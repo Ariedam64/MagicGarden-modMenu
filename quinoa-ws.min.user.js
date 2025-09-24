@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.0.6
+// @version      1.0.7
 // @match        https://*.discordsays.com/*
 // @run-at       document-start
 // @all-frames   true
