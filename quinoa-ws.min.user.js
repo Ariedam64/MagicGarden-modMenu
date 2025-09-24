@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.1.5
+// @version      1.1.7
 // @match        https://*.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13,7 +13,2785 @@
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
-(()=>{var Vn=Object.defineProperty;var Xn=(e,t,n)=>t in e?Vn(e,t,{enumerable:!0,configurable:!0,writable:!0,value:n}):e[t]=n;var pe=(e,t,n)=>Xn(e,typeof t!="symbol"?t+"":t,n);var be=window.WebSocket,Yr=window.Worker,he=[],qe=null;function Be(e,t){if(!qe){qe=e;try{console.log("[QuinoaWS] selected ->",t)}catch{}}}var ot=!1;var st=typeof Set<"u"?new Set:{_a:[],add(e){this._a.push(e)},delete(e){let t=this._a.indexOf(e);t>=0&&this._a.splice(t,1)},forEach(e){for(let t=0;t<this._a.length;t++)e(this._a[t])}};function lt(e){return["CONNECTING","OPEN","CLOSING","CLOSED"][e??-1]||"none"}async function Jt(e){try{if(typeof e=="string")return JSON.parse(e);if(e instanceof Blob)return JSON.parse(await e.text());if(e instanceof ArrayBuffer)return JSON.parse(new TextDecoder().decode(e))}catch{}return null}function Kt(){function e(t,n){let r=n!==void 0?new be(t,n):new be(t);he.push(r),r.addEventListener("open",()=>{setTimeout(()=>{r.readyState===be.OPEN&&Be(r,"open-fallback")},800)}),r.addEventListener("message",async i=>{let o=await Jt(i.data);o&&!window.quinoaWS&&(o.type==="Welcome"||o.type==="Config"||o.fullState||o.config)&&Be(r,"message:"+(o.type||"state"))});let a=r.send.bind(r);return r.send=function(i){try{let o=null;typeof i=="string"?o=JSON.parse(i):i instanceof ArrayBuffer&&(o=JSON.parse(new TextDecoder().decode(i))),!window.quinoaWS&&o&&Array.isArray(o.scopePath)&&o.scopePath.join("/")==="Room/Quinoa"&&Be(r,"send:"+o.type)}catch{}return a(i)},r}e.prototype=be.prototype;try{e.OPEN=be.OPEN}catch{}try{e.CLOSED=be.CLOSED}catch{}try{e.CLOSING=be.CLOSING}catch{}try{e.CONNECTING=be.CONNECTING}catch{}window.WebSocket=e}var Ee=null,Ct=!1,Qt=null,ct=null,Zt=()=>globalThis.jotaiAtomCache?.cache;function Jn(){let e=globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;if(!e?.renderers?.size)return null;for(let[t]of e.renderers){let n=e.getFiberRoots(t);for(let r of n){let a=new Set,i=[r.current];for(;i.length;){let o=i.pop();if(!o||a.has(o))continue;a.add(o);let l=o?.pendingProps?.value;if(l&&typeof l.get=="function"&&typeof l.set=="function"&&typeof l.sub=="function")return ct="fiber",l;o.child&&i.push(o.child),o.sibling&&i.push(o.sibling),o.alternate&&i.push(o.alternate)}}}return null}async function Kn(e=5e3){let t=Zt();if(!t)throw new Error("jotaiAtomCache.cache introuvable");let n=null,r=null,a=[];for(let l of t.values()){if(!l||typeof l.write!="function")continue;let u=l.write;l.__origWrite=u,l.write=function(d,y,...P){if(!r){n=d,r=y;for(let M of a)M.write=M.__origWrite,delete M.__origWrite}return u.call(this,d,y,...P)},a.push(l)}let i=l=>new Promise(u=>setTimeout(u,l)),o=Date.now();try{globalThis.dispatchEvent?.(new Event("visibilitychange"))}catch{}for(;!r&&Date.now()-o<e;)await i(50);return r?(ct="write",{get:l=>n(l),set:(l,u)=>r(l,u),sub:(l,u)=>{let d;try{d=n(l)}catch{}let y=setInterval(()=>{let P;try{P=n(l)}catch{return}if(P!==d){d=P;try{u()}catch{}}},100);return()=>clearInterval(y)}}):(ct="polyfill",{get:()=>{throw new Error("Store non captur\xE9: get indisponible")},set:()=>{throw new Error("Store non captur\xE9: set indisponible")},sub:()=>()=>{},__polyfill:!0})}async function Ie(){if(Ee)return Ee;if(Ct){let e=Date.now();for(;!Ee&&Date.now()-e<3e3;)await new Promise(t=>setTimeout(t,25));if(Ee)return Ee}Ct=!0;try{return Ee=Jn()||await Kn(),Ee}catch(e){throw Qt=e,e}finally{Ct=!1}}function Ge(){return!!Ee&&!Ee.__polyfill}function en(){return{via:ct,polyfill:!!Ee?.__polyfill,error:Qt}}async function ve(e){return(await Ie()).get(e)}async function xe(e,t){await(await Ie()).set(e,t)}async function $e(e,t){return(await Ie()).sub(e,t)}function Ve(e){let t=Zt();if(!t)return[];let n=[];for(let r of t.values()){let a=r?.debugLabel||r?.label||"";e.test(String(a))&&n.push(r)}return n}function oe(e){return Ve(new RegExp("^"+e+"$"))[0]||null}function Qn(e){if(st.forEach)st.forEach(t=>{try{t.postMessage(e)}catch{}});else for(let t of st._a)try{t.postMessage(e)}catch{}}function Zn(){if(qe&&qe.readyState===be.OPEN)return qe;let e=null;if(he.find&&(e=he.find(t=>t.readyState===be.OPEN)||null),!e){for(let t=0;t<he.length;t++)if(he[t].readyState===be.OPEN){e=he[t];break}}if(e)return Be(e,"getPageWS"),e;throw new Error("No page WebSocket open")}function Se(e){let t={scopePath:["Room","Quinoa"],...e};try{return Zn().send(JSON.stringify(t)),!0}catch{return Qn({__QWS_CMD:"send",payload:JSON.stringify(t)}),!0}}async function dt(){try{await Ie()}catch{}}async function tn(e,t){await dt();let n=oe(e);if(!n)return t;try{return await ve(n)}catch{return t}}async function nn(e,t){await dt();let n=oe(e);return n?await $e(n,async()=>{try{t(await ve(n))}catch{}}):()=>{}}async function er(e,t){let n=await tn(e);return n!==void 0&&t(n),nn(e,t)}async function tr(e,t){await dt();let n=oe(e);n&&await xe(n,t)}var Xe={ensure:dt,select:tn,subscribe:nn,subscribeImmediate:er,set:tr};function ut(e,t){if(e===t)return!0;if(!Array.isArray(e)||!Array.isArray(t)||e.length!==t.length)return!1;let n=new Set(e);for(let r of t)if(!n.has(r))return!1;return!0}async function nr(e,t){await Xe.set(e,t)}function we(e,t,n){let r=()=>Xe.select(e),a=()=>r().then(d=>t?t(d):d),i=async d=>{let y=await r().catch(()=>{}),P=n?n(d,y):d;return nr(e,P)};return{label:e,get:a,set:i,update:async d=>{let y=await a(),P=d(y);return await i(P),P},sub:d=>Xe.subscribe(e,y=>d(t?t(y):y)),subNow:d=>Xe.subscribeImmediate(e,y=>d(t?t(y):y))}}var mt=(()=>{let e=we("myInventoryAtom",t=>Array.isArray(t?.favoritedItemIds)?t.favoritedItemIds.slice():[]);return{label:e.label+":favoriteIds",get:e.get,sub(t){let n=null;return e.sub(r=>{(!n||!ut(n,r))&&(n=r,t(r))})},subNow(t){let n=null;return e.subNow(r=>{(!n||!ut(n,r))&&(n=r,t(r))})}}})(),Fe=(()=>{let e=we("myInventoryAtom",t=>Array.isArray(t?.favoritedItemIds)?t.favoritedItemIds:[]);return{label:e.label+":favoriteIdSet",async get(){return new Set(await e.get())},sub(t){let n=null;return e.sub(r=>{(!n||!ut(n,r))&&(n=r,t(new Set(r)))})},subNow(t){let n=null;return e.subNow(r=>{(!n||!ut(n,r))&&(n=r,t(new Set(r)))})}}})(),Je=(()=>{let e=we("myDataAtom",t=>t?.garden??null);return{label:e.label+":garden",get:e.get,sub:e.sub,subNow:e.subNow}})(),Ke=we("positionAtom"),Qe=we("stateAtom"),pt=we("myInventoryAtom"),ra=we("shopsAtom"),aa=we("myShopPurchasesAtom"),yt=we("myDataAtom"),He=we("myCropInventoryAtom"),gt=we("numPlayersAtom"),ia=we("totalCropSellPriceAtom"),ke=we("myPetInfosAtom"),oa=we("myPetSlotInfosAtom"),sa=we("myValidatedSelectedItemIndexAtom"),la=we("setSelectedIndexToEndAtom");function rr(e){if(!e)return"null";let t=typeof e?.abilityId=="string"?e.abilityId:"",n=Number.isFinite(e?.performedAt)?String(e.performedAt):"",r="";try{r=JSON.stringify(e?.data??null)}catch{r=""}return`${t}|${n}|${r}`}function Et(e){let t={},n=new Map;if(e&&typeof e=="object")for(let r of Object.keys(e)){let a=e[r]??{},i=a.lastAbilityTrigger??null,o=a.position??null;t[r]={petId:r,abilityId:i?.abilityId??null,performedAt:Number.isFinite(i?.performedAt)?i.performedAt:null,data:i?.data??null,position:o??null},n.set(r,rr(i))}return{value:t,sig:n}}function rn(e,t){if(!e||e.size!==t.size)return!1;for(let[n,r]of t)if(e.get(n)!==r)return!1;return!0}var an=(()=>{let e=we("myPetSlotInfosAtom");return{label:e.label+":abilitiesTrigger",async get(){let n=await e.get();return Et(n).value},sub(n){let r=null;return e.sub(a=>{let{value:i,sig:o}=Et(a);rn(r,o)||(r=o,n(i))})},subNow(n){let r=null;return e.subNow(a=>{let{value:i,sig:o}=Et(a);rn(r,o)||(r=o,n(i))})}}})();function on(e){return e?[e.objectType??e.type??"",e.species??e.seedSpecies??e.plantSpecies??e.eggId??e.decorId??"",e.plantedAt??e.startTime??0,e.maturedAt??e.endTime??0].join("|"):"\u2205"}function Mt(e,t){let n=e?.tileObjects??{},r=t?.tileObjects??{},a=[],i=[],o=[],l=[],u=new Set;for(let d of Object.keys(r))u.add(d),d in n?on(n[d])!==on(r[d])&&(i.push(+d),l.push({kind:"updated",slot:+d,prev:n[d],next:r[d]})):(a.push(+d),l.push({kind:"added",slot:+d,next:r[d]}));for(let d of Object.keys(n))u.has(d)||(o.push(+d),l.push({kind:"removed",slot:+d,prev:n[d]}));return{added:a,updated:i,removed:o,changes:l}}function ar(e){let t=e?.slot??{},n=Array.isArray(t.mutations)?t.mutations.slice().sort().join(","):"",r=Array.isArray(t.abilities)?t.abilities.slice().sort().join(","):"",a=t.name??"",i=t.petSpecies??"",o=Number.isFinite(t.xp)?Math.round(t.xp):0,l=Number.isFinite(t.hunger)?Math.round(t.hunger*1e3):0,u=Number.isFinite(t.targetScale)?Math.round(t.targetScale*1e3):0,d=Number.isFinite(e?.position?.x)?Math.round(e.position.x):0,y=Number.isFinite(e?.position?.y)?Math.round(e.position.y):0;return`${i}|${a}|xp:${o}|hg:${l}|sc:${u}|m:${n}|a:${r}|pos:${d},${y}`}function Ze(e){let t=new Map,n=Array.isArray(e)?e:[];for(let r of n){let a=String(r?.slot?.id??"");a&&t.set(a,ar(r))}return t}function At(e,t){let n=[],r=[],a=[],i=[];for(let[o,l]of t)e.has(o)?e.get(o)!==l&&(r.push(o),i.push({kind:"updated",id:o})):(n.push(o),i.push({kind:"added",id:o}));for(let o of e.keys())t.has(o)||(a.push(o),i.push({kind:"removed",id:o}));return{added:n,updated:r,removed:a,changes:i}}function ir(e){let t=Array.isArray(e.mutations)?e.mutations.slice().sort().join(","):"",n=Number.isFinite(e.scale)?Math.round(e.scale*1e3):0;return`${e.species??""}|${e.itemType??""}|${n}|${t}`}function et(e){let t=new Map,n=Array.isArray(e)?e:[];for(let r of n){let a=String(r?.id??"");a&&t.set(a,ir(r))}return t}function Lt(e,t){let n=[],r=[],a=[],i=[];for(let[o,l]of t)e.has(o)?e.get(o)!==l&&(r.push(o),i.push({kind:"updated",key:o})):(n.push(o),i.push({kind:"added",key:o}));for(let o of e.keys())t.has(o)||(a.push(o),i.push({kind:"removed",key:o}));return{added:n,updated:r,removed:a,changes:i}}var me={getPosition(){return Ke.get()},onPosition(e){return Ke.sub(e)},onPositionNow(e){return Ke.subNow(e)},async setPosition(e,t){let n=oe(Ke.label||"positionAtom");if(!n)throw new Error("positionAtom introuvable");await xe(n,{x:e,y:t})},async teleport(e,t){try{await this.setPosition(e,t)}catch{}try{Se({type:"Teleport",position:{x:e,y:t}})}catch{}},async move(e,t){try{await this.setPosition(e,t)}catch{}try{Se({type:"PlayerPosition",position:{x:e,y:t}})}catch{}},async plantSeed(e,t){try{Se({type:"PlantSeed",slot:e,species:t})}catch{}},async sellAllCrops(){try{Se({type:"SellAllCrops"})}catch{}},async sellPet(e){try{Se({type:"SellPet",itemId:e})}catch{}},async waterPlant(e){try{Se({type:"WaterPlant",slot:e})}catch{}},async setSelectedItem(e){try{Se({type:"SetSelectedItem",itemIndex:e})}catch{}},async pickupObject(){try{Se({type:"PickupObject"})}catch{}},async dropObject(){try{Se({type:"DropObject"})}catch{}},async harvestCrop(e,t){try{Se({type:"HarvestCrop",slot:e,slotsIndex:t})}catch{}},async feedPet(e,t){try{Se({type:"FeedPet",petItemId:e,cropItemId:t})}catch{}},async hatchEgg(e){try{Se({type:"HatchEgg",slot:e})}catch{}},async placeDecor(e,t,n){try{Se({type:"PlaceDecor",tileType:e,localTileIndex:t,decorId:n})}catch{}},async swapPet(e,t){try{Se({type:"SwapPet",petSlotId:e,petInventoryId:t})}catch{}},async placePet(e,t,n,r){try{Se({type:"PlacePet",itemId:e,position:t,tileType:n,localTileIndex:r})}catch{}},async storePet(e){try{Se({type:"StorePet",itemId:e})}catch{}},async toggleFavoriteItem(e){try{Se({type:"ToggleFavoriteItem",itemId:e})}catch{}},async getFavoriteIds(){let e=await mt.get();return Array.isArray(e)?e.slice():[]},async getFavoriteIdSet(){return await Fe.get()},async isFavoriteItem(e){return(await Fe.get()).has(e)},async ensureFavoriteItem(e,t){let n=await this.isFavoriteItem(e);return n!==t?(await this.toggleFavoriteItem(e),t):n},async ensureFavorites(e,t){let n=await Fe.get(),r=0;for(let a of e)if(n.has(a)!==t)try{await this.toggleFavoriteItem(a),r++}catch{}},onFavoriteIdsChange(e){return mt.sub(t=>{let n=Array.isArray(t)?t:[];e(n)})},async onFavoriteIdsChangeNow(e){let t=await this.getFavoriteIds();return e(t),mt.sub(n=>{let r=Array.isArray(n)?n:[];e(r)})},onFavoriteSetChange(e){return Fe.sub(t=>{e(t)})},async onFavoriteSetChangeNow(e){let t=await Fe.get();return e(t),Fe.sub(n=>{e(n)})},async getGardenState(){return(await yt.get())?.garden??null},onGardenChange(e){let t=null;return Je.sub(n=>{n!==t&&(t=n,e(n))})},async onGardenChangeNow(e){let t=await Je.get();return e(t),Je.sub(n=>{n!==t&&(t=n,e(n))})},onGardenDiff(e){let t=null;return Je.sub(n=>{let r=Mt(t,n);(r.added.length||r.updated.length||r.removed.length||n!==t)&&(t=n,e(n,r))})},async onGardenDiffNow(e){let t=(await yt.get())?.garden??null;return e(t,Mt(null,t)),yt.sub(n=>{let r=n?.garden??null,a=Mt(t,r);(a.added.length||a.updated.length||a.removed.length)&&(t=r,e(r,a))})},async getPets(){let e=await ke.get();return Array.isArray(e)?e:null},onPetsChange(e){let t=null;return ke.sub(n=>{n!==t&&(t=n,e(t))})},async onPetsChangeNow(e){let t=await this.getPets();return e(t),ke.sub(n=>{n!==t&&(t=n,e(t))})},onPetsDiff(e){let t=Ze(null);return ke.sub(n=>{let r=Ze(n),a=At(t,r);(a.added.length||a.updated.length||a.removed.length)&&(e(n,a),t=r)})},async onPetsDiffNow(e){let t=await this.getPets(),n=Ze(null),r=Ze(t),a=At(n,r);return e(t,a),n=r,ke.sub(i=>{r=Ze(i);let o=At(n,r);(o.added.length||o.updated.length||o.removed.length)&&(e(i,o),n=r)})},async getCropInventoryState(){return await He.get()},onCropInventoryChange(e){let t=null;return He.sub(n=>{n!==t&&(t=n,e(n))})},async onCropInventoryChangeNow(e){let t=await He.get();return e(t),He.sub(n=>{n!==t&&(t=n,e(n))})},onCropInventoryDiff(e){let t=et(null);return He.sub(n=>{let r=et(n),a=Lt(t,r);(a.added.length||a.updated.length||a.removed.length)&&(e(n,a),t=r)})},async onCropInventoryDiffNow(e){let t=await He.get(),n=et(null),r=et(t),a=Lt(n,r);return e(t,a),n=r,He.sub(i=>{r=et(i);let o=Lt(n,r);(o.added.length||o.updated.length||o.removed.length)&&(e(i,o),n=r)})},async getNumPlayers(){let e=await gt.get();return typeof e=="number"?e:0},onNumPlayersChange(e){let t;return gt.sub(n=>{n!==t&&(t=n,e(n))})},async onNumPlayersChangeNow(e){let t=await this.getNumPlayers();return e(t),gt.sub(n=>{n!==t&&(t=n,e(n))})}};var A={Common:"Common",Uncommon:"Uncommon",Rare:"Rare",Legendary:"Legendary",Mythic:"Mythical",Divine:"Divine",Celestial:"Celestial"},ne={Single:"Single",Multiple:"Multiple"};var _={Empty:0,DirtPatch:1,SproutFlower:2,SproutVegetable:3,SproutFruit:4,SproutVine:5,StemFlower:6,Trellis:7,Daffodil:11,Tulip:12,Sunflower:13,Lily:14,Starweaver:15,StarweaverPlant:16,AloePlant:17,Aloe:18,Blueberry:21,Banana:22,Strawberry:23,Mango:24,Grape:25,Watermelon:26,Lemon:27,Apple:28,Pepper:31,Tomato:32,BabyCarrot:33,Carrot:34,Pumpkin:35,Corn:36,PalmTreeTop:39,BushyTree:40,Coconut:41,MushroomPlant:42,PassionFruit:43,DragonFruit:44,Lychee:45,Mushroom:46,BurrosTail:47,Cacao:48,Echeveria:49},We={Empty:0,Bamboo:1,PalmTree:2,Cactus:3,Tree:4},re={Empty:0,Daffodil:1,Tulip:2,Sunflower:3,Starweaver:6,Blueberry:11,Banana:12,Strawberry:13,Mango:14,Grape:15,Watermelon:16,Lemon:17,Apple:18,Lily:20,Pepper:21,Tomato:22,Carrot:23,Pumpkin:25,Corn:26,Bamboo:41,Coconut:31,Mushroom:32,PassionFruit:33,DragonFruit:34,Lychee:35,BurrosTail:37,Aloe:39,Echeveria:40,Cactus:42},ft={Empty:0,Coin:1,Shovel:2,Seeds:3,PlanterPot:5,InventoryBag:6,WateringCan:14,Fertilizer:15,RainbowPotion:16,ArrowKeys:41,Touchpad:42};var ye={Bee:1,Chicken:2,Bunny:3,Turtle:4,Capybara:5,Cow:6,Pig:7,Butterfly:8,Snail:9,Worm:10,CommonEgg:11,UncommonEgg:12,RareEgg:13,LegendaryEgg:14,MythicalEgg:15,DivineEgg:16,CelestialEgg:17,Squirrel:18,Goat:19,Dragonfly:20,Peacock:30},tt={Wet:1,Chilled:2,Frozen:3,Dawnlit:11,Amberglow:12},se={SmallRock:11,MediumRock:21,LargeRock:31,WoodPedestal:4,WoodBench:13,WoodBucketPedestal:14,WoodLampPost:23,WoodStool:24,WoodArch:33,WoodBridge:34,WoodOwl:43,WoodGardenBox:44,StonePedestal:6,StoneBench:15,StoneBucketPedestal:16,StoneLampPost:25,StoneColumn:26,StoneArch:35,StoneBridge:36,StoneGnome:45,StoneGardenBox:46,MarblePedestal:8,MarbleBench:17,MarbleBucketPedestal:18,MarbleLampPost:27,MarbleColumn:28,MarbleArch:37,MarbleBridge:38,MarbleBlobling:47,MarbleGardenBox:48,StrawScarecrow:49,MiniFairyCottage:50,MiniFairyForge:40,MiniFairyKeep:60,Birdhouse:63,WoodenWindmill:64,StoneBirdbath:65},ga={Carrot:{seed:{tileRef:re.Carrot,name:"Carrot Seed",coinPrice:10,creditPrice:7,rarity:A.Common},plant:{tileRef:_.BabyCarrot,name:"Carrot Plant",harvestType:ne.Single,baseTileScale:.7},crop:{tileRef:_.Carrot,name:"Carrot",baseSellPrice:20,baseWeight:.1,baseTileScale:.6,maxScale:3}},Strawberry:{seed:{tileRef:re.Strawberry,name:"Strawberry Seed",coinPrice:50,creditPrice:21,rarity:A.Common},plant:{tileRef:_.SproutFruit,name:"Strawberry Plant",harvestType:ne.Multiple,slotOffsets:[{x:.3,y:.4,rotation:85},{x:.675,y:.3,rotation:195},{x:.32,y:.72,rotation:340},{x:.7,y:.7,rotation:280},{x:.51,y:.51,rotation:0}],secondsToMature:70,baseTileScale:1,rotateSlotOffsetsRandomly:!0},crop:{tileRef:_.Strawberry,name:"Strawberry",baseSellPrice:14,baseWeight:.05,baseTileScale:.25,maxScale:2}},Aloe:{seed:{tileRef:re.Aloe,name:"Aloe Seed",coinPrice:135,creditPrice:18,rarity:A.Common},plant:{tileRef:_.AloePlant,name:"Aloe Plant",harvestType:ne.Single,baseTileScale:.9},crop:{tileRef:_.Aloe,name:"Aloe",baseSellPrice:310,baseWeight:1.5,baseTileScale:.7,maxScale:2.5}},Blueberry:{seed:{tileRef:re.Blueberry,name:"Blueberry Seed",coinPrice:400,creditPrice:49,rarity:A.Uncommon},plant:{tileRef:_.SproutFruit,name:"Blueberry Plant",harvestType:ne.Multiple,slotOffsets:[{x:.3,y:.4,rotation:85},{x:.675,y:.3,rotation:195},{x:.32,y:.72,rotation:340},{x:.7,y:.7,rotation:280},{x:.51,y:.51,rotation:0}],secondsToMature:105,baseTileScale:1,rotateSlotOffsetsRandomly:!0},crop:{tileRef:_.Blueberry,name:"Blueberry",baseSellPrice:23,baseWeight:.01,baseTileScale:.25,maxScale:2}},Apple:{seed:{tileRef:re.Apple,name:"Apple Seed",coinPrice:500,creditPrice:67,rarity:A.Uncommon,unavailableSurfaces:["discord"]},plant:{tileRef:We.Tree,name:"Apple Tree",harvestType:ne.Multiple,slotOffsets:[{x:.15,y:-1.9,rotation:-90},{x:0,y:-1.5,rotation:-75},{x:.6,y:-1.7,rotation:-60},{x:.3,y:-1.15,rotation:-55},{x:1.05,y:-1.4,rotation:-45},{x:.8,y:-1.2,rotation:-35},{x:.9,y:.6,rotation:-30}],secondsToMature:360*60,baseTileScale:3,rotateSlotOffsetsRandomly:!1,tileTransformOrigin:"bottom",nudgeY:.25},crop:{tileRef:_.Apple,name:"Apple",baseSellPrice:73,baseWeight:.18,baseTileScale:.5,maxScale:2}},OrangeTulip:{seed:{tileRef:re.Tulip,name:"Tulip Seed",coinPrice:600,creditPrice:14,rarity:A.Uncommon},plant:{tileRef:_.Tulip,name:"Tulip Plant",harvestType:ne.Single,baseTileScale:.5},crop:{tileRef:_.Tulip,name:"Tulip",baseSellPrice:767,baseWeight:.01,baseTileScale:.5,maxScale:3}},Tomato:{seed:{tileRef:re.Tomato,name:"Tomato Seed",coinPrice:800,creditPrice:79,rarity:A.Uncommon},plant:{tileRef:_.SproutVine,name:"Tomato Plant",harvestType:ne.Multiple,slotOffsets:[{x:.2,y:.2,rotation:0},{x:.8,y:.8,rotation:0}],secondsToMature:1100,baseTileScale:1,rotateSlotOffsetsRandomly:!1},crop:{tileRef:_.Tomato,name:"Tomato",baseSellPrice:27,baseWeight:.3,baseTileScale:.33,maxScale:2}},Daffodil:{seed:{tileRef:re.Daffodil,name:"Daffodil Seed",coinPrice:1e3,creditPrice:19,rarity:A.Rare},plant:{tileRef:_.Daffodil,name:"Daffodil Plant",harvestType:ne.Single,baseTileScale:.5},crop:{tileRef:_.Daffodil,name:"Daffodil",baseSellPrice:1090,baseWeight:.01,baseTileScale:.5,maxScale:3}},Corn:{seed:{tileRef:re.Corn,name:"Corn Kernel",coinPrice:1300,creditPrice:135,rarity:A.Rare},plant:{tileRef:_.SproutVegetable,name:"Corn Plant",harvestType:ne.Multiple,slotOffsets:[{x:.5,y:.4,rotation:0}],secondsToMature:130,baseTileScale:1,rotateSlotOffsetsRandomly:!1},crop:{tileRef:_.Corn,name:"Corn",baseSellPrice:36,baseWeight:1.2,baseTileScale:.7,maxScale:2}},Watermelon:{seed:{tileRef:re.Watermelon,name:"Watermelon Seed",coinPrice:2500,creditPrice:195,rarity:A.Rare},plant:{tileRef:_.Watermelon,name:"Watermelon Plant",harvestType:ne.Single,baseTileScale:.8},crop:{tileRef:_.Watermelon,name:"Watermelon",baseSellPrice:2708,baseWeight:4.5,baseTileScale:.8,maxScale:3}},Pumpkin:{seed:{tileRef:re.Pumpkin,name:"Pumpkin Seed",coinPrice:3e3,creditPrice:210,rarity:A.Rare},plant:{tileRef:_.Pumpkin,name:"Pumpkin Plant",harvestType:ne.Single,baseTileScale:.8},crop:{tileRef:_.Pumpkin,name:"Pumpkin",baseSellPrice:3700,baseWeight:6,baseTileScale:.8,maxScale:3}},Echeveria:{seed:{tileRef:re.Echeveria,name:"Echeveria Cutting",coinPrice:4200,creditPrice:113,rarity:A.Legendary},plant:{tileRef:_.Echeveria,name:"Echeveria Plant",harvestType:ne.Single,baseTileScale:.8},crop:{tileRef:_.Echeveria,name:"Echeveria",baseSellPrice:4600,baseWeight:.8,baseTileScale:.8,maxScale:2.75}},Coconut:{seed:{tileRef:re.Coconut,name:"Coconut Seed",coinPrice:6e3,creditPrice:235,rarity:A.Legendary},plant:{tileRef:We.PalmTree,name:"Coconut Tree",harvestType:ne.Multiple,slotOffsets:[{x:.3,y:-2.1,rotation:0},{x:.2,y:-1.9,rotation:51.4},{x:.7,y:-2,rotation:102.9},{x:.25,y:-1.6,rotation:154.3},{x:.5,y:-1.8,rotation:205.7},{x:.8,y:-1.7,rotation:257.1},{x:.55,y:-1.5,rotation:308.6}],secondsToMature:720*60,baseTileScale:3,rotateSlotOffsetsRandomly:!0,tileTransformOrigin:"bottom",nudgeY:.15},crop:{tileRef:_.Coconut,name:"Coconut",baseSellPrice:302,baseWeight:5,baseTileScale:.25,maxScale:3}},Banana:{seed:{tileRef:re.Banana,name:"Banana Seed",coinPrice:7500,creditPrice:199,rarity:A.Legendary,getCanSpawnInGuild:e=>{let t=e.slice(-1),n=parseInt(t,10);return!isNaN(n)&&n%2===0}},plant:{tileRef:We.PalmTree,name:"Banana Plant",harvestType:ne.Multiple,slotOffsets:[{x:.2,y:-1.2,rotation:10},{x:.3,y:-1.2,rotation:-10},{x:.4,y:-1.2,rotation:-30},{x:.5,y:-1.2,rotation:-50},{x:.6,y:-1.2,rotation:-70}],secondsToMature:14400,baseTileScale:2.5,rotateSlotOffsetsRandomly:!1,tileTransformOrigin:"bottom",nudgeY:.1},crop:{tileRef:_.Banana,name:"Banana",baseSellPrice:1750,baseWeight:.12,baseTileScale:.5,maxScale:1.7}},Lily:{seed:{tileRef:re.Lily,name:"Lily Seed",coinPrice:2e4,creditPrice:34,rarity:A.Legendary},plant:{tileRef:_.Lily,name:"Lily Plant",harvestType:ne.Single,baseTileScale:.75,nudgeY:.4},crop:{tileRef:_.Lily,name:"Lily",baseSellPrice:20123,baseWeight:.02,baseTileScale:.5,maxScale:2.75}},BurrosTail:{seed:{tileRef:re.BurrosTail,name:"Burro's Tail Cutting",coinPrice:93e3,creditPrice:338,rarity:A.Legendary},plant:{tileRef:_.Trellis,name:"Burro's Tail Plant",harvestType:ne.Multiple,slotOffsets:[{x:.37,y:.4,rotation:0},{x:.67,y:.63,rotation:0}],secondsToMature:1800,baseTileScale:.8,rotateSlotOffsetsRandomly:!1},crop:{tileRef:_.BurrosTail,name:"Burro's Tail",baseSellPrice:6e3,baseWeight:.4,baseTileScale:.4,maxScale:2.5}},Mushroom:{seed:{tileRef:re.Mushroom,name:"Mushroom Spore",coinPrice:15e4,creditPrice:249,rarity:A.Mythic},plant:{tileRef:_.MushroomPlant,name:"Mushroom Plant",harvestType:ne.Single,baseTileScale:.8},crop:{tileRef:_.Mushroom,name:"Mushroom",baseSellPrice:16e4,baseWeight:25,baseTileScale:.8,maxScale:3.5}},Cactus:{seed:{tileRef:re.Cactus,name:"Cactus Seed",coinPrice:25e4,creditPrice:250,rarity:A.Mythic},plant:{tileRef:We.Cactus,name:"Cactus Plant",harvestType:ne.Single,baseTileScale:2.5,tileTransformOrigin:"bottom",nudgeY:.15},crop:{tileRef:We.Cactus,name:"Cactus",baseSellPrice:261e3,baseWeight:1500,baseTileScale:2.5,maxScale:1.8}},Bamboo:{seed:{tileRef:re.Bamboo,name:"Bamboo Seed",coinPrice:4e5,creditPrice:300,rarity:A.Mythic},plant:{tileRef:We.Bamboo,name:"Bamboo Plant",harvestType:ne.Single,baseTileScale:2.5,tileTransformOrigin:"bottom",nudgeY:.1},crop:{tileRef:We.Bamboo,name:"Bamboo Shoot",baseSellPrice:5e5,baseWeight:1,baseTileScale:2.5,maxScale:2}},Grape:{seed:{tileRef:re.Grape,name:"Grape Seed",coinPrice:85e4,creditPrice:599,rarity:A.Mythic,getCanSpawnInGuild:e=>e.endsWith("1")},plant:{tileRef:_.SproutVine,name:"Grape Plant",harvestType:ne.Multiple,slotOffsets:[{x:.5,y:.5,rotation:0}],secondsToMature:1440*60,baseTileScale:1,rotateSlotOffsetsRandomly:!1},crop:{tileRef:_.Grape,name:"Grape",baseSellPrice:7085,baseWeight:3,baseTileScale:.5,maxScale:2}},Pepper:{seed:{tileRef:re.Pepper,name:"Pepper Seed",coinPrice:1e6,creditPrice:629,rarity:A.Divine},plant:{tileRef:_.SproutVine,name:"Pepper Plant",harvestType:ne.Multiple,slotOffsets:[{x:.1,y:.1,rotation:0},{x:.9,y:.1,rotation:0},{x:.3,y:.3,rotation:0},{x:.7,y:.3,rotation:0},{x:.5,y:.5,rotation:0},{x:.3,y:.7,rotation:0},{x:.7,y:.7,rotation:0},{x:.1,y:.9,rotation:0},{x:.9,y:.9,rotation:0}],secondsToMature:560,baseTileScale:1,rotateSlotOffsetsRandomly:!0},crop:{tileRef:_.Pepper,name:"Pepper",baseSellPrice:7220,baseWeight:.5,baseTileScale:.3,maxScale:2}},Lemon:{seed:{tileRef:re.Lemon,name:"Lemon Seed",coinPrice:2e6,creditPrice:500,rarity:A.Divine,getCanSpawnInGuild:e=>e.endsWith("2")},plant:{tileRef:We.Tree,name:"Lemon Tree",harvestType:ne.Multiple,slotOffsets:[{x:0,y:-1,rotation:85},{x:.9,y:-1.1,rotation:195},{x:.2,y:-.68,rotation:340},{x:.7,y:-.7,rotation:280},{x:.51,y:-1,rotation:0},{x:.45,y:-1.3,rotation:280}],secondsToMature:720*60,baseTileScale:2.3,rotateSlotOffsetsRandomly:!0,tileTransformOrigin:"bottom",nudgeY:.25},crop:{tileRef:_.Lemon,name:"Lemon",baseSellPrice:1e4,baseWeight:.5,baseTileScale:.25,maxScale:3}},PassionFruit:{seed:{tileRef:re.PassionFruit,name:"Passion Fruit Seed",coinPrice:275e4,creditPrice:679,rarity:A.Divine},plant:{tileRef:_.SproutVine,name:"Passion Fruit Plant",harvestType:ne.Multiple,slotOffsets:[{x:.2,y:.2,rotation:0},{x:.8,y:.8,rotation:0}],secondsToMature:1440*60,baseTileScale:1.1,rotateSlotOffsetsRandomly:!1},crop:{tileRef:_.PassionFruit,name:"Passion Fruit",baseSellPrice:24500,baseWeight:9.5,baseTileScale:.35,maxScale:2}},DragonFruit:{seed:{tileRef:re.DragonFruit,name:"Dragon Fruit Seed",coinPrice:5e6,creditPrice:715,rarity:A.Divine},plant:{tileRef:_.PalmTreeTop,name:"Dragon Fruit Plant",harvestType:ne.Multiple,slotOffsets:[{x:.2,y:.1,rotation:0},{x:.1,y:.45,rotation:51.4},{x:.86,y:.2,rotation:102.9},{x:.25,y:.8,rotation:154.3},{x:.5,y:.4,rotation:205.7},{x:.9,y:.6,rotation:257.1},{x:.6,y:.7,rotation:308.6}],secondsToMature:600,baseTileScale:1.6,rotateSlotOffsetsRandomly:!0},crop:{tileRef:_.DragonFruit,name:"Dragon Fruit",baseSellPrice:24500,baseWeight:8.4,baseTileScale:.4,maxScale:2}},Lychee:{seed:{tileRef:re.Lychee,name:"Lychee Pit",coinPrice:25e6,creditPrice:819,rarity:A.Divine,getCanSpawnInGuild:e=>e.endsWith("2")},plant:{tileRef:_.BushyTree,name:"Lychee Plant",harvestType:ne.Multiple,slotOffsets:[{x:.1,y:.4,rotation:85},{x:.8,y:.3,rotation:195},{x:.2,y:.72,rotation:340},{x:.7,y:.7,rotation:280},{x:.51,y:.4,rotation:0},{x:.3,y:.2,rotation:280}],secondsToMature:1440*60,baseTileScale:1.2,rotateSlotOffsetsRandomly:!0},crop:{tileRef:_.Lychee,name:"Lychee Fruit",baseSellPrice:5e4,baseWeight:9,baseTileScale:.2,maxScale:2}},Sunflower:{seed:{tileRef:re.Sunflower,name:"Sunflower Seed",coinPrice:1e8,creditPrice:900,rarity:A.Divine},plant:{tileRef:_.StemFlower,name:"Sunflower Plant",harvestType:ne.Multiple,slotOffsets:[{x:.51,y:-.1,rotation:0}],secondsToMature:1440*60,rotateSlotOffsetsRandomly:!0,tileTransformOrigin:"bottom",baseTileScale:.8,nudgeY:.15},crop:{tileRef:_.Sunflower,name:"Sunflower",baseSellPrice:75e4,baseWeight:10,baseTileScale:.5,maxScale:2.5}},Starweaver:{seed:{tileRef:re.Starweaver,name:"Starweaver Pod",coinPrice:1e9,creditPrice:1e3,rarity:A.Celestial},plant:{tileRef:_.StarweaverPlant,name:"Starweaver Plant",harvestType:ne.Multiple,slotOffsets:[{x:.5,y:-.158,rotation:0}],secondsToMature:1440*60,baseTileScale:1.5,rotateSlotOffsetsRandomly:!1,nudgeY:.25},crop:{tileRef:_.Starweaver,name:"Starweaver Fruit",baseSellPrice:1e7,baseWeight:10,baseTileScale:.6,maxScale:2}}},fa={Gold:{name:"Gold",baseChance:.01,coinMultiplier:25},Rainbow:{name:"Rainbow",baseChance:.001,coinMultiplier:50},Wet:{name:"Wet",baseChance:0,coinMultiplier:2,tileRef:tt.Wet},Chilled:{name:"Chilled",baseChance:0,coinMultiplier:2,tileRef:tt.Chilled},Frozen:{name:"Frozen",baseChance:0,coinMultiplier:10,tileRef:tt.Frozen},Dawnlit:{name:"Dawnlit",baseChance:0,coinMultiplier:2,tileRef:tt.Dawnlit},Ambershine:{name:"Ambershine",baseChance:0,coinMultiplier:5,tileRef:tt.Ambershine}},ba={CommonEgg:{tileRef:ye.CommonEgg,name:"Common Egg",coinPrice:1e5,creditPrice:19,rarity:A.Common,initialTileScale:.3,baseTileScale:.8,secondsToHatch:600,faunaSpawnWeights:{Worm:60,Snail:35,Bee:5}},UncommonEgg:{tileRef:ye.UncommonEgg,name:"Uncommon Egg",coinPrice:1e6,creditPrice:48,rarity:A.Uncommon,initialTileScale:.3,baseTileScale:.8,secondsToHatch:3600,faunaSpawnWeights:{Chicken:65,Bunny:25,Dragonfly:10}},RareEgg:{tileRef:ye.RareEgg,name:"Rare Egg",coinPrice:1e7,creditPrice:99,rarity:A.Rare,initialTileScale:.3,baseTileScale:.8,secondsToHatch:21600,faunaSpawnWeights:{Pig:90,Cow:10}},LegendaryEgg:{tileRef:ye.LegendaryEgg,name:"Legendary Egg",coinPrice:1e8,creditPrice:249,rarity:A.Legendary,initialTileScale:.3,baseTileScale:.8,secondsToHatch:43200,faunaSpawnWeights:{Squirrel:60,Turtle:30,Goat:10}},MythicalEgg:{tileRef:ye.MythicalEgg,name:"Mythical Egg",coinPrice:1e9,creditPrice:599,rarity:A.Mythic,initialTileScale:.3,baseTileScale:.8,secondsToHatch:86400,faunaSpawnWeights:{Butterfly:75,Capybara:5,Peacock:20}}},kt={Worm:{tileRef:ye.Worm,name:"Worm",description:"",coinsToFullyReplenishHunger:500,innateAbilityWeights:{SeedFinderI:50,ProduceEater:50},baseTileScale:.6,maxScale:2,maturitySellPrice:5e3,matureWeight:.1,moveProbability:.1,hoursToMature:12,rarity:A.Common,tileTransformOrigin:"bottom",nudgeY:.25,diet:["Carrot","Strawberry","Aloe","Tomato","Apple"]},Snail:{tileRef:ye.Snail,name:"Snail",description:"",coinsToFullyReplenishHunger:1e3,innateAbilityWeights:{CoinFinderI:100},baseTileScale:.6,maxScale:2,maturitySellPrice:5e3,matureWeight:.15,moveProbability:.01,hoursToMature:12,rarity:A.Common,tileTransformOrigin:"bottom",nudgeY:-.25,diet:["Blueberry","Tomato","Corn","Daffodil"]},Bee:{tileRef:ye.Bee,name:"Bee",coinsToFullyReplenishHunger:1500,innateAbilityWeights:{ProduceScaleBoost:50,ProduceMutationBoost:50},baseTileScale:.6,maxScale:2.5,maturitySellPrice:3e4,matureWeight:.2,moveProbability:.5,hoursToMature:12,rarity:A.Common,diet:["Strawberry","Blueberry","OrangeTulip","Daffodil","Lily"]},Chicken:{tileRef:ye.Chicken,name:"Chicken",coinsToFullyReplenishHunger:3e3,innateAbilityWeights:{EggGrowthBoost:80,PetRefund:20},baseTileScale:.8,maxScale:2,maturitySellPrice:5e4,matureWeight:3,moveProbability:.2,hoursToMature:24,rarity:A.Uncommon,tileTransformOrigin:"bottom",nudgeY:-.2,diet:["Aloe","Corn","Watermelon","Pumpkin"]},Bunny:{tileRef:ye.Bunny,name:"Bunny",coinsToFullyReplenishHunger:750,innateAbilityWeights:{CoinFinderII:60,SellBoostI:40},baseTileScale:.7,maxScale:2,maturitySellPrice:75e3,matureWeight:2,moveProbability:.3,hoursToMature:24,rarity:A.Uncommon,tileTransformOrigin:"bottom",nudgeY:-.2,diet:["Carrot","Strawberry","Blueberry","Echeveria"]},Dragonfly:{tileRef:ye.Dragonfly,name:"Dragonfly",coinsToFullyReplenishHunger:250,innateAbilityWeights:{HungerRestore:70,PetMutationBoost:30},baseTileScale:.6,maxScale:2.5,maturitySellPrice:15e4,matureWeight:.2,moveProbability:.7,hoursToMature:24,rarity:A.Uncommon,tileTransformOrigin:"center",diet:["Apple","OrangeTulip","Echeveria"]},Pig:{tileRef:ye.Pig,name:"Pig",coinsToFullyReplenishHunger:5e4,innateAbilityWeights:{SellBoostII:30,PetAgeBoost:30,PetHatchSizeBoost:30},baseTileScale:1,maxScale:2.5,maturitySellPrice:5e5,matureWeight:200,moveProbability:.2,hoursToMature:72,rarity:A.Rare,tileTransformOrigin:"bottom",nudgeY:-.15,diet:["Watermelon","Pumpkin","Mushroom","Bamboo"]},Cow:{tileRef:ye.Cow,name:"Cow",coinsToFullyReplenishHunger:25e3,innateAbilityWeights:{SeedFinderII:30,HungerBoost:30,PlantGrowthBoost:30},baseTileScale:1.1,maxScale:2.5,maturitySellPrice:1e6,matureWeight:600,moveProbability:.1,hoursToMature:72,rarity:A.Rare,tileTransformOrigin:"bottom",nudgeY:-.15,diet:["Coconut","Banana","BurrosTail","Mushroom"]},Squirrel:{tileRef:ye.Squirrel,name:"Squirrel",coinsToFullyReplenishHunger:15e3,innateAbilityWeights:{CoinFinderIII:70,SellBoostIII:20,PetMutationBoostII:10},baseTileScale:.6,maxScale:2,maturitySellPrice:5e6,matureWeight:.5,moveProbability:.4,hoursToMature:100,rarity:A.Legendary,tileTransformOrigin:"bottom",nudgeY:-.1,diet:["Pumpkin","Banana","Grape"]},Turtle:{tileRef:ye.Turtle,name:"Turtle",coinsToFullyReplenishHunger:1e5,innateAbilityWeights:{HungerRestoreII:25,HungerBoostII:25,PlantGrowthBoostII:25,EggGrowthBoostII:25},baseTileScale:1,maxScale:2.5,maturitySellPrice:1e7,matureWeight:150,moveProbability:.05,hoursToMature:100,rarity:A.Legendary,tileTransformOrigin:"bottom",nudgeY:-.15,diet:["Watermelon","BurrosTail","Bamboo","Pepper"]},Goat:{tileRef:ye.Goat,name:"Goat",coinsToFullyReplenishHunger:2e4,innateAbilityWeights:{PetHatchSizeBoostII:10,PetAgeBoostII:40,PetXpBoost:40},baseTileScale:1,maxScale:2,maturitySellPrice:2e7,matureWeight:100,moveProbability:.2,hoursToMature:100,rarity:A.Legendary,tileTransformOrigin:"bottom",nudgeY:-.1,diet:["Pumpkin","Coconut","Cactus","Pepper"]},Butterfly:{tileRef:ye.Butterfly,name:"Butterfly",coinsToFullyReplenishHunger:25e3,innateAbilityWeights:{ProduceScaleBoostII:40,ProduceMutationBoostII:40,SeedFinderIII:20},baseTileScale:.6,maxScale:2.5,maturitySellPrice:5e7,matureWeight:.2,moveProbability:.6,hoursToMature:144,rarity:A.Mythic,tileTransformOrigin:"center",diet:["Daffodil","Lily","Grape","Lemon","Sunflower"]},Capybara:{tileRef:ye.Capybara,name:"Capybara",coinsToFullyReplenishHunger:15e4,innateAbilityWeights:{DoubleHarvest:50,ProduceRefund:50},baseTileScale:1,maxScale:2.5,maturitySellPrice:2e8,matureWeight:50,moveProbability:.2,hoursToMature:144,rarity:A.Mythic,tileTransformOrigin:"bottom",nudgeY:-.1,diet:["Lemon","PassionFruit","DragonFruit","Lychee"]},Peacock:{tileRef:ye.Peacock,name:"Peacock",coinsToFullyReplenishHunger:1e5,innateAbilityWeights:{SellBoostIV:40,PetXpBoostII:50,PetRefundII:10},baseTileScale:1.2,maxScale:2.5,maturitySellPrice:1e8,matureWeight:5,moveProbability:.2,hoursToMature:144,rarity:A.Mythic,tileTransformOrigin:"bottom",nudgeY:-.1,diet:["Cactus","Sunflower","Lychee"]}},sn={ProduceScaleBoost:{name:"Crop Size Boost I",description:"Increases the scale of garden crops",trigger:"continuous",baseProbability:.3,baseParameters:{cropScaleIncreasePercentage:6}},ProduceScaleBoostII:{name:"Crop Size Boost II",description:"Increases the scale of garden crops",trigger:"continuous",baseProbability:.4,baseParameters:{cropScaleIncreasePercentage:10}},DoubleHarvest:{name:"Double Harvest",description:"Chance to duplicate harvested crops",trigger:"harvest",baseProbability:5,baseParameters:{}},ProduceEater:{name:"Crop Eater",description:"Harvests non-mutated crops and sells them",trigger:"continuous",baseProbability:60,baseParameters:{cropSellPriceIncreasePercentage:150}},SellBoostI:{name:"Sell Boost I",description:"Receive bonus coins when selling crops",trigger:"sellAllCrops",baseProbability:10,baseParameters:{cropSellPriceIncreasePercentage:20}},SellBoostII:{name:"Sell Boost II",description:"Receive bonus coins when selling crops",trigger:"sellAllCrops",baseProbability:12,baseParameters:{cropSellPriceIncreasePercentage:30}},SellBoostIII:{name:"Sell Boost III",description:"Receive bonus coins when selling crops",trigger:"sellAllCrops",baseProbability:14,baseParameters:{cropSellPriceIncreasePercentage:40}},SellBoostIV:{name:"Sell Boost IV",description:"Receive bonus coins when selling crops",trigger:"sellAllCrops",baseProbability:16,baseParameters:{cropSellPriceIncreasePercentage:50}},ProduceRefund:{name:"Crop Refund",description:"Chance to get crops back when selling",trigger:"sellAllCrops",baseProbability:20,baseParameters:{}},PlantGrowthBoost:{name:"Plant Growth Boost I",description:"Reduces the time for plants to grow",trigger:"continuous",baseProbability:24,baseParameters:{plantGrowthReductionMinutes:3}},PlantGrowthBoostII:{name:"Plant Growth Boost II",description:"Reduces the time for plants to grow",trigger:"continuous",baseProbability:27,baseParameters:{plantGrowthReductionMinutes:5}},ProduceMutationBoost:{name:"Crop Mutation Boost I",description:"Increases the chance of garden crops gaining mutations",trigger:"continuous",baseParameters:{mutationChanceIncreasePercentage:10}},ProduceMutationBoostII:{name:"Crop Mutation Boost II",description:"Increases the chance of garden crops gaining mutations",trigger:"continuous",baseParameters:{mutationChanceIncreasePercentage:15}},PetMutationBoost:{name:"Pet Mutation Boost I",description:"Increases the chance of hatched pets gaining mutations",trigger:"hatchEgg",baseParameters:{mutationChanceIncreasePercentage:7}},PetMutationBoostII:{name:"Pet Mutation Boost II",description:"Increases the chance of hatched pets gaining mutations",trigger:"hatchEgg",baseParameters:{mutationChanceIncreasePercentage:10}},GoldGranter:{name:"Gold Granter",description:"Grants the Gold mutation to a garden crop",trigger:"continuous",baseProbability:.72,baseParameters:{grantedMutations:["Gold"]}},RainbowGranter:{name:"Rainbow Granter",description:"Grants the Rainbow mutation to a garden crop",trigger:"continuous",baseProbability:.72,baseParameters:{grantedMutations:["Rainbow"]}},EggGrowthBoost:{name:"Egg Growth Boost I",description:"Reduces the time for eggs to hatch",trigger:"continuous",baseProbability:21,baseParameters:{eggGrowthTimeReductionMinutes:7}},EggGrowthBoostII:{name:"Egg Growth Boost II",description:"Reduces the time for eggs to hatch",trigger:"continuous",baseProbability:24,baseParameters:{eggGrowthTimeReductionMinutes:10}},EggGrowthBoostIII:{name:"Egg Growth Boost III",description:"Reduces the time for eggs to hatch",trigger:"continuous",baseProbability:27,baseParameters:{eggGrowthTimeReductionMinutes:13}},PetAgeBoost:{name:"Hatch XP Boost I",description:"Hatched pets start with bonus XP",trigger:"hatchEgg",baseProbability:50,baseParameters:{bonusXp:8e3}},PetAgeBoostII:{name:"Hatch XP Boost II",description:"Hatched pets start with bonus XP",trigger:"hatchEgg",baseProbability:60,baseParameters:{bonusXp:12e3}},PetHatchSizeBoost:{name:"Max Strength Boost I",description:"Increases the maximum strength of hatched pets",trigger:"hatchEgg",baseProbability:12,baseParameters:{maxStrengthIncreasePercentage:2.4}},PetHatchSizeBoostII:{name:"Max Strength Boost II",description:"Increases the maximum strength of hatched pets",trigger:"hatchEgg",baseProbability:14,baseParameters:{maxStrengthIncreasePercentage:3.5}},PetXpBoost:{name:"XP Boost I",description:"Gives bonus XP to active pets",trigger:"continuous",baseProbability:30,baseParameters:{bonusXp:300}},PetXpBoostII:{name:"XP Boost II",description:"Gives bonus XP to active pets",trigger:"continuous",baseProbability:35,baseParameters:{bonusXp:400}},HungerRestore:{name:"Hunger Restore I",description:"Restores the hunger of a random active pet",trigger:"continuous",baseProbability:12,baseParameters:{hungerRestorePercentage:30}},HungerRestoreII:{name:"Hunger Restore II",description:"Restores the hunger of a random active pet",trigger:"continuous",baseProbability:14,baseParameters:{hungerRestorePercentage:35}},HungerBoost:{name:"Hunger Boost I",description:"Reduces the hunger depletion rate of active pets",trigger:"continuous",baseParameters:{hungerDepletionRateDecreasePercentage:12}},HungerBoostII:{name:"Hunger Boost II",description:"Reduces the hunger depletion rate of active pets",trigger:"continuous",baseParameters:{hungerDepletionRateDecreasePercentage:16}},PetRefund:{name:"Pet Refund I",description:"Chance to receive the pet back as an egg when sold",trigger:"sellPet",baseProbability:5,baseParameters:{}},PetRefundII:{name:"Pet Refund II",description:"Chance to receive the pet back as an egg when sold",trigger:"sellPet",baseProbability:7,baseParameters:{}},Copycat:{name:"Copycat",description:"Chance to copy the ability of another active pet",trigger:"continuous",baseProbability:1,baseParameters:{}},CoinFinderI:{name:"Coin Finder I",description:"Finds coins in your garden",trigger:"continuous",baseProbability:35,baseParameters:{baseMaxCoinsFindable:12e4}},CoinFinderII:{name:"Coin Finder II",description:"Finds coins in your garden",trigger:"continuous",baseProbability:13,baseParameters:{baseMaxCoinsFindable:12e5}},CoinFinderIII:{name:"Coin Finder III",description:"Finds coins in your garden",trigger:"continuous",baseProbability:6,baseParameters:{baseMaxCoinsFindable:1e7}},SeedFinderI:{name:"Seed Finder I",description:"Finds common and uncommon seeds in your garden",trigger:"continuous",baseProbability:40,baseParameters:{}},SeedFinderII:{name:"Seed Finder II",description:"Finds rare and legendary seeds in your garden",trigger:"continuous",baseProbability:16,baseParameters:{}},SeedFinderIII:{name:"Seed Finder III",description:"Finds mythical seeds in your garden",trigger:"continuous",baseProbability:9,baseParameters:{}},SeedFinderIV:{name:"Seed Finder IV",description:"Finds divine and celestial seeds in your garden",trigger:"continuous",baseProbability:.01,baseParameters:{}}},ha={WateringCan:{tileRef:ft.WateringCan,name:"Watering Can",coinPrice:5e3,creditPrice:2,rarity:A.Common,description:"Speeds up growth of plant by 5 minutes. SINGLE USE.",isOneTimePurchase:!1,baseTileScale:.6,maxInventoryQuantity:99},PlanterPot:{tileRef:ft.PlanterPot,name:"Planter Pot",coinPrice:25e3,creditPrice:5,rarity:A.Common,description:"Extract a plant to your inventory (can be replanted). SINGLE USE.",isOneTimePurchase:!1,baseTileScale:.8},Shovel:{tileRef:ft.Shovel,name:"Shovel",coinPrice:1e6,creditPrice:100,rarity:A.Uncommon,description:"Remove plants from your garden. UNLIMITED USES.",isOneTimePurchase:!0,baseTileScale:.7},RainbowPotion:{tileRef:ft.RainbowPotion,name:"Rainbow Potion",coinPrice:1/0,creditPrice:1/0,rarity:A.Celestial,description:"Adds the Rainbow mutation to a crop in your garden. SINGLE USE.",isOneTimePurchase:!0,baseTileScale:1}},Sa={SmallRock:{tileRef:se.SmallRock,name:"Small Garden Rock",coinPrice:1e3,creditPrice:2,rarity:A.Common,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.3},MediumRock:{tileRef:se.MediumRock,name:"Medium Garden Rock",coinPrice:2500,creditPrice:5,rarity:A.Common,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.21},LargeRock:{tileRef:se.LargeRock,name:"Large Garden Rock",coinPrice:5e3,creditPrice:10,rarity:A.Common,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.1},WoodBench:{tileRef:se.WoodBench,name:"Wood Bench",coinPrice:1e4,creditPrice:15,rarity:A.Common,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.3,avatarNudgeY:-.18},WoodArch:{tileRef:se.WoodArch,name:"Wood Arch",coinPrice:2e4,creditPrice:25,rarity:A.Common,baseTileScale:1.53,isOneTimePurchase:!1,nudgeY:-.5},WoodBridge:{tileRef:se.WoodBridge,name:"Wood Bridge",coinPrice:4e4,creditPrice:35,rarity:A.Common,baseTileScale:1.22,isOneTimePurchase:!1,nudgeY:-.35,avatarNudgeY:-.44},WoodLampPost:{tileRef:se.WoodLampPost,name:"Wood Lamp Post",coinPrice:8e4,creditPrice:49,rarity:A.Common,baseTileScale:1.5,isOneTimePurchase:!1,nudgeY:-.6},WoodOwl:{tileRef:se.WoodOwl,name:"Wood Owl",coinPrice:9e4,creditPrice:59,rarity:A.Common,baseTileScale:1.3,isOneTimePurchase:!1,nudgeY:-.4},WoodBirdhouse:{tileRef:se.Birdhouse,name:"Wood Birdhouse",coinPrice:1e5,creditPrice:69,rarity:A.Common,baseTileScale:1.5,isOneTimePurchase:!1,nudgeY:-.6},StoneBench:{tileRef:se.StoneBench,name:"Stone Bench",coinPrice:1e6,creditPrice:75,rarity:A.Uncommon,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.3,avatarNudgeY:-.18},StoneArch:{tileRef:se.StoneArch,name:"Stone Arch",coinPrice:4e6,creditPrice:124,rarity:A.Uncommon,baseTileScale:1.53,isOneTimePurchase:!1,nudgeY:-.5},StoneBridge:{tileRef:se.StoneBridge,name:"Stone Bridge",coinPrice:5e6,creditPrice:179,rarity:A.Uncommon,baseTileScale:1.22,isOneTimePurchase:!1,nudgeY:-.35,avatarNudgeY:-.44},StoneLampPost:{tileRef:se.StoneLampPost,name:"Stone Lamp Post",coinPrice:8e6,creditPrice:199,rarity:A.Uncommon,baseTileScale:1.5,isOneTimePurchase:!1,nudgeY:-.6},StoneGnome:{tileRef:se.StoneGnome,name:"Stone Gnome",coinPrice:9e6,creditPrice:219,rarity:A.Uncommon,baseTileScale:1.3,isOneTimePurchase:!1,nudgeY:-.4},StoneBirdbath:{tileRef:se.StoneBirdbath,name:"Stone Birdbath",coinPrice:1e7,creditPrice:249,rarity:A.Uncommon,baseTileScale:1.2,isOneTimePurchase:!1,nudgeY:-.46},MarbleBench:{tileRef:se.MarbleBench,name:"Marble Bench",coinPrice:75e6,creditPrice:349,rarity:A.Rare,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.3,avatarNudgeY:-.18},MarbleArch:{tileRef:se.MarbleArch,name:"Marble Arch",coinPrice:1e8,creditPrice:399,rarity:A.Rare,baseTileScale:1.53,isOneTimePurchase:!1,nudgeY:-.5},MarbleBridge:{tileRef:se.MarbleBridge,name:"Marble Bridge",coinPrice:15e7,creditPrice:429,rarity:A.Rare,baseTileScale:1.22,isOneTimePurchase:!1,nudgeY:-.35,avatarNudgeY:-.44},MarbleLampPost:{tileRef:se.MarbleLampPost,name:"Marble Lamp Post",coinPrice:2e8,creditPrice:449,rarity:A.Rare,baseTileScale:1.5,isOneTimePurchase:!1,nudgeY:-.6},MarbleBlobling:{tileRef:se.MarbleBlobling,name:"Marble Blobling",coinPrice:3e8,creditPrice:499,rarity:A.Rare,baseTileScale:1.5,isOneTimePurchase:!1,nudgeY:-.56},MiniFairyCottage:{tileRef:se.MiniFairyCottage,name:"Mini Fairy Cottage",coinPrice:5e8,creditPrice:549,rarity:A.Rare,baseTileScale:1.1,isOneTimePurchase:!1,nudgeY:-.37},StrawScarecrow:{tileRef:se.StrawScarecrow,name:"Straw Scarecrow",coinPrice:1e9,creditPrice:599,rarity:A.Legendary,baseTileScale:1.8,isOneTimePurchase:!1,nudgeY:-.65},MiniFairyForge:{tileRef:se.MiniFairyForge,name:"Mini Fairy Forge",coinPrice:5e9,creditPrice:979,rarity:A.Legendary,baseTileScale:1,isOneTimePurchase:!1,nudgeY:-.3},MiniFairyKeep:{tileRef:se.MiniFairyKeep,name:"Mini Fairy Keep",coinPrice:25e9,creditPrice:1249,rarity:A.Mythic,baseTileScale:1.05,isOneTimePurchase:!1,nudgeY:-.33}};var Rt=new Map;function or(e){try{return Ve(new RegExp("^"+e+"$"))}catch{return[]}}function sr(e){if(e&&typeof e.read=="function")return"read";for(let t of Object.keys(e||{})){let n=e[t];if(typeof n=="function"&&t!=="write"&&t!=="onMount"&&t!=="toString"){let r=n.length;if(r===1||r===2)return t}}throw new Error("Impossible de localiser la fonction read() de l'atom")}function lr(e){return Rt.get(e)||null}async function cr(e){!e?.closeAction||!e?.openAction||(await e.closeAction(),await new Promise(t=>setTimeout(t,0)),await e.openAction())}async function dr(e){let t=e.label,n=Rt.get(t);if(n?.installed)return n;let r=or(e.label);if(!r.length)throw new Error(`${e.label} introuvable`);let a=n??{config:e,enabled:!1,payload:null,patched:new Map,installed:!1},i=null;e.gate?.label&&(i=oe(e.gate.label));for(let o of r){let l=sr(o),u=o[l];o[l]=d=>{try{i&&d(i)}catch{}for(let P of e.extraDeps||[])try{let M=oe(P);M&&d(M)}catch{}let y=u(d);return!a.enabled||a.payload==null?y:e.merge?e.merge(y,a.payload):a.payload},a.patched.set(o,{readKey:l,orig:u})}return i&&e.gate?.autoDisableOnClose&&(a.unsubGate=await $e(i,async()=>{let o;try{o=await ve(i)}catch{o=null}!(e.gate?.isOpen?e.gate.isOpen(o):!!o)&&a.enabled&&(a.enabled=!1)})),a.installed=!0,Rt.set(t,a),a}async function qt(e,t,n){await Ie();let r=await dr(e);r.payload=t,r.enabled=!0,n?.merge&&!e.merge&&(e.merge=(a,i)=>i),n?.openGate&&e.gate?.openAction&&await e.gate.openAction(),r.autoTimer&&(clearTimeout(r.autoTimer),r.autoTimer=null),n?.autoRestoreMs&&n.autoRestoreMs>0&&(r.autoTimer=setTimeout(()=>{ln(e.label)},n.autoRestoreMs))}async function ln(e){let t=lr(e);t&&(t.enabled=!1,t.payload=null,t.autoTimer&&(clearTimeout(t.autoTimer),t.autoTimer=null),await cr(t.config.gate))}var _e={activeModal:"activeModalAtom",inventory:"myInventoryAtom",myData:"myDataAtom"};async function Bt(){let e=oe(_e.activeModal);e&&await xe(e,"inventory")}async function nt(){let e=oe(_e.activeModal);e&&await xe(e,null)}function cn(e){return e==="inventory"}var ur={label:_e.inventory,merge:(e,t)=>t,gate:{label:_e.activeModal,isOpen:cn,openAction:Bt,closeAction:nt,autoDisableOnClose:!0}},mr={label:_e.myData,merge:(e,t)=>({...e&&typeof e=="object"?e:{},inventory:t}),gate:{label:_e.activeModal,isOpen:cn,openAction:Bt,closeAction:nt,autoDisableOnClose:!0}};async function rt(e,t){let n=t?.open!==!1,r;try{let i=oe(_e.inventory);i&&(r=await ve(i).catch(()=>{}))}catch{}try{console.log("[fakeInventory] \u25B6 re\xE7u \u2192",e)}catch{}try{console.log("[fakeInventory] \u25B6 moi   \u2192",r)}catch{}let a=e;try{await qt(mr,a,{openGate:!1,autoRestoreMs:t?.autoRestoreMs})}catch{}await qt(ur,a,{openGate:!1,autoRestoreMs:t?.autoRestoreMs}),n&&await Bt()}var Pn="myValidatedSelectedItemIndexAtom",pr="qws:pets:overrides:v1",Tn="qws:pets:ui:v1",In="qws:pets:teams:v1",Cn="qws:pets:teamSearch:v1",dn={enabled:!1,thresholdPct:10,crops:{}},Ht={selectedPetId:null},De=sn??{};function En(e){let t=String(e??""),n=typeof De?.[t]?.name=="string"&&De[t].name.trim()?De[t].name:t;return String(n)}function Mn(e){let t=String(e??""),n=typeof De?.[t]?.name=="string"&&De[t].name.trim()?De[t].name:t;return String(n).replace(/(?:\s+|-)?(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\s*$/,"").trim()}function un(e){let t=String(e||"").trim(),n=t.match(/^(ab|sp):\s*(.*)$/i);return n?{mode:n[1].toLowerCase()==="ab"?"ability":"species",value:(n[2]||"").trim()}:{mode:"text",value:t}}async function mn(e){await Ne();let t=String(e||"").toLowerCase().trim().replace(/(?:\s+|-)?(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\s*$/i,""),n=new Set;if(!t)return n;for(let r of Re){let a=Array.isArray(r.abilities)?r.abilities:[];for(let i of a)Mn(i).toLowerCase()===t&&n.add(i)}return n}function Wt(e,t){return t?Me(e.id).includes(t)||Me(e.petSpecies).includes(t)||Me(e.name).includes(t)||Array.isArray(e.abilities)&&e.abilities.some(n=>Me(n).includes(t)||Me(En(n)).includes(t))||Array.isArray(e.mutations)&&e.mutations.some(n=>Me(n).includes(t)):!0}async function pn(){try{let e=await pt.get();return(Array.isArray(e?.favoritedItemIds)?e.favoritedItemIds:[]).slice()}catch{return[]}}function yr(e){if(!e||kt[e])return e;let t=e.charAt(0).toUpperCase()+e.slice(1).toLowerCase();return kt[t]?t:e}function yn(e){return{id:e.id,itemType:"Pet",petSpecies:yr(e.petSpecies),name:e.name??null,xp:e.xp,hunger:e.hunger,mutations:Array.isArray(e.mutations)?e.mutations.slice():[],targetScale:e.targetScale,abilities:Array.isArray(e.abilities)?e.abilities.slice():[]}}async function Dt(){let e=oe("setSelectedIndexToEndAtom");await xe(e,"null");try{await me.setSelectedItem(null)}catch{}try{await me.dropObject()}catch{}}async function gn(e=2e4){let t=oe(Pn);if(!t)return null;await Dt();let n=performance.now();for(;performance.now()-n<e;){try{let r=await ve(t);if(typeof r=="number"&&Number.isInteger(r)&&r>=0)return r}catch{}await new Promise(r=>setTimeout(r,100))}return null}function gr(){try{let e=localStorage.getItem(pr);if(!e)return{};let t=JSON.parse(e);return t&&typeof t=="object"?t:{}}catch{return{}}}function Nt(){try{let e=localStorage.getItem(Tn);if(!e)return{...Ht};let t=JSON.parse(e);return{...Ht,...t||{}}}catch{return{...Ht}}}function fr(e){try{localStorage.setItem(Tn,JSON.stringify(e))}catch{}}function An(){try{let e=localStorage.getItem(In);if(!e)return[];let t=JSON.parse(e);return Array.isArray(t)?t.map(n=>({id:String(n?.id||""),name:String(n?.name||"Team"),slots:Array.isArray(n?.slots)?n.slots.slice(0,3).map(r=>r?String(r):null):[null,null,null]})).filter(n=>n.id):[]}catch{return[]}}function je(e){try{localStorage.setItem(In,JSON.stringify(e))}catch{}}function fn(){try{return crypto.randomUUID()}catch{return`t_${Date.now().toString(36)}_${Math.random().toString(16).slice(2)}`}}var at=An(),br=new Set;function hr(){let e=at.slice();br.forEach(t=>{try{t(e)}catch{}})}function Sr(){try{let e=localStorage.getItem(Cn),t=e?JSON.parse(e):{};return t&&typeof t=="object"?t:{}}catch{return{}}}function wr(e){try{localStorage.setItem(Cn,JSON.stringify(e))}catch{}}var bt=Sr(),Gt=new Set;function vr(e){let t=bt[e]||"";Gt.forEach(n=>{try{n(e,t)}catch{}})}function xr(e){let t=e??dn;return{enabled:!!t.enabled,thresholdPct:Math.min(100,Math.max(1,Number(t.thresholdPct)||dn.thresholdPct)),crops:{...t.crops||{}}}}var Pr=[],Ye=null,ht=[],Re=[],$t=new Set,bn=null,hn=null,Ot=null,Ft=null,Me=e=>(e??"").toLowerCase(),Ln=e=>typeof e=="string"?e:null,St=e=>Number.isFinite(e)?e:0,wt=e=>Array.isArray(e)?e.filter(t=>typeof t=="string"):[];function vt(e){if(!e||e.itemType!=="Pet")return null;let t=Me(e.id);return t?{id:t,itemType:"Pet",petSpecies:Me(e.petSpecies??e.data?.petSpecies),name:Ln(e.name??e.data?.name??null),xp:St(e.xp??e.data?.xp),hunger:St(e.hunger??e.data?.hunger),mutations:wt(e.mutations??e.data?.mutations),targetScale:Number.isFinite(e.targetScale??e.data?.targetScale)?Number(e.targetScale??e.data?.targetScale):void 0,abilities:wt(e.abilities??e.data?.abilities)}:null}function kn(e){let t=e?.slot;if(!t||typeof t!="object")return null;let n=Me(t.id);return n?{id:n,itemType:"Pet",petSpecies:Me(t.petSpecies),name:Ln(t.name??null),xp:St(t.xp),hunger:St(t.hunger),mutations:wt(t.mutations),targetScale:Number.isFinite(t.targetScale)?Number(t.targetScale):void 0,abilities:wt(t.abilities)}:null}function Rn(e){return JSON.stringify({id:e.id,itemType:"Pet",petSpecies:e.petSpecies,name:e.name??null,mutations:Array.isArray(e.mutations)?e.mutations:[],targetScale:Number.isFinite(e.targetScale)?e.targetScale:null,abilities:Array.isArray(e.abilities)?e.abilities:[]})}function Sn(e){let t=new Map,n=Array.isArray(e?.items)?e.items:Array.isArray(e)?e:[];for(let r of n){let a=vt(r);a&&t.set(a.id,Rn(a))}return t}function wn(e){let t=new Map,n=Array.isArray(e)?e:[];for(let r of n){let a=kn(r);a&&t.set(a.id,Rn(a))}return t}function vn(e,t){if(!e||e.size!==t.size)return!1;for(let[n,r]of t)if(e.get(n)!==r)return!1;return!0}function _t(){let e=new Map,t=Array.isArray(Ye?.items)?Ye.items:Array.isArray(Ye)?Ye:[];for(let a of t){let i=vt(a);i&&i.id&&e.set(i.id,i)}let n=Array.isArray(ht)?ht:[];for(let a of n){let i=kn(a);i&&i.id&&e.set(i.id,i)}Re=Array.from(e.values());let r=Re.slice();$t.forEach(a=>{try{a(r)}catch{}})}async function Ne(){if(!bn){let e=await pt.subNow(t=>{let n=Sn(t);vn(Ot,n)||(Ot=n,Ye=t,_t())});bn=()=>{try{e()}catch{}}}if(!hn){let e=await ke.subNow(t=>{let n=wn(t);vn(Ft,n)||(Ft=n,ht=Array.isArray(t)?t:[],_t())});hn=()=>{try{e()}catch{}}}if(!Re.length)try{let[e,t]=await Promise.all([pt.get(),ke.get()]);Ot=Sn(e),Ft=wn(t),Ye=e,ht=Array.isArray(t)?t:[],_t()}catch{}}var J={getPets(){return me.getPets()},onPetsChange(e){return me.onPetsChange(e)},onPetsChangeNow(e){return me.onPetsChangeNow(e)},async getPetById(e){await Ne();let t=String(e||"");return t?Re.find(n=>n.id===t)??null:null},getAbilityName(e){return En(e)},getAbilityNameWithoutLevel(e){return Mn(e)},getAbilityInfo(e){let t=String(e??""),n=De?.[t];return n?{id:t,...n}:null},getOverride(e){let t=gr();return xr(t[e])},async chooseSlotPet(e,t,n){let r=Math.max(0,Math.min(2,Math.floor(t||0))),a=this.getTeamById(e);if(!a)return null;let i=new Set;a.slots.forEach((P,M)=>{M!==r&&P&&i.add(String(P))});let o=n&&n.trim().length?await this.buildFilteredInventoryByQuery(n,{excludeIds:i}):await this.buildFilteredInventoryForTeam(e,{excludeIds:i});console.log("payload: ",o);let l=Array.isArray(o?.items)?o.items:[];if(!l.length){try{console.warn("[Pets] chooseSlotPet: no items match current filter.")}catch{}return null}await rt(o,{open:!0});let u=await gn(2e4);if(await nt(),u==null||u<0||u>=l.length){try{console.log("[Pets] chooseSlotPet: selection canceled or timed out.")}catch{}return null}let d=vt(l[u]);if(!d)return null;let y=a.slots.slice(0,3);y[r]=String(d.id),this.saveTeam({id:a.id,slots:y});try{await Dt()}catch{}return d},async pickPetViaFakeInventory(e){let t=await this.buildFilteredInventoryByQuery(e||""),n=Array.isArray(t?.items)?t.items:[];if(!n.length)return null;await rt(t,{open:!0});let r=await gn(2e4);await nt();let a=oe(Pn);return r==null||r<0||r>=n.length?null:(await Dt(),vt(n[r]))},setTeamsOrder(e){let t=new Map(this._teams.map(r=>[r.id,r])),n=[];for(let r of e){let a=t.get(r);a&&(n.push(a),t.delete(r))}for(let r of t.values())n.push(r);this._teams=n,je(this._teams),this._notifyTeamSubs()},async buildFilteredInventoryForTeam(e,t){await Ne();let{mode:n,value:r}=un(this.getTeamSearch(e)||""),a=await this.getInventoryPets();if(n==="ability"&&r){let d=await mn(r);a=d.size?a.filter(y=>Array.isArray(y.abilities)&&y.abilities.some(P=>d.has(P))):[]}else if(n==="species"&&r){let d=r.toLowerCase();a=a.filter(y=>(y.petSpecies||"").toLowerCase()===d)}else r&&(a=a.filter(d=>Wt(d,r)));if(t?.excludeIds?.size){let d=t.excludeIds;a=a.filter(y=>!d.has(y.id))}let i=a.map(yn),o=await pn(),l=new Set(a.map(d=>d.id)),u=o.filter(d=>l.has(d));return{items:i,favoritedItemIds:u}},async buildFilteredInventoryByQuery(e,t){await Ne();let n=(e||"").toLowerCase().trim();console.log(n);let r=await this.getInventoryPets();if(console.log("before filter (query)",r),r=r.filter(u=>Wt(u,n)),t?.excludeIds?.size){let u=t.excludeIds;r=r.filter(d=>!u.has(d.id))}console.log("after filter (query)",r);let a=r.map(yn),i=await pn(),o=new Set(r.map(u=>u.id)),l=i.filter(u=>o.has(u));return{items:a,favoritedItemIds:l}},getUIState(){return Nt()},setUIState(e){let n={...Nt(),...e||{}};return fr(n),n},setSelectedPet(e){return this.setUIState({selectedPetId:e})},getSelectedPetId(){return Nt().selectedPetId??null},_teams:An(),_teamSubs:new Set,_notifyTeamSubs(){let e=this.getTeams();this._teamSubs.forEach(t=>{try{t(e)}catch{}})},getTeams(){return Array.isArray(this._teams)?this._teams.map(e=>({...e,slots:e.slots.slice(0,3)})):[]},onTeamsChange(e){this._teamSubs.add(e);try{e(this.getTeams())}catch{}return()=>{this._teamSubs.delete(e)}},async onTeamsChangeNow(e){let t=this.onTeamsChange(e);try{e(this.getTeams())}catch{}return t},createTeam(e){let t={id:fn(),name:e?.trim()||`Team ${this._teams.length+1}`,slots:[null,null,null]};return this._teams.push(t),je(this._teams),this._notifyTeamSubs(),t},duplicateTeam(e){let t=this._teams.find(r=>r.id===e);if(!t)return null;let n={id:fn(),name:`${t.name} (copy)`,slots:t.slots.slice(0,3)};return this._teams.push(n),je(this._teams),this._notifyTeamSubs(),n},deleteTeam(e){let t=this._teams.findIndex(n=>n.id===e);return t<0?!1:(this._teams.splice(t,1),je(this._teams),this._notifyTeamSubs(),!0)},saveTeam(e){let t=this._teams.findIndex(a=>a.id===e.id);if(t<0)return null;let n=this._teams[t],r={id:n.id,name:typeof e.name=="string"?e.name:n.name,slots:Array.isArray(e.slots)?e.slots.slice(0,3):n.slots};return this._teams[t]=r,je(this._teams),this._notifyTeamSubs(),r},updateTeam(e,t){let n=at.findIndex(i=>i.id===e);if(n<0)return null;let r=at[n],a={...r,...t,slots:t.slots?[...t.slots]:r.slots};return at[n]=a,je(at),hr(),a},getTeamSearch(e){return bt[e]||""},setTeamSearch(e,t){bt[e]=(t||"").trim(),wr(bt),vr(e)},onTeamSearchChange(e){return Gt.add(e),()=>{Gt.delete(e)}},getTeamById(e){let t=this._teams.find(n=>n.id===e)||null;return t?{...t,slots:t.slots.slice(0,3)}:null},async getTeamFilteredInventoryPets(e){await Ne();let{mode:t,value:n}=un(this.getTeamSearch(e)||""),r=Re.slice();if(t==="ability"&&n){let a=await mn(n);return a.size?r.filter(i=>i.abilities?.some(o=>a.has(o))):[]}if(t==="species"&&n){let a=n.toLowerCase();return r.filter(i=>(i.petSpecies||"").toLowerCase()===a)}return n?r.filter(a=>Wt(a,n)):r},async getTeamSlotOptions(e,t){await Ne();let n=this.getTeamById(e),r=await this.getTeamFilteredInventoryPets(e);if(!n)return r;let a=Math.max(0,Math.min(2,Math.floor(t))),i=n.slots[a]||null,o=new Set;n.slots.forEach((u,d)=>{d!==a&&u&&o.add(u)});let l=r.filter(u=>!o.has(u.id));if(i&&!l.some(u=>u.id===i)){let u=Re.find(d=>d.id===i);u&&(l=[u,...l])}return l},_logs:[],_logsMax:500,_seenPerfByPet:new Map,_logSubs:new Set,async startAbilityLogsWatcher(){let e=await an.subNow(t=>{this._ingestAbilityMap(t)});return()=>{try{e()}catch{}}},getAbilityLogs(e){let t=e?.abilityIds&&e.abilityIds.length?new Set(e.abilityIds):null,n=Number.isFinite(e?.since)?e.since:0,r=Math.max(0,Math.floor(e?.limit??0)),a=this._logs.filter(i=>(n?i.performedAt>=n:!0)&&(t?t.has(i.abilityId):!0));return a=a.sort((i,o)=>o.performedAt-i.performedAt),r?a.slice(0,r):a},onAbilityLogs(e){this._logSubs.add(e);try{e(this.getAbilityLogs())}catch{}return()=>{this._logSubs.delete(e)}},getSeenAbilityIds(){let e=new Set;for(let t of this._logs)e.add(t.abilityId);return Array.from(e).sort()},clearAbilityLogs(){this._logs.length=0,this._seenPerfByPet.clear(),this._notifyLogSubs()},_notifyLogSubs(){let e=this.getAbilityLogs();this._logSubs.forEach(t=>{try{t(e)}catch{}})},_pushLog(e){this._logs.push(e),this._logs.length>this._logsMax&&this._logs.splice(0,this._logs.length-this._logsMax),this._notifyLogSubs()},_ingestAbilityMap(e){if(!(!e||typeof e!="object"))for(let t of Object.keys(e)){let n=e[t];if(!n||typeof n!="object")continue;let r=n.abilityId??null,a=Number(n.performedAt)||0;if(!r||!a)continue;let i=this._seenPerfByPet.get(t)||0;if(a<=i)continue;let o=Pr.find(u=>String(u?.slot?.id||"")===t)||null,l={petId:t,species:o?.slot?.petSpecies||void 0,name:o?.slot?.name??void 0,abilityId:String(r),data:n.data,performedAt:a};this._seenPerfByPet.set(t,a),this._pushLog(l)}},async getInventoryPets(){return await Ne(),Re.slice()},async searchInventoryPets(e){let t=await this.getInventoryPets(),n=a=>(a??"").toLowerCase(),r=(e||"").toLowerCase().trim();return r?t.filter(a=>n(a.id).includes(r)||n(a.petSpecies).includes(r)||n(a.name).includes(r)||a.abilities.some(i=>n(i).includes(r))||a.mutations.some(i=>n(i).includes(r))):t},onInventoryPetsChange(e){Ne(),$t.add(e);try{e(Re.slice())}catch{}return()=>{$t.delete(e)}},async useTeam(e){let t=this.getTeams().find(r=>r.id===e)||null;if(!t)throw new Error("Team not found");let n=(t.slots||[]).filter(r=>typeof r=="string"&&r.length>0).slice(0,3);return n.length?xn(n):{swapped:0,placed:0,skipped:0}},async useTeamSlots(e){let t=(Array.isArray(e)?e:[]).filter(n=>typeof n=="string"&&n.length>0).slice(0,3);return t.length?xn(t):{swapped:0,placed:0,skipped:0}}};async function Tr(){try{let e=await me.getPets();return(Array.isArray(e)?e:[]).map(n=>String(n?.slot?.id||"")).filter(n=>!!n).slice(0,3)}catch{return[]}}async function xn(e){let t=await Tr(),n=new Set(e),r=t.filter(y=>!n.has(y)),a=Math.max(0,t.length-e.length);if(a>0){let y=r.slice(0,a);for(let P of y)try{await me.storePet(P),t=t.filter(M=>M!==P)}catch(M){console.warn("[Pets] storePet failed:",P,M)}}let i=new Set;for(let y of e)t.includes(y)&&i.add(y);let o=0,l=0,u=0;i.size&&(t=t.filter(y=>!i.has(y)),u=i.size);let d=e.filter(y=>!i.has(y));for(let y of d){let P=t.shift();try{P?(await me.swapPet(P,y),o++):(await me.placePet(y,{x:0,y:0},"Boardwalk",64),l++)}catch(M){console.warn("[Pets] useTeam op failed for",{invId:y,slotId:P,err:M})}}return{swapped:o,placed:l,skipped:u}}function jt(e){let t="qws:pos",n="qws:collapsed",r="qws:hidden";if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",()=>jt(e),{once:!0});return}let i=`
+(() => {
+  var __defProp = Object.defineProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+
+  // src/core/state.ts
+  var NativeWS = window.WebSocket;
+  var NativeWorker = window.Worker;
+  var sockets = [];
+  var quinoaWS = null;
+  function setQWS(ws, why) {
+    if (!quinoaWS) {
+      quinoaWS = ws;
+      try {
+        console.log("[QuinoaWS] selected ->", why);
+      } catch {
+      }
+    }
+  }
+  var workerFound = false;
+  var Workers = typeof Set !== "undefined" ? /* @__PURE__ */ new Set() : {
+    _a: [],
+    add(w) {
+      this._a.push(w);
+    },
+    delete(w) {
+      const i = this._a.indexOf(w);
+      if (i >= 0) this._a.splice(i, 1);
+    },
+    forEach(fn) {
+      for (let i = 0; i < this._a.length; i++) fn(this._a[i]);
+    }
+  };
+  function label(rs) {
+    return ["CONNECTING", "OPEN", "CLOSING", "CLOSED"][rs ?? -1] || "none";
+  }
+
+  // src/core/parse.ts
+  async function parseWSData(d) {
+    try {
+      if (typeof d === "string") return JSON.parse(d);
+      if (d instanceof Blob) return JSON.parse(await d.text());
+      if (d instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(d));
+    } catch {
+    }
+    return null;
+  }
+
+  // src/hooks/ws-hook.ts
+  function installPageWebSocketHook() {
+    function WrappedWebSocket(url, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+      sockets.push(ws);
+      ws.addEventListener("open", () => {
+        setTimeout(() => {
+          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
+        }, 800);
+      });
+      ws.addEventListener("message", async (ev) => {
+        const j = await parseWSData(ev.data);
+        if (!j) return;
+        if (!window.quinoaWS && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+          setQWS(ws, "message:" + (j.type || "state"));
+        }
+      });
+      const nativeSend = ws.send.bind(ws);
+      ws.send = function(data) {
+        try {
+          let j = null;
+          if (typeof data === "string") j = JSON.parse(data);
+          else if (data instanceof ArrayBuffer) j = JSON.parse(new TextDecoder().decode(data));
+          if (!window.quinoaWS && j && Array.isArray(j.scopePath) && j.scopePath.join("/") === "Room/Quinoa") {
+            setQWS(ws, "send:" + j.type);
+          }
+        } catch {
+        }
+        return nativeSend(data);
+      };
+      return ws;
+    }
+    WrappedWebSocket.prototype = NativeWS.prototype;
+    try {
+      WrappedWebSocket.OPEN = NativeWS.OPEN;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
+    } catch {
+    }
+    window.WebSocket = WrappedWebSocket;
+  }
+
+  // src/store/jotai.ts
+  var _store = null;
+  var _captureInProgress = false;
+  var _captureError = null;
+  var _lastCapturedVia = null;
+  var getAtomCache = () => globalThis.jotaiAtomCache?.cache;
+  function findStoreViaFiber() {
+    const hook = globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    if (!hook?.renderers?.size) return null;
+    for (const [rid] of hook.renderers) {
+      const roots = hook.getFiberRoots(rid);
+      for (const root of roots) {
+        const seen = /* @__PURE__ */ new Set();
+        const stack = [root.current];
+        while (stack.length) {
+          const f = stack.pop();
+          if (!f || seen.has(f)) continue;
+          seen.add(f);
+          const v = f?.pendingProps?.value;
+          if (v && typeof v.get === "function" && typeof v.set === "function" && typeof v.sub === "function") {
+            _lastCapturedVia = "fiber";
+            return v;
+          }
+          if (f.child) stack.push(f.child);
+          if (f.sibling) stack.push(f.sibling);
+          if (f.alternate) stack.push(f.alternate);
+        }
+      }
+    }
+    return null;
+  }
+  async function captureViaWriteOnce(timeoutMs = 5e3) {
+    const cache = getAtomCache();
+    if (!cache) throw new Error("jotaiAtomCache.cache introuvable");
+    let capturedGet = null;
+    let capturedSet = null;
+    const patched = [];
+    for (const atom of cache.values()) {
+      if (!atom || typeof atom.write !== "function") continue;
+      const orig = atom.write;
+      atom.__origWrite = orig;
+      atom.write = function(get, set2, ...args) {
+        if (!capturedSet) {
+          capturedGet = get;
+          capturedSet = set2;
+          for (const a of patched) {
+            a.write = a.__origWrite;
+            delete a.__origWrite;
+          }
+        }
+        return orig.call(this, get, set2, ...args);
+      };
+      patched.push(atom);
+    }
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const t0 = Date.now();
+    try {
+      globalThis.dispatchEvent?.(new Event("visibilitychange"));
+    } catch {
+    }
+    while (!capturedSet && Date.now() - t0 < timeoutMs) {
+      await wait(50);
+    }
+    if (!capturedSet) {
+      _lastCapturedVia = "polyfill";
+      return {
+        get: () => {
+          throw new Error("Store non captur\xE9: get indisponible");
+        },
+        set: () => {
+          throw new Error("Store non captur\xE9: set indisponible");
+        },
+        sub: () => () => {
+        },
+        __polyfill: true
+      };
+    }
+    _lastCapturedVia = "write";
+    return {
+      get: (a) => capturedGet(a),
+      set: (a, v) => capturedSet(a, v),
+      // Poll-based sub when we only have raw get/set (no native sub)
+      sub: (a, cb) => {
+        let last;
+        try {
+          last = capturedGet(a);
+        } catch {
+        }
+        const id = setInterval(() => {
+          let curr;
+          try {
+            curr = capturedGet(a);
+          } catch {
+            return;
+          }
+          if (curr !== last) {
+            last = curr;
+            try {
+              cb();
+            } catch {
+            }
+          }
+        }, 100);
+        return () => clearInterval(id);
+      }
+    };
+  }
+  async function ensureStore() {
+    if (_store) return _store;
+    if (_captureInProgress) {
+      const t0 = Date.now();
+      while (!_store && Date.now() - t0 < 3e3) await new Promise((r) => setTimeout(r, 25));
+      if (_store) return _store;
+    }
+    _captureInProgress = true;
+    try {
+      _store = findStoreViaFiber() || await captureViaWriteOnce();
+      return _store;
+    } catch (e) {
+      _captureError = e;
+      throw e;
+    } finally {
+      _captureInProgress = false;
+    }
+  }
+  function isStoreCaptured() {
+    return !!_store && !_store.__polyfill;
+  }
+  function getCapturedInfo() {
+    return { via: _lastCapturedVia, polyfill: !!_store?.__polyfill, error: _captureError };
+  }
+  async function jGet(atom) {
+    const s = await ensureStore();
+    return s.get(atom);
+  }
+  async function jSet(atom, value) {
+    const s = await ensureStore();
+    await s.set(atom, value);
+  }
+  async function jSub(atom, cb) {
+    const s = await ensureStore();
+    return s.sub(atom, cb);
+  }
+  function findAtomsByLabel(regex) {
+    const cache = getAtomCache();
+    if (!cache) return [];
+    const out = [];
+    for (const a of cache.values()) {
+      const label2 = a?.debugLabel || a?.label || "";
+      if (regex.test(String(label2))) out.push(a);
+    }
+    return out;
+  }
+  function getAtomByLabel(label2) {
+    return findAtomsByLabel(new RegExp("^" + label2 + "$"))[0] || null;
+  }
+
+  // src/core/webSocketBridge.ts
+  function postAllToWorkers(msg) {
+    if (Workers.forEach) Workers.forEach((w) => {
+      try {
+        w.postMessage(msg);
+      } catch {
+      }
+    });
+    else for (const w of Workers._a) {
+      try {
+        w.postMessage(msg);
+      } catch {
+      }
+    }
+  }
+  function getPageWS() {
+    if (quinoaWS && quinoaWS.readyState === NativeWS.OPEN) return quinoaWS;
+    let any = null;
+    if (sockets.find) any = sockets.find((s) => s.readyState === NativeWS.OPEN) || null;
+    if (!any) {
+      for (let i = 0; i < sockets.length; i++) if (sockets[i].readyState === NativeWS.OPEN) {
+        any = sockets[i];
+        break;
+      }
+    }
+    if (any) {
+      setQWS(any, "getPageWS");
+      return any;
+    }
+    throw new Error("No page WebSocket open");
+  }
+  function sendToGame(payloadObj) {
+    const msg = { scopePath: ["Room", "Quinoa"], ...payloadObj };
+    try {
+      const ws = getPageWS();
+      ws.send(JSON.stringify(msg));
+      return true;
+    } catch {
+      postAllToWorkers({ __QWS_CMD: "send", payload: JSON.stringify(msg) });
+      return true;
+    }
+  }
+
+  // src/store/api.ts
+  async function ensureStore2() {
+    try {
+      await ensureStore();
+    } catch {
+    }
+  }
+  async function select(label2, fallback) {
+    await ensureStore2();
+    const atom = getAtomByLabel(label2);
+    if (!atom) return fallback;
+    try {
+      return await jGet(atom);
+    } catch {
+      return fallback;
+    }
+  }
+  async function subscribe(label2, cb) {
+    await ensureStore2();
+    const atom = getAtomByLabel(label2);
+    if (!atom) return () => {
+    };
+    const unsub = await jSub(atom, async () => {
+      try {
+        cb(await jGet(atom));
+      } catch {
+      }
+    });
+    return unsub;
+  }
+  async function subscribeImmediate(label2, cb) {
+    const first = await select(label2);
+    if (first !== void 0) cb(first);
+    return subscribe(label2, cb);
+  }
+  async function set(label2, value) {
+    await ensureStore2();
+    const atom = getAtomByLabel(label2);
+    if (!atom) return;
+    await jSet(atom, value);
+  }
+  var Store = { ensure: ensureStore2, select, subscribe, subscribeImmediate, set };
+
+  // src/store/selectors.ts
+  function sameIdSet(a, b) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    const sa = new Set(a);
+    for (const id of b) if (!sa.has(id)) return false;
+    return true;
+  }
+  async function _doSet(label2, raw) {
+    await Store.set(label2, raw);
+  }
+  function makeSelector(label2, map, write) {
+    const getRaw = () => Store.select(label2);
+    const get = () => getRaw().then((v) => map ? map(v) : v);
+    const set2 = async (next) => {
+      const prevRaw = await getRaw().catch(() => void 0);
+      const raw = write ? write(next, prevRaw) : next;
+      return _doSet(label2, raw);
+    };
+    const update = async (fn) => {
+      const prev = await get();
+      const next = fn(prev);
+      await set2(next);
+      return next;
+    };
+    const sub = (cb) => Store.subscribe(label2, (v) => cb(map ? map(v) : v));
+    const subNow = (cb) => Store.subscribeImmediate(label2, (v) => cb(map ? map(v) : v));
+    return { label: label2, get, set: set2, update, sub, subNow };
+  }
+  var favoriteIdsAtom = (() => {
+    const base = makeSelector(
+      "myInventoryAtom",
+      (inv) => Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds.slice() : []
+    );
+    return {
+      label: base.label + ":favoriteIds",
+      get: base.get,
+      sub(cb) {
+        let prev = null;
+        return base.sub((next) => {
+          if (!prev || !sameIdSet(prev, next)) {
+            prev = next;
+            cb(next);
+          }
+        });
+      },
+      subNow(cb) {
+        let prev = null;
+        return base.subNow((next) => {
+          if (!prev || !sameIdSet(prev, next)) {
+            prev = next;
+            cb(next);
+          }
+        });
+      }
+    };
+  })();
+  var favoriteIdSetAtom = (() => {
+    const base = makeSelector(
+      "myInventoryAtom",
+      (inv) => Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds : []
+    );
+    return {
+      label: base.label + ":favoriteIdSet",
+      async get() {
+        return new Set(await base.get());
+      },
+      sub(cb) {
+        let prev = null;
+        return base.sub((next) => {
+          if (!prev || !sameIdSet(prev, next)) {
+            prev = next;
+            cb(new Set(next));
+          }
+        });
+      },
+      subNow(cb) {
+        let prev = null;
+        return base.subNow((next) => {
+          if (!prev || !sameIdSet(prev, next)) {
+            prev = next;
+            cb(new Set(next));
+          }
+        });
+      }
+    };
+  })();
+  var gardenAtom = (() => {
+    const base = makeSelector("myDataAtom", (v) => v?.garden ?? null);
+    return { label: base.label + ":garden", get: base.get, sub: base.sub, subNow: base.subNow };
+  })();
+  var positionAtom = makeSelector("positionAtom");
+  var stateAtom = makeSelector("stateAtom");
+  var myInventoryAtom = makeSelector("myInventoryAtom");
+  var shopsAtom = makeSelector("shopsAtom");
+  var myShopPurchasesAtom = makeSelector("myShopPurchasesAtom");
+  var myDataAtom = makeSelector("myDataAtom");
+  var myCropInventoryAtom = makeSelector("myCropInventoryAtom");
+  var numPlayersAtom = makeSelector("numPlayersAtom");
+  var totalCropSellPriceAtom = makeSelector("totalCropSellPriceAtom");
+  var myPetInfosAtom = makeSelector("myPetInfosAtom");
+  var myPetSlotInfosAtom = makeSelector("myPetSlotInfosAtom");
+  var myValidatedSelectedItemIndexAtom = makeSelector("myValidatedSelectedItemIndexAtom");
+  var setSelectedIndexToEndAtom = makeSelector("setSelectedIndexToEndAtom");
+  function _abilitySig(a) {
+    if (!a) return "null";
+    const id = typeof a?.abilityId === "string" ? a.abilityId : "";
+    const ts = Number.isFinite(a?.performedAt) ? String(a.performedAt) : "";
+    let data = "";
+    try {
+      data = JSON.stringify(a?.data ?? null);
+    } catch {
+      data = "";
+    }
+    return `${id}|${ts}|${data}`;
+  }
+  function _extractTriggers(obj) {
+    const value = {};
+    const sig = /* @__PURE__ */ new Map();
+    if (obj && typeof obj === "object") {
+      for (const petId of Object.keys(obj)) {
+        const entry = obj[petId] ?? {};
+        const lat = entry.lastAbilityTrigger ?? null;
+        const pos = entry.position ?? null;
+        value[petId] = {
+          petId,
+          abilityId: lat?.abilityId ?? null,
+          performedAt: Number.isFinite(lat?.performedAt) ? lat.performedAt : null,
+          data: lat?.data ?? null,
+          position: pos ?? null
+        };
+        sig.set(petId, _abilitySig(lat));
+      }
+    }
+    return { value, sig };
+  }
+  function _mapEqual(a, b) {
+    if (!a) return false;
+    if (a.size !== b.size) return false;
+    for (const [k, v] of b) if (a.get(k) !== v) return false;
+    return true;
+  }
+  var myPetsAbilitiesTrigger = (() => {
+    const base = makeSelector("myPetSlotInfosAtom");
+    const label2 = base.label + ":abilitiesTrigger";
+    return {
+      label: label2,
+      async get() {
+        const src = await base.get();
+        return _extractTriggers(src).value;
+      },
+      sub(cb) {
+        let prevSig = null;
+        return base.sub((src) => {
+          const { value, sig } = _extractTriggers(src);
+          if (!_mapEqual(prevSig, sig)) {
+            prevSig = sig;
+            cb(value);
+          }
+        });
+      },
+      subNow(cb) {
+        let prevSig = null;
+        return base.subNow((src) => {
+          const { value, sig } = _extractTriggers(src);
+          if (!_mapEqual(prevSig, sig)) {
+            prevSig = sig;
+            cb(value);
+          }
+        });
+      }
+    };
+  })();
+
+  // src/services/player.ts
+  function slotSig(o) {
+    if (!o) return "\u2205";
+    return [
+      o.objectType ?? o.type ?? "",
+      o.species ?? o.seedSpecies ?? o.plantSpecies ?? o.eggId ?? o.decorId ?? "",
+      o.plantedAt ?? o.startTime ?? 0,
+      o.maturedAt ?? o.endTime ?? 0
+    ].join("|");
+  }
+  function diffGarden(prev, next) {
+    const p = prev?.tileObjects ?? {};
+    const n = next?.tileObjects ?? {};
+    const added = [];
+    const updated = [];
+    const removed = [];
+    const changes = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const k of Object.keys(n)) {
+      seen.add(k);
+      if (!(k in p)) {
+        added.push(+k);
+        changes.push({ kind: "added", slot: +k, next: n[k] });
+      } else if (slotSig(p[k]) !== slotSig(n[k])) {
+        updated.push(+k);
+        changes.push({ kind: "updated", slot: +k, prev: p[k], next: n[k] });
+      }
+    }
+    for (const k of Object.keys(p)) {
+      if (!seen.has(k)) {
+        removed.push(+k);
+        changes.push({ kind: "removed", slot: +k, prev: p[k] });
+      }
+    }
+    return { added, updated, removed, changes };
+  }
+  function petSig(p) {
+    const s = p?.slot ?? {};
+    const muts = Array.isArray(s.mutations) ? s.mutations.slice().sort().join(",") : "";
+    const ab = Array.isArray(s.abilities) ? s.abilities.slice().sort().join(",") : "";
+    const name = s.name ?? "";
+    const species = s.petSpecies ?? "";
+    const xp = Number.isFinite(s.xp) ? Math.round(s.xp) : 0;
+    const hunger = Number.isFinite(s.hunger) ? Math.round(s.hunger * 1e3) : 0;
+    const scale = Number.isFinite(s.targetScale) ? Math.round(s.targetScale * 1e3) : 0;
+    const x = Number.isFinite(p?.position?.x) ? Math.round(p.position.x) : 0;
+    const y = Number.isFinite(p?.position?.y) ? Math.round(p.position.y) : 0;
+    return `${species}|${name}|xp:${xp}|hg:${hunger}|sc:${scale}|m:${muts}|a:${ab}|pos:${x},${y}`;
+  }
+  function snapshotPets(state) {
+    const snap = /* @__PURE__ */ new Map();
+    const arr = Array.isArray(state) ? state : [];
+    for (const it of arr) {
+      const id = String(it?.slot?.id ?? "");
+      if (!id) continue;
+      snap.set(id, petSig(it));
+    }
+    return snap;
+  }
+  function diffPetsSnapshot(prev, next) {
+    const added = [];
+    const updated = [];
+    const removed = [];
+    const changes = [];
+    for (const [id, sig] of next) {
+      if (!prev.has(id)) {
+        added.push(id);
+        changes.push({ kind: "added", id });
+      } else if (prev.get(id) !== sig) {
+        updated.push(id);
+        changes.push({ kind: "updated", id });
+      }
+    }
+    for (const id of prev.keys()) {
+      if (!next.has(id)) {
+        removed.push(id);
+        changes.push({ kind: "removed", id });
+      }
+    }
+    return { added, updated, removed, changes };
+  }
+  function cropSig(it) {
+    const muts = Array.isArray(it.mutations) ? it.mutations.slice().sort().join(",") : "";
+    const scale = Number.isFinite(it.scale) ? Math.round(it.scale * 1e3) : 0;
+    return `${it.species ?? ""}|${it.itemType ?? ""}|${scale}|${muts}`;
+  }
+  function snapshotInventory(inv) {
+    const snap = /* @__PURE__ */ new Map();
+    const arr = Array.isArray(inv) ? inv : [];
+    for (const it of arr) {
+      const id = String(it?.id ?? "");
+      if (!id) continue;
+      snap.set(id, cropSig(it));
+    }
+    return snap;
+  }
+  function diffCropInventorySnapshot(prev, next) {
+    const added = [];
+    const updated = [];
+    const removed = [];
+    const changes = [];
+    for (const [id, sig] of next) {
+      if (!prev.has(id)) {
+        added.push(id);
+        changes.push({ kind: "added", key: id });
+      } else if (prev.get(id) !== sig) {
+        updated.push(id);
+        changes.push({ kind: "updated", key: id });
+      }
+    }
+    for (const id of prev.keys()) {
+      if (!next.has(id)) {
+        removed.push(id);
+        changes.push({ kind: "removed", key: id });
+      }
+    }
+    return { added, updated, removed, changes };
+  }
+  var PlayerService = {
+    /* ------------------------- Position / Déplacement ------------------------- */
+    getPosition() {
+      return positionAtom.get();
+    },
+    onPosition(cb) {
+      return positionAtom.sub(cb);
+    },
+    onPositionNow(cb) {
+      return positionAtom.subNow(cb);
+    },
+    async setPosition(x, y) {
+      const atom = getAtomByLabel(positionAtom.label || "positionAtom");
+      if (!atom) throw new Error("positionAtom introuvable");
+      await jSet(atom, { x, y });
+    },
+    async teleport(x, y) {
+      try {
+        await this.setPosition(x, y);
+      } catch {
+      }
+      try {
+        sendToGame({ type: "Teleport", position: { x, y } });
+      } catch {
+      }
+    },
+    async move(x, y) {
+      try {
+        await this.setPosition(x, y);
+      } catch {
+      }
+      try {
+        sendToGame({ type: "PlayerPosition", position: { x, y } });
+      } catch {
+      }
+    },
+    /* ------------------------------ Game actions ------------------------------ */
+    async plantSeed(slot, species) {
+      try {
+        sendToGame({ type: "PlantSeed", slot, species });
+      } catch {
+      }
+    },
+    async sellAllCrops() {
+      try {
+        sendToGame({ type: "SellAllCrops" });
+      } catch {
+      }
+    },
+    async sellPet(itemId) {
+      try {
+        sendToGame({ type: "SellPet", itemId });
+      } catch {
+      }
+    },
+    async waterPlant(slot) {
+      try {
+        sendToGame({ type: "WaterPlant", slot });
+      } catch {
+      }
+    },
+    async setSelectedItem(itemIndex) {
+      try {
+        sendToGame({ type: "SetSelectedItem", itemIndex });
+      } catch {
+      }
+    },
+    async pickupObject() {
+      try {
+        sendToGame({ type: "PickupObject" });
+      } catch {
+      }
+    },
+    async dropObject() {
+      try {
+        sendToGame({ type: "DropObject" });
+      } catch {
+      }
+    },
+    async harvestCrop(slot, slotsIndex) {
+      try {
+        sendToGame({ type: "HarvestCrop", slot, slotsIndex });
+      } catch {
+      }
+    },
+    async feedPet(petItemId, cropItemId) {
+      try {
+        sendToGame({ type: "FeedPet", petItemId, cropItemId });
+      } catch {
+      }
+    },
+    async hatchEgg(slot) {
+      try {
+        sendToGame({ type: "HatchEgg", slot });
+      } catch {
+      }
+    },
+    async placeDecor(tileType, localTileIndex, decorId) {
+      try {
+        sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId });
+      } catch {
+      }
+    },
+    async swapPet(petSlotId, petInventoryId) {
+      try {
+        sendToGame({ type: "SwapPet", petSlotId, petInventoryId });
+      } catch {
+      }
+    },
+    async placePet(itemId, position, tileType, localTileIndex) {
+      try {
+        sendToGame({ type: "PlacePet", itemId, position, tileType, localTileIndex });
+      } catch {
+      }
+    },
+    async storePet(itemId) {
+      try {
+        sendToGame({ type: "StorePet", itemId });
+      } catch {
+      }
+    },
+    /* -------------------------------- Favorites ------------------------------ */
+    async toggleFavoriteItem(itemId) {
+      try {
+        sendToGame({ type: "ToggleFavoriteItem", itemId });
+      } catch {
+      }
+    },
+    async getFavoriteIds() {
+      const ids = await favoriteIdsAtom.get();
+      const arr = Array.isArray(ids) ? ids.slice() : [];
+      return arr;
+    },
+    async getFavoriteIdSet() {
+      const set2 = await favoriteIdSetAtom.get();
+      return set2;
+    },
+    async isFavoriteItem(itemId) {
+      const set2 = await favoriteIdSetAtom.get();
+      const ok = set2.has(itemId);
+      return ok;
+    },
+    async ensureFavoriteItem(itemId, shouldBeFavorite) {
+      const cur = await this.isFavoriteItem(itemId);
+      if (cur !== shouldBeFavorite) {
+        await this.toggleFavoriteItem(itemId);
+        return shouldBeFavorite;
+      }
+      return cur;
+    },
+    async ensureFavorites(items, shouldBeFavorite) {
+      const set2 = await favoriteIdSetAtom.get();
+      let toggled = 0;
+      for (const id of items) {
+        const cur = set2.has(id);
+        if (cur !== shouldBeFavorite) {
+          try {
+            await this.toggleFavoriteItem(id);
+            toggled++;
+          } catch {
+          }
+        }
+      }
+    },
+    onFavoriteIdsChange(cb) {
+      return favoriteIdsAtom.sub((ids) => {
+        const arr = Array.isArray(ids) ? ids : [];
+        cb(arr);
+      });
+    },
+    async onFavoriteIdsChangeNow(cb) {
+      const cur = await this.getFavoriteIds();
+      cb(cur);
+      return favoriteIdsAtom.sub((ids) => {
+        const arr = Array.isArray(ids) ? ids : [];
+        cb(arr);
+      });
+    },
+    onFavoriteSetChange(cb) {
+      return favoriteIdSetAtom.sub((set2) => {
+        cb(set2);
+      });
+    },
+    async onFavoriteSetChangeNow(cb) {
+      const cur = await favoriteIdSetAtom.get();
+      cb(cur);
+      return favoriteIdSetAtom.sub((set2) => {
+        cb(set2);
+      });
+    },
+    /* --------------------------------- Garden -------------------------------- */
+    async getGardenState() {
+      const data = await myDataAtom.get();
+      return data?.garden ?? null;
+    },
+    onGardenChange(cb) {
+      let prev = null;
+      return gardenAtom.sub((g) => {
+        if (g !== prev) {
+          prev = g;
+          cb(g);
+        }
+      });
+    },
+    async onGardenChangeNow(cb) {
+      let prev = await gardenAtom.get();
+      cb(prev);
+      return gardenAtom.sub((g) => {
+        if (g !== prev) {
+          prev = g;
+          cb(g);
+        }
+      });
+    },
+    onGardenDiff(cb) {
+      let prev = null;
+      return gardenAtom.sub((g) => {
+        const d = diffGarden(prev, g);
+        if (d.added.length || d.updated.length || d.removed.length || g !== prev) {
+          prev = g;
+          cb(g, d);
+        }
+      });
+    },
+    async onGardenDiffNow(cb) {
+      let prev = (await myDataAtom.get())?.garden ?? null;
+      cb(prev, diffGarden(null, prev));
+      return myDataAtom.sub((data) => {
+        const next = data?.garden ?? null;
+        const d = diffGarden(prev, next);
+        if (d.added.length || d.updated.length || d.removed.length) {
+          prev = next;
+          cb(next, d);
+        }
+      });
+    },
+    /* ------------------------------------ Pets ------------------------------------ */
+    async getPets() {
+      const arr = await myPetInfosAtom.get();
+      return Array.isArray(arr) ? arr : null;
+    },
+    onPetsChange(cb) {
+      let prev = null;
+      return myPetInfosAtom.sub((next) => {
+        if (next !== prev) {
+          prev = next;
+          cb(prev);
+        }
+      });
+    },
+    async onPetsChangeNow(cb) {
+      let prev = await this.getPets();
+      cb(prev);
+      return myPetInfosAtom.sub((next) => {
+        if (next !== prev) {
+          prev = next;
+          cb(prev);
+        }
+      });
+    },
+    onPetsDiff(cb) {
+      let prevSnap = snapshotPets(null);
+      return myPetInfosAtom.sub((state) => {
+        const nextSnap = snapshotPets(state);
+        const d = diffPetsSnapshot(prevSnap, nextSnap);
+        if (d.added.length || d.updated.length || d.removed.length) {
+          cb(state, d);
+          prevSnap = nextSnap;
+        }
+      });
+    },
+    async onPetsDiffNow(cb) {
+      let cur = await this.getPets();
+      let prevSnap = snapshotPets(null);
+      let nextSnap = snapshotPets(cur);
+      const first = diffPetsSnapshot(prevSnap, nextSnap);
+      cb(cur, first);
+      prevSnap = nextSnap;
+      return myPetInfosAtom.sub((state) => {
+        nextSnap = snapshotPets(state);
+        const d = diffPetsSnapshot(prevSnap, nextSnap);
+        if (d.added.length || d.updated.length || d.removed.length) {
+          cb(state, d);
+          prevSnap = nextSnap;
+        }
+      });
+    },
+    /* ------------------------- Crop Inventory (crops) ------------------------- */
+    async getCropInventoryState() {
+      const data = await myCropInventoryAtom.get();
+      return data;
+    },
+    onCropInventoryChange(cb) {
+      let prev = null;
+      return myCropInventoryAtom.sub((inv) => {
+        if (inv !== prev) {
+          prev = inv;
+          cb(inv);
+        }
+      });
+    },
+    async onCropInventoryChangeNow(cb) {
+      let prev = await myCropInventoryAtom.get();
+      cb(prev);
+      return myCropInventoryAtom.sub((inv) => {
+        if (inv !== prev) {
+          prev = inv;
+          cb(inv);
+        }
+      });
+    },
+    onCropInventoryDiff(cb) {
+      let prevSnap = snapshotInventory(null);
+      return myCropInventoryAtom.sub((inv) => {
+        const nextSnap = snapshotInventory(inv);
+        const d = diffCropInventorySnapshot(prevSnap, nextSnap);
+        if (d.added.length || d.updated.length || d.removed.length) {
+          cb(inv, d);
+          prevSnap = nextSnap;
+        }
+      });
+    },
+    async onCropInventoryDiffNow(cb) {
+      let cur = await myCropInventoryAtom.get();
+      let prevSnap = snapshotInventory(null);
+      let nextSnap = snapshotInventory(cur);
+      const firstDiff = diffCropInventorySnapshot(prevSnap, nextSnap);
+      cb(cur, firstDiff);
+      prevSnap = nextSnap;
+      return myCropInventoryAtom.sub((inv) => {
+        nextSnap = snapshotInventory(inv);
+        const d = diffCropInventorySnapshot(prevSnap, nextSnap);
+        if (d.added.length || d.updated.length || d.removed.length) {
+          cb(inv, d);
+          prevSnap = nextSnap;
+        }
+      });
+    },
+    /* --------------------------- Players in room --------------------------- */
+    async getNumPlayers() {
+      const n = await numPlayersAtom.get();
+      return typeof n === "number" ? n : 0;
+    },
+    onNumPlayersChange(cb) {
+      let prev = void 0;
+      return numPlayersAtom.sub((n) => {
+        if (n !== prev) {
+          prev = n;
+          cb(n);
+        }
+      });
+    },
+    async onNumPlayersChangeNow(cb) {
+      let prev = await this.getNumPlayers();
+      cb(prev);
+      return numPlayersAtom.sub((n) => {
+        if (n !== prev) {
+          prev = n;
+          cb(n);
+        }
+      });
+    }
+  };
+
+  // src/data/hardcoded-data.clean.js
+  var rarity = { Common: "Common", Uncommon: "Uncommon", Rare: "Rare", Legendary: "Legendary", Mythic: "Mythical", Divine: "Divine", Celestial: "Celestial" };
+  var harvestType = { Single: "Single", Multiple: "Multiple" };
+  var tileRefsPlants = { Empty: 0, DirtPatch: 1, SproutFlower: 2, SproutVegetable: 3, SproutFruit: 4, SproutVine: 5, StemFlower: 6, Trellis: 7, Daffodil: 11, Tulip: 12, Sunflower: 13, Lily: 14, Starweaver: 15, StarweaverPlant: 16, AloePlant: 17, Aloe: 18, Blueberry: 21, Banana: 22, Strawberry: 23, Mango: 24, Grape: 25, Watermelon: 26, Lemon: 27, Apple: 28, Pepper: 31, Tomato: 32, BabyCarrot: 33, Carrot: 34, Pumpkin: 35, Corn: 36, PalmTreeTop: 39, BushyTree: 40, Coconut: 41, MushroomPlant: 42, PassionFruit: 43, DragonFruit: 44, Lychee: 45, Mushroom: 46, BurrosTail: 47, Cacao: 48, Echeveria: 49 };
+  var tileRefsTallPlants = { Empty: 0, Bamboo: 1, PalmTree: 2, Cactus: 3, Tree: 4 };
+  var tileRefsSeeds = { Empty: 0, Daffodil: 1, Tulip: 2, Sunflower: 3, Starweaver: 6, Blueberry: 11, Banana: 12, Strawberry: 13, Mango: 14, Grape: 15, Watermelon: 16, Lemon: 17, Apple: 18, Lily: 20, Pepper: 21, Tomato: 22, Carrot: 23, Pumpkin: 25, Corn: 26, Bamboo: 41, Coconut: 31, Mushroom: 32, PassionFruit: 33, DragonFruit: 34, Lychee: 35, BurrosTail: 37, Aloe: 39, Echeveria: 40, Cactus: 42 };
+  var tileRefsItems = { Empty: 0, Coin: 1, Shovel: 2, Seeds: 3, PlanterPot: 5, InventoryBag: 6, WateringCan: 14, Fertilizer: 15, RainbowPotion: 16, ArrowKeys: 41, Touchpad: 42 };
+  var tileRefsPets = {
+    Bee: 1,
+    Chicken: 2,
+    Bunny: 3,
+    Turtle: 4,
+    Capybara: 5,
+    Cow: 6,
+    Pig: 7,
+    Butterfly: 8,
+    Snail: 9,
+    Worm: 10,
+    CommonEgg: 11,
+    UncommonEgg: 12,
+    RareEgg: 13,
+    LegendaryEgg: 14,
+    MythicalEgg: 15,
+    DivineEgg: 16,
+    CelestialEgg: 17,
+    Squirrel: 18,
+    Goat: 19,
+    Dragonfly: 20,
+    Peacock: 30
+  };
+  var tileRefsMutations = {
+    Wet: 1,
+    Chilled: 2,
+    Frozen: 3,
+    Dawnlit: 11,
+    Amberglow: 12
+  };
+  var tileRefsDecor = {
+    SmallRock: 11,
+    MediumRock: 21,
+    LargeRock: 31,
+    WoodPedestal: 4,
+    WoodBench: 13,
+    WoodBucketPedestal: 14,
+    WoodLampPost: 23,
+    WoodStool: 24,
+    WoodArch: 33,
+    WoodBridge: 34,
+    WoodOwl: 43,
+    WoodGardenBox: 44,
+    StonePedestal: 6,
+    StoneBench: 15,
+    StoneBucketPedestal: 16,
+    StoneLampPost: 25,
+    StoneColumn: 26,
+    StoneArch: 35,
+    StoneBridge: 36,
+    StoneGnome: 45,
+    StoneGardenBox: 46,
+    MarblePedestal: 8,
+    MarbleBench: 17,
+    MarbleBucketPedestal: 18,
+    MarbleLampPost: 27,
+    MarbleColumn: 28,
+    MarbleArch: 37,
+    MarbleBridge: 38,
+    MarbleBlobling: 47,
+    MarbleGardenBox: 48,
+    StrawScarecrow: 49,
+    MiniFairyCottage: 50,
+    MiniFairyForge: 40,
+    MiniFairyKeep: 60,
+    Birdhouse: 63,
+    WoodenWindmill: 64,
+    StoneBirdbath: 65
+  };
+  var plantCatalog = { Carrot: { seed: { tileRef: tileRefsSeeds.Carrot, name: "Carrot Seed", coinPrice: 10, creditPrice: 7, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.BabyCarrot, name: "Carrot Plant", harvestType: harvestType.Single, baseTileScale: 0.7 }, crop: { tileRef: tileRefsPlants.Carrot, name: "Carrot", baseSellPrice: 20, baseWeight: 0.1, baseTileScale: 0.6, maxScale: 3 } }, Strawberry: { seed: { tileRef: tileRefsSeeds.Strawberry, name: "Strawberry Seed", coinPrice: 50, creditPrice: 21, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.SproutFruit, name: "Strawberry Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }], secondsToMature: 70, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Strawberry, name: "Strawberry", baseSellPrice: 14, baseWeight: 0.05, baseTileScale: 0.25, maxScale: 2 } }, Aloe: { seed: { tileRef: tileRefsSeeds.Aloe, name: "Aloe Seed", coinPrice: 135, creditPrice: 18, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.AloePlant, name: "Aloe Plant", harvestType: harvestType.Single, baseTileScale: 0.9 }, crop: { tileRef: tileRefsPlants.Aloe, name: "Aloe", baseSellPrice: 310, baseWeight: 1.5, baseTileScale: 0.7, maxScale: 2.5 } }, Blueberry: { seed: { tileRef: tileRefsSeeds.Blueberry, name: "Blueberry Seed", coinPrice: 400, creditPrice: 49, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.SproutFruit, name: "Blueberry Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }], secondsToMature: 105, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Blueberry, name: "Blueberry", baseSellPrice: 23, baseWeight: 0.01, baseTileScale: 0.25, maxScale: 2 } }, Apple: { seed: { tileRef: tileRefsSeeds.Apple, name: "Apple Seed", coinPrice: 500, creditPrice: 67, rarity: rarity.Uncommon, unavailableSurfaces: ["discord"] }, plant: { tileRef: tileRefsTallPlants.Tree, name: "Apple Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.15, y: -1.9, rotation: -90 }, { x: 0, y: -1.5, rotation: -75 }, { x: 0.6, y: -1.7, rotation: -60 }, { x: 0.3, y: -1.15, rotation: -55 }, { x: 1.05, y: -1.4, rotation: -45 }, { x: 0.8, y: -1.2, rotation: -35 }, { x: 0.9, y: 0.6, rotation: -30 }], secondsToMature: 360 * 60, baseTileScale: 3, rotateSlotOffsetsRandomly: false, tileTransformOrigin: "bottom", nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Apple, name: "Apple", baseSellPrice: 73, baseWeight: 0.18, baseTileScale: 0.5, maxScale: 2 } }, OrangeTulip: { seed: { tileRef: tileRefsSeeds.Tulip, name: "Tulip Seed", coinPrice: 600, creditPrice: 14, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.Tulip, name: "Tulip Plant", harvestType: harvestType.Single, baseTileScale: 0.5 }, crop: { tileRef: tileRefsPlants.Tulip, name: "Tulip", baseSellPrice: 767, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 } }, Tomato: { seed: { tileRef: tileRefsSeeds.Tomato, name: "Tomato Seed", coinPrice: 800, creditPrice: 79, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Tomato Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }], secondsToMature: 1100, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Tomato, name: "Tomato", baseSellPrice: 27, baseWeight: 0.3, baseTileScale: 0.33, maxScale: 2 } }, Daffodil: { seed: { tileRef: tileRefsSeeds.Daffodil, name: "Daffodil Seed", coinPrice: 1e3, creditPrice: 19, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil Plant", harvestType: harvestType.Single, baseTileScale: 0.5 }, crop: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil", baseSellPrice: 1090, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 } }, Corn: { seed: { tileRef: tileRefsSeeds.Corn, name: "Corn Kernel", coinPrice: 1300, creditPrice: 135, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.SproutVegetable, name: "Corn Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: 0.4, rotation: 0 }], secondsToMature: 130, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Corn, name: "Corn", baseSellPrice: 36, baseWeight: 1.2, baseTileScale: 0.7, maxScale: 2 } }, Watermelon: { seed: { tileRef: tileRefsSeeds.Watermelon, name: "Watermelon Seed", coinPrice: 2500, creditPrice: 195, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon", baseSellPrice: 2708, baseWeight: 4.5, baseTileScale: 0.8, maxScale: 3 } }, Pumpkin: { seed: { tileRef: tileRefsSeeds.Pumpkin, name: "Pumpkin Seed", coinPrice: 3e3, creditPrice: 210, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin", baseSellPrice: 3700, baseWeight: 6, baseTileScale: 0.8, maxScale: 3 } }, Echeveria: { seed: { tileRef: tileRefsSeeds.Echeveria, name: "Echeveria Cutting", coinPrice: 4200, creditPrice: 113, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria", baseSellPrice: 4600, baseWeight: 0.8, baseTileScale: 0.8, maxScale: 2.75 } }, Coconut: { seed: { tileRef: tileRefsSeeds.Coconut, name: "Coconut Seed", coinPrice: 6e3, creditPrice: 235, rarity: rarity.Legendary }, plant: { tileRef: tileRefsTallPlants.PalmTree, name: "Coconut Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: -2.1, rotation: 0 }, { x: 0.2, y: -1.9, rotation: 51.4 }, { x: 0.7, y: -2, rotation: 102.9 }, { x: 0.25, y: -1.6, rotation: 154.3 }, { x: 0.5, y: -1.8, rotation: 205.7 }, { x: 0.8, y: -1.7, rotation: 257.1 }, { x: 0.55, y: -1.5, rotation: 308.6 }], secondsToMature: 720 * 60, baseTileScale: 3, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", nudgeY: 0.15 }, crop: { tileRef: tileRefsPlants.Coconut, name: "Coconut", baseSellPrice: 302, baseWeight: 5, baseTileScale: 0.25, maxScale: 3 } }, Banana: { seed: { tileRef: tileRefsSeeds.Banana, name: "Banana Seed", coinPrice: 7500, creditPrice: 199, rarity: rarity.Legendary, getCanSpawnInGuild: (t) => {
+    const e = t.slice(-1), s = parseInt(e, 10);
+    return !isNaN(s) && s % 2 === 0;
+  } }, plant: { tileRef: tileRefsTallPlants.PalmTree, name: "Banana Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: -1.2, rotation: 10 }, { x: 0.3, y: -1.2, rotation: -10 }, { x: 0.4, y: -1.2, rotation: -30 }, { x: 0.5, y: -1.2, rotation: -50 }, { x: 0.6, y: -1.2, rotation: -70 }], secondsToMature: 14400, baseTileScale: 2.5, rotateSlotOffsetsRandomly: false, tileTransformOrigin: "bottom", nudgeY: 0.1 }, crop: { tileRef: tileRefsPlants.Banana, name: "Banana", baseSellPrice: 1750, baseWeight: 0.12, baseTileScale: 0.5, maxScale: 1.7 } }, Lily: { seed: { tileRef: tileRefsSeeds.Lily, name: "Lily Seed", coinPrice: 2e4, creditPrice: 34, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: 0.4 }, crop: { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 } }, BurrosTail: { seed: { tileRef: tileRefsSeeds.BurrosTail, name: "Burro's Tail Cutting", coinPrice: 93e3, creditPrice: 338, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Trellis, name: "Burro's Tail Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.37, y: 0.4, rotation: 0 }, { x: 0.67, y: 0.63, rotation: 0 }], secondsToMature: 1800, baseTileScale: 0.8, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.BurrosTail, name: "Burro's Tail", baseSellPrice: 6e3, baseWeight: 0.4, baseTileScale: 0.4, maxScale: 2.5 } }, Mushroom: { seed: { tileRef: tileRefsSeeds.Mushroom, name: "Mushroom Spore", coinPrice: 15e4, creditPrice: 249, rarity: rarity.Mythic }, plant: { tileRef: tileRefsPlants.MushroomPlant, name: "Mushroom Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Mushroom, name: "Mushroom", baseSellPrice: 16e4, baseWeight: 25, baseTileScale: 0.8, maxScale: 3.5 } }, Cactus: { seed: { tileRef: tileRefsSeeds.Cactus, name: "Cactus Seed", coinPrice: 25e4, creditPrice: 250, rarity: rarity.Mythic }, plant: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.15 }, crop: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus", baseSellPrice: 261e3, baseWeight: 1500, baseTileScale: 2.5, maxScale: 1.8 } }, Bamboo: { seed: { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 4e5, creditPrice: 300, rarity: rarity.Mythic }, plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.1 }, crop: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 5e5, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 } }, Grape: { seed: { tileRef: tileRefsSeeds.Grape, name: "Grape Seed", coinPrice: 85e4, creditPrice: 599, rarity: rarity.Mythic, getCanSpawnInGuild: (t) => t.endsWith("1") }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Grape Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: 0.5, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Grape, name: "Grape", baseSellPrice: 7085, baseWeight: 3, baseTileScale: 0.5, maxScale: 2 } }, Pepper: { seed: { tileRef: tileRefsSeeds.Pepper, name: "Pepper Seed", coinPrice: 1e6, creditPrice: 629, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Pepper Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.1, y: 0.1, rotation: 0 }, { x: 0.9, y: 0.1, rotation: 0 }, { x: 0.3, y: 0.3, rotation: 0 }, { x: 0.7, y: 0.3, rotation: 0 }, { x: 0.5, y: 0.5, rotation: 0 }, { x: 0.3, y: 0.7, rotation: 0 }, { x: 0.7, y: 0.7, rotation: 0 }, { x: 0.1, y: 0.9, rotation: 0 }, { x: 0.9, y: 0.9, rotation: 0 }], secondsToMature: 560, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Pepper, name: "Pepper", baseSellPrice: 7220, baseWeight: 0.5, baseTileScale: 0.3, maxScale: 2 } }, Lemon: { seed: { tileRef: tileRefsSeeds.Lemon, name: "Lemon Seed", coinPrice: 2e6, creditPrice: 500, rarity: rarity.Divine, getCanSpawnInGuild: (t) => t.endsWith("2") }, plant: { tileRef: tileRefsTallPlants.Tree, name: "Lemon Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0, y: -1, rotation: 85 }, { x: 0.9, y: -1.1, rotation: 195 }, { x: 0.2, y: -0.68, rotation: 340 }, { x: 0.7, y: -0.7, rotation: 280 }, { x: 0.51, y: -1, rotation: 0 }, { x: 0.45, y: -1.3, rotation: 280 }], secondsToMature: 720 * 60, baseTileScale: 2.3, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Lemon, name: "Lemon", baseSellPrice: 1e4, baseWeight: 0.5, baseTileScale: 0.25, maxScale: 3 } }, PassionFruit: { seed: { tileRef: tileRefsSeeds.PassionFruit, name: "Passion Fruit Seed", coinPrice: 275e4, creditPrice: 679, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Passion Fruit Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1.1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.PassionFruit, name: "Passion Fruit", baseSellPrice: 24500, baseWeight: 9.5, baseTileScale: 0.35, maxScale: 2 } }, DragonFruit: { seed: { tileRef: tileRefsSeeds.DragonFruit, name: "Dragon Fruit Seed", coinPrice: 5e6, creditPrice: 715, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.PalmTreeTop, name: "Dragon Fruit Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.1, rotation: 0 }, { x: 0.1, y: 0.45, rotation: 51.4 }, { x: 0.86, y: 0.2, rotation: 102.9 }, { x: 0.25, y: 0.8, rotation: 154.3 }, { x: 0.5, y: 0.4, rotation: 205.7 }, { x: 0.9, y: 0.6, rotation: 257.1 }, { x: 0.6, y: 0.7, rotation: 308.6 }], secondsToMature: 600, baseTileScale: 1.6, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.DragonFruit, name: "Dragon Fruit", baseSellPrice: 24500, baseWeight: 8.4, baseTileScale: 0.4, maxScale: 2 } }, Lychee: { seed: { tileRef: tileRefsSeeds.Lychee, name: "Lychee Pit", coinPrice: 25e6, creditPrice: 819, rarity: rarity.Divine, getCanSpawnInGuild: (t) => t.endsWith("2") }, plant: { tileRef: tileRefsPlants.BushyTree, name: "Lychee Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.1, y: 0.4, rotation: 85 }, { x: 0.8, y: 0.3, rotation: 195 }, { x: 0.2, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.4, rotation: 0 }, { x: 0.3, y: 0.2, rotation: 280 }], secondsToMature: 1440 * 60, baseTileScale: 1.2, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Lychee, name: "Lychee Fruit", baseSellPrice: 5e4, baseWeight: 9, baseTileScale: 0.2, maxScale: 2 } }, Sunflower: { seed: { tileRef: tileRefsSeeds.Sunflower, name: "Sunflower Seed", coinPrice: 1e8, creditPrice: 900, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.StemFlower, name: "Sunflower Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.51, y: -0.1, rotation: 0 }], secondsToMature: 1440 * 60, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", baseTileScale: 0.8, nudgeY: 0.15 }, crop: { tileRef: tileRefsPlants.Sunflower, name: "Sunflower", baseSellPrice: 75e4, baseWeight: 10, baseTileScale: 0.5, maxScale: 2.5 } }, Starweaver: { seed: { tileRef: tileRefsSeeds.Starweaver, name: "Starweaver Pod", coinPrice: 1e9, creditPrice: 1e3, rarity: rarity.Celestial }, plant: { tileRef: tileRefsPlants.StarweaverPlant, name: "Starweaver Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: -0.158, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1.5, rotateSlotOffsetsRandomly: false, nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Starweaver, name: "Starweaver Fruit", baseSellPrice: 1e7, baseWeight: 10, baseTileScale: 0.6, maxScale: 2 } } };
+  var mutationCatalog = { Gold: { name: "Gold", baseChance: 0.01, coinMultiplier: 25 }, Rainbow: { name: "Rainbow", baseChance: 1e-3, coinMultiplier: 50 }, Wet: { name: "Wet", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Wet }, Chilled: { name: "Chilled", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Chilled }, Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen }, Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit }, Ambershine: { name: "Ambershine", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Ambershine } };
+  var eggCatalog = {
+    CommonEgg: { tileRef: tileRefsPets.CommonEgg, name: "Common Egg", coinPrice: 1e5, creditPrice: 19, rarity: rarity.Common, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 600, faunaSpawnWeights: { Worm: 60, Snail: 35, Bee: 5 } },
+    UncommonEgg: { tileRef: tileRefsPets.UncommonEgg, name: "Uncommon Egg", coinPrice: 1e6, creditPrice: 48, rarity: rarity.Uncommon, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 3600, faunaSpawnWeights: { Chicken: 65, Bunny: 25, Dragonfly: 10 } },
+    RareEgg: { tileRef: tileRefsPets.RareEgg, name: "Rare Egg", coinPrice: 1e7, creditPrice: 99, rarity: rarity.Rare, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 21600, faunaSpawnWeights: { Pig: 90, Cow: 10 } },
+    LegendaryEgg: { tileRef: tileRefsPets.LegendaryEgg, name: "Legendary Egg", coinPrice: 1e8, creditPrice: 249, rarity: rarity.Legendary, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 43200, faunaSpawnWeights: { Squirrel: 60, Turtle: 30, Goat: 10 } },
+    MythicalEgg: { tileRef: tileRefsPets.MythicalEgg, name: "Mythical Egg", coinPrice: 1e9, creditPrice: 599, rarity: rarity.Mythic, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 86400, faunaSpawnWeights: { Butterfly: 75, Capybara: 5, Peacock: 20 } }
+  };
+  var petCatalog = {
+    Worm: {
+      tileRef: tileRefsPets.Worm,
+      name: "Worm",
+      description: "",
+      coinsToFullyReplenishHunger: 500,
+      innateAbilityWeights: { SeedFinderI: 50, ProduceEater: 50 },
+      baseTileScale: 0.6,
+      maxScale: 2,
+      maturitySellPrice: 5e3,
+      matureWeight: 0.1,
+      moveProbability: 0.1,
+      hoursToMature: 12,
+      rarity: rarity.Common,
+      tileTransformOrigin: "bottom",
+      nudgeY: 0.25,
+      diet: ["Carrot", "Strawberry", "Aloe", "Tomato", "Apple"]
+    },
+    Snail: {
+      tileRef: tileRefsPets.Snail,
+      name: "Snail",
+      description: "",
+      coinsToFullyReplenishHunger: 1e3,
+      innateAbilityWeights: { CoinFinderI: 100 },
+      baseTileScale: 0.6,
+      maxScale: 2,
+      maturitySellPrice: 5e3,
+      matureWeight: 0.15,
+      moveProbability: 0.01,
+      hoursToMature: 12,
+      rarity: rarity.Common,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.25,
+      diet: ["Blueberry", "Tomato", "Corn", "Daffodil"]
+    },
+    Bee: {
+      tileRef: tileRefsPets.Bee,
+      name: "Bee",
+      coinsToFullyReplenishHunger: 1500,
+      innateAbilityWeights: { ProduceScaleBoost: 50, ProduceMutationBoost: 50 },
+      baseTileScale: 0.6,
+      maxScale: 2.5,
+      maturitySellPrice: 3e4,
+      matureWeight: 0.2,
+      moveProbability: 0.5,
+      hoursToMature: 12,
+      rarity: rarity.Common,
+      diet: ["Strawberry", "Blueberry", "OrangeTulip", "Daffodil", "Lily"]
+    },
+    Chicken: {
+      tileRef: tileRefsPets.Chicken,
+      name: "Chicken",
+      coinsToFullyReplenishHunger: 3e3,
+      innateAbilityWeights: { EggGrowthBoost: 80, PetRefund: 20 },
+      baseTileScale: 0.8,
+      maxScale: 2,
+      maturitySellPrice: 5e4,
+      matureWeight: 3,
+      moveProbability: 0.2,
+      hoursToMature: 24,
+      rarity: rarity.Uncommon,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.2,
+      diet: ["Aloe", "Corn", "Watermelon", "Pumpkin"]
+    },
+    Bunny: {
+      tileRef: tileRefsPets.Bunny,
+      name: "Bunny",
+      coinsToFullyReplenishHunger: 750,
+      innateAbilityWeights: { CoinFinderII: 60, SellBoostI: 40 },
+      baseTileScale: 0.7,
+      maxScale: 2,
+      maturitySellPrice: 75e3,
+      matureWeight: 2,
+      moveProbability: 0.3,
+      hoursToMature: 24,
+      rarity: rarity.Uncommon,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.2,
+      diet: ["Carrot", "Strawberry", "Blueberry", "Echeveria"]
+    },
+    Dragonfly: {
+      tileRef: tileRefsPets.Dragonfly,
+      name: "Dragonfly",
+      coinsToFullyReplenishHunger: 250,
+      innateAbilityWeights: { HungerRestore: 70, PetMutationBoost: 30 },
+      baseTileScale: 0.6,
+      maxScale: 2.5,
+      maturitySellPrice: 15e4,
+      matureWeight: 0.2,
+      moveProbability: 0.7,
+      hoursToMature: 24,
+      rarity: rarity.Uncommon,
+      tileTransformOrigin: "center",
+      diet: ["Apple", "OrangeTulip", "Echeveria"]
+    },
+    Pig: {
+      tileRef: tileRefsPets.Pig,
+      name: "Pig",
+      coinsToFullyReplenishHunger: 5e4,
+      innateAbilityWeights: { SellBoostII: 30, PetAgeBoost: 30, PetHatchSizeBoost: 30 },
+      baseTileScale: 1,
+      maxScale: 2.5,
+      maturitySellPrice: 5e5,
+      matureWeight: 200,
+      moveProbability: 0.2,
+      hoursToMature: 72,
+      rarity: rarity.Rare,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.15,
+      diet: ["Watermelon", "Pumpkin", "Mushroom", "Bamboo"]
+    },
+    Cow: {
+      tileRef: tileRefsPets.Cow,
+      name: "Cow",
+      coinsToFullyReplenishHunger: 25e3,
+      innateAbilityWeights: { SeedFinderII: 30, HungerBoost: 30, PlantGrowthBoost: 30 },
+      baseTileScale: 1.1,
+      maxScale: 2.5,
+      maturitySellPrice: 1e6,
+      matureWeight: 600,
+      moveProbability: 0.1,
+      hoursToMature: 72,
+      rarity: rarity.Rare,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.15,
+      diet: ["Coconut", "Banana", "BurrosTail", "Mushroom"]
+    },
+    Squirrel: {
+      tileRef: tileRefsPets.Squirrel,
+      name: "Squirrel",
+      coinsToFullyReplenishHunger: 15e3,
+      innateAbilityWeights: { CoinFinderIII: 70, SellBoostIII: 20, PetMutationBoostII: 10 },
+      baseTileScale: 0.6,
+      maxScale: 2,
+      maturitySellPrice: 5e6,
+      matureWeight: 0.5,
+      moveProbability: 0.4,
+      hoursToMature: 100,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.1,
+      diet: ["Pumpkin", "Banana", "Grape"]
+    },
+    Turtle: {
+      tileRef: tileRefsPets.Turtle,
+      name: "Turtle",
+      coinsToFullyReplenishHunger: 1e5,
+      innateAbilityWeights: { HungerRestoreII: 25, HungerBoostII: 25, PlantGrowthBoostII: 25, EggGrowthBoostII: 25 },
+      baseTileScale: 1,
+      maxScale: 2.5,
+      maturitySellPrice: 1e7,
+      matureWeight: 150,
+      moveProbability: 0.05,
+      hoursToMature: 100,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.15,
+      diet: ["Watermelon", "BurrosTail", "Bamboo", "Pepper"]
+    },
+    Goat: {
+      tileRef: tileRefsPets.Goat,
+      name: "Goat",
+      coinsToFullyReplenishHunger: 2e4,
+      innateAbilityWeights: { PetHatchSizeBoostII: 10, PetAgeBoostII: 40, PetXpBoost: 40 },
+      baseTileScale: 1,
+      maxScale: 2,
+      maturitySellPrice: 2e7,
+      matureWeight: 100,
+      moveProbability: 0.2,
+      hoursToMature: 100,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.1,
+      diet: ["Pumpkin", "Coconut", "Cactus", "Pepper"]
+    },
+    Butterfly: {
+      tileRef: tileRefsPets.Butterfly,
+      name: "Butterfly",
+      coinsToFullyReplenishHunger: 25e3,
+      innateAbilityWeights: { ProduceScaleBoostII: 40, ProduceMutationBoostII: 40, SeedFinderIII: 20 },
+      baseTileScale: 0.6,
+      maxScale: 2.5,
+      maturitySellPrice: 5e7,
+      matureWeight: 0.2,
+      moveProbability: 0.6,
+      hoursToMature: 144,
+      rarity: rarity.Mythic,
+      tileTransformOrigin: "center",
+      diet: ["Daffodil", "Lily", "Grape", "Lemon", "Sunflower"]
+    },
+    Capybara: {
+      tileRef: tileRefsPets.Capybara,
+      name: "Capybara",
+      coinsToFullyReplenishHunger: 15e4,
+      innateAbilityWeights: { DoubleHarvest: 50, ProduceRefund: 50 },
+      baseTileScale: 1,
+      maxScale: 2.5,
+      maturitySellPrice: 2e8,
+      matureWeight: 50,
+      moveProbability: 0.2,
+      hoursToMature: 144,
+      rarity: rarity.Mythic,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.1,
+      diet: ["Lemon", "PassionFruit", "DragonFruit", "Lychee"]
+    },
+    Peacock: {
+      tileRef: tileRefsPets.Peacock,
+      name: "Peacock",
+      coinsToFullyReplenishHunger: 1e5,
+      innateAbilityWeights: { SellBoostIV: 40, PetXpBoostII: 50, PetRefundII: 10 },
+      baseTileScale: 1.2,
+      maxScale: 2.5,
+      maturitySellPrice: 1e8,
+      matureWeight: 5,
+      moveProbability: 0.2,
+      hoursToMature: 144,
+      rarity: rarity.Mythic,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.1,
+      diet: ["Cactus", "Sunflower", "Lychee"]
+    }
+  };
+  var petAbilities = {
+    ProduceScaleBoost: {
+      name: "Crop Size Boost I",
+      description: "Increases the scale of garden crops",
+      trigger: "continuous",
+      baseProbability: 0.3,
+      baseParameters: { cropScaleIncreasePercentage: 6 }
+    },
+    ProduceScaleBoostII: {
+      name: "Crop Size Boost II",
+      description: "Increases the scale of garden crops",
+      trigger: "continuous",
+      baseProbability: 0.4,
+      baseParameters: { cropScaleIncreasePercentage: 10 }
+    },
+    DoubleHarvest: {
+      name: "Double Harvest",
+      description: "Chance to duplicate harvested crops",
+      trigger: "harvest",
+      baseProbability: 5,
+      baseParameters: {}
+    },
+    ProduceEater: {
+      name: "Crop Eater",
+      description: "Harvests non-mutated crops and sells them",
+      trigger: "continuous",
+      baseProbability: 60,
+      baseParameters: { cropSellPriceIncreasePercentage: 150 }
+    },
+    SellBoostI: {
+      name: "Sell Boost I",
+      description: "Receive bonus coins when selling crops",
+      trigger: "sellAllCrops",
+      baseProbability: 10,
+      baseParameters: { cropSellPriceIncreasePercentage: 20 }
+    },
+    SellBoostII: {
+      name: "Sell Boost II",
+      description: "Receive bonus coins when selling crops",
+      trigger: "sellAllCrops",
+      baseProbability: 12,
+      baseParameters: { cropSellPriceIncreasePercentage: 30 }
+    },
+    SellBoostIII: {
+      name: "Sell Boost III",
+      description: "Receive bonus coins when selling crops",
+      trigger: "sellAllCrops",
+      baseProbability: 14,
+      baseParameters: { cropSellPriceIncreasePercentage: 40 }
+    },
+    SellBoostIV: {
+      name: "Sell Boost IV",
+      description: "Receive bonus coins when selling crops",
+      trigger: "sellAllCrops",
+      baseProbability: 16,
+      baseParameters: { cropSellPriceIncreasePercentage: 50 }
+    },
+    ProduceRefund: {
+      name: "Crop Refund",
+      description: "Chance to get crops back when selling",
+      trigger: "sellAllCrops",
+      baseProbability: 20,
+      baseParameters: {}
+    },
+    PlantGrowthBoost: {
+      name: "Plant Growth Boost I",
+      description: "Reduces the time for plants to grow",
+      trigger: "continuous",
+      baseProbability: 24,
+      baseParameters: { plantGrowthReductionMinutes: 3 }
+    },
+    PlantGrowthBoostII: {
+      name: "Plant Growth Boost II",
+      description: "Reduces the time for plants to grow",
+      trigger: "continuous",
+      baseProbability: 27,
+      baseParameters: { plantGrowthReductionMinutes: 5 }
+    },
+    ProduceMutationBoost: {
+      name: "Crop Mutation Boost I",
+      description: "Increases the chance of garden crops gaining mutations",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 10 }
+    },
+    ProduceMutationBoostII: {
+      name: "Crop Mutation Boost II",
+      description: "Increases the chance of garden crops gaining mutations",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 15 }
+    },
+    PetMutationBoost: {
+      name: "Pet Mutation Boost I",
+      description: "Increases the chance of hatched pets gaining mutations",
+      trigger: "hatchEgg",
+      baseParameters: { mutationChanceIncreasePercentage: 7 }
+    },
+    PetMutationBoostII: {
+      name: "Pet Mutation Boost II",
+      description: "Increases the chance of hatched pets gaining mutations",
+      trigger: "hatchEgg",
+      baseParameters: { mutationChanceIncreasePercentage: 10 }
+    },
+    GoldGranter: {
+      name: "Gold Granter",
+      description: "Grants the Gold mutation to a garden crop",
+      trigger: "continuous",
+      baseProbability: 0.72,
+      baseParameters: { grantedMutations: ["Gold"] }
+    },
+    RainbowGranter: {
+      name: "Rainbow Granter",
+      description: "Grants the Rainbow mutation to a garden crop",
+      trigger: "continuous",
+      baseProbability: 0.72,
+      baseParameters: { grantedMutations: ["Rainbow"] }
+    },
+    EggGrowthBoost: {
+      name: "Egg Growth Boost I",
+      description: "Reduces the time for eggs to hatch",
+      trigger: "continuous",
+      baseProbability: 21,
+      baseParameters: { eggGrowthTimeReductionMinutes: 7 }
+    },
+    EggGrowthBoostII: {
+      name: "Egg Growth Boost II",
+      description: "Reduces the time for eggs to hatch",
+      trigger: "continuous",
+      baseProbability: 24,
+      baseParameters: { eggGrowthTimeReductionMinutes: 10 }
+    },
+    // NEW
+    EggGrowthBoostIII: {
+      name: "Egg Growth Boost III",
+      description: "Reduces the time for eggs to hatch",
+      trigger: "continuous",
+      baseProbability: 27,
+      baseParameters: { eggGrowthTimeReductionMinutes: 13 }
+    },
+    PetAgeBoost: {
+      name: "Hatch XP Boost I",
+      description: "Hatched pets start with bonus XP",
+      trigger: "hatchEgg",
+      baseProbability: 50,
+      baseParameters: { bonusXp: 8e3 }
+    },
+    PetAgeBoostII: {
+      name: "Hatch XP Boost II",
+      description: "Hatched pets start with bonus XP",
+      trigger: "hatchEgg",
+      baseProbability: 60,
+      baseParameters: { bonusXp: 12e3 }
+    },
+    PetHatchSizeBoost: {
+      name: "Max Strength Boost I",
+      description: "Increases the maximum strength of hatched pets",
+      trigger: "hatchEgg",
+      baseProbability: 12,
+      baseParameters: { maxStrengthIncreasePercentage: 2.4 }
+    },
+    PetHatchSizeBoostII: {
+      name: "Max Strength Boost II",
+      description: "Increases the maximum strength of hatched pets",
+      trigger: "hatchEgg",
+      baseProbability: 14,
+      baseParameters: { maxStrengthIncreasePercentage: 3.5 }
+    },
+    PetXpBoost: {
+      name: "XP Boost I",
+      description: "Gives bonus XP to active pets",
+      trigger: "continuous",
+      baseProbability: 30,
+      baseParameters: { bonusXp: 300 }
+    },
+    PetXpBoostII: {
+      name: "XP Boost II",
+      description: "Gives bonus XP to active pets",
+      trigger: "continuous",
+      baseProbability: 35,
+      baseParameters: { bonusXp: 400 }
+    },
+    HungerRestore: {
+      name: "Hunger Restore I",
+      description: "Restores the hunger of a random active pet",
+      trigger: "continuous",
+      baseProbability: 12,
+      baseParameters: { hungerRestorePercentage: 30 }
+    },
+    // NEW
+    HungerRestoreII: {
+      name: "Hunger Restore II",
+      description: "Restores the hunger of a random active pet",
+      trigger: "continuous",
+      baseProbability: 14,
+      baseParameters: { hungerRestorePercentage: 35 }
+    },
+    HungerBoost: {
+      name: "Hunger Boost I",
+      description: "Reduces the hunger depletion rate of active pets",
+      trigger: "continuous",
+      baseParameters: { hungerDepletionRateDecreasePercentage: 12 }
+    },
+    HungerBoostII: {
+      name: "Hunger Boost II",
+      description: "Reduces the hunger depletion rate of active pets",
+      trigger: "continuous",
+      baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+    },
+    PetRefund: {
+      name: "Pet Refund I",
+      description: "Chance to receive the pet back as an egg when sold",
+      trigger: "sellPet",
+      baseProbability: 5,
+      baseParameters: {}
+    },
+    // NEW
+    PetRefundII: {
+      name: "Pet Refund II",
+      description: "Chance to receive the pet back as an egg when sold",
+      trigger: "sellPet",
+      baseProbability: 7,
+      baseParameters: {}
+    },
+    Copycat: {
+      name: "Copycat",
+      description: "Chance to copy the ability of another active pet",
+      trigger: "continuous",
+      baseProbability: 1,
+      baseParameters: {}
+    },
+    CoinFinderI: {
+      name: "Coin Finder I",
+      description: "Finds coins in your garden",
+      trigger: "continuous",
+      baseProbability: 35,
+      baseParameters: { baseMaxCoinsFindable: 12e4 }
+    },
+    CoinFinderII: {
+      name: "Coin Finder II",
+      description: "Finds coins in your garden",
+      trigger: "continuous",
+      baseProbability: 13,
+      baseParameters: { baseMaxCoinsFindable: 12e5 }
+    },
+    CoinFinderIII: {
+      name: "Coin Finder III",
+      description: "Finds coins in your garden",
+      trigger: "continuous",
+      baseProbability: 6,
+      baseParameters: { baseMaxCoinsFindable: 1e7 }
+    },
+    SeedFinderI: {
+      name: "Seed Finder I",
+      description: "Finds common and uncommon seeds in your garden",
+      trigger: "continuous",
+      baseProbability: 40,
+      baseParameters: {}
+    },
+    SeedFinderII: {
+      name: "Seed Finder II",
+      description: "Finds rare and legendary seeds in your garden",
+      trigger: "continuous",
+      baseProbability: 16,
+      baseParameters: {}
+    },
+    SeedFinderIII: {
+      name: "Seed Finder III",
+      description: "Finds mythical seeds in your garden",
+      trigger: "continuous",
+      baseProbability: 9,
+      baseParameters: {}
+    },
+    SeedFinderIV: {
+      name: "Seed Finder IV",
+      description: "Finds divine and celestial seeds in your garden",
+      trigger: "continuous",
+      baseProbability: 0.01,
+      baseParameters: {}
+    }
+  };
+  var toolCatalog = { WateringCan: { tileRef: tileRefsItems.WateringCan, name: "Watering Can", coinPrice: 5e3, creditPrice: 2, rarity: rarity.Common, description: "Speeds up growth of plant by 5 minutes. SINGLE USE.", isOneTimePurchase: false, baseTileScale: 0.6, maxInventoryQuantity: 99 }, PlanterPot: { tileRef: tileRefsItems.PlanterPot, name: "Planter Pot", coinPrice: 25e3, creditPrice: 5, rarity: rarity.Common, description: "Extract a plant to your inventory (can be replanted). SINGLE USE.", isOneTimePurchase: false, baseTileScale: 0.8 }, Shovel: { tileRef: tileRefsItems.Shovel, name: "Shovel", coinPrice: 1e6, creditPrice: 100, rarity: rarity.Uncommon, description: "Remove plants from your garden. UNLIMITED USES.", isOneTimePurchase: true, baseTileScale: 0.7 }, RainbowPotion: { tileRef: tileRefsItems.RainbowPotion, name: "Rainbow Potion", coinPrice: 1 / 0, creditPrice: 1 / 0, rarity: rarity.Celestial, description: "Adds the Rainbow mutation to a crop in your garden. SINGLE USE.", isOneTimePurchase: true, baseTileScale: 1 } };
+  var decorCatalog = {
+    // Rochers
+    SmallRock: {
+      tileRef: tileRefsDecor.SmallRock,
+      name: "Small Garden Rock",
+      coinPrice: 1e3,
+      creditPrice: 2,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.3
+    },
+    MediumRock: {
+      tileRef: tileRefsDecor.MediumRock,
+      name: "Medium Garden Rock",
+      coinPrice: 2500,
+      creditPrice: 5,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.21
+    },
+    LargeRock: {
+      tileRef: tileRefsDecor.LargeRock,
+      name: "Large Garden Rock",
+      coinPrice: 5e3,
+      creditPrice: 10,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.1
+    },
+    // Bois
+    WoodBench: {
+      tileRef: tileRefsDecor.WoodBench,
+      name: "Wood Bench",
+      coinPrice: 1e4,
+      creditPrice: 15,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.3,
+      avatarNudgeY: -0.18
+    },
+    WoodArch: {
+      tileRef: tileRefsDecor.WoodArch,
+      name: "Wood Arch",
+      coinPrice: 2e4,
+      creditPrice: 25,
+      rarity: rarity.Common,
+      baseTileScale: 1.53,
+      isOneTimePurchase: false,
+      nudgeY: -0.5
+    },
+    WoodBridge: {
+      tileRef: tileRefsDecor.WoodBridge,
+      name: "Wood Bridge",
+      coinPrice: 4e4,
+      creditPrice: 35,
+      rarity: rarity.Common,
+      baseTileScale: 1.22,
+      isOneTimePurchase: false,
+      nudgeY: -0.35,
+      avatarNudgeY: -0.44
+    },
+    WoodLampPost: {
+      tileRef: tileRefsDecor.WoodLampPost,
+      name: "Wood Lamp Post",
+      coinPrice: 8e4,
+      creditPrice: 49,
+      rarity: rarity.Common,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.6
+    },
+    WoodOwl: {
+      tileRef: tileRefsDecor.WoodOwl,
+      name: "Wood Owl",
+      coinPrice: 9e4,
+      creditPrice: 59,
+      rarity: rarity.Common,
+      baseTileScale: 1.3,
+      isOneTimePurchase: false,
+      nudgeY: -0.4
+    },
+    WoodBirdhouse: {
+      tileRef: tileRefsDecor.Birdhouse,
+      name: "Wood Birdhouse",
+      coinPrice: 1e5,
+      creditPrice: 69,
+      rarity: rarity.Common,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.6
+    },
+    // Pierre
+    StoneBench: {
+      tileRef: tileRefsDecor.StoneBench,
+      name: "Stone Bench",
+      coinPrice: 1e6,
+      creditPrice: 75,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.3,
+      avatarNudgeY: -0.18
+    },
+    StoneArch: {
+      tileRef: tileRefsDecor.StoneArch,
+      name: "Stone Arch",
+      coinPrice: 4e6,
+      creditPrice: 124,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.53,
+      isOneTimePurchase: false,
+      nudgeY: -0.5
+    },
+    StoneBridge: {
+      tileRef: tileRefsDecor.StoneBridge,
+      name: "Stone Bridge",
+      coinPrice: 5e6,
+      creditPrice: 179,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.22,
+      isOneTimePurchase: false,
+      nudgeY: -0.35,
+      avatarNudgeY: -0.44
+    },
+    StoneLampPost: {
+      tileRef: tileRefsDecor.StoneLampPost,
+      name: "Stone Lamp Post",
+      coinPrice: 8e6,
+      creditPrice: 199,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.6
+    },
+    StoneGnome: {
+      tileRef: tileRefsDecor.StoneGnome,
+      name: "Stone Gnome",
+      coinPrice: 9e6,
+      creditPrice: 219,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.3,
+      isOneTimePurchase: false,
+      nudgeY: -0.4
+    },
+    StoneBirdbath: {
+      tileRef: tileRefsDecor.StoneBirdbath,
+      name: "Stone Birdbath",
+      coinPrice: 1e7,
+      creditPrice: 249,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.2,
+      isOneTimePurchase: false,
+      nudgeY: -0.46
+    },
+    // Marbre
+    MarbleBench: {
+      tileRef: tileRefsDecor.MarbleBench,
+      name: "Marble Bench",
+      coinPrice: 75e6,
+      creditPrice: 349,
+      rarity: rarity.Rare,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.3,
+      avatarNudgeY: -0.18
+    },
+    MarbleArch: {
+      tileRef: tileRefsDecor.MarbleArch,
+      name: "Marble Arch",
+      coinPrice: 1e8,
+      creditPrice: 399,
+      rarity: rarity.Rare,
+      baseTileScale: 1.53,
+      isOneTimePurchase: false,
+      nudgeY: -0.5
+    },
+    MarbleBridge: {
+      tileRef: tileRefsDecor.MarbleBridge,
+      name: "Marble Bridge",
+      coinPrice: 15e7,
+      creditPrice: 429,
+      rarity: rarity.Rare,
+      baseTileScale: 1.22,
+      isOneTimePurchase: false,
+      nudgeY: -0.35,
+      avatarNudgeY: -0.44
+    },
+    MarbleLampPost: {
+      tileRef: tileRefsDecor.MarbleLampPost,
+      name: "Marble Lamp Post",
+      coinPrice: 2e8,
+      creditPrice: 449,
+      rarity: rarity.Rare,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.6
+    },
+    MarbleBlobling: {
+      tileRef: tileRefsDecor.MarbleBlobling,
+      name: "Marble Blobling",
+      coinPrice: 3e8,
+      creditPrice: 499,
+      rarity: rarity.Rare,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.56
+    },
+    // Spéciaux
+    MiniFairyCottage: {
+      tileRef: tileRefsDecor.MiniFairyCottage,
+      name: "Mini Fairy Cottage",
+      coinPrice: 5e8,
+      creditPrice: 549,
+      rarity: rarity.Rare,
+      baseTileScale: 1.1,
+      isOneTimePurchase: false,
+      nudgeY: -0.37
+    },
+    StrawScarecrow: {
+      tileRef: tileRefsDecor.StrawScarecrow,
+      name: "Straw Scarecrow",
+      coinPrice: 1e9,
+      creditPrice: 599,
+      rarity: rarity.Legendary,
+      baseTileScale: 1.8,
+      isOneTimePurchase: false,
+      nudgeY: -0.65
+    },
+    MiniFairyForge: {
+      tileRef: tileRefsDecor.MiniFairyForge,
+      name: "Mini Fairy Forge",
+      coinPrice: 5e9,
+      creditPrice: 979,
+      rarity: rarity.Legendary,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.3
+    },
+    MiniFairyKeep: {
+      tileRef: tileRefsDecor.MiniFairyKeep,
+      name: "Mini Fairy Keep",
+      coinPrice: 25e9,
+      creditPrice: 1249,
+      rarity: rarity.Mythic,
+      baseTileScale: 1.05,
+      isOneTimePurchase: false,
+      nudgeY: -0.33
+    }
+  };
+
+  // src/services/fakeAtoms.ts
+  var _fakeRegistry = /* @__PURE__ */ new Map();
+  function _atomsByExactLabel(label2) {
+    try {
+      return findAtomsByLabel(new RegExp("^" + label2 + "$"));
+    } catch {
+      return [];
+    }
+  }
+  function _findReadKey(atom) {
+    if (atom && typeof atom.read === "function") return "read";
+    for (const k of Object.keys(atom || {})) {
+      const v = atom[k];
+      if (typeof v === "function" && k !== "write" && k !== "onMount" && k !== "toString") {
+        const ar = v.length;
+        if (ar === 1 || ar === 2) return k;
+      }
+    }
+    throw new Error("Impossible de localiser la fonction read() de l'atom");
+  }
+  function _getState(label2) {
+    return _fakeRegistry.get(label2) || null;
+  }
+  async function _forceRepaintViaGate(gate) {
+    if (!gate?.closeAction || !gate?.openAction) return;
+    await gate.closeAction();
+    await new Promise((r) => setTimeout(r, 0));
+    await gate.openAction();
+  }
+  async function _ensureFakeInstalled(config) {
+    const key = config.label;
+    const existing = _fakeRegistry.get(key);
+    if (existing?.installed) return existing;
+    const atoms = _atomsByExactLabel(config.label);
+    if (!atoms.length) throw new Error(`${config.label} introuvable`);
+    const state = existing ?? {
+      config,
+      enabled: false,
+      payload: null,
+      patched: /* @__PURE__ */ new Map(),
+      installed: false
+    };
+    let gateAtom = null;
+    if (config.gate?.label) gateAtom = getAtomByLabel(config.gate.label);
+    for (const a of atoms) {
+      const readKey = _findReadKey(a);
+      const orig = a[readKey];
+      a[readKey] = (get) => {
+        try {
+          if (gateAtom) get(gateAtom);
+        } catch {
+        }
+        for (const dep of config.extraDeps || []) {
+          try {
+            const d = getAtomByLabel(dep);
+            d && get(d);
+          } catch {
+          }
+        }
+        const real = orig(get);
+        if (!state.enabled || state.payload == null) return real;
+        return config.merge ? config.merge(real, state.payload) : state.payload;
+      };
+      state.patched.set(a, { readKey, orig });
+    }
+    if (gateAtom && config.gate?.autoDisableOnClose) {
+      state.unsubGate = await jSub(gateAtom, async () => {
+        let v;
+        try {
+          v = await jGet(gateAtom);
+        } catch {
+          v = null;
+        }
+        const isOpen = config.gate?.isOpen ? config.gate.isOpen(v) : !!v;
+        if (!isOpen && state.enabled) state.enabled = false;
+      });
+    }
+    state.installed = true;
+    _fakeRegistry.set(key, state);
+    return state;
+  }
+  async function fakeShow(config, payload, options) {
+    await ensureStore();
+    const st = await _ensureFakeInstalled(config);
+    st.payload = payload;
+    st.enabled = true;
+    if (options?.merge && !config.merge) {
+      config.merge = (_real, fake) => fake;
+    }
+    if (options?.openGate && config.gate?.openAction) await config.gate.openAction();
+    if (st.autoTimer) {
+      clearTimeout(st.autoTimer);
+      st.autoTimer = null;
+    }
+    if (options?.autoRestoreMs && options.autoRestoreMs > 0) {
+      st.autoTimer = setTimeout(() => {
+        void fakeHide(config.label);
+      }, options.autoRestoreMs);
+    }
+  }
+  async function fakeHide(label2) {
+    const st = _getState(label2);
+    if (!st) return;
+    st.enabled = false;
+    st.payload = null;
+    if (st.autoTimer) {
+      clearTimeout(st.autoTimer);
+      st.autoTimer = null;
+    }
+    await _forceRepaintViaGate(st.config.gate);
+  }
+
+  // src/services/fakeInventory.ts
+  var ATOMS = {
+    activeModal: "activeModalAtom",
+    inventory: "myInventoryAtom",
+    myData: "myDataAtom"
+  };
+  async function openInventoryPanel() {
+    const modal = getAtomByLabel(ATOMS.activeModal);
+    if (modal) await jSet(modal, "inventory");
+  }
+  async function closeInventoryPanel() {
+    const modal = getAtomByLabel(ATOMS.activeModal);
+    if (modal) await jSet(modal, null);
+  }
+  function isInventoryOpen(v) {
+    return v === "inventory";
+  }
+  var INVENTORY_FAKE_CONFIG = {
+    label: ATOMS.inventory,
+    merge: (_real, fake) => fake,
+    gate: {
+      label: ATOMS.activeModal,
+      isOpen: isInventoryOpen,
+      openAction: openInventoryPanel,
+      closeAction: closeInventoryPanel,
+      autoDisableOnClose: true
+      // à la fermeture du modal → restauration automatique
+    }
+  };
+  var MYDATA_FAKE_CONFIG = {
+    label: ATOMS.myData,
+    merge: (real, fake) => {
+      const base = real && typeof real === "object" ? real : {};
+      return { ...base, inventory: fake };
+    },
+    gate: {
+      label: ATOMS.activeModal,
+      isOpen: isInventoryOpen,
+      openAction: openInventoryPanel,
+      closeAction: closeInventoryPanel,
+      autoDisableOnClose: true
+    }
+  };
+  async function fakeInventoryShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    let myInv = void 0;
+    try {
+      const invAtom = getAtomByLabel(ATOMS.inventory);
+      if (invAtom) myInv = await jGet(invAtom).catch(() => void 0);
+    } catch {
+    }
+    try {
+      console.log("[fakeInventory] \u25B6 re\xE7u \u2192", payload);
+    } catch {
+    }
+    try {
+      console.log("[fakeInventory] \u25B6 moi   \u2192", myInv);
+    } catch {
+    }
+    const safePayload = payload;
+    try {
+      await fakeShow(MYDATA_FAKE_CONFIG, safePayload, {
+        openGate: false,
+        autoRestoreMs: opts?.autoRestoreMs
+      });
+    } catch {
+    }
+    await fakeShow(INVENTORY_FAKE_CONFIG, safePayload, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openInventoryPanel();
+  }
+
+  // src/services/pets.ts
+  var VALIDATED_INDEX_ATOM_LABEL = "myValidatedSelectedItemIndexAtom";
+  var LS_TEAMS_KEY = "qws:pets:teams:v1";
+  var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
+  var _AB = petAbilities ?? {};
+  function _abilityName(id) {
+    const key = String(id ?? "");
+    const raw = typeof _AB?.[key]?.name === "string" && _AB[key].name.trim() ? _AB[key].name : key;
+    return String(raw);
+  }
+  function _abilityNameWithoutLevel(id) {
+    const key = String(id ?? "");
+    const raw = typeof _AB?.[key]?.name === "string" && _AB[key].name.trim() ? _AB[key].name : key;
+    return String(raw).replace(/(?:\s+|-)?(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\s*$/, "").trim();
+  }
+  function _parseTeamSearch(raw) {
+    const s = String(raw || "").trim();
+    const m = s.match(/^(ab|sp):\s*(.*)$/i);
+    if (!m) return { mode: "text", value: s };
+    return { mode: m[1].toLowerCase() === "ab" ? "ability" : "species", value: (m[2] || "").trim() };
+  }
+  async function _abilityNameToPresentIds(name) {
+    await _ensureInventoryWatchersStarted();
+    const target = String(name || "").toLowerCase().trim().replace(/(?:\s+|-)?(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\s*$/i, "");
+    const ids = /* @__PURE__ */ new Set();
+    if (!target) return ids;
+    for (const p of _invPetsCache) {
+      const abs = Array.isArray(p.abilities) ? p.abilities : [];
+      for (const id of abs) {
+        if (_abilityNameWithoutLevel(id).toLowerCase() === target) {
+          ids.add(id);
+        }
+      }
+    }
+    return ids;
+  }
+  function _matchesQuery(p, q) {
+    if (!q) return true;
+    return _s(p.id).includes(q) || _s(p.petSpecies).includes(q) || _s(p.name).includes(q) || Array.isArray(p.abilities) && p.abilities.some((a) => _s(a).includes(q) || _s(_abilityName(a)).includes(q)) || Array.isArray(p.mutations) && p.mutations.some((m) => _s(m).includes(q));
+  }
+  async function _favoriteIdsSafe() {
+    try {
+      const inv = await myInventoryAtom.get();
+      const fav = Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds : [];
+      return fav.slice();
+    } catch {
+      return [];
+    }
+  }
+  function _canonicalSpecies(s) {
+    if (!s) return s;
+    if (petCatalog[s]) return s;
+    const t = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+    return petCatalog[t] ? t : s;
+  }
+  function _invPetToRawItem(p) {
+    return {
+      id: p.id,
+      itemType: "Pet",
+      petSpecies: _canonicalSpecies(p.petSpecies),
+      name: p.name ?? null,
+      xp: p.xp,
+      hunger: p.hunger,
+      mutations: Array.isArray(p.mutations) ? p.mutations.slice() : [],
+      targetScale: p.targetScale,
+      abilities: Array.isArray(p.abilities) ? p.abilities.slice() : []
+    };
+  }
+  async function clearHandSelection() {
+    const atom = getAtomByLabel("setSelectedIndexToEndAtom");
+    await jSet(atom, "null");
+    try {
+      await PlayerService.setSelectedItem(null);
+    } catch {
+    }
+    try {
+      await PlayerService.dropObject();
+    } catch {
+    }
+  }
+  async function _waitValidatedInventoryIndex(timeoutMs = 2e4) {
+    const atom = getAtomByLabel(VALIDATED_INDEX_ATOM_LABEL);
+    if (!atom) return null;
+    await clearHandSelection();
+    const t0 = performance.now();
+    while (performance.now() - t0 < timeoutMs) {
+      try {
+        const v = await jGet(atom);
+        if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
+      } catch {
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return null;
+  }
+  function loadTeams() {
+    try {
+      const raw = localStorage.getItem(LS_TEAMS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.map((t) => ({
+        id: String(t?.id || ""),
+        name: String(t?.name || "Team"),
+        slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
+      })).filter((t) => t.id);
+    } catch {
+      return [];
+    }
+  }
+  function saveTeams(arr) {
+    try {
+      localStorage.setItem(LS_TEAMS_KEY, JSON.stringify(arr));
+    } catch {
+    }
+  }
+  function _uid() {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `t_${Date.now().toString(36)}_${Math.random().toString(16).slice(2)}`;
+    }
+  }
+  var _teams = loadTeams();
+  var _teamSubs = /* @__PURE__ */ new Set();
+  function _notifyTeams() {
+    const snap = _teams.slice();
+    _teamSubs.forEach((fn) => {
+      try {
+        fn(snap);
+      } catch {
+      }
+    });
+  }
+  function _loadTeamSearchMap() {
+    try {
+      const raw = localStorage.getItem(LS_TEAM_SEARCH_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch {
+      return {};
+    }
+  }
+  function _saveTeamSearchMap(map) {
+    try {
+      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map));
+    } catch {
+    }
+  }
+  var _teamSearch = _loadTeamSearchMap();
+  var _teamSearchSubs = /* @__PURE__ */ new Set();
+  function _notifyTeamSearch(teamId) {
+    const q = _teamSearch[teamId] || "";
+    _teamSearchSubs.forEach((fn) => {
+      try {
+        fn(teamId, q);
+      } catch {
+      }
+    });
+  }
+  var _s = (v) => (v ?? "").toLowerCase();
+  var _sOpt = (v) => typeof v === "string" ? v : null;
+  var _n = (v) => Number.isFinite(v) ? v : 0;
+  var _sArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  var _invRaw = null;
+  var _activeRaw = [];
+  var _invPetsCache = [];
+  var _invSubs = /* @__PURE__ */ new Set();
+  var _invUnsub = null;
+  var _activeUnsub = null;
+  var _invSig = null;
+  var _activeSig = null;
+  function _inventoryItemToPet(x) {
+    if (!x || x.itemType !== "Pet") return null;
+    const id = _s(x.id);
+    if (!id) return null;
+    return {
+      id,
+      itemType: "Pet",
+      petSpecies: _s(x.petSpecies ?? x.data?.petSpecies),
+      name: _sOpt(x.name ?? x.data?.name ?? null),
+      xp: _n(x.xp ?? x.data?.xp),
+      hunger: _n(x.hunger ?? x.data?.hunger),
+      mutations: _sArr(x.mutations ?? x.data?.mutations),
+      targetScale: Number.isFinite(x.targetScale ?? x.data?.targetScale) ? Number(x.targetScale ?? x.data?.targetScale) : void 0,
+      abilities: _sArr(x.abilities ?? x.data?.abilities)
+    };
+  }
+  function _activeSlotToPet(entry) {
+    const slot = entry?.slot;
+    if (!slot || typeof slot !== "object") return null;
+    const id = _s(slot.id);
+    if (!id) return null;
+    return {
+      id,
+      itemType: "Pet",
+      petSpecies: _s(slot.petSpecies),
+      name: _sOpt(slot.name ?? null),
+      xp: _n(slot.xp),
+      hunger: _n(slot.hunger),
+      mutations: _sArr(slot.mutations),
+      targetScale: Number.isFinite(slot.targetScale) ? Number(slot.targetScale) : void 0,
+      abilities: _sArr(slot.abilities)
+    };
+  }
+  function _petSigStableNoXpNoHunger(p) {
+    return JSON.stringify({
+      id: p.id,
+      itemType: "Pet",
+      petSpecies: p.petSpecies,
+      name: p.name ?? null,
+      mutations: Array.isArray(p.mutations) ? p.mutations : [],
+      targetScale: Number.isFinite(p.targetScale) ? p.targetScale : null,
+      abilities: Array.isArray(p.abilities) ? p.abilities : []
+    });
+  }
+  function _buildInvSigFromInventory(inv) {
+    const out = /* @__PURE__ */ new Map();
+    const items = Array.isArray(inv?.items) ? inv.items : Array.isArray(inv) ? inv : [];
+    for (const it of items) {
+      const p = _inventoryItemToPet(it);
+      if (p) out.set(p.id, _petSigStableNoXpNoHunger(p));
+    }
+    return out;
+  }
+  function _buildActiveSig(list) {
+    const out = /* @__PURE__ */ new Map();
+    const arr = Array.isArray(list) ? list : [];
+    for (const e of arr) {
+      const p = _activeSlotToPet(e);
+      if (p) out.set(p.id, _petSigStableNoXpNoHunger(p));
+    }
+    return out;
+  }
+  function _mapsEqual(a, b) {
+    if (!a) return false;
+    if (a.size !== b.size) return false;
+    for (const [k, v] of b) if (a.get(k) !== v) return false;
+    return true;
+  }
+  function _rebuildInvPets() {
+    const map = /* @__PURE__ */ new Map();
+    const items = Array.isArray(_invRaw?.items) ? _invRaw.items : Array.isArray(_invRaw) ? _invRaw : [];
+    for (const it of items) {
+      const p = _inventoryItemToPet(it);
+      if (p && p.id) map.set(p.id, p);
+    }
+    const act = Array.isArray(_activeRaw) ? _activeRaw : [];
+    for (const e of act) {
+      const p = _activeSlotToPet(e);
+      if (p && p.id) map.set(p.id, p);
+    }
+    _invPetsCache = Array.from(map.values());
+    const snap = _invPetsCache.slice();
+    _invSubs.forEach((fn) => {
+      try {
+        fn(snap);
+      } catch {
+      }
+    });
+  }
+  async function _ensureInventoryWatchersStarted() {
+    if (!_invUnsub) {
+      const unsub = await myInventoryAtom.subNow((inv) => {
+        const nextSig = _buildInvSigFromInventory(inv);
+        if (_mapsEqual(_invSig, nextSig)) return;
+        _invSig = nextSig;
+        _invRaw = inv;
+        _rebuildInvPets();
+      });
+      _invUnsub = () => {
+        try {
+          unsub();
+        } catch {
+        }
+      };
+    }
+    if (!_activeUnsub) {
+      const unsub = await myPetInfosAtom.subNow((list) => {
+        const nextSig = _buildActiveSig(list);
+        if (_mapsEqual(_activeSig, nextSig)) return;
+        _activeSig = nextSig;
+        _activeRaw = Array.isArray(list) ? list : [];
+        _rebuildInvPets();
+      });
+      _activeUnsub = () => {
+        try {
+          unsub();
+        } catch {
+        }
+      };
+    }
+    if (!_invPetsCache.length) {
+      try {
+        const [inv, active] = await Promise.all([
+          myInventoryAtom.get(),
+          myPetInfosAtom.get()
+        ]);
+        _invSig = _buildInvSigFromInventory(inv);
+        _activeSig = _buildActiveSig(active);
+        _invRaw = inv;
+        _activeRaw = Array.isArray(active) ? active : [];
+        _rebuildInvPets();
+      } catch {
+      }
+    }
+  }
+  var PetsService = {
+    getPets() {
+      return PlayerService.getPets();
+    },
+    onPetsChange(cb) {
+      return PlayerService.onPetsChange(cb);
+    },
+    onPetsChangeNow(cb) {
+      return PlayerService.onPetsChangeNow(cb);
+    },
+    getAbilityName(id) {
+      return _abilityName(id);
+    },
+    getAbilityNameWithoutLevel(id) {
+      return _abilityNameWithoutLevel(id);
+    },
+    getAbilityInfo(id) {
+      const key = String(id ?? "");
+      const def = _AB?.[key];
+      return def ? { id: key, ...def } : null;
+    },
+    async chooseSlotPet(teamId, slotIndex, searchOverride) {
+      const idx = Math.max(0, Math.min(2, Math.floor(slotIndex || 0)));
+      const team = this.getTeamById(teamId);
+      if (!team) return null;
+      const exclude = /* @__PURE__ */ new Set();
+      team.slots.forEach((id, i) => {
+        if (i !== idx && id) exclude.add(String(id));
+      });
+      const payload = searchOverride && searchOverride.trim().length ? await this.buildFilteredInventoryByQuery(searchOverride, { excludeIds: exclude }) : await this.buildFilteredInventoryForTeam(teamId, { excludeIds: exclude });
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      if (!items.length) {
+        return null;
+      }
+      await fakeInventoryShow(payload, { open: true });
+      const selIndex = await _waitValidatedInventoryIndex(2e4);
+      await closeInventoryPanel();
+      if (selIndex == null || selIndex < 0 || selIndex >= items.length) {
+        return null;
+      }
+      const chosenPet = _inventoryItemToPet(items[selIndex]);
+      if (!chosenPet) return null;
+      const next = team.slots.slice(0, 3);
+      next[idx] = String(chosenPet.id);
+      this.saveTeam({ id: team.id, slots: next });
+      try {
+        await clearHandSelection();
+      } catch {
+      }
+      return chosenPet;
+    },
+    async pickPetViaFakeInventory(search) {
+      const payload = await this.buildFilteredInventoryByQuery(search || "");
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      if (!items.length) return null;
+      await fakeInventoryShow(payload, { open: true });
+      const selIndex = await _waitValidatedInventoryIndex(2e4);
+      await closeInventoryPanel();
+      if (selIndex == null || selIndex < 0 || selIndex >= items.length) return null;
+      await clearHandSelection();
+      return _inventoryItemToPet(items[selIndex]);
+    },
+    setTeamsOrder(ids) {
+      const byId = new Map(this._teams.map((t) => [t.id, t]));
+      const next = [];
+      for (const id of ids) {
+        const t = byId.get(id);
+        if (t) {
+          next.push(t);
+          byId.delete(id);
+        }
+      }
+      for (const rest of byId.values()) next.push(rest);
+      this._teams = next;
+      saveTeams(this._teams);
+      this._notifyTeamSubs();
+    },
+    async buildFilteredInventoryForTeam(teamId, opts) {
+      await _ensureInventoryWatchersStarted();
+      const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
+      let list = await this.getInventoryPets();
+      if (mode === "ability" && value) {
+        const idSet = await _abilityNameToPresentIds(value);
+        list = idSet.size ? list.filter((p) => Array.isArray(p.abilities) && p.abilities.some((a) => idSet.has(a))) : [];
+      } else if (mode === "species" && value) {
+        const vv = value.toLowerCase();
+        list = list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
+      } else if (value) {
+        list = list.filter((p) => _matchesQuery(p, value));
+      }
+      if (opts?.excludeIds?.size) {
+        const ex = opts.excludeIds;
+        list = list.filter((p) => !ex.has(p.id));
+      }
+      const items = list.map(_invPetToRawItem);
+      const favAll = await _favoriteIdsSafe();
+      const keep = new Set(list.map((p) => p.id));
+      const favoritedItemIds = favAll.filter((id) => keep.has(id));
+      return { items, favoritedItemIds };
+    },
+    async buildFilteredInventoryByQuery(query, opts) {
+      await _ensureInventoryWatchersStarted();
+      const q = (query || "").toLowerCase().trim();
+      let list = await this.getInventoryPets();
+      list = list.filter((p) => _matchesQuery(p, q));
+      if (opts?.excludeIds?.size) {
+        const ex = opts.excludeIds;
+        list = list.filter((p) => !ex.has(p.id));
+      }
+      const items = list.map(_invPetToRawItem);
+      const favAll = await _favoriteIdsSafe();
+      const keep = new Set(list.map((p) => p.id));
+      const favoritedItemIds = favAll.filter((id) => keep.has(id));
+      return { items, favoritedItemIds };
+    },
+    /* --------------------------------- UI-less team APIs -------------------------------- */
+    _teams: loadTeams(),
+    _teamSubs: /* @__PURE__ */ new Set(),
+    _notifyTeamSubs() {
+      const snap = this.getTeams();
+      this._teamSubs.forEach((fn) => {
+        try {
+          fn(snap);
+        } catch {
+        }
+      });
+    },
+    getTeams() {
+      return Array.isArray(this._teams) ? this._teams.map((t) => ({ ...t, slots: t.slots.slice(0, 3) })) : [];
+    },
+    onTeamsChange(cb) {
+      this._teamSubs.add(cb);
+      try {
+        cb(this.getTeams());
+      } catch {
+      }
+      return () => {
+        this._teamSubs.delete(cb);
+      };
+    },
+    async onTeamsChangeNow(cb) {
+      const unsub = this.onTeamsChange(cb);
+      try {
+        cb(this.getTeams());
+      } catch {
+      }
+      return unsub;
+    },
+    createTeam(name) {
+      const t = { id: _uid(), name: name?.trim() || `Team ${this._teams.length + 1}`, slots: [null, null, null] };
+      this._teams.push(t);
+      saveTeams(this._teams);
+      this._notifyTeamSubs();
+      return t;
+    },
+    duplicateTeam(teamId) {
+      const src = this._teams.find((t) => t.id === teamId);
+      if (!src) return null;
+      const copy = {
+        id: _uid(),
+        name: `${src.name} (copy)`,
+        slots: src.slots.slice(0, 3)
+      };
+      this._teams.push(copy);
+      saveTeams(this._teams);
+      this._notifyTeamSubs();
+      return copy;
+    },
+    deleteTeam(teamId) {
+      const i = this._teams.findIndex((t) => t.id === teamId);
+      if (i < 0) return false;
+      this._teams.splice(i, 1);
+      saveTeams(this._teams);
+      this._notifyTeamSubs();
+      return true;
+    },
+    saveTeam(patch) {
+      const i = this._teams.findIndex((t) => t.id === patch.id);
+      if (i < 0) return null;
+      const cur = this._teams[i];
+      const next = {
+        id: cur.id,
+        name: typeof patch.name === "string" ? patch.name : cur.name,
+        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur.slots
+      };
+      this._teams[i] = next;
+      saveTeams(this._teams);
+      this._notifyTeamSubs();
+      return next;
+    },
+    updateTeam(teamId, patch) {
+      const idx = _teams.findIndex((t) => t.id === teamId);
+      if (idx < 0) return null;
+      const cur = _teams[idx];
+      const next = {
+        ...cur,
+        ...patch,
+        slots: patch.slots ? [...patch.slots] : cur.slots
+      };
+      _teams[idx] = next;
+      saveTeams(_teams);
+      _notifyTeams();
+      return next;
+    },
+    getTeamSearch(teamId) {
+      return _teamSearch[teamId] || "";
+    },
+    setTeamSearch(teamId, q) {
+      _teamSearch[teamId] = (q || "").trim();
+      _saveTeamSearchMap(_teamSearch);
+      _notifyTeamSearch(teamId);
+    },
+    onTeamSearchChange(cb) {
+      _teamSearchSubs.add(cb);
+      return () => {
+        _teamSearchSubs.delete(cb);
+      };
+    },
+    getTeamById(teamId) {
+      const t = this._teams.find((t2) => t2.id === teamId) || null;
+      return t ? { ...t, slots: t.slots.slice(0, 3) } : null;
+    },
+    async getTeamSlotOptions(teamId, slotIndex) {
+      await _ensureInventoryWatchersStarted();
+      const team = this.getTeamById(teamId);
+      const filtered = await this.getTeamFilteredInventoryPets(teamId);
+      if (!team) return filtered;
+      const idx = Math.max(0, Math.min(2, Math.floor(slotIndex)));
+      const current = team.slots[idx] || null;
+      const taken = /* @__PURE__ */ new Set();
+      team.slots.forEach((id, i) => {
+        if (i !== idx && id) taken.add(id);
+      });
+      let visible = filtered.filter((p) => !taken.has(p.id));
+      if (current && !visible.some((p) => p.id === current)) {
+        const cur = _invPetsCache.find((p) => p.id === current);
+        if (cur) visible = [cur, ...visible];
+      }
+      return visible;
+    },
+    async getTeamFilteredInventoryPets(teamId) {
+      await _ensureInventoryWatchersStarted();
+      const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
+      let list = _invPetsCache.slice();
+      if (mode === "ability" && value) {
+        const idSet = await _abilityNameToPresentIds(value);
+        return idSet.size ? list.filter((p) => p.abilities?.some((a) => idSet.has(a))) : [];
+      }
+      if (mode === "species" && value) {
+        const vv = value.toLowerCase();
+        return list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
+      }
+      if (value) return list.filter((p) => _matchesQuery(p, value));
+      return list;
+    },
+    /* ============================ Ability Logs (for "Logs" tab) ============================ */
+    _logs: [],
+    _logsMax: 500,
+    _seenPerfByPet: /* @__PURE__ */ new Map(),
+    _logSubs: /* @__PURE__ */ new Set(),
+    async startAbilityLogsWatcher() {
+      const stop = await myPetsAbilitiesTrigger.subNow((map) => {
+        this._ingestAbilityMap(map);
+      });
+      return () => {
+        try {
+          stop();
+        } catch {
+        }
+      };
+    },
+    getAbilityLogs(opts) {
+      const ids = opts?.abilityIds && opts.abilityIds.length ? new Set(opts.abilityIds) : null;
+      const since = Number.isFinite(opts?.since) ? opts.since : 0;
+      const lim = Math.max(0, Math.floor(opts?.limit ?? 0));
+      let arr = this._logs.filter(
+        (e) => (since ? e.performedAt >= since : true) && (ids ? ids.has(e.abilityId) : true)
+      );
+      arr = arr.sort((a, b) => b.performedAt - a.performedAt);
+      return lim ? arr.slice(0, lim) : arr;
+    },
+    onAbilityLogs(cb) {
+      this._logSubs.add(cb);
+      try {
+        cb(this.getAbilityLogs());
+      } catch {
+      }
+      return () => {
+        this._logSubs.delete(cb);
+      };
+    },
+    getSeenAbilityIds() {
+      const set2 = /* @__PURE__ */ new Set();
+      for (const e of this._logs) set2.add(e.abilityId);
+      return Array.from(set2).sort();
+    },
+    clearAbilityLogs() {
+      this._logs.length = 0;
+      this._seenPerfByPet.clear();
+      this._notifyLogSubs();
+    },
+    _notifyLogSubs() {
+      const snap = this.getAbilityLogs();
+      this._logSubs.forEach((fn) => {
+        try {
+          fn(snap);
+        } catch {
+        }
+      });
+    },
+    _pushLog(e) {
+      this._logs.push(e);
+      if (this._logs.length > this._logsMax) {
+        this._logs.splice(0, this._logs.length - this._logsMax);
+      }
+      this._notifyLogSubs();
+    },
+    _ingestAbilityMap(map) {
+      if (!map || typeof map !== "object") return;
+      for (const petId of Object.keys(map)) {
+        const entry = map[petId];
+        if (!entry || typeof entry !== "object") continue;
+        const abilityId = entry.abilityId ?? null;
+        const performedAtNum = Number(entry.performedAt) || 0;
+        if (!abilityId || !performedAtNum) continue;
+        const prev = this._seenPerfByPet.get(petId) || 0;
+        if (performedAtNum <= prev) continue;
+        const pet = _invPetsCache.find((p) => String(p.id) === String(petId)) || null;
+        const log = {
+          petId,
+          species: pet?.petSpecies || void 0,
+          name: pet?.name ?? void 0,
+          abilityId: String(abilityId),
+          data: entry.data,
+          performedAt: performedAtNum
+        };
+        this._seenPerfByPet.set(petId, performedAtNum);
+        this._pushLog(log);
+      }
+    },
+    /* ============================ Inventory (from myInventoryAtom) ============================ */
+    async getInventoryPets() {
+      await _ensureInventoryWatchersStarted();
+      return _invPetsCache.slice();
+    },
+    async searchInventoryPets(q) {
+      const list = await this.getInventoryPets();
+      const s = (v) => (v ?? "").toLowerCase();
+      const qq = (q || "").toLowerCase().trim();
+      if (!qq) return list;
+      return list.filter(
+        (p) => s(p.id).includes(qq) || s(p.petSpecies).includes(qq) || s(p.name).includes(qq) || p.abilities.some((a) => s(a).includes(qq)) || p.mutations.some((m) => s(m).includes(qq))
+      );
+    },
+    onInventoryPetsChange(cb) {
+      void _ensureInventoryWatchersStarted();
+      _invSubs.add(cb);
+      try {
+        cb(_invPetsCache.slice());
+      } catch {
+      }
+      return () => {
+        _invSubs.delete(cb);
+      };
+    },
+    async useTeam(teamId) {
+      const t = this.getTeams().find((tt) => tt.id === teamId) || null;
+      if (!t) throw new Error("Team not found");
+      const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
+      if (!targetInvIds.length) {
+        return { swapped: 0, placed: 0, skipped: 0 };
+      }
+      return _applyTeam(targetInvIds);
+    },
+    async useTeamSlots(slots) {
+      const targetInvIds = (Array.isArray(slots) ? slots : []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
+      if (!targetInvIds.length) return { swapped: 0, placed: 0, skipped: 0 };
+      return _applyTeam(targetInvIds);
+    }
+  };
+  async function _getActivePetSlotIds() {
+    try {
+      const arr = await PlayerService.getPets();
+      const list = Array.isArray(arr) ? arr : [];
+      return list.map((p) => String(p?.slot?.id || "")).filter((id) => !!id).slice(0, 3);
+    } catch {
+      return [];
+    }
+  }
+  async function _applyTeam(targetInvIds) {
+    let activeSlots = await _getActivePetSlotIds();
+    const targetSet = new Set(targetInvIds);
+    const extras = activeSlots.filter((id) => !targetSet.has(id));
+    const mustStore = Math.max(0, activeSlots.length - targetInvIds.length);
+    if (mustStore > 0) {
+      const toStore = extras.slice(0, mustStore);
+      for (const itemId of toStore) {
+        try {
+          await PlayerService.storePet(itemId);
+          activeSlots = activeSlots.filter((id) => id !== itemId);
+        } catch (e) {
+        }
+      }
+    }
+    const alreadyActive = /* @__PURE__ */ new Set();
+    for (const invId of targetInvIds) {
+      if (activeSlots.includes(invId)) alreadyActive.add(invId);
+    }
+    let swapped = 0, placed = 0, skipped = 0;
+    if (alreadyActive.size) {
+      activeSlots = activeSlots.filter((slotId) => !alreadyActive.has(slotId));
+      skipped = alreadyActive.size;
+    }
+    const toDo = targetInvIds.filter((id) => !alreadyActive.has(id));
+    for (const invId of toDo) {
+      const slotId = activeSlots.shift();
+      try {
+        if (slotId) {
+          await PlayerService.swapPet(slotId, invId);
+          swapped++;
+        } else {
+          await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
+          placed++;
+        }
+      } catch (e) {
+      }
+    }
+    return { swapped, placed, skipped };
+  }
+
+  // src/ui/hud.ts
+  function mountHUD(opts) {
+    const LS_POS = "qws:pos";
+    const LS_COLL = "qws:collapsed";
+    const LS_HIDDEN = "qws:hidden";
+    const MARGIN = 8;
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => mountHUD(opts), { once: true });
+      return;
+    }
+    const css = `
   :root{
     --qws-bg:        #0f1318;
     --qws-panel:     #111823cc;
@@ -111,7 +2889,13 @@
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
   }
   .qws-win .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 }
-  `,o=document.createElement("style");o.textContent=i,(document.documentElement||document.body).appendChild(o);let l=document.createElement("div");l.className="qws2",l.innerHTML=`
+  `;
+    const st = document.createElement("style");
+    st.textContent = css;
+    (document.documentElement || document.body).appendChild(st);
+    const box = document.createElement("div");
+    box.className = "qws2";
+    box.innerHTML = `
     <div class="row drag">
       <div class="title">Arie's Mod</div>
       <div class="sp"></div>
@@ -129,7 +2913,171 @@
     <div class="body">
       <div id="qws-launch" class="qws-launch"></div>
     </div>
-  `,(document.documentElement||document.body).appendChild(l);function u(m){let k=m.getBoundingClientRect(),c=window.innerWidth,s=window.innerHeight,b=parseFloat(getComputedStyle(m).right)||c-k.right,p=parseFloat(getComputedStyle(m).bottom)||s-k.bottom,E=Math.max(8,c-k.width-8),g=Math.max(8,s-k.height-8);b=Math.min(Math.max(b,8),E),p=Math.min(Math.max(p,8),g),m.style.right=b+"px",m.style.bottom=p+"px"}function d(m){u(m);let k=m.getBoundingClientRect(),s=m.querySelector(".w-head")?.getBoundingClientRect()||k,b=window.innerWidth,p=window.innerHeight,E=8,g=parseFloat(getComputedStyle(m).right);Number.isNaN(g)&&(g=b-k.right);let R=parseFloat(getComputedStyle(m).bottom);Number.isNaN(R)&&(R=p-k.bottom);let Y=Math.max(E,b-k.width-E),q=Math.max(E,p-k.height-E);if(s.top<E){let W=E-s.top;R=Math.max(E,Math.min(q,R-W))}if(k.left<E){let W=E-k.left;g=Math.max(E,Math.min(Y,g-W))}m.style.right=g+"px",m.style.bottom=R+"px"}function y(m){m.style.right="16px",m.style.bottom="16px",d(m)}function P(m,k){let c=m.getBoundingClientRect(),s=window.innerHeight,b=parseFloat(getComputedStyle(m).bottom);Number.isNaN(b)&&(b=s-c.bottom),k(),requestAnimationFrame(()=>{let p=m.getBoundingClientRect(),E=p.top-c.top,g=b+E,R=Math.max(8,s-p.height-8);g=Math.min(Math.max(8,g),R),m.style.bottom=g+"px",d(m)})}function M(){try{let m=parseFloat(l.style.right)||16,k=parseFloat(l.style.bottom)||16;localStorage.setItem(t,JSON.stringify({r:m,b:k}))}catch{}}try{let m=JSON.parse(localStorage.getItem(t)||"null");if(m&&typeof m.r=="number"&&typeof m.b=="number"&&(l.style.right=m.r+"px",l.style.bottom=m.b+"px"),localStorage.getItem(n)==="1"){l.classList.add("min");let k=l.querySelector("#qws2-min");k&&(k.textContent="+")}localStorage.getItem(r)==="1"&&l.classList.add("hidden"),requestAnimationFrame(()=>u(l)),window.addEventListener("resize",()=>u(l))}catch{}let L=l.querySelector(".drag"),w=l.querySelector("#qws2-min"),T=l.querySelector("#qws2-hide"),I=l.querySelector("#qws2-status-mini"),v=l.querySelector("#qws2-status2"),x=l.querySelector("#qws2-store"),B=l.querySelector("#qws-launch");if(!L||!w||!T||!I||!v||!x||!B){console.warn("[QuinoaWS] HUD elements missing, abort init");return}let D=B;(function(){let k=0,c=0,s=0,b=0,p=!1;L.addEventListener("mousedown",E=>{p=!0,k=E.clientX,c=E.clientY;let g=l.getBoundingClientRect();s=parseFloat(getComputedStyle(l).right)||window.innerWidth-g.right,b=parseFloat(getComputedStyle(l).bottom)||window.innerHeight-g.bottom,document.body.style.userSelect="none"}),window.addEventListener("mousemove",E=>{if(!p)return;let g=E.clientX-k,R=E.clientY-c,Y=s-g,q=b-R,W=l.getBoundingClientRect(),ee=window.innerWidth,K=window.innerHeight,z=Math.max(8,ee-W.width-8),f=Math.max(8,K-W.height-8);Y=Math.min(Math.max(Y,8),z),q=Math.min(Math.max(q,8),f),l.style.right=Y+"px",l.style.bottom=q+"px"}),window.addEventListener("mouseup",()=>{p&&(p=!1,document.body.style.userSelect="",M())})})(),w.onclick=()=>{P(l,()=>{l.classList.toggle("min"),w.textContent=l.classList.contains("min")?"+":"\u2013";try{localStorage.setItem(n,l.classList.contains("min")?"1":"0")}catch{}})},T.onclick=()=>{l.classList.add("hidden");try{localStorage.setItem(r,"1")}catch{}},window.addEventListener("keydown",m=>{let k=(m.target&&m.target.tagName||"").toLowerCase();if(!(k==="input"||k==="textarea"||m.target?.isContentEditable)&&m.altKey&&!m.shiftKey&&!m.ctrlKey&&!m.metaKey&&(m.key==="x"||m.key==="X")){let s=l.classList.toggle("hidden");try{localStorage.setItem(r,s?"1":"0")}catch{}}},!0);let j=new Map,$=0;function U(m,k,c){if(j.has(m)){let q=j.get(m);q.el.style.display="",ce(q.el),F(m,!0);return}let s=document.createElement("div");s.className="qws-win",s.innerHTML=`
+  `;
+    (document.documentElement || document.body).appendChild(box);
+    function clampRect(el2) {
+      const rect = el2.getBoundingClientRect();
+      const vw = window.innerWidth, vh = window.innerHeight;
+      let r = parseFloat(getComputedStyle(el2).right) || vw - rect.right;
+      let b = parseFloat(getComputedStyle(el2).bottom) || vh - rect.bottom;
+      const maxRight = Math.max(MARGIN, vw - rect.width - MARGIN);
+      const maxBottom = Math.max(MARGIN, vh - rect.height - MARGIN);
+      r = Math.min(Math.max(r, MARGIN), maxRight);
+      b = Math.min(Math.max(b, MARGIN), maxBottom);
+      el2.style.right = r + "px";
+      el2.style.bottom = b + "px";
+    }
+    function ensureOnScreen(el2) {
+      clampRect(el2);
+      const rect = el2.getBoundingClientRect();
+      const head = el2.querySelector(".w-head");
+      const hrect = head?.getBoundingClientRect() || rect;
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const M = MARGIN;
+      let r = parseFloat(getComputedStyle(el2).right);
+      if (Number.isNaN(r)) r = vw - rect.right;
+      let b = parseFloat(getComputedStyle(el2).bottom);
+      if (Number.isNaN(b)) b = vh - rect.bottom;
+      const maxRight = Math.max(M, vw - rect.width - M);
+      const maxBottom = Math.max(M, vh - rect.height - M);
+      if (hrect.top < M) {
+        const delta = M - hrect.top;
+        b = Math.max(M, Math.min(maxBottom, b - delta));
+      }
+      if (rect.left < M) {
+        const deltaL = M - rect.left;
+        r = Math.max(M, Math.min(maxRight, r - deltaL));
+      }
+      el2.style.right = r + "px";
+      el2.style.bottom = b + "px";
+    }
+    function withTopLocked(el2, mutate) {
+      const before = el2.getBoundingClientRect();
+      const vh = window.innerHeight;
+      let b = parseFloat(getComputedStyle(el2).bottom);
+      if (Number.isNaN(b)) b = vh - before.bottom;
+      mutate();
+      requestAnimationFrame(() => {
+        const after = el2.getBoundingClientRect();
+        const deltaTop = after.top - before.top;
+        let newBottom = b + deltaTop;
+        const maxBottom = Math.max(MARGIN, vh - after.height - MARGIN);
+        newBottom = Math.min(Math.max(MARGIN, newBottom), maxBottom);
+        el2.style.bottom = newBottom + "px";
+        ensureOnScreen(el2);
+      });
+    }
+    function saveHUDPos() {
+      try {
+        const r = parseFloat(box.style.right) || 16;
+        const b = parseFloat(box.style.bottom) || 16;
+        localStorage.setItem(LS_POS, JSON.stringify({ r, b }));
+      } catch {
+      }
+    }
+    try {
+      const pos = JSON.parse(localStorage.getItem(LS_POS) || "null");
+      if (pos && typeof pos.r === "number" && typeof pos.b === "number") {
+        box.style.right = pos.r + "px";
+        box.style.bottom = pos.b + "px";
+      }
+      if (localStorage.getItem(LS_COLL) === "1") {
+        box.classList.add("min");
+        const btnMin0 = box.querySelector("#qws2-min");
+        if (btnMin0) btnMin0.textContent = "+";
+      }
+      if (localStorage.getItem(LS_HIDDEN) === "1") box.classList.add("hidden");
+      requestAnimationFrame(() => clampRect(box));
+      window.addEventListener("resize", () => clampRect(box));
+    } catch {
+    }
+    const header = box.querySelector(".drag");
+    const btnMin = box.querySelector("#qws2-min");
+    const btnHide = box.querySelector("#qws2-hide");
+    const sMini = box.querySelector("#qws2-status-mini");
+    const sFull = box.querySelector("#qws2-status2");
+    const sStore = box.querySelector("#qws2-store");
+    const launch = box.querySelector("#qws-launch");
+    if (!header || !btnMin || !btnHide || !sMini || !sFull || !sStore || !launch) {
+      console.warn("[QuinoaWS] HUD elements missing, abort init");
+      return;
+    }
+    const launchEl = launch;
+    (function makeDraggable() {
+      let sx = 0, sy = 0, or = 0, ob = 0, down = false;
+      header.addEventListener("mousedown", (e) => {
+        down = true;
+        sx = e.clientX;
+        sy = e.clientY;
+        const rect = box.getBoundingClientRect();
+        or = parseFloat(getComputedStyle(box).right) || window.innerWidth - rect.right;
+        ob = parseFloat(getComputedStyle(box).bottom) || window.innerHeight - rect.bottom;
+        document.body.style.userSelect = "none";
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (!down) return;
+        const dx = e.clientX - sx;
+        const dy = e.clientY - sy;
+        let r = or - dx;
+        let b = ob - dy;
+        const rect = box.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const maxRight = Math.max(MARGIN, vw - rect.width - MARGIN);
+        const maxBottom = Math.max(MARGIN, vh - rect.height - MARGIN);
+        r = Math.min(Math.max(r, MARGIN), maxRight);
+        b = Math.min(Math.max(b, MARGIN), maxBottom);
+        box.style.right = r + "px";
+        box.style.bottom = b + "px";
+      });
+      window.addEventListener("mouseup", () => {
+        if (!down) return;
+        down = false;
+        document.body.style.userSelect = "";
+        saveHUDPos();
+      });
+    })();
+    btnMin.onclick = () => {
+      withTopLocked(box, () => {
+        box.classList.toggle("min");
+        btnMin.textContent = box.classList.contains("min") ? "+" : "\u2013";
+        try {
+          localStorage.setItem(LS_COLL, box.classList.contains("min") ? "1" : "0");
+        } catch {
+        }
+      });
+    };
+    btnHide.onclick = () => {
+      box.classList.add("hidden");
+      try {
+        localStorage.setItem(LS_HIDDEN, "1");
+      } catch {
+      }
+    };
+    window.addEventListener("keydown", (e) => {
+      const tn = (e.target && e.target.tagName || "").toLowerCase();
+      const editing = tn === "input" || tn === "textarea" || e.target?.isContentEditable;
+      if (editing) return;
+      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "x" || e.key === "X")) {
+        const hidden = box.classList.toggle("hidden");
+        try {
+          localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0");
+        } catch {
+        }
+      }
+    }, true);
+    const windows = /* @__PURE__ */ new Map();
+    let cascade = 0;
+    function openWindow(id, title, render) {
+      if (windows.has(id)) {
+        const w = windows.get(id);
+        w.el.style.display = "";
+        bumpZ(w.el);
+        setLaunchState(id, true);
+        return;
+      }
+      const win = document.createElement("div");
+      win.className = "qws-win";
+      win.innerHTML = `
       <div class="w-head">
         <div class="w-title"></div>
         <div class="sp"></div>
@@ -137,8 +3085,754 @@
         <button class="w-btn" data-act="close" title="Close">\u2715</button>
       </div>
       <div class="w-body"></div>
-    `,(document.documentElement||document.body).appendChild(s);let b=s.querySelector(".w-head"),p=s.querySelector(".w-title"),E=s.querySelector('[data-act="min"]'),g=s.querySelector('[data-act="close"]'),R=s.querySelector(".w-body");p.textContent=k;let Y=$++%5*24;s.style.right=16+Y+"px",s.style.bottom=16+Y+"px",u(s),ce(s),function(){let W=0,ee=0,K=0,z=0,f=!1;b.addEventListener("mousedown",h=>{if(h.target.closest(".w-btn"))return;f=!0,W=h.clientX,ee=h.clientY;let N=s.getBoundingClientRect();K=parseFloat(getComputedStyle(s).right)||window.innerWidth-N.right,z=parseFloat(getComputedStyle(s).bottom)||window.innerHeight-N.bottom,document.body.style.userSelect="none",ce(s)}),window.addEventListener("mousemove",h=>{if(!f)return;let O=h.clientX-W,N=h.clientY-ee,G=K-O,Q=z-N,ae=s.getBoundingClientRect(),Le=window.innerWidth,it=window.innerHeight,Tt=Math.max(8,Le-ae.width-8),ze=Math.max(8,it-ae.height-8);G=Math.min(Math.max(G,8),Tt),Q=Math.min(Math.max(Q,8),ze),s.style.right=G+"px",s.style.bottom=Q+"px"}),window.addEventListener("mouseup",()=>{f=!1,document.body.style.userSelect="",ge(m,s)})}(),E.onclick=()=>{P(s,()=>{let q=R.style.display==="none";R.style.display=q?"":"none",E.textContent=q?"\u2013":"+"})},g.onclick=()=>{s.style.display="none",F(m,!1)},S(s);try{c(R)}catch(q){R.textContent=String(q)}ge(m,s),j.set(m,{id:m,el:s,head:b,body:R}),F(m,!0)}function le(m){return m.style.display!=="none"}function X(m,k,c){let s=j.get(m);return s?le(s.el)?(s.el.style.display="none",F(m,!1),!1):(s.el.style.display="",ce(s.el),d(s.el),F(m,!0),!0):(U(m,k,b=>{let p=b.closest(".qws-win");p&&fe(m,p),c(b)}),!0)}function ce(m){let k=999999;j.forEach(c=>{let s=parseInt(getComputedStyle(c.el).zIndex||"999999",10);s>k&&(k=s)}),m.style.zIndex=String(k+1)}function ge(m,k){try{let c=parseFloat(k.style.right)||16,s=parseFloat(k.style.bottom)||16;localStorage.setItem(`qws:win:${m}:pos`,JSON.stringify({r:c,b:s}))}catch{}}function fe(m,k){try{let c=localStorage.getItem(`qws:win:${m}:pos`);if(!c)return;let s=JSON.parse(c);typeof s.r=="number"&&(k.style.right=s.r+"px"),typeof s.b=="number"&&(k.style.bottom=s.b+"px"),d(k)}catch{}}window.addEventListener("resize",()=>{j.forEach(m=>d(m.el))});function Te(){let m=null,k=g=>{let R=g;return R&&R.closest?.(".qws-win, .qws2")||null},c=g=>{if(!g.altKey||g.button!==0)return;let R=k(g.target);if(!R||R.style.display==="none")return;let Y=R.getBoundingClientRect(),q=window.innerWidth,W=window.innerHeight,ee=parseFloat(getComputedStyle(R).right),K=parseFloat(getComputedStyle(R).bottom);Number.isNaN(ee)&&(ee=q-Y.right),Number.isNaN(K)&&(K=W-Y.bottom),m={el:R,sx:g.clientX,sy:g.clientY,or:ee,ob:K},document.body.style.userSelect="none",ce(R),g.preventDefault(),g.stopPropagation()},s=g=>{if(!m)return;let R=g.clientX-m.sx,Y=g.clientY-m.sy,q=m.or-R,W=m.ob-Y,ee=m.el.getBoundingClientRect(),K=window.innerWidth,z=window.innerHeight,f=Math.max(8,K-ee.width-8),h=Math.max(8,z-ee.height-8);q=Math.min(Math.max(q,8),f),W=Math.min(Math.max(W,8),h),m.el.style.right=`${q}px`,m.el.style.bottom=`${W}px`},b=()=>{if(!m)return;document.body.style.userSelect="",u(m.el);let g=m.el,R=!1;j.forEach(Y=>{Y.el===g&&!R&&(ge(Y.id,g),R=!0)}),!R&&g===l&&M(),m=null},p=()=>b(),E=g=>{(g.key==="Alt"||g.key==="AltGraph")&&b()};window.addEventListener("mousedown",c,!0),window.addEventListener("mousemove",s,!0),window.addEventListener("mouseup",p,!0),window.addEventListener("keyup",E,!0)}function S(m){let k=b=>{if(!b||!(b instanceof HTMLElement))return!1;if(b instanceof HTMLTextAreaElement)return!0;if(b instanceof HTMLInputElement){let p=(b.type||"").toLowerCase();return p==="text"||p==="number"||p==="search"}return b.isContentEditable===!0},c=b=>{let p=b.target,E=document.activeElement,g=R=>!!(R&&(m.contains(R)||R.closest?.(".qws-win")||R.closest?.(".qws2")));(g(p)&&k(p)||g(E)&&k(E))&&(b.stopPropagation(),b.stopImmediatePropagation?.())},s=["keydown","keypress","keyup"];return s.forEach(b=>{window.addEventListener(b,c,{capture:!0}),document.addEventListener(b,c,{capture:!0}),m.addEventListener(b,c,{capture:!0})}),()=>{s.forEach(b=>{window.removeEventListener(b,c,{capture:!0}),document.removeEventListener(b,c,{capture:!0}),m.removeEventListener(b,c,{capture:!0})})}}let H=[],C=new Map;function F(m,k){let c=C.get(m);c&&(c.textContent=k?"Close":"Open",c.dataset.open=k?"1":"0",k?c.classList.add("active"):c.classList.remove("active"))}function ie(m,k,c){H.push({id:m,title:k,render:c}),de(m,k,c)}function de(m,k,c){let s=document.createElement("div");s.className="launch-item",s.innerHTML=`<div class="name">${Oe(k)}</div>`;let b=document.createElement("button");b.className="btn",b.textContent="Open",b.dataset.open="0",C.set(m,b),b.onclick=()=>{let p=j.get(m);p&&p.el.style.display!=="none"?(p.el.style.display="none",F(m,!1)):(U(m,k,E=>{let g=E.closest(".qws-win");g&&fe(m,g),c(E)}),F(m,!0))},s.appendChild(b),B.appendChild(s)}try{e?.onRegister?.(ie)}catch{}S(l),Te(),(async()=>{try{await Ie()}catch{}})(),setInterval(()=>{try{let m=V();I.textContent="OPEN",v.textContent="WS: OPEN",ue(I,"ok"),ue(v,"ok")}catch{let m=!!window.__QWS_workerFound||ot;I.textContent=m?"Worker":"none",v.textContent="WS: "+(m?"via Worker":"none"),ue(I,m?"ok":"warn"),ue(v,m?"ok":"warn")}try{let m=Ge(),k=en();m?(x.textContent=`store: ${k.via||"ready"}`,ue(x,"ok")):k.via==="polyfill"||k.polyfill?(x.textContent="store: polyfill",ue(x,"warn")):(x.textContent="store: none",ue(x,"bad"))}catch{x.textContent="store: error",ue(x,"bad")}},800);function V(){for(let m=0;m<he.length;m++)if(he[m].readyState===be.OPEN)return he[m];throw new Error("no page ws")}function ue(m,k){m.classList.remove("ok","warn","bad"),k&&m.classList.add(k)}function Oe(m){return m.replace(/[&<>"']/g,k=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[k])}}function qn(){(async()=>await J.startAbilityLogsWatcher())()}var Ae=class{constructor(t={}){this.opts=t;pe(this,"root");pe(this,"tabBar");pe(this,"views");pe(this,"tabs",new Map);pe(this,"events",new Map);pe(this,"currentId",null);pe(this,"lsKeyActive");this.lsKeyActive=`menu:${t.id||"default"}:activeTab`}mount(t){if(this.ensureStyles(),t.innerHTML="",this.root=Z("div",`qmm ${this.opts.classes||""} ${this.opts.compact?"qmm-compact":""}`),this.opts.startHidden&&(this.root.style.display="none"),this.tabBar=Z("div","qmm-tabs"),this.views=Z("div","qmm-views"),this.root.appendChild(this.tabBar),this.root.appendChild(this.views),t.appendChild(this.root),this.tabs.size){for(let[n,r]of this.tabs)this.createTabView(n,r);this.restoreActive()}this.updateTabsBarVisibility(),this.emit("mounted")}unmount(){this.root?.parentElement&&this.root.parentElement.removeChild(this.root),this.emit("unmounted")}setVisible(t){this.root&&(this.root.style.display=t?"":"none",this.emit(t?"show":"hide"))}toggle(){if(!this.root)return!1;let t=this.root.style.display==="none";return this.setVisible(t),t}addTab(t,n,r){return this.tabs.set(t,{title:n,render:r,badge:null}),this.root&&(this.createTabView(t,this.tabs.get(t)),this.updateTabsBarVisibility()),this}addTabs(t){return t.forEach(n=>this.addTab(n.id,n.title,n.render)),this}setTabTitle(t,n){let r=this.tabs.get(t);if(r&&(r.title=n,r.btn)){let a=r.btn.querySelector(".label");a&&(a.textContent=n)}}setTabBadge(t,n){let r=this.tabs.get(t);!r||!r.btn||(r.badge||(r.badge=document.createElement("span"),r.badge.className="badge",r.btn.appendChild(r.badge)),n==null||n===""?r.badge.style.display="none":(r.badge.textContent=n,r.badge.style.display=""))}refreshTab(t){let n=this.tabs.get(t);if(!n?.view)return;let r=this.findScrollableAncestor(n.view),a=r?r.scrollTop:null,i=r?r.scrollLeft:null,o=document.activeElement?.id||null;n.view.innerHTML="";try{n.render(n.view,this)}catch(l){n.view.textContent=String(l)}this.currentId===t&&this.switchTo(t),this.emit("tab:render",t),r&&a!=null&&requestAnimationFrame(()=>{try{r.scrollTop=a,r.scrollLeft=i??0}catch{}if(o){let l=document.getElementById(o);if(l&&l.focus)try{l.focus()}catch{}}})}findScrollableAncestor(t){function n(a){let i=getComputedStyle(a),o=i.overflowY||i.overflow;return/(auto|scroll)/.test(o)&&a.scrollHeight>a.clientHeight}let r=t;for(;r;){if(n(r))return r;r=r.parentElement}return document.querySelector(".qws-win")}firstTabId(){let t=this.tabs.keys().next();return t.done?null:t.value??null}getTabView(t){return this.tabs.get(t)?.view??null}removeTab(t){let n=this.tabs.get(t);if(!n)return;this.tabs.delete(t);let r=this.tabBar?.querySelector(`button[data-id="${Bn(t)}"]`);if(r&&r.parentElement&&r.parentElement.removeChild(r),n.view&&n.view.parentElement&&n.view.parentElement.removeChild(n.view),this.currentId===t){let a=this.tabs.keys().next().value||null;this.switchTo(a)}this.updateTabsBarVisibility()}switchTo(t){this.currentId=t,[...this.tabBar.children].forEach(n=>n.classList.toggle("active",n.dataset.id===t||t===null)),[...this.views.children].forEach(n=>n.classList.toggle("active",n.dataset.id===t||t===null)),this.persistActive(),this.emit("tab:change",t)}on(t,n){return this.events.has(t)||this.events.set(t,new Set),this.events.get(t).add(n),()=>this.off(t,n)}off(t,n){this.events.get(t)?.delete(n)}emit(t,...n){this.events.get(t)?.forEach(r=>{try{r(...n)}catch{}})}btn(t,n){let r=Z("button","qmm-btn",`<span class="label">${xt(t)}</span>`);return r.onclick=n,r}label(t){let n=Z("label","qmm-label");return n.textContent=t,n}row(...t){let n=Z("div","qmm-row");return t.forEach(r=>n.appendChild(r)),n}section(t){let n=Z("div","qmm-section");return n.appendChild(Z("div","qmm-section-title",xt(t))),n}inputNumber(t=0,n=9999,r=1,a=0){let i=Z("div","qmm-input-number"),o=Z("input","qmm-input qmm-input-number-input");o.type="number",o.min=String(t),o.max=String(n),o.step=String(r),o.value=String(a),o.inputMode="numeric";let l=Z("div","qmm-spin"),u=Z("button","qmm-step qmm-step--up","\u25B2"),d=Z("button","qmm-step qmm-step--down","\u25BC");u.type=d.type="button";let y=()=>{let L=Number(o.value);if(Number.isFinite(L)){let w=Number(o.min),T=Number(o.max),I=Math.max(w,Math.min(T,L));I!==L&&(o.value=String(I))}},P=L=>{L<0?o.stepDown():o.stepUp(),y(),o.dispatchEvent(new Event("input",{bubbles:!0})),o.dispatchEvent(new Event("change",{bubbles:!0}))},M=(L,w)=>{let T=null,I=null,v=!1,x=D=>{v=!1,T=window.setTimeout(()=>{v=!0,P(w),I=window.setInterval(()=>P(w),60)},300),L.setPointerCapture?.(D.pointerId)},B=()=>{T!=null&&(clearTimeout(T),T=null),I!=null&&(clearInterval(I),I=null)};L.addEventListener("pointerdown",x),["pointerup","pointercancel","pointerleave","blur"].forEach(D=>L.addEventListener(D,B)),L.addEventListener("click",D=>{if(v){D.preventDefault(),D.stopPropagation(),v=!1;return}P(w)})};return M(u,1),M(d,-1),o.addEventListener("change",y),l.append(u,d),i.append(o,l),o.wrap=i,o}inputText(t="",n=""){let r=Z("input","qmm-input");return r.type="text",r.placeholder=t,r.value=n,r}checkbox(t=!1){let n=Z("input","qmm-check");return n.type="checkbox",n.checked=t,n}radio(t,n,r=!1){let a=Z("input","qmm-radio");return a.type="radio",a.name=t,a.value=n,a.checked=r,a}slider(t=0,n=100,r=1,a=0){let i=Z("input","qmm-range");return i.type="range",i.min=String(t),i.max=String(n),i.step=String(r),i.value=String(a),i}switch(t=!1){let n=this.checkbox(t);return n.classList.add("qmm-switch"),n}table(t,n){let r=document.createElement("div");r.className="qmm-table-wrap",n?.minimal&&r.classList.add("qmm-table-wrap--minimal");let a=document.createElement("div");a.className="qmm-table-scroll",n?.maxHeight&&(a.style.maxHeight=n.maxHeight),r.appendChild(a);let i=document.createElement("table");i.className="qmm-table",n?.minimal&&i.classList.add("qmm-table--minimal"),n?.compact&&i.classList.add("qmm-table--compact"),n?.fixed&&(i.style.tableLayout="fixed");let o=document.createElement("thead"),l=document.createElement("tr");t.forEach(d=>{let y=document.createElement("th");typeof d=="string"?y.textContent=d:(y.textContent=d.label??"",d.align&&y.classList.add(`is-${d.align}`),d.width&&(y.style.width=d.width)),l.appendChild(y)}),o.appendChild(l);let u=document.createElement("tbody");return i.append(o,u),a.appendChild(i),{root:r,tbody:u}}radioGroup(t,n,r,a){let i=Z("div","qmm-radio-group");for(let{value:o,label:l}of n){let u=this.radio(t,o,r===o),d=document.createElement("label");d.className="qmm-radio-label",d.appendChild(u),d.appendChild(document.createTextNode(l)),u.onchange=()=>{u.checked&&a(o)},i.appendChild(d)}return i}bindLS(t,n,r,a,i){try{let o=localStorage.getItem(t);o!=null&&r(a(o))}catch{}return{save:()=>{try{localStorage.setItem(t,i(n()))}catch{}}}}split2(t="260px"){let n=Z("div","qmm-split");n.style.gridTemplateColumns="minmax(160px, max-content) 1fr";let r=Z("div","qmm-split-left"),a=Z("div","qmm-split-right");return n.appendChild(r),n.appendChild(a),{root:n,left:r,right:a}}vtabs(t={}){return new Yt(this,t)}createTabView(t,n){let r=document.createElement("button");r.className="qmm-tab",r.dataset.id=t,r.innerHTML=`<span class="label">${xt(n.title)}</span><span class="badge" style="display:none"></span>`;let a=r.querySelector(".badge");n.btn=r,n.badge=a,r.onclick=()=>this.switchTo(t),this.tabBar.appendChild(r);let i=Z("div","qmm-view");i.dataset.id=t,n.view=i,this.views.appendChild(i);try{n.render(i,this)}catch(o){i.textContent=String(o)}this.currentId||this.switchTo(t)}persistActive(){if(this.currentId)try{localStorage.setItem(this.lsKeyActive,this.currentId)}catch{}}restoreActive(){let t=null;try{t=localStorage.getItem(this.lsKeyActive)}catch{}t&&this.tabs.has(t)?this.switchTo(t):this.tabs.size&&this.switchTo(this.firstTabId())}updateTabsBarVisibility(){if(!this.tabBar||!this.root)return;this.tabs.size>0?(this.tabBar.parentElement||this.root.insertBefore(this.tabBar,this.views),this.tabBar.style.display="flex",this.root.classList.remove("qmm-no-tabs")):(this.tabBar.parentElement&&this.tabBar.parentElement.removeChild(this.tabBar),this.root.classList.add("qmm-no-tabs"))}ensureStyles(){if(document.getElementById("__qmm_css__"))return;let t=`
-    /* ================= Modern UI for qmm ================= */
+    `;
+      (document.documentElement || document.body).appendChild(win);
+      const head = win.querySelector(".w-head");
+      const titleEl = win.querySelector(".w-title");
+      const btnMin2 = win.querySelector('[data-act="min"]');
+      const btnClose = win.querySelector('[data-act="close"]');
+      const body = win.querySelector(".w-body");
+      titleEl.textContent = title;
+      const offset = cascade++ % 5 * 24;
+      win.style.right = 16 + offset + "px";
+      win.style.bottom = 16 + offset + "px";
+      clampRect(win);
+      bumpZ(win);
+      (function dragWin() {
+        let sx = 0, sy = 0, or = 0, ob = 0, down = false;
+        head.addEventListener("mousedown", (e) => {
+          const t = e.target;
+          if (t.closest(".w-btn")) return;
+          down = true;
+          sx = e.clientX;
+          sy = e.clientY;
+          const rect = win.getBoundingClientRect();
+          or = parseFloat(getComputedStyle(win).right) || window.innerWidth - rect.right;
+          ob = parseFloat(getComputedStyle(win).bottom) || window.innerHeight - rect.bottom;
+          document.body.style.userSelect = "none";
+          bumpZ(win);
+        });
+        window.addEventListener("mousemove", (e) => {
+          if (!down) return;
+          const dx = e.clientX - sx;
+          const dy = e.clientY - sy;
+          let r = or - dx;
+          let b = ob - dy;
+          const rect = win.getBoundingClientRect();
+          const vw = window.innerWidth, vh = window.innerHeight;
+          const maxRight = Math.max(MARGIN, vw - rect.width - MARGIN);
+          const maxBottom = Math.max(MARGIN, vh - rect.height - MARGIN);
+          r = Math.min(Math.max(r, MARGIN), maxRight);
+          b = Math.min(Math.max(b, MARGIN), maxBottom);
+          win.style.right = r + "px";
+          win.style.bottom = b + "px";
+        });
+        window.addEventListener("mouseup", () => {
+          down = false;
+          document.body.style.userSelect = "";
+          saveWinPos(id, win);
+        });
+      })();
+      btnMin2.onclick = () => {
+        withTopLocked(win, () => {
+          const hidden = body.style.display === "none";
+          body.style.display = hidden ? "" : "none";
+          btnMin2.textContent = hidden ? "\u2013" : "+";
+        });
+      };
+      btnClose.onclick = () => {
+        win.style.display = "none";
+        setLaunchState(id, false);
+      };
+      patchInputsKeyTrap(win);
+      try {
+        render(body);
+      } catch (e) {
+        body.textContent = String(e);
+      }
+      saveWinPos(id, win);
+      windows.set(id, { id, el: win, head, body });
+      setLaunchState(id, true);
+    }
+    function isShown(el2) {
+      return el2.style.display !== "none";
+    }
+    function toggleWindow(id, title, render) {
+      const existing = windows.get(id);
+      if (!existing) {
+        openWindow(id, title, (root) => {
+          const el2 = root.closest(".qws-win");
+          if (el2) restoreWinPos(id, el2);
+          render(root);
+        });
+        return true;
+      } else {
+        if (isShown(existing.el)) {
+          existing.el.style.display = "none";
+          setLaunchState(id, false);
+          return false;
+        } else {
+          existing.el.style.display = "";
+          bumpZ(existing.el);
+          ensureOnScreen(existing.el);
+          setLaunchState(id, true);
+          return true;
+        }
+      }
+    }
+    function bumpZ(el2) {
+      let maxZ = 999999;
+      windows.forEach((w) => {
+        const z = parseInt(getComputedStyle(w.el).zIndex || "999999", 10);
+        if (z > maxZ) maxZ = z;
+      });
+      el2.style.zIndex = String(maxZ + 1);
+    }
+    function saveWinPos(id, el2) {
+      try {
+        const r = parseFloat(el2.style.right) || 16;
+        const b = parseFloat(el2.style.bottom) || 16;
+        localStorage.setItem(`qws:win:${id}:pos`, JSON.stringify({ r, b }));
+      } catch {
+      }
+    }
+    function restoreWinPos(id, el2) {
+      try {
+        const raw = localStorage.getItem(`qws:win:${id}:pos`);
+        if (!raw) return;
+        const pos = JSON.parse(raw);
+        if (typeof pos.r === "number") el2.style.right = pos.r + "px";
+        if (typeof pos.b === "number") el2.style.bottom = pos.b + "px";
+        ensureOnScreen(el2);
+      } catch {
+      }
+    }
+    window.addEventListener("resize", () => {
+      windows.forEach((w) => ensureOnScreen(w.el));
+    });
+    function enableAltDragAnywhere() {
+      let st2 = null;
+      const pickRoot = (node) => {
+        const el2 = node;
+        if (!el2) return null;
+        return el2.closest?.(".qws-win, .qws2") || null;
+      };
+      const onDown = (e) => {
+        if (!e.altKey || e.button !== 0) return;
+        const root = pickRoot(e.target);
+        if (!root || root.style.display === "none") return;
+        const rect = root.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let or = parseFloat(getComputedStyle(root).right);
+        let ob = parseFloat(getComputedStyle(root).bottom);
+        if (Number.isNaN(or)) or = vw - rect.right;
+        if (Number.isNaN(ob)) ob = vh - rect.bottom;
+        st2 = { el: root, sx: e.clientX, sy: e.clientY, or, ob };
+        document.body.style.userSelect = "none";
+        bumpZ(root);
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      const onMove = (e) => {
+        if (!st2) return;
+        const dx = e.clientX - st2.sx;
+        const dy = e.clientY - st2.sy;
+        let r = st2.or - dx;
+        let b = st2.ob - dy;
+        const rect = st2.el.getBoundingClientRect();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const maxRight = Math.max(MARGIN, vw - rect.width - MARGIN);
+        const maxBottom = Math.max(MARGIN, vh - rect.height - MARGIN);
+        r = Math.min(Math.max(r, MARGIN), maxRight);
+        b = Math.min(Math.max(b, MARGIN), maxBottom);
+        st2.el.style.right = `${r}px`;
+        st2.el.style.bottom = `${b}px`;
+      };
+      const stopDrag = () => {
+        if (!st2) return;
+        document.body.style.userSelect = "";
+        clampRect(st2.el);
+        const el2 = st2.el;
+        let saved = false;
+        windows.forEach((w) => {
+          if (w.el === el2 && !saved) {
+            saveWinPos(w.id, el2);
+            saved = true;
+          }
+        });
+        if (!saved && el2 === box) saveHUDPos();
+        st2 = null;
+      };
+      const onUp = () => stopDrag();
+      const onKeyUp = (e) => {
+        if (e.key === "Alt" || e.key === "AltGraph") stopDrag();
+      };
+      window.addEventListener("mousedown", onDown, true);
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", onUp, true);
+      window.addEventListener("keyup", onKeyUp, true);
+    }
+    function patchInputsKeyTrap(scope) {
+      const isEditable = (el2) => {
+        if (!el2 || !(el2 instanceof HTMLElement)) return false;
+        if (el2 instanceof HTMLTextAreaElement) return true;
+        if (el2 instanceof HTMLInputElement) {
+          const t = (el2.type || "").toLowerCase();
+          return t === "text" || t === "number" || t === "search";
+        }
+        return el2.isContentEditable === true;
+      };
+      const handler = (ev) => {
+        const target = ev.target;
+        const active = document.activeElement;
+        const inScope = (node) => !!(node && (scope.contains(node) || node.closest?.(".qws-win") || node.closest?.(".qws2")));
+        if (!(inScope(target) && isEditable(target) || inScope(active) && isEditable(active))) return;
+        ev.stopPropagation();
+        ev.stopImmediatePropagation?.();
+      };
+      const types = ["keydown", "keypress", "keyup"];
+      types.forEach((t) => {
+        window.addEventListener(t, handler, { capture: true });
+        document.addEventListener(t, handler, { capture: true });
+        scope.addEventListener(t, handler, { capture: true });
+      });
+      return () => {
+        types.forEach((t) => {
+          window.removeEventListener(t, handler, { capture: true });
+          document.removeEventListener(t, handler, { capture: true });
+          scope.removeEventListener(t, handler, { capture: true });
+        });
+      };
+    }
+    const registry2 = [];
+    const launchButtons = /* @__PURE__ */ new Map();
+    function setLaunchState(id, open) {
+      const btn = launchButtons.get(id);
+      if (!btn) return;
+      btn.textContent = open ? "Close" : "Open";
+      btn.dataset.open = open ? "1" : "0";
+      if (open) btn.classList.add("active");
+      else btn.classList.remove("active");
+    }
+    function register(id, title, render) {
+      registry2.push({ id, title, render });
+      addLaunchItem(id, title, render);
+    }
+    function addLaunchItem(id, title, render) {
+      const item = document.createElement("div");
+      item.className = "launch-item";
+      item.innerHTML = `<div class="name">${escapeHtml2(title)}</div>`;
+      const openBtn = document.createElement("button");
+      openBtn.className = "btn";
+      openBtn.textContent = "Open";
+      openBtn.dataset.open = "0";
+      launchButtons.set(id, openBtn);
+      openBtn.onclick = () => {
+        const w = windows.get(id);
+        if (w && w.el.style.display !== "none") {
+          w.el.style.display = "none";
+          setLaunchState(id, false);
+        } else {
+          openWindow(id, title, (root) => {
+            const el2 = root.closest(".qws-win");
+            if (el2) restoreWinPos(id, el2);
+            render(root);
+          });
+          setLaunchState(id, true);
+        }
+      };
+      item.appendChild(openBtn);
+      launch.appendChild(item);
+    }
+    try {
+      opts?.onRegister?.(register);
+    } catch {
+    }
+    patchInputsKeyTrap(box);
+    enableAltDragAnywhere();
+    (async () => {
+      try {
+        await ensureStore();
+      } catch {
+      }
+    })();
+    setInterval(() => {
+      try {
+        const ws = getOpenPageWS();
+        sMini.textContent = "OPEN";
+        sFull.textContent = "WS: OPEN";
+        tag(sMini, "ok");
+        tag(sFull, "ok");
+      } catch {
+        const viaWorker = !!window.__QWS_workerFound || workerFound;
+        sMini.textContent = viaWorker ? "Worker" : "none";
+        sFull.textContent = "WS: " + (viaWorker ? "via Worker" : "none");
+        tag(sMini, viaWorker ? "ok" : "warn");
+        tag(sFull, viaWorker ? "ok" : "warn");
+      }
+      try {
+        const captured = isStoreCaptured();
+        const info = getCapturedInfo();
+        if (captured) {
+          sStore.textContent = `store: ${info.via || "ready"}`;
+          tag(sStore, "ok");
+        } else if (info.via === "polyfill" || info.polyfill) {
+          sStore.textContent = "store: polyfill";
+          tag(sStore, "warn");
+        } else {
+          sStore.textContent = "store: none";
+          tag(sStore, "bad");
+        }
+      } catch {
+        sStore.textContent = "store: error";
+        tag(sStore, "bad");
+      }
+    }, 800);
+    function getOpenPageWS() {
+      for (let i = 0; i < sockets.length; i++) {
+        if (sockets[i].readyState === NativeWS.OPEN) return sockets[i];
+      }
+      throw new Error("no page ws");
+    }
+    function tag(el2, cls) {
+      el2.classList.remove("ok", "warn", "bad");
+      if (cls) el2.classList.add(cls);
+    }
+    function escapeHtml2(s) {
+      return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+    }
+  }
+  function initWatchers() {
+    (async () => {
+      await PetsService.startAbilityLogsWatcher();
+    })();
+  }
+
+  // src/ui/menu.ts
+  var Menu = class {
+    constructor(opts = {}) {
+      this.opts = opts;
+      __publicField(this, "root");
+      __publicField(this, "tabBar");
+      __publicField(this, "views");
+      __publicField(this, "tabs", /* @__PURE__ */ new Map());
+      __publicField(this, "events", /* @__PURE__ */ new Map());
+      __publicField(this, "currentId", null);
+      __publicField(this, "lsKeyActive");
+      this.lsKeyActive = `menu:${opts.id || "default"}:activeTab`;
+    }
+    mount(container) {
+      this.ensureStyles();
+      container.innerHTML = "";
+      this.root = el("div", `qmm ${this.opts.classes || ""} ${this.opts.compact ? "qmm-compact" : ""}`);
+      if (this.opts.startHidden) this.root.style.display = "none";
+      this.tabBar = el("div", "qmm-tabs");
+      this.views = el("div", "qmm-views");
+      this.root.appendChild(this.tabBar);
+      this.root.appendChild(this.views);
+      container.appendChild(this.root);
+      if (this.tabs.size) {
+        for (const [id, def] of this.tabs) this.createTabView(id, def);
+        this.restoreActive();
+      }
+      this.updateTabsBarVisibility();
+      this.emit("mounted");
+    }
+    unmount() {
+      if (this.root?.parentElement) this.root.parentElement.removeChild(this.root);
+      this.emit("unmounted");
+    }
+    setVisible(visible) {
+      if (!this.root) return;
+      this.root.style.display = visible ? "" : "none";
+      this.emit(visible ? "show" : "hide");
+    }
+    toggle() {
+      if (!this.root) return false;
+      const v = this.root.style.display === "none";
+      this.setVisible(v);
+      return v;
+    }
+    addTab(id, title, render) {
+      this.tabs.set(id, { title, render, badge: null });
+      if (this.root) {
+        this.createTabView(id, this.tabs.get(id));
+        this.updateTabsBarVisibility();
+      }
+      return this;
+    }
+    addTabs(defs) {
+      defs.forEach((d) => this.addTab(d.id, d.title, d.render));
+      return this;
+    }
+    setTabTitle(id, title) {
+      const def = this.tabs.get(id);
+      if (!def) return;
+      def.title = title;
+      if (def.btn) {
+        const label2 = def.btn.querySelector(".label");
+        if (label2) label2.textContent = title;
+      }
+    }
+    setTabBadge(id, text) {
+      const def = this.tabs.get(id);
+      if (!def || !def.btn) return;
+      if (!def.badge) {
+        def.badge = document.createElement("span");
+        def.badge.className = "badge";
+        def.btn.appendChild(def.badge);
+      }
+      if (text == null || text === "") {
+        def.badge.style.display = "none";
+      } else {
+        def.badge.textContent = text;
+        def.badge.style.display = "";
+      }
+    }
+    refreshTab(id) {
+      const def = this.tabs.get(id);
+      if (!def?.view) return;
+      const scroller = this.findScrollableAncestor(def.view);
+      const st = scroller ? scroller.scrollTop : null;
+      const sl = scroller ? scroller.scrollLeft : null;
+      const activeId = document.activeElement?.id || null;
+      def.view.innerHTML = "";
+      try {
+        def.render(def.view, this);
+      } catch (e) {
+        def.view.textContent = String(e);
+      }
+      if (this.currentId === id) this.switchTo(id);
+      this.emit("tab:render", id);
+      if (scroller && st != null) {
+        requestAnimationFrame(() => {
+          try {
+            scroller.scrollTop = st;
+            scroller.scrollLeft = sl ?? 0;
+          } catch {
+          }
+          if (activeId) {
+            const n = document.getElementById(activeId);
+            if (n && n.focus) try {
+              n.focus();
+            } catch {
+            }
+          }
+        });
+      }
+    }
+    findScrollableAncestor(start) {
+      function isScrollable(el3) {
+        const s = getComputedStyle(el3);
+        const oy = s.overflowY || s.overflow;
+        return /(auto|scroll)/.test(oy) && el3.scrollHeight > el3.clientHeight;
+      }
+      let el2 = start;
+      while (el2) {
+        if (isScrollable(el2)) return el2;
+        el2 = el2.parentElement;
+      }
+      return document.querySelector(".qws-win");
+    }
+    firstTabId() {
+      const it = this.tabs.keys().next();
+      return it.done ? null : it.value ?? null;
+    }
+    getTabView(id) {
+      return this.tabs.get(id)?.view ?? null;
+    }
+    removeTab(id) {
+      const def = this.tabs.get(id);
+      if (!def) return;
+      this.tabs.delete(id);
+      const btn = this.tabBar?.querySelector(`button[data-id="${cssq(id)}"]`);
+      if (btn && btn.parentElement) btn.parentElement.removeChild(btn);
+      if (def.view && def.view.parentElement) def.view.parentElement.removeChild(def.view);
+      if (this.currentId === id) {
+        const first = this.tabs.keys().next().value || null;
+        this.switchTo(first);
+      }
+      this.updateTabsBarVisibility();
+    }
+    switchTo(id) {
+      this.currentId = id;
+      [...this.tabBar.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
+      [...this.views.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
+      this.persistActive();
+      this.emit("tab:change", id);
+    }
+    on(event, handler) {
+      if (!this.events.has(event)) this.events.set(event, /* @__PURE__ */ new Set());
+      this.events.get(event).add(handler);
+      return () => this.off(event, handler);
+    }
+    off(event, handler) {
+      this.events.get(event)?.delete(handler);
+    }
+    emit(event, ...args) {
+      this.events.get(event)?.forEach((h) => {
+        try {
+          h(...args);
+        } catch {
+        }
+      });
+    }
+    btn(label2, onClick) {
+      const b = el("button", "qmm-btn", `<span class="label">${escapeHtml(label2)}</span>`);
+      b.onclick = onClick;
+      return b;
+    }
+    label(text) {
+      const l = el("label", "qmm-label");
+      l.textContent = text;
+      return l;
+    }
+    row(...children) {
+      const r = el("div", "qmm-row");
+      children.forEach((c) => r.appendChild(c));
+      return r;
+    }
+    section(title) {
+      const s = el("div", "qmm-section");
+      s.appendChild(el("div", "qmm-section-title", escapeHtml(title)));
+      return s;
+    }
+    inputNumber(min = 0, max = 9999, step = 1, value = 0) {
+      const wrap = el("div", "qmm-input-number");
+      const i = el("input", "qmm-input qmm-input-number-input");
+      i.type = "number";
+      i.min = String(min);
+      i.max = String(max);
+      i.step = String(step);
+      i.value = String(value);
+      i.inputMode = "numeric";
+      const spin = el("div", "qmm-spin");
+      const up = el("button", "qmm-step qmm-step--up", "\u25B2");
+      const down = el("button", "qmm-step qmm-step--down", "\u25BC");
+      up.type = down.type = "button";
+      const clamp = () => {
+        const n = Number(i.value);
+        if (Number.isFinite(n)) {
+          const lo = Number(i.min), hi = Number(i.max);
+          const clamped = Math.max(lo, Math.min(hi, n));
+          if (clamped !== n) i.value = String(clamped);
+        }
+      };
+      const bump = (dir) => {
+        if (dir < 0) i.stepDown();
+        else i.stepUp();
+        clamp();
+        i.dispatchEvent(new Event("input", { bubbles: true }));
+        i.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const addSpin = (btn, dir) => {
+        let pressTimer = null;
+        let repeatTimer = null;
+        let suppressNextClick = false;
+        const start = (ev) => {
+          suppressNextClick = false;
+          pressTimer = window.setTimeout(() => {
+            suppressNextClick = true;
+            bump(dir);
+            repeatTimer = window.setInterval(() => bump(dir), 60);
+          }, 300);
+          btn.setPointerCapture?.(ev.pointerId);
+        };
+        const stop = () => {
+          if (pressTimer != null) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+          }
+          if (repeatTimer != null) {
+            clearInterval(repeatTimer);
+            repeatTimer = null;
+          }
+        };
+        btn.addEventListener("pointerdown", start);
+        ["pointerup", "pointercancel", "pointerleave", "blur"].forEach(
+          (ev) => btn.addEventListener(ev, stop)
+        );
+        btn.addEventListener("click", (e) => {
+          if (suppressNextClick) {
+            e.preventDefault();
+            e.stopPropagation();
+            suppressNextClick = false;
+            return;
+          }
+          bump(dir);
+        });
+      };
+      addSpin(up, 1);
+      addSpin(down, -1);
+      i.addEventListener("change", clamp);
+      spin.append(up, down);
+      wrap.append(i, spin);
+      i.wrap = wrap;
+      return i;
+    }
+    inputText(placeholder = "", value = "") {
+      const i = el("input", "qmm-input");
+      i.type = "text";
+      i.placeholder = placeholder;
+      i.value = value;
+      return i;
+    }
+    checkbox(checked = false) {
+      const i = el("input", "qmm-check");
+      i.type = "checkbox";
+      i.checked = checked;
+      return i;
+    }
+    radio(name, value, checked = false) {
+      const i = el("input", "qmm-radio");
+      i.type = "radio";
+      i.name = name;
+      i.value = value;
+      i.checked = checked;
+      return i;
+    }
+    slider(min = 0, max = 100, step = 1, value = 0) {
+      const i = el("input", "qmm-range");
+      i.type = "range";
+      i.min = String(min);
+      i.max = String(max);
+      i.step = String(step);
+      i.value = String(value);
+      return i;
+    }
+    switch(checked = false) {
+      const i = this.checkbox(checked);
+      i.classList.add("qmm-switch");
+      return i;
+    }
+    table(headers, opts) {
+      const wrap = document.createElement("div");
+      wrap.className = "qmm-table-wrap";
+      if (opts?.minimal) wrap.classList.add("qmm-table-wrap--minimal");
+      const scroller = document.createElement("div");
+      scroller.className = "qmm-table-scroll";
+      if (opts?.maxHeight) scroller.style.maxHeight = opts.maxHeight;
+      wrap.appendChild(scroller);
+      const t = document.createElement("table");
+      t.className = "qmm-table";
+      if (opts?.minimal) t.classList.add("qmm-table--minimal");
+      if (opts?.compact) t.classList.add("qmm-table--compact");
+      if (opts?.fixed) t.style.tableLayout = "fixed";
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      headers.forEach((h) => {
+        const th = document.createElement("th");
+        if (typeof h === "string") {
+          th.textContent = h;
+        } else {
+          th.textContent = h.label ?? "";
+          if (h.align) th.classList.add(`is-${h.align}`);
+          if (h.width) th.style.width = h.width;
+        }
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      const tbody = document.createElement("tbody");
+      t.append(thead, tbody);
+      scroller.appendChild(t);
+      return { root: wrap, tbody };
+    }
+    radioGroup(name, options, selected, onChange) {
+      const wrap = el("div", "qmm-radio-group");
+      for (const { value, label: label2 } of options) {
+        const r = this.radio(name, value, selected === value);
+        const lab = document.createElement("label");
+        lab.className = "qmm-radio-label";
+        lab.appendChild(r);
+        lab.appendChild(document.createTextNode(label2));
+        r.onchange = () => {
+          if (r.checked) onChange(value);
+        };
+        wrap.appendChild(lab);
+      }
+      return wrap;
+    }
+    bindLS(key, read, write, parse, toStr) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw != null) write(parse(raw));
+      } catch {
+      }
+      return { save: () => {
+        try {
+          localStorage.setItem(key, toStr(read()));
+        } catch {
+        }
+      } };
+    }
+    split2(leftWidth = "260px") {
+      const root = el("div", "qmm-split");
+      root.style.gridTemplateColumns = "minmax(160px, max-content) 1fr";
+      const left = el("div", "qmm-split-left");
+      const right = el("div", "qmm-split-right");
+      root.appendChild(left);
+      root.appendChild(right);
+      return { root, left, right };
+    }
+    vtabs(options = {}) {
+      return new VTabs(this, options);
+    }
+    createTabView(id, def) {
+      const b = document.createElement("button");
+      b.className = "qmm-tab";
+      b.dataset.id = id;
+      b.innerHTML = `<span class="label">${escapeHtml(def.title)}</span><span class="badge" style="display:none"></span>`;
+      const badgeEl = b.querySelector(".badge");
+      def.btn = b;
+      def.badge = badgeEl;
+      b.onclick = () => this.switchTo(id);
+      this.tabBar.appendChild(b);
+      const view = el("div", "qmm-view");
+      view.dataset.id = id;
+      def.view = view;
+      this.views.appendChild(view);
+      try {
+        def.render(view, this);
+      } catch (e) {
+        view.textContent = String(e);
+      }
+      if (!this.currentId) this.switchTo(id);
+    }
+    persistActive() {
+      if (!this.currentId) return;
+      try {
+        localStorage.setItem(this.lsKeyActive, this.currentId);
+      } catch {
+      }
+    }
+    restoreActive() {
+      let id = null;
+      try {
+        id = localStorage.getItem(this.lsKeyActive);
+      } catch {
+      }
+      if (id && this.tabs.has(id)) this.switchTo(id);
+      else if (this.tabs.size) this.switchTo(this.firstTabId());
+    }
+    updateTabsBarVisibility() {
+      if (!this.tabBar || !this.root) return;
+      const hasTabs = this.tabs.size > 0;
+      if (hasTabs) {
+        if (!this.tabBar.parentElement) {
+          this.root.insertBefore(this.tabBar, this.views);
+        }
+        this.tabBar.style.display = "flex";
+        this.root.classList.remove("qmm-no-tabs");
+      } else {
+        if (this.tabBar.parentElement) {
+          this.tabBar.parentElement.removeChild(this.tabBar);
+        }
+        this.root.classList.add("qmm-no-tabs");
+      }
+    }
+    ensureStyles() {
+      if (document.getElementById("__qmm_css__")) return;
+      const css = `
 .qmm{
   --qmm-bg:        #0f1318;
   --qmm-bg-soft:   #0b0f13;
@@ -151,12 +3845,9 @@
   --qmm-text-dim:  #b9c3cf;
   --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
   --qmm-blur:      8px;
-
   display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
 }
 .qmm-compact{ gap:6px }
-
-/* ---------- Tabs (pill + underline) ---------- */
 .qmm-tabs{
   display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
   padding:0 6px 2px 6px; position:relative; isolation:isolate;
@@ -165,7 +3856,6 @@
   border-top-left-radius:10px; border-top-right-radius:10px;
 }
 .qmm-no-tabs .qmm-views{ margin-top:0 }
-
 .qmm-tab{
   flex:1 1 0; min-width:0; cursor:pointer;
   display:inline-flex; justify-content:center; align-items:center; gap:8px;
@@ -179,12 +3869,10 @@
 .qmm-tab:hover{ background:rgba(255,255,255,.06) }
 .qmm-tab:active{ transform:translateY(1px) }
 .qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
-
 .qmm-tab .badge{
   font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
   background:#ffffff1a; border:1px solid #ffffff22;
 }
-
 .qmm-tab.active{
   background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
   color:#fff; box-shadow:inset 0 -1px 0 #0007;
@@ -194,8 +3882,6 @@
   background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
   border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
 }
-
-/* ---------- Views panel ---------- */
 .qmm-views{
   border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
@@ -204,19 +3890,13 @@
 }
 .qmm-compact .qmm-views{ padding:8px }
 .qmm-tabs + .qmm-views{ margin-top:-1px }
-
 .qmm-view{ display:none; min-width:0; min-height:0; }
 .qmm-view.active{ display:block; }
-
-/* ---------- Basic controls ---------- */
 .qmm-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 }
 .qmm-section{ margin-top:8px }
 .qmm-section-title{ font-weight:650; margin:2px 0 8px 0; color:var(--qmm-text) }
-
 .qmm-label{ opacity:.9 }
 .qmm-val{ min-width:24px; text-align:center }
-
-/* Buttons */
 .qmm-btn{
   cursor:pointer; border-radius:10px; border:1px solid var(--qmm-border);
   padding:8px 12px; background:linear-gradient(180deg, #ffffff10, #ffffff06);
@@ -227,8 +3907,6 @@
 .qmm-btn:hover{ background:linear-gradient(180deg, #ffffff16, #ffffff08); border-color:#ffffff40 }
 .qmm-btn:active{ transform:translateY(1px) }
 .qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
-
-/* Button variants (optional utility) */
 .qmm-btn.qmm-primary{ background:linear-gradient(180deg, rgba(122,162,255,.35), rgba(122,162,255,.15)); border-color:#9db7ff55 }
 .qmm-btn.qmm-danger{  background:linear-gradient(180deg, rgba(255,86,86,.28), rgba(255,86,86,.12));  border-color:#ff6a6a55 }
 .qmm-btn.active{
@@ -236,8 +3914,6 @@
   border-color:#79a6ff66;
   box-shadow: inset 0 0 0 1px #79a6ff33;
 }
-
-/* Inputs */
 .qmm-input{
   min-width:90px; background:rgba(0,0,0,.42); color:#fff;
   border:1px solid var(--qmm-border); border-radius:10px;
@@ -246,8 +3922,6 @@
 }
 .qmm-input::placeholder{ color:#cbd6e780 }
 .qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
-
-/* Number input + spinner (unchanged API) */
 .qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
 .qmm-input-number-input{ width:70px; text-align:center; padding-right:8px }
 .qmm-spin{ display:inline-flex; flex-direction:column; gap:2px }
@@ -260,8 +3934,6 @@
 }
 .qmm-step:hover{ background:#ffffff18; border-color:#ffffff40 }
 .qmm-step:active{ transform:translateY(1px) }
-
-/* Switch (checkbox) */
 .qmm-switch{
   appearance:none; width:42px; height:24px; background:#6c7488aa; border-radius:999px;
   position:relative; outline:none; cursor:pointer; transition:background .18s ease, box-shadow .18s ease;
@@ -275,11 +3947,7 @@
 .qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
 .qmm-switch:checked::before{ transform:translateX(18px) }
 .qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
-
-/* Checkbox & radio (native inputs skinned lightly) */
 .qmm-check, .qmm-radio{ transform:scale(1.1); accent-color: var(--qmm-accent) }
-
-/* Slider */
 .qmm-range{
   width:180px; appearance:none; background:transparent; height:22px;
 }
@@ -302,26 +3970,18 @@
   width:16px; height:16px; border-radius:50%; background:#fff; border:none;
   box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
 }
-
-/* ---------- Minimal table ---------- */
-/* container */
 .qmm-table-wrap--minimal{
   border:1px solid #263040; border-radius:8px; background:#0b0f14; box-shadow:none;
 }
-/* scroller (height cap) */
 .qmm-table-scroll{
-  overflow:auto; max-height:44vh; /* override via opts.maxHeight */
+  overflow:auto; max-height:44vh;
 }
-
-/* base */
 .qmm-table--minimal{
   width:100%;
   border-collapse:collapse;
   background:transparent;
   font-size:13px; line-height:1.35; color:var(--qmm-text, #cdd6e3);
 }
-
-/* header */
 .qmm-table--minimal thead th{
   position:sticky; top:0; z-index:1;
   text-align:left; font-weight:600;
@@ -331,29 +3991,20 @@
   text-transform:none; letter-spacing:0;
 }
 .qmm-table--minimal thead th.is-center { text-align: center; }
-.qmm-table--minimal thead th.is-left   { text-align: left; }   /* d\xE9j\xE0 pr\xE9sent, ok */
+.qmm-table--minimal thead th.is-left   { text-align: left; }
 .qmm-table--minimal thead th.is-right  { text-align: right; }
 .qmm-table--minimal thead th,
 .qmm-table--minimal td { vertical-align: middle; }
-
-/* cells */
 .qmm-table--minimal td{
   padding:8px 10px; border-bottom:1px solid #1f2937; vertical-align:middle;
 }
 .qmm-table--minimal tbody tr:hover{ background:#0f1824; }
-
-/* compact variant */
 .qmm-table--compact thead th,
 .qmm-table--compact td{ padding:6px 8px; font-size:12px }
-
-/* utils */
 .qmm-table--minimal td.is-num{ text-align:right; font-variant-numeric:tabular-nums }
 .qmm-table--minimal td.is-center{ text-align:center }
 .qmm-ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .qmm-prewrap{ white-space:pre-wrap; word-break:break-word }
-
-
-/* ---------- Split panels ---------- */
 .qmm-split{
   display:grid; gap:12px;
   grid-template-columns:minmax(180px,260px) minmax(0,1fr);
@@ -366,19 +4017,15 @@
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
   box-shadow:var(--qmm-shadow);
 }
-
-/* ---------- VTabs (vertical list + filter) ---------- */
 .qmm-vtabs{ display:flex; flex-direction:column; gap:8px; min-width:0 }
 .qmm-vtabs .filter{ display:block }
 .qmm-vtabs .filter input{ width:100% }
-
 .qmm-vlist{
   flex:0 0 auto; overflow:visible;
   border:1px solid var(--qmm-border); border-radius:12px; padding:6px;
   background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
 }
-
 .qmm-vtab{
   width:100%; text-align:left; cursor:pointer;
   display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px;
@@ -393,7 +4040,6 @@
   border-color:#9db7ff55;
   box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
 }
-
 .qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
 .qmm-chip{ display:flex; align-items:center; gap:8px; min-width:0 }
 .qmm-chip img{
@@ -405,21 +4051,15 @@
   font-size:11px; line-height:1; padding:3px 7px; border-radius:999px;
   background:#ffffff14; border:1px solid #ffffff26;
 }
-
-/* ---------- Small helpers (optional) ---------- */
 .qmm .qmm-card{
   border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
 }
-  .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
-
-/* ta poign\xE9e, inchang\xE9 */
+.qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
+.qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
 .qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
 .qmm-grab:active { cursor:grabbing; }
 .qmm-dragging { opacity:.6; }
-
-/* items animables */
 .qmm-team-item {
   will-change: transform;
   transition: transform 160ms ease;
@@ -427,13 +4067,654 @@
 .qmm-team-item.drag-ghost {
   opacity: .4;
 }
+    `;
+      const st = document.createElement("style");
+      st.id = "__qmm_css__";
+      st.textContent = css;
+      (document.documentElement || document.body).appendChild(st);
+    }
+  };
+  var VTabs = class {
+    constructor(api, opts = {}) {
+      this.api = api;
+      this.opts = opts;
+      __publicField(this, "root");
+      __publicField(this, "filterWrap", null);
+      __publicField(this, "filterInput", null);
+      __publicField(this, "list");
+      __publicField(this, "items", []);
+      __publicField(this, "selectedId", null);
+      __publicField(this, "onSelectCb");
+      __publicField(this, "renderItemCustom");
+      __publicField(this, "emptyText");
+      this.root = el("div", "qmm-vtabs");
+      this.root.style.minWidth = "0";
+      this.emptyText = opts.emptyText || "Aucun \xE9l\xE9ment.";
+      this.renderItemCustom = opts.renderItem;
+      if (opts.filterPlaceholder) {
+        this.filterWrap = el("div", "filter");
+        this.filterInput = document.createElement("input");
+        this.filterInput.type = "search";
+        this.filterInput.placeholder = opts.filterPlaceholder;
+        this.filterInput.className = "qmm-input";
+        this.filterInput.oninput = () => this.renderList();
+        this.filterWrap.appendChild(this.filterInput);
+        this.root.appendChild(this.filterWrap);
+      }
+      this.list = el("div", "qmm-vlist");
+      this.list.style.minWidth = "0";
+      if (opts.maxHeightPx) {
+        this.list.style.maxHeight = `${opts.maxHeightPx}px`;
+        this.list.style.overflow = "auto";
+        this.list.style.flex = "1 1 auto";
+      }
+      this.root.appendChild(this.list);
+      this.selectedId = opts.initialId ?? null;
+      this.onSelectCb = opts.onSelect;
+    }
+    setItems(items) {
+      this.items = Array.isArray(items) ? items.slice() : [];
+      if (this.selectedId && !this.items.some((i) => i.id === this.selectedId)) {
+        this.selectedId = this.items[0]?.id ?? null;
+      }
+      this.renderList();
+    }
+    getSelected() {
+      return this.items.find((i) => i.id === this.selectedId) ?? null;
+    }
+    select(id) {
+      this.selectedId = id;
+      this.renderList();
+      this.onSelectCb?.(this.selectedId, this.getSelected());
+    }
+    onSelect(cb) {
+      this.onSelectCb = cb;
+    }
+    setBadge(id, text) {
+      const btn = this.list.querySelector(`button[data-id="${cssq(id)}"]`);
+      if (!btn) return;
+      let tag = btn.querySelector(".qmm-tag");
+      if (!tag && text != null) {
+        tag = el("span", "qmm-tag");
+        btn.appendChild(tag);
+      }
+      if (!tag) return;
+      if (text == null || text === "") tag.style.display = "none";
+      else {
+        tag.textContent = text;
+        tag.style.display = "";
+      }
+    }
+    getFilter() {
+      return (this.filterInput?.value || "").trim().toLowerCase();
+    }
+    renderList() {
+      const keepScroll = this.list.scrollTop;
+      this.list.innerHTML = "";
+      const q = this.getFilter();
+      const filtered = q ? this.items.filter((it) => (it.title || "").toLowerCase().includes(q) || (it.subtitle || "").toLowerCase().includes(q)) : this.items;
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.style.opacity = "0.75";
+        empty.textContent = this.emptyText;
+        this.list.appendChild(empty);
+        return;
+      }
+      const ul = document.createElement("ul");
+      ul.style.listStyle = "none";
+      ul.style.margin = "0";
+      ul.style.padding = "0";
+      ul.style.display = "flex";
+      ul.style.flexDirection = "column";
+      ul.style.gap = "4px";
+      for (const it of filtered) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.className = "qmm-vtab";
+        btn.dataset.id = it.id;
+        btn.disabled = !!it.disabled;
+        if (this.renderItemCustom) {
+          this.renderItemCustom(it, btn);
+        } else {
+          const dot = el("div", "qmm-dot");
+          dot.style.background = it.statusColor || "#999a";
+          const chip = el("div", "qmm-chip");
+          const img = document.createElement("img");
+          img.src = it.avatarUrl || "";
+          img.alt = it.title;
+          const wrap = document.createElement("div");
+          wrap.style.display = "flex";
+          wrap.style.flexDirection = "column";
+          wrap.style.gap = "2px";
+          const t = el("div", "t");
+          t.textContent = it.title;
+          const sub = document.createElement("div");
+          sub.textContent = it.subtitle || "";
+          sub.style.opacity = "0.7";
+          sub.style.fontSize = "12px";
+          if (!it.subtitle) sub.style.display = "none";
+          wrap.appendChild(t);
+          wrap.appendChild(sub);
+          chip.appendChild(img);
+          chip.appendChild(wrap);
+          btn.appendChild(dot);
+          btn.appendChild(chip);
+          if (it.badge != null) {
+            const tag = el("span", "qmm-tag", escapeHtml(String(it.badge)));
+            btn.appendChild(tag);
+          } else {
+            const spacer = document.createElement("div");
+            spacer.style.width = "0";
+            btn.appendChild(spacer);
+          }
+        }
+        btn.classList.toggle("active", it.id === this.selectedId);
+        btn.onclick = () => this.select(it.id);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      }
+      this.list.appendChild(ul);
+      this.list.scrollTop = keepScroll;
+    }
+  };
+  function el(tag, cls, html) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function cssq(s) {
+    return s.replace(/"/g, '\\"');
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+  }
 
-
-
-    `,n=document.createElement("style");n.id="__qmm_css__",n.textContent=t,(document.documentElement||document.body).appendChild(n)}},Yt=class{constructor(t,n={}){this.api=t;this.opts=n;pe(this,"root");pe(this,"filterWrap",null);pe(this,"filterInput",null);pe(this,"list");pe(this,"items",[]);pe(this,"selectedId",null);pe(this,"onSelectCb");pe(this,"renderItemCustom");pe(this,"emptyText");this.root=Z("div","qmm-vtabs"),this.root.style.minWidth="0",this.emptyText=n.emptyText||"Aucun \xE9l\xE9ment.",this.renderItemCustom=n.renderItem,n.filterPlaceholder&&(this.filterWrap=Z("div","filter"),this.filterInput=document.createElement("input"),this.filterInput.type="search",this.filterInput.placeholder=n.filterPlaceholder,this.filterInput.className="qmm-input",this.filterInput.oninput=()=>this.renderList(),this.filterWrap.appendChild(this.filterInput),this.root.appendChild(this.filterWrap)),this.list=Z("div","qmm-vlist"),this.list.style.minWidth="0",n.maxHeightPx&&(this.list.style.maxHeight=`${n.maxHeightPx}px`,this.list.style.overflow="auto",this.list.style.flex="1 1 auto"),this.root.appendChild(this.list),this.selectedId=n.initialId??null,this.onSelectCb=n.onSelect}setItems(t){this.items=Array.isArray(t)?t.slice():[],this.selectedId&&!this.items.some(n=>n.id===this.selectedId)&&(this.selectedId=this.items[0]?.id??null),this.renderList()}getSelected(){return this.items.find(t=>t.id===this.selectedId)??null}select(t){this.selectedId=t,this.renderList(),this.onSelectCb?.(this.selectedId,this.getSelected())}onSelect(t){this.onSelectCb=t}setBadge(t,n){let r=this.list.querySelector(`button[data-id="${Bn(t)}"]`);if(!r)return;let a=r.querySelector(".qmm-tag");!a&&n!=null&&(a=Z("span","qmm-tag"),r.appendChild(a)),a&&(n==null||n===""?a.style.display="none":(a.textContent=n,a.style.display=""))}getFilter(){return(this.filterInput?.value||"").trim().toLowerCase()}renderList(){let t=this.list.scrollTop;this.list.innerHTML="";let n=this.getFilter(),r=n?this.items.filter(i=>(i.title||"").toLowerCase().includes(n)||(i.subtitle||"").toLowerCase().includes(n)):this.items;if(!r.length){let i=document.createElement("div");i.style.opacity="0.75",i.textContent=this.emptyText,this.list.appendChild(i);return}let a=document.createElement("ul");a.style.listStyle="none",a.style.margin="0",a.style.padding="0",a.style.display="flex",a.style.flexDirection="column",a.style.gap="4px";for(let i of r){let o=document.createElement("li"),l=document.createElement("button");if(l.className="qmm-vtab",l.dataset.id=i.id,l.disabled=!!i.disabled,this.renderItemCustom)this.renderItemCustom(i,l);else{let u=Z("div","qmm-dot");u.style.background=i.statusColor||"#999a";let d=Z("div","qmm-chip"),y=document.createElement("img");y.src=i.avatarUrl||"",y.alt=i.title;let P=document.createElement("div");P.style.display="flex",P.style.flexDirection="column",P.style.gap="2px";let M=Z("div","t");M.textContent=i.title;let L=document.createElement("div");if(L.textContent=i.subtitle||"",L.style.opacity="0.7",L.style.fontSize="12px",i.subtitle||(L.style.display="none"),P.appendChild(M),P.appendChild(L),d.appendChild(y),d.appendChild(P),l.appendChild(u),l.appendChild(d),i.badge!=null){let w=Z("span","qmm-tag",xt(String(i.badge)));l.appendChild(w)}else{let w=document.createElement("div");w.style.width="0",l.appendChild(w)}}l.classList.toggle("active",i.id===this.selectedId),l.onclick=()=>this.select(i.id),o.appendChild(l),a.appendChild(o)}this.list.appendChild(a),this.list.scrollTop=t}};function Z(e,t,n){let r=document.createElement(e);return t&&(r.className=t),n!=null&&(r.innerHTML=n),r}function Bn(e){return e.replace(/"/g,'\\"')}function xt(e){return e.replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[t])}var zt=e=>{let t=new Date(e),n=(r,a=2)=>String(r).padStart(a,"0");return`${n(t.getHours())}:${n(t.getMinutes())}:${n(t.getSeconds())}.${String(t.getMilliseconds()).padStart(3,"0")}`},Ir=e=>e.replace(/[<>&]/g,t=>({"<":"&lt;",">":"&gt;","&":"&amp;"})[t]),Vt=class{constructor(t=2e3){this.max=t;pe(this,"arr",[])}push(t){this.arr.push(t),this.arr.length>this.max&&this.arr.splice(0,this.arr.length-this.max)}toArray(){return this.arr.slice()}clear(){this.arr.length=0}},Ue=new Map,Hn=!1;function Cr(e){Hn?he.forEach(t=>{Ue.has(t)||Ut(t,"late",e)}):(window.WebSocket===be&&(window.WebSocket=new Proxy(be,{construct(t,n,r){let a=Reflect.construct(t,n,r);return Ut(a,"new",e),a}})),he.forEach(t=>Ut(t,"existing",e)),Hn=!0)}function Ut(e,t,n){if(Ue.has(e))return;let r=`WS#${1+Ue.size} (${lt(e.readyState)})`,a={ws:e,id:r,listeners:[]};he.includes(e)||he.push(e),Be?.(e,t);let i=u=>{let d="";try{d=typeof u.data=="string"?u.data:JSON.stringify(u.data)}catch{d=String(u.data)}n({t:Date.now(),dir:"in",text:d,ws:e})};e.addEventListener("message",i),a.listeners.push(()=>e.removeEventListener("message",i));let o=()=>{a.id=a.id.replace(/\(.*\)/,`(${lt(e.readyState)})`)},l=()=>{a.id=a.id.replace(/\(.*\)/,`(${lt(e.readyState)})`)};if(e.addEventListener("open",o),e.addEventListener("close",l),a.listeners.push(()=>e.removeEventListener("open",o)),a.listeners.push(()=>e.removeEventListener("close",l)),!a.sendOrig){let u=e.send.bind(e);a.sendOrig=u,e.send=d=>{try{let y=typeof d=="string"?d:JSON.stringify(d);n({t:Date.now(),dir:"out",text:y,ws:e})}catch{n({t:Date.now(),dir:"out",text:String(d),ws:e})}return u(d)}}Ue.set(e,a)}async function Wn(e){let t=new Ae({id:"debug-tools",compact:!0});t.mount(e),t.addTab("jotai","Jotai",n=>Er(n,t)),t.addTab("websocket","WebSocket",n=>Mr(n,t))}function Er(e,t){e.innerHTML="";let n=t.section("Store"),r=t.btn("Capture store",async()=>{try{await Ie()}catch{}a.textContent=`captured: ${String(Ge())}`,d({capture:Ge()})}),a=t.label(`captured: ${String(Ge())}`);n.appendChild(t.row(r,a)),e.appendChild(n);let i=document.createElement("div");i.style.display="grid",i.style.gridTemplateColumns="repeat(auto-fit, minmax(280px, 1fr))",i.style.gap="12px",e.appendChild(i);{let T=t.section("Find / List atoms"),I=t.inputText("regex label (eg: position|health)",""),v=t.btn("List",()=>D()),x=t.btn("Copy",()=>M(B.textContent||"")),B=document.createElement("pre");w(B);async function D(){let j=I.value.trim(),$=L(j||".*"),X=Ve(/.*/).filter(ce=>$.test(String(ce?.debugLabel||ce?.label||""))).map(ce=>String(ce?.debugLabel||ce?.label||"<?>"));B.textContent=X.join(`
-`),d({list:{query:j||".*",count:X.length}})}T.appendChild(t.row(I,v,x)),T.appendChild(B),i.appendChild(T)}{let T=t.section("Get / Subscribe"),I=t.inputText("atom label (eg: positionAtom)",""),v=t.btn("Get",async()=>{let $=oe(I.value.trim());if(!$){D.textContent=`Atom "${I.value}" not found`;return}try{y(D,await ve($)),d({get:{label:I.value,ok:!0}})}catch(U){y(D,U?.message||String(U)),d({get:{label:I.value,ok:!1,error:U?.message}})}}),x=t.btn("Subscribe",async()=>{let $=I.value.trim();if(!$)return;let U=oe($);if(!U)return d(`Atom "${$}" not found`);if(j){j(),j=null,x.textContent="Subscribe",d({sub:{label:$,status:"unsubscribed"}});return}j=await $e(U,async()=>{try{y(D,await ve(U))}catch{}}),x.textContent="Unsubscribe",d({sub:{label:$,status:"subscribed"}})}),B=t.btn("Copy",()=>M(D.textContent||"")),D=document.createElement("pre");w(D);let j=null;T.appendChild(t.row(I,v,x,B)),T.appendChild(D),i.appendChild(T)}{let T=t.section("Set atom"),I=t.inputText("atom label (eg: activeModalAtom)",""),v=t.btn("Set",async()=>{let D=I.value.trim(),j=oe(D);if(!j)return d(`Atom "${D}" not found`);let $;try{$=JSON.parse(B.value)}catch{return P("Invalid JSON")}try{await xe(j,$),d({set:{label:D,ok:!0}})}catch(U){d({set:{label:D,ok:!1,error:U?.message}})}}),x=t.btn("Copy json",()=>M(B.value)),B=document.createElement("textarea");B.className="qmm-input",B.style.minHeight="120px",B.style.width="100%",B.placeholder='JSON value, eg: "inventory" or { "x": 1, "y": 2 }',T.appendChild(t.row(I,v,x)),T.appendChild(B),i.appendChild(T)}let o=t.section("Output"),l=t.row(t.label("\u2014"),(()=>{let T=document.createElement("div");return T.style.flex="1",T})(),t.btn("Copy",()=>M(u.textContent||"")),t.btn("Clear",()=>u.textContent="")),u=document.createElement("pre");w(u),o.appendChild(l),o.appendChild(u),e.appendChild(o);function d(T){let I=zt(Date.now());try{u.textContent+=`[${I}] ${JSON.stringify(T)}
-`}catch{u.textContent+=`[${I}] ${String(T)}
-`}u.scrollTop=u.scrollHeight}function y(T,I){T.textContent=typeof I=="string"?I:JSON.stringify(I,null,2)}function P(T){try{window.toastSimple?.(T,"","warn")}catch{}}function M(T){let I=String(T??"");if(!I.length)return;let v=()=>{let x=document.createElement("textarea");x.value=I,x.setAttribute("readonly","true"),x.style.position="fixed",x.style.left="-9999px",x.style.opacity="0",document.body.appendChild(x),x.focus(),x.select();let B=!1;try{B=document.execCommand("copy")}catch{}document.body.removeChild(x);try{window.toastSimple?.(B?"Copied":"Copy failed","",B?"success":"error")}catch{}};window.isSecureContext&&navigator.clipboard?.writeText?navigator.clipboard.writeText(I).then(()=>{try{window.toastSimple?.("Copied","","success")}catch{}}).catch(v):v()}function L(T){try{return new RegExp(T,"i")}catch{return/.*/i}}function w(T){T.style.maxHeight="260px",T.style.overflow="auto",T.style.background="#0f1318",T.style.border="1px solid #ffffff14",T.style.borderRadius="8px",T.style.padding="8px",T.style.margin="6px 0",T.style.fontSize="12px",T.style.color="#e7eef7"}}function Mr(e,t){e.innerHTML="";let n=new Vt(2e3),r=new Map,a=0,i=!1,o=!0,l=!0,u=!0,d="",y=!1,P=!1,M=null,L=[],w=()=>{let f=document.createElement("div");return f.style.flex="1",f},T=f=>{if(M=f,[...V.querySelectorAll("[data-fid]")].forEach(h=>{h.classList.toggle("selected",String(f||"")===h.dataset.fid)}),f!=null){let h=r.get(f);h&&(m.value=h.text)}},I=f=>L.some(h=>h.test(f));function v(f){let h=String(f??"");if(!h.length)return;let O=()=>{let N=document.createElement("textarea");N.value=h,N.setAttribute("readonly","true"),N.style.position="fixed",N.style.left="-9999px",N.style.opacity="0",document.body.appendChild(N),N.focus(),N.select();let G=!1;try{G=document.execCommand("copy")}catch{}document.body.removeChild(N);try{window.toastSimple?.(G?"Copied":"Copy failed","",G?"success":"error")}catch{}};window.isSecureContext&&navigator.clipboard?.writeText?navigator.clipboard.writeText(h).then(()=>{try{window.toastSimple?.("Copied","","success")}catch{}}).catch(O):O()}let x=t.section("Live log"),B=t.label("\u2014"),D=t.checkbox(!0);D.addEventListener("change",()=>{l=D.checked,W(!0)});let j=t.checkbox(!0);j.addEventListener("change",()=>{u=j.checked,W(!0)});let $=t.inputText("filter text (case-insensitive)","");$.addEventListener("input",()=>{d=$.value.trim().toLowerCase(),W(!0)});let U=t.checkbox(!1);U.addEventListener("change",()=>{y=U.checked,W(!0)});let le=t.btn("Pause",()=>{i=!i,le.textContent=i?"Resume":"Pause"}),X=t.btn("Clear",()=>{n.clear(),r.clear(),T(null),W(!0)}),ce=t.btn("Copy visible",()=>ee());x.appendChild(t.row(B,w(),D,t.label("IN"),j,t.label("OUT"),$,U,t.label("Current socket only"),le,X,ce)),e.appendChild(x);let ge=t.section("Mutes (exclude by regex)"),fe=t.inputText("add regex (e.g. ping|keepalive)",""),Te=t.btn("Add",()=>{let f=fe.value.trim();if(f)try{L.push(new RegExp(f,"i")),fe.value="",H(),W(!0)}catch{}}),S=document.createElement("div");S.style.display="flex",S.style.flexWrap="wrap",S.style.gap="6px";function H(){S.innerHTML="",L.forEach((f,h)=>{let O=document.createElement("button");O.className="qmm-btn",O.textContent=`/${f.source}/i \xD7`,O.title="Remove",O.onclick=()=>{L.splice(h,1),H(),W(!0)},S.appendChild(O)})}ge.appendChild(t.row(fe,Te)),ge.appendChild(S),e.appendChild(ge);let C=t.section("Sockets"),F=document.createElement("select");F.className="qmm-input",F.style.minWidth="260px",C.appendChild(F),e.appendChild(C);function ie(){let f=Array.from(Ue.values());F.innerHTML="",f.forEach((h,O)=>{let N=document.createElement("option");N.value=String(O),N.textContent=h.id+(h.ws===qe?" \u2022 page":""),F.appendChild(N)}),!F.value&&F.options.length&&(F.value="0"),B.textContent=E()}function de(){let f=Number(F.value),h=Array.from(Ue.values());return Number.isFinite(f)?h[f]?.ws??null:null}let V=document.createElement("div");V.style.border="1px solid #ffffff14",V.style.borderRadius="10px",V.style.background="#0f1318",V.style.padding="6px",V.style.maxHeight="46vh",V.style.overflow="auto",V.style.fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",V.style.fontSize="12px",V.style.lineHeight="1.3",V.style.userSelect="text";let ue=document.createElement("style");ue.textContent=`
+  // src/ui/menus/debug-data.ts
+  var fmtTime = (ms) => {
+    const d = new Date(ms);
+    const pad = (n, s = 2) => String(n).padStart(s, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${String(d.getMilliseconds()).padStart(3, "0")}`;
+  };
+  var escapeLite = (s) => s.replace(/[<>&]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" })[m]);
+  var FrameBuffer = class {
+    constructor(max = 2e3) {
+      this.max = max;
+      __publicField(this, "arr", []);
+    }
+    push(f) {
+      this.arr.push(f);
+      if (this.arr.length > this.max) this.arr.splice(0, this.arr.length - this.max);
+    }
+    toArray() {
+      return this.arr.slice();
+    }
+    clear() {
+      this.arr.length = 0;
+    }
+  };
+  var registry = /* @__PURE__ */ new Map();
+  var hookedOnce = false;
+  function installWSHookIfNeeded(onFrame) {
+    if (!hookedOnce) {
+      if (window.WebSocket === NativeWS) {
+        window.WebSocket = new Proxy(NativeWS, {
+          construct(target, args, newTarget) {
+            const ws = Reflect.construct(target, args, newTarget);
+            trackSocket(ws, "new", onFrame);
+            return ws;
+          }
+        });
+      }
+      sockets.forEach((ws) => trackSocket(ws, "existing", onFrame));
+      hookedOnce = true;
+    } else {
+      sockets.forEach((ws) => {
+        if (!registry.has(ws)) trackSocket(ws, "late", onFrame);
+      });
+    }
+  }
+  function trackSocket(ws, why, onFrame) {
+    if (registry.has(ws)) return;
+    const id = `WS#${1 + registry.size} (${label(ws.readyState)})`;
+    const info = { ws, id, listeners: [] };
+    if (!sockets.includes(ws)) sockets.push(ws);
+    setQWS?.(ws, why);
+    const onMsg = (ev) => {
+      let text = "";
+      try {
+        text = typeof ev.data === "string" ? ev.data : JSON.stringify(ev.data);
+      } catch {
+        text = String(ev.data);
+      }
+      onFrame({ t: Date.now(), dir: "in", text, ws });
+    };
+    ws.addEventListener("message", onMsg);
+    info.listeners.push(() => ws.removeEventListener("message", onMsg));
+    const onOpen = () => {
+      info.id = info.id.replace(/\(.*\)/, `(${label(ws.readyState)})`);
+    };
+    const onClose = () => {
+      info.id = info.id.replace(/\(.*\)/, `(${label(ws.readyState)})`);
+    };
+    ws.addEventListener("open", onOpen);
+    ws.addEventListener("close", onClose);
+    info.listeners.push(() => ws.removeEventListener("open", onOpen));
+    info.listeners.push(() => ws.removeEventListener("close", onClose));
+    if (!info.sendOrig) {
+      const orig = ws.send.bind(ws);
+      info.sendOrig = orig;
+      ws.send = (data) => {
+        try {
+          const text = typeof data === "string" ? data : JSON.stringify(data);
+          onFrame({ t: Date.now(), dir: "out", text, ws });
+        } catch {
+          onFrame({ t: Date.now(), dir: "out", text: String(data), ws });
+        }
+        return orig(data);
+      };
+    }
+    registry.set(ws, info);
+  }
+  async function renderDebugDataMenu(root) {
+    const ui = new Menu({ id: "debug-tools", compact: true });
+    ui.mount(root);
+    ui.addTab("jotai", "Jotai", (view) => renderJotaiTab(view, ui));
+    ui.addTab("websocket", "WebSocket", (view) => renderWSTab(view, ui));
+  }
+  function renderJotaiTab(view, ui) {
+    view.innerHTML = "";
+    const head = ui.section("Store");
+    const btnCap = ui.btn("Capture store", async () => {
+      try {
+        await ensureStore();
+      } catch {
+      }
+      capLbl.textContent = `captured: ${String(isStoreCaptured())}`;
+      appendOut({ capture: isStoreCaptured() });
+    });
+    const capLbl = ui.label(`captured: ${String(isStoreCaptured())}`);
+    head.appendChild(ui.row(btnCap, capLbl));
+    view.appendChild(head);
+    const grid = document.createElement("div");
+    grid.style.display = "grid";
+    grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(280px, 1fr))";
+    grid.style.gap = "12px";
+    view.appendChild(grid);
+    {
+      const s = ui.section("Find / List atoms");
+      const q = ui.inputText("regex label (eg: position|health)", "");
+      const btnList = ui.btn("List", () => doList());
+      const btnCopy = ui.btn("Copy", () => copy(pre2.textContent || ""));
+      const pre2 = document.createElement("pre");
+      stylePre(pre2);
+      async function doList() {
+        const raw = q.value.trim();
+        const rx = safeRegex(raw || ".*");
+        const all = findAtomsByLabel(/.*/);
+        const atoms = all.filter((a) => rx.test(String(a?.debugLabel || a?.label || "")));
+        const labels = atoms.map((a) => String(a?.debugLabel || a?.label || "<?>"));
+        pre2.textContent = labels.join("\n");
+        appendOut({ list: { query: raw || ".*", count: labels.length } });
+      }
+      s.appendChild(ui.row(q, btnList, btnCopy));
+      s.appendChild(pre2);
+      grid.appendChild(s);
+    }
+    {
+      const s = ui.section("Get / Subscribe");
+      const q = ui.inputText("atom label (eg: positionAtom)", "");
+      const btnGet = ui.btn("Get", async () => {
+        const atom = getAtomByLabel(q.value.trim());
+        if (!atom) {
+          pre2.textContent = `Atom "${q.value}" not found`;
+          return;
+        }
+        try {
+          setText(pre2, await jGet(atom));
+          appendOut({ get: { label: q.value, ok: true } });
+        } catch (e) {
+          setText(pre2, e?.message || String(e));
+          appendOut({ get: { label: q.value, ok: false, error: e?.message } });
+        }
+      });
+      const btnSub = ui.btn("Subscribe", async () => {
+        const label2 = q.value.trim();
+        if (!label2) return;
+        const atom = getAtomByLabel(label2);
+        if (!atom) return appendOut(`Atom "${label2}" not found`);
+        if (unsubRef) {
+          unsubRef();
+          unsubRef = null;
+          btnSub.textContent = "Subscribe";
+          appendOut({ sub: { label: label2, status: "unsubscribed" } });
+          return;
+        }
+        unsubRef = await jSub(atom, async () => {
+          try {
+            setText(pre2, await jGet(atom));
+          } catch {
+          }
+        });
+        btnSub.textContent = "Unsubscribe";
+        appendOut({ sub: { label: label2, status: "subscribed" } });
+      });
+      const btnCopy = ui.btn("Copy", () => copy(pre2.textContent || ""));
+      const pre2 = document.createElement("pre");
+      stylePre(pre2);
+      let unsubRef = null;
+      s.appendChild(ui.row(q, btnGet, btnSub, btnCopy));
+      s.appendChild(pre2);
+      grid.appendChild(s);
+    }
+    {
+      const s = ui.section("Set atom");
+      const q = ui.inputText("atom label (eg: activeModalAtom)", "");
+      const btnSet = ui.btn("Set", async () => {
+        const label2 = q.value.trim();
+        const atom = getAtomByLabel(label2);
+        if (!atom) return appendOut(`Atom "${label2}" not found`);
+        let val;
+        try {
+          val = JSON.parse(ta.value);
+        } catch (e) {
+          return toast("Invalid JSON");
+        }
+        try {
+          await jSet(atom, val);
+          appendOut({ set: { label: label2, ok: true } });
+        } catch (e) {
+          appendOut({ set: { label: label2, ok: false, error: e?.message } });
+        }
+      });
+      const btnCopy = ui.btn("Copy json", () => copy(ta.value));
+      const ta = document.createElement("textarea");
+      ta.className = "qmm-input";
+      ta.style.minHeight = "120px";
+      ta.style.width = "100%";
+      ta.placeholder = `JSON value, eg: "inventory" or { "x": 1, "y": 2 }`;
+      s.appendChild(ui.row(q, btnSet, btnCopy));
+      s.appendChild(ta);
+      grid.appendChild(s);
+    }
+    const outBox = ui.section("Output");
+    const bar = ui.row(
+      ui.label("\u2014"),
+      (() => {
+        const sp = document.createElement("div");
+        sp.style.flex = "1";
+        return sp;
+      })(),
+      (() => {
+        const b = ui.btn("Copy", () => copy(pre.textContent || ""));
+        return b;
+      })(),
+      (() => {
+        const b = ui.btn("Clear", () => pre.textContent = "");
+        return b;
+      })()
+    );
+    const pre = document.createElement("pre");
+    stylePre(pre);
+    outBox.appendChild(bar);
+    outBox.appendChild(pre);
+    view.appendChild(outBox);
+    function appendOut(v) {
+      const ts = fmtTime(Date.now());
+      try {
+        pre.textContent += `[${ts}] ${JSON.stringify(v)}
+`;
+      } catch {
+        pre.textContent += `[${ts}] ${String(v)}
+`;
+      }
+      pre.scrollTop = pre.scrollHeight;
+    }
+    function setText(el2, v) {
+      el2.textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2);
+    }
+    function toast(msg) {
+      try {
+        window.toastSimple?.(msg, "", "warn");
+      } catch {
+      }
+    }
+    function copy(text) {
+      const str = String(text ?? "");
+      if (!str.length) return;
+      const fallback = () => {
+        const ta = document.createElement("textarea");
+        ta.value = str;
+        ta.setAttribute("readonly", "true");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch {
+        }
+        document.body.removeChild(ta);
+        try {
+          window.toastSimple?.(ok ? "Copied" : "Copy failed", "", ok ? "success" : "error");
+        } catch {
+        }
+      };
+      if (window.isSecureContext && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(str).then(() => {
+          try {
+            window.toastSimple?.("Copied", "", "success");
+          } catch {
+          }
+        }).catch(fallback);
+      } else {
+        fallback();
+      }
+    }
+    function safeRegex(q) {
+      try {
+        return new RegExp(q, "i");
+      } catch {
+        return /.*/i;
+      }
+    }
+    function stylePre(pre2) {
+      pre2.style.maxHeight = "260px";
+      pre2.style.overflow = "auto";
+      pre2.style.background = "#0f1318";
+      pre2.style.border = "1px solid #ffffff14";
+      pre2.style.borderRadius = "8px";
+      pre2.style.padding = "8px";
+      pre2.style.margin = "6px 0";
+      pre2.style.fontSize = "12px";
+      pre2.style.color = "#e7eef7";
+    }
+  }
+  function renderWSTab(view, ui) {
+    view.innerHTML = "";
+    const frames = new FrameBuffer(2e3);
+    const framesMap = /* @__PURE__ */ new Map();
+    let seq = 0;
+    let paused = false;
+    let autoScroll = true;
+    let showIn = true;
+    let showOut = true;
+    let filterText = "";
+    let onlyCurrentSocket = false;
+    let replayToSource = false;
+    let selectedId = null;
+    let mutePatterns = [];
+    const $spacer = () => {
+      const d = document.createElement("div");
+      d.style.flex = "1";
+      return d;
+    };
+    const setSelectedRow = (fid) => {
+      selectedId = fid;
+      [...logWrap.querySelectorAll("[data-fid]")].forEach((row) => {
+        row.classList.toggle("selected", String(fid || "") === row.dataset.fid);
+      });
+      if (fid != null) {
+        const f = framesMap.get(fid);
+        if (f) ta.value = f.text;
+      }
+    };
+    const matchesMutes = (text) => mutePatterns.some((rx) => rx.test(text));
+    function copy(text) {
+      const str = String(text ?? "");
+      if (!str.length) return;
+      const fallback = () => {
+        const taTmp = document.createElement("textarea");
+        taTmp.value = str;
+        taTmp.setAttribute("readonly", "true");
+        taTmp.style.position = "fixed";
+        taTmp.style.left = "-9999px";
+        taTmp.style.opacity = "0";
+        document.body.appendChild(taTmp);
+        taTmp.focus();
+        taTmp.select();
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch {
+        }
+        document.body.removeChild(taTmp);
+        try {
+          window.toastSimple?.(ok ? "Copied" : "Copy failed", "", ok ? "success" : "error");
+        } catch {
+        }
+      };
+      if (window.isSecureContext && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(str).then(() => {
+          try {
+            window.toastSimple?.("Copied", "", "success");
+          } catch {
+          }
+        }).catch(fallback);
+      } else fallback();
+    }
+    const head = ui.section("Live log");
+    const lblConn = ui.label("\u2014");
+    const chIn = ui.checkbox(true);
+    chIn.addEventListener("change", () => {
+      showIn = chIn.checked;
+      repaint(true);
+    });
+    const chOut = ui.checkbox(true);
+    chOut.addEventListener("change", () => {
+      showOut = chOut.checked;
+      repaint(true);
+    });
+    const inputFilter = ui.inputText("filter text (case-insensitive)", "");
+    inputFilter.addEventListener("input", () => {
+      filterText = inputFilter.value.trim().toLowerCase();
+      repaint(true);
+    });
+    const chOnlyCurrent = ui.checkbox(false);
+    chOnlyCurrent.addEventListener("change", () => {
+      onlyCurrentSocket = chOnlyCurrent.checked;
+      repaint(true);
+    });
+    const btnPause = ui.btn("Pause", () => {
+      paused = !paused;
+      btnPause.textContent = paused ? "Resume" : "Pause";
+    });
+    const btnClear = ui.btn("Clear", () => {
+      frames.clear();
+      framesMap.clear();
+      setSelectedRow(null);
+      repaint(true);
+    });
+    const btnCopy = ui.btn("Copy visible", () => copyVisible());
+    head.appendChild(ui.row(
+      lblConn,
+      $spacer(),
+      chIn,
+      ui.label("IN"),
+      chOut,
+      ui.label("OUT"),
+      inputFilter,
+      chOnlyCurrent,
+      ui.label("Current socket only"),
+      btnPause,
+      btnClear,
+      btnCopy
+    ));
+    view.appendChild(head);
+    const muteSec = ui.section("Mutes (exclude by regex)");
+    const muteInput = ui.inputText("add regex (e.g. ping|keepalive)", "");
+    const btnAddMute = ui.btn("Add", () => {
+      const raw = muteInput.value.trim();
+      if (!raw) return;
+      try {
+        mutePatterns.push(new RegExp(raw, "i"));
+        muteInput.value = "";
+        repaintMutes();
+        repaint(true);
+      } catch {
+      }
+    });
+    const mutesWrap = document.createElement("div");
+    mutesWrap.style.display = "flex";
+    mutesWrap.style.flexWrap = "wrap";
+    mutesWrap.style.gap = "6px";
+    function repaintMutes() {
+      mutesWrap.innerHTML = "";
+      mutePatterns.forEach((rx, i) => {
+        const chip = document.createElement("button");
+        chip.className = "qmm-btn";
+        chip.textContent = `/${rx.source}/i \xD7`;
+        chip.title = "Remove";
+        chip.onclick = () => {
+          mutePatterns.splice(i, 1);
+          repaintMutes();
+          repaint(true);
+        };
+        mutesWrap.appendChild(chip);
+      });
+    }
+    muteSec.appendChild(ui.row(muteInput, btnAddMute));
+    muteSec.appendChild(mutesWrap);
+    view.appendChild(muteSec);
+    const pickSec = ui.section("Sockets");
+    const sel = document.createElement("select");
+    sel.className = "qmm-input";
+    sel.style.minWidth = "260px";
+    pickSec.appendChild(sel);
+    view.appendChild(pickSec);
+    function refreshSocketPicker() {
+      const wsArr = Array.from(registry.values());
+      sel.innerHTML = "";
+      wsArr.forEach((info, idx) => {
+        const op = document.createElement("option");
+        op.value = String(idx);
+        op.textContent = info.id + (info.ws === quinoaWS ? " \u2022 page" : "");
+        sel.appendChild(op);
+      });
+      if (!sel.value && sel.options.length) sel.value = "0";
+      lblConn.textContent = statusText();
+    }
+    function currentWS() {
+      const idx = Number(sel.value);
+      const vals = Array.from(registry.values());
+      return Number.isFinite(idx) ? vals[idx]?.ws ?? null : null;
+    }
+    const logWrap = document.createElement("div");
+    logWrap.style.border = "1px solid #ffffff14";
+    logWrap.style.borderRadius = "10px";
+    logWrap.style.background = "#0f1318";
+    logWrap.style.padding = "6px";
+    logWrap.style.maxHeight = "46vh";
+    logWrap.style.overflow = "auto";
+    logWrap.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    logWrap.style.fontSize = "12px";
+    logWrap.style.lineHeight = "1.3";
+    logWrap.style.userSelect = "text";
+    const style = document.createElement("style");
+    style.textContent = `
     .ws-row{display:grid;grid-template-columns:92px 18px 1fr auto;gap:8px;padding:3px 4px;border-bottom:1px dashed #ffffff12;align-items:start}
     .ws-row .ts{opacity:.8}
     .ws-row .arrow{font-weight:600}
@@ -442,9 +4723,2181 @@
     .ws-row:hover .acts{display:flex}
     .ws-row.selected{background:rgba(120,160,255,.12)}
     .ws-row .chip{border:1px solid #ffffff26;background:#ffffff14;border-radius:6px;padding:2px 6px;cursor:pointer}
-  `,V.appendChild(ue),e.appendChild(V);let Oe=t.section("Send"),m=document.createElement("textarea");m.className="qmm-input",m.style.width="100%",m.style.minHeight="120px",m.placeholder="Select a frame or paste a payload here. Choose Text or JSON below.";let k=t.radioGroup("ws-send-mode",[{value:"text",label:"Text"},{value:"json",label:"JSON"}],"text",()=>{}),c=t.checkbox(!1);c.addEventListener("change",()=>{P=c.checked});let s=t.btn("Send",()=>z()),b=t.btn("Copy payload",()=>v(m.value));Oe.appendChild(m),Oe.appendChild(t.row(k,c,t.label("Use source WS"),s,b)),e.appendChild(Oe),Cr(f=>{if(i)return;let h={...f,id:++a};n.push(h),r.set(h.id,h),B.textContent=E(),q(h)}),ie(),W(!0);let p=window.setInterval(()=>{ie()},1e3);e.__ws_cleanup__=()=>{window.clearInterval(p)};function E(){return`status: ${he.some(O=>O.readyState===WebSocket.OPEN)?"OPEN":"none"} \u2022 mode: ${ot?"worker":"page/auto"}`}function g(f){return!(f.dir==="in"&&!l||f.dir==="out"&&!u||d&&!f.text.toLowerCase().includes(d)||y&&f.ws&&de()&&f.ws!==de()||I(f.text))}function R(f,h){let O=document.createElement("div");O.className="acts";let N=document.createElement("button");N.className="qmm-btn",N.textContent="Copy",N.onclick=ae=>{ae.stopPropagation(),v(h.text)};let G=document.createElement("button");G.className="qmm-btn",G.textContent="\u2192 Editor",G.onclick=ae=>{ae.stopPropagation(),m.value=h.text,T(f)};let Q=document.createElement("button");return Q.className="qmm-btn",Q.textContent="Replay",Q.title="Send right away (to current WS or source WS if enabled)",Q.onclick=ae=>{ae.stopPropagation(),K(h)},O.append(N,G,Q),O}function Y(f){let h=document.createElement("div");h.className="ws-row",h.dataset.fid=String(f.id);let O=document.createElement("div");O.className="ts",O.textContent=zt(f.t);let N=document.createElement("div");N.className="arrow",N.textContent=f.dir==="in"?"\u2190":"\u2192",N.style.color=f.dir==="in"?"#4bd17a":"#8ab4ff";let G=document.createElement("div");G.className="body",G.innerHTML=`<code>${Ir(f.text)}</code>`;let Q=R(f.id,f);return h.append(O,N,G,Q),h.onclick=()=>T(f.id),h.ondblclick=()=>{m.value=f.text,T(f.id)},h}function q(f){if(!g(f))return;let h=Y(f);V.appendChild(h),o&&(V.scrollTop=V.scrollHeight)}function W(f=!1){V.querySelectorAll(".ws-row").forEach(h=>h.remove()),n.toArray().forEach(h=>{g(h)&&V.appendChild(Y(h))}),M!=null&&T(M),o&&(V.scrollTop=V.scrollHeight)}function ee(){let f=n.toArray().filter(h=>g(h)).map(h=>`[${zt(h.t)}] ${h.dir==="in"?"<-":"->"} ${h.text}`).join(`
-`);v(f)}function K(f){let h=P&&f.ws?f.ws:de();if(!h||h.readyState!==WebSocket.OPEN)return;if((k.querySelector('input[type="radio"]:checked')?.value||"text")==="json")try{h.send(JSON.parse(f.text))}catch{h.send(f.text)}else h.send(f.text)}function z(){let f=de(),h=M!=null&&P?r.get(M)?.ws??null:null,O=(P?h:f)||f;if(!O||O.readyState!==WebSocket.OPEN)return;if((k.querySelector('input[type="radio"]:checked')?.value||"text")==="json")try{O.send(JSON.parse(m.value))}catch{O.send(m.value)}else O.send(m.value)}}async function Ar(e){let t=oe("sendQuinoaToastAtom");if(t){await xe(t,e);return}let n=oe("quinoaToastsAtom");if(!n)throw new Error("Aucun atom de toast trouv\xE9");let r=await ve(n).catch(()=>[]),a={isClosable:!0,duration:1e4,...e};"toastType"in a&&a.toastType==="board"?a.id=a.id??(a.isStackable?`quinoa-stackable-${Date.now()}-${Math.random()}`:"quinoa-game-toast"):a.id=a.id??"quinoa-game-toast",await xe(n,[...r,a])}async function Pe(e,t,n="info",r=3500){await Ar({title:e,description:t,variant:n,duration:r})}function Lr(e){if(!e||typeof e!="object")return[];let t=[],n=new Set,r=[e];for(;r.length;){let i=r.pop();if(!(!i||typeof i!="object"||n.has(i))){n.add(i);for(let o of Object.keys(i)){let l=i[o];Array.isArray(l)&&l.length&&l.every(u=>u&&typeof u=="object")&&l.some(d=>"id"in d&&"name"in d)&&/player/i.test(o)&&t.push(...l),l&&typeof l=="object"&&r.push(l)}}}let a=new Map;for(let i of t)i?.id&&a.set(String(i.id),i);return[...a.values()]}function kr(e){let t=e?.fullState?.data?.players??e?.data?.players??e?.players;return Array.isArray(t)?t:Lr(e)}function On(e){let t=e?.child?.data?.userSlots??e?.fullState?.child?.data?.userSlots??e?.data?.userSlots;return Array.isArray(t)?t:t&&typeof t=="object"?Object.values(t):[]}function Fn(e){let t=e?.data?.position??e?.position??e?.data?.coords??e?.coords,n=Number(t?.x),r=Number(t?.y);return Number.isFinite(n)&&Number.isFinite(r)?{x:n,y:r}:null}function _n(e){let t=e?.data?.inventory;if(!t||typeof t!="object")return null;let n=Array.isArray(t.items)?t.items:[],r=Array.isArray(t.favoritedItemIds)?t.favoritedItemIds:[];return{items:n,favoritedItemIds:r}}function Nn(e,t){for(let n of On(e))if(String(n?.playerId??"")===String(t))return n;return null}function Rr(e,t){let n=new Map;for(let r of On(t)){if(!r||typeof r!="object")continue;let a=r.playerId!=null?String(r.playerId):"";if(!a)continue;let i=Fn(r),o=_n(r);n.set(a,{x:i?.x,y:i?.y,inventory:o??null})}return e.map(r=>{let a=n.get(String(r.id));return a?{...r,...a}:{...r,inventory:null}})}var te={currentTargetId:null,unsub:null,lastPos:null,prevPos:null,steps:0},Ce={async list(){let e=await Qe.get();return e?Rr(kr(e),e):[]},async onChange(e){return Qe.sub(async()=>{try{e(await this.list())}catch{}})},async getPosition(e){let t=await Qe.get();if(!t)return null;let n=Nn(t,e);return Fn(n)},async getInventory(e){let t=await Qe.get();if(!t)return null;let n=Nn(t,e);return _n(n)},async teleportTo(e){let t=await this.getPosition(e);if(!t)throw new Error("Unknown position for this player");me.teleport(t.x,t.y),Pe("Teleport",`Teleported to ${t.x}, ${t.y}`,"success")},async openInventoryPreview(e,t){try{let n=await Ce.getInventory(e);if(!n||!Array.isArray(n.items)||n.items.length===0){await Pe("Inventory","No usable inventory for this player.","warn");return}await rt(n,{open:!0}),t&&await Pe("Inventory",`${t}'s inventory displayed.`,"info")}catch(n){await Pe("Inventory",n?.message||"Failed to open inventory.","error")}},async stopFollowing(){if(te.unsub)try{te.unsub()}catch{}te.unsub=null,te.currentTargetId=null,te.lastPos=null,te.prevPos=null,te.steps=0},isFollowing(e){return te.currentTargetId===e},async startFollowing(e){if(te.unsub){try{te.unsub()}catch{}te.unsub=null}te.currentTargetId=e,te.lastPos=null,te.prevPos=null,te.steps=0;let t=await Ce.getPosition(e);if(!t){await Pe("Follow","Unable to retrieve player position.","error"),te.currentTargetId=null;return}await me.teleport(t.x,t.y),te.lastPos={x:t.x,y:t.y},te.prevPos=null,te.steps=0,te.unsub=await Ce.onChange(async n=>{if(te.currentTargetId!==e)return;let r=n.find(o=>o.id===e);if(!r||typeof r.x!="number"||typeof r.y!="number"){this.stopFollowing(),await Pe("Follow","The target is no longer trackable (disconnected?).","error");return}let a={x:r.x,y:r.y},i=te.lastPos;if(!i){te.lastPos=a;return}(a.x!==i.x||a.y!==i.y)&&(te.steps+=1,te.steps>=2&&i&&me.move(i.x,i.y),te.prevPos=te.lastPos,te.lastPos=a)}),await Pe("Follow","Follow enabled","success")}};async function qr(){return Ce.list()}function Br(e,t=22){return e?e.length<=t?e:e.slice(0,t-1)+"\u2026":""}var Hr=e=>({id:e.id,title:Br(e.name||e.id,9),subtitle:e.isConnected?"Online":"Offline",avatarUrl:e.discordAvatarUrl||"",statusColor:e.isConnected?"#48d170":"#999a"});async function Dn(e){let t=new Ae({id:"players",compact:!0});t.mount(e);let n=t.root.querySelector(".qmm-views"),{root:r,left:a,right:i}=t.split2("260px");n.appendChild(r);let o=t.vtabs({filterPlaceholder:"Find player\u2026",onSelect:(L,w)=>u(w?.id||null)});a.appendChild(o.root);let l=o.root.querySelector(".filter");if(l){l.style.display="flex",l.style.alignItems="center",l.style.gap="8px";let L=l.querySelector("input");L&&(L.style.flex="1 1 auto",L.style.minWidth="0");let w=document.createElement("button");w.className="qmm-btn",w.title="Refresh",w.setAttribute("aria-label","Refresh"),w.style.width="34px",w.style.height="34px",w.style.padding="0",w.style.display="inline-flex",w.style.alignItems="center",w.style.justifyContent="center",w.innerHTML=`
+  `;
+    logWrap.appendChild(style);
+    view.appendChild(logWrap);
+    const sendSec = ui.section("Send");
+    const ta = document.createElement("textarea");
+    ta.className = "qmm-input";
+    ta.style.width = "100%";
+    ta.style.minHeight = "120px";
+    ta.placeholder = `Select a frame or paste a payload here. Choose Text or JSON below.`;
+    const asJson = ui.radioGroup(
+      "ws-send-mode",
+      [{ value: "text", label: "Text" }, { value: "json", label: "JSON" }],
+      "text",
+      () => {
+      }
+    );
+    const chUseSource = ui.checkbox(false);
+    chUseSource.addEventListener("change", () => {
+      replayToSource = chUseSource.checked;
+    });
+    const btnSend = ui.btn("Send", () => doSend());
+    const btnCopyPayload = ui.btn("Copy payload", () => copy(ta.value));
+    sendSec.appendChild(ta);
+    sendSec.appendChild(ui.row(asJson, chUseSource, ui.label("Use source WS"), btnSend, btnCopyPayload));
+    view.appendChild(sendSec);
+    installWSHookIfNeeded((f) => {
+      if (paused) return;
+      const ex = { ...f, id: ++seq };
+      frames.push(ex);
+      framesMap.set(ex.id, ex);
+      lblConn.textContent = statusText();
+      appendOne(ex);
+    });
+    refreshSocketPicker();
+    repaint(true);
+    const pollId = window.setInterval(() => {
+      refreshSocketPicker();
+    }, 1e3);
+    view.__ws_cleanup__ = () => {
+      window.clearInterval(pollId);
+    };
+    function statusText() {
+      const anyOpen = sockets.some((ws) => ws.readyState === WebSocket.OPEN);
+      const viaW = workerFound ? "worker" : "page/auto";
+      return `status: ${anyOpen ? "OPEN" : "none"} \u2022 mode: ${viaW}`;
+    }
+    function passesFilters(f) {
+      if (f.dir === "in" && !showIn || f.dir === "out" && !showOut) return false;
+      if (filterText && !f.text.toLowerCase().includes(filterText)) return false;
+      if (onlyCurrentSocket && f.ws && currentWS() && f.ws !== currentWS()) return false;
+      if (matchesMutes(f.text)) return false;
+      return true;
+    }
+    function rowActions(fid, f) {
+      const acts = document.createElement("div");
+      acts.className = "acts";
+      const bCopy = document.createElement("button");
+      bCopy.className = "qmm-btn";
+      bCopy.textContent = "Copy";
+      bCopy.onclick = (e) => {
+        e.stopPropagation();
+        copy(f.text);
+      };
+      const bToEd = document.createElement("button");
+      bToEd.className = "qmm-btn";
+      bToEd.textContent = "\u2192 Editor";
+      bToEd.onclick = (e) => {
+        e.stopPropagation();
+        ta.value = f.text;
+        setSelectedRow(fid);
+      };
+      const bReplay = document.createElement("button");
+      bReplay.className = "qmm-btn";
+      bReplay.textContent = "Replay";
+      bReplay.title = "Send right away (to current WS or source WS if enabled)";
+      bReplay.onclick = (e) => {
+        e.stopPropagation();
+        replayFrame(f);
+      };
+      acts.append(bCopy, bToEd, bReplay);
+      return acts;
+    }
+    function buildRow(f) {
+      const row = document.createElement("div");
+      row.className = "ws-row";
+      row.dataset.fid = String(f.id);
+      const ts = document.createElement("div");
+      ts.className = "ts";
+      ts.textContent = fmtTime(f.t);
+      const arrow = document.createElement("div");
+      arrow.className = "arrow";
+      arrow.textContent = f.dir === "in" ? "\u2190" : "\u2192";
+      arrow.style.color = f.dir === "in" ? "#4bd17a" : "#8ab4ff";
+      const body = document.createElement("div");
+      body.className = "body";
+      body.innerHTML = `<code>${escapeLite(f.text)}</code>`;
+      const acts = rowActions(f.id, f);
+      row.append(ts, arrow, body, acts);
+      row.onclick = () => setSelectedRow(f.id);
+      row.ondblclick = () => {
+        ta.value = f.text;
+        setSelectedRow(f.id);
+      };
+      return row;
+    }
+    function appendOne(f) {
+      if (!passesFilters(f)) return;
+      const row = buildRow(f);
+      logWrap.appendChild(row);
+      if (autoScroll) logWrap.scrollTop = logWrap.scrollHeight;
+    }
+    function repaint(full = false) {
+      logWrap.querySelectorAll(".ws-row").forEach((n) => n.remove());
+      frames.toArray().forEach((f) => {
+        if (passesFilters(f)) logWrap.appendChild(buildRow(f));
+      });
+      if (selectedId != null) setSelectedRow(selectedId);
+      if (autoScroll) logWrap.scrollTop = logWrap.scrollHeight;
+    }
+    function copyVisible() {
+      const lines = frames.toArray().filter((f) => passesFilters(f)).map((f) => `[${fmtTime(f.t)}] ${f.dir === "in" ? "<-" : "->"} ${f.text}`).join("\n");
+      copy(lines);
+    }
+    function replayFrame(f) {
+      const wsTarget = replayToSource && f.ws ? f.ws : currentWS();
+      if (!wsTarget || wsTarget.readyState !== WebSocket.OPEN) return;
+      const mode = asJson.querySelector('input[type="radio"]:checked')?.value || "text";
+      if (mode === "json") {
+        try {
+          wsTarget.send(JSON.parse(f.text));
+        } catch {
+          wsTarget.send(f.text);
+        }
+      } else {
+        wsTarget.send(f.text);
+      }
+    }
+    function doSend() {
+      const ws = currentWS();
+      const wsAlt = selectedId != null && replayToSource ? framesMap.get(selectedId)?.ws ?? null : null;
+      const target = (replayToSource ? wsAlt : ws) || ws;
+      if (!target || target.readyState !== WebSocket.OPEN) return;
+      const mode = asJson.querySelector('input[type="radio"]:checked')?.value || "text";
+      if (mode === "json") {
+        try {
+          target.send(JSON.parse(ta.value));
+        } catch {
+          target.send(ta.value);
+        }
+      } else {
+        target.send(ta.value);
+      }
+    }
+  }
+
+  // src/ui/toast.ts
+  async function sendToast(toast) {
+    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
+    if (sendAtom) {
+      await jSet(sendAtom, toast);
+      return;
+    }
+    const listAtom = getAtomByLabel("quinoaToastsAtom");
+    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
+    const prev = await jGet(listAtom).catch(() => []);
+    const t = { isClosable: true, duration: 1e4, ...toast };
+    if ("toastType" in t && t.toastType === "board") {
+      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
+    } else {
+      t.id = t.id ?? "quinoa-game-toast";
+    }
+    await jSet(listAtom, [...prev, t]);
+  }
+  async function toastSimple(title, description, variant = "info", duration = 3500) {
+    await sendToast({ title, description, variant, duration });
+  }
+
+  // src/services/players.ts
+  function findPlayersDeep(state) {
+    if (!state || typeof state !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const k of Object.keys(cur)) {
+        const v = cur[k];
+        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
+          const looks = v.some((p) => "id" in p && "name" in p);
+          if (looks && /player/i.test(k)) out.push(...v);
+        }
+        if (v && typeof v === "object") stack.push(v);
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const p of out) if (p?.id) byId.set(String(p.id), p);
+    return [...byId.values()];
+  }
+  function getPlayersArray(st) {
+    const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep(st);
+  }
+  function getSlotsArray(st) {
+    const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object") return Object.values(raw);
+    return [];
+  }
+  function extractPosFromSlot(slot) {
+    const pos = slot?.data?.position ?? slot?.position ?? slot?.data?.coords ?? slot?.coords;
+    const x = Number(pos?.x);
+    const y = Number(pos?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+  function extractInventoryFromSlot(slot) {
+    const inv = slot?.data?.inventory;
+    if (!inv || typeof inv !== "object") return null;
+    const items = Array.isArray(inv.items) ? inv.items : [];
+    const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
+    return { items, favoritedItemIds };
+  }
+  function getSlotByPlayerId(st, playerId) {
+    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
+    return null;
+  }
+  function enrichPlayersWithSlots(players, st) {
+    const byPid = /* @__PURE__ */ new Map();
+    for (const slot of getSlotsArray(st)) {
+      if (!slot || typeof slot !== "object") continue;
+      const pid = slot.playerId != null ? String(slot.playerId) : "";
+      if (!pid) continue;
+      const pos = extractPosFromSlot(slot);
+      const inv = extractInventoryFromSlot(slot);
+      byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
+    }
+    return players.map((p) => {
+      const extra = byPid.get(String(p.id));
+      return extra ? { ...p, ...extra } : { ...p, inventory: null };
+    });
+  }
+  var followingState = {
+    currentTargetId: null,
+    unsub: null,
+    lastPos: null,
+    prevPos: null,
+    steps: 0
+  };
+  var PlayersService = {
+    async list() {
+      const st = await stateAtom.get();
+      if (!st) return [];
+      return enrichPlayersWithSlots(getPlayersArray(st), st);
+    },
+    async onChange(cb) {
+      return stateAtom.sub(async () => {
+        try {
+          cb(await this.list());
+        } catch {
+        }
+      });
+    },
+    async getPosition(playerId) {
+      const st = await stateAtom.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId);
+      return extractPosFromSlot(slot);
+    },
+    async getInventory(playerId) {
+      const st = await stateAtom.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId);
+      return extractInventoryFromSlot(slot);
+    },
+    async teleportTo(playerId) {
+      const pos = await this.getPosition(playerId);
+      if (!pos) throw new Error("Unknown position for this player");
+      PlayerService.teleport(pos.x, pos.y);
+      toastSimple("Teleport", `Teleported to ${pos.x}, ${pos.y}`, "success");
+    },
+    async openInventoryPreview(playerId, playerName) {
+      try {
+        const inv = await PlayersService.getInventory(playerId);
+        if (!inv || !Array.isArray(inv.items) || inv.items.length === 0) {
+          await toastSimple("Inventory", "No usable inventory for this player.", "warn");
+          return;
+        }
+        await fakeInventoryShow(inv, { open: true });
+        if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
+      }
+    },
+    async stopFollowing() {
+      if (followingState.unsub) {
+        try {
+          followingState.unsub();
+        } catch {
+        }
+      }
+      followingState.unsub = null;
+      followingState.currentTargetId = null;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+    },
+    isFollowing(playerId) {
+      return followingState.currentTargetId === playerId;
+    },
+    async startFollowing(playerId) {
+      if (followingState.unsub) {
+        try {
+          followingState.unsub();
+        } catch {
+        }
+        followingState.unsub = null;
+      }
+      followingState.currentTargetId = playerId;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      const pos = await PlayersService.getPosition(playerId);
+      if (!pos) {
+        await toastSimple("Follow", "Unable to retrieve player position.", "error");
+        followingState.currentTargetId = null;
+        return;
+      }
+      await PlayerService.teleport(pos.x, pos.y);
+      followingState.lastPos = { x: pos.x, y: pos.y };
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      followingState.unsub = await PlayersService.onChange(async (players) => {
+        if (followingState.currentTargetId !== playerId) return;
+        const target = players.find((p) => p.id === playerId);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          this.stopFollowing();
+          await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
+          return;
+        }
+        const cur = { x: target.x, y: target.y };
+        const last = followingState.lastPos;
+        if (!last) {
+          followingState.lastPos = cur;
+          return;
+        }
+        if (cur.x !== last.x || cur.y !== last.y) {
+          followingState.steps += 1;
+          if (followingState.steps >= 2) {
+            if (last) {
+              PlayerService.move(last.x, last.y);
+            }
+          }
+          followingState.prevPos = followingState.lastPos;
+          followingState.lastPos = cur;
+        }
+      });
+      await toastSimple("Follow", "Follow enabled", "success");
+    }
+  };
+
+  // src/ui/menus/players.ts
+  async function readPlayers() {
+    return PlayersService.list();
+  }
+  function truncateLabel(s, max = 22) {
+    if (!s) return "";
+    return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
+  }
+  var vItem = (p) => ({
+    id: p.id,
+    title: truncateLabel(p.name || p.id, 9),
+    subtitle: p.isConnected ? "Online" : "Offline",
+    avatarUrl: p.discordAvatarUrl || "",
+    statusColor: p.isConnected ? "#48d170" : "#999a"
+  });
+  async function renderPlayersMenu(root) {
+    const ui = new Menu({ id: "players", compact: true });
+    ui.mount(root);
+    const panel = ui.root.querySelector(".qmm-views");
+    const { root: split, left, right } = ui.split2("260px");
+    panel.appendChild(split);
+    const vt = ui.vtabs({
+      filterPlaceholder: "Find player\u2026",
+      onSelect: (_id, item) => renderRight(item?.id || null)
+    });
+    left.appendChild(vt.root);
+    const filter = vt.root.querySelector(".filter");
+    if (filter) {
+      filter.style.display = "flex";
+      filter.style.alignItems = "center";
+      filter.style.gap = "8px";
+      const input = filter.querySelector("input");
+      if (input) {
+        input.style.flex = "1 1 auto";
+        input.style.minWidth = "0";
+      }
+      const refreshBtn = document.createElement("button");
+      refreshBtn.className = "qmm-btn";
+      refreshBtn.title = "Refresh";
+      refreshBtn.setAttribute("aria-label", "Refresh");
+      refreshBtn.style.width = "34px";
+      refreshBtn.style.height = "34px";
+      refreshBtn.style.padding = "0";
+      refreshBtn.style.display = "inline-flex";
+      refreshBtn.style.alignItems = "center";
+      refreshBtn.style.justifyContent = "center";
+      refreshBtn.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
         <path fill="currentColor" d="M12 6a6 6 0 0 1 5.66 4H20l-3.5 3.5L13 10h2.34A4 4 0 1 0 16 12h2a6 6 0 1 1-6-6z"/>
       </svg>
-    `,w.onclick=async()=>{await M(!0)},l.appendChild(w)}function u(L){i.innerHTML="";let w=L&&d.find(X=>X.id===L)||null;if(!w){let X=document.createElement("div");X.style.opacity="0.75",X.textContent="Select a player on the left.",i.appendChild(X);return}let T=document.createElement("div");T.style.display="flex",T.style.alignItems="center",T.style.gap="12px";let I=document.createElement("img");I.src=w.discordAvatarUrl||"",I.alt=w.name,I.width=48,I.height=48,I.style.borderRadius="50%",I.style.objectFit="cover",I.style.border="1px solid #4446";let v=document.createElement("div"),x=document.createElement("div");x.textContent=w.name||w.id,x.style.fontWeight="600",x.style.fontSize="16px";let B=document.createElement("div");B.style.opacity="0.8",B.style.fontSize="12px";let D=w.isConnected?"Online":"Offline";B.textContent=D,v.appendChild(x),v.appendChild(B),T.appendChild(I),T.appendChild(v),i.appendChild(T);let j=document.createElement("div");j.style.display="flex",j.style.gap="8px",j.style.marginTop="8px",j.appendChild(t.btn("Teleport",async()=>{try{await Ce.teleportTo(w.id)}catch(X){Pe("Teleport",X?.message||"Error during teleport.","error")}})),j.appendChild(t.btn("Inventory",async()=>{await Ce.openInventoryPreview(w.id,w.name)}));let $=document.createElement("div");$.style.display="flex",$.style.alignItems="center",$.style.marginTop="6px",$.style.gap="8px";let U=document.createElement("div");U.textContent="Follow",U.style.fontSize="14px",U.style.opacity="0.85";let le=t.switch(Ce.isFollowing(w.id));le.addEventListener("change",async()=>{try{le.checked?(await Ce.startFollowing(w.id),await Pe("Follow","Follow activ\xE9.","success")):(Ce.stopFollowing(),await Pe("Follow","Follow d\xE9sactiv\xE9.","info"))}catch(X){await Pe("Follow",X?.message||"Erreur sur le follow.","error"),le.checked=!le.checked}}),$.appendChild(U),$.appendChild(le),i.appendChild(j),i.appendChild($)}let d=[],y="";function P(L){return L.map(w=>`${w.id}|${w.name??""}|${w.isConnected?1:0}|${w.inventory?.items?.length??0}`).join(";")}async function M(L=!0){let w=o.getSelected()?.id??null,T=await qr(),I=P(T);if(I===y)return;y=I,d=T,o.setItems(d.map(Hr));let v=L&&w&&d.some(x=>x.id===w)?w:d[0]?.id??null;v!==null?o.select(v):u(null)}await Ce.onChange(()=>{M(!0).catch(()=>{})}),await M(!0)}function Gn(e,t){e.textContent=t,e.style.flex="1",e.style.margin="0",e.style.padding="6px 10px",e.style.borderRadius="8px",e.style.border="1px solid #4445",e.style.background="#1f2328",e.style.color="#e7eef7",e.style.justifyContent="center",e.onmouseenter=()=>e.style.borderColor="#6aa1",e.onmouseleave=()=>e.style.borderColor="#4445"}function Wr(e,t){let n=document.createElement("div");n.style.display="grid",n.style.justifyItems="center",n.style.gap="8px",n.style.textAlign="center",n.style.border="1px solid #4446",n.style.borderRadius="10px",n.style.padding="10px",n.style.background="#1f2328",n.style.boxShadow="0 0 0 1px #0002 inset",n.style.width="min(720px, 100%)";let r=document.createElement("div");return r.textContent=e,r.style.fontWeight="600",r.style.opacity="0.95",n.append(r,t),n}var $n=e=>{let t=new Date(e),n=(r,a=2)=>String(r).padStart(a,"0");return`${n(t.getHours())}:${n(t.getMinutes())}:${n(t.getSeconds())}.${String(t.getMilliseconds()).padStart(3,"0")}`};var Pt=null,Xt=new Set;function Nr(e){let t=String(e||""),n=(J.getAbilityNameWithoutLevel?.(t)||"").replace(/[\s\-_]+/g,"").toLowerCase(),r=a=>t.startsWith(a)||n===a.toLowerCase();if(r("ProduceScaleBoost"))return{bg:"rgba(34,139,34,0.9)",hover:"rgba(34,139,34,1)"};if(r("PlantGrowthBoost"))return{bg:"rgba(0,128,128,0.9)",hover:"rgba(0,128,128,1)"};if(r("EggGrowthBoost"))return{bg:"rgba(180,90,240,0.9)",hover:"rgba(180,90,240,1)"};if(r("PetAgeBoost"))return{bg:"rgba(147,112,219,0.9)",hover:"rgba(147,112,219,1)"};if(r("PetHatchSizeBoost"))return{bg:"rgba(128,0,128,0.9)",hover:"rgba(128,0,128,1)"};if(r("PetXpBoost"))return{bg:"rgba(30,144,255,0.9)",hover:"rgba(30,144,255,1)"};if(r("HungerBoost"))return{bg:"rgba(255,20,147,0.9)",hover:"rgba(255,20,147,1)"};if(r("SellBoost"))return{bg:"rgba(220,20,60,0.9)",hover:"rgba(220,20,60,1)"};if(r("CoinFinder"))return{bg:"rgba(180,150,0,0.9)",hover:"rgba(180,150,0,1)"};if(r("ProduceMutationBoost"))return{bg:"rgba(138,43,226,0.9)",hover:"rgba(138,43,226,1)"};if(r("DoubleHarvest"))return{bg:"rgba(0,120,180,0.9)",hover:"rgba(0,120,180,1)"};if(r("ProduceEater"))return{bg:"rgba(255,69,0,0.9)",hover:"rgba(255,69,0,1)"};if(r("ProduceRefund"))return{bg:"rgba(255,99,71,0.9)",hover:"rgba(255,99,71,1)"};if(r("PetMutationBoost"))return{bg:"rgba(156,65,181,0.9)",hover:"rgba(156,65,181,1)"};if(r("HungerRestore"))return{bg:"rgba(255,105,180,0.9)",hover:"rgba(255,105,180,1)"};if(r("PetRefund"))return{bg:"rgba(0,80,120,0.9)",hover:"rgba(0,80,120,1)"};if(r("Copycat"))return{bg:"rgba(255,140,0,0.9)",hover:"rgba(255,140,0,1)"};if(r("GoldGranter"))return{bg:"linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",hover:"linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)"};if(r("RainbowGranter"))return{bg:"linear-gradient(45deg, rgba(200,0,0,0.9), rgba(200,120,0,0.9), rgba(160,170,30,0.9), rgba(60,170,60,0.9), rgba(50,170,170,0.9), rgba(40,150,180,0.9), rgba(20,90,180,0.9), rgba(70,30,150,0.9))",hover:"linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))"};if(r("SeedFinderIV"))return{bg:"linear-gradient(130deg, rgba(0,180,216,0.9) 0%, rgba(124,42,232,0.9) 40%, rgba(160,0,126,0.9) 60%, rgba(255,215,0,0.9) 100%)",hover:"linear-gradient(130deg, rgba(0,180,216,1) 0%, rgba(124,42,232,1) 40%, rgba(160,0,126,1) 60%, rgba(255,215,0,1) 100%)"};if(r("SeedFinder")){let a=t.replace(/.*?([IVX]+)$/,"$1");return a==="II"?{bg:"rgba(183,121,31,0.9)",hover:"rgba(183,121,31,1)"}:a==="III"?{bg:"rgba(139,62,152,0.9)",hover:"rgba(139,62,152,1)"}:{bg:"rgba(94,172,70,0.9)",hover:"rgba(94,172,70,1)"}}return{bg:"rgba(100,100,100,0.9)",hover:"rgba(150,150,150,1)"}}function Or(e,t){let n=c=>{let s=t?.root??e;s.style.display=c?"none":""};e.innerHTML="";let r=(c,s)=>{c.textContent=s,c.style.width="100%",c.style.margin="0",c.style.padding="10px",c.style.borderRadius="8px",c.style.border="1px solid #4445",c.style.background="#1f2328",c.style.color="#e7eef7",c.style.justifyContent="center",c.onmouseenter=()=>c.style.borderColor="#6aa1",c.onmouseleave=()=>c.style.borderColor="#4445"},a=(c,s)=>Wr(c,s),i=()=>{let c=document.createElement("div");return c.style.display="flex",c.style.alignItems="center",c.style.flexWrap="wrap",c.style.gap="8px",c},o=document.createElement("div");o.style.display="grid",o.style.gridTemplateColumns="minmax(220px, 280px) minmax(0, 1fr)",o.style.gap="10px",o.style.alignItems="stretch",o.style.height="54vh",o.style.overflow="hidden",e.appendChild(o);let l=document.createElement("div");l.style.display="grid",l.style.gridTemplateRows="1fr auto",l.style.gap="8px",l.style.minHeight="0",o.appendChild(l);let u=document.createElement("div");u.style.display="flex",u.style.flexDirection="column",u.style.gap="6px",u.style.overflow="auto",u.style.padding="6px",u.style.border="1px solid #4445",u.style.borderRadius="10px",u.style.scrollBehavior="smooth",u.style.minHeight="0",l.appendChild(u);let d=document.createElement("div");d.style.display="flex",d.style.gap="6px",l.appendChild(d);let y=document.createElement("button");y.id="pets.teams.new";let P=document.createElement("button");P.id="pets.teams.duplicate";let M=document.createElement("button");M.id="pets.teams.delete",r(y,"New"),r(P,"Duplicate"),r(M,"Delete"),d.append(y,P,M);let L=[],w=null,T=!1,I=null,v=null,x=0;function B(){return L.find(c=>c.id===w)||null}function D(c){let s=Array.from(u.children);if(!s.length)return 0;let b=s[0].getBoundingClientRect();if(c<b.top+b.height/2)return 0;for(let p=0;p<s.length;p++){let E=s[p].getBoundingClientRect(),g=E.top+E.height/2;if(c<g)return p}return s.length}function j(c){let s=document.createElement("span");s.style.display="inline-flex",s.style.alignItems="center",s.style.lineHeight="1";let b=8,p=12,E=3,g=Array.isArray(c)?c.filter(Boolean):[];if(!g.length){let R=document.createElement("span");return R.textContent="No ability",R.style.opacity="0.75",R.style.fontSize="12px",s.appendChild(R),s}return g.forEach((R,Y)=>{let q=document.createElement("span"),{bg:W,hover:ee}=Nr(R);q.title=J.getAbilityName(R)||R,q.setAttribute("aria-label",q.title),Object.assign(q.style,{display:"inline-block",width:`${p}px`,height:`${p}px`,borderRadius:`${E}px`,marginRight:Y===g.length-1?"0":`${b}px`,background:W,transition:"transform 80ms ease, box-shadow 120ms ease, background 120ms ease",cursor:"default"}),q.onmouseenter=()=>{q.style.background=ee,q.style.transform="scale(1.08)",q.style.boxShadow="0 0 0 1px #0006 inset, 0 0 0 1px #ffffff33"},q.onmouseleave=()=>{q.style.background=W,q.style.transform="none",q.style.boxShadow="0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a"},s.appendChild(q)}),s}function $(){let c=Array.from(u.children);if(c.forEach(p=>p.style.transform=""),I===null||v===null)return;let s=I,b=v;c.forEach((p,E)=>{p.style.transition="transform 120ms ease",E!==s&&(b>s&&E>s&&E<b&&(p.style.transform=`translateY(${-x}px)`),b<s&&E>=b&&E<s&&(p.style.transform=`translateY(${x}px)`))})}function U(){Array.from(u.children).forEach(c=>{c.style.transform="",c.style.transition=""})}async function le(){Pt=null,Xt=new Set;try{let c=await J.getPets(),s=Array.isArray(c)?c.map(b=>String(b?.slot?.id||"")).filter(Boolean):[];Xt=new Set(s);for(let b of L){let p=(b.slots||[]).filter(Boolean);if(p.length!==s.length)continue;let E=!0;for(let g of p)if(!Xt.has(g)){E=!1;break}if(E){Pt=b.id;break}}}catch{}}async function X(c=!1){if(c||await le(),U(),I=null,v=null,x=0,u.innerHTML="",!L.length){let s=document.createElement("div");s.textContent="No teams yet. Create one!",s.style.opacity="0.75",s.style.textAlign="center",s.style.padding="8px",u.appendChild(s),ue(null);return}L.forEach((s,b)=>{let p=document.createElement("div"),E=s.id===Pt;p.dataset.index=String(b),p.textContent="",p.style.height="36px",p.style.lineHeight="36px",p.style.padding="0 10px",p.style.border="1px solid #ffffff15",p.style.borderRadius="6px",p.style.cursor="pointer",p.style.fontSize="13px",p.style.overflow="hidden",p.style.whiteSpace="nowrap",p.style.textOverflow="ellipsis",p.style.display="flex",p.style.flex="0 0 auto",p.style.gap="8px",p.style.alignItems="center",p.style.background=s.id===w?"#2a313a":"#1f2328";let g=document.createElement("span");g.style.width="10px",g.style.height="10px",g.style.borderRadius="50%",g.style.boxShadow="0 0 0 1px #0006 inset",g.style.background=E?"#48d170":"#64748b",g.title=E?"This team is currently active":"Inactive team";let R=document.createElement("span");R.textContent=s.name||"(unnamed)",R.style.overflow="hidden",R.style.textOverflow="ellipsis",R.style.whiteSpace="nowrap",p.append(g,R);let Y=document.createElement("span");Y.className="qmm-grab",Y.title="Drag to reorder",Y.innerHTML="&#8942;",Y.draggable=!0,p.onmouseenter=()=>p.style.borderColor="#6aa1",p.onmouseleave=()=>p.style.borderColor="#ffffff15",p.onclick=q=>{if(q.__byDrag)return;w!==s.id&&(w=s.id,X()),ue(B())},Y.addEventListener("dragstart",q=>{I=b,x=p.getBoundingClientRect().height,p.classList.add("qmm-dragging"),q.dataTransfer?.setData("text/plain",String(b)),q.dataTransfer&&(q.dataTransfer.effectAllowed="move");try{let W=p.cloneNode(!0);W.style.width=`${p.getBoundingClientRect().width}px`,W.style.position="absolute",W.style.top="-9999px",document.body.appendChild(W),q.dataTransfer.setDragImage(W,W.offsetWidth/2,W.offsetHeight/2),setTimeout(()=>document.body.removeChild(W),0)}catch{}}),Y.addEventListener("dragend",()=>{p.classList.remove("qmm-dragging"),U(),I=null,v=null}),p.addEventListener("dragover",q=>{if(q.preventDefault(),q.dataTransfer&&(q.dataTransfer.dropEffect="move"),I===null)return;let W=Number(q.currentTarget.dataset.index||-1);if(W<0)return;let ee=p.getBoundingClientRect(),K=ee.top+ee.height/2,z=q.clientY<K?W:W+1,f=Math.max(0,Math.min(L.length,z));v!==f&&(v=f,$());let h=28,O=u.getBoundingClientRect();q.clientY<O.top+h?u.scrollTop-=18:q.clientY>O.bottom-h&&(u.scrollTop+=18)}),p.addEventListener("drop",q=>{if(q.preventDefault(),q.__byDrag=!0,I===null)return;let W=v??D(q.clientY);if(W>I&&(W-=1),W=Math.max(0,Math.min(L.length-1,W)),W!==I){let ee=L.slice(),[K]=ee.splice(I,1);ee.splice(W,0,K),L=ee;try{J.setTeamsOrder(L.map(z=>z.id))}catch{}}U(),I=null,v=null,x=0,X()}),p.onclick=q=>{if(q.__byDrag)return;w!==s.id&&(w=s.id,X()),ue(B())},p.appendChild(Y),u.appendChild(p)})}u.addEventListener("dragover",c=>{if(c.preventDefault(),c.dataTransfer&&(c.dataTransfer.dropEffect="move"),I===null)return;let s=D(c.clientY);v!==s&&(v=s,$());let b=28,p=u.getBoundingClientRect();c.clientY<p.top+b?u.scrollTop-=18:c.clientY>p.bottom-b&&(u.scrollTop+=18)}),u.addEventListener("drop",c=>{if(c.preventDefault(),I===null)return;let s=v??D(c.clientY);if(s>I&&(s-=1),s=Math.max(0,Math.min(L.length-1,s)),s!==I){let b=L.slice(),[p]=b.splice(I,1);b.splice(s,0,p),L=b;try{J.setTeamsOrder(L.map(E=>E.id))}catch{}}U(),I=null,v=null,x=0,X()}),y.onclick=()=>{w=J.createTeam("New Team").id,X(),ue(B())},P.onclick=()=>{if(!w)return;let c=J.duplicateTeam(w);c&&(w=c.id,X(),ue(B()))},M.onclick=()=>{!w||J.deleteTeam(w)};let ce=null;(async()=>{try{ce=await J.onTeamsChangeNow(async c=>{L=Array.isArray(c)?c.slice():[],w&&!L.some(s=>s.id===w)&&(w=L[0]?.id??null),!w&&L.length&&(w=L[0].id),X(),await J.getInventoryPets(),await ue(B())})}catch{}})();let ge=document.createElement("div");ge.style.display="grid",ge.style.gridTemplateRows="auto 1fr",ge.style.gap="10px",ge.style.minHeight="0",o.appendChild(ge);let fe=document.createElement("div");fe.style.display="flex",fe.style.alignItems="center",fe.style.gap="8px";let Te=document.createElement("div");Te.textContent="Team editor \u2014 ",Te.style.fontWeight="700",Te.style.fontSize="14px";let S=document.createElement("button");S.id="pets.teams.useThisTeam",S.textContent="Use this team",S.style.padding="6px 10px",S.style.borderRadius="8px",S.style.border="1px solid #4445",S.style.background="#1f2328",S.style.color="#e7eef7",S.style.cursor="pointer",S.onmouseenter=()=>S.style.borderColor="#6aa1",S.onmouseleave=()=>S.style.borderColor="#4445",S.disabled=!0;let H=document.createElement("button");H.id="pets.teams.save",H.textContent="Save",H.style.padding="6px 10px",H.style.borderRadius="8px",H.style.border="1px solid #4445",H.style.background="#1f2328",H.style.color="#e7eef7",H.style.cursor="pointer",H.onmouseenter=()=>H.style.borderColor="#6aa1",H.onmouseleave=()=>H.style.borderColor="#4445",H.disabled=!0,fe.append(Te,S,H),ge.appendChild(fe);let C=document.createElement("div");C.style.border="1px solid #4445",C.style.borderRadius="10px",C.style.padding="10px",C.style.display="flex",C.style.flexDirection="column",C.style.gap="12px",C.style.overflow="auto",C.style.minHeight="0",C.style.background="#0f1318",ge.appendChild(C);let F=(()=>{let c=i(),s=t.inputText("Team name","");return s.id="pets.teams.editor.name",s.style.minWidth="260px",c.append(s),C.appendChild(a("Team name",c)),{nameInput:s}})(),ie=(()=>{let c=document.createElement("div");c.style.display="grid",c.style.gap="10px",c.style.justifyItems="center";let s=document.createElement("div");s.style.display="flex",s.style.flexWrap="wrap",s.style.alignItems="center",s.style.justifyContent="center",s.style.gap="10px";let b=(z,f,h,O=!1)=>{let N=document.createElement("label");N.style.display="inline-flex",N.style.alignItems="center",N.style.gap="6px";let G=t.radio(z,f,O),Q=document.createElement("span");return Q.textContent=h,N.append(G,Q),{wrap:N,input:G}},p=b("pets-search-mode","ability","Ability",!0),E=b("pets-search-mode","species","Species",!1);s.append(p.wrap,E.wrap);let g=document.createElement("select");g.className="qmm-input",g.id="pets.teams.filter.select",g.style.minWidth="260px";let R="ability",Y=()=>R,q=z=>{R=z,p.input.checked=z==="ability",E.input.checked=z==="species",p.input.type="radio",E.input.type="radio",p.input.name="pets-search-mode",E.input.name="pets-search-mode"},W=z=>{g.innerHTML="";let f=document.createElement("option");f.value="",f.textContent="\u2014 No filter \u2014",g.appendChild(f),z.forEach(h=>{let O=document.createElement("option");O.value=h,O.textContent=h,g.appendChild(O)})},ee=async()=>{let z=await J.getInventoryPets().catch(()=>[]),f=Y();if(Y()==="ability"){let h=new Set;for(let G of z){let Q=Array.isArray(G?.abilities)?G.abilities.filter(Boolean):[];for(let ae of Q){let Le=J.getAbilityNameWithoutLevel(ae);Le&&h.add(Le)}}let O=Array.from(h).sort((G,Q)=>G.localeCompare(Q));g.innerHTML="";let N=document.createElement("option");N.value="",N.textContent="\u2014 No filter \u2014",g.appendChild(N),O.forEach(G=>{let Q=document.createElement("option");Q.value=G,Q.textContent=G,g.appendChild(Q)})}else{let h=new Set;for(let G of z){let Q=String(G?.petSpecies||"").trim();Q&&h.add(Q)}let O=Array.from(h).sort((G,Q)=>G.localeCompare(Q));g.innerHTML="";let N=document.createElement("option");N.value="",N.textContent="\u2014 No filter \u2014",g.appendChild(N),O.forEach(G=>{let Q=document.createElement("option");Q.value=G,Q.textContent=G.charAt(0).toUpperCase()+G.slice(1),g.appendChild(Q)})}},K=()=>{let z=B();if(!z)return;let f=(g.value||"").trim(),h=Y()==="ability"?f?`ab:${f}`:"":f?`sp:${f}`:"";J.setTeamSearch(z.id,h)};return p.input.addEventListener("change",async()=>{p.input.checked&&(q("ability"),await ee(),g.value="",K())}),E.input.addEventListener("change",async()=>{E.input.checked&&(q("species"),await ee(),g.value="",K())}),g.addEventListener("change",K),c.append(s,g),C.appendChild(a("Search",c)),{getMode:Y,setMode:q,select:g,rebuild:ee,apply:K,setFromSearchString(z){let f=(z||"").match(/^(ab|sp):\s*(.*)$/i);if(!f){q("ability"),g.value="";return}let h=f[1].toLowerCase()==="ab"?"ability":"species";q(h),g.value=f[2]||""}}})(),de=(()=>{let c=document.createElement("div");c.style.display="grid",c.style.gridTemplateColumns="1fr",c.style.rowGap="10px",c.style.justifyItems="center";let s=ee=>{let K=document.createElement("div"),z=28;K.style.display="grid",K.style.gridTemplateColumns=`minmax(0,1fr) ${z}px ${z}px`,K.style.alignItems="center",K.style.gap="8px",K.style.width="min(560px, 100%)",K.style.border="1px solid #4445",K.style.borderRadius="10px",K.style.padding="8px 10px",K.style.background="#0f1318";let f=document.createElement("div");f.style.display="flex",f.style.flexDirection="column",f.style.gap="6px",f.style.minWidth="0";let h=document.createElement("div");h.style.fontWeight="700",h.textContent="None",h.style.overflow="hidden",h.style.textOverflow="ellipsis",h.style.whiteSpace="nowrap";let O=j([]);O.style.display="inline-block",f.append(h,O);let N=document.createElement("button");N.textContent="+",Object.assign(N.style,{width:`${z}px`,minWidth:`${z}px`,height:`${z}px`,padding:"0",fontSize:"16px",lineHeight:"1",borderRadius:"10px",boxShadow:"none",display:"grid",placeItems:"center"}),N.title="Choose a pet",N.setAttribute("aria-label","Choose a pet");let G=document.createElement("button");G.textContent="\u2212",Object.assign(G.style,{width:`${z}px`,minWidth:`${z}px`,height:`${z}px`,padding:"0",fontSize:"16px",lineHeight:"1",borderRadius:"10px",boxShadow:"none",display:"grid",placeItems:"center"}),G.title="Remove this pet",G.setAttribute("aria-label","Remove this pet"),K.append(f,N,G);function Q(ae){if(!ae){h.textContent="None";let It=j([]);It.style.display="inline-block",f.replaceChild(It,f.children[1]),O=It;return}let Le=ae.petSpecies?ae.petSpecies.charAt(0).toUpperCase()+ae.petSpecies.slice(1):"",it=ae.name?.trim()||Le||"Pet";h.textContent=it,h.textContent=it;let Tt=Array.isArray(ae.abilities)?ae.abilities.filter(Boolean):[],ze=j(Tt);ze.style.display="inline-block",f.replaceChild(ze,f.children[1]),O=ze}return N.onclick=async()=>{let ae=B();if(ae){N.disabled=!0,G.disabled=!0,n(!0);try{await J.chooseSlotPet(ae.id,ee),await V(B())}finally{n(!1),N.disabled=!1,G.disabled=!1}}},G.onclick=async()=>{let ae=B();if(!ae)return;let Le=ae.slots.slice(0,3);Le[ee]=null,J.saveTeam({id:ae.id,slots:Le}),await V(ae)},{root:K,nameEl:h,abilitiesEl:O,btnChoose:N,btnClear:G,update:Q}},b=s(0),p=s(1),E=s(2);c.append(b.root,p.root,E.root);let g=document.createElement("div");g.style.display="flex",g.style.gap="6px",g.style.justifyContent="center";let R=document.createElement("button");r(R,"Current active"),R.id="pets.teams.useCurrent";let Y=document.createElement("button");r(Y,"Clear slots"),Y.id="pets.teams.clearSlots";let q="#0f1318";g.append(R,Y),Object.assign(R.style,{width:"auto",fontSize:"16px",borderRadius:"10px",background:q,boxShadow:"none"}),Object.assign(Y.style,{width:"auto",fontSize:"16px",borderRadius:"10px",background:q,boxShadow:"none"});let W=document.createElement("div");return W.style.display="flex",W.style.flexDirection="column",W.style.gap="8px",W.append(c,g),C.appendChild(a("Active pets (3 slots)",W)),{rows:[b,p,E],btnUseCurrent:R,btnClear:Y}})();async function V(c){let s=c??B();if(!s)return;let b=await J.getInventoryPets().catch(()=>[]),p=new Map;for(let E of b)E?.id!=null&&p.set(String(E.id),E);[0,1,2].forEach(E=>{let g=s.slots[E]||"",R=g&&p.get(g)||null;de.rows[E].update(R)})}async function ue(c){let s=!!c;if(F.nameInput.disabled=!s,de.btnClear.disabled=!s,de.btnUseCurrent.disabled=!s,S.disabled=!s,H.disabled=!s,ie.setMode("ability"),await ie.rebuild(),s){let b=J.getTeamSearch(c.id)||"";ie.setFromSearchString(b),ie.apply()}if(!s){de.rows.forEach(b=>b.update(null)),F.nameInput.value="";return}F.nameInput.value=String(c.name||""),await V(c)}F.nameInput.addEventListener("keydown",c=>{c.key==="Enter"&&c.currentTarget.blur()}),F.nameInput.addEventListener("blur",()=>{let c=B();if(!c)return;let s=F.nameInput.value.trim();s!==c.name&&J.saveTeam({id:c.id,name:s})}),de.btnUseCurrent.onclick=async()=>{let c=B();if(c)try{let s=await J.getPets(),p=(Array.isArray(s)?s:[]).map(g=>String(g?.slot?.id||"")).filter(g=>!!g).slice(0,3),E=[p[0]||null,p[1]||null,p[2]||null];J.saveTeam({id:c.id,slots:E}),await V(c)}catch{}},de.btnClear.onclick=async()=>{let c=B();c&&(J.saveTeam({id:c.id,slots:[null,null,null]}),await V(c))},H.onclick=()=>{let c=B();if(!c)return;let s=F.nameInput.value.trim(),b=c.slots.slice(0,3);J.saveTeam({id:c.id,name:s,slots:b}),V(c)};function Oe(c,s){if(c.length!==s.length)return!1;let b=new Set(c);for(let p of s)if(!b.has(p))return!1;return!0}async function m(c,s=2e3){let b=(c.slots||[]).filter(Boolean),p=performance.now();for(;performance.now()-p<s;){let E=await J.getPets().catch(()=>null),g=Array.isArray(E)?E.map(R=>String(R?.slot?.id||"")).filter(Boolean):[];if(Oe(g,b))return!0;await new Promise(R=>setTimeout(R,80))}return!1}S.onclick=async()=>{let c=B();if(c)try{T=!0,Pt=c.id,await X(!0),await J.useTeam(c.id),await m(c),await ue(B()),await X()}catch(s){console.warn("[Pets] Use this team failed:",s),await X()}finally{T=!1}};let k=null;(async()=>{try{V(),k=await J.onInventoryPetsChange(async()=>{T||await V(B())})}catch{}})(),e.__cleanup__=(()=>{let c=e.__cleanup__;return()=>{try{ce?.()}catch{}try{k?.()}catch{}try{c?.()}catch{}}})()}function Fr(e,t){e.innerHTML="";let n=document.createElement("div");n.style.display="grid",n.style.gridTemplateRows="auto 1fr",n.style.gap="10px",n.style.height="54vh",e.appendChild(n);let r=document.createElement("div");r.style.display="flex",r.style.flexWrap="wrap",r.style.alignItems="center",r.style.gap="8px",r.style.border="1px solid #4445",r.style.borderRadius="10px",r.style.padding="8px 10px",r.style.background="#0f1318",n.appendChild(r);let a=document.createElement("select");a.className="qmm-input",a.style.minWidth="200px",a.id="pets.logs.filter.ability";let i=document.createElement("select");i.className="qmm-input",i.style.minWidth="140px",i.id="pets.logs.sort",[["desc","Newest first"],["asc","Oldest first"]].forEach(([S,H])=>{let C=document.createElement("option");C.value=S,C.textContent=H,i.appendChild(C)}),i.value="desc";let o=t.inputText("search (pet / ability / details)","");o.id="pets.logs.search",o.style.minWidth="220px";let l=document.createElement("button");Gn(l,"Copy"),l.id="pets.logs.copy";let u=document.createElement("button");Gn(u,"Clear"),u.id="pets.logs.clear",r.append(t.label("Ability"),a,t.label("Sort"),i,o,l,u);let d=document.createElement("div");d.style.border="1px solid #4445",d.style.borderRadius="10px",d.style.padding="10px",d.style.background="#0f1318",d.style.overflow="hidden",d.style.display="grid",d.style.gridTemplateRows="auto 1fr",d.style.minHeight="0",n.appendChild(d);let y=document.createElement("div");y.style.display="grid",y.style.gridTemplateColumns="140px 220px 200px minmax(0,1fr)",y.style.columnGap="0",y.style.borderBottom="1px solid #ffffff1a",y.style.padding="0 0 6px 0";function P(S,H="center"){let C=document.createElement("div");return C.textContent=S,C.style.fontWeight="600",C.style.opacity="0.9",C.style.padding="6px 8px",C.style.textAlign=H,C}y.append(P("Time"),P("Pet"),P("Ability"),P("Details","left")),d.appendChild(y);let M=document.createElement("div");M.style.display="grid",M.style.gridTemplateColumns="140px 220px 200px minmax(0,1fr)",M.style.gridAutoRows="auto",M.style.alignContent="start",M.style.overflow="auto",M.style.width="100%",M.style.minHeight="0",d.appendChild(M);let L=[],w=new Set,T="",I="desc",v="",x=new Intl.NumberFormat(void 0,{maximumFractionDigits:0});function B(S){return Math.round(S)}function D(S){if(typeof S=="number")return B(S);if(S==null)return S;if(Array.isArray(S))return S.map(D);if(typeof S=="object"){let H={};for(let C of Object.keys(S))H[C]=D(S[C]);return H}return S}function j(S,H=0){if(S==null)return"";if(typeof S=="number")return x.format(S);if(typeof S=="string")return S;if(typeof S=="boolean")return String(S);if(Array.isArray(S))return S.map(C=>j(C,H+1)).join(", ");if(typeof S=="object"){let C=Object.entries(S);return C.length?C.map(([F,ie])=>{if(ie!==null&&typeof ie=="object")try{let de=D(ie);return`${F}: ${JSON.stringify(de)}`}catch{return`${F}: ${String(ie)}`}return`${F}: ${j(ie,H+1)}`}).join(", "):""}return String(S)}function $(S){try{let H=D(S);return j(H)}catch{try{return JSON.stringify(S)}catch{return String(S??"")}}}function U(S){try{return $(S).toLowerCase()}catch{try{return JSON.stringify(S).toLowerCase()}catch{return""}}}function le(){let S=a.value;a.innerHTML="";let H=[["","All abilities"],...Array.from(w).sort().map(C=>[C,C])];for(let[C,F]of H){let ie=document.createElement("option");ie.value=C,ie.textContent=F,a.appendChild(ie)}a.value=H.some(([C])=>C===S)?S:""}function X(S,H="center"){let C=document.createElement("div");return C.textContent=S,C.style.padding="6px 8px",C.style.textAlign=H,C.style.whiteSpace=H==="left"?"pre-wrap":"normal",C.style.wordBreak=H==="left"?"break-word":"normal",C.style.borderBottom="1px solid #ffffff12",C}function ce(S){let H=X($n(S.performedAt),"center"),C=S.petName||S.species||"Pet",F=X(C,"center"),ie=X(S.abilityId,"center"),de=$(S.data),V=X(de,"left");M.append(H,F,ie,V)}function ge(){let S=C=>String(C??"").toLowerCase().replace(/\s+/g,"").replace(/([ivx]+)$/i,""),H=L.slice();if(T&&T.trim()){let C=S(T);H=H.filter(F=>{let ie=S(F.abilityId),de=S(J.getAbilityNameWithoutLevel(F.abilityId));return ie===C||de===C})}if(v&&v.trim()){let C=v.toLowerCase();H=H.filter(F=>{let ie=(F.petName||F.species||"").toLowerCase(),de=(J.getAbilityNameWithoutLevel(F.abilityId)||"").toLowerCase(),V=(F.abilityId||"").toLowerCase(),ue=U(F.data);return ie.includes(C)||de.includes(C)||V.includes(C)||ue.includes(C)||(F.petId||"").toLowerCase().includes(C)})}return H.sort((C,F)=>I==="asc"?C.performedAt-F.performedAt:F.performedAt-C.performedAt),H}function fe(){M.innerHTML="";let S=ge();if(!S.length){let H=document.createElement("div");H.textContent="No logs yet.",H.style.opacity="0.75",H.style.gridColumn="1 / -1",H.style.padding="8px",M.appendChild(H);return}S.forEach(ce),M.scrollTop=M.scrollHeight+32}a.onchange=()=>{T=a.value,fe()},i.onchange=()=>{I=i.value||"desc",fe()},o.addEventListener("input",()=>{v=o.value.trim(),fe()}),u.onclick=()=>{try{J.clearAbilityLogs()}catch{}},l.onclick=async()=>{let S=ge().map(C=>({time:$n(C.performedAt),pet:C.petName||C.species||C.petId,petId:C.petId,ability:C.abilityId,data:D(C.data)})),H=JSON.stringify(S,null,2);try{await navigator.clipboard.writeText(H)}catch{}};let Te=null;(async()=>{try{w=new Set(J.getSeenAbilityIds()),le(),Te=J.onAbilityLogs(S=>{L=S.map(H=>({petId:H.petId,petName:H.name??null,species:H.species??null,abilityId:H.abilityId,data:H.data,performedAt:H.performedAt})),w=new Set(J.getSeenAbilityIds()),le(),fe()})}catch{}})(),e.__cleanup__=()=>{try{Te?.()}catch{}},fe()}function jn(e){let t=new Ae({id:"pets",compact:!0});t.mount(e),t.addTab("manager","Manager",n=>Or(n,t)),t.addTab("logs","Logs",n=>Fr(n,t))}function _r(){let e=document.createElement("div");return e.style.display="flex",e.style.flexWrap="wrap",e.style.justifyContent="center",e.style.alignItems="center",e.style.gap="8px",e}var Yn="qws:player:ghostMode",Dr=(e,t=!1)=>{try{return localStorage.getItem(e)==="1"}catch{return t}},Gr=(e,t)=>{try{localStorage.setItem(e,t?"1":"0")}catch{}};function $r(){let e="qws:ghost:delayMs",n=()=>{try{return Math.max(5,Math.floor(Number(localStorage.getItem(e))||50))}catch{return 50}},r=n();function a(v){r=Math.max(5,Math.floor(v||50));try{localStorage.setItem(e,String(r))}catch{}}let i=new Set,o=v=>{let x=v.key.toLowerCase();(x==="z"||x==="q"||x==="s"||x==="d"||x==="w"||x==="a"||v.key==="ArrowUp"||v.key==="ArrowDown"||v.key==="ArrowLeft"||v.key==="ArrowRight")&&(v.preventDefault(),v.stopImmediatePropagation(),!v.repeat&&i.add(x))},l=v=>{let x=v.key.toLowerCase();(x==="z"||x==="q"||x==="s"||x==="d"||x==="w"||x==="a"||v.key==="ArrowUp"||v.key==="ArrowDown"||v.key==="ArrowLeft"||v.key==="ArrowRight")&&(v.preventDefault(),v.stopImmediatePropagation(),i.delete(x))},u=()=>{i.clear()},d=()=>{document.hidden&&i.clear()};function y(){let v=0,x=0;return(i.has("z")||i.has("w")||i.has("arrowup"))&&(x-=1),(i.has("s")||i.has("arrowdown"))&&(x+=1),(i.has("q")||i.has("a")||i.has("arrowleft"))&&(v-=1),(i.has("d")||i.has("arrowright"))&&(v+=1),v&&(v=v>0?1:-1),x&&(x=x>0?1:-1),{dx:v,dy:x}}let P=null,M=0,L=0,w=!1;async function T(v,x){let B;try{B=await me.getPosition()}catch{}let D=Math.round(B?.x??0),j=Math.round(B?.y??0);try{await me.move(D+v,j+x)}catch{}}function I(v){M||(M=v);let x=v-M;M=v;let{dx:B,dy:D}=y();if(L+=x,B===0&&D===0){L=Math.min(L,r*4),P=requestAnimationFrame(I);return}L>=r&&!w&&(L-=r,w=!0,(async()=>{try{await T(B,D)}finally{w=!1}})()),L=Math.min(L,r*4),P=requestAnimationFrame(I)}return{start(){P===null&&(M=0,L=0,w=!1,window.addEventListener("keydown",o,{capture:!0}),window.addEventListener("keyup",l,{capture:!0}),window.addEventListener("blur",u),document.addEventListener("visibilitychange",d),P=requestAnimationFrame(I))},stop(){P!==null&&(cancelAnimationFrame(P),P=null),i.clear(),window.removeEventListener("keydown",o,{capture:!0}),window.removeEventListener("keyup",l,{capture:!0}),window.removeEventListener("blur",u),document.removeEventListener("visibilitychange",d)},setSpeed:a,getSpeed:n}}async function Un(e){let t=new Ae({id:"misc",compact:!0});t.mount(e);let n=t.root.querySelector(".qmm-views");n.innerHTML="",n.style.display="grid",n.style.gridTemplateRows="auto 1fr",n.style.gap="10px",n.style.minHeight="0";let r=document.createElement("div");r.style.display="flex",r.style.alignItems="center",r.style.gap="10px";let a=t.label("Player controls");a.style.fontWeight="700",a.style.fontSize="14px",r.append(a),n.appendChild(r);let i=document.createElement("div");i.className="qmm-card",i.style.display="flex",i.style.flexDirection="column",i.style.gap="12px",i.style.alignItems="center",i.style.overflow="auto",i.style.minHeight="0",n.appendChild(i);let o=_r(),l=t.switch(Dr(Yn));l.id="player.ghostMode";let u=t.label("Ghost mode"),d=t.label("Move delay (ms)"),y=t.inputNumber(10,1e3,5,50);y.id="player.moveDelay",o.append(l,u,d,y.wrap??y),i.appendChild(o);let P=$r();y.value=String(P.getSpeed?.()??50),y.addEventListener("change",()=>{let M=Math.max(10,Math.min(1e3,Math.floor(Number(y.value)||50)));y.value=String(M),P.setSpeed?.(M)}),l.checked&&P.start(),l.onchange=()=>{let M=!!l.checked;Gr(Yn,M),M?P.start():P.stop()},i.__cleanup__=()=>{try{P.stop()}catch{}}}function zn(e){let t=["visibilitychange","blur","focus","focusout","pagehide","freeze","resume","mouseleave","mouseenter"],n=[];function r(){let $=(U,le)=>{let X=ce=>{ce.stopImmediatePropagation(),ce.preventDefault?.()};U.addEventListener(le,X,{capture:!0}),n.push({t:le,h:X,target:U})};t.forEach(U=>{$(document,U),$(window,U)})}function a(){for(let{t:$,h:U,target:le}of n)try{le.removeEventListener($,U,{capture:!0})}catch{}n.length=0}let i=Object.getPrototypeOf(document),o={hidden:Object.getOwnPropertyDescriptor(i,"hidden"),visibilityState:Object.getOwnPropertyDescriptor(i,"visibilityState"),hasFocus:document.hasFocus?document.hasFocus.bind(document):null};function l(){try{Object.defineProperty(i,"hidden",{configurable:!0,get(){return!1}})}catch{}try{Object.defineProperty(i,"visibilityState",{configurable:!0,get(){return"visible"}})}catch{}try{document.hasFocus=()=>!0}catch{}}function u(){try{o.hidden&&Object.defineProperty(i,"hidden",o.hidden)}catch{}try{o.visibilityState&&Object.defineProperty(i,"visibilityState",o.visibilityState)}catch{}try{o.hasFocus&&(document.hasFocus=o.hasFocus)}catch{}}let d=null,y=null,P=null,M=()=>{d&&d.state!=="running"&&d.resume?.().catch(()=>{})};function L(){try{d=new(window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"}),P=d.createGain(),P.gain.value=1e-5,y=d.createOscillator(),y.frequency.value=1,y.connect(P).connect(d.destination),y.start(),document.addEventListener("visibilitychange",M,{capture:!0}),window.addEventListener("focus",M,{capture:!0})}catch{w()}}function w(){try{y?.stop()}catch{}try{y?.disconnect(),P?.disconnect()}catch{}try{d?.close?.()}catch{}document.removeEventListener("visibilitychange",M,{capture:!0}),window.removeEventListener("focus",M,{capture:!0}),y=null,P=null,d=null}let T=null;function I(){let $=document.querySelector("canvas")||document.body||document.documentElement;T=window.setInterval(()=>{try{$.dispatchEvent(new MouseEvent("mousemove",{bubbles:!0,clientX:1,clientY:1}))}catch{}},25e3)}function v(){T!==null&&(clearInterval(T),T=null)}let x=null;async function B(){try{let $=await e.getPosition();if(!$)return;await e.move(Math.round($.x),Math.round($.y))}catch{}}function D(){x=window.setInterval(B,6e4),B()}function j(){x!==null&&(clearInterval(x),x=null)}return{start(){l(),r(),L(),I(),D()},stop(){j(),v(),w(),a(),u()}}}(async function(){"use strict";Kt(),jt({onRegister(t){t("players","Players",Dn),t("pets","Pets",jn),t("misc","Misc",Un),t("debug-data","Debug Data",Wn)}}),qn(),zn({getPosition:()=>me.getPosition(),move:(t,n)=>me.move(t,n)}).start()})();})();
+    `;
+      refreshBtn.onclick = async () => {
+        await refreshAll(true);
+      };
+      filter.appendChild(refreshBtn);
+    }
+    function renderRight(playerId) {
+      right.innerHTML = "";
+      const p = playerId ? players.find((x) => x.id === playerId) || null : null;
+      if (!p) {
+        const empty = document.createElement("div");
+        empty.style.opacity = "0.75";
+        empty.textContent = "Select a player on the left.";
+        right.appendChild(empty);
+        return;
+      }
+      const head = document.createElement("div");
+      head.style.display = "flex";
+      head.style.alignItems = "center";
+      head.style.gap = "12px";
+      const avatar = document.createElement("img");
+      avatar.src = p.discordAvatarUrl || "";
+      avatar.alt = p.name;
+      avatar.width = 48;
+      avatar.height = 48;
+      avatar.style.borderRadius = "50%";
+      avatar.style.objectFit = "cover";
+      avatar.style.border = "1px solid #4446";
+      const title = document.createElement("div");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = p.name || p.id;
+      nameEl.style.fontWeight = "600";
+      nameEl.style.fontSize = "16px";
+      const sub = document.createElement("div");
+      sub.style.opacity = "0.8";
+      sub.style.fontSize = "12px";
+      const status = p.isConnected ? "Online" : "Offline";
+      sub.textContent = status;
+      title.appendChild(nameEl);
+      title.appendChild(sub);
+      head.appendChild(avatar);
+      head.appendChild(title);
+      right.appendChild(head);
+      const btnRow = document.createElement("div");
+      btnRow.style.display = "flex";
+      btnRow.style.gap = "8px";
+      btnRow.style.marginTop = "8px";
+      btnRow.appendChild(ui.btn("Teleport", async () => {
+        try {
+          await PlayersService.teleportTo(p.id);
+        } catch (e) {
+          toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+        }
+      }));
+      btnRow.appendChild(ui.btn("Inventory", async () => {
+        await PlayersService.openInventoryPreview(p.id, p.name);
+      }));
+      const followRow = document.createElement("div");
+      followRow.style.display = "flex";
+      followRow.style.alignItems = "center";
+      followRow.style.marginTop = "6px";
+      followRow.style.gap = "8px";
+      const followLabel = document.createElement("div");
+      followLabel.textContent = "Follow";
+      followLabel.style.fontSize = "14px";
+      followLabel.style.opacity = "0.85";
+      const followSwitch = ui.switch(PlayersService.isFollowing(p.id));
+      followSwitch.addEventListener("change", async () => {
+        try {
+          if (followSwitch.checked) {
+            await PlayersService.startFollowing(p.id);
+            await toastSimple("Follow", "Follow activ\xE9.", "success");
+          } else {
+            PlayersService.stopFollowing();
+            await toastSimple("Follow", "Follow d\xE9sactiv\xE9.", "info");
+          }
+        } catch (e) {
+          await toastSimple("Follow", e?.message || "Erreur sur le follow.", "error");
+          followSwitch.checked = !followSwitch.checked;
+        }
+      });
+      followRow.appendChild(followLabel);
+      followRow.appendChild(followSwitch);
+      right.appendChild(btnRow);
+      right.appendChild(followRow);
+    }
+    let players = [];
+    let lastSig = "";
+    function signature(ps) {
+      return ps.map(
+        (p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
+      ).join(";");
+    }
+    async function refreshAll(keepSelection = true) {
+      const prevSel = vt.getSelected()?.id ?? null;
+      const next = await readPlayers();
+      const sig = signature(next);
+      if (sig === lastSig) {
+        return;
+      }
+      lastSig = sig;
+      players = next;
+      vt.setItems(players.map(vItem));
+      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
+      if (sel !== null) vt.select(sel);
+      else renderRight(null);
+    }
+    await PlayersService.onChange(() => {
+      refreshAll(true).catch(() => {
+      });
+    });
+    await refreshAll(true);
+  }
+
+  // src/ui/menus/pets.ts
+  function styleBtnFullWidth(b, text) {
+    b.textContent = text;
+    b.style.flex = "1";
+    b.style.margin = "0";
+    b.style.padding = "6px 10px";
+    b.style.borderRadius = "8px";
+    b.style.border = "1px solid #4445";
+    b.style.background = "#1f2328";
+    b.style.color = "#e7eef7";
+    b.style.justifyContent = "center";
+    b.onmouseenter = () => b.style.borderColor = "#6aa1";
+    b.onmouseleave = () => b.style.borderColor = "#4445";
+  }
+  function sectionFramed(titleText, content) {
+    const s = document.createElement("div");
+    s.style.display = "grid";
+    s.style.justifyItems = "center";
+    s.style.gap = "8px";
+    s.style.textAlign = "center";
+    s.style.border = "1px solid #4446";
+    s.style.borderRadius = "10px";
+    s.style.padding = "10px";
+    s.style.background = "#1f2328";
+    s.style.boxShadow = "0 0 0 1px #0002 inset";
+    s.style.width = "min(720px, 100%)";
+    const h = document.createElement("div");
+    h.textContent = titleText;
+    h.style.fontWeight = "600";
+    h.style.opacity = "0.95";
+    s.append(h, content);
+    return s;
+  }
+  var fmtTime2 = (ms) => {
+    const d = new Date(ms);
+    const p = (n, s = 2) => String(n).padStart(s, "0");
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(
+      d.getMilliseconds()
+    ).padStart(3, "0")}`;
+  };
+  var activeTeamId = null;
+  var activePetIdSet = /* @__PURE__ */ new Set();
+  function getAbilityChipColors(id) {
+    const key = String(id || "");
+    const base = (PetsService.getAbilityNameWithoutLevel?.(key) || "").replace(/[\s\-_]+/g, "").toLowerCase();
+    const is = (prefix) => key.startsWith(prefix) || base === prefix.toLowerCase();
+    if (is("ProduceScaleBoost")) return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
+    if (is("PlantGrowthBoost")) return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
+    if (is("EggGrowthBoost")) return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
+    if (is("PetAgeBoost")) return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
+    if (is("PetHatchSizeBoost")) return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
+    if (is("PetXpBoost")) return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
+    if (is("HungerBoost")) return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
+    if (is("SellBoost")) return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
+    if (is("CoinFinder")) return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
+    if (is("ProduceMutationBoost")) return { bg: "rgba(138,43,226,0.9)", hover: "rgba(138,43,226,1)" };
+    if (is("DoubleHarvest")) return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
+    if (is("ProduceEater")) return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
+    if (is("ProduceRefund")) return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
+    if (is("PetMutationBoost")) return { bg: "rgba(156,65,181,0.9)", hover: "rgba(156,65,181,1)" };
+    if (is("HungerRestore")) return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
+    if (is("PetRefund")) return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
+    if (is("Copycat")) return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+    if (is("GoldGranter")) {
+      return {
+        bg: "linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",
+        hover: "linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)"
+      };
+    }
+    if (is("RainbowGranter")) {
+      return {
+        bg: "linear-gradient(45deg, rgba(200,0,0,0.9), rgba(200,120,0,0.9), rgba(160,170,30,0.9), rgba(60,170,60,0.9), rgba(50,170,170,0.9), rgba(40,150,180,0.9), rgba(20,90,180,0.9), rgba(70,30,150,0.9))",
+        hover: "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))"
+      };
+    }
+    if (is("SeedFinderIV")) {
+      return {
+        bg: "linear-gradient(130deg, rgba(0,180,216,0.9) 0%, rgba(124,42,232,0.9) 40%, rgba(160,0,126,0.9) 60%, rgba(255,215,0,0.9) 100%)",
+        hover: "linear-gradient(130deg, rgba(0,180,216,1) 0%, rgba(124,42,232,1) 40%, rgba(160,0,126,1) 60%, rgba(255,215,0,1) 100%)"
+      };
+    }
+    if (is("SeedFinder")) {
+      const lv = key.replace(/.*?([IVX]+)$/, "$1");
+      if (lv === "II") return { bg: "rgba(183,121,31,0.9)", hover: "rgba(183,121,31,1)" };
+      if (lv === "III") return { bg: "rgba(139,62,152,0.9)", hover: "rgba(139,62,152,1)" };
+      return { bg: "rgba(94,172,70,0.9)", hover: "rgba(94,172,70,1)" };
+    }
+    return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
+  }
+  function renderManagerTab(view, ui) {
+    const setPetsMenuHidden = (hidden) => {
+      const el2 = ui?.root ?? view;
+      el2.style.display = hidden ? "none" : "";
+    };
+    view.innerHTML = "";
+    const styleBtnFullWidthL = (b, text) => {
+      b.textContent = text;
+      b.style.width = "100%";
+      b.style.margin = "0";
+      b.style.padding = "10px";
+      b.style.borderRadius = "8px";
+      b.style.border = "1px solid #4445";
+      b.style.background = "#1f2328";
+      b.style.color = "#e7eef7";
+      b.style.justifyContent = "center";
+      b.onmouseenter = () => b.style.borderColor = "#6aa1";
+      b.onmouseleave = () => b.style.borderColor = "#4445";
+    };
+    const framed = (title, content) => sectionFramed(title, content);
+    const row = () => {
+      const r = document.createElement("div");
+      r.style.display = "flex";
+      r.style.alignItems = "center";
+      r.style.flexWrap = "wrap";
+      r.style.gap = "8px";
+      return r;
+    };
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gridTemplateColumns = "minmax(220px, 280px) minmax(0, 1fr)";
+    wrap.style.gap = "10px";
+    wrap.style.alignItems = "stretch";
+    wrap.style.height = "54vh";
+    wrap.style.overflow = "hidden";
+    view.appendChild(wrap);
+    const left = document.createElement("div");
+    left.style.display = "grid";
+    left.style.gridTemplateRows = "1fr auto";
+    left.style.gap = "8px";
+    left.style.minHeight = "0";
+    wrap.appendChild(left);
+    const teamList = document.createElement("div");
+    teamList.style.display = "flex";
+    teamList.style.flexDirection = "column";
+    teamList.style.gap = "6px";
+    teamList.style.overflow = "auto";
+    teamList.style.padding = "6px";
+    teamList.style.border = "1px solid #4445";
+    teamList.style.borderRadius = "10px";
+    teamList.style.scrollBehavior = "smooth";
+    teamList.style.minHeight = "0";
+    left.appendChild(teamList);
+    const footer = document.createElement("div");
+    footer.style.display = "flex";
+    footer.style.gap = "6px";
+    left.appendChild(footer);
+    const btnNew = document.createElement("button");
+    btnNew.id = "pets.teams.new";
+    const btnDup = document.createElement("button");
+    btnDup.id = "pets.teams.duplicate";
+    const btnDel = document.createElement("button");
+    btnDel.id = "pets.teams.delete";
+    styleBtnFullWidthL(btnNew, "New");
+    styleBtnFullWidthL(btnDup, "Duplicate");
+    styleBtnFullWidthL(btnDel, "Delete");
+    footer.append(btnNew, btnDup, btnDel);
+    let teams = [];
+    let selectedId = null;
+    let isApplyingTeam = false;
+    let draggingIdx = null;
+    let overInsertIdx = null;
+    let draggingHeight = 0;
+    function getSelectedTeam() {
+      return teams.find((t) => t.id === selectedId) || null;
+    }
+    function computeInsertIndex(clientY) {
+      const children = Array.from(teamList.children);
+      if (!children.length) return 0;
+      const first = children[0].getBoundingClientRect();
+      if (clientY < first.top + first.height / 2) return 0;
+      for (let i = 0; i < children.length; i++) {
+        const rect = children[i].getBoundingClientRect();
+        const mid = rect.top + rect.height / 2;
+        if (clientY < mid) return i;
+      }
+      return children.length;
+    }
+    function abilitiesBadge(abilities) {
+      const wrap2 = document.createElement("span");
+      wrap2.style.display = "inline-flex";
+      wrap2.style.alignItems = "center";
+      wrap2.style.lineHeight = "1";
+      const SPACING_PX = 8;
+      const SIZE_PX = 12;
+      const RADIUS_PX = 3;
+      const ids = Array.isArray(abilities) ? abilities.filter(Boolean) : [];
+      if (!ids.length) {
+        const empty = document.createElement("span");
+        empty.textContent = "No ability";
+        empty.style.opacity = "0.75";
+        empty.style.fontSize = "12px";
+        wrap2.appendChild(empty);
+        return wrap2;
+      }
+      ids.forEach((id, i) => {
+        const chip = document.createElement("span");
+        const { bg, hover } = getAbilityChipColors(id);
+        chip.title = PetsService.getAbilityName(id) || id;
+        chip.setAttribute("aria-label", chip.title);
+        Object.assign(chip.style, {
+          display: "inline-block",
+          width: `${SIZE_PX}px`,
+          height: `${SIZE_PX}px`,
+          borderRadius: `${RADIUS_PX}px`,
+          marginRight: i === ids.length - 1 ? "0" : `${SPACING_PX}px`,
+          background: bg,
+          transition: "transform 80ms ease, box-shadow 120ms ease, background 120ms ease",
+          cursor: "default"
+        });
+        chip.onmouseenter = () => {
+          chip.style.background = hover;
+          chip.style.transform = "scale(1.08)";
+          chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff33";
+        };
+        chip.onmouseleave = () => {
+          chip.style.background = bg;
+          chip.style.transform = "none";
+          chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a";
+        };
+        wrap2.appendChild(chip);
+      });
+      return wrap2;
+    }
+    function applyLiveTransforms() {
+      const children = Array.from(teamList.children);
+      children.forEach((el2) => el2.style.transform = "");
+      if (draggingIdx === null || overInsertIdx === null) return;
+      const from = draggingIdx;
+      const to = overInsertIdx;
+      children.forEach((el2, idx) => {
+        el2.style.transition = "transform 120ms ease";
+        if (idx === from) return;
+        if (to > from && idx > from && idx < to) {
+          el2.style.transform = `translateY(${-draggingHeight}px)`;
+        }
+        if (to < from && idx >= to && idx < from) {
+          el2.style.transform = `translateY(${draggingHeight}px)`;
+        }
+      });
+    }
+    function clearLiveTransforms() {
+      Array.from(teamList.children).forEach((el2) => {
+        el2.style.transform = "";
+        el2.style.transition = "";
+      });
+    }
+    async function refreshActiveIds() {
+      activeTeamId = null;
+      activePetIdSet = /* @__PURE__ */ new Set();
+      try {
+        const pets = await PetsService.getPets();
+        const equipIds = Array.isArray(pets) ? pets.map((p) => String(p?.slot?.id || "")).filter(Boolean) : [];
+        activePetIdSet = new Set(equipIds);
+        for (const t of teams) {
+          const tIds = (t.slots || []).filter(Boolean);
+          if (tIds.length !== equipIds.length) continue;
+          let same = true;
+          for (const id of tIds) {
+            if (!activePetIdSet.has(id)) {
+              same = false;
+              break;
+            }
+          }
+          if (same) {
+            activeTeamId = t.id;
+            break;
+          }
+        }
+      } catch {
+      }
+    }
+    async function refreshTeamList(skipDetectActive = false) {
+      if (!skipDetectActive) {
+        await refreshActiveIds();
+      }
+      clearLiveTransforms();
+      draggingIdx = null;
+      overInsertIdx = null;
+      draggingHeight = 0;
+      teamList.innerHTML = "";
+      if (!teams.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No teams yet. Create one!";
+        empty.style.opacity = "0.75";
+        empty.style.textAlign = "center";
+        empty.style.padding = "8px";
+        teamList.appendChild(empty);
+        hydrateEditor(null);
+        return;
+      }
+      teams.forEach((t, idx) => {
+        const item = document.createElement("div");
+        const isActive = t.id === activeTeamId;
+        item.dataset.index = String(idx);
+        item.textContent = "";
+        item.style.height = "36px";
+        item.style.lineHeight = "36px";
+        item.style.padding = "0 10px";
+        item.style.border = "1px solid #ffffff15";
+        item.style.borderRadius = "6px";
+        item.style.cursor = "pointer";
+        item.style.fontSize = "13px";
+        item.style.overflow = "hidden";
+        item.style.whiteSpace = "nowrap";
+        item.style.textOverflow = "ellipsis";
+        item.style.display = "flex";
+        item.style.flex = "0 0 auto";
+        item.style.gap = "8px";
+        item.style.alignItems = "center";
+        item.style.background = t.id === selectedId ? "#2a313a" : "#1f2328";
+        const dot = document.createElement("span");
+        dot.style.width = "10px";
+        dot.style.height = "10px";
+        dot.style.borderRadius = "50%";
+        dot.style.boxShadow = "0 0 0 1px #0006 inset";
+        dot.style.background = isActive ? "#48d170" : "#64748b";
+        dot.title = isActive ? "This team is currently active" : "Inactive team";
+        const label2 = document.createElement("span");
+        label2.textContent = t.name || "(unnamed)";
+        label2.style.overflow = "hidden";
+        label2.style.textOverflow = "ellipsis";
+        label2.style.whiteSpace = "nowrap";
+        item.append(dot, label2);
+        const grab = document.createElement("span");
+        grab.className = "qmm-grab";
+        grab.title = "Drag to reorder";
+        grab.innerHTML = "&#8942;";
+        grab.draggable = true;
+        item.onmouseenter = () => item.style.borderColor = "#6aa1";
+        item.onmouseleave = () => item.style.borderColor = "#ffffff15";
+        item.onclick = (ev) => {
+          if (ev.__byDrag) return;
+          const changed = selectedId !== t.id;
+          if (changed) {
+            selectedId = t.id;
+            refreshTeamList();
+          }
+          void hydrateEditor(getSelectedTeam());
+        };
+        grab.addEventListener("dragstart", (ev) => {
+          draggingIdx = idx;
+          draggingHeight = item.getBoundingClientRect().height;
+          item.classList.add("qmm-dragging");
+          ev.dataTransfer?.setData("text/plain", String(idx));
+          if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+          try {
+            const ghost = item.cloneNode(true);
+            ghost.style.width = `${item.getBoundingClientRect().width}px`;
+            ghost.style.position = "absolute";
+            ghost.style.top = "-9999px";
+            document.body.appendChild(ghost);
+            ev.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
+            setTimeout(() => document.body.removeChild(ghost), 0);
+          } catch {
+          }
+        });
+        grab.addEventListener("dragend", () => {
+          item.classList.remove("qmm-dragging");
+          clearLiveTransforms();
+          draggingIdx = null;
+          overInsertIdx = null;
+        });
+        item.addEventListener("dragover", (ev) => {
+          ev.preventDefault();
+          if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+          if (draggingIdx === null) return;
+          const idxOver = Number(ev.currentTarget.dataset.index || -1);
+          if (idxOver < 0) return;
+          const rect = item.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          const insertIdx = ev.clientY < mid ? idxOver : idxOver + 1;
+          const clamped = Math.max(0, Math.min(teams.length, insertIdx));
+          if (overInsertIdx !== clamped) {
+            overInsertIdx = clamped;
+            applyLiveTransforms();
+          }
+          const edge = 28;
+          const listRect = teamList.getBoundingClientRect();
+          if (ev.clientY < listRect.top + edge) teamList.scrollTop -= 18;
+          else if (ev.clientY > listRect.bottom - edge) teamList.scrollTop += 18;
+        });
+        item.addEventListener("drop", (ev) => {
+          ev.preventDefault();
+          ev.__byDrag = true;
+          if (draggingIdx === null) return;
+          let target = overInsertIdx ?? computeInsertIndex(ev.clientY);
+          if (target > draggingIdx) target -= 1;
+          target = Math.max(0, Math.min(teams.length - 1, target));
+          if (target !== draggingIdx) {
+            const a = teams.slice();
+            const [it] = a.splice(draggingIdx, 1);
+            a.splice(target, 0, it);
+            teams = a;
+            try {
+              PetsService.setTeamsOrder(teams.map((x) => x.id));
+            } catch {
+            }
+          }
+          clearLiveTransforms();
+          draggingIdx = null;
+          overInsertIdx = null;
+          draggingHeight = 0;
+          refreshTeamList();
+        });
+        item.onclick = (ev) => {
+          if (ev.__byDrag) return;
+          const changed = selectedId !== t.id;
+          if (changed) {
+            selectedId = t.id;
+            void refreshTeamList();
+          }
+          void hydrateEditor(getSelectedTeam());
+        };
+        item.appendChild(grab);
+        teamList.appendChild(item);
+      });
+    }
+    teamList.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      if (draggingIdx === null) return;
+      const idx = computeInsertIndex(e.clientY);
+      if (overInsertIdx !== idx) {
+        overInsertIdx = idx;
+        applyLiveTransforms();
+      }
+      const edge = 28;
+      const listRect = teamList.getBoundingClientRect();
+      if (e.clientY < listRect.top + edge) teamList.scrollTop -= 18;
+      else if (e.clientY > listRect.bottom - edge) teamList.scrollTop += 18;
+    });
+    teamList.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (draggingIdx === null) return;
+      let target = overInsertIdx ?? computeInsertIndex(e.clientY);
+      if (target > draggingIdx) target -= 1;
+      target = Math.max(0, Math.min(teams.length - 1, target));
+      if (target !== draggingIdx) {
+        const a = teams.slice();
+        const [it] = a.splice(draggingIdx, 1);
+        a.splice(target, 0, it);
+        teams = a;
+        try {
+          PetsService.setTeamsOrder(teams.map((x) => x.id));
+        } catch {
+        }
+      }
+      clearLiveTransforms();
+      draggingIdx = null;
+      overInsertIdx = null;
+      draggingHeight = 0;
+      refreshTeamList();
+    });
+    btnNew.onclick = () => {
+      const created = PetsService.createTeam("New Team");
+      selectedId = created.id;
+      refreshTeamList();
+      hydrateEditor(getSelectedTeam());
+    };
+    btnDup.onclick = () => {
+      if (!selectedId) return;
+      const copy = PetsService.duplicateTeam(selectedId);
+      if (!copy) return;
+      selectedId = copy.id;
+      refreshTeamList();
+      hydrateEditor(getSelectedTeam());
+    };
+    btnDel.onclick = () => {
+      if (!selectedId) return;
+      const ok = PetsService.deleteTeam(selectedId);
+      if (!ok) return;
+    };
+    let unsubTeams = null;
+    (async () => {
+      try {
+        unsubTeams = await PetsService.onTeamsChangeNow(async (all) => {
+          teams = Array.isArray(all) ? all.slice() : [];
+          if (selectedId && !teams.some((t) => t.id === selectedId)) {
+            selectedId = teams[0]?.id ?? null;
+          }
+          if (!selectedId && teams.length) selectedId = teams[0].id;
+          refreshTeamList();
+          await PetsService.getInventoryPets();
+          await hydrateEditor(getSelectedTeam());
+        });
+      } catch {
+      }
+    })();
+    const right = document.createElement("div");
+    right.style.display = "grid";
+    right.style.gridTemplateRows = "auto 1fr";
+    right.style.gap = "10px";
+    right.style.minHeight = "0";
+    wrap.appendChild(right);
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "8px";
+    const headerTitle = document.createElement("div");
+    headerTitle.textContent = "Team editor \u2014 ";
+    headerTitle.style.fontWeight = "700";
+    headerTitle.style.fontSize = "14px";
+    const btnUseTeam = document.createElement("button");
+    btnUseTeam.id = "pets.teams.useThisTeam";
+    btnUseTeam.textContent = "Use this team";
+    btnUseTeam.style.padding = "6px 10px";
+    btnUseTeam.style.borderRadius = "8px";
+    btnUseTeam.style.border = "1px solid #4445";
+    btnUseTeam.style.background = "#1f2328";
+    btnUseTeam.style.color = "#e7eef7";
+    btnUseTeam.style.cursor = "pointer";
+    btnUseTeam.onmouseenter = () => btnUseTeam.style.borderColor = "#6aa1";
+    btnUseTeam.onmouseleave = () => btnUseTeam.style.borderColor = "#4445";
+    btnUseTeam.disabled = true;
+    const btnSave = document.createElement("button");
+    btnSave.id = "pets.teams.save";
+    btnSave.textContent = "Save";
+    btnSave.style.padding = "6px 10px";
+    btnSave.style.borderRadius = "8px";
+    btnSave.style.border = "1px solid #4445";
+    btnSave.style.background = "#1f2328";
+    btnSave.style.color = "#e7eef7";
+    btnSave.style.cursor = "pointer";
+    btnSave.onmouseenter = () => btnSave.style.borderColor = "#6aa1";
+    btnSave.onmouseleave = () => btnSave.style.borderColor = "#4445";
+    btnSave.disabled = true;
+    header.append(headerTitle, btnUseTeam, btnSave);
+    right.appendChild(header);
+    const card = document.createElement("div");
+    card.style.border = "1px solid #4445";
+    card.style.borderRadius = "10px";
+    card.style.padding = "10px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "12px";
+    card.style.overflow = "auto";
+    card.style.minHeight = "0";
+    card.style.background = "#0f1318";
+    right.appendChild(card);
+    const secName = (() => {
+      const r = row();
+      const nameInput = ui.inputText("Team name", "");
+      nameInput.id = "pets.teams.editor.name";
+      nameInput.style.minWidth = "260px";
+      r.append(nameInput);
+      card.appendChild(framed("Team name", r));
+      return { nameInput };
+    })();
+    const secSearch = (() => {
+      const wrap2 = document.createElement("div");
+      wrap2.style.display = "grid";
+      wrap2.style.gap = "10px";
+      wrap2.style.justifyItems = "center";
+      const radiosRow = document.createElement("div");
+      radiosRow.style.display = "flex";
+      radiosRow.style.flexWrap = "wrap";
+      radiosRow.style.alignItems = "center";
+      radiosRow.style.justifyContent = "center";
+      radiosRow.style.gap = "10px";
+      const mkRadio = (name, value, label2, checked = false) => {
+        const lab = document.createElement("label");
+        lab.style.display = "inline-flex";
+        lab.style.alignItems = "center";
+        lab.style.gap = "6px";
+        const r = ui.radio(name, value, checked);
+        const t = document.createElement("span");
+        t.textContent = label2;
+        lab.append(r, t);
+        return { wrap: lab, input: r };
+      };
+      const rAbility = mkRadio("pets-search-mode", "ability", "Ability", true);
+      const rSpecies = mkRadio("pets-search-mode", "species", "Species", false);
+      radiosRow.append(rAbility.wrap, rSpecies.wrap);
+      const select2 = document.createElement("select");
+      select2.className = "qmm-input";
+      select2.id = "pets.teams.filter.select";
+      select2.style.minWidth = "260px";
+      let currentMode = "ability";
+      const getMode = () => currentMode;
+      const setMode = (m) => {
+        currentMode = m;
+        rAbility.input.checked = m === "ability";
+        rSpecies.input.checked = m === "species";
+        rAbility.input.type = "radio";
+        rSpecies.input.type = "radio";
+        rAbility.input.name = "pets-search-mode";
+        rSpecies.input.name = "pets-search-mode";
+      };
+      const setOptions = (values) => {
+        select2.innerHTML = "";
+        const opt0 = document.createElement("option");
+        opt0.value = "";
+        opt0.textContent = "\u2014 No filter \u2014";
+        select2.appendChild(opt0);
+        values.forEach((v) => {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = v;
+          select2.appendChild(o);
+        });
+      };
+      const rebuildOptionsFromInventory = async () => {
+        const inv = await PetsService.getInventoryPets().catch(() => []);
+        const mode = getMode();
+        if (getMode() === "ability") {
+          const nameSet = /* @__PURE__ */ new Set();
+          for (const p of inv) {
+            const abs = Array.isArray(p?.abilities) ? p.abilities.filter(Boolean) : [];
+            for (const id of abs) {
+              const baseName = PetsService.getAbilityNameWithoutLevel(id);
+              if (baseName) nameSet.add(baseName);
+            }
+          }
+          const names = Array.from(nameSet).sort((a, b) => a.localeCompare(b));
+          select2.innerHTML = "";
+          const opt0 = document.createElement("option");
+          opt0.value = "";
+          opt0.textContent = "\u2014 No filter \u2014";
+          select2.appendChild(opt0);
+          names.forEach((name) => {
+            const o = document.createElement("option");
+            o.value = name;
+            o.textContent = name;
+            select2.appendChild(o);
+          });
+        } else {
+          const set2 = /* @__PURE__ */ new Set();
+          for (const p of inv) {
+            const sp = String(p?.petSpecies || "").trim();
+            if (sp) set2.add(sp);
+          }
+          const values = Array.from(set2).sort((a, b) => a.localeCompare(b));
+          select2.innerHTML = "";
+          const opt0 = document.createElement("option");
+          opt0.value = "";
+          opt0.textContent = "\u2014 No filter \u2014";
+          select2.appendChild(opt0);
+          values.forEach((v) => {
+            const o = document.createElement("option");
+            o.value = v;
+            o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
+            select2.appendChild(o);
+          });
+        }
+      };
+      const applyFilterToTeam = () => {
+        const t = getSelectedTeam();
+        if (!t) return;
+        const val = (select2.value || "").trim();
+        const raw = getMode() === "ability" ? val ? `ab:${val}` : "" : val ? `sp:${val}` : "";
+        PetsService.setTeamSearch(t.id, raw);
+      };
+      rAbility.input.addEventListener("change", async () => {
+        if (!rAbility.input.checked) return;
+        setMode("ability");
+        await rebuildOptionsFromInventory();
+        select2.value = "";
+        applyFilterToTeam();
+      });
+      rSpecies.input.addEventListener("change", async () => {
+        if (!rSpecies.input.checked) return;
+        setMode("species");
+        await rebuildOptionsFromInventory();
+        select2.value = "";
+        applyFilterToTeam();
+      });
+      select2.addEventListener("change", applyFilterToTeam);
+      wrap2.append(radiosRow, select2);
+      card.appendChild(framed("Search", wrap2));
+      return {
+        getMode,
+        setMode,
+        select: select2,
+        rebuild: rebuildOptionsFromInventory,
+        apply: applyFilterToTeam,
+        setFromSearchString(s) {
+          const m = (s || "").match(/^(ab|sp):\s*(.*)$/i);
+          if (!m) {
+            setMode("ability");
+            select2.value = "";
+            return;
+          }
+          const mode = m[1].toLowerCase() === "ab" ? "ability" : "species";
+          setMode(mode);
+          select2.value = m[2] || "";
+        }
+      };
+    })();
+    const secSlots = (() => {
+      const grid = document.createElement("div");
+      grid.style.display = "grid";
+      grid.style.gridTemplateColumns = "1fr";
+      grid.style.rowGap = "10px";
+      grid.style.justifyItems = "center";
+      const mkRow = (idx) => {
+        const root = document.createElement("div");
+        const BTN = 28;
+        root.style.display = "grid";
+        root.style.gridTemplateColumns = `minmax(0,1fr) ${BTN}px ${BTN}px`;
+        root.style.alignItems = "center";
+        root.style.gap = "8px";
+        root.style.width = "min(560px, 100%)";
+        root.style.border = "1px solid #4445";
+        root.style.borderRadius = "10px";
+        root.style.padding = "8px 10px";
+        root.style.background = "#0f1318";
+        const left2 = document.createElement("div");
+        left2.style.display = "flex";
+        left2.style.flexDirection = "column";
+        left2.style.gap = "6px";
+        left2.style.minWidth = "0";
+        const nameEl = document.createElement("div");
+        nameEl.style.fontWeight = "700";
+        nameEl.textContent = "None";
+        nameEl.style.overflow = "hidden";
+        nameEl.style.textOverflow = "ellipsis";
+        nameEl.style.whiteSpace = "nowrap";
+        let abilitiesEl = abilitiesBadge([]);
+        abilitiesEl.style.display = "inline-block";
+        left2.append(nameEl, abilitiesEl);
+        const btnChoose = document.createElement("button");
+        btnChoose.textContent = "+";
+        Object.assign(btnChoose.style, {
+          width: `${BTN}px`,
+          minWidth: `${BTN}px`,
+          height: `${BTN}px`,
+          padding: "0",
+          fontSize: "16px",
+          lineHeight: "1",
+          borderRadius: "10px",
+          boxShadow: "none",
+          display: "grid",
+          placeItems: "center"
+        });
+        btnChoose.title = "Choose a pet";
+        btnChoose.setAttribute("aria-label", "Choose a pet");
+        const btnClear2 = document.createElement("button");
+        btnClear2.textContent = "\u2212";
+        Object.assign(btnClear2.style, {
+          width: `${BTN}px`,
+          minWidth: `${BTN}px`,
+          height: `${BTN}px`,
+          padding: "0",
+          fontSize: "16px",
+          lineHeight: "1",
+          borderRadius: "10px",
+          boxShadow: "none",
+          display: "grid",
+          placeItems: "center"
+        });
+        btnClear2.title = "Remove this pet";
+        btnClear2.setAttribute("aria-label", "Remove this pet");
+        root.append(left2, btnChoose, btnClear2);
+        function update(p) {
+          if (!p) {
+            nameEl.textContent = "None";
+            const fresh2 = abilitiesBadge([]);
+            fresh2.style.display = "inline-block";
+            left2.replaceChild(fresh2, left2.children[1]);
+            abilitiesEl = fresh2;
+            return;
+          }
+          const speciesLabel = p.petSpecies ? p.petSpecies.charAt(0).toUpperCase() + p.petSpecies.slice(1) : "";
+          const n = p.name?.trim() || speciesLabel || "Pet";
+          nameEl.textContent = n;
+          nameEl.textContent = n;
+          const abs = Array.isArray(p.abilities) ? p.abilities.filter(Boolean) : [];
+          const fresh = abilitiesBadge(abs);
+          fresh.style.display = "inline-block";
+          left2.replaceChild(fresh, left2.children[1]);
+          abilitiesEl = fresh;
+        }
+        btnChoose.onclick = async () => {
+          const t = getSelectedTeam();
+          if (!t) return;
+          btnChoose.disabled = true;
+          btnClear2.disabled = true;
+          setPetsMenuHidden(true);
+          try {
+            await PetsService.chooseSlotPet(t.id, idx);
+            await repaintSlots(getSelectedTeam());
+          } finally {
+            setPetsMenuHidden(false);
+            btnChoose.disabled = false;
+            btnClear2.disabled = false;
+          }
+        };
+        btnClear2.onclick = async () => {
+          const t = getSelectedTeam();
+          if (!t) return;
+          const next = t.slots.slice(0, 3);
+          next[idx] = null;
+          PetsService.saveTeam({ id: t.id, slots: next });
+          await repaintSlots(t);
+        };
+        return { root, nameEl, abilitiesEl, btnChoose, btnClear: btnClear2, update };
+      };
+      const r0 = mkRow(0);
+      const r1 = mkRow(1);
+      const r2 = mkRow(2);
+      grid.append(r0.root, r1.root, r2.root);
+      const extra = document.createElement("div");
+      extra.style.display = "flex";
+      extra.style.gap = "6px";
+      extra.style.justifyContent = "center";
+      const btnUseCurrent = document.createElement("button");
+      styleBtnFullWidthL(btnUseCurrent, "Current active");
+      btnUseCurrent.id = "pets.teams.useCurrent";
+      const btnClear = document.createElement("button");
+      styleBtnFullWidthL(btnClear, "Clear slots");
+      btnClear.id = "pets.teams.clearSlots";
+      const DARK_BG = "#0f1318";
+      extra.append(btnUseCurrent, btnClear);
+      Object.assign(btnUseCurrent.style, {
+        width: "auto",
+        fontSize: "16px",
+        borderRadius: "10px",
+        background: DARK_BG,
+        boxShadow: "none"
+      });
+      Object.assign(btnClear.style, {
+        width: "auto",
+        fontSize: "16px",
+        borderRadius: "10px",
+        background: DARK_BG,
+        boxShadow: "none"
+      });
+      const wrapSlots = document.createElement("div");
+      wrapSlots.style.display = "flex";
+      wrapSlots.style.flexDirection = "column";
+      wrapSlots.style.gap = "8px";
+      wrapSlots.append(grid, extra);
+      card.appendChild(framed("Active pets (3 slots)", wrapSlots));
+      return {
+        rows: [r0, r1, r2],
+        btnUseCurrent,
+        btnClear
+      };
+    })();
+    async function repaintSlots(sourceTeam) {
+      const t = sourceTeam ?? getSelectedTeam();
+      if (!t) return;
+      const allInv = await PetsService.getInventoryPets().catch(() => []);
+      const idToPet = /* @__PURE__ */ new Map();
+      for (const p of allInv) if (p?.id != null) idToPet.set(String(p.id), p);
+      [0, 1, 2].forEach((i) => {
+        const id = t.slots[i] || "";
+        const pet = id ? idToPet.get(id) || null : null;
+        secSlots.rows[i].update(pet);
+      });
+    }
+    async function hydrateEditor(team) {
+      const has = !!team;
+      secName.nameInput.disabled = !has;
+      secSlots.btnClear.disabled = !has;
+      secSlots.btnUseCurrent.disabled = !has;
+      btnUseTeam.disabled = !has;
+      btnSave.disabled = !has;
+      secSearch.setMode("ability");
+      await secSearch.rebuild();
+      if (has) {
+        const saved = PetsService.getTeamSearch(team.id) || "";
+        secSearch.setFromSearchString(saved);
+        secSearch.apply();
+      }
+      if (!has) {
+        secSlots.rows.forEach((r) => r.update(null));
+        secName.nameInput.value = "";
+        return;
+      }
+      secName.nameInput.value = String(team.name || "");
+      await repaintSlots(team);
+    }
+    secName.nameInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") ev.currentTarget.blur();
+    });
+    secName.nameInput.addEventListener("blur", () => {
+      const t = getSelectedTeam();
+      if (!t) return;
+      const nextName = secName.nameInput.value.trim();
+      if (nextName !== t.name) {
+        PetsService.saveTeam({ id: t.id, name: nextName });
+      }
+    });
+    secSlots.btnUseCurrent.onclick = async () => {
+      const t = getSelectedTeam();
+      if (!t) return;
+      try {
+        const arr = await PetsService.getPets();
+        const list = Array.isArray(arr) ? arr : [];
+        const ids = list.map((p) => String(p?.slot?.id || "")).filter((x) => !!x).slice(0, 3);
+        const nextSlots = [ids[0] || null, ids[1] || null, ids[2] || null];
+        PetsService.saveTeam({ id: t.id, slots: nextSlots });
+        await repaintSlots(t);
+      } catch {
+      }
+    };
+    secSlots.btnClear.onclick = async () => {
+      const t = getSelectedTeam();
+      if (!t) return;
+      PetsService.saveTeam({ id: t.id, slots: [null, null, null] });
+      await repaintSlots(t);
+    };
+    btnSave.onclick = () => {
+      const t = getSelectedTeam();
+      if (!t) return;
+      const name = secName.nameInput.value.trim();
+      const slots = t.slots.slice(0, 3);
+      PetsService.saveTeam({ id: t.id, name, slots });
+      void repaintSlots(t);
+    };
+    function sameSet(a, b) {
+      if (a.length !== b.length) return false;
+      const s = new Set(a);
+      for (const x of b) if (!s.has(x)) return false;
+      return true;
+    }
+    async function waitForActiveTeam(team, timeoutMs = 2e3) {
+      const target = (team.slots || []).filter(Boolean);
+      const t0 = performance.now();
+      while (performance.now() - t0 < timeoutMs) {
+        const pets = await PetsService.getPets().catch(() => null);
+        const equip = Array.isArray(pets) ? pets.map((p) => String(p?.slot?.id || "")).filter(Boolean) : [];
+        if (sameSet(equip, target)) return true;
+        await new Promise((r) => setTimeout(r, 80));
+      }
+      return false;
+    }
+    btnUseTeam.onclick = async () => {
+      const t = getSelectedTeam();
+      if (!t) return;
+      try {
+        isApplyingTeam = true;
+        activeTeamId = t.id;
+        await refreshTeamList(true);
+        await PetsService.useTeam(t.id);
+        await waitForActiveTeam(t);
+        await hydrateEditor(getSelectedTeam());
+        await refreshTeamList();
+      } catch (e) {
+        console.warn("[Pets] Use this team failed:", e);
+        await refreshTeamList();
+      } finally {
+        isApplyingTeam = false;
+      }
+    };
+    let unsubInv = null;
+    (async () => {
+      try {
+        void repaintSlots();
+        unsubInv = await PetsService.onInventoryPetsChange(async () => {
+          if (isApplyingTeam) return;
+          await repaintSlots(getSelectedTeam());
+        });
+      } catch {
+      }
+    })();
+    view.__cleanup__ = (() => {
+      const prev = view.__cleanup__;
+      return () => {
+        try {
+          unsubTeams?.();
+        } catch {
+        }
+        try {
+          unsubInv?.();
+        } catch {
+        }
+        try {
+          prev?.();
+        } catch {
+        }
+      };
+    })();
+  }
+  function renderLogsTab(view, ui) {
+    view.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gridTemplateRows = "auto 1fr";
+    wrap.style.gap = "10px";
+    wrap.style.height = "54vh";
+    view.appendChild(wrap);
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.flexWrap = "wrap";
+    header.style.alignItems = "center";
+    header.style.gap = "8px";
+    header.style.border = "1px solid #4445";
+    header.style.borderRadius = "10px";
+    header.style.padding = "8px 10px";
+    header.style.background = "#0f1318";
+    wrap.appendChild(header);
+    const selAbility = document.createElement("select");
+    selAbility.className = "qmm-input";
+    selAbility.style.minWidth = "200px";
+    selAbility.id = "pets.logs.filter.ability";
+    const selSort = document.createElement("select");
+    selSort.className = "qmm-input";
+    selSort.style.minWidth = "140px";
+    selSort.id = "pets.logs.sort";
+    [["desc", "Newest first"], ["asc", "Oldest first"]].forEach(([v, t]) => {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = t;
+      selSort.appendChild(o);
+    });
+    selSort.value = "desc";
+    const inputSearch = ui.inputText("search (pet / ability / details)", "");
+    inputSearch.id = "pets.logs.search";
+    inputSearch.style.minWidth = "220px";
+    const btnCopy = document.createElement("button");
+    styleBtnFullWidth(btnCopy, "Copy");
+    btnCopy.id = "pets.logs.copy";
+    const btnClear = document.createElement("button");
+    styleBtnFullWidth(btnClear, "Clear");
+    btnClear.id = "pets.logs.clear";
+    header.append(
+      ui.label("Ability"),
+      selAbility,
+      ui.label("Sort"),
+      selSort,
+      inputSearch,
+      btnCopy,
+      btnClear
+    );
+    const card = document.createElement("div");
+    card.style.border = "1px solid #4445";
+    card.style.borderRadius = "10px";
+    card.style.padding = "10px";
+    card.style.background = "#0f1318";
+    card.style.overflow = "hidden";
+    card.style.display = "grid";
+    card.style.gridTemplateRows = "auto 1fr";
+    card.style.minHeight = "0";
+    wrap.appendChild(card);
+    const headerGrid = document.createElement("div");
+    headerGrid.style.display = "grid";
+    headerGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
+    headerGrid.style.columnGap = "0";
+    headerGrid.style.borderBottom = "1px solid #ffffff1a";
+    headerGrid.style.padding = "0 0 6px 0";
+    function mkHeadCell(txt, align = "center") {
+      const el2 = document.createElement("div");
+      el2.textContent = txt;
+      el2.style.fontWeight = "600";
+      el2.style.opacity = "0.9";
+      el2.style.padding = "6px 8px";
+      el2.style.textAlign = align;
+      return el2;
+    }
+    headerGrid.append(
+      mkHeadCell("Time"),
+      mkHeadCell("Pet"),
+      mkHeadCell("Ability"),
+      mkHeadCell("Details", "left")
+    );
+    card.appendChild(headerGrid);
+    const bodyGrid = document.createElement("div");
+    bodyGrid.style.display = "grid";
+    bodyGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
+    bodyGrid.style.gridAutoRows = "auto";
+    bodyGrid.style.alignContent = "start";
+    bodyGrid.style.overflow = "auto";
+    bodyGrid.style.width = "100%";
+    bodyGrid.style.minHeight = "0";
+    card.appendChild(bodyGrid);
+    let logs = [];
+    let abilitySet = /* @__PURE__ */ new Set();
+    let abilityFilter = "";
+    let sortDir = "desc";
+    let q = "";
+    const NF_INT = new Intl.NumberFormat(void 0, { maximumFractionDigits: 0 });
+    function roundNumber(n) {
+      return Math.round(n);
+    }
+    function normalizeNumbersDeep(v) {
+      if (typeof v === "number") return roundNumber(v);
+      if (v === null || v === void 0) return v;
+      if (Array.isArray(v)) return v.map(normalizeNumbersDeep);
+      if (typeof v === "object") {
+        const o = {};
+        for (const k of Object.keys(v)) o[k] = normalizeNumbersDeep(v[k]);
+        return o;
+      }
+      return v;
+    }
+    function toDisplayString(v, depth = 0) {
+      if (v === null || v === void 0) return "";
+      if (typeof v === "number") return NF_INT.format(v);
+      if (typeof v === "string") return v;
+      if (typeof v === "boolean") return String(v);
+      if (Array.isArray(v)) {
+        return v.map((x) => toDisplayString(x, depth + 1)).join(", ");
+      }
+      if (typeof v === "object") {
+        const entries = Object.entries(v);
+        if (!entries.length) return "";
+        return entries.map(([k, val]) => {
+          if (val !== null && typeof val === "object") {
+            try {
+              const norm = normalizeNumbersDeep(val);
+              return `${k}: ${JSON.stringify(norm)}`;
+            } catch {
+              return `${k}: ${String(val)}`;
+            }
+          }
+          return `${k}: ${toDisplayString(val, depth + 1)}`;
+        }).join(", ");
+      }
+      return String(v);
+    }
+    function formatDetails(data) {
+      try {
+        const norm = normalizeNumbersDeep(data);
+        return toDisplayString(norm);
+      } catch {
+        try {
+          return JSON.stringify(data);
+        } catch {
+          return String(data ?? "");
+        }
+      }
+    }
+    function detailsForSearch(data) {
+      try {
+        return formatDetails(data).toLowerCase();
+      } catch {
+        try {
+          return JSON.stringify(data).toLowerCase();
+        } catch {
+          return "";
+        }
+      }
+    }
+    function rebuildAbilityOptions() {
+      const current = selAbility.value;
+      selAbility.innerHTML = "";
+      const opts = [["", "All abilities"], ...Array.from(abilitySet).sort().map((a) => [a, a])];
+      for (const [v, t] of opts) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = t;
+        selAbility.appendChild(o);
+      }
+      selAbility.value = opts.some(([v]) => v === current) ? current : "";
+    }
+    function cell(txt, align = "center") {
+      const el2 = document.createElement("div");
+      el2.textContent = txt;
+      el2.style.padding = "6px 8px";
+      el2.style.textAlign = align;
+      el2.style.whiteSpace = align === "left" ? "pre-wrap" : "normal";
+      el2.style.wordBreak = align === "left" ? "break-word" : "normal";
+      el2.style.borderBottom = "1px solid #ffffff12";
+      return el2;
+    }
+    function row(log) {
+      const time = cell(fmtTime2(log.performedAt), "center");
+      const petLabel = log.petName || log.species || "Pet";
+      const pet = cell(petLabel, "center");
+      const ab = cell(log.abilityId, "center");
+      const detText = formatDetails(log.data);
+      const det = cell(detText, "left");
+      bodyGrid.append(time, pet, ab, det);
+    }
+    function applyFilters() {
+      const normAbilityKey = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "").replace(/([ivx]+)$/i, "");
+      let arr = logs.slice();
+      if (abilityFilter && abilityFilter.trim()) {
+        const f = normAbilityKey(abilityFilter);
+        arr = arr.filter((l) => {
+          const idKey = normAbilityKey(l.abilityId);
+          const nameKey = normAbilityKey(PetsService.getAbilityNameWithoutLevel(l.abilityId));
+          return idKey === f || nameKey === f;
+        });
+      }
+      if (q && q.trim()) {
+        const qq = q.toLowerCase();
+        arr = arr.filter((l) => {
+          const pet = (l.petName || l.species || "").toLowerCase();
+          const abName = (PetsService.getAbilityNameWithoutLevel(l.abilityId) || "").toLowerCase();
+          const abId = (l.abilityId || "").toLowerCase();
+          const det = detailsForSearch(l.data);
+          return pet.includes(qq) || abName.includes(qq) || abId.includes(qq) || det.includes(qq) || (l.petId || "").toLowerCase().includes(qq);
+        });
+      }
+      arr.sort(
+        (a, b) => sortDir === "asc" ? a.performedAt - b.performedAt : b.performedAt - a.performedAt
+      );
+      return arr;
+    }
+    function repaint() {
+      bodyGrid.innerHTML = "";
+      const arr = applyFilters();
+      if (!arr.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No logs yet.";
+        empty.style.opacity = "0.75";
+        empty.style.gridColumn = "1 / -1";
+        empty.style.padding = "8px";
+        bodyGrid.appendChild(empty);
+        return;
+      }
+      arr.forEach(row);
+      bodyGrid.scrollTop = bodyGrid.scrollHeight + 32;
+    }
+    selAbility.onchange = () => {
+      abilityFilter = selAbility.value;
+      repaint();
+    };
+    selSort.onchange = () => {
+      sortDir = selSort.value || "desc";
+      repaint();
+    };
+    inputSearch.addEventListener("input", () => {
+      q = inputSearch.value.trim();
+      repaint();
+    });
+    btnClear.onclick = () => {
+      try {
+        PetsService.clearAbilityLogs();
+      } catch {
+      }
+    };
+    btnCopy.onclick = async () => {
+      const arr = applyFilters().map((l) => ({
+        time: fmtTime2(l.performedAt),
+        pet: l.petName || l.species || l.petId,
+        petId: l.petId,
+        ability: l.abilityId,
+        data: normalizeNumbersDeep(l.data)
+      }));
+      const txt = JSON.stringify(arr, null, 2);
+      try {
+        await navigator.clipboard.writeText(txt);
+      } catch {
+      }
+    };
+    let unsubLogs = null;
+    (async () => {
+      try {
+        abilitySet = new Set(PetsService.getSeenAbilityIds());
+        rebuildAbilityOptions();
+        unsubLogs = PetsService.onAbilityLogs((all) => {
+          logs = all.map((e) => ({
+            petId: e.petId,
+            petName: e.name ?? null,
+            species: e.species ?? null,
+            abilityId: e.abilityId,
+            data: e.data,
+            performedAt: e.performedAt
+          }));
+          abilitySet = new Set(PetsService.getSeenAbilityIds());
+          rebuildAbilityOptions();
+          repaint();
+        });
+      } catch {
+      }
+    })();
+    view.__cleanup__ = () => {
+      try {
+        unsubLogs?.();
+      } catch {
+      }
+    };
+    repaint();
+  }
+  function renderPetsMenu(root) {
+    const ui = new Menu({ id: "pets", compact: true });
+    ui.mount(root);
+    ui.addTab("manager", "Manager", (view) => renderManagerTab(view, ui));
+    ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
+  }
+
+  // src/ui/menus/misc.ts
+  function centerRow() {
+    const r = document.createElement("div");
+    r.style.display = "flex";
+    r.style.flexWrap = "wrap";
+    r.style.justifyContent = "center";
+    r.style.alignItems = "center";
+    r.style.gap = "8px";
+    return r;
+  }
+  var LS_GHOST_KEY = "qws:player:ghostMode";
+  var readLS = (k, def = false) => {
+    try {
+      return localStorage.getItem(k) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writeLS = (k, v) => {
+    try {
+      localStorage.setItem(k, v ? "1" : "0");
+    } catch {
+    }
+  };
+  function createGhostController() {
+    const LS_DELAY_KEY = "qws:ghost:delayMs";
+    const DEFAULT_DELAY_MS = 50;
+    const readDelay = () => {
+      try {
+        return Math.max(5, Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS));
+      } catch {
+        return DEFAULT_DELAY_MS;
+      }
+    };
+    let DELAY_MS = readDelay();
+    function setDelayMs(n) {
+      const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+      DELAY_MS = v;
+      try {
+        localStorage.setItem(LS_DELAY_KEY, String(DELAY_MS));
+      } catch {
+      }
+    }
+    const KEYS = /* @__PURE__ */ new Set();
+    const onKeyDownCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.repeat) return;
+      KEYS.add(k);
+    };
+    const onKeyUpCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      KEYS.delete(k);
+    };
+    const onBlur = () => {
+      KEYS.clear();
+    };
+    const onVisibility = () => {
+      if (document.hidden) KEYS.clear();
+    };
+    function getDir() {
+      let dx = 0, dy = 0;
+      if (KEYS.has("z") || KEYS.has("w") || KEYS.has("arrowup")) dy -= 1;
+      if (KEYS.has("s") || KEYS.has("arrowdown")) dy += 1;
+      if (KEYS.has("q") || KEYS.has("a") || KEYS.has("arrowleft")) dx -= 1;
+      if (KEYS.has("d") || KEYS.has("arrowright")) dx += 1;
+      if (dx) dx = dx > 0 ? 1 : -1;
+      if (dy) dy = dy > 0 ? 1 : -1;
+      return { dx, dy };
+    }
+    let rafId = null;
+    let lastTs = 0, accMs = 0, inMove = false;
+    async function step(dx, dy) {
+      let cur;
+      try {
+        cur = await PlayerService.getPosition();
+      } catch {
+      }
+      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
+      try {
+        await PlayerService.move(cx + dx, cy + dy);
+      } catch {
+      }
+    }
+    function frame(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = ts - lastTs;
+      lastTs = ts;
+      const { dx, dy } = getDir();
+      accMs += dt;
+      if (dx === 0 && dy === 0) {
+        accMs = Math.min(accMs, DELAY_MS * 4);
+        rafId = requestAnimationFrame(frame);
+        return;
+      }
+      if (accMs >= DELAY_MS && !inMove) {
+        accMs -= DELAY_MS;
+        inMove = true;
+        (async () => {
+          try {
+            await step(dx, dy);
+          } finally {
+            inMove = false;
+          }
+        })();
+      }
+      accMs = Math.min(accMs, DELAY_MS * 4);
+      rafId = requestAnimationFrame(frame);
+    }
+    return {
+      start() {
+        if (rafId !== null) return;
+        lastTs = 0;
+        accMs = 0;
+        inMove = false;
+        window.addEventListener("keydown", onKeyDownCapture, { capture: true });
+        window.addEventListener("keyup", onKeyUpCapture, { capture: true });
+        window.addEventListener("blur", onBlur);
+        document.addEventListener("visibilitychange", onVisibility);
+        rafId = requestAnimationFrame(frame);
+      },
+      stop() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        KEYS.clear();
+        window.removeEventListener("keydown", onKeyDownCapture, { capture: true });
+        window.removeEventListener("keyup", onKeyUpCapture, { capture: true });
+        window.removeEventListener("blur", onBlur);
+        document.removeEventListener("visibilitychange", onVisibility);
+      },
+      setSpeed: setDelayMs,
+      getSpeed: readDelay
+    };
+  }
+  async function renderMiscMenu(container) {
+    const ui = new Menu({ id: "misc", compact: true });
+    ui.mount(container);
+    const view = ui.root.querySelector(".qmm-views");
+    view.innerHTML = "";
+    view.style.display = "grid";
+    view.style.gridTemplateRows = "auto 1fr";
+    view.style.gap = "10px";
+    view.style.minHeight = "0";
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "10px";
+    const title = ui.label("Player controls");
+    title.style.fontWeight = "700";
+    title.style.fontSize = "14px";
+    header.append(title);
+    view.appendChild(header);
+    const card = document.createElement("div");
+    card.className = "qmm-card";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "12px";
+    card.style.alignItems = "center";
+    card.style.overflow = "auto";
+    card.style.minHeight = "0";
+    view.appendChild(card);
+    const row = centerRow();
+    const swGhost = ui.switch(readLS(LS_GHOST_KEY));
+    swGhost.id = "player.ghostMode";
+    const labGhost = ui.label("Ghost mode");
+    const labDelay = ui.label("Move delay (ms)");
+    const inputDelay = ui.inputNumber(10, 1e3, 5, 50);
+    inputDelay.id = "player.moveDelay";
+    row.append(swGhost, labGhost, labDelay, inputDelay.wrap ?? inputDelay);
+    card.appendChild(row);
+    const ghost = createGhostController();
+    inputDelay.value = String(ghost.getSpeed?.() ?? 50);
+    inputDelay.addEventListener("change", () => {
+      const v = Math.max(10, Math.min(1e3, Math.floor(Number(inputDelay.value) || 50)));
+      inputDelay.value = String(v);
+      ghost.setSpeed?.(v);
+    });
+    if (swGhost.checked) ghost.start();
+    swGhost.onchange = () => {
+      const on = !!swGhost.checked;
+      writeLS(LS_GHOST_KEY, on);
+      on ? ghost.start() : ghost.stop();
+    };
+    card.__cleanup__ = () => {
+      try {
+        ghost.stop();
+      } catch {
+      }
+    };
+  }
+
+  // src/utils/antiafk.ts
+  function createAntiAfkController(deps) {
+    const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
+    const listeners = [];
+    function swallowAll() {
+      const add = (target, t) => {
+        const h = (e) => {
+          e.stopImmediatePropagation();
+          e.preventDefault?.();
+        };
+        target.addEventListener(t, h, { capture: true });
+        listeners.push({ t, h, target });
+      };
+      STOP_EVENTS.forEach((t) => {
+        add(document, t);
+        add(window, t);
+      });
+    }
+    function unswallowAll() {
+      for (const { t, h, target } of listeners) try {
+        target.removeEventListener(t, h, { capture: true });
+      } catch {
+      }
+      listeners.length = 0;
+    }
+    const docProto = Object.getPrototypeOf(document);
+    const saved = {
+      hidden: Object.getOwnPropertyDescriptor(docProto, "hidden"),
+      visibilityState: Object.getOwnPropertyDescriptor(docProto, "visibilityState"),
+      hasFocus: document.hasFocus ? document.hasFocus.bind(document) : null
+    };
+    function patchProps() {
+      try {
+        Object.defineProperty(docProto, "hidden", { configurable: true, get() {
+          return false;
+        } });
+      } catch {
+      }
+      try {
+        Object.defineProperty(docProto, "visibilityState", { configurable: true, get() {
+          return "visible";
+        } });
+      } catch {
+      }
+      try {
+        document.hasFocus = () => true;
+      } catch {
+      }
+    }
+    function restoreProps() {
+      try {
+        if (saved.hidden) Object.defineProperty(docProto, "hidden", saved.hidden);
+      } catch {
+      }
+      try {
+        if (saved.visibilityState) Object.defineProperty(docProto, "visibilityState", saved.visibilityState);
+      } catch {
+      }
+      try {
+        if (saved.hasFocus) document.hasFocus = saved.hasFocus;
+      } catch {
+      }
+    }
+    let audioCtx = null;
+    let osc = null;
+    let gain = null;
+    const resumeIfSuspended = () => {
+      if (audioCtx && audioCtx.state !== "running") audioCtx.resume?.().catch(() => {
+      });
+    };
+    function startAudioKeepAlive() {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+        gain = audioCtx.createGain();
+        gain.gain.value = 1e-5;
+        osc = audioCtx.createOscillator();
+        osc.frequency.value = 1;
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start();
+        document.addEventListener("visibilitychange", resumeIfSuspended, { capture: true });
+        window.addEventListener("focus", resumeIfSuspended, { capture: true });
+      } catch {
+        stopAudioKeepAlive();
+      }
+    }
+    function stopAudioKeepAlive() {
+      try {
+        osc?.stop();
+      } catch {
+      }
+      try {
+        osc?.disconnect();
+        gain?.disconnect();
+      } catch {
+      }
+      try {
+        audioCtx?.close?.();
+      } catch {
+      }
+      document.removeEventListener("visibilitychange", resumeIfSuspended, { capture: true });
+      window.removeEventListener("focus", resumeIfSuspended, { capture: true });
+      osc = null;
+      gain = null;
+      audioCtx = null;
+    }
+    let hb = null;
+    function startHeartbeat() {
+      const targetEl = document.querySelector("canvas") || document.body || document.documentElement;
+      hb = window.setInterval(() => {
+        try {
+          targetEl.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 1, clientY: 1 }));
+        } catch {
+        }
+      }, 25e3);
+    }
+    function stopHeartbeat() {
+      if (hb !== null) {
+        clearInterval(hb);
+        hb = null;
+      }
+    }
+    let pingTimer = null;
+    async function pingPosition() {
+      try {
+        const cur = await deps.getPosition();
+        if (!cur) return;
+        await deps.move(Math.round(cur.x), Math.round(cur.y));
+      } catch {
+      }
+    }
+    function startPing() {
+      pingTimer = window.setInterval(pingPosition, 6e4);
+      void pingPosition();
+    }
+    function stopPing() {
+      if (pingTimer !== null) {
+        clearInterval(pingTimer);
+        pingTimer = null;
+      }
+    }
+    return {
+      start() {
+        patchProps();
+        swallowAll();
+        startAudioKeepAlive();
+        startHeartbeat();
+        startPing();
+      },
+      stop() {
+        stopPing();
+        stopHeartbeat();
+        stopAudioKeepAlive();
+        unswallowAll();
+        restoreProps();
+      }
+    };
+  }
+
+  // src/main.ts
+  (async function() {
+    "use strict";
+    installPageWebSocketHook();
+    mountHUD({
+      onRegister(register) {
+        register("players", "Players", renderPlayersMenu);
+        register("pets", "Pets", renderPetsMenu);
+        register("misc", "Misc", renderMiscMenu);
+        register("debug-data", "Debug Data", renderDebugDataMenu);
+      }
+    });
+    initWatchers();
+    const antiAfk = createAntiAfkController({
+      getPosition: () => PlayerService.getPosition(),
+      move: (x, y) => PlayerService.move(x, y)
+    });
+    antiAfk.start();
+  })();
+})();
