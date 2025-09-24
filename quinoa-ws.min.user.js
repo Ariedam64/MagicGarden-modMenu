@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.1.7
+// @version      1.1.8
 // @match        https://*.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -194,7 +194,6 @@
     return {
       get: (a) => capturedGet(a),
       set: (a, v) => capturedSet(a, v),
-      // Poll-based sub when we only have raw get/set (no native sub)
       sub: (a, cb) => {
         let last;
         try {
@@ -1996,7 +1995,6 @@
       openAction: openInventoryPanel,
       closeAction: closeInventoryPanel,
       autoDisableOnClose: true
-      // à la fermeture du modal → restauration automatique
     }
   };
   var MYDATA_FAKE_CONFIG = {
@@ -2019,14 +2017,6 @@
     try {
       const invAtom = getAtomByLabel(ATOMS.inventory);
       if (invAtom) myInv = await jGet(invAtom).catch(() => void 0);
-    } catch {
-    }
-    try {
-      console.log("[fakeInventory] \u25B6 re\xE7u \u2192", payload);
-    } catch {
-    }
-    try {
-      console.log("[fakeInventory] \u25B6 moi   \u2192", myInv);
     } catch {
     }
     const safePayload = payload;
@@ -2720,14 +2710,10 @@
       const t = this.getTeams().find((tt) => tt.id === teamId) || null;
       if (!t) throw new Error("Team not found");
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      if (!targetInvIds.length) {
-        return { swapped: 0, placed: 0, skipped: 0 };
-      }
       return _applyTeam(targetInvIds);
     },
     async useTeamSlots(slots) {
       const targetInvIds = (Array.isArray(slots) ? slots : []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      if (!targetInvIds.length) return { swapped: 0, placed: 0, skipped: 0 };
       return _applyTeam(targetInvIds);
     }
   };
