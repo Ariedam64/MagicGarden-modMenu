@@ -2060,10 +2060,1220 @@
     if (shouldOpen) await openInventoryPanel();
   }
 
+  // src/ui/menu.ts
+  var Menu = class {
+    constructor(opts = {}) {
+      this.opts = opts;
+      // NOTE: je rends root public pour pouvoir faire ui.root.appendChild(...) côté menus
+      __publicField(this, "root");
+      __publicField(this, "tabBar");
+      __publicField(this, "views");
+      __publicField(this, "tabs", /* @__PURE__ */ new Map());
+      __publicField(this, "events", /* @__PURE__ */ new Map());
+      __publicField(this, "currentId", null);
+      __publicField(this, "lsKeyActive");
+      __publicField(this, "_altDown", false);
+      __publicField(this, "_hovering", false);
+      __publicField(this, "_onKey", (e) => {
+        const alt = e.altKey;
+        if (alt !== this._altDown) {
+          this._altDown = alt;
+          this._updateAltCursor();
+        }
+      });
+      __publicField(this, "_onBlur", () => {
+        this._altDown = false;
+        this._updateAltCursor();
+      });
+      __publicField(this, "_onEnter", () => {
+        this._hovering = true;
+        this._updateAltCursor();
+      });
+      __publicField(this, "_onLeave", () => {
+        this._hovering = false;
+        this._updateAltCursor();
+      });
+      this.lsKeyActive = `menu:${opts.id || "default"}:activeTab`;
+    }
+    /** Monte le menu dans un conteneur */
+    mount(container) {
+      this.ensureStyles();
+      container.innerHTML = "";
+      this.root = el("div", `qmm ${this.opts.classes || ""} ${this.opts.compact ? "qmm-compact" : ""}`);
+      if (this.opts.startHidden) this.root.style.display = "none";
+      this.tabBar = el("div", "qmm-tabs");
+      this.views = el("div", "qmm-views");
+      this.root.appendChild(this.tabBar);
+      this.root.appendChild(this.views);
+      container.appendChild(this.root);
+      if (this.tabs.size) {
+        for (const [id, def] of this.tabs) this.createTabView(id, def);
+        this.restoreActive();
+      }
+      this.updateTabsBarVisibility();
+      this.root.addEventListener("pointerenter", this._onEnter);
+      this.root.addEventListener("pointerleave", this._onLeave);
+      window.addEventListener("keydown", this._onKey, true);
+      window.addEventListener("keyup", this._onKey, true);
+      window.addEventListener("blur", this._onBlur);
+      document.addEventListener("visibilitychange", this._onBlur);
+      if (this.opts.startWindowHidden) this.setWindowVisible(false);
+      this.emit("mounted");
+    }
+    /** Démonte le menu (optionnel) */
+    unmount() {
+      this.root?.removeEventListener("pointerenter", this._onEnter);
+      this.root?.removeEventListener("pointerleave", this._onLeave);
+      window.removeEventListener("keydown", this._onKey, true);
+      window.removeEventListener("keyup", this._onKey, true);
+      window.removeEventListener("blur", this._onBlur);
+      document.removeEventListener("visibilitychange", this._onBlur);
+      if (this.root?.parentElement) this.root.parentElement.removeChild(this.root);
+      this.emit("unmounted");
+    }
+    /** Retourne l'élément fenêtre englobant (barre – / ×) */
+    getWindowEl() {
+      if (!this.root) return null;
+      const sel = this.opts.windowSelector || ".qws-win";
+      return this.root.closest(sel);
+    }
+    /** Affiche/masque la FENÊTRE (barre incluse) */
+    setWindowVisible(visible) {
+      const win = this.getWindowEl();
+      if (!win) return;
+      win.classList.toggle("is-hidden", !visible);
+      this.emit(visible ? "window:show" : "window:hide");
+    }
+    /** Bascule l’état de la fenêtre. Retourne true si maintenant visible. */
+    toggleWindow() {
+      const win = this.getWindowEl();
+      if (!win) return false;
+      const willShow = win.classList.contains("is-hidden");
+      this.setWindowVisible(willShow);
+      return willShow;
+    }
+    /** Donne l’état courant de la fenêtre (true = visible) */
+    isWindowVisible() {
+      const win = this.getWindowEl();
+      if (!win) return true;
+      return !win.classList.contains("is-hidden") && getComputedStyle(win).display !== "none";
+    }
+    /** Affiche/masque le root */
+    setVisible(visible) {
+      if (!this.root) return;
+      this.root.style.display = visible ? "" : "none";
+      this.emit(visible ? "show" : "hide");
+    }
+    toggle() {
+      if (!this.root) return false;
+      const v = this.root.style.display === "none";
+      this.setVisible(v);
+      return v;
+    }
+    /** Ajoute un onglet (peut être appelé avant ou après mount) */
+    addTab(id, title, render) {
+      this.tabs.set(id, { title, render, badge: null });
+      if (this.root) {
+        this.createTabView(id, this.tabs.get(id));
+        this.updateTabsBarVisibility();
+      }
+      return this;
+    }
+    /** Ajoute plusieurs onglets en une fois */
+    addTabs(defs) {
+      defs.forEach((d) => this.addTab(d.id, d.title, d.render));
+      return this;
+    }
+    /** Met à jour le titre de l’onglet (ex: compteur, libellé) */
+    setTabTitle(id, title) {
+      const def = this.tabs.get(id);
+      if (!def) return;
+      def.title = title;
+      if (def.btn) {
+        const label2 = def.btn.querySelector(".label");
+        if (label2) label2.textContent = title;
+      }
+    }
+    /** Ajoute/retire un badge à droite du titre (ex: “3”, “NEW”, “!”) */
+    setTabBadge(id, text) {
+      const def = this.tabs.get(id);
+      if (!def || !def.btn) return;
+      if (!def.badge) {
+        def.badge = document.createElement("span");
+        def.badge.className = "badge";
+        def.btn.appendChild(def.badge);
+      }
+      if (text == null || text === "") {
+        def.badge.style.display = "none";
+      } else {
+        def.badge.textContent = text;
+        def.badge.style.display = "";
+      }
+    }
+    /** Force le re-render d’un onglet (ré-exécute son render) */
+    refreshTab(id) {
+      const def = this.tabs.get(id);
+      if (!def?.view) return;
+      const scroller = this.findScrollableAncestor(def.view);
+      const st = scroller ? scroller.scrollTop : null;
+      const sl = scroller ? scroller.scrollLeft : null;
+      const activeId = document.activeElement?.id || null;
+      def.view.innerHTML = "";
+      try {
+        def.render(def.view, this);
+      } catch (e) {
+        def.view.textContent = String(e);
+      }
+      if (this.currentId === id) this.switchTo(id);
+      this.emit("tab:render", id);
+      if (scroller && st != null) {
+        requestAnimationFrame(() => {
+          try {
+            scroller.scrollTop = st;
+            scroller.scrollLeft = sl ?? 0;
+          } catch {
+          }
+          if (activeId) {
+            const n = document.getElementById(activeId);
+            if (n && n.focus) try {
+              n.focus();
+            } catch {
+            }
+          }
+        });
+      }
+    }
+    findScrollableAncestor(start) {
+      function isScrollable(el3) {
+        const s = getComputedStyle(el3);
+        const oy = s.overflowY || s.overflow;
+        return /(auto|scroll)/.test(oy) && el3.scrollHeight > el3.clientHeight;
+      }
+      let el2 = start;
+      while (el2) {
+        if (isScrollable(el2)) return el2;
+        el2 = el2.parentElement;
+      }
+      return document.querySelector(".qws-win");
+    }
+    firstTabId() {
+      const it = this.tabs.keys().next();
+      return it.done ? null : it.value ?? null;
+    }
+    _updateAltCursor() {
+      if (!this.root) return;
+      this.root.classList.toggle("qmm-alt-drag", this._altDown && this._hovering);
+    }
+    /** Récupère la vue DOM d’un onglet (pratique pour updates ciblées) */
+    getTabView(id) {
+      return this.tabs.get(id)?.view ?? null;
+    }
+    /** Retire un onglet */
+    removeTab(id) {
+      const def = this.tabs.get(id);
+      if (!def) return;
+      this.tabs.delete(id);
+      const btn = this.tabBar?.querySelector(`button[data-id="${cssq(id)}"]`);
+      if (btn && btn.parentElement) btn.parentElement.removeChild(btn);
+      if (def.view && def.view.parentElement) def.view.parentElement.removeChild(def.view);
+      if (this.currentId === id) {
+        const first = this.tabs.keys().next().value || null;
+        this.switchTo(first);
+      }
+      this.updateTabsBarVisibility();
+    }
+    /** Active un onglet (id=null => affiche toutes les vues) */
+    switchTo(id) {
+      this.currentId = id;
+      [...this.tabBar.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
+      [...this.views.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
+      this.persistActive();
+      this.emit("tab:change", id);
+    }
+    /** Événements */
+    on(event, handler) {
+      if (!this.events.has(event)) this.events.set(event, /* @__PURE__ */ new Set());
+      this.events.get(event).add(handler);
+      return () => this.off(event, handler);
+    }
+    off(event, handler) {
+      this.events.get(event)?.delete(handler);
+    }
+    emit(event, ...args) {
+      this.events.get(event)?.forEach((h) => {
+        try {
+          h(...args);
+        } catch {
+        }
+      });
+    }
+    // ---------- Helpers UI publics (réutilisables dans tes tabs) ----------
+    btn(label2, onClick) {
+      const b = el("button", "qmm-btn", `<span class="label">${escapeHtml(label2)}</span>`);
+      b.onclick = onClick;
+      return b;
+    }
+    label(text) {
+      const l = el("label", "qmm-label");
+      l.textContent = text;
+      return l;
+    }
+    row(...children) {
+      const r = el("div", "qmm-row");
+      children.forEach((c) => r.appendChild(c));
+      return r;
+    }
+    section(title) {
+      const s = el("div", "qmm-section");
+      s.appendChild(el("div", "qmm-section-title", escapeHtml(title)));
+      return s;
+    }
+    inputNumber(min = 0, max = 9999, step = 1, value = 0) {
+      const wrap = el("div", "qmm-input-number");
+      const i = el("input", "qmm-input qmm-input-number-input");
+      i.type = "number";
+      i.min = String(min);
+      i.max = String(max);
+      i.step = String(step);
+      i.value = String(value);
+      i.inputMode = "numeric";
+      const spin = el("div", "qmm-spin");
+      const up = el("button", "qmm-step qmm-step--up", "\u25B2");
+      const down = el("button", "qmm-step qmm-step--down", "\u25BC");
+      up.type = down.type = "button";
+      const clamp = () => {
+        const n = Number(i.value);
+        if (Number.isFinite(n)) {
+          const lo = Number(i.min), hi = Number(i.max);
+          const clamped = Math.max(lo, Math.min(hi, n));
+          if (clamped !== n) i.value = String(clamped);
+        }
+      };
+      const bump = (dir) => {
+        if (dir < 0) i.stepDown();
+        else i.stepUp();
+        clamp();
+        i.dispatchEvent(new Event("input", { bubbles: true }));
+        i.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      const addSpin = (btn, dir) => {
+        let pressTimer = null;
+        let repeatTimer = null;
+        let suppressNextClick = false;
+        const start = (ev) => {
+          suppressNextClick = false;
+          pressTimer = window.setTimeout(() => {
+            suppressNextClick = true;
+            bump(dir);
+            repeatTimer = window.setInterval(() => bump(dir), 60);
+          }, 300);
+          btn.setPointerCapture?.(ev.pointerId);
+        };
+        const stop = () => {
+          if (pressTimer != null) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+          }
+          if (repeatTimer != null) {
+            clearInterval(repeatTimer);
+            repeatTimer = null;
+          }
+        };
+        btn.addEventListener("pointerdown", start);
+        ["pointerup", "pointercancel", "pointerleave", "blur"].forEach(
+          (ev) => btn.addEventListener(ev, stop)
+        );
+        btn.addEventListener("click", (e) => {
+          if (suppressNextClick) {
+            e.preventDefault();
+            e.stopPropagation();
+            suppressNextClick = false;
+            return;
+          }
+          bump(dir);
+        });
+      };
+      addSpin(up, 1);
+      addSpin(down, -1);
+      i.addEventListener("change", clamp);
+      spin.append(up, down);
+      wrap.append(i, spin);
+      i.wrap = wrap;
+      return i;
+    }
+    inputText(placeholder = "", value = "") {
+      const i = el("input", "qmm-input");
+      i.type = "text";
+      i.placeholder = placeholder;
+      i.value = value;
+      return i;
+    }
+    checkbox(checked = false) {
+      const i = el("input", "qmm-check");
+      i.type = "checkbox";
+      i.checked = checked;
+      return i;
+    }
+    radio(name, value, checked = false) {
+      const i = el("input", "qmm-radio");
+      i.type = "radio";
+      i.name = name;
+      i.value = value;
+      i.checked = checked;
+      return i;
+    }
+    slider(min = 0, max = 100, step = 1, value = 0) {
+      const i = el("input", "qmm-range");
+      i.type = "range";
+      i.min = String(min);
+      i.max = String(max);
+      i.step = String(step);
+      i.value = String(value);
+      return i;
+    }
+    switch(checked = false) {
+      const i = this.checkbox(checked);
+      i.classList.add("qmm-switch");
+      return i;
+    }
+    // Helpers “tableau simple” pour lister les items
+    table(headers, opts) {
+      const wrap = document.createElement("div");
+      wrap.className = "qmm-table-wrap";
+      if (opts?.minimal) wrap.classList.add("qmm-table-wrap--minimal");
+      const scroller = document.createElement("div");
+      scroller.className = "qmm-table-scroll";
+      if (opts?.maxHeight) scroller.style.maxHeight = opts.maxHeight;
+      wrap.appendChild(scroller);
+      const t = document.createElement("table");
+      t.className = "qmm-table";
+      if (opts?.minimal) t.classList.add("qmm-table--minimal");
+      if (opts?.compact) t.classList.add("qmm-table--compact");
+      if (opts?.fixed) t.style.tableLayout = "fixed";
+      const thead = document.createElement("thead");
+      const trh = document.createElement("tr");
+      headers.forEach((h) => {
+        const th = document.createElement("th");
+        if (typeof h === "string") {
+          th.textContent = h;
+        } else {
+          th.textContent = h.label ?? "";
+          if (h.align) th.classList.add(`is-${h.align}`);
+          if (h.width) th.style.width = h.width;
+        }
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+      const tbody = document.createElement("tbody");
+      t.append(thead, tbody);
+      scroller.appendChild(t);
+      return { root: wrap, tbody };
+    }
+    radioGroup(name, options, selected, onChange) {
+      const wrap = el("div", "qmm-radio-group");
+      for (const { value, label: label2 } of options) {
+        const r = this.radio(name, value, selected === value);
+        const lab = document.createElement("label");
+        lab.className = "qmm-radio-label";
+        lab.appendChild(r);
+        lab.appendChild(document.createTextNode(label2));
+        r.onchange = () => {
+          if (r.checked) onChange(value);
+        };
+        wrap.appendChild(lab);
+      }
+      return wrap;
+    }
+    /** Bind LS: sauvegarde automatique via toStr/parse */
+    bindLS(key, read, write, parse, toStr) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw != null) write(parse(raw));
+      } catch {
+      }
+      return { save: () => {
+        try {
+          localStorage.setItem(key, toStr(read()));
+        } catch {
+        }
+      } };
+    }
+    /* -------------------------- split2 helper -------------------------- */
+    /** Crée un layout 2 colonnes (gauche/droite) en CSS Grid.
+     *  leftWidth: ex "200px" | "18rem" | "minmax(160px, 30%)" */
+    split2(leftWidth = "260px") {
+      const root = el("div", "qmm-split");
+      root.style.gridTemplateColumns = "minmax(160px, max-content) 1fr";
+      const left = el("div", "qmm-split-left");
+      const right = el("div", "qmm-split-right");
+      root.appendChild(left);
+      root.appendChild(right);
+      return { root, left, right };
+    }
+    /* -------------------------- VTabs factory -------------------------- */
+    /** Crée des “tabs verticaux” génériques (liste sélectionnable + filtre). */
+    vtabs(options = {}) {
+      return new VTabs(this, options);
+    }
+    hotkeyButton(initial, onChange, opts) {
+      const emptyLabel = opts?.emptyLabel ?? "None";
+      const listeningLabel = opts?.listeningLabel ?? "Press a key\u2026";
+      const clearable = opts?.clearable ?? true;
+      let hk = initial ?? null;
+      let recording = false;
+      if (opts?.storageKey) {
+        try {
+          hk = stringToHotkey(localStorage.getItem(opts.storageKey) || "") ?? initial ?? null;
+        } catch {
+        }
+      }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qmm-hotkey";
+      btn.setAttribute("aria-live", "polite");
+      const render = () => {
+        btn.classList.toggle("is-recording", recording);
+        btn.classList.toggle("is-empty", !hk);
+        if (recording) {
+          btn.textContent = listeningLabel;
+          btn.title = "Listening\u2026 press a key (Esc to cancel, Backspace to clear)";
+        } else if (!hk) {
+          btn.textContent = emptyLabel;
+          btn.title = "No key assigned";
+        } else {
+          btn.textContent = hotkeyToString(hk);
+          btn.title = "Click to rebind \u2022 Right-click to clear";
+        }
+      };
+      const stopRecording = (commit) => {
+        recording = false;
+        if (!commit) {
+          render();
+          return;
+        }
+        render();
+      };
+      const save = () => {
+        if (opts?.storageKey) {
+          const str = hotkeyToString(hk);
+          try {
+            if (str) localStorage.setItem(opts.storageKey, str);
+            else localStorage.removeItem(opts.storageKey);
+          } catch {
+          }
+        }
+        onChange?.(hk, opts?.storageKey ? hotkeyToString(hk) : void 0);
+      };
+      const handleKeyDown = (e) => {
+        if (!recording) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Escape") {
+          stopRecording(false);
+          window.removeEventListener("keydown", handleKeyDown, true);
+          return;
+        }
+        if ((e.key === "Backspace" || e.key === "Delete") && clearable) {
+          hk = null;
+          save();
+          stopRecording(true);
+          window.removeEventListener("keydown", handleKeyDown, true);
+          return;
+        }
+        const next = eventToHotkey(e);
+        if (!next) {
+          return;
+        }
+        hk = next;
+        save();
+        stopRecording(true);
+        window.removeEventListener("keydown", handleKeyDown, true);
+      };
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (!recording) {
+          recording = true;
+          render();
+          window.addEventListener("keydown", handleKeyDown, true);
+          btn.focus();
+        }
+      });
+      if (clearable) {
+        btn.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          if (hk) {
+            hk = null;
+            save();
+            render();
+          }
+        });
+      }
+      render();
+      return btn;
+    }
+    // ---------- internes ----------
+    createTabView(id, def) {
+      const b = document.createElement("button");
+      b.className = "qmm-tab";
+      b.dataset.id = id;
+      b.innerHTML = `<span class="label">${escapeHtml(def.title)}</span><span class="badge" style="display:none"></span>`;
+      const badgeEl = b.querySelector(".badge");
+      def.btn = b;
+      def.badge = badgeEl;
+      b.onclick = () => this.switchTo(id);
+      this.tabBar.appendChild(b);
+      const view = el("div", "qmm-view");
+      view.dataset.id = id;
+      def.view = view;
+      this.views.appendChild(view);
+      try {
+        def.render(view, this);
+      } catch (e) {
+        view.textContent = String(e);
+      }
+      if (!this.currentId) this.switchTo(id);
+    }
+    persistActive() {
+      if (!this.currentId) return;
+      try {
+        localStorage.setItem(this.lsKeyActive, this.currentId);
+      } catch {
+      }
+    }
+    restoreActive() {
+      let id = null;
+      try {
+        id = localStorage.getItem(this.lsKeyActive);
+      } catch {
+      }
+      if (id && this.tabs.has(id)) this.switchTo(id);
+      else if (this.tabs.size) this.switchTo(this.firstTabId());
+    }
+    updateTabsBarVisibility() {
+      if (!this.tabBar || !this.root) return;
+      const hasTabs = this.tabs.size > 0;
+      if (hasTabs) {
+        if (!this.tabBar.parentElement) {
+          this.root.insertBefore(this.tabBar, this.views);
+        }
+        this.tabBar.style.display = "flex";
+        this.root.classList.remove("qmm-no-tabs");
+      } else {
+        if (this.tabBar.parentElement) {
+          this.tabBar.parentElement.removeChild(this.tabBar);
+        }
+        this.root.classList.add("qmm-no-tabs");
+      }
+    }
+    ensureStyles() {
+      if (document.getElementById("__qmm_css__")) return;
+      const css = `
+    /* ================= Modern UI for qmm ================= */
+.qmm{
+  --qmm-bg:        #0f1318;
+  --qmm-bg-soft:   #0b0f13;
+  --qmm-panel:     #111823cc;
+  --qmm-border:    #ffffff22;
+  --qmm-border-2:  #ffffff14;
+  --qmm-accent:    #7aa2ff;
+  --qmm-accent-2:  #92b2ff;
+  --qmm-text:      #e7eef7;
+  --qmm-text-dim:  #b9c3cf;
+  --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
+  --qmm-blur:      8px;
+
+  display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
+}
+.qmm-compact{ gap:6px }
+
+/* ---------- Tabs (pill + underline) ---------- */
+.qmm-tabs{
+  display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
+  padding:0 6px 2px 6px; position:relative; isolation:isolate;
+  border-bottom:1px solid var(--qmm-border);
+  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
+  border-top-left-radius:10px; border-top-right-radius:10px;
+}
+.qmm-no-tabs .qmm-views{ margin-top:0 }
+
+.qmm-tab{
+  flex:1 1 0; min-width:0; cursor:pointer;
+  display:inline-flex; justify-content:center; align-items:center; gap:8px;
+  padding:8px 12px; color:var(--qmm-text);
+  background:transparent; border:1px solid transparent; border-bottom:none;
+  border-top-left-radius:10px; border-top-right-radius:10px;
+  position:relative; margin:0; margin-bottom:-1px;
+  transition:background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
+}
+.qmm-compact .qmm-tab{ padding:6px 10px }
+.qmm-tab:hover{ background:rgba(255,255,255,.06) }
+.qmm-tab:active{ transform:translateY(1px) }
+.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
+
+.qmm-tab .badge{
+  font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
+  background:#ffffff1a; border:1px solid #ffffff22;
+}
+
+.qmm-tab.active{
+  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  color:#fff; box-shadow:inset 0 -1px 0 #0007;
+}
+.qmm-tab.active::after{
+  content:""; position:absolute; left:10%; right:10%; bottom:-1px; height:2px;
+  background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
+  border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
+}
+
+/* ---------- Views panel ---------- */
+.qmm-views{
+  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
+  display:flex; flex-direction:column;
+  min-width:0; min-height:0; overflow:auto; box-shadow:var(--qmm-shadow);
+}
+.qmm-compact .qmm-views{ padding:8px }
+.qmm-tabs + .qmm-views{ margin-top:-1px }
+
+.qmm-view{ display:none; min-width:0; min-height:0; }
+.qmm-view.active{ display:block; }
+
+/* ---------- Basic controls ---------- */
+.qmm-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 }
+.qmm-section{ margin-top:8px }
+.qmm-section-title{ font-weight:650; margin:2px 0 8px 0; color:var(--qmm-text) }
+
+.qmm-label{ opacity:.9 }
+.qmm-val{ min-width:24px; text-align:center }
+
+/* Buttons */
+.qmm-btn{
+  cursor:pointer; border-radius:10px; border:1px solid var(--qmm-border);
+  padding:8px 12px; background:linear-gradient(180deg, #ffffff10, #ffffff06);
+  color:#fff; box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.2);
+  transition:transform .1s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+}
+.qmm-compact .qmm-btn{ padding:6px 10px }
+.qmm-btn:hover{ background:linear-gradient(180deg, #ffffff16, #ffffff08); border-color:#ffffff40 }
+.qmm-btn:active{ transform:translateY(1px) }
+.qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
+
+/* Button variants (optional utility) */
+.qmm-btn.qmm-primary{ background:linear-gradient(180deg, rgba(122,162,255,.35), rgba(122,162,255,.15)); border-color:#9db7ff55 }
+.qmm-btn.qmm-danger{  background:linear-gradient(180deg, rgba(255,86,86,.28), rgba(255,86,86,.12));  border-color:#ff6a6a55 }
+.qmm-btn.active{
+  background:#79a6ff22;
+  border-color:#79a6ff66;
+  box-shadow: inset 0 0 0 1px #79a6ff33;
+}
+
+/* Inputs */
+.qmm-input{
+  min-width:90px; background:rgba(0,0,0,.42); color:#fff;
+  border:1px solid var(--qmm-border); border-radius:10px;
+  padding:8px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+.qmm-input::placeholder{ color:#cbd6e780 }
+.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
+
+/* Number input + spinner (unchanged API) */
+.qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
+.qmm-input-number-input{ width:70px; text-align:center; padding-right:8px }
+.qmm-spin{ display:inline-flex; flex-direction:column; gap:2px }
+.qmm-step{
+  width:22px; height:16px; font-size:11px; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:6px; border:1px solid var(--qmm-border);
+  background:rgba(255,255,255,.08); color:#fff; cursor:pointer; user-select:none;
+  transition:background .18s ease, border-color .18s ease, transform .08s ease;
+}
+.qmm-step:hover{ background:#ffffff18; border-color:#ffffff40 }
+.qmm-step:active{ transform:translateY(1px) }
+
+/* Switch (checkbox) */
+.qmm-switch{
+  appearance:none; width:42px; height:24px; background:#6c7488aa; border-radius:999px;
+  position:relative; outline:none; cursor:pointer; transition:background .18s ease, box-shadow .18s ease;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+}
+.qmm-switch::before{
+  content:""; position:absolute; top:2px; left:2px; width:20px; height:20px;
+  background:#fff; border-radius:50%; transition:transform .2s ease;
+  box-shadow:0 2px 8px rgba(0,0,0,.35);
+}
+.qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
+.qmm-switch:checked::before{ transform:translateX(18px) }
+.qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
+
+/* Checkbox & radio (native inputs skinned lightly) */
+.qmm-check, .qmm-radio{ transform:scale(1.1); accent-color: var(--qmm-accent) }
+
+/* Slider */
+.qmm-range{
+  width:180px; appearance:none; background:transparent; height:22px;
+}
+.qmm-range:focus{ outline:none }
+.qmm-range::-webkit-slider-runnable-track{
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
+}
+.qmm-range::-moz-range-track{
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
+}
+.qmm-range::-webkit-slider-thumb{
+  appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5px;
+  background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
+  transition:transform .1s ease;
+}
+.qmm-range:active::-webkit-slider-thumb{ transform:scale(1.04) }
+.qmm-range::-moz-range-thumb{
+  width:16px; height:16px; border-radius:50%; background:#fff; border:none;
+  box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
+}
+
+/* ---------- Minimal table ---------- */
+/* container */
+.qmm-table-wrap--minimal{
+  border:1px solid #263040; border-radius:8px; background:#0b0f14; box-shadow:none;
+}
+/* scroller (height cap) */
+.qmm-table-scroll{
+  overflow:auto; max-height:44vh; /* override via opts.maxHeight */
+}
+
+/* base */
+.qmm-table--minimal{
+  width:100%;
+  border-collapse:collapse;
+  background:transparent;
+  font-size:13px; line-height:1.35; color:var(--qmm-text, #cdd6e3);
+}
+
+/* header */
+.qmm-table--minimal thead th{
+  position:sticky; top:0; z-index:1;
+  text-align:left; font-weight:600;
+  padding:8px 10px;
+  color:#cbd5e1; background:#0f1318;
+  border-bottom:1px solid #263040;
+  text-transform:none; letter-spacing:0;
+}
+.qmm-table--minimal thead th.is-center { text-align: center; }
+.qmm-table--minimal thead th.is-left   { text-align: left; }   /* d\xE9j\xE0 pr\xE9sent, ok */
+.qmm-table--minimal thead th.is-right  { text-align: right; }
+.qmm-table--minimal thead th,
+.qmm-table--minimal td { vertical-align: middle; }
+
+/* cells */
+.qmm-table--minimal td{
+  padding:8px 10px; border-bottom:1px solid #1f2937; vertical-align:middle;
+}
+.qmm-table--minimal tbody tr:hover{ background:#0f1824; }
+
+/* compact variant */
+.qmm-table--compact thead th,
+.qmm-table--compact td{ padding:6px 8px; font-size:12px }
+
+/* utils */
+.qmm-table--minimal td.is-num{ text-align:right; font-variant-numeric:tabular-nums }
+.qmm-table--minimal td.is-center{ text-align:center }
+.qmm-ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.qmm-prewrap{ white-space:pre-wrap; word-break:break-word }
+
+
+/* ---------- Split panels ---------- */
+.qmm-split{
+  display:grid; gap:12px;
+  grid-template-columns:minmax(180px,260px) minmax(0,1fr);
+  align-items:start;
+}
+.qmm-split-left{ display:flex; flex-direction:column; gap:10px }
+.qmm-split-right{
+  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  display:flex; flex-direction:column; gap:12px;
+  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
+  box-shadow:var(--qmm-shadow);
+}
+
+/* ---------- VTabs (vertical list + filter) ---------- */
+.qmm-vtabs{ display:flex; flex-direction:column; gap:8px; min-width:0 }
+.qmm-vtabs .filter{ display:block }
+.qmm-vtabs .filter input{ width:100% }
+
+.qmm-vlist{
+  flex:0 0 auto; overflow:visible;
+  border:1px solid var(--qmm-border); border-radius:12px; padding:6px;
+  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.qmm-vtab{
+  width:100%; text-align:left; cursor:pointer;
+  display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:10px; border:1px solid #ffffff18;
+  background:rgba(255,255,255,.03); color:inherit;
+  transition:background .18s ease, border-color .18s ease, transform .08s ease;
+}
+.qmm-vtab:hover{ background:rgba(255,255,255,.07); border-color:#ffffff34 }
+.qmm-vtab:active{ transform:translateY(1px) }
+.qmm-vtab.active{
+  background:linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
+  border-color:#9db7ff55;
+  box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
+}
+
+.qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
+.qmm-chip{ display:flex; align-items:center; gap:8px; min-width:0 }
+.qmm-chip img{
+  width:20px; height:20px; border-radius:50%; object-fit:cover; border:1px solid #4446;
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset;
+}
+.qmm-chip .t{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.qmm-tag{
+  font-size:11px; line-height:1; padding:3px 7px; border-radius:999px;
+  background:#ffffff14; border:1px solid #ffffff26;
+}
+
+/* ---------- Small helpers (optional) ---------- */
+.qmm .qmm-card{
+  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
+}
+  .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
+  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+
+/* ta poign\xE9e, inchang\xE9 */
+.qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
+.qmm-grab:active { cursor:grabbing; }
+.qmm-dragging { opacity:.6; }
+
+/* items animables */
+.qmm-team-item {
+  will-change: transform;
+  transition: transform 160ms ease;
+}
+.qmm-team-item.drag-ghost {
+  opacity: .4;
+}
+
+.qmm.qmm-alt-drag { cursor: grab; }
+.qmm.qmm-alt-drag:active { cursor: grabbing; }
+
+.qws-win.is-hidden { display: none !important; }
+
+.qmm-hotkey{
+  cursor:pointer; user-select:none;
+  border:1px solid var(--qmm-border); border-radius:10px;
+  padding:8px 12px;
+  background:linear-gradient(180deg, #ffffff10, #ffffff06);
+  color:var(--qmm-text);
+  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18);
+  transition:
+    background .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    transform .08s ease,
+    color .18s ease;
+}
+.qmm-hotkey{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+  width: var(--qmm-hotkey-w, 180px); 
+}
+.qmm-hotkey:hover{ background:linear-gradient(180deg, #ffffff16, #ffffff08); border-color:#ffffff40 }
+.qmm-hotkey:active{ transform:translateY(1px) }
+
+.qmm-hotkey:focus-visible{ outline:none }
+
+.qmm-hotkey.is-empty{
+  color:var(--qmm-text-dim);
+  font-style:italic;
+}
+
+.qmm-hotkey.is-recording{
+  outline:2px solid var(--qmm-accent);
+  outline-offset:2px;
+  border-color: var(--qmm-accent);
+  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
+  animation: qmm-hotkey-breathe 1.2s ease-in-out infinite;
+}
+  
+@keyframes qmm-hotkey-breathe{
+  0%   { box-shadow: 0 0 0 0 rgba(122,162,255,.55), 0 1px 16px rgba(0,0,0,.25); }
+  60%  { box-shadow: 0 0 0 12px rgba(122,162,255,0), 0 1px 16px rgba(0,0,0,.25); }
+  100% { box-shadow: 0 0 0 0 rgba(122,162,255,0),  0 1px 16px rgba(0,0,0,.25); }
+}
+    `;
+      const st = document.createElement("style");
+      st.id = "__qmm_css__";
+      st.textContent = css;
+      (document.documentElement || document.body).appendChild(st);
+    }
+  };
+  var VTabs = class {
+    constructor(api, opts = {}) {
+      this.api = api;
+      this.opts = opts;
+      __publicField(this, "root");
+      __publicField(this, "filterWrap", null);
+      __publicField(this, "filterInput", null);
+      __publicField(this, "list");
+      __publicField(this, "items", []);
+      __publicField(this, "selectedId", null);
+      __publicField(this, "onSelectCb");
+      __publicField(this, "renderItemCustom");
+      __publicField(this, "emptyText");
+      this.root = el("div", "qmm-vtabs");
+      this.root.style.minWidth = "0";
+      this.emptyText = opts.emptyText || "Aucun \xE9l\xE9ment.";
+      this.renderItemCustom = opts.renderItem;
+      if (opts.filterPlaceholder) {
+        this.filterWrap = el("div", "filter");
+        this.filterInput = document.createElement("input");
+        this.filterInput.type = "search";
+        this.filterInput.placeholder = opts.filterPlaceholder;
+        this.filterInput.className = "qmm-input";
+        this.filterInput.oninput = () => this.renderList();
+        this.filterWrap.appendChild(this.filterInput);
+        this.root.appendChild(this.filterWrap);
+      }
+      this.list = el("div", "qmm-vlist");
+      this.list.style.minWidth = "0";
+      if (opts.maxHeightPx) {
+        this.list.style.maxHeight = `${opts.maxHeightPx}px`;
+        this.list.style.overflow = "auto";
+        this.list.style.flex = "1 1 auto";
+      }
+      this.root.appendChild(this.list);
+      this.selectedId = opts.initialId ?? null;
+      this.onSelectCb = opts.onSelect;
+    }
+    setItems(items) {
+      this.items = Array.isArray(items) ? items.slice() : [];
+      if (this.selectedId && !this.items.some((i) => i.id === this.selectedId)) {
+        this.selectedId = this.items[0]?.id ?? null;
+      }
+      this.renderList();
+    }
+    getSelected() {
+      return this.items.find((i) => i.id === this.selectedId) ?? null;
+    }
+    select(id) {
+      this.selectedId = id;
+      this.renderList();
+      this.onSelectCb?.(this.selectedId, this.getSelected());
+    }
+    onSelect(cb) {
+      this.onSelectCb = cb;
+    }
+    setBadge(id, text) {
+      const btn = this.list.querySelector(`button[data-id="${cssq(id)}"]`);
+      if (!btn) return;
+      let tag = btn.querySelector(".qmm-tag");
+      if (!tag && text != null) {
+        tag = el("span", "qmm-tag");
+        btn.appendChild(tag);
+      }
+      if (!tag) return;
+      if (text == null || text === "") tag.style.display = "none";
+      else {
+        tag.textContent = text;
+        tag.style.display = "";
+      }
+    }
+    getFilter() {
+      return (this.filterInput?.value || "").trim().toLowerCase();
+    }
+    renderList() {
+      const keepScroll = this.list.scrollTop;
+      this.list.innerHTML = "";
+      const q = this.getFilter();
+      const filtered = q ? this.items.filter((it) => (it.title || "").toLowerCase().includes(q) || (it.subtitle || "").toLowerCase().includes(q)) : this.items;
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.style.opacity = "0.75";
+        empty.textContent = this.emptyText;
+        this.list.appendChild(empty);
+        return;
+      }
+      const ul = document.createElement("ul");
+      ul.style.listStyle = "none";
+      ul.style.margin = "0";
+      ul.style.padding = "0";
+      ul.style.display = "flex";
+      ul.style.flexDirection = "column";
+      ul.style.gap = "4px";
+      for (const it of filtered) {
+        const li = document.createElement("li");
+        const btn = document.createElement("button");
+        btn.className = "qmm-vtab";
+        btn.dataset.id = it.id;
+        btn.disabled = !!it.disabled;
+        if (this.renderItemCustom) {
+          this.renderItemCustom(it, btn);
+        } else {
+          const dot = el("div", "qmm-dot");
+          dot.style.background = it.statusColor || "#999a";
+          const chip = el("div", "qmm-chip");
+          const img = document.createElement("img");
+          img.src = it.avatarUrl || "";
+          img.alt = it.title;
+          const wrap = document.createElement("div");
+          wrap.style.display = "flex";
+          wrap.style.flexDirection = "column";
+          wrap.style.gap = "2px";
+          const t = el("div", "t");
+          t.textContent = it.title;
+          const sub = document.createElement("div");
+          sub.textContent = it.subtitle || "";
+          sub.style.opacity = "0.7";
+          sub.style.fontSize = "12px";
+          if (!it.subtitle) sub.style.display = "none";
+          wrap.appendChild(t);
+          wrap.appendChild(sub);
+          chip.appendChild(img);
+          chip.appendChild(wrap);
+          btn.appendChild(dot);
+          btn.appendChild(chip);
+          if (it.badge != null) {
+            const tag = el("span", "qmm-tag", escapeHtml(String(it.badge)));
+            btn.appendChild(tag);
+          } else {
+            const spacer = document.createElement("div");
+            spacer.style.width = "0";
+            btn.appendChild(spacer);
+          }
+        }
+        btn.classList.toggle("active", it.id === this.selectedId);
+        btn.onclick = () => this.select(it.id);
+        li.appendChild(btn);
+        ul.appendChild(li);
+      }
+      this.list.appendChild(ul);
+      this.list.scrollTop = keepScroll;
+    }
+  };
+  function el(tag, cls, html) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function cssq(s) {
+    return s.replace(/"/g, '\\"');
+  }
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
+  }
+  var _MOD_CODES = /* @__PURE__ */ new Set([
+    "ShiftLeft",
+    "ShiftRight",
+    "ControlLeft",
+    "ControlRight",
+    "AltLeft",
+    "AltRight",
+    "MetaLeft",
+    "MetaRight"
+  ]);
+  function eventToHotkey(e) {
+    if (_MOD_CODES.has(e.code) || e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") {
+      return null;
+    }
+    return {
+      code: e.code,
+      ctrl: e.ctrlKey,
+      alt: e.altKey,
+      shift: e.shiftKey,
+      meta: e.metaKey
+    };
+  }
+  function matchHotkey(e, h) {
+    if (!h) return false;
+    if (!!h.ctrl !== e.ctrlKey) return false;
+    if (!!h.shift !== e.shiftKey) return false;
+    if (!!h.alt !== e.altKey) return false;
+    if (!!h.meta !== e.metaKey) return false;
+    return e.code === h.code;
+  }
+  function hotkeyToString(hk) {
+    if (!hk) return "";
+    const parts = [];
+    if (hk.ctrl) parts.push("Ctrl");
+    if (hk.shift) parts.push("Shift");
+    if (hk.alt) parts.push("Alt");
+    if (hk.meta) parts.push("Meta");
+    if (hk.code) parts.push(hk.code);
+    return parts.join("+");
+  }
+  function stringToHotkey(s) {
+    if (!s) return null;
+    const parts = s.split("+").map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return null;
+    const code = parts.pop() || "";
+    const hk = { code };
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") hk.ctrl = true;
+      else if (P === "shift") hk.shift = true;
+      else if (P === "alt") hk.alt = true;
+      else if (P === "meta" || P === "cmd" || P === "command") hk.meta = true;
+    }
+    return hk.code ? hk : null;
+  }
+
   // src/services/pets.ts
   var VALIDATED_INDEX_ATOM_LABEL = "myValidatedSelectedItemIndexAtom";
   var LS_TEAMS_KEY = "qws:pets:teams:v1";
   var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
+  var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
+  var TEAM_HK_MAP = /* @__PURE__ */ new Map();
+  var hkKeyForTeam = (id) => `${LS_TEAM_HK_PREFIX}${id}`;
+  function setTeamsForHotkeys(teams) {
+    TEAM_HK_MAP.clear();
+    for (const t of teams) {
+      const hk = stringToHotkey(localStorage.getItem(hkKeyForTeam(t.id)) || "");
+      if (hk) TEAM_HK_MAP.set(t.id, hk);
+    }
+  }
+  function refreshTeamFromLS(teamId) {
+    const hk = stringToHotkey(localStorage.getItem(hkKeyForTeam(teamId)) || "");
+    if (hk) TEAM_HK_MAP.set(teamId, hk);
+    else TEAM_HK_MAP.delete(teamId);
+  }
+  window.addEventListener("storage", (e) => {
+    if (!e.key || !e.key.startsWith(LS_TEAM_HK_PREFIX)) return;
+    const teamId = e.key.slice(LS_TEAM_HK_PREFIX.length);
+    refreshTeamFromLS(teamId);
+  });
+  function shouldIgnoreKeydown(e) {
+    const el2 = e.target;
+    if (!el2) return false;
+    return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
+  }
+  function installPetTeamHotkeysOnce(onUseTeam) {
+    const FLAG = "__qws_pet_team_hk_installed";
+    if (window[FLAG]) return;
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (shouldIgnoreKeydown(e)) return;
+        for (const [teamId, hk] of TEAM_HK_MAP) {
+          if (matchHotkey(e, hk)) {
+            e.preventDefault();
+            e.stopPropagation();
+            onUseTeam(teamId);
+            break;
+          }
+        }
+      },
+      true
+    );
+    window[FLAG] = true;
+  }
   var _AB = petAbilities ?? {};
   function _abilityName(id) {
     const key = String(id ?? "");
@@ -3436,977 +4646,6 @@
     })();
   }
 
-  // src/ui/menu.ts
-  var Menu = class {
-    constructor(opts = {}) {
-      this.opts = opts;
-      // NOTE: je rends root public pour pouvoir faire ui.root.appendChild(...) côté menus
-      __publicField(this, "root");
-      __publicField(this, "tabBar");
-      __publicField(this, "views");
-      __publicField(this, "tabs", /* @__PURE__ */ new Map());
-      __publicField(this, "events", /* @__PURE__ */ new Map());
-      __publicField(this, "currentId", null);
-      __publicField(this, "lsKeyActive");
-      __publicField(this, "_altDown", false);
-      __publicField(this, "_hovering", false);
-      __publicField(this, "_onKey", (e) => {
-        const alt = e.altKey;
-        if (alt !== this._altDown) {
-          this._altDown = alt;
-          this._updateAltCursor();
-        }
-      });
-      __publicField(this, "_onBlur", () => {
-        this._altDown = false;
-        this._updateAltCursor();
-      });
-      __publicField(this, "_onEnter", () => {
-        this._hovering = true;
-        this._updateAltCursor();
-      });
-      __publicField(this, "_onLeave", () => {
-        this._hovering = false;
-        this._updateAltCursor();
-      });
-      this.lsKeyActive = `menu:${opts.id || "default"}:activeTab`;
-    }
-    /** Monte le menu dans un conteneur */
-    mount(container) {
-      this.ensureStyles();
-      container.innerHTML = "";
-      this.root = el("div", `qmm ${this.opts.classes || ""} ${this.opts.compact ? "qmm-compact" : ""}`);
-      if (this.opts.startHidden) this.root.style.display = "none";
-      this.tabBar = el("div", "qmm-tabs");
-      this.views = el("div", "qmm-views");
-      this.root.appendChild(this.tabBar);
-      this.root.appendChild(this.views);
-      container.appendChild(this.root);
-      if (this.tabs.size) {
-        for (const [id, def] of this.tabs) this.createTabView(id, def);
-        this.restoreActive();
-      }
-      this.updateTabsBarVisibility();
-      this.root.addEventListener("pointerenter", this._onEnter);
-      this.root.addEventListener("pointerleave", this._onLeave);
-      window.addEventListener("keydown", this._onKey, true);
-      window.addEventListener("keyup", this._onKey, true);
-      window.addEventListener("blur", this._onBlur);
-      document.addEventListener("visibilitychange", this._onBlur);
-      if (this.opts.startWindowHidden) this.setWindowVisible(false);
-      this.emit("mounted");
-    }
-    /** Démonte le menu (optionnel) */
-    unmount() {
-      this.root?.removeEventListener("pointerenter", this._onEnter);
-      this.root?.removeEventListener("pointerleave", this._onLeave);
-      window.removeEventListener("keydown", this._onKey, true);
-      window.removeEventListener("keyup", this._onKey, true);
-      window.removeEventListener("blur", this._onBlur);
-      document.removeEventListener("visibilitychange", this._onBlur);
-      if (this.root?.parentElement) this.root.parentElement.removeChild(this.root);
-      this.emit("unmounted");
-    }
-    /** Retourne l'élément fenêtre englobant (barre – / ×) */
-    getWindowEl() {
-      if (!this.root) return null;
-      const sel = this.opts.windowSelector || ".qws-win";
-      return this.root.closest(sel);
-    }
-    /** Affiche/masque la FENÊTRE (barre incluse) */
-    setWindowVisible(visible) {
-      const win = this.getWindowEl();
-      if (!win) return;
-      win.classList.toggle("is-hidden", !visible);
-      this.emit(visible ? "window:show" : "window:hide");
-    }
-    /** Bascule l’état de la fenêtre. Retourne true si maintenant visible. */
-    toggleWindow() {
-      const win = this.getWindowEl();
-      if (!win) return false;
-      const willShow = win.classList.contains("is-hidden");
-      this.setWindowVisible(willShow);
-      return willShow;
-    }
-    /** Donne l’état courant de la fenêtre (true = visible) */
-    isWindowVisible() {
-      const win = this.getWindowEl();
-      if (!win) return true;
-      return !win.classList.contains("is-hidden") && getComputedStyle(win).display !== "none";
-    }
-    /** Affiche/masque le root */
-    setVisible(visible) {
-      if (!this.root) return;
-      this.root.style.display = visible ? "" : "none";
-      this.emit(visible ? "show" : "hide");
-    }
-    toggle() {
-      if (!this.root) return false;
-      const v = this.root.style.display === "none";
-      this.setVisible(v);
-      return v;
-    }
-    /** Ajoute un onglet (peut être appelé avant ou après mount) */
-    addTab(id, title, render) {
-      this.tabs.set(id, { title, render, badge: null });
-      if (this.root) {
-        this.createTabView(id, this.tabs.get(id));
-        this.updateTabsBarVisibility();
-      }
-      return this;
-    }
-    /** Ajoute plusieurs onglets en une fois */
-    addTabs(defs) {
-      defs.forEach((d) => this.addTab(d.id, d.title, d.render));
-      return this;
-    }
-    /** Met à jour le titre de l’onglet (ex: compteur, libellé) */
-    setTabTitle(id, title) {
-      const def = this.tabs.get(id);
-      if (!def) return;
-      def.title = title;
-      if (def.btn) {
-        const label2 = def.btn.querySelector(".label");
-        if (label2) label2.textContent = title;
-      }
-    }
-    /** Ajoute/retire un badge à droite du titre (ex: “3”, “NEW”, “!”) */
-    setTabBadge(id, text) {
-      const def = this.tabs.get(id);
-      if (!def || !def.btn) return;
-      if (!def.badge) {
-        def.badge = document.createElement("span");
-        def.badge.className = "badge";
-        def.btn.appendChild(def.badge);
-      }
-      if (text == null || text === "") {
-        def.badge.style.display = "none";
-      } else {
-        def.badge.textContent = text;
-        def.badge.style.display = "";
-      }
-    }
-    /** Force le re-render d’un onglet (ré-exécute son render) */
-    refreshTab(id) {
-      const def = this.tabs.get(id);
-      if (!def?.view) return;
-      const scroller = this.findScrollableAncestor(def.view);
-      const st = scroller ? scroller.scrollTop : null;
-      const sl = scroller ? scroller.scrollLeft : null;
-      const activeId = document.activeElement?.id || null;
-      def.view.innerHTML = "";
-      try {
-        def.render(def.view, this);
-      } catch (e) {
-        def.view.textContent = String(e);
-      }
-      if (this.currentId === id) this.switchTo(id);
-      this.emit("tab:render", id);
-      if (scroller && st != null) {
-        requestAnimationFrame(() => {
-          try {
-            scroller.scrollTop = st;
-            scroller.scrollLeft = sl ?? 0;
-          } catch {
-          }
-          if (activeId) {
-            const n = document.getElementById(activeId);
-            if (n && n.focus) try {
-              n.focus();
-            } catch {
-            }
-          }
-        });
-      }
-    }
-    findScrollableAncestor(start) {
-      function isScrollable(el3) {
-        const s = getComputedStyle(el3);
-        const oy = s.overflowY || s.overflow;
-        return /(auto|scroll)/.test(oy) && el3.scrollHeight > el3.clientHeight;
-      }
-      let el2 = start;
-      while (el2) {
-        if (isScrollable(el2)) return el2;
-        el2 = el2.parentElement;
-      }
-      return document.querySelector(".qws-win");
-    }
-    firstTabId() {
-      const it = this.tabs.keys().next();
-      return it.done ? null : it.value ?? null;
-    }
-    _updateAltCursor() {
-      if (!this.root) return;
-      this.root.classList.toggle("qmm-alt-drag", this._altDown && this._hovering);
-    }
-    /** Récupère la vue DOM d’un onglet (pratique pour updates ciblées) */
-    getTabView(id) {
-      return this.tabs.get(id)?.view ?? null;
-    }
-    /** Retire un onglet */
-    removeTab(id) {
-      const def = this.tabs.get(id);
-      if (!def) return;
-      this.tabs.delete(id);
-      const btn = this.tabBar?.querySelector(`button[data-id="${cssq(id)}"]`);
-      if (btn && btn.parentElement) btn.parentElement.removeChild(btn);
-      if (def.view && def.view.parentElement) def.view.parentElement.removeChild(def.view);
-      if (this.currentId === id) {
-        const first = this.tabs.keys().next().value || null;
-        this.switchTo(first);
-      }
-      this.updateTabsBarVisibility();
-    }
-    /** Active un onglet (id=null => affiche toutes les vues) */
-    switchTo(id) {
-      this.currentId = id;
-      [...this.tabBar.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
-      [...this.views.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
-      this.persistActive();
-      this.emit("tab:change", id);
-    }
-    /** Événements */
-    on(event, handler) {
-      if (!this.events.has(event)) this.events.set(event, /* @__PURE__ */ new Set());
-      this.events.get(event).add(handler);
-      return () => this.off(event, handler);
-    }
-    off(event, handler) {
-      this.events.get(event)?.delete(handler);
-    }
-    emit(event, ...args) {
-      this.events.get(event)?.forEach((h) => {
-        try {
-          h(...args);
-        } catch {
-        }
-      });
-    }
-    // ---------- Helpers UI publics (réutilisables dans tes tabs) ----------
-    btn(label2, onClick) {
-      const b = el("button", "qmm-btn", `<span class="label">${escapeHtml(label2)}</span>`);
-      b.onclick = onClick;
-      return b;
-    }
-    label(text) {
-      const l = el("label", "qmm-label");
-      l.textContent = text;
-      return l;
-    }
-    row(...children) {
-      const r = el("div", "qmm-row");
-      children.forEach((c) => r.appendChild(c));
-      return r;
-    }
-    section(title) {
-      const s = el("div", "qmm-section");
-      s.appendChild(el("div", "qmm-section-title", escapeHtml(title)));
-      return s;
-    }
-    inputNumber(min = 0, max = 9999, step = 1, value = 0) {
-      const wrap = el("div", "qmm-input-number");
-      const i = el("input", "qmm-input qmm-input-number-input");
-      i.type = "number";
-      i.min = String(min);
-      i.max = String(max);
-      i.step = String(step);
-      i.value = String(value);
-      i.inputMode = "numeric";
-      const spin = el("div", "qmm-spin");
-      const up = el("button", "qmm-step qmm-step--up", "\u25B2");
-      const down = el("button", "qmm-step qmm-step--down", "\u25BC");
-      up.type = down.type = "button";
-      const clamp = () => {
-        const n = Number(i.value);
-        if (Number.isFinite(n)) {
-          const lo = Number(i.min), hi = Number(i.max);
-          const clamped = Math.max(lo, Math.min(hi, n));
-          if (clamped !== n) i.value = String(clamped);
-        }
-      };
-      const bump = (dir) => {
-        if (dir < 0) i.stepDown();
-        else i.stepUp();
-        clamp();
-        i.dispatchEvent(new Event("input", { bubbles: true }));
-        i.dispatchEvent(new Event("change", { bubbles: true }));
-      };
-      const addSpin = (btn, dir) => {
-        let pressTimer = null;
-        let repeatTimer = null;
-        let suppressNextClick = false;
-        const start = (ev) => {
-          suppressNextClick = false;
-          pressTimer = window.setTimeout(() => {
-            suppressNextClick = true;
-            bump(dir);
-            repeatTimer = window.setInterval(() => bump(dir), 60);
-          }, 300);
-          btn.setPointerCapture?.(ev.pointerId);
-        };
-        const stop = () => {
-          if (pressTimer != null) {
-            clearTimeout(pressTimer);
-            pressTimer = null;
-          }
-          if (repeatTimer != null) {
-            clearInterval(repeatTimer);
-            repeatTimer = null;
-          }
-        };
-        btn.addEventListener("pointerdown", start);
-        ["pointerup", "pointercancel", "pointerleave", "blur"].forEach(
-          (ev) => btn.addEventListener(ev, stop)
-        );
-        btn.addEventListener("click", (e) => {
-          if (suppressNextClick) {
-            e.preventDefault();
-            e.stopPropagation();
-            suppressNextClick = false;
-            return;
-          }
-          bump(dir);
-        });
-      };
-      addSpin(up, 1);
-      addSpin(down, -1);
-      i.addEventListener("change", clamp);
-      spin.append(up, down);
-      wrap.append(i, spin);
-      i.wrap = wrap;
-      return i;
-    }
-    inputText(placeholder = "", value = "") {
-      const i = el("input", "qmm-input");
-      i.type = "text";
-      i.placeholder = placeholder;
-      i.value = value;
-      return i;
-    }
-    checkbox(checked = false) {
-      const i = el("input", "qmm-check");
-      i.type = "checkbox";
-      i.checked = checked;
-      return i;
-    }
-    radio(name, value, checked = false) {
-      const i = el("input", "qmm-radio");
-      i.type = "radio";
-      i.name = name;
-      i.value = value;
-      i.checked = checked;
-      return i;
-    }
-    slider(min = 0, max = 100, step = 1, value = 0) {
-      const i = el("input", "qmm-range");
-      i.type = "range";
-      i.min = String(min);
-      i.max = String(max);
-      i.step = String(step);
-      i.value = String(value);
-      return i;
-    }
-    switch(checked = false) {
-      const i = this.checkbox(checked);
-      i.classList.add("qmm-switch");
-      return i;
-    }
-    // Helpers “tableau simple” pour lister les items
-    table(headers, opts) {
-      const wrap = document.createElement("div");
-      wrap.className = "qmm-table-wrap";
-      if (opts?.minimal) wrap.classList.add("qmm-table-wrap--minimal");
-      const scroller = document.createElement("div");
-      scroller.className = "qmm-table-scroll";
-      if (opts?.maxHeight) scroller.style.maxHeight = opts.maxHeight;
-      wrap.appendChild(scroller);
-      const t = document.createElement("table");
-      t.className = "qmm-table";
-      if (opts?.minimal) t.classList.add("qmm-table--minimal");
-      if (opts?.compact) t.classList.add("qmm-table--compact");
-      if (opts?.fixed) t.style.tableLayout = "fixed";
-      const thead = document.createElement("thead");
-      const trh = document.createElement("tr");
-      headers.forEach((h) => {
-        const th = document.createElement("th");
-        if (typeof h === "string") {
-          th.textContent = h;
-        } else {
-          th.textContent = h.label ?? "";
-          if (h.align) th.classList.add(`is-${h.align}`);
-          if (h.width) th.style.width = h.width;
-        }
-        trh.appendChild(th);
-      });
-      thead.appendChild(trh);
-      const tbody = document.createElement("tbody");
-      t.append(thead, tbody);
-      scroller.appendChild(t);
-      return { root: wrap, tbody };
-    }
-    radioGroup(name, options, selected, onChange) {
-      const wrap = el("div", "qmm-radio-group");
-      for (const { value, label: label2 } of options) {
-        const r = this.radio(name, value, selected === value);
-        const lab = document.createElement("label");
-        lab.className = "qmm-radio-label";
-        lab.appendChild(r);
-        lab.appendChild(document.createTextNode(label2));
-        r.onchange = () => {
-          if (r.checked) onChange(value);
-        };
-        wrap.appendChild(lab);
-      }
-      return wrap;
-    }
-    /** Bind LS: sauvegarde automatique via toStr/parse */
-    bindLS(key, read, write, parse, toStr) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw != null) write(parse(raw));
-      } catch {
-      }
-      return { save: () => {
-        try {
-          localStorage.setItem(key, toStr(read()));
-        } catch {
-        }
-      } };
-    }
-    /* -------------------------- split2 helper -------------------------- */
-    /** Crée un layout 2 colonnes (gauche/droite) en CSS Grid.
-     *  leftWidth: ex "200px" | "18rem" | "minmax(160px, 30%)" */
-    split2(leftWidth = "260px") {
-      const root = el("div", "qmm-split");
-      root.style.gridTemplateColumns = "minmax(160px, max-content) 1fr";
-      const left = el("div", "qmm-split-left");
-      const right = el("div", "qmm-split-right");
-      root.appendChild(left);
-      root.appendChild(right);
-      return { root, left, right };
-    }
-    /* -------------------------- VTabs factory -------------------------- */
-    /** Crée des “tabs verticaux” génériques (liste sélectionnable + filtre). */
-    vtabs(options = {}) {
-      return new VTabs(this, options);
-    }
-    // ---------- internes ----------
-    createTabView(id, def) {
-      const b = document.createElement("button");
-      b.className = "qmm-tab";
-      b.dataset.id = id;
-      b.innerHTML = `<span class="label">${escapeHtml(def.title)}</span><span class="badge" style="display:none"></span>`;
-      const badgeEl = b.querySelector(".badge");
-      def.btn = b;
-      def.badge = badgeEl;
-      b.onclick = () => this.switchTo(id);
-      this.tabBar.appendChild(b);
-      const view = el("div", "qmm-view");
-      view.dataset.id = id;
-      def.view = view;
-      this.views.appendChild(view);
-      try {
-        def.render(view, this);
-      } catch (e) {
-        view.textContent = String(e);
-      }
-      if (!this.currentId) this.switchTo(id);
-    }
-    persistActive() {
-      if (!this.currentId) return;
-      try {
-        localStorage.setItem(this.lsKeyActive, this.currentId);
-      } catch {
-      }
-    }
-    restoreActive() {
-      let id = null;
-      try {
-        id = localStorage.getItem(this.lsKeyActive);
-      } catch {
-      }
-      if (id && this.tabs.has(id)) this.switchTo(id);
-      else if (this.tabs.size) this.switchTo(this.firstTabId());
-    }
-    updateTabsBarVisibility() {
-      if (!this.tabBar || !this.root) return;
-      const hasTabs = this.tabs.size > 0;
-      if (hasTabs) {
-        if (!this.tabBar.parentElement) {
-          this.root.insertBefore(this.tabBar, this.views);
-        }
-        this.tabBar.style.display = "flex";
-        this.root.classList.remove("qmm-no-tabs");
-      } else {
-        if (this.tabBar.parentElement) {
-          this.tabBar.parentElement.removeChild(this.tabBar);
-        }
-        this.root.classList.add("qmm-no-tabs");
-      }
-    }
-    ensureStyles() {
-      if (document.getElementById("__qmm_css__")) return;
-      const css = `
-    /* ================= Modern UI for qmm ================= */
-.qmm{
-  --qmm-bg:        #0f1318;
-  --qmm-bg-soft:   #0b0f13;
-  --qmm-panel:     #111823cc;
-  --qmm-border:    #ffffff22;
-  --qmm-border-2:  #ffffff14;
-  --qmm-accent:    #7aa2ff;
-  --qmm-accent-2:  #92b2ff;
-  --qmm-text:      #e7eef7;
-  --qmm-text-dim:  #b9c3cf;
-  --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
-  --qmm-blur:      8px;
-
-  display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
-}
-.qmm-compact{ gap:6px }
-
-/* ---------- Tabs (pill + underline) ---------- */
-.qmm-tabs{
-  display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
-  padding:0 6px 2px 6px; position:relative; isolation:isolate;
-  border-bottom:1px solid var(--qmm-border);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  border-top-left-radius:10px; border-top-right-radius:10px;
-}
-.qmm-no-tabs .qmm-views{ margin-top:0 }
-
-.qmm-tab{
-  flex:1 1 0; min-width:0; cursor:pointer;
-  display:inline-flex; justify-content:center; align-items:center; gap:8px;
-  padding:8px 12px; color:var(--qmm-text);
-  background:transparent; border:1px solid transparent; border-bottom:none;
-  border-top-left-radius:10px; border-top-right-radius:10px;
-  position:relative; margin:0; margin-bottom:-1px;
-  transition:background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
-}
-.qmm-compact .qmm-tab{ padding:6px 10px }
-.qmm-tab:hover{ background:rgba(255,255,255,.06) }
-.qmm-tab:active{ transform:translateY(1px) }
-.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
-
-.qmm-tab .badge{
-  font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
-  background:#ffffff1a; border:1px solid #ffffff22;
-}
-
-.qmm-tab.active{
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  color:#fff; box-shadow:inset 0 -1px 0 #0007;
-}
-.qmm-tab.active::after{
-  content:""; position:absolute; left:10%; right:10%; bottom:-1px; height:2px;
-  background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
-  border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
-}
-
-/* ---------- Views panel ---------- */
-.qmm-views{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
-  display:flex; flex-direction:column;
-  min-width:0; min-height:0; overflow:auto; box-shadow:var(--qmm-shadow);
-}
-.qmm-compact .qmm-views{ padding:8px }
-.qmm-tabs + .qmm-views{ margin-top:-1px }
-
-.qmm-view{ display:none; min-width:0; min-height:0; }
-.qmm-view.active{ display:block; }
-
-/* ---------- Basic controls ---------- */
-.qmm-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 }
-.qmm-section{ margin-top:8px }
-.qmm-section-title{ font-weight:650; margin:2px 0 8px 0; color:var(--qmm-text) }
-
-.qmm-label{ opacity:.9 }
-.qmm-val{ min-width:24px; text-align:center }
-
-/* Buttons */
-.qmm-btn{
-  cursor:pointer; border-radius:10px; border:1px solid var(--qmm-border);
-  padding:8px 12px; background:linear-gradient(180deg, #ffffff10, #ffffff06);
-  color:#fff; box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.2);
-  transition:transform .1s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
-}
-.qmm-compact .qmm-btn{ padding:6px 10px }
-.qmm-btn:hover{ background:linear-gradient(180deg, #ffffff16, #ffffff08); border-color:#ffffff40 }
-.qmm-btn:active{ transform:translateY(1px) }
-.qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
-
-/* Button variants (optional utility) */
-.qmm-btn.qmm-primary{ background:linear-gradient(180deg, rgba(122,162,255,.35), rgba(122,162,255,.15)); border-color:#9db7ff55 }
-.qmm-btn.qmm-danger{  background:linear-gradient(180deg, rgba(255,86,86,.28), rgba(255,86,86,.12));  border-color:#ff6a6a55 }
-.qmm-btn.active{
-  background:#79a6ff22;
-  border-color:#79a6ff66;
-  box-shadow: inset 0 0 0 1px #79a6ff33;
-}
-
-/* Inputs */
-.qmm-input{
-  min-width:90px; background:rgba(0,0,0,.42); color:#fff;
-  border:1px solid var(--qmm-border); border-radius:10px;
-  padding:8px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
-}
-.qmm-input::placeholder{ color:#cbd6e780 }
-.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
-
-/* Number input + spinner (unchanged API) */
-.qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
-.qmm-input-number-input{ width:70px; text-align:center; padding-right:8px }
-.qmm-spin{ display:inline-flex; flex-direction:column; gap:2px }
-.qmm-step{
-  width:22px; height:16px; font-size:11px; line-height:1;
-  display:inline-flex; align-items:center; justify-content:center;
-  border-radius:6px; border:1px solid var(--qmm-border);
-  background:rgba(255,255,255,.08); color:#fff; cursor:pointer; user-select:none;
-  transition:background .18s ease, border-color .18s ease, transform .08s ease;
-}
-.qmm-step:hover{ background:#ffffff18; border-color:#ffffff40 }
-.qmm-step:active{ transform:translateY(1px) }
-
-/* Switch (checkbox) */
-.qmm-switch{
-  appearance:none; width:42px; height:24px; background:#6c7488aa; border-radius:999px;
-  position:relative; outline:none; cursor:pointer; transition:background .18s ease, box-shadow .18s ease;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
-}
-.qmm-switch::before{
-  content:""; position:absolute; top:2px; left:2px; width:20px; height:20px;
-  background:#fff; border-radius:50%; transition:transform .2s ease;
-  box-shadow:0 2px 8px rgba(0,0,0,.35);
-}
-.qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
-.qmm-switch:checked::before{ transform:translateX(18px) }
-.qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
-
-/* Checkbox & radio (native inputs skinned lightly) */
-.qmm-check, .qmm-radio{ transform:scale(1.1); accent-color: var(--qmm-accent) }
-
-/* Slider */
-.qmm-range{
-  width:180px; appearance:none; background:transparent; height:22px;
-}
-.qmm-range:focus{ outline:none }
-.qmm-range::-webkit-slider-runnable-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
-  border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
-}
-.qmm-range::-moz-range-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
-  border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
-}
-.qmm-range::-webkit-slider-thumb{
-  appearance:none; width:16px; height:16px; border-radius:50%; margin-top:-5px;
-  background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
-  transition:transform .1s ease;
-}
-.qmm-range:active::-webkit-slider-thumb{ transform:scale(1.04) }
-.qmm-range::-moz-range-thumb{
-  width:16px; height:16px; border-radius:50%; background:#fff; border:none;
-  box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
-}
-
-/* ---------- Minimal table ---------- */
-/* container */
-.qmm-table-wrap--minimal{
-  border:1px solid #263040; border-radius:8px; background:#0b0f14; box-shadow:none;
-}
-/* scroller (height cap) */
-.qmm-table-scroll{
-  overflow:auto; max-height:44vh; /* override via opts.maxHeight */
-}
-
-/* base */
-.qmm-table--minimal{
-  width:100%;
-  border-collapse:collapse;
-  background:transparent;
-  font-size:13px; line-height:1.35; color:var(--qmm-text, #cdd6e3);
-}
-
-/* header */
-.qmm-table--minimal thead th{
-  position:sticky; top:0; z-index:1;
-  text-align:left; font-weight:600;
-  padding:8px 10px;
-  color:#cbd5e1; background:#0f1318;
-  border-bottom:1px solid #263040;
-  text-transform:none; letter-spacing:0;
-}
-.qmm-table--minimal thead th.is-center { text-align: center; }
-.qmm-table--minimal thead th.is-left   { text-align: left; }   /* d\xE9j\xE0 pr\xE9sent, ok */
-.qmm-table--minimal thead th.is-right  { text-align: right; }
-.qmm-table--minimal thead th,
-.qmm-table--minimal td { vertical-align: middle; }
-
-/* cells */
-.qmm-table--minimal td{
-  padding:8px 10px; border-bottom:1px solid #1f2937; vertical-align:middle;
-}
-.qmm-table--minimal tbody tr:hover{ background:#0f1824; }
-
-/* compact variant */
-.qmm-table--compact thead th,
-.qmm-table--compact td{ padding:6px 8px; font-size:12px }
-
-/* utils */
-.qmm-table--minimal td.is-num{ text-align:right; font-variant-numeric:tabular-nums }
-.qmm-table--minimal td.is-center{ text-align:center }
-.qmm-ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-.qmm-prewrap{ white-space:pre-wrap; word-break:break-word }
-
-
-/* ---------- Split panels ---------- */
-.qmm-split{
-  display:grid; gap:12px;
-  grid-template-columns:minmax(180px,260px) minmax(0,1fr);
-  align-items:start;
-}
-.qmm-split-left{ display:flex; flex-direction:column; gap:10px }
-.qmm-split-right{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  display:flex; flex-direction:column; gap:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
-}
-
-/* ---------- VTabs (vertical list + filter) ---------- */
-.qmm-vtabs{ display:flex; flex-direction:column; gap:8px; min-width:0 }
-.qmm-vtabs .filter{ display:block }
-.qmm-vtabs .filter input{ width:100% }
-
-.qmm-vlist{
-  flex:0 0 auto; overflow:visible;
-  border:1px solid var(--qmm-border); border-radius:12px; padding:6px;
-  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
-}
-
-.qmm-vtab{
-  width:100%; text-align:left; cursor:pointer;
-  display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px;
-  padding:8px 10px; border-radius:10px; border:1px solid #ffffff18;
-  background:rgba(255,255,255,.03); color:inherit;
-  transition:background .18s ease, border-color .18s ease, transform .08s ease;
-}
-.qmm-vtab:hover{ background:rgba(255,255,255,.07); border-color:#ffffff34 }
-.qmm-vtab:active{ transform:translateY(1px) }
-.qmm-vtab.active{
-  background:linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
-  border-color:#9db7ff55;
-  box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
-}
-
-.qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
-.qmm-chip{ display:flex; align-items:center; gap:8px; min-width:0 }
-.qmm-chip img{
-  width:20px; height:20px; border-radius:50%; object-fit:cover; border:1px solid #4446;
-  box-shadow:0 1px 0 rgba(255,255,255,.08) inset;
-}
-.qmm-chip .t{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-.qmm-tag{
-  font-size:11px; line-height:1; padding:3px 7px; border-radius:999px;
-  background:#ffffff14; border:1px solid #ffffff26;
-}
-
-/* ---------- Small helpers (optional) ---------- */
-.qmm .qmm-card{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
-}
-  .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
-
-/* ta poign\xE9e, inchang\xE9 */
-.qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
-.qmm-grab:active { cursor:grabbing; }
-.qmm-dragging { opacity:.6; }
-
-/* items animables */
-.qmm-team-item {
-  will-change: transform;
-  transition: transform 160ms ease;
-}
-.qmm-team-item.drag-ghost {
-  opacity: .4;
-}
-
-.qmm.qmm-alt-drag { cursor: grab; }
-.qmm.qmm-alt-drag:active { cursor: grabbing; }
-
-.qws-win.is-hidden { display: none !important; }
-
-
-    `;
-      const st = document.createElement("style");
-      st.id = "__qmm_css__";
-      st.textContent = css;
-      (document.documentElement || document.body).appendChild(st);
-    }
-  };
-  var VTabs = class {
-    constructor(api, opts = {}) {
-      this.api = api;
-      this.opts = opts;
-      __publicField(this, "root");
-      __publicField(this, "filterWrap", null);
-      __publicField(this, "filterInput", null);
-      __publicField(this, "list");
-      __publicField(this, "items", []);
-      __publicField(this, "selectedId", null);
-      __publicField(this, "onSelectCb");
-      __publicField(this, "renderItemCustom");
-      __publicField(this, "emptyText");
-      this.root = el("div", "qmm-vtabs");
-      this.root.style.minWidth = "0";
-      this.emptyText = opts.emptyText || "Aucun \xE9l\xE9ment.";
-      this.renderItemCustom = opts.renderItem;
-      if (opts.filterPlaceholder) {
-        this.filterWrap = el("div", "filter");
-        this.filterInput = document.createElement("input");
-        this.filterInput.type = "search";
-        this.filterInput.placeholder = opts.filterPlaceholder;
-        this.filterInput.className = "qmm-input";
-        this.filterInput.oninput = () => this.renderList();
-        this.filterWrap.appendChild(this.filterInput);
-        this.root.appendChild(this.filterWrap);
-      }
-      this.list = el("div", "qmm-vlist");
-      this.list.style.minWidth = "0";
-      if (opts.maxHeightPx) {
-        this.list.style.maxHeight = `${opts.maxHeightPx}px`;
-        this.list.style.overflow = "auto";
-        this.list.style.flex = "1 1 auto";
-      }
-      this.root.appendChild(this.list);
-      this.selectedId = opts.initialId ?? null;
-      this.onSelectCb = opts.onSelect;
-    }
-    setItems(items) {
-      this.items = Array.isArray(items) ? items.slice() : [];
-      if (this.selectedId && !this.items.some((i) => i.id === this.selectedId)) {
-        this.selectedId = this.items[0]?.id ?? null;
-      }
-      this.renderList();
-    }
-    getSelected() {
-      return this.items.find((i) => i.id === this.selectedId) ?? null;
-    }
-    select(id) {
-      this.selectedId = id;
-      this.renderList();
-      this.onSelectCb?.(this.selectedId, this.getSelected());
-    }
-    onSelect(cb) {
-      this.onSelectCb = cb;
-    }
-    setBadge(id, text) {
-      const btn = this.list.querySelector(`button[data-id="${cssq(id)}"]`);
-      if (!btn) return;
-      let tag = btn.querySelector(".qmm-tag");
-      if (!tag && text != null) {
-        tag = el("span", "qmm-tag");
-        btn.appendChild(tag);
-      }
-      if (!tag) return;
-      if (text == null || text === "") tag.style.display = "none";
-      else {
-        tag.textContent = text;
-        tag.style.display = "";
-      }
-    }
-    getFilter() {
-      return (this.filterInput?.value || "").trim().toLowerCase();
-    }
-    renderList() {
-      const keepScroll = this.list.scrollTop;
-      this.list.innerHTML = "";
-      const q = this.getFilter();
-      const filtered = q ? this.items.filter((it) => (it.title || "").toLowerCase().includes(q) || (it.subtitle || "").toLowerCase().includes(q)) : this.items;
-      if (!filtered.length) {
-        const empty = document.createElement("div");
-        empty.style.opacity = "0.75";
-        empty.textContent = this.emptyText;
-        this.list.appendChild(empty);
-        return;
-      }
-      const ul = document.createElement("ul");
-      ul.style.listStyle = "none";
-      ul.style.margin = "0";
-      ul.style.padding = "0";
-      ul.style.display = "flex";
-      ul.style.flexDirection = "column";
-      ul.style.gap = "4px";
-      for (const it of filtered) {
-        const li = document.createElement("li");
-        const btn = document.createElement("button");
-        btn.className = "qmm-vtab";
-        btn.dataset.id = it.id;
-        btn.disabled = !!it.disabled;
-        if (this.renderItemCustom) {
-          this.renderItemCustom(it, btn);
-        } else {
-          const dot = el("div", "qmm-dot");
-          dot.style.background = it.statusColor || "#999a";
-          const chip = el("div", "qmm-chip");
-          const img = document.createElement("img");
-          img.src = it.avatarUrl || "";
-          img.alt = it.title;
-          const wrap = document.createElement("div");
-          wrap.style.display = "flex";
-          wrap.style.flexDirection = "column";
-          wrap.style.gap = "2px";
-          const t = el("div", "t");
-          t.textContent = it.title;
-          const sub = document.createElement("div");
-          sub.textContent = it.subtitle || "";
-          sub.style.opacity = "0.7";
-          sub.style.fontSize = "12px";
-          if (!it.subtitle) sub.style.display = "none";
-          wrap.appendChild(t);
-          wrap.appendChild(sub);
-          chip.appendChild(img);
-          chip.appendChild(wrap);
-          btn.appendChild(dot);
-          btn.appendChild(chip);
-          if (it.badge != null) {
-            const tag = el("span", "qmm-tag", escapeHtml(String(it.badge)));
-            btn.appendChild(tag);
-          } else {
-            const spacer = document.createElement("div");
-            spacer.style.width = "0";
-            btn.appendChild(spacer);
-          }
-        }
-        btn.classList.toggle("active", it.id === this.selectedId);
-        btn.onclick = () => this.select(it.id);
-        li.appendChild(btn);
-        ul.appendChild(li);
-      }
-      this.list.appendChild(ul);
-      this.list.scrollTop = keepScroll;
-    }
-  };
-  function el(tag, cls, html) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (html != null) e.innerHTML = html;
-    return e;
-  }
-  function cssq(s) {
-    return s.replace(/"/g, '\\"');
-  }
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m]);
-  }
-
   // src/ui/menus/debug-data.ts
   var fmtTime = (ms) => {
     const d = new Date(ms);
@@ -5717,6 +5956,11 @@
   }
   function renderManagerTab(view, ui) {
     view.innerHTML = "";
+    installPetTeamHotkeysOnce((teamId) => {
+      PetsService.useTeam(teamId).catch(
+        (e) => console.warn("[Pets] hotkey useTeam failed:", e)
+      );
+    });
     const styleBtnFullWidthL2 = (b, text) => {
       b.textContent = text;
       b.style.width = "100%";
@@ -6104,6 +6348,7 @@
           }
           if (!selectedId && teams.length) selectedId = teams[0].id;
           refreshTeamList();
+          setTeamsForHotkeys(teams);
           await PetsService.getInventoryPets();
           await hydrateEditor(getSelectedTeam());
         });
@@ -6461,6 +6706,30 @@
         btnClear
       };
     })();
+    const secKeybinds = (() => {
+      const r = row();
+      const holder = document.createElement("span");
+      holder.style.display = "inline-block";
+      function setTeam(team) {
+        holder.innerHTML = "";
+        if (!team) return;
+        const btn = ui.hotkeyButton(
+          null,
+          // onChange -> remet à jour la map logique à partir du LS
+          () => refreshTeamFromLS(team.id),
+          {
+            storageKey: hkKeyForTeam(team.id),
+            emptyLabel: "None",
+            listeningLabel: "Press a key\u2026",
+            clearable: true
+          }
+        );
+        holder.appendChild(btn);
+      }
+      r.append(holder);
+      card.appendChild(framed("Quick switch", r));
+      return { setTeam };
+    })();
     async function repaintSlots(sourceTeam) {
       const t = sourceTeam ?? getSelectedTeam();
       if (!t) return;
@@ -6480,6 +6749,7 @@
       secSlots.btnUseCurrent.disabled = !has;
       btnUseTeam.disabled = !has;
       btnSave.disabled = !has;
+      secKeybinds.setTeam(team);
       secSearch.setMode("ability");
       await secSearch.rebuild();
       if (has) {
