@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.1.8
+// @version      1.2.0
 // @match        https://*.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -459,6 +459,7 @@
   var myPetSlotInfosAtom = makeSelector("myPetSlotInfosAtom");
   var myValidatedSelectedItemIndexAtom = makeSelector("myValidatedSelectedItemIndexAtom");
   var setSelectedIndexToEndAtom = makeSelector("setSelectedIndexToEndAtom");
+  var mapAtom = makeSelector("mapAtom");
   function _abilitySig(a) {
     if (!a) return "null";
     const id = typeof a?.abilityId === "string" ? a.abilityId : "";
@@ -1986,6 +1987,31 @@
   function isInventoryOpen(v) {
     return v === "inventory";
   }
+  async function isInventoryPanelOpen() {
+    const modal = getAtomByLabel(ATOMS.activeModal);
+    if (!modal) return false;
+    try {
+      const v = await jGet(modal);
+      return isInventoryOpen(v);
+    } catch {
+      return false;
+    }
+  }
+  async function waitInventoryPanelClosed(timeoutMs = 12e4) {
+    const modal = getAtomByLabel(ATOMS.activeModal);
+    const t0 = performance.now();
+    while (performance.now() - t0 < timeoutMs) {
+      if (!modal) return true;
+      try {
+        const v = await jGet(modal);
+        if (!isInventoryOpen(v)) return true;
+      } catch {
+        return true;
+      }
+      await new Promise((r) => setTimeout(r, 80));
+    }
+    return false;
+  }
   var INVENTORY_FAKE_CONFIG = {
     label: ATOMS.inventory,
     merge: (_real, fake) => fake,
@@ -2117,15 +2143,23 @@
   async function _waitValidatedInventoryIndex(timeoutMs = 2e4) {
     const atom = getAtomByLabel(VALIDATED_INDEX_ATOM_LABEL);
     if (!atom) return null;
+    const modalAtom = getAtomByLabel("activeModalAtom");
     await clearHandSelection();
     const t0 = performance.now();
     while (performance.now() - t0 < timeoutMs) {
+      if (modalAtom) {
+        try {
+          const modalVal = await jGet(modalAtom);
+          if (!isInventoryOpen(modalVal)) return null;
+        } catch {
+        }
+      }
       try {
         const v = await jGet(atom);
         if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
       } catch {
       }
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 80));
     }
     return null;
   }
@@ -2937,6 +2971,11 @@
       el2.style.right = r + "px";
       el2.style.bottom = b + "px";
     }
+    function resetWinPosDefault(el2) {
+      el2.style.right = "16px";
+      el2.style.bottom = "16px";
+      ensureOnScreen(el2);
+    }
     function withTopLocked(el2, mutate) {
       const before = el2.getBoundingClientRect();
       const vh = window.innerHeight;
@@ -3040,10 +3079,13 @@
       }
     };
     window.addEventListener("keydown", (e) => {
-      const tn = (e.target && e.target.tagName || "").toLowerCase();
-      const editing = tn === "input" || tn === "textarea" || e.target?.isContentEditable;
+      const t = e.target;
+      const editing = !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
       if (editing) return;
-      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "x" || e.key === "X")) {
+      if (e.repeat) return;
+      const isX = e.code === "KeyX" || typeof e.key === "string" && (e.key.toLowerCase() === "x" || e.key === "\u2248");
+      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && isX) {
+        e.preventDefault();
         const hidden = box.classList.toggle("hidden");
         try {
           localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0");
@@ -3398,6 +3440,7 @@
   var Menu = class {
     constructor(opts = {}) {
       this.opts = opts;
+      // NOTE: je rends root public pour pouvoir faire ui.root.appendChild(...) côté menus
       __publicField(this, "root");
       __publicField(this, "tabBar");
       __publicField(this, "views");
@@ -3405,8 +3448,30 @@
       __publicField(this, "events", /* @__PURE__ */ new Map());
       __publicField(this, "currentId", null);
       __publicField(this, "lsKeyActive");
+      __publicField(this, "_altDown", false);
+      __publicField(this, "_hovering", false);
+      __publicField(this, "_onKey", (e) => {
+        const alt = e.altKey;
+        if (alt !== this._altDown) {
+          this._altDown = alt;
+          this._updateAltCursor();
+        }
+      });
+      __publicField(this, "_onBlur", () => {
+        this._altDown = false;
+        this._updateAltCursor();
+      });
+      __publicField(this, "_onEnter", () => {
+        this._hovering = true;
+        this._updateAltCursor();
+      });
+      __publicField(this, "_onLeave", () => {
+        this._hovering = false;
+        this._updateAltCursor();
+      });
       this.lsKeyActive = `menu:${opts.id || "default"}:activeTab`;
     }
+    /** Monte le menu dans un conteneur */
     mount(container) {
       this.ensureStyles();
       container.innerHTML = "";
@@ -3422,12 +3487,54 @@
         this.restoreActive();
       }
       this.updateTabsBarVisibility();
+      this.root.addEventListener("pointerenter", this._onEnter);
+      this.root.addEventListener("pointerleave", this._onLeave);
+      window.addEventListener("keydown", this._onKey, true);
+      window.addEventListener("keyup", this._onKey, true);
+      window.addEventListener("blur", this._onBlur);
+      document.addEventListener("visibilitychange", this._onBlur);
+      if (this.opts.startWindowHidden) this.setWindowVisible(false);
       this.emit("mounted");
     }
+    /** Démonte le menu (optionnel) */
     unmount() {
+      this.root?.removeEventListener("pointerenter", this._onEnter);
+      this.root?.removeEventListener("pointerleave", this._onLeave);
+      window.removeEventListener("keydown", this._onKey, true);
+      window.removeEventListener("keyup", this._onKey, true);
+      window.removeEventListener("blur", this._onBlur);
+      document.removeEventListener("visibilitychange", this._onBlur);
       if (this.root?.parentElement) this.root.parentElement.removeChild(this.root);
       this.emit("unmounted");
     }
+    /** Retourne l'élément fenêtre englobant (barre – / ×) */
+    getWindowEl() {
+      if (!this.root) return null;
+      const sel = this.opts.windowSelector || ".qws-win";
+      return this.root.closest(sel);
+    }
+    /** Affiche/masque la FENÊTRE (barre incluse) */
+    setWindowVisible(visible) {
+      const win = this.getWindowEl();
+      if (!win) return;
+      win.classList.toggle("is-hidden", !visible);
+      this.emit(visible ? "window:show" : "window:hide");
+    }
+    /** Bascule l’état de la fenêtre. Retourne true si maintenant visible. */
+    toggleWindow() {
+      const win = this.getWindowEl();
+      if (!win) return false;
+      const willShow = win.classList.contains("is-hidden");
+      this.setWindowVisible(willShow);
+      return willShow;
+    }
+    /** Donne l’état courant de la fenêtre (true = visible) */
+    isWindowVisible() {
+      const win = this.getWindowEl();
+      if (!win) return true;
+      return !win.classList.contains("is-hidden") && getComputedStyle(win).display !== "none";
+    }
+    /** Affiche/masque le root */
     setVisible(visible) {
       if (!this.root) return;
       this.root.style.display = visible ? "" : "none";
@@ -3439,6 +3546,7 @@
       this.setVisible(v);
       return v;
     }
+    /** Ajoute un onglet (peut être appelé avant ou après mount) */
     addTab(id, title, render) {
       this.tabs.set(id, { title, render, badge: null });
       if (this.root) {
@@ -3447,10 +3555,12 @@
       }
       return this;
     }
+    /** Ajoute plusieurs onglets en une fois */
     addTabs(defs) {
       defs.forEach((d) => this.addTab(d.id, d.title, d.render));
       return this;
     }
+    /** Met à jour le titre de l’onglet (ex: compteur, libellé) */
     setTabTitle(id, title) {
       const def = this.tabs.get(id);
       if (!def) return;
@@ -3460,6 +3570,7 @@
         if (label2) label2.textContent = title;
       }
     }
+    /** Ajoute/retire un badge à droite du titre (ex: “3”, “NEW”, “!”) */
     setTabBadge(id, text) {
       const def = this.tabs.get(id);
       if (!def || !def.btn) return;
@@ -3475,6 +3586,7 @@
         def.badge.style.display = "";
       }
     }
+    /** Force le re-render d’un onglet (ré-exécute son render) */
     refreshTab(id) {
       const def = this.tabs.get(id);
       if (!def?.view) return;
@@ -3524,9 +3636,15 @@
       const it = this.tabs.keys().next();
       return it.done ? null : it.value ?? null;
     }
+    _updateAltCursor() {
+      if (!this.root) return;
+      this.root.classList.toggle("qmm-alt-drag", this._altDown && this._hovering);
+    }
+    /** Récupère la vue DOM d’un onglet (pratique pour updates ciblées) */
     getTabView(id) {
       return this.tabs.get(id)?.view ?? null;
     }
+    /** Retire un onglet */
     removeTab(id) {
       const def = this.tabs.get(id);
       if (!def) return;
@@ -3540,6 +3658,7 @@
       }
       this.updateTabsBarVisibility();
     }
+    /** Active un onglet (id=null => affiche toutes les vues) */
     switchTo(id) {
       this.currentId = id;
       [...this.tabBar.children].forEach((ch) => ch.classList.toggle("active", ch.dataset.id === id || id === null));
@@ -3547,6 +3666,7 @@
       this.persistActive();
       this.emit("tab:change", id);
     }
+    /** Événements */
     on(event, handler) {
       if (!this.events.has(event)) this.events.set(event, /* @__PURE__ */ new Set());
       this.events.get(event).add(handler);
@@ -3563,6 +3683,7 @@
         }
       });
     }
+    // ---------- Helpers UI publics (réutilisables dans tes tabs) ----------
     btn(label2, onClick) {
       const b = el("button", "qmm-btn", `<span class="label">${escapeHtml(label2)}</span>`);
       b.onclick = onClick;
@@ -3691,6 +3812,7 @@
       i.classList.add("qmm-switch");
       return i;
     }
+    // Helpers “tableau simple” pour lister les items
     table(headers, opts) {
       const wrap = document.createElement("div");
       wrap.className = "qmm-table-wrap";
@@ -3738,6 +3860,7 @@
       }
       return wrap;
     }
+    /** Bind LS: sauvegarde automatique via toStr/parse */
     bindLS(key, read, write, parse, toStr) {
       try {
         const raw = localStorage.getItem(key);
@@ -3751,6 +3874,9 @@
         }
       } };
     }
+    /* -------------------------- split2 helper -------------------------- */
+    /** Crée un layout 2 colonnes (gauche/droite) en CSS Grid.
+     *  leftWidth: ex "200px" | "18rem" | "minmax(160px, 30%)" */
     split2(leftWidth = "260px") {
       const root = el("div", "qmm-split");
       root.style.gridTemplateColumns = "minmax(160px, max-content) 1fr";
@@ -3760,9 +3886,12 @@
       root.appendChild(right);
       return { root, left, right };
     }
+    /* -------------------------- VTabs factory -------------------------- */
+    /** Crée des “tabs verticaux” génériques (liste sélectionnable + filtre). */
     vtabs(options = {}) {
       return new VTabs(this, options);
     }
+    // ---------- internes ----------
     createTabView(id, def) {
       const b = document.createElement("button");
       b.className = "qmm-tab";
@@ -3819,6 +3948,7 @@
     ensureStyles() {
       if (document.getElementById("__qmm_css__")) return;
       const css = `
+    /* ================= Modern UI for qmm ================= */
 .qmm{
   --qmm-bg:        #0f1318;
   --qmm-bg-soft:   #0b0f13;
@@ -3831,9 +3961,12 @@
   --qmm-text-dim:  #b9c3cf;
   --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
   --qmm-blur:      8px;
+
   display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
 }
 .qmm-compact{ gap:6px }
+
+/* ---------- Tabs (pill + underline) ---------- */
 .qmm-tabs{
   display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
   padding:0 6px 2px 6px; position:relative; isolation:isolate;
@@ -3842,6 +3975,7 @@
   border-top-left-radius:10px; border-top-right-radius:10px;
 }
 .qmm-no-tabs .qmm-views{ margin-top:0 }
+
 .qmm-tab{
   flex:1 1 0; min-width:0; cursor:pointer;
   display:inline-flex; justify-content:center; align-items:center; gap:8px;
@@ -3855,10 +3989,12 @@
 .qmm-tab:hover{ background:rgba(255,255,255,.06) }
 .qmm-tab:active{ transform:translateY(1px) }
 .qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
+
 .qmm-tab .badge{
   font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
   background:#ffffff1a; border:1px solid #ffffff22;
 }
+
 .qmm-tab.active{
   background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
   color:#fff; box-shadow:inset 0 -1px 0 #0007;
@@ -3868,6 +4004,8 @@
   background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
   border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
 }
+
+/* ---------- Views panel ---------- */
 .qmm-views{
   border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
@@ -3876,13 +4014,19 @@
 }
 .qmm-compact .qmm-views{ padding:8px }
 .qmm-tabs + .qmm-views{ margin-top:-1px }
+
 .qmm-view{ display:none; min-width:0; min-height:0; }
 .qmm-view.active{ display:block; }
+
+/* ---------- Basic controls ---------- */
 .qmm-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:6px 0 }
 .qmm-section{ margin-top:8px }
 .qmm-section-title{ font-weight:650; margin:2px 0 8px 0; color:var(--qmm-text) }
+
 .qmm-label{ opacity:.9 }
 .qmm-val{ min-width:24px; text-align:center }
+
+/* Buttons */
 .qmm-btn{
   cursor:pointer; border-radius:10px; border:1px solid var(--qmm-border);
   padding:8px 12px; background:linear-gradient(180deg, #ffffff10, #ffffff06);
@@ -3893,6 +4037,8 @@
 .qmm-btn:hover{ background:linear-gradient(180deg, #ffffff16, #ffffff08); border-color:#ffffff40 }
 .qmm-btn:active{ transform:translateY(1px) }
 .qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
+
+/* Button variants (optional utility) */
 .qmm-btn.qmm-primary{ background:linear-gradient(180deg, rgba(122,162,255,.35), rgba(122,162,255,.15)); border-color:#9db7ff55 }
 .qmm-btn.qmm-danger{  background:linear-gradient(180deg, rgba(255,86,86,.28), rgba(255,86,86,.12));  border-color:#ff6a6a55 }
 .qmm-btn.active{
@@ -3900,6 +4046,8 @@
   border-color:#79a6ff66;
   box-shadow: inset 0 0 0 1px #79a6ff33;
 }
+
+/* Inputs */
 .qmm-input{
   min-width:90px; background:rgba(0,0,0,.42); color:#fff;
   border:1px solid var(--qmm-border); border-radius:10px;
@@ -3908,6 +4056,8 @@
 }
 .qmm-input::placeholder{ color:#cbd6e780 }
 .qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
+
+/* Number input + spinner (unchanged API) */
 .qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
 .qmm-input-number-input{ width:70px; text-align:center; padding-right:8px }
 .qmm-spin{ display:inline-flex; flex-direction:column; gap:2px }
@@ -3920,6 +4070,8 @@
 }
 .qmm-step:hover{ background:#ffffff18; border-color:#ffffff40 }
 .qmm-step:active{ transform:translateY(1px) }
+
+/* Switch (checkbox) */
 .qmm-switch{
   appearance:none; width:42px; height:24px; background:#6c7488aa; border-radius:999px;
   position:relative; outline:none; cursor:pointer; transition:background .18s ease, box-shadow .18s ease;
@@ -3933,7 +4085,11 @@
 .qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
 .qmm-switch:checked::before{ transform:translateX(18px) }
 .qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
+
+/* Checkbox & radio (native inputs skinned lightly) */
 .qmm-check, .qmm-radio{ transform:scale(1.1); accent-color: var(--qmm-accent) }
+
+/* Slider */
 .qmm-range{
   width:180px; appearance:none; background:transparent; height:22px;
 }
@@ -3956,18 +4112,26 @@
   width:16px; height:16px; border-radius:50%; background:#fff; border:none;
   box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
 }
+
+/* ---------- Minimal table ---------- */
+/* container */
 .qmm-table-wrap--minimal{
   border:1px solid #263040; border-radius:8px; background:#0b0f14; box-shadow:none;
 }
+/* scroller (height cap) */
 .qmm-table-scroll{
-  overflow:auto; max-height:44vh;
+  overflow:auto; max-height:44vh; /* override via opts.maxHeight */
 }
+
+/* base */
 .qmm-table--minimal{
   width:100%;
   border-collapse:collapse;
   background:transparent;
   font-size:13px; line-height:1.35; color:var(--qmm-text, #cdd6e3);
 }
+
+/* header */
 .qmm-table--minimal thead th{
   position:sticky; top:0; z-index:1;
   text-align:left; font-weight:600;
@@ -3977,20 +4141,29 @@
   text-transform:none; letter-spacing:0;
 }
 .qmm-table--minimal thead th.is-center { text-align: center; }
-.qmm-table--minimal thead th.is-left   { text-align: left; }
+.qmm-table--minimal thead th.is-left   { text-align: left; }   /* d\xE9j\xE0 pr\xE9sent, ok */
 .qmm-table--minimal thead th.is-right  { text-align: right; }
 .qmm-table--minimal thead th,
 .qmm-table--minimal td { vertical-align: middle; }
+
+/* cells */
 .qmm-table--minimal td{
   padding:8px 10px; border-bottom:1px solid #1f2937; vertical-align:middle;
 }
 .qmm-table--minimal tbody tr:hover{ background:#0f1824; }
+
+/* compact variant */
 .qmm-table--compact thead th,
 .qmm-table--compact td{ padding:6px 8px; font-size:12px }
+
+/* utils */
 .qmm-table--minimal td.is-num{ text-align:right; font-variant-numeric:tabular-nums }
 .qmm-table--minimal td.is-center{ text-align:center }
 .qmm-ellipsis{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
 .qmm-prewrap{ white-space:pre-wrap; word-break:break-word }
+
+
+/* ---------- Split panels ---------- */
 .qmm-split{
   display:grid; gap:12px;
   grid-template-columns:minmax(180px,260px) minmax(0,1fr);
@@ -4003,15 +4176,19 @@
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
   box-shadow:var(--qmm-shadow);
 }
+
+/* ---------- VTabs (vertical list + filter) ---------- */
 .qmm-vtabs{ display:flex; flex-direction:column; gap:8px; min-width:0 }
 .qmm-vtabs .filter{ display:block }
 .qmm-vtabs .filter input{ width:100% }
+
 .qmm-vlist{
   flex:0 0 auto; overflow:visible;
   border:1px solid var(--qmm-border); border-radius:12px; padding:6px;
   background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
 }
+
 .qmm-vtab{
   width:100%; text-align:left; cursor:pointer;
   display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:10px;
@@ -4026,6 +4203,7 @@
   border-color:#9db7ff55;
   box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
 }
+
 .qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
 .qmm-chip{ display:flex; align-items:center; gap:8px; min-width:0 }
 .qmm-chip img{
@@ -4037,15 +4215,21 @@
   font-size:11px; line-height:1; padding:3px 7px; border-radius:999px;
   background:#ffffff14; border:1px solid #ffffff26;
 }
+
+/* ---------- Small helpers (optional) ---------- */
 .qmm .qmm-card{
   border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
   background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
 }
-.qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-.qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+  .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
+  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+
+/* ta poign\xE9e, inchang\xE9 */
 .qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
 .qmm-grab:active { cursor:grabbing; }
 .qmm-dragging { opacity:.6; }
+
+/* items animables */
 .qmm-team-item {
   will-change: transform;
   transition: transform 160ms ease;
@@ -4053,6 +4237,13 @@
 .qmm-team-item.drag-ghost {
   opacity: .4;
 }
+
+.qmm.qmm-alt-drag { cursor: grab; }
+.qmm.qmm-alt-drag:active { cursor: grabbing; }
+
+.qws-win.is-hidden { display: none !important; }
+
+
     `;
       const st = document.createElement("style");
       st.id = "__qmm_css__";
@@ -4916,7 +5107,16 @@
   function getSlotsArray(st) {
     const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
     if (Array.isArray(raw)) return raw;
-    if (raw && typeof raw === "object") return Object.values(raw);
+    if (raw && typeof raw === "object") {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
+        const ai = Number(a[0]);
+        const bi = Number(b[0]);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([, v]) => v);
+    }
     return [];
   }
   function extractPosFromSlot(slot) {
@@ -4951,6 +5151,95 @@
       return extra ? { ...p, ...extra } : { ...p, inventory: null };
     });
   }
+  function orderPlayersBySlots(players, st) {
+    const slots = getSlotsArray(st);
+    const mapById = /* @__PURE__ */ new Map();
+    for (const p of players) mapById.set(String(p.id), p);
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const s of slots) {
+      const pid = s?.playerId != null ? String(s.playerId) : "";
+      if (!pid || seen.has(pid)) continue;
+      const p = mapById.get(pid);
+      if (p) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    for (const p of players) {
+      const pid = String(p.id);
+      if (!seen.has(pid)) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    return out;
+  }
+  var __cachedSpawnTiles = null;
+  var __spawnLoadPromise = null;
+  async function getSpawnTilesSorted() {
+    if (Array.isArray(__cachedSpawnTiles)) return __cachedSpawnTiles;
+    if (__spawnLoadPromise) return __spawnLoadPromise;
+    __spawnLoadPromise = (async () => {
+      try {
+        const map = typeof mapAtom?.get === "function" ? await mapAtom.get() : null;
+        const arr = map?.spawnTiles;
+        if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+          __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+          return __cachedSpawnTiles;
+        }
+      } catch {
+      }
+      try {
+        const st = await stateAtom.get();
+        const seen = /* @__PURE__ */ new Set();
+        const stack = [st];
+        while (stack.length) {
+          const cur = stack.pop();
+          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+          seen.add(cur);
+          const arr = cur?.spawnTiles;
+          if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+            __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+            return __cachedSpawnTiles;
+          }
+          for (const k of Object.keys(cur)) {
+            const v = cur[k];
+            if (v && typeof v === "object") stack.push(v);
+          }
+        }
+      } catch {
+      }
+      __cachedSpawnTiles = [];
+      return __cachedSpawnTiles;
+    })();
+    const res = await __spawnLoadPromise;
+    __spawnLoadPromise = null;
+    return res;
+  }
+  async function getMapCols() {
+    try {
+      const map = typeof mapAtom?.get === "function" ? await mapAtom.get() : null;
+      const cols = Number(map?.cols);
+      if (Number.isFinite(cols) && cols > 0) return cols;
+    } catch {
+    }
+    try {
+      const st = await stateAtom.get();
+    } catch {
+    }
+    return 81;
+  }
+  function assignGardenPositions(players, spawnTilesSorted) {
+    if (!players.length || !spawnTilesSorted.length) {
+      return players.map((p) => ({ ...p, gardenPosition: null }));
+    }
+    const out = [];
+    for (let i = 0; i < players.length; i++) {
+      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
+    }
+    return out;
+  }
   var followingState = {
     currentTargetId: null,
     unsub: null,
@@ -4962,7 +5251,10 @@
     async list() {
       const st = await stateAtom.get();
       if (!st) return [];
-      return enrichPlayersWithSlots(getPlayersArray(st), st);
+      const base = enrichPlayersWithSlots(getPlayersArray(st), st);
+      const ordered = orderPlayersBySlots(base, st);
+      const spawns = await getSpawnTilesSorted();
+      return assignGardenPositions(ordered, spawns);
     },
     async onChange(cb) {
       return stateAtom.sub(async () => {
@@ -4984,11 +5276,45 @@
       const slot = getSlotByPlayerId(st, playerId);
       return extractInventoryFromSlot(slot);
     },
-    async teleportTo(playerId) {
+    async getGardenPosition(playerId) {
+      const list = await this.list();
+      const p = list.find((x) => String(x.id) === String(playerId));
+      return p?.gardenPosition ?? null;
+    },
+    async getPlayerNameById(playerId) {
+      try {
+        const st = await stateAtom.get();
+        if (st) {
+          const arr = getPlayersArray(st);
+          const p = arr.find((x) => String(x?.id) === String(playerId));
+          if (p && typeof p.name === "string" && p.name) return p.name;
+        }
+      } catch {
+      }
+      try {
+        const list = await this.list();
+        const p = list.find((x) => String(x.id) === String(playerId));
+        return p?.name ?? null;
+      } catch {
+        return null;
+      }
+    },
+    async teleportToPlayer(playerId) {
       const pos = await this.getPosition(playerId);
       if (!pos) throw new Error("Unknown position for this player");
       PlayerService.teleport(pos.x, pos.y);
-      toastSimple("Teleport", `Teleported to ${pos.x}, ${pos.y}`, "success");
+      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}`, "success");
+    },
+    async teleportToGarden(playerId) {
+      const tileId = await this.getGardenPosition(playerId);
+      if (tileId == null) {
+        await toastSimple("Teleport", "No garden position for this player.", "warn");
+        return;
+      }
+      const cols = await getMapCols();
+      const x = tileId % cols, y = Math.floor(tileId / cols);
+      await PlayerService.teleport(x, y);
+      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}'s garden`, "success");
     },
     async openInventoryPreview(playerId, playerName) {
       try {
@@ -5085,8 +5411,52 @@
     avatarUrl: p.discordAvatarUrl || "",
     statusColor: p.isConnected ? "#48d170" : "#999a"
   });
+  function styleBtnFullWidthL(b, text) {
+    b.textContent = text;
+    b.style.width = "auto";
+    b.style.minWidth = "110px";
+    b.style.margin = "0";
+    b.style.padding = "6px 10px";
+    b.style.fontSize = "13px";
+    b.style.lineHeight = "1.1";
+    b.style.borderRadius = "6px";
+    b.style.border = "1px solid #4445";
+    b.style.background = "#1f2328";
+    b.style.color = "#e7eef7";
+    b.style.justifyContent = "center";
+    b.onmouseenter = () => b.style.borderColor = "#6aa1";
+    b.onmouseleave = () => b.style.borderColor = "#4445";
+  }
+  function sectionFramed(titleText, content) {
+    const s = document.createElement("div");
+    s.style.display = "grid";
+    s.style.justifyItems = "center";
+    s.style.gap = "8px";
+    s.style.textAlign = "center";
+    s.style.border = "1px solid #4446";
+    s.style.borderRadius = "10px";
+    s.style.padding = "10px";
+    s.style.background = "#0f1318";
+    s.style.boxShadow = "0 0 0 1px #0002 inset";
+    s.style.width = "min(720px, 100%)";
+    const h = document.createElement("div");
+    h.textContent = titleText;
+    h.style.fontWeight = "600";
+    h.style.opacity = "0.95";
+    s.append(h, content);
+    return s;
+  }
+  function rowCenter() {
+    const r = document.createElement("div");
+    r.style.display = "flex";
+    r.style.alignItems = "center";
+    r.style.justifyContent = "center";
+    r.style.flexWrap = "wrap";
+    r.style.gap = "6px";
+    return r;
+  }
   async function renderPlayersMenu(root) {
-    const ui = new Menu({ id: "players", compact: true });
+    const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     const panel = ui.root.querySelector(".qmm-views");
     const { root: split, left, right } = ui.split2("260px");
@@ -5106,27 +5476,19 @@
         input.style.flex = "1 1 auto";
         input.style.minWidth = "0";
       }
-      const refreshBtn = document.createElement("button");
-      refreshBtn.className = "qmm-btn";
-      refreshBtn.title = "Refresh";
-      refreshBtn.setAttribute("aria-label", "Refresh");
-      refreshBtn.style.width = "34px";
-      refreshBtn.style.height = "34px";
-      refreshBtn.style.padding = "0";
-      refreshBtn.style.display = "inline-flex";
-      refreshBtn.style.alignItems = "center";
-      refreshBtn.style.justifyContent = "center";
-      refreshBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M12 6a6 6 0 0 1 5.66 4H20l-3.5 3.5L13 10h2.34A4 4 0 1 0 16 12h2a6 6 0 1 1-6-6z"/>
-      </svg>
-    `;
-      refreshBtn.onclick = async () => {
-        await refreshAll(true);
-      };
-      filter.appendChild(refreshBtn);
     }
-    function renderRight(playerId) {
+    const scroller = document.createElement("div");
+    scroller.style.maxHeight = "27vh";
+    scroller.style.overflow = "auto";
+    scroller.style.minHeight = "0";
+    const ul = vt.root.querySelector("ul");
+    if (ul) {
+      vt.root.insertBefore(scroller, ul);
+      scroller.appendChild(ul);
+    }
+    vt.root.style.height = "54vh";
+    vt.root.style.overflow = "hidden";
+    async function renderRight(playerId) {
       right.innerHTML = "";
       const p = playerId ? players.find((x) => x.id === playerId) || null : null;
       if (!p) {
@@ -5136,6 +5498,17 @@
         right.appendChild(empty);
         return;
       }
+      const col = document.createElement("div");
+      col.style.display = "grid";
+      col.style.gridAutoRows = "min-content";
+      col.style.justifyItems = "center";
+      col.style.gap = "10px";
+      col.style.overflow = "auto";
+      right.appendChild(col);
+      const prof = document.createElement("div");
+      prof.style.display = "grid";
+      prof.style.gap = "8px";
+      prof.style.justifyItems = "center";
       const head = document.createElement("div");
       head.style.display = "flex";
       head.style.alignItems = "center";
@@ -5156,55 +5529,74 @@
       const sub = document.createElement("div");
       sub.style.opacity = "0.8";
       sub.style.fontSize = "12px";
-      const status = p.isConnected ? "Online" : "Offline";
-      sub.textContent = status;
-      title.appendChild(nameEl);
-      title.appendChild(sub);
-      head.appendChild(avatar);
-      head.appendChild(title);
-      right.appendChild(head);
-      const btnRow = document.createElement("div");
-      btnRow.style.display = "flex";
-      btnRow.style.gap = "8px";
-      btnRow.style.marginTop = "8px";
-      btnRow.appendChild(ui.btn("Teleport", async () => {
+      sub.textContent = p.isConnected ? "Online" : "Offline";
+      title.append(nameEl, sub);
+      head.append(avatar, title);
+      const info = document.createElement("div");
+      info.style.opacity = "0.9";
+      prof.append(head, info);
+      col.appendChild(prof);
+      const teleRow = rowCenter();
+      const btnToPlayer = document.createElement("button");
+      const btnToGarden = document.createElement("button");
+      styleBtnFullWidthL(btnToPlayer, "To player");
+      styleBtnFullWidthL(btnToGarden, "To garden");
+      btnToPlayer.onclick = async () => {
         try {
-          await PlayersService.teleportTo(p.id);
+          const fn = PlayersService.teleportToPlayer ?? PlayersService.teleportTo;
+          await fn.call(PlayersService, p.id);
         } catch (e) {
-          toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
         }
-      }));
-      btnRow.appendChild(ui.btn("Inventory", async () => {
-        await PlayersService.openInventoryPreview(p.id, p.name);
-      }));
-      const followRow = document.createElement("div");
-      followRow.style.display = "flex";
-      followRow.style.alignItems = "center";
-      followRow.style.marginTop = "6px";
-      followRow.style.gap = "8px";
-      const followLabel = document.createElement("div");
-      followLabel.textContent = "Follow";
-      followLabel.style.fontSize = "14px";
-      followLabel.style.opacity = "0.85";
-      const followSwitch = ui.switch(PlayersService.isFollowing(p.id));
-      followSwitch.addEventListener("change", async () => {
+      };
+      btnToGarden.onclick = async () => {
         try {
-          if (followSwitch.checked) {
+          const fn = PlayersService.teleportToGarden ?? PlayersService.tptogarden;
+          await fn.call(PlayersService, p.id);
+        } catch (e) {
+          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+        }
+      };
+      teleRow.append(btnToPlayer, btnToGarden);
+      col.appendChild(sectionFramed("Teleport", teleRow));
+      const invRow = rowCenter();
+      const btnPrev = document.createElement("button");
+      styleBtnFullWidthL(btnPrev, "Preview");
+      btnPrev.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openInventoryPreview(p.id, p.name);
+          if (await isInventoryPanelOpen()) {
+            await waitInventoryPanelClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      invRow.append(btnPrev);
+      col.appendChild(sectionFramed("Inventory", invRow));
+      const funRow = rowCenter();
+      const label2 = document.createElement("div");
+      label2.textContent = "Follow";
+      label2.style.fontSize = "14px";
+      label2.style.opacity = "0.85";
+      const sw = ui.switch(PlayersService.isFollowing(p.id));
+      sw.addEventListener("change", async () => {
+        try {
+          if (sw.checked) {
             await PlayersService.startFollowing(p.id);
-            await toastSimple("Follow", "Follow activ\xE9.", "success");
+            await toastSimple("Follow", "Enabled.", "success");
           } else {
             PlayersService.stopFollowing();
-            await toastSimple("Follow", "Follow d\xE9sactiv\xE9.", "info");
+            await toastSimple("Follow", "Disable.", "info");
           }
         } catch (e) {
-          await toastSimple("Follow", e?.message || "Erreur sur le follow.", "error");
-          followSwitch.checked = !followSwitch.checked;
+          await toastSimple("Follow", e?.message || "Error", "error");
+          sw.checked = !sw.checked;
         }
       });
-      followRow.appendChild(followLabel);
-      followRow.appendChild(followSwitch);
-      right.appendChild(btnRow);
-      right.appendChild(followRow);
+      funRow.append(label2, sw);
+      col.appendChild(sectionFramed("Fun", funRow));
     }
     let players = [];
     let lastSig = "";
@@ -5248,7 +5640,7 @@
     b.onmouseenter = () => b.style.borderColor = "#6aa1";
     b.onmouseleave = () => b.style.borderColor = "#4445";
   }
-  function sectionFramed(titleText, content) {
+  function sectionFramed2(titleText, content) {
     const s = document.createElement("div");
     s.style.display = "grid";
     s.style.justifyItems = "center";
@@ -5324,12 +5716,8 @@
     return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
   }
   function renderManagerTab(view, ui) {
-    const setPetsMenuHidden = (hidden) => {
-      const el2 = ui?.root ?? view;
-      el2.style.display = hidden ? "none" : "";
-    };
     view.innerHTML = "";
-    const styleBtnFullWidthL = (b, text) => {
+    const styleBtnFullWidthL2 = (b, text) => {
       b.textContent = text;
       b.style.width = "100%";
       b.style.margin = "0";
@@ -5342,7 +5730,7 @@
       b.onmouseenter = () => b.style.borderColor = "#6aa1";
       b.onmouseleave = () => b.style.borderColor = "#4445";
     };
-    const framed = (title, content) => sectionFramed(title, content);
+    const framed = (title, content) => sectionFramed2(title, content);
     const row = () => {
       const r = document.createElement("div");
       r.style.display = "flex";
@@ -5386,9 +5774,9 @@
     btnDup.id = "pets.teams.duplicate";
     const btnDel = document.createElement("button");
     btnDel.id = "pets.teams.delete";
-    styleBtnFullWidthL(btnNew, "New");
-    styleBtnFullWidthL(btnDup, "Duplicate");
-    styleBtnFullWidthL(btnDel, "Delete");
+    styleBtnFullWidthL2(btnNew, "New");
+    styleBtnFullWidthL2(btnDup, "Duplicate");
+    styleBtnFullWidthL2(btnDel, "Delete");
     footer.append(btnNew, btnDup, btnDel);
     let teams = [];
     let selectedId = null;
@@ -6011,12 +6399,12 @@
           if (!t) return;
           btnChoose.disabled = true;
           btnClear2.disabled = true;
-          setPetsMenuHidden(true);
+          ui.setWindowVisible(false);
           try {
             await PetsService.chooseSlotPet(t.id, idx);
             await repaintSlots(getSelectedTeam());
           } finally {
-            setPetsMenuHidden(false);
+            ui.setWindowVisible(true);
             btnChoose.disabled = false;
             btnClear2.disabled = false;
           }
@@ -6040,10 +6428,10 @@
       extra.style.gap = "6px";
       extra.style.justifyContent = "center";
       const btnUseCurrent = document.createElement("button");
-      styleBtnFullWidthL(btnUseCurrent, "Current active");
+      styleBtnFullWidthL2(btnUseCurrent, "Current active");
       btnUseCurrent.id = "pets.teams.useCurrent";
       const btnClear = document.createElement("button");
-      styleBtnFullWidthL(btnClear, "Clear slots");
+      styleBtnFullWidthL2(btnClear, "Clear slots");
       btnClear.id = "pets.teams.clearSlots";
       const DARK_BG = "#0f1318";
       extra.append(btnUseCurrent, btnClear);
@@ -6503,7 +6891,7 @@
     repaint();
   }
   function renderPetsMenu(root) {
-    const ui = new Menu({ id: "pets", compact: true });
+    const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     ui.addTab("manager", "Manager", (view) => renderManagerTab(view, ui));
     ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
