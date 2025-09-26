@@ -355,183 +355,306 @@
   }
   var Store = { ensure: ensureStore2, select, subscribe, subscribeImmediate, set };
 
-  // src/store/selectors.ts
-  function sameIdSet(a, b) {
-    if (a === b) return true;
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-    const sa = new Set(a);
-    for (const id of b) if (!sa.has(id)) return false;
-    return true;
+  // src/store/hub.ts
+  function toPathArray(path) {
+    if (!path) return [];
+    return Array.isArray(path) ? path.slice() : path.split(".").map((k) => k.match(/^\d+$/) ? Number(k) : k);
   }
-  async function _doSet(label2, raw) {
-    await Store.set(label2, raw);
+  function getAtPath(root, path) {
+    const segs = toPathArray(path);
+    let cur = root;
+    for (const s of segs) {
+      if (cur == null) return void 0;
+      cur = cur[s];
+    }
+    return cur;
   }
-  function makeSelector(label2, map, write) {
-    const getRaw = () => Store.select(label2);
-    const get = () => getRaw().then((v) => map ? map(v) : v);
-    const set2 = async (next) => {
-      const prevRaw = await getRaw().catch(() => void 0);
-      const raw = write ? write(next, prevRaw) : next;
-      return _doSet(label2, raw);
-    };
-    const update = async (fn) => {
+  function setAtPath(root, path, nextValue) {
+    const segs = toPathArray(path);
+    if (!segs.length) return nextValue;
+    const clone = Array.isArray(root) ? root.slice() : { ...root ?? {} };
+    let cur = clone;
+    for (let i = 0; i < segs.length - 1; i++) {
+      const key = segs[i];
+      const src = cur[key];
+      const obj = typeof src === "object" && src !== null ? Array.isArray(src) ? src.slice() : { ...src } : {};
+      cur[key] = obj;
+      cur = obj;
+    }
+    cur[segs[segs.length - 1]] = nextValue;
+    return clone;
+  }
+  var eq = {
+    shallow(a, b) {
+      if (Object.is(a, b)) return true;
+      if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+      const ka = Object.keys(a);
+      const kb = Object.keys(b);
+      if (ka.length !== kb.length) return false;
+      for (const k of ka) if (!Object.is(a[k], b[k])) return false;
+      return true;
+    },
+    idSet(a, b) {
+      if (a === b) return true;
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      const sa = new Set(a);
+      for (const id of b) if (!sa.has(id)) return false;
+      return true;
+    }
+  };
+  function makeView(sourceLabel, opts = {}) {
+    const { path, write = "replace" } = opts;
+    async function get() {
+      const src = await Store.select(sourceLabel);
+      return path ? getAtPath(src, path) : src;
+    }
+    async function set2(next) {
+      if (typeof write === "function") {
+        const prev2 = await Store.select(sourceLabel);
+        const raw2 = write(next, prev2);
+        return Store.set(sourceLabel, raw2);
+      }
+      const prev = await Store.select(sourceLabel);
+      const raw = path ? setAtPath(prev, path, next) : next;
+      if (write === "merge-shallow" && !path && prev && typeof prev === "object" && typeof next === "object") {
+        return Store.set(sourceLabel, { ...prev, ...next });
+      }
+      return Store.set(sourceLabel, raw);
+    }
+    async function update(fn) {
       const prev = await get();
       const next = fn(prev);
       await set2(next);
       return next;
-    };
-    const sub = (cb) => Store.subscribe(label2, (v) => cb(map ? map(v) : v));
-    const subNow = (cb) => Store.subscribeImmediate(label2, (v) => cb(map ? map(v) : v));
-    return { label: label2, get, set: set2, update, sub, subNow };
+    }
+    async function onChange(cb, isEqual = Object.is) {
+      let prev;
+      return Store.subscribe(sourceLabel, (src) => {
+        const v = path ? getAtPath(src, path) : src;
+        if (typeof prev === "undefined" || !isEqual(prev, v)) {
+          const p = prev;
+          prev = v;
+          cb(v, p);
+        }
+      });
+    }
+    async function onChangeNow(cb, isEqual = Object.is) {
+      let prev;
+      return Store.subscribeImmediate(sourceLabel, (src) => {
+        const v = path ? getAtPath(src, path) : src;
+        if (typeof prev === "undefined" || !isEqual(prev, v)) {
+          const p = prev;
+          prev = v;
+          cb(v, p);
+        }
+      });
+    }
+    function asSignature(opts2) {
+      return makeSignatureChannel(sourceLabel, path, opts2);
+    }
+    return { label: sourceLabel + (path ? ":" + toPathArray(path).join(".") : ""), get, set: set2, update, onChange, onChangeNow, asSignature };
   }
-  var favoriteIdsAtom = (() => {
-    const base = makeSelector(
-      "myInventoryAtom",
-      (inv) => Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds.slice() : []
-    );
-    return {
-      label: base.label + ":favoriteIds",
-      get: base.get,
-      sub(cb) {
-        let prev = null;
-        return base.sub((next) => {
-          if (!prev || !sameIdSet(prev, next)) {
-            prev = next;
-            cb(next);
-          }
-        });
-      },
-      subNow(cb) {
-        let prev = null;
-        return base.subNow((next) => {
-          if (!prev || !sameIdSet(prev, next)) {
-            prev = next;
-            cb(next);
-          }
-        });
-      }
-    };
-  })();
-  var favoriteIdSetAtom = (() => {
-    const base = makeSelector(
-      "myInventoryAtom",
-      (inv) => Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds : []
-    );
-    return {
-      label: base.label + ":favoriteIdSet",
-      async get() {
-        return new Set(await base.get());
-      },
-      sub(cb) {
-        let prev = null;
-        return base.sub((next) => {
-          if (!prev || !sameIdSet(prev, next)) {
-            prev = next;
-            cb(new Set(next));
-          }
-        });
-      },
-      subNow(cb) {
-        let prev = null;
-        return base.subNow((next) => {
-          if (!prev || !sameIdSet(prev, next)) {
-            prev = next;
-            cb(new Set(next));
-          }
-        });
-      }
-    };
-  })();
-  var gardenAtom = (() => {
-    const base = makeSelector("myDataAtom", (v) => v?.garden ?? null);
-    return { label: base.label + ":garden", get: base.get, sub: base.sub, subNow: base.subNow };
-  })();
-  var positionAtom = makeSelector("positionAtom");
-  var stateAtom = makeSelector("stateAtom");
-  var myInventoryAtom = makeSelector("myInventoryAtom");
-  var shopsAtom = makeSelector("shopsAtom");
-  var myShopPurchasesAtom = makeSelector("myShopPurchasesAtom");
-  var myDataAtom = makeSelector("myDataAtom");
-  var myCropInventoryAtom = makeSelector("myCropInventoryAtom");
-  var numPlayersAtom = makeSelector("numPlayersAtom");
-  var totalCropSellPriceAtom = makeSelector("totalCropSellPriceAtom");
-  var myPetInfosAtom = makeSelector("myPetInfosAtom");
-  var myPetSlotInfosAtom = makeSelector("myPetSlotInfosAtom");
-  var myValidatedSelectedItemIndexAtom = makeSelector("myValidatedSelectedItemIndexAtom");
-  var setSelectedIndexToEndAtom = makeSelector("setSelectedIndexToEndAtom");
-  var mapAtom = makeSelector("mapAtom");
-  function _abilitySig(a) {
-    if (!a) return "null";
-    const id = typeof a?.abilityId === "string" ? a.abilityId : "";
-    const ts = Number.isFinite(a?.performedAt) ? String(a.performedAt) : "";
-    let data = "";
+  function stablePick(obj, fields) {
+    const out = {};
+    for (const f of fields) {
+      const v = getAtPath(obj, f.includes(".") ? f : [f]);
+      out[f] = v;
+    }
     try {
-      data = JSON.stringify(a?.data ?? null);
+      return JSON.stringify(out);
     } catch {
-      data = "";
+      return String(out);
     }
-    return `${id}|${ts}|${data}`;
   }
-  function _extractTriggers(obj) {
-    const value = {};
-    const sig = /* @__PURE__ */ new Map();
-    if (obj && typeof obj === "object") {
-      for (const petId of Object.keys(obj)) {
-        const entry = obj[petId] ?? {};
-        const lat = entry.lastAbilityTrigger ?? null;
-        const pos = entry.position ?? null;
-        value[petId] = {
-          petId,
-          abilityId: lat?.abilityId ?? null,
-          performedAt: Number.isFinite(lat?.performedAt) ? lat.performedAt : null,
-          data: lat?.data ?? null,
-          position: pos ?? null
-        };
-        sig.set(petId, _abilitySig(lat));
+  function makeSignatureChannel(sourceLabel, path, opts) {
+    const mode = opts.mode ?? "auto";
+    function computeSig(whole) {
+      const base = whole;
+      const value = path ? getAtPath(base, path) : base;
+      const sig = /* @__PURE__ */ new Map();
+      if (value == null) return { sig, keys: [] };
+      if ((mode === "array" || mode === "auto" && Array.isArray(value)) && Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+          const item = value[i];
+          const key = opts.key ? opts.key(item, i, whole) : i;
+          const s = opts.sig ? opts.sig(item, i, whole) : opts.fields ? stablePick(item, opts.fields) : (() => {
+            try {
+              return JSON.stringify(item);
+            } catch {
+              return String(item);
+            }
+          })();
+          sig.set(key, s);
+        }
+      } else {
+        for (const [k, item] of Object.entries(value)) {
+          const key = opts.key ? opts.key(item, k, whole) : k;
+          const s = opts.sig ? opts.sig(item, k, whole) : opts.fields ? stablePick(item, opts.fields) : (() => {
+            try {
+              return JSON.stringify(item);
+            } catch {
+              return String(item);
+            }
+          })();
+          sig.set(key, s);
+        }
       }
+      return { sig, keys: Array.from(sig.keys()) };
     }
-    return { value, sig };
+    function mapEqual(a, b) {
+      if (a === b) return true;
+      if (!a || !b || a.size !== b.size) return false;
+      for (const [k, v] of a) if (b.get(k) !== v) return false;
+      return true;
+    }
+    async function sub(cb) {
+      let prevSig = null;
+      return Store.subscribeImmediate(sourceLabel, (src) => {
+        const whole = path ? getAtPath(src, path) : src;
+        const { sig } = computeSig(whole);
+        if (!mapEqual(prevSig, sig)) {
+          const allKeys = /* @__PURE__ */ new Set([
+            ...prevSig ? Array.from(prevSig.keys()) : [],
+            ...Array.from(sig.keys())
+          ]);
+          const changed = [];
+          for (const k of allKeys) if ((prevSig?.get(k) ?? "__NONE__") !== (sig.get(k) ?? "__NONE__")) changed.push(k);
+          prevSig = sig;
+          cb({ value: whole, changedKeys: changed });
+        }
+      });
+    }
+    async function subKey(key, cb) {
+      let last = "__INIT__";
+      return sub(({ value, changedKeys }) => {
+        if (changedKeys.includes(key)) cb({ value });
+      });
+    }
+    async function subKeys(keys, cb) {
+      const wanted = new Set(keys);
+      return sub(({ value, changedKeys }) => {
+        const hit = changedKeys.filter((k) => wanted.has(k));
+        if (hit.length) cb({ value, changedKeys: hit });
+      });
+    }
+    return { sub, subKey, subKeys };
   }
-  function _mapEqual(a, b) {
-    if (!a) return false;
-    if (a.size !== b.size) return false;
-    for (const [k, v] of b) if (a.get(k) !== v) return false;
-    return true;
+  var HubEq = eq;
+  function makeAtom(label2) {
+    return makeView(label2);
   }
-  var myPetsAbilitiesTrigger = (() => {
-    const base = makeSelector("myPetSlotInfosAtom");
-    const label2 = base.label + ":abilitiesTrigger";
-    return {
-      label: label2,
-      async get() {
-        const src = await base.get();
-        return _extractTriggers(src).value;
-      },
-      sub(cb) {
-        let prevSig = null;
-        return base.sub((src) => {
-          const { value, sig } = _extractTriggers(src);
-          if (!_mapEqual(prevSig, sig)) {
-            prevSig = sig;
-            cb(value);
-          }
-        });
-      },
-      subNow(cb) {
-        let prevSig = null;
-        return base.subNow((src) => {
-          const { value, sig } = _extractTriggers(src);
-          if (!_mapEqual(prevSig, sig)) {
-            prevSig = sig;
-            cb(value);
-          }
-        });
-      }
-    };
-  })();
+
+  // src/store/atoms.ts
+  var position = makeAtom("positionAtom");
+  var state = makeAtom("stateAtom");
+  var map = makeAtom("mapAtom");
+  var myData = makeAtom("myDataAtom");
+  var myInventory = makeAtom("myInventoryAtom");
+  var myCropInventory = makeAtom("myCropInventoryAtom");
+  var myPetInfos = makeAtom("myPetInfosAtom");
+  var myPetSlotInfos = makeAtom("myPetSlotInfosAtom");
+  var shops = makeAtom("shopsAtom");
+  var myShopPurchases = makeAtom("myShopPurchasesAtom");
+  var numPlayers = makeAtom("numPlayersAtom");
+  var totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
+  var myValidatedSelectedItemIndex = makeAtom("myValidatedSelectedItemIndexAtom");
+  var setSelectedIndexToEnd = makeAtom("setSelectedIndexToEndAtom");
+  var activeModal = makeAtom("activeModalAtom");
+  var garden = makeView("myDataAtom", { path: "garden" });
+  var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
+  var favoriteIds = makeView("myInventoryAtom", { path: "favoritedItemIds" });
+  var stateChild = makeView("stateAtom", { path: "child" });
+  var stateChildData = makeView("stateAtom", { path: "child.data" });
+  var stateShops = makeView("stateAtom", { path: "child.data.shops" });
+  var stateUserSlots = makeView("stateAtom", { path: "child.data.userSlots" });
+  var statePlayers = makeView("stateAtom", { path: "data.players" });
+  function slotSig(o) {
+    if (!o) return "\u2205";
+    return [
+      o.objectType ?? o.type ?? "",
+      o.species ?? o.seedSpecies ?? o.plantSpecies ?? o.eggId ?? o.decorId ?? "",
+      o.plantedAt ?? o.startTime ?? 0,
+      o.maturedAt ?? o.endTime ?? 0
+    ].join("|");
+  }
+  var GardenSlotsSig = gardenTileObjects.asSignature({
+    mode: "record",
+    key: (_item, key) => Number(key),
+    sig: (item) => slotSig(item)
+  });
+  function petSig(p) {
+    const s = p?.slot ?? {};
+    const muts = Array.isArray(s.mutations) ? s.mutations.slice().sort().join(",") : "";
+    const ab = Array.isArray(s.abilities) ? s.abilities.slice().sort().join(",") : "";
+    const name = s.name ?? "";
+    const species = s.petSpecies ?? "";
+    const xp = Number.isFinite(s.xp) ? Math.round(s.xp) : 0;
+    const hunger = Number.isFinite(s.hunger) ? Math.round(s.hunger * 1e3) : 0;
+    const scale = Number.isFinite(s.targetScale) ? Math.round(s.targetScale * 1e3) : 0;
+    const x = Number.isFinite(p?.position?.x) ? Math.round(p.position.x) : 0;
+    const y = Number.isFinite(p?.position?.y) ? Math.round(p.position.y) : 0;
+    return `${species}|${name}|xp:${xp}|hg:${hunger}|sc:${scale}|m:${muts}|a:${ab}|pos:${x},${y}`;
+  }
+  var PetsByIdSig = myPetInfos.asSignature({
+    mode: "array",
+    key: (p) => String(p?.slot?.id ?? ""),
+    sig: (p) => petSig(p)
+  });
+  var FavoriteIdsSig = favoriteIds.asSignature({
+    mode: "array",
+    key: (id) => String(id),
+    sig: () => "1"
+  });
+  var Atoms = {
+    ui: {
+      activeModal
+    },
+    server: {
+      numPlayers
+    },
+    player: {
+      position
+    },
+    root: {
+      state,
+      map
+    },
+    data: {
+      myData,
+      garden,
+      gardenTileObjects
+    },
+    inventory: {
+      myInventory,
+      myCropInventory,
+      favoriteIds
+    },
+    pets: {
+      myPetInfos,
+      myPetSlotInfos
+    },
+    shop: {
+      shops,
+      myShopPurchases,
+      totalCropSellPrice,
+      myValidatedSelectedItemIndex,
+      setSelectedIndexToEnd
+    }
+  };
+  function onFavoriteIds(cb) {
+    return favoriteIds.onChange((next) => cb(Array.isArray(next) ? next : []), HubEq.idSet);
+  }
+  async function onFavoriteIdsNow(cb) {
+    cb(Array.isArray(await favoriteIds.get()) ? await favoriteIds.get() : []);
+    return onFavoriteIds(cb);
+  }
+  async function getFavoriteIdSet() {
+    const arr = await favoriteIds.get();
+    return new Set(Array.isArray(arr) ? arr : []);
+  }
 
   // src/services/player.ts
-  function slotSig(o) {
+  function slotSig2(o) {
     if (!o) return "\u2205";
     return [
       o.objectType ?? o.type ?? "",
@@ -553,7 +676,7 @@
       if (!(k in p)) {
         added.push(+k);
         changes.push({ kind: "added", slot: +k, next: n[k] });
-      } else if (slotSig(p[k]) !== slotSig(n[k])) {
+      } else if (slotSig2(p[k]) !== slotSig2(n[k])) {
         updated.push(+k);
         changes.push({ kind: "updated", slot: +k, prev: p[k], next: n[k] });
       }
@@ -566,7 +689,7 @@
     }
     return { added, updated, removed, changes };
   }
-  function petSig(p) {
+  function petSig2(p) {
     const s = p?.slot ?? {};
     const muts = Array.isArray(s.mutations) ? s.mutations.slice().sort().join(",") : "";
     const ab = Array.isArray(s.abilities) ? s.abilities.slice().sort().join(",") : "";
@@ -579,13 +702,13 @@
     const y = Number.isFinite(p?.position?.y) ? Math.round(p.position.y) : 0;
     return `${species}|${name}|xp:${xp}|hg:${hunger}|sc:${scale}|m:${muts}|a:${ab}|pos:${x},${y}`;
   }
-  function snapshotPets(state) {
+  function snapshotPets(state2) {
     const snap = /* @__PURE__ */ new Map();
-    const arr = Array.isArray(state) ? state : [];
+    const arr = Array.isArray(state2) ? state2 : [];
     for (const it of arr) {
       const id = String(it?.slot?.id ?? "");
       if (!id) continue;
-      snap.set(id, petSig(it));
+      snap.set(id, petSig2(it));
     }
     return snap;
   }
@@ -651,18 +774,16 @@
   var PlayerService = {
     /* ------------------------- Position / Déplacement ------------------------- */
     getPosition() {
-      return positionAtom.get();
+      return Atoms.player.position.get();
     },
     onPosition(cb) {
-      return positionAtom.sub(cb);
+      return Atoms.player.position.onChange(cb);
     },
     onPositionNow(cb) {
-      return positionAtom.subNow(cb);
+      return Atoms.player.position.onChangeNow(cb);
     },
     async setPosition(x, y) {
-      const atom = getAtomByLabel(positionAtom.label || "positionAtom");
-      if (!atom) throw new Error("positionAtom introuvable");
-      await jSet(atom, { x, y });
+      await Atoms.player.position.set({ x, y });
     },
     async teleport(x, y) {
       try {
@@ -684,7 +805,7 @@
       } catch {
       }
     },
-    /* ------------------------------ Game actions ------------------------------ */
+    /* ------------------------------ Actions jeu ------------------------------ */
     async plantSeed(slot, species) {
       try {
         sendToGame({ type: "PlantSeed", slot, species });
@@ -757,9 +878,11 @@
       } catch {
       }
     },
-    async placePet(itemId, position, tileType, localTileIndex) {
+    // NB: types littéraux {x:0,y:0} / "Boardwalk" / 64 provenaient de l'ancien code.
+    // Si tu préfères des types génériques, remplace par {x:number,y:number}, "Dirt"|"Boardwalk", number.
+    async placePet(itemId, position2, tileType, localTileIndex) {
       try {
-        sendToGame({ type: "PlacePet", itemId, position, tileType, localTileIndex });
+        sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
       } catch {
       }
     },
@@ -777,18 +900,15 @@
       }
     },
     async getFavoriteIds() {
-      const ids = await favoriteIdsAtom.get();
-      const arr = Array.isArray(ids) ? ids.slice() : [];
-      return arr;
+      const ids = await Atoms.inventory.favoriteIds.get();
+      return Array.isArray(ids) ? ids.slice() : [];
     },
     async getFavoriteIdSet() {
-      const set2 = await favoriteIdSetAtom.get();
-      return set2;
+      return getFavoriteIdSet();
     },
     async isFavoriteItem(itemId) {
-      const set2 = await favoriteIdSetAtom.get();
-      const ok = set2.has(itemId);
-      return ok;
+      const set2 = await getFavoriteIdSet();
+      return set2.has(itemId);
     },
     async ensureFavoriteItem(itemId, shouldBeFavorite) {
       const cur = await this.isFavoriteItem(itemId);
@@ -799,72 +919,44 @@
       return cur;
     },
     async ensureFavorites(items, shouldBeFavorite) {
-      const set2 = await favoriteIdSetAtom.get();
-      let toggled = 0;
+      const set2 = await getFavoriteIdSet();
       for (const id of items) {
         const cur = set2.has(id);
         if (cur !== shouldBeFavorite) {
           try {
             await this.toggleFavoriteItem(id);
-            toggled++;
           } catch {
           }
         }
       }
     },
     onFavoriteIdsChange(cb) {
-      return favoriteIdsAtom.sub((ids) => {
-        const arr = Array.isArray(ids) ? ids : [];
-        cb(arr);
-      });
+      return onFavoriteIds((ids) => cb(Array.isArray(ids) ? ids : []));
     },
     async onFavoriteIdsChangeNow(cb) {
-      const cur = await this.getFavoriteIds();
-      cb(cur);
-      return favoriteIdsAtom.sub((ids) => {
-        const arr = Array.isArray(ids) ? ids : [];
-        cb(arr);
-      });
+      return onFavoriteIdsNow((ids) => cb(Array.isArray(ids) ? ids : []));
     },
     onFavoriteSetChange(cb) {
-      return favoriteIdSetAtom.sub((set2) => {
-        cb(set2);
-      });
+      return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     async onFavoriteSetChangeNow(cb) {
-      const cur = await favoriteIdSetAtom.get();
+      const cur = await getFavoriteIdSet();
       cb(cur);
-      return favoriteIdSetAtom.sub((set2) => {
-        cb(set2);
-      });
+      return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     /* --------------------------------- Garden -------------------------------- */
     async getGardenState() {
-      const data = await myDataAtom.get();
-      return data?.garden ?? null;
+      return await Atoms.data.garden.get() ?? null;
     },
     onGardenChange(cb) {
-      let prev = null;
-      return gardenAtom.sub((g) => {
-        if (g !== prev) {
-          prev = g;
-          cb(g);
-        }
-      });
+      return Atoms.data.garden.onChange(cb);
     },
-    async onGardenChangeNow(cb) {
-      let prev = await gardenAtom.get();
-      cb(prev);
-      return gardenAtom.sub((g) => {
-        if (g !== prev) {
-          prev = g;
-          cb(g);
-        }
-      });
+    onGardenChangeNow(cb) {
+      return Atoms.data.garden.onChangeNow(cb);
     },
     onGardenDiff(cb) {
       let prev = null;
-      return gardenAtom.sub((g) => {
+      return Atoms.data.garden.onChange((g) => {
         const d = diffGarden(prev, g);
         if (d.added.length || d.updated.length || d.removed.length || g !== prev) {
           prev = g;
@@ -873,10 +965,9 @@
       });
     },
     async onGardenDiffNow(cb) {
-      let prev = (await myDataAtom.get())?.garden ?? null;
+      let prev = await Atoms.data.garden.get() ?? null;
       cb(prev, diffGarden(null, prev));
-      return myDataAtom.sub((data) => {
-        const next = data?.garden ?? null;
+      return Atoms.data.garden.onChange((next) => {
         const d = diffGarden(prev, next);
         if (d.added.length || d.updated.length || d.removed.length) {
           prev = next;
@@ -886,12 +977,12 @@
     },
     /* ------------------------------------ Pets ------------------------------------ */
     async getPets() {
-      const arr = await myPetInfosAtom.get();
+      const arr = await Atoms.pets.myPetInfos.get();
       return Array.isArray(arr) ? arr : null;
     },
     onPetsChange(cb) {
       let prev = null;
-      return myPetInfosAtom.sub((next) => {
+      return Atoms.pets.myPetInfos.onChange((next) => {
         if (next !== prev) {
           prev = next;
           cb(prev);
@@ -901,7 +992,7 @@
     async onPetsChangeNow(cb) {
       let prev = await this.getPets();
       cb(prev);
-      return myPetInfosAtom.sub((next) => {
+      return Atoms.pets.myPetInfos.onChange((next) => {
         if (next !== prev) {
           prev = next;
           cb(prev);
@@ -910,11 +1001,11 @@
     },
     onPetsDiff(cb) {
       let prevSnap = snapshotPets(null);
-      return myPetInfosAtom.sub((state) => {
-        const nextSnap = snapshotPets(state);
+      return Atoms.pets.myPetInfos.onChange((state2) => {
+        const nextSnap = snapshotPets(state2);
         const d = diffPetsSnapshot(prevSnap, nextSnap);
         if (d.added.length || d.updated.length || d.removed.length) {
-          cb(state, d);
+          cb(state2, d);
           prevSnap = nextSnap;
         }
       });
@@ -926,23 +1017,22 @@
       const first = diffPetsSnapshot(prevSnap, nextSnap);
       cb(cur, first);
       prevSnap = nextSnap;
-      return myPetInfosAtom.sub((state) => {
-        nextSnap = snapshotPets(state);
+      return Atoms.pets.myPetInfos.onChange((state2) => {
+        nextSnap = snapshotPets(state2);
         const d = diffPetsSnapshot(prevSnap, nextSnap);
         if (d.added.length || d.updated.length || d.removed.length) {
-          cb(state, d);
+          cb(state2, d);
           prevSnap = nextSnap;
         }
       });
     },
     /* ------------------------- Crop Inventory (crops) ------------------------- */
     async getCropInventoryState() {
-      const data = await myCropInventoryAtom.get();
-      return data;
+      return Atoms.inventory.myCropInventory.get();
     },
     onCropInventoryChange(cb) {
       let prev = null;
-      return myCropInventoryAtom.sub((inv) => {
+      return Atoms.inventory.myCropInventory.onChange((inv) => {
         if (inv !== prev) {
           prev = inv;
           cb(inv);
@@ -950,9 +1040,9 @@
       });
     },
     async onCropInventoryChangeNow(cb) {
-      let prev = await myCropInventoryAtom.get();
+      let prev = await Atoms.inventory.myCropInventory.get();
       cb(prev);
-      return myCropInventoryAtom.sub((inv) => {
+      return Atoms.inventory.myCropInventory.onChange((inv) => {
         if (inv !== prev) {
           prev = inv;
           cb(inv);
@@ -961,7 +1051,7 @@
     },
     onCropInventoryDiff(cb) {
       let prevSnap = snapshotInventory(null);
-      return myCropInventoryAtom.sub((inv) => {
+      return Atoms.inventory.myCropInventory.onChange((inv) => {
         const nextSnap = snapshotInventory(inv);
         const d = diffCropInventorySnapshot(prevSnap, nextSnap);
         if (d.added.length || d.updated.length || d.removed.length) {
@@ -971,13 +1061,13 @@
       });
     },
     async onCropInventoryDiffNow(cb) {
-      let cur = await myCropInventoryAtom.get();
+      let cur = await Atoms.inventory.myCropInventory.get();
       let prevSnap = snapshotInventory(null);
       let nextSnap = snapshotInventory(cur);
       const firstDiff = diffCropInventorySnapshot(prevSnap, nextSnap);
       cb(cur, firstDiff);
       prevSnap = nextSnap;
-      return myCropInventoryAtom.sub((inv) => {
+      return Atoms.inventory.myCropInventory.onChange((inv) => {
         nextSnap = snapshotInventory(inv);
         const d = diffCropInventorySnapshot(prevSnap, nextSnap);
         if (d.added.length || d.updated.length || d.removed.length) {
@@ -988,12 +1078,12 @@
     },
     /* --------------------------- Players in room --------------------------- */
     async getNumPlayers() {
-      const n = await numPlayersAtom.get();
+      const n = await Atoms.server.numPlayers.get();
       return typeof n === "number" ? n : 0;
     },
     onNumPlayersChange(cb) {
       let prev = void 0;
-      return numPlayersAtom.sub((n) => {
+      return Atoms.server.numPlayers.onChange((n) => {
         if (n !== prev) {
           prev = n;
           cb(n);
@@ -1003,7 +1093,7 @@
     async onNumPlayersChangeNow(cb) {
       let prev = await this.getNumPlayers();
       cb(prev);
-      return numPlayersAtom.sub((n) => {
+      return Atoms.server.numPlayers.onChange((n) => {
         if (n !== prev) {
           prev = n;
           cb(n);
@@ -1893,7 +1983,7 @@
     if (existing?.installed) return existing;
     const atoms = _atomsByExactLabel(config.label);
     if (!atoms.length) throw new Error(`${config.label} introuvable`);
-    const state = existing ?? {
+    const state2 = existing ?? {
       config,
       enabled: false,
       payload: null,
@@ -1918,13 +2008,13 @@
           }
         }
         const real = orig(get);
-        if (!state.enabled || state.payload == null) return real;
-        return config.merge ? config.merge(real, state.payload) : state.payload;
+        if (!state2.enabled || state2.payload == null) return real;
+        return config.merge ? config.merge(real, state2.payload) : state2.payload;
       };
-      state.patched.set(a, { readKey, orig });
+      state2.patched.set(a, { readKey, orig });
     }
     if (gateAtom && config.gate?.autoDisableOnClose) {
-      state.unsubGate = await jSub(gateAtom, async () => {
+      state2.unsubGate = await jSub(gateAtom, async () => {
         let v;
         try {
           v = await jGet(gateAtom);
@@ -1932,12 +2022,12 @@
           v = null;
         }
         const isOpen = config.gate?.isOpen ? config.gate.isOpen(v) : !!v;
-        if (!isOpen && state.enabled) state.enabled = false;
+        if (!isOpen && state2.enabled) state2.enabled = false;
       });
     }
-    state.installed = true;
-    _fakeRegistry.set(key, state);
-    return state;
+    state2.installed = true;
+    _fakeRegistry.set(key, state2);
+    return state2;
   }
   async function fakeShow(config, payload, options) {
     await ensureStore();
@@ -1970,41 +2060,36 @@
     await _forceRepaintViaGate(st.config.gate);
   }
 
-  // src/services/fakeInventory.ts
-  var ATOMS = {
-    activeModal: "activeModalAtom",
-    inventory: "myInventoryAtom",
-    myData: "myDataAtom"
-  };
-  async function openInventoryPanel() {
-    const modal = getAtomByLabel(ATOMS.activeModal);
-    if (modal) await jSet(modal, "inventory");
-  }
-  async function closeInventoryPanel() {
-    const modal = getAtomByLabel(ATOMS.activeModal);
-    if (modal) await jSet(modal, null);
-  }
-  function isInventoryOpen(v) {
-    return v === "inventory";
-  }
-  async function isInventoryPanelOpen() {
-    const modal = getAtomByLabel(ATOMS.activeModal);
-    if (!modal) return false;
+  // src/services/fakeModal.ts
+  async function openModal(modalId) {
     try {
-      const v = await jGet(modal);
-      return isInventoryOpen(v);
+      await Atoms.ui.activeModal.set(modalId);
+    } catch {
+    }
+  }
+  async function closeModal(_modalId) {
+    try {
+      await Atoms.ui.activeModal.set(null);
+    } catch {
+    }
+  }
+  function isModalOpen(value, modalId) {
+    return value === modalId;
+  }
+  async function isModalOpenAsync(modalId) {
+    try {
+      const v = await Atoms.ui.activeModal.get();
+      return isModalOpen(v, modalId);
     } catch {
       return false;
     }
   }
-  async function waitInventoryPanelClosed(timeoutMs = 12e4) {
-    const modal = getAtomByLabel(ATOMS.activeModal);
+  async function waitModalClosed(modalId, timeoutMs = 12e4) {
     const t0 = performance.now();
     while (performance.now() - t0 < timeoutMs) {
-      if (!modal) return true;
       try {
-        const v = await jGet(modal);
-        if (!isInventoryOpen(v)) return true;
+        const v = await Atoms.ui.activeModal.get();
+        if (!isModalOpen(v, modalId)) return true;
       } catch {
         return true;
       }
@@ -2012,52 +2097,74 @@
     }
     return false;
   }
-  var INVENTORY_FAKE_CONFIG = {
-    label: ATOMS.inventory,
-    merge: (_real, fake) => fake,
-    gate: {
-      label: ATOMS.activeModal,
-      isOpen: isInventoryOpen,
-      openAction: openInventoryPanel,
-      closeAction: closeInventoryPanel,
-      autoDisableOnClose: true
-    }
-  };
-  var MYDATA_FAKE_CONFIG = {
-    label: ATOMS.myData,
-    merge: (real, fake) => {
+  var SHARED_MYDATA_PATCH = {
+    label: Atoms.data.myData.label,
+    merge: (real, patch) => {
       const base = real && typeof real === "object" ? real : {};
-      return { ...base, inventory: fake };
+      const add = patch && typeof patch === "object" ? patch : {};
+      return { ...base, ...add };
     },
     gate: {
-      label: ATOMS.activeModal,
-      isOpen: isInventoryOpen,
-      openAction: openInventoryPanel,
-      closeAction: closeInventoryPanel,
+      label: Atoms.ui.activeModal.label,
+      isOpen: (v) => v === "inventory" || v === "journal",
       autoDisableOnClose: true
     }
   };
+  var INVENTORY_ATOM_PATCH = {
+    label: Atoms.inventory.myInventory.label,
+    merge: (_real, fake) => fake,
+    gate: {
+      label: Atoms.ui.activeModal.label,
+      isOpen: (v) => v === "inventory",
+      autoDisableOnClose: true
+    }
+  };
+  var INVENTORY_MODAL_ID = "inventory";
+  async function openInventoryPanel() {
+    return openModal(INVENTORY_MODAL_ID);
+  }
+  async function closeInventoryPanel() {
+    return closeModal(INVENTORY_MODAL_ID);
+  }
+  function isInventoryOpen(v) {
+    return isModalOpen(v, INVENTORY_MODAL_ID);
+  }
+  async function isInventoryPanelOpen() {
+    return isModalOpenAsync(INVENTORY_MODAL_ID);
+  }
+  async function waitInventoryPanelClosed(timeoutMs = 12e4) {
+    return waitModalClosed(INVENTORY_MODAL_ID, timeoutMs);
+  }
   async function fakeInventoryShow(payload, opts) {
     const shouldOpen = opts?.open !== false;
-    let myInv = void 0;
-    try {
-      const invAtom = getAtomByLabel(ATOMS.inventory);
-      if (invAtom) myInv = await jGet(invAtom).catch(() => void 0);
-    } catch {
-    }
-    const safePayload = payload;
-    try {
-      await fakeShow(MYDATA_FAKE_CONFIG, safePayload, {
-        openGate: false,
-        autoRestoreMs: opts?.autoRestoreMs
-      });
-    } catch {
-    }
-    await fakeShow(INVENTORY_FAKE_CONFIG, safePayload, {
+    await fakeShow(SHARED_MYDATA_PATCH, { inventory: payload }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    await fakeShow(INVENTORY_ATOM_PATCH, payload, {
       openGate: false,
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openInventoryPanel();
+  }
+  var JOURNAL_MODAL_ID = "journal";
+  async function openJournalModal() {
+    return openModal(JOURNAL_MODAL_ID);
+  }
+  async function isJournalModalOpen() {
+    return isModalOpenAsync(JOURNAL_MODAL_ID);
+  }
+  async function waitJournalModalClosed(timeoutMs = 12e4) {
+    return waitModalClosed(JOURNAL_MODAL_ID, timeoutMs);
+  }
+  async function fakeJournalShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    await fakeHide(INVENTORY_ATOM_PATCH.label);
+    await fakeShow(SHARED_MYDATA_PATCH, { journal: payload ?? {} }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openJournalModal();
   }
 
   // src/ui/menu.ts
@@ -3226,7 +3333,6 @@
   }
 
   // src/services/pets.ts
-  var VALIDATED_INDEX_ATOM_LABEL = "myValidatedSelectedItemIndexAtom";
   var LS_TEAMS_KEY = "qws:pets:teams:v1";
   var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
   var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
@@ -3312,8 +3418,7 @@
   }
   async function _favoriteIdsSafe() {
     try {
-      const inv = await myInventoryAtom.get();
-      const fav = Array.isArray(inv?.favoritedItemIds) ? inv.favoritedItemIds : [];
+      const fav = await Atoms.inventory.favoriteIds.get().catch(() => []);
       return fav.slice();
     } catch {
       return [];
@@ -3339,8 +3444,10 @@
     };
   }
   async function clearHandSelection() {
-    const atom = getAtomByLabel("setSelectedIndexToEndAtom");
-    await jSet(atom, "null");
+    try {
+      await Atoms.shop.setSelectedIndexToEnd.set("null");
+    } catch {
+    }
     try {
       await PlayerService.setSelectedItem(null);
     } catch {
@@ -3351,21 +3458,17 @@
     }
   }
   async function _waitValidatedInventoryIndex(timeoutMs = 2e4) {
-    const atom = getAtomByLabel(VALIDATED_INDEX_ATOM_LABEL);
-    if (!atom) return null;
-    const modalAtom = getAtomByLabel("activeModalAtom");
     await clearHandSelection();
     const t0 = performance.now();
     while (performance.now() - t0 < timeoutMs) {
-      if (modalAtom) {
-        try {
-          const modalVal = await jGet(modalAtom);
-          if (!isInventoryOpen(modalVal)) return null;
-        } catch {
-        }
+      try {
+        const modalVal = await Atoms.ui.activeModal.get();
+        if (!isInventoryOpen(modalVal)) return null;
+      } catch {
+        return null;
       }
       try {
-        const v = await jGet(atom);
+        const v = await Atoms.shop.myValidatedSelectedItemIndex.get();
         if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
       } catch {
       }
@@ -3421,9 +3524,9 @@
       return {};
     }
   }
-  function _saveTeamSearchMap(map) {
+  function _saveTeamSearchMap(map2) {
     try {
-      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map));
+      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map2));
     } catch {
     }
   }
@@ -3519,18 +3622,18 @@
     return true;
   }
   function _rebuildInvPets() {
-    const map = /* @__PURE__ */ new Map();
+    const map2 = /* @__PURE__ */ new Map();
     const items = Array.isArray(_invRaw?.items) ? _invRaw.items : Array.isArray(_invRaw) ? _invRaw : [];
     for (const it of items) {
       const p = _inventoryItemToPet(it);
-      if (p && p.id) map.set(p.id, p);
+      if (p && p.id) map2.set(p.id, p);
     }
     const act = Array.isArray(_activeRaw) ? _activeRaw : [];
     for (const e of act) {
       const p = _activeSlotToPet(e);
-      if (p && p.id) map.set(p.id, p);
+      if (p && p.id) map2.set(p.id, p);
     }
-    _invPetsCache = Array.from(map.values());
+    _invPetsCache = Array.from(map2.values());
     const snap = _invPetsCache.slice();
     _invSubs.forEach((fn) => {
       try {
@@ -3539,42 +3642,66 @@
       }
     });
   }
-  async function _ensureInventoryWatchersStarted() {
-    if (!_invUnsub) {
-      const unsub = await myInventoryAtom.subNow((inv) => {
+  async function _startInventoryWatcher() {
+    const unsub = await (async () => {
+      try {
+        const cur = await Atoms.inventory.myInventory.get();
+        _invSig = _buildInvSigFromInventory(cur);
+        _invRaw = cur;
+        _rebuildInvPets();
+      } catch {
+      }
+      return Atoms.inventory.myInventory.onChange((inv) => {
         const nextSig = _buildInvSigFromInventory(inv);
         if (_mapsEqual(_invSig, nextSig)) return;
         _invSig = nextSig;
         _invRaw = inv;
         _rebuildInvPets();
       });
-      _invUnsub = () => {
-        try {
-          unsub();
-        } catch {
-        }
-      };
-    }
-    if (!_activeUnsub) {
-      const unsub = await myPetInfosAtom.subNow((list) => {
+    })();
+    _invUnsub = () => {
+      try {
+        unsub();
+      } catch {
+      }
+    };
+  }
+  async function _startActivePetsWatcher() {
+    const unsub = await (async () => {
+      try {
+        const cur = await Atoms.pets.myPetInfos.get();
+        _activeSig = _buildActiveSig(cur);
+        _activeRaw = Array.isArray(cur) ? cur : [];
+        _rebuildInvPets();
+      } catch {
+      }
+      return Atoms.pets.myPetInfos.onChange((list) => {
         const nextSig = _buildActiveSig(list);
         if (_mapsEqual(_activeSig, nextSig)) return;
         _activeSig = nextSig;
         _activeRaw = Array.isArray(list) ? list : [];
         _rebuildInvPets();
       });
-      _activeUnsub = () => {
-        try {
-          unsub();
-        } catch {
-        }
-      };
+    })();
+    _activeUnsub = () => {
+      try {
+        unsub();
+      } catch {
+      }
+    };
+  }
+  async function _ensureInventoryWatchersStarted() {
+    if (!_invUnsub) {
+      await _startInventoryWatcher();
+    }
+    if (!_activeUnsub) {
+      await _startActivePetsWatcher();
     }
     if (!_invPetsCache.length) {
       try {
         const [inv, active] = await Promise.all([
-          myInventoryAtom.get(),
-          myPetInfosAtom.get()
+          Atoms.inventory.myInventory.get(),
+          Atoms.pets.myPetInfos.get()
         ]);
         _invSig = _buildInvSigFromInventory(inv);
         _activeSig = _buildActiveSig(active);
@@ -3840,22 +3967,89 @@
       if (value) return list.filter((p) => _matchesQuery(p, value));
       return list;
     },
-    /* ============================ Ability Logs (for "Logs" tab) ============================ */
+    //* ============================ Ability Logs (for "Logs" tab) ============================ */
     _logs: [],
     _logsMax: 500,
     _seenPerfByPet: /* @__PURE__ */ new Map(),
+    // petId -> last performedAt pushed
     _logSubs: /* @__PURE__ */ new Set(),
+    _logsCutoffMs: 0,
+    _logsCutoffSkewMs: 1500,
+    /** Starts the watcher on myPetSlotInfos and feeds the ring buffer. */
     async startAbilityLogsWatcher() {
-      const stop = await myPetsAbilitiesTrigger.subNow((map) => {
-        this._ingestAbilityMap(map);
+      const indexInfosByPetId = (list) => {
+        const out = {};
+        const arr = Array.isArray(list) ? list : [];
+        for (const e of arr) {
+          const id = String(e?.slot?.id ?? e?.id ?? "");
+          if (id) out[id] = e;
+        }
+        return out;
+      };
+      let myInfosMap = {};
+      try {
+        const curInfos = await Atoms.pets.myPetInfos.get();
+        myInfosMap = indexInfosByPetId(curInfos);
+      } catch {
+      }
+      let stopInfos = null;
+      try {
+        stopInfos = await Atoms.pets.myPetInfos.onChange((list) => {
+          try {
+            myInfosMap = indexInfosByPetId(list);
+          } catch {
+          }
+        });
+      } catch {
+      }
+      const extractFlat = (src) => {
+        const out = {};
+        if (!src || typeof src !== "object") return out;
+        const obj = src;
+        for (const petId of Object.keys(obj)) {
+          const entry = obj[petId] ?? {};
+          const lat = entry.lastAbilityTrigger ?? null;
+          let rawH = entry.hungerPct ?? entry.hunger_percentage ?? entry.hunger ?? entry.stats?.hungerPct ?? entry.stats?.hunger?.pct ?? entry.stats?.hunger?.percent ?? null;
+          if (rawH == null) {
+            const info = myInfosMap[petId];
+            rawH = info?.hungerPct ?? info?.hunger_percentage ?? info?.hunger ?? info?.slot?.hungerPct ?? info?.slot?.hunger ?? info?.stats?.hungerPct ?? info?.stats?.hunger?.pct ?? info?.stats?.hunger?.percent ?? null;
+          }
+          let hungerPct = Number.isFinite(Number(rawH)) ? Number(rawH) : null;
+          if (hungerPct != null && hungerPct > 0 && hungerPct <= 1) hungerPct *= 100;
+          out[petId] = {
+            petId,
+            abilityId: lat?.abilityId ?? null,
+            performedAt: Number.isFinite(lat?.performedAt) ? lat.performedAt : null,
+            data: lat?.data ?? null,
+            position: entry.position ?? null,
+            hungerPct
+          };
+        }
+        return out;
+      };
+      try {
+        const cur = await Atoms.pets.myPetSlotInfos.get();
+        this._ingestAbilityMap(extractFlat(cur));
+      } catch {
+      }
+      const stopSlots = await Atoms.pets.myPetSlotInfos.onChange((src) => {
+        try {
+          this._ingestAbilityMap(extractFlat(src));
+        } catch {
+        }
       });
       return () => {
         try {
-          stop();
+          stopSlots();
+        } catch {
+        }
+        try {
+          stopInfos?.();
         } catch {
         }
       };
     },
+    /** Returns raw entries (optional filter: abilityIds, since, limit; sorted newest → oldest). */
     getAbilityLogs(opts) {
       const ids = opts?.abilityIds && opts.abilityIds.length ? new Set(opts.abilityIds) : null;
       const since = Number.isFinite(opts?.since) ? opts.since : 0;
@@ -3866,6 +4060,7 @@
       arr = arr.sort((a, b) => b.performedAt - a.performedAt);
       return lim ? arr.slice(0, lim) : arr;
     },
+    /** UI subscription (called whenever a new entry is pushed). */
     onAbilityLogs(cb) {
       this._logSubs.add(cb);
       try {
@@ -3876,16 +4071,20 @@
         this._logSubs.delete(cb);
       };
     },
+    /** Returns the set of seen abilityIds (useful to populate a filter UI). */
     getSeenAbilityIds() {
       const set2 = /* @__PURE__ */ new Set();
       for (const e of this._logs) set2.add(e.abilityId);
       return Array.from(set2).sort();
     },
+    /** Clears the ring buffer. */
     clearAbilityLogs() {
       this._logs.length = 0;
       this._seenPerfByPet.clear();
+      this._logsCutoffMs = Date.now();
       this._notifyLogSubs();
     },
+    // --- internal helpers (logs) ---
     _notifyLogSubs() {
       const snap = this.getAbilityLogs();
       this._logSubs.forEach((fn) => {
@@ -3902,24 +4101,149 @@
       }
       this._notifyLogSubs();
     },
-    _ingestAbilityMap(map) {
-      if (!map || typeof map !== "object") return;
-      for (const petId of Object.keys(map)) {
-        const entry = map[petId];
+    /** Ingests a FLAT map keyed by petId. */
+    _ingestAbilityMap(map2) {
+      if (!map2 || typeof map2 !== "object") return;
+      const abilityDisplayName = (abilityId) => {
+        const def = petAbilities[abilityId];
+        return def?.name && def.name.trim() || abilityId;
+      };
+      const fmtTime12 = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+      const fmtInt = (n) => Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString("en-US") : "0";
+      const fmtPct0 = (n) => `${Number.isFinite(Number(n)) ? Number(n).toFixed(0) : "0"}%`;
+      const fmtMin1 = (n) => `${Number.isFinite(Number(n)) ? Number(n).toFixed(1) : "0.0"} min`;
+      const formatDetails = (abilityId, data) => {
+        const d = data ?? {};
+        const base = petAbilities[abilityId]?.baseParameters ?? {};
+        switch (abilityId) {
+          case "CoinFinderI":
+          case "CoinFinderII":
+          case "CoinFinderIII": {
+            const coins = d["coinsFound"] ?? base["baseMaxCoinsFindable"];
+            return `+${fmtInt(coins)} coins`;
+          }
+          case "SeedFinderI":
+          case "SeedFinderII":
+          case "SeedFinderIII":
+          case "SeedFinderIV":
+            return `Seed found: ${d["seedName"] ?? "\u2014"}`;
+          case "SellBoostI":
+          case "SellBoostII":
+          case "SellBoostIII":
+          case "SellBoostIV": {
+            if (d["bonusCoins"] != null) return `Sale bonus: +${fmtInt(d["bonusCoins"])} coins`;
+            const pct = base["cropSellPriceIncreasePercentage"];
+            return pct != null ? `Sale bonus: +${fmtPct0(pct)}` : "Sale bonus";
+          }
+          case "ProduceRefund": {
+            const n = d["numItemsRefunded"];
+            return n != null ? `Refunded: ${fmtInt(n)} item(s)` : `Crops refunded`;
+          }
+          case "DoubleHarvest":
+            return `Harvest duplicated`;
+          case "ProduceEater": {
+            const name = d["cropName"] ?? "\u2014";
+            if (d["sellPrice"] != null) return `Eaten: ${name} (value ${fmtInt(d["sellPrice"])})`;
+            const pct = base["cropSellPriceIncreasePercentage"];
+            return pct != null ? `Eaten: ${name} (+${fmtPct0(pct)} price)` : `Eaten: ${name}`;
+          }
+          case "EggGrowthBoost":
+          case "EggGrowthBoostII":
+          case "EggGrowthBoostIII": {
+            const mins = d["eggGrowthTimeReductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"];
+            return `Eggs faster: -${fmtMin1(mins)}`;
+          }
+          case "PlantGrowthBoost":
+          case "PlantGrowthBoostII": {
+            const mins = d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
+            return `Plants faster: -${fmtMin1(mins)}`;
+          }
+          case "GoldGranter": {
+            const target = d["cropName"] ?? "\u2014";
+            return `Gold mutation: ${target}`;
+          }
+          case "RainbowGranter": {
+            const target = d["cropName"] ?? "\u2014";
+            return `Rainbow mutation: ${target}`;
+          }
+          case "ProduceMutationBoost":
+          case "ProduceMutationBoostII":
+          case "PetMutationBoost":
+          case "PetMutationBoostII":
+            return "\u2014";
+          case "PetXpBoost":
+          case "PetXpBoostII": {
+            const xp = d["bonusXp"] ?? base["bonusXp"];
+            return `+${fmtInt(xp)} XP`;
+          }
+          case "PetAgeBoost":
+          case "PetAgeBoostII": {
+            const xp = d["bonusXp"] ?? base["bonusXp"];
+            const who = d["petName"] ?? "pet";
+            return `+${fmtInt(xp)} XP (${who})`;
+          }
+          case "PetHatchSizeBoost":
+          case "PetHatchSizeBoostII": {
+            const who = d["petName"] ?? "pet";
+            if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
+            const pct = base["maxStrengthIncreasePercentage"];
+            return pct != null ? `Max strength +${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
+          }
+          case "HungerRestore":
+          case "HungerRestoreII": {
+            const pct = d["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"];
+            const who = d["petName"] ?? "pet";
+            return `Hunger restored (${who}): ${fmtPct0(pct)}`;
+          }
+          case "HungerBoost":
+          case "HungerBoostII": {
+            const pct = base["hungerDepletionRateDecreasePercentage"];
+            return pct != null ? `Hunger depletion rate: -${fmtPct0(pct)}` : "Hunger reduced";
+          }
+          case "PetRefund":
+          case "PetRefundII": {
+            const egg = d["eggName"] ?? null;
+            return egg ? `Refunded: ${egg}` : `Pet refunded as egg`;
+          }
+          case "Copycat":
+            return "\u2014";
+          default: {
+            const meta = petAbilities[abilityId];
+            if (d && typeof d === "object" && Object.keys(d).length) return JSON.stringify(d);
+            return meta?.description || "\u2014";
+          }
+        }
+      };
+      const EPS = 1e-6;
+      for (const petId of Object.keys(map2)) {
+        const entry = map2[petId];
         if (!entry || typeof entry !== "object") continue;
         const abilityId = entry.abilityId ?? null;
         const performedAtNum = Number(entry.performedAt) || 0;
         if (!abilityId || !performedAtNum) continue;
         const prev = this._seenPerfByPet.get(petId) || 0;
         if (performedAtNum <= prev) continue;
+        if (this._logsCutoffMs && performedAtNum < this._logsCutoffMs - this._logsCutoffSkewMs) {
+          this._seenPerfByPet.set(petId, performedAtNum);
+          continue;
+        }
+        let hungerPct = Number.isFinite(Number(entry.hungerPct)) ? Number(entry.hungerPct) : null;
+        if (hungerPct != null && hungerPct > 0 && hungerPct <= 1) hungerPct *= 100;
+        if (hungerPct != null && hungerPct <= EPS) {
+          this._seenPerfByPet.set(petId, performedAtNum);
+          continue;
+        }
         const pet = _invPetsCache.find((p) => String(p.id) === String(petId)) || null;
+        const abilityIdStr = String(abilityId);
         const log = {
           petId,
           species: pet?.petSpecies || void 0,
           name: pet?.name ?? void 0,
-          abilityId: String(abilityId),
-          data: entry.data,
-          performedAt: performedAtNum
+          abilityId: abilityIdStr,
+          abilityName: abilityDisplayName(abilityId),
+          data: formatDetails(abilityIdStr, entry.data),
+          performedAt: performedAtNum,
+          time12: fmtTime12(performedAtNum)
         };
         this._seenPerfByPet.set(petId, performedAtNum);
         this._pushLog(log);
@@ -5317,11 +5641,11 @@
   }
 
   // src/services/players.ts
-  function findPlayersDeep(state) {
-    if (!state || typeof state !== "object") return [];
+  function findPlayersDeep(state2) {
+    if (!state2 || typeof state2 !== "object") return [];
     const out = [];
     const seen = /* @__PURE__ */ new Set();
-    const stack = [state];
+    const stack = [state2];
     while (stack.length) {
       const cur = stack.pop();
       if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
@@ -5370,6 +5694,24 @@
     const items = Array.isArray(inv.items) ? inv.items : [];
     const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
     return { items, favoritedItemIds };
+  }
+  function extractJournalFromSlot(slot) {
+    const j = slot?.data?.journal ?? slot?.journal;
+    if (!j || typeof j !== "object") return null;
+    const produce = j.produce && typeof j.produce === "object" ? j.produce : void 0;
+    const pets = j.pets && typeof j.pets === "object" ? j.pets : void 0;
+    const normProduce = produce ? Object.fromEntries(Object.entries(produce).map(([k, v]) => [
+      String(k),
+      { variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [] }
+    ])) : void 0;
+    const normPets = pets ? Object.fromEntries(Object.entries(pets).map(([k, v]) => [
+      String(k),
+      {
+        variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [],
+        abilitiesLogged: Array.isArray(v?.abilitiesLogged) ? v.abilitiesLogged : []
+      }
+    ])) : void 0;
+    return { produce: normProduce, pets: normPets };
   }
   function getSlotByPlayerId(st, playerId) {
     for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
@@ -5421,8 +5763,8 @@
     if (__spawnLoadPromise) return __spawnLoadPromise;
     __spawnLoadPromise = (async () => {
       try {
-        const map = typeof mapAtom?.get === "function" ? await mapAtom.get() : null;
-        const arr = map?.spawnTiles;
+        const map2 = await Atoms.root.map.get();
+        const arr = map2?.spawnTiles;
         if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
           __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
           return __cachedSpawnTiles;
@@ -5430,7 +5772,7 @@
       } catch {
       }
       try {
-        const st = await stateAtom.get();
+        const st = await Atoms.root.state.get();
         const seen = /* @__PURE__ */ new Set();
         const stack = [st];
         while (stack.length) {
@@ -5458,13 +5800,17 @@
   }
   async function getMapCols() {
     try {
-      const map = typeof mapAtom?.get === "function" ? await mapAtom.get() : null;
-      const cols = Number(map?.cols);
+      const map2 = await Atoms.root.map.get();
+      const cols = Number(map2?.cols);
       if (Number.isFinite(cols) && cols > 0) return cols;
     } catch {
     }
     try {
-      const st = await stateAtom.get();
+      const st = await Atoms.root.state.get();
+      const maybeCols = Number(
+        st?.map?.cols ?? st?.child?.data?.map?.cols ?? st?.fullState?.map?.cols
+      );
+      if (Number.isFinite(maybeCols) && maybeCols > 0) return maybeCols;
     } catch {
     }
     return 81;
@@ -5479,6 +5825,22 @@
     }
     return out;
   }
+  function nowTs() {
+    return Date.now();
+  }
+  function normJournal(j) {
+    if (!j || typeof j !== "object") return {};
+    const out = {};
+    if (j.produce && typeof j.produce === "object") out.produce = j.produce;
+    if (j.pets && typeof j.pets === "object") out.pets = j.pets;
+    return out;
+  }
+  function hasJournalData(j) {
+    if (!j) return false;
+    const hasProduce = !!j.produce && Object.values(j.produce).some((s) => (s.variantsLogged?.length ?? 0) > 0);
+    const hasPets = !!j.pets && Object.values(j.pets).some((s) => (s.variantsLogged?.length ?? 0) > 0 || (s.abilitiesLogged?.length ?? 0) > 0);
+    return hasProduce || hasPets;
+  }
   var followingState = {
     currentTargetId: null,
     unsub: null,
@@ -5488,7 +5850,7 @@
   };
   var PlayersService = {
     async list() {
-      const st = await stateAtom.get();
+      const st = await Atoms.root.state.get();
       if (!st) return [];
       const base = enrichPlayersWithSlots(getPlayersArray(st), st);
       const ordered = orderPlayersBySlots(base, st);
@@ -5496,7 +5858,7 @@
       return assignGardenPositions(ordered, spawns);
     },
     async onChange(cb) {
-      return stateAtom.sub(async () => {
+      return Atoms.root.state.onChange(async () => {
         try {
           cb(await this.list());
         } catch {
@@ -5504,16 +5866,23 @@
       });
     },
     async getPosition(playerId) {
-      const st = await stateAtom.get();
+      const st = await Atoms.root.state.get();
       if (!st) return null;
       const slot = getSlotByPlayerId(st, playerId);
       return extractPosFromSlot(slot);
     },
     async getInventory(playerId) {
-      const st = await stateAtom.get();
+      const st = await Atoms.root.state.get();
       if (!st) return null;
       const slot = getSlotByPlayerId(st, playerId);
       return extractInventoryFromSlot(slot);
+    },
+    async getJournal(playerId) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId);
+      const j = extractJournalFromSlot(slot);
+      return j ? normJournal(j) : null;
     },
     async getGardenPosition(playerId) {
       const list = await this.list();
@@ -5522,7 +5891,7 @@
     },
     async getPlayerNameById(playerId) {
       try {
-        const st = await stateAtom.get();
+        const st = await Atoms.root.state.get();
         if (st) {
           const arr = getPlayersArray(st);
           const p = arr.find((x) => String(x?.id) === String(playerId));
@@ -5547,7 +5916,7 @@
     async teleportToGarden(playerId) {
       const tileId = await this.getGardenPosition(playerId);
       if (tileId == null) {
-        await toastSimple("Teleport", "No garden position for this player.", "warn");
+        await toastSimple("Teleport", "No garden position for this player.", "error");
         return;
       }
       const cols = await getMapCols();
@@ -5555,23 +5924,113 @@
       await PlayerService.teleport(x, y);
       await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}'s garden`, "success");
     },
+    /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
     async openInventoryPreview(playerId, playerName) {
       try {
-        const inv = await PlayersService.getInventory(playerId);
-        if (!inv || !Array.isArray(inv.items) || inv.items.length === 0) {
-          await toastSimple("Inventory", "No usable inventory for this player.", "warn");
+        const inv = await this.getInventory(playerId);
+        if (!inv) {
+          await toastSimple("Inventory", "No inventory object found for this player.", "error");
           return;
         }
-        await fakeInventoryShow(inv, { open: true });
+        const items = Array.isArray(inv.items) ? inv.items : [];
+        if (items.length === 0) {
+          await toastSimple("Inventory", "Inventory is empty for this player.", "info");
+          return;
+        }
+        try {
+          await fakeInventoryShow({ ...inv, items }, { open: true });
+        } catch (err) {
+          await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
+          return;
+        }
         if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
       } catch (e) {
         await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
       }
     },
+    /** Ouvre le Journal (produce + pets) avec garde + toasts. */
+    async openJournalLog(playerId, playerName) {
+      try {
+        const journal = await this.getJournal(playerId);
+        if (!hasJournalData(journal)) {
+          await toastSimple("Journal", "No journal data for this player.", "error");
+          return;
+        }
+        const safe = journal ?? {};
+        try {
+          await fakeJournalShow(safe, { open: true });
+        } catch (err) {
+          await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
+          return;
+        }
+        if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+      }
+    },
+    /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
+    async addProduceVariant(playerId, species, variant, createdAt = nowTs()) {
+      if (!species || !variant) {
+        await toastSimple("Journal", "Missing species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          produce: {
+            [String(species)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId);
+        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
+      }
+    },
+    async addPetVariant(playerId, petSpecies, variant, createdAt = nowTs()) {
+      if (!petSpecies || !variant) {
+        await toastSimple("Journal", "Missing pet species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId);
+        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
+      }
+    },
+    async addPetAbility(playerId, petSpecies, ability, createdAt = nowTs()) {
+      if (!petSpecies || !ability) {
+        await toastSimple("Journal", "Missing pet species or ability.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              abilitiesLogged: [{ ability: String(ability), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId);
+        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
+      }
+    },
+    /* ---------------- Follow ---------------- */
     async stopFollowing() {
       if (followingState.unsub) {
         try {
-          followingState.unsub();
+          await followingState.unsub();
         } catch {
         }
       }
@@ -5587,7 +6046,7 @@
     async startFollowing(playerId) {
       if (followingState.unsub) {
         try {
-          followingState.unsub();
+          await followingState.unsub();
         } catch {
         }
         followingState.unsub = null;
@@ -5596,7 +6055,7 @@
       followingState.lastPos = null;
       followingState.prevPos = null;
       followingState.steps = 0;
-      const pos = await PlayersService.getPosition(playerId);
+      const pos = await this.getPosition(playerId);
       if (!pos) {
         await toastSimple("Follow", "Unable to retrieve player position.", "error");
         followingState.currentTargetId = null;
@@ -5606,11 +6065,11 @@
       followingState.lastPos = { x: pos.x, y: pos.y };
       followingState.prevPos = null;
       followingState.steps = 0;
-      followingState.unsub = await PlayersService.onChange(async (players) => {
+      followingState.unsub = await this.onChange(async (players) => {
         if (followingState.currentTargetId !== playerId) return;
         const target = players.find((p) => p.id === playerId);
         if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
-          this.stopFollowing();
+          await this.stopFollowing();
           await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
           return;
         }
@@ -5694,16 +6153,47 @@
     r.style.gap = "6px";
     return r;
   }
+  function ensureVtabsListScrollable(vtabsRoot) {
+    const ul = vtabsRoot.querySelector("ul");
+    if (!ul) return;
+    let wrap = vtabsRoot.querySelector('[data-scroll-wrap="1"]');
+    if (!wrap || !wrap.contains(ul)) {
+      wrap = document.createElement("div");
+      wrap.dataset.scrollWrap = "1";
+      wrap.style.flex = "1 1 auto";
+      wrap.style.minHeight = "0";
+      wrap.style.overflow = "auto";
+      wrap.style.marginTop = "6px";
+      const parent = ul.parentElement;
+      parent.insertBefore(wrap, ul);
+      wrap.appendChild(ul);
+    } else {
+      wrap.style.flex = "1 1 auto";
+      wrap.style.minHeight = "0";
+      wrap.style.overflow = "auto";
+    }
+  }
   async function renderPlayersMenu(root) {
     const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     const panel = ui.root.querySelector(".qmm-views");
     const { root: split, left, right } = ui.split2("260px");
     panel.appendChild(split);
+    split.style.height = "100%";
+    split.style.minHeight = "0";
+    left.style.display = "flex";
+    left.style.flexDirection = "column";
+    left.style.minHeight = "0";
+    right.style.minHeight = "0";
+    right.style.overflow = "auto";
     const vt = ui.vtabs({
       filterPlaceholder: "Find player\u2026",
       onSelect: (_id, item) => renderRight(item?.id || null)
     });
+    vt.root.style.display = "flex";
+    vt.root.style.flexDirection = "column";
+    vt.root.style.flex = "1 1 auto";
+    vt.root.style.minHeight = "0";
     left.appendChild(vt.root);
     const filter = vt.root.querySelector(".filter");
     if (filter) {
@@ -5716,17 +6206,9 @@
         input.style.minWidth = "0";
       }
     }
-    const scroller = document.createElement("div");
-    scroller.style.maxHeight = "27vh";
-    scroller.style.overflow = "auto";
-    scroller.style.minHeight = "0";
-    const ul = vt.root.querySelector("ul");
-    if (ul) {
-      vt.root.insertBefore(scroller, ul);
-      scroller.appendChild(ul);
-    }
-    vt.root.style.height = "54vh";
-    vt.root.style.overflow = "hidden";
+    ensureVtabsListScrollable(vt.root);
+    const mo = new MutationObserver(() => ensureVtabsListScrollable(vt.root));
+    mo.observe(vt.root, { childList: true, subtree: true });
     async function renderRight(playerId) {
       right.innerHTML = "";
       const p = playerId ? players.find((x) => x.id === playerId) || null : null;
@@ -5799,9 +6281,11 @@
       teleRow.append(btnToPlayer, btnToGarden);
       col.appendChild(sectionFramed("Teleport", teleRow));
       const invRow = rowCenter();
-      const btnPrev = document.createElement("button");
-      styleBtnFullWidthL(btnPrev, "Preview");
-      btnPrev.onclick = async () => {
+      const btnInv = document.createElement("button");
+      const btnJournal = document.createElement("button");
+      styleBtnFullWidthL(btnInv, "Inventory");
+      styleBtnFullWidthL(btnJournal, "Journal");
+      btnInv.onclick = async () => {
         try {
           ui.setWindowVisible(false);
           await PlayersService.openInventoryPreview(p.id, p.name);
@@ -5812,8 +6296,19 @@
           ui.setWindowVisible(true);
         }
       };
-      invRow.append(btnPrev);
-      col.appendChild(sectionFramed("Inventory", invRow));
+      btnJournal.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openJournalLog(p.id, p.name);
+          if (await isJournalModalOpen()) {
+            await waitJournalModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      invRow.append(btnInv, btnJournal);
+      col.appendChild(sectionFramed("Inspect", invRow));
       const funRow = rowCenter();
       const label2 = document.createElement("div");
       label2.textContent = "Follow";
@@ -5854,6 +6349,7 @@
       lastSig = sig;
       players = next;
       vt.setItems(players.map(vItem));
+      ensureVtabsListScrollable(vt.root);
       const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
       if (sel !== null) vt.select(sel);
       else renderRight(null);
@@ -5956,10 +6452,24 @@
   }
   function renderManagerTab(view, ui) {
     view.innerHTML = "";
-    installPetTeamHotkeysOnce((teamId) => {
-      PetsService.useTeam(teamId).catch(
-        (e) => console.warn("[Pets] hotkey useTeam failed:", e)
-      );
+    installPetTeamHotkeysOnce(async (teamId) => {
+      const t = teams.find((tt) => tt.id === teamId) || null;
+      try {
+        isApplyingTeam = true;
+        if (t) {
+          activeTeamId = t.id;
+          await refreshTeamList(true);
+        }
+        await PetsService.useTeam(teamId);
+        if (t) await waitForActiveTeam(t);
+        await hydrateEditor(getSelectedTeam());
+        await refreshTeamList();
+      } catch (e) {
+        console.warn("[Pets] hotkey useTeam failed:", e);
+        await refreshTeamList();
+      } finally {
+        isApplyingTeam = false;
+      }
     });
     const styleBtnFullWidthL2 = (b, text) => {
       b.textContent = text;
@@ -6014,14 +6524,11 @@
     left.appendChild(footer);
     const btnNew = document.createElement("button");
     btnNew.id = "pets.teams.new";
-    const btnDup = document.createElement("button");
-    btnDup.id = "pets.teams.duplicate";
     const btnDel = document.createElement("button");
     btnDel.id = "pets.teams.delete";
     styleBtnFullWidthL2(btnNew, "New");
-    styleBtnFullWidthL2(btnDup, "Duplicate");
     styleBtnFullWidthL2(btnDel, "Delete");
-    footer.append(btnNew, btnDup, btnDel);
+    footer.append(btnNew, btnDel);
     let teams = [];
     let selectedId = null;
     let isApplyingTeam = false;
@@ -6322,14 +6829,6 @@
     btnNew.onclick = () => {
       const created = PetsService.createTeam("New Team");
       selectedId = created.id;
-      refreshTeamList();
-      hydrateEditor(getSelectedTeam());
-    };
-    btnDup.onclick = () => {
-      if (!selectedId) return;
-      const copy = PetsService.duplicateTeam(selectedId);
-      if (!copy) return;
-      selectedId = copy.id;
       refreshTeamList();
       hydrateEditor(getSelectedTeam());
     };
@@ -6845,6 +7344,7 @@
         unsubInv = await PetsService.onInventoryPetsChange(async () => {
           if (isApplyingTeam) return;
           await repaintSlots(getSelectedTeam());
+          await refreshTeamList();
         });
       } catch {
       }
@@ -6903,9 +7403,6 @@
     const inputSearch = ui.inputText("search (pet / ability / details)", "");
     inputSearch.id = "pets.logs.search";
     inputSearch.style.minWidth = "220px";
-    const btnCopy = document.createElement("button");
-    styleBtnFullWidth(btnCopy, "Copy");
-    btnCopy.id = "pets.logs.copy";
     const btnClear = document.createElement("button");
     styleBtnFullWidth(btnClear, "Clear");
     btnClear.id = "pets.logs.clear";
@@ -6915,7 +7412,6 @@
       ui.label("Sort"),
       selSort,
       inputSearch,
-      btnCopy,
       btnClear
     );
     const card = document.createElement("div");
@@ -7051,12 +7547,14 @@
     }
     function row(log) {
       const time = cell(fmtTime2(log.performedAt), "center");
+      const timeFrt = cell(log.time12);
       const petLabel = log.petName || log.species || "Pet";
       const pet = cell(petLabel, "center");
-      const ab = cell(log.abilityId, "center");
+      const abId = cell(log.abilityId, "center");
+      const abName = cell(log.abilityName, "center");
       const detText = formatDetails(log.data);
       const det = cell(detText, "left");
-      bodyGrid.append(time, pet, ab, det);
+      bodyGrid.append(timeFrt, pet, abName, det);
     }
     function applyFilters() {
       const normAbilityKey = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "").replace(/([ivx]+)$/i, "");
@@ -7117,20 +7615,6 @@
       } catch {
       }
     };
-    btnCopy.onclick = async () => {
-      const arr = applyFilters().map((l) => ({
-        time: fmtTime2(l.performedAt),
-        pet: l.petName || l.species || l.petId,
-        petId: l.petId,
-        ability: l.abilityId,
-        data: normalizeNumbersDeep(l.data)
-      }));
-      const txt = JSON.stringify(arr, null, 2);
-      try {
-        await navigator.clipboard.writeText(txt);
-      } catch {
-      }
-    };
     let unsubLogs = null;
     (async () => {
       try {
@@ -7142,8 +7626,10 @@
             petName: e.name ?? null,
             species: e.species ?? null,
             abilityId: e.abilityId,
+            abilityName: e.abilityName,
             data: e.data,
-            performedAt: e.performedAt
+            performedAt: e.performedAt,
+            time12: e.time12
           }));
           abilitySet = new Set(PetsService.getSeenAbilityIds());
           rebuildAbilityOptions();
