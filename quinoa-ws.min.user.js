@@ -2952,7 +2952,7 @@
       const up = el("button", "qmm-step qmm-step--up", "\u25B2");
       const down = el("button", "qmm-step qmm-step--down", "\u25BC");
       up.type = down.type = "button";
-      const clamp2 = () => {
+      const clamp = () => {
         const n = Number(i.value);
         if (Number.isFinite(n)) {
           const lo = Number(i.min), hi = Number(i.max);
@@ -2963,7 +2963,7 @@
       const bump = (dir) => {
         if (dir < 0) i.stepDown();
         else i.stepUp();
-        clamp2();
+        clamp();
         i.dispatchEvent(new Event("input", { bubbles: true }));
         i.dispatchEvent(new Event("change", { bubbles: true }));
       };
@@ -3006,7 +3006,7 @@
       };
       addSpin(up, 1);
       addSpin(down, -1);
-      i.addEventListener("change", clamp2);
+      i.addEventListener("change", clamp);
       spin.append(up, down);
       wrap.append(i, spin);
       i.wrap = wrap;
@@ -5717,43 +5717,109 @@
     rounding: "round"
   });
 
+  // src/utils/tooltip.finder.ts
+  var NEXT_QUERY = 'button[aria-label^="Next"]';
+  var PREV_QUERY = 'button[aria-label^="Previous"]';
+  function isVisible(el2) {
+    if (!el2) return false;
+    const s = getComputedStyle(el2);
+    return s && s.visibility !== "hidden" && s.display !== "none";
+  }
+  function hasCanvas(el2) {
+    return !!el2.querySelector?.("canvas");
+  }
+  function hasNameText(el2) {
+    return !!el2.querySelector?.('p.chakra-text, p[class*="chakra-text"]');
+  }
+  function findTooltipRootFrom(start) {
+    let n = start || null;
+    while (n && n !== document.body) {
+      if (n.getAttribute?.("role") === "tooltip") return n;
+      if (hasCanvas(n) && hasNameText(n)) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
+  function findBestTooltipDetailHostInside(root) {
+    if (!root) return null;
+    const name = root.querySelector?.("p.chakra-text") ?? root.querySelector?.('p[class*="chakra-text"]') ?? root.querySelector?.("p") ?? null;
+    if (name) {
+      const hasCanvasLocal = (el2) => !!el2.querySelector("canvas");
+      let node = name;
+      while (node && node !== root) {
+        const cs = getComputedStyle(node);
+        if (cs.display.includes("flex") && !hasCanvasLocal(node)) {
+          const parent = node.parentElement;
+          if (parent && Array.from(parent.children).some((ch) => ch !== node && ch instanceof HTMLElement && hasCanvasLocal(ch))) {
+            return node;
+          }
+        }
+        node = node.parentElement;
+      }
+      const mc = name.closest(".McFlex");
+      if (mc) return mc;
+      if (name.parentElement) return name.parentElement;
+    }
+    const candidates = Array.from(root.querySelectorAll?.(".McFlex, [class*='McFlex']") ?? []);
+    for (const c of candidates) {
+      const cs = getComputedStyle(c);
+      if (!cs.display.includes("flex")) continue;
+      if (c.querySelector("canvas")) continue;
+      if (!c.querySelector('p, [class*="chakra-text"]')) continue;
+      return c;
+    }
+    return root || null;
+  }
+  function findNavButtonsInside(root) {
+    if (!root) return { root: null, next: null, prev: null };
+    let next = root.querySelector?.(NEXT_QUERY) ?? null;
+    let prev = root.querySelector?.(PREV_QUERY) ?? null;
+    if (!next) next = root.querySelector?.('button.chakra-button[aria-label*="Next"]') ?? null;
+    if (!prev) prev = root.querySelector?.('button.chakra-button[aria-label*="Previous"]') ?? null;
+    if (next && !isVisible(next)) next = null;
+    if (prev && !isVisible(prev)) prev = null;
+    return { root, next, prev };
+  }
+  function findNearestNavButtonsFrom(start) {
+    const root = findTooltipRootFrom(start);
+    if (root) return findNavButtonsInside(root);
+    const all = Array.from(document.querySelectorAll(`${NEXT_QUERY},${PREV_QUERY}`)).filter(isVisible);
+    let best = null;
+    for (const btn of all) {
+      const r = findTooltipRootFrom(btn);
+      if (!r) continue;
+      const pair = findNavButtonsInside(r);
+      if (pair.next || pair.prev) {
+        best = pair;
+        break;
+      }
+    }
+    return best ?? { root: null, next: null, prev: null };
+  }
+  function findBestNavButtons(start) {
+    const byStart = start ? findNearestNavButtonsFrom(start) : null;
+    if (byStart && (byStart.next || byStart.prev)) return byStart;
+    const roots = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => hasCanvas(r) && hasNameText(r) && isVisible(r));
+    for (const r of roots) {
+      const pair = findNavButtonsInside(r);
+      if (pair.next || pair.prev) return pair;
+    }
+    return { root: null, next: null, prev: null };
+  }
+
   // src/services/domChanges.ts
   var STYLE_ID = "qws-price-badge-style";
   var ATTR_INJECTED = "data-qws-injected";
   var CLASS_BADGE = "qws-price-badge";
-  var NEXT_SEL = 'button[aria-label^="Next"]';
-  var PREV_SEL = 'button[aria-label^="Previous"]';
-  var XPATHS = [
-    '//*[@id="App"]/div[1]/div[1]/div[2]/div[2]/div[3]/div[1]/div/div/div/div'
-  ];
+  var USER_SCOPE_ROOT = ".McFlex.css-1wu1jyg";
   var nfUS = new Intl.NumberFormat("en-US");
   var fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
-  var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  var ACTIVE_CONTAINERS = /* @__PURE__ */ new Set();
+  var ACTIVE_HOSTS = /* @__PURE__ */ new Set();
   var HOST_STATE = /* @__PURE__ */ new WeakMap();
   var cur = null;
   var players;
   var sortedIdx = null;
   var isPlantObject = (o) => !!o && o.objectType === "plant";
-  function xpathSnapshot(expr, root = document) {
-    const doc = root.ownerDocument || root;
-    const res = doc.evaluate(expr, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
-    const out = [];
-    for (let i = 0; i < res.snapshotLength; i++) {
-      const n = res.snapshotItem(i);
-      if (n && n.nodeType === 1) out.push(n);
-    }
-    return out;
-  }
-  var distinct = (els) => {
-    const seen = /* @__PURE__ */ new Set(), out = [];
-    for (const el2 of els) if (!seen.has(el2)) {
-      seen.add(el2);
-      out.push(el2);
-    }
-    return out;
-  };
-  var resolveContainersFromXPaths = (paths) => distinct(paths.flatMap((x) => xpathSnapshot(x))).filter((el2) => document.contains(el2));
   var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
   var getOrder = () => {
     const n = Array.isArray(cur?.slots) ? cur.slots.length : 0;
@@ -5799,21 +5865,18 @@
     probe.remove();
     return BADGE_RESERVE;
   }
-  function findDetailsHost(container) {
-    const name = container.querySelector("p.chakra-text") ?? container.querySelector('p[class*="chakra-text"]') ?? container.querySelector("p");
-    if (!name) return container;
-    const hasCanvas = (el2) => !!el2.querySelector("canvas");
-    let node = name;
-    while (node && node !== container) {
-      const cs = getComputedStyle(node);
-      if (cs.display.includes("flex") && !hasCanvas(node)) {
-        const parent = node.parentElement;
-        if (parent && Array.from(parent.children).some((ch) => ch !== node && ch instanceof HTMLElement && hasCanvas(ch)))
-          return node;
-      }
-      node = node.parentElement;
+  function collectTooltipRoots() {
+    const set2 = /* @__PURE__ */ new Set();
+    const userRoot = document.querySelector(USER_SCOPE_ROOT);
+    if (userRoot) set2.add(userRoot);
+    for (const h of ACTIVE_HOSTS) {
+      if (h && h.isConnected) set2.add(h.closest(".McFlex, .css-0") || h);
     }
-    return name.closest(".McFlex") || name.parentElement || container;
+    if (set2.size === 0) {
+      const guess = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
+      guess.slice(0, 3).forEach((r) => set2.add(r));
+    }
+    return Array.from(set2).filter((r) => r.isConnected);
   }
   function currentSlotValue(host) {
     if (!isPlantObject(cur)) return null;
@@ -5830,23 +5893,21 @@
     const val = valueFromGardenSlot(ordered[safeIdx], DefaultPricing, players);
     return Number.isFinite(val) && val > 0 ? val : null;
   }
-  function injectOrUpdateBadge(container) {
+  function injectOrUpdateBadge(host) {
     if (!isPlantObject(cur)) {
-      removeBadge(container);
+      removeBadge(host);
       return;
     }
     ensureStyle();
-    const host = findDetailsHost(container);
     if (getComputedStyle(host).position === "static") host.style.position = "relative";
     const reserve = measureBadgeReserve();
     if ((parseFloat(host.style.paddingBottom) || 0) < reserve) host.style.paddingBottom = `${reserve}px`;
-    const val = currentSlotValue(host) ?? // fallback total si besoin
-    (() => {
+    const val = currentSlotValue(host) ?? (() => {
       const v = valueFromGardenPlant(cur, DefaultPricing, players);
       return Number.isFinite(v) && v > 0 ? v : null;
     })();
     if (val == null) {
-      removeBadge(container);
+      removeBadge(host);
       return;
     }
     let badge = host.querySelector("." + CLASS_BADGE);
@@ -5858,8 +5919,7 @@
     }
     badge.textContent = fmtCoins(val);
   }
-  function removeBadge(container) {
-    const host = findDetailsHost(container);
+  function removeBadge(host) {
     host.querySelectorAll("." + CLASS_BADGE).forEach((n) => n.remove());
     if (host.hasAttribute(ATTR_INJECTED)) {
       host.removeAttribute(ATTR_INJECTED);
@@ -5868,7 +5928,22 @@
     HOST_STATE.delete(host);
   }
   function updateAllBadges() {
-    for (const el2 of resolveContainersFromXPaths(XPATHS)) injectOrUpdateBadge(el2);
+    const roots = collectTooltipRoots();
+    const found = [];
+    for (const root of roots) {
+      const host = findBestTooltipDetailHostInside(root);
+      if (host) found.push(host);
+    }
+    for (const host of found) {
+      if (!ACTIVE_HOSTS.has(host)) ACTIVE_HOSTS.add(host);
+      injectOrUpdateBadge(host);
+    }
+    for (const host of Array.from(ACTIVE_HOSTS)) {
+      if (!document.contains(host) || !found.includes(host)) {
+        removeBadge(host);
+        ACTIVE_HOSTS.delete(host);
+      }
+    }
   }
   function clearAllBadges() {
     document.querySelectorAll("." + CLASS_BADGE).forEach((el2) => el2.remove());
@@ -5876,27 +5951,10 @@
       host.style.paddingBottom = "";
       host.removeAttribute(ATTR_INJECTED);
     });
-    ACTIVE_CONTAINERS.clear();
+    ACTIVE_HOSTS.clear();
   }
-  function watchTooltipsByXPath(xpaths) {
-    const current = /* @__PURE__ */ new Set();
-    const rescan = () => {
-      const found = resolveContainersFromXPaths(xpaths);
-      for (const el2 of found) {
-        if (!current.has(el2)) {
-          current.add(el2);
-          ACTIVE_CONTAINERS.add(el2);
-        }
-        injectOrUpdateBadge(el2);
-      }
-      for (const el2 of Array.from(current)) {
-        if (!document.contains(el2) || !found.includes(el2)) {
-          removeBadge(el2);
-          current.delete(el2);
-          ACTIVE_CONTAINERS.delete(el2);
-        }
-      }
-    };
+  function watchTooltipsByXPath() {
+    const rescan = () => updateAllBadges();
     rescan();
     let raf = 0;
     const mo = new MutationObserver(() => {
@@ -5907,50 +5965,38 @@
       });
     });
     mo.observe(document.body, { subtree: true, childList: true, attributes: true });
-    const getNearestActiveContainerTo = (el2) => {
-      if (ACTIVE_CONTAINERS.size === 0) return null;
-      if (ACTIVE_CONTAINERS.size === 1) return Array.from(ACTIVE_CONTAINERS)[0];
-      const r = el2.getBoundingClientRect(), ex = r.left + r.width / 2, ey = r.top + r.height / 2;
-      let best = null;
-      for (const c of ACTIVE_CONTAINERS) {
-        const cr = c.getBoundingClientRect();
-        const px = clamp(ex, cr.left, cr.right), py = clamp(ey, cr.top, cr.bottom);
-        const d = (ex - px) ** 2 + (ey - py) ** 2;
-        if (!best || d < best.d) best = { c, d };
-      }
-      return best?.c ?? null;
-    };
-    const handleNavFrom = (el2, dir) => {
-      const container = getNearestActiveContainerTo(el2) ?? Array.from(ACTIVE_CONTAINERS)[0] ?? null;
-      if (!container || !isPlantObject(cur)) return;
-      const host = findDetailsHost(container);
-      const total = getOrderedSlots().length;
-      if (total <= 1) {
-        injectOrUpdateBadge(container);
-        return;
-      }
-      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
-      st.sig = plantSig(cur);
-      st.idx = dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
-      HOST_STATE.set(host, st);
-      requestAnimationFrame(() => injectOrUpdateBadge(container));
-    };
     const presses = /* @__PURE__ */ new Map();
-    const hitButtonAt = (x, y) => document.elementFromPoint(x, y)?.closest(`${NEXT_SEL},${PREV_SEL}`) ?? null;
     const onPointerDownNav = (ev) => {
       const t = ev.target;
       if (!t) return;
-      const btn = t.closest(`${NEXT_SEL},${PREV_SEL}`);
-      if (!btn) return;
-      presses.set(ev.pointerId, { btn, dir: btn.matches(NEXT_SEL) ? "NEXT" : "PREV" });
+      const pair = findNearestNavButtonsFrom(t);
+      if (!pair.root) return;
+      const pressedBtn = t.closest("button");
+      if (!pressedBtn) return;
+      let dir = null;
+      if (pair.next && pressedBtn === pair.next) dir = "NEXT";
+      else if (pair.prev && pressedBtn === pair.prev) dir = "PREV";
+      if (!dir) return;
+      presses.set(ev.pointerId, { btn: pressedBtn, dir, root: pair.root });
     };
     const onPointerUpNav = (ev) => {
       const rec = presses.get(ev.pointerId);
       if (!rec) return;
       presses.delete(ev.pointerId);
-      const upBtn = hitButtonAt(ev.clientX, ev.clientY);
+      const upBtn = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("button");
       if (upBtn !== rec.btn) return;
-      handleNavFrom(rec.btn, rec.dir);
+      const host = rec.root ? findBestTooltipDetailHostInside(rec.root) : null;
+      if (!host || !isPlantObject(cur)) return;
+      const total = getOrderedSlots().length;
+      if (total <= 1) {
+        injectOrUpdateBadge(host);
+        return;
+      }
+      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
+      st.sig = plantSig(cur);
+      st.idx = rec.dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
+      HOST_STATE.set(host, st);
+      requestAnimationFrame(() => injectOrUpdateBadge(host));
     };
     const onPointerCancelNav = (ev) => {
       presses.delete(ev.pointerId);
@@ -5961,14 +6007,27 @@
     const onKey = (ev) => {
       const k = ev.key?.toLowerCase();
       if (k !== "c" && k !== "x") return;
-      handleNavFrom(document.elementFromPoint(innerWidth / 2, innerHeight / 2) ?? document.body, k === "c" ? "NEXT" : "PREV");
+      const pair = findBestNavButtons();
+      if (!pair.root) return;
+      const host = findBestTooltipDetailHostInside(pair.root);
+      if (!host || !isPlantObject(cur)) return;
+      const dir = k === "c" ? "NEXT" : "PREV";
+      const total = getOrderedSlots().length;
+      if (total <= 1) {
+        injectOrUpdateBadge(host);
+        return;
+      }
+      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
+      st.sig = plantSig(cur);
+      st.idx = dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
+      HOST_STATE.set(host, st);
+      requestAnimationFrame(() => injectOrUpdateBadge(host));
     };
     document.addEventListener("keydown", onKey, true);
     return {
       disconnect() {
         mo.disconnect();
-        current.clear();
-        ACTIVE_CONTAINERS.clear();
+        ACTIVE_HOSTS.clear();
         document.removeEventListener("pointerdown", onPointerDownNav, true);
         document.removeEventListener("pointerup", onPointerUpNav, true);
         document.removeEventListener("pointercancel", onPointerCancelNav, true);
@@ -6002,7 +6061,7 @@
       sortedIdx = Array.isArray(v) ? v.slice() : null;
       updateAllBadges();
     });
-    watchTooltipsByXPath(XPATHS);
+    watchTooltipsByXPath();
   })();
 
   // src/ui/menus/debug-data.ts
