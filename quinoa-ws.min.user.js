@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.4
+// @version      1.2.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -7080,7 +7080,7 @@
       gardenValue.style.fontWeight = "700";
       gardenValueRow.append(gardenLabel, gardenValue);
       infoWrap.append(invValueRow, gardenValueRow);
-      col.appendChild(sectionFramed("Crops informations", infoWrap));
+      col.appendChild(sectionFramed("Crops values", infoWrap));
       const teleRow = rowCenter();
       const btnToPlayer = document.createElement("button");
       const btnToGarden = document.createElement("button");
