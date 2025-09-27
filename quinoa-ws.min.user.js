@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.7
+// @version      1.2.9
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5812,10 +5812,13 @@
   var ATTR_INJECTED = "data-qws-injected";
   var CLASS_BADGE = "qws-price-badge";
   var USER_SCOPE_ROOT = ".McFlex.css-1wu1jyg";
+  var KEY_NEXT = "c";
+  var KEY_PREV = "x";
   var nfUS = new Intl.NumberFormat("en-US");
   var fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
   var ACTIVE_HOSTS = /* @__PURE__ */ new Set();
   var HOST_STATE = /* @__PURE__ */ new WeakMap();
+  var LAST_NAV_ROOT = null;
   var cur = null;
   var players;
   var sortedIdx = null;
@@ -5953,6 +5956,9 @@
     });
     ACTIVE_HOSTS.clear();
   }
+  var resolveNavRootForKeys = () => {
+    return LAST_NAV_ROOT || document.querySelector(USER_SCOPE_ROOT) || (Array.from(ACTIVE_HOSTS)[0]?.closest(".McFlex, .css-0") ?? null) || findBestNavButtons().root || null;
+  };
   function watchTooltipsByXPath() {
     const rescan = () => updateAllBadges();
     rescan();
@@ -5977,6 +5983,7 @@
       if (pair.next && pressedBtn === pair.next) dir = "NEXT";
       else if (pair.prev && pressedBtn === pair.prev) dir = "PREV";
       if (!dir) return;
+      LAST_NAV_ROOT = pair.root;
       presses.set(ev.pointerId, { btn: pressedBtn, dir, root: pair.root });
     };
     const onPointerUpNav = (ev) => {
@@ -6004,14 +6011,20 @@
     document.addEventListener("pointerdown", onPointerDownNav, true);
     document.addEventListener("pointerup", onPointerUpNav, true);
     document.addEventListener("pointercancel", onPointerCancelNav, true);
-    const onKey = (ev) => {
+    const onKeyUp = (ev) => {
       const k = ev.key?.toLowerCase();
-      if (k !== "c" && k !== "x") return;
-      const pair = findBestNavButtons();
-      if (!pair.root) return;
-      const host = findBestTooltipDetailHostInside(pair.root);
+      if (k !== KEY_NEXT && k !== KEY_PREV) return;
+      const t = ev.target;
+      const tag = t?.tagName?.toLowerCase();
+      if (t && (t.isContentEditable || tag === "input" || tag === "textarea")) return;
+      let root = resolveNavRootForKeys();
+      if (!root) {
+        const pair = findBestNavButtons();
+        root = pair.root || null;
+      }
+      if (!root) return;
+      const host = findBestTooltipDetailHostInside(root);
       if (!host || !isPlantObject(cur)) return;
-      const dir = k === "c" ? "NEXT" : "PREV";
       const total = getOrderedSlots().length;
       if (total <= 1) {
         injectOrUpdateBadge(host);
@@ -6019,11 +6032,13 @@
       }
       const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
       st.sig = plantSig(cur);
-      st.idx = dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
+      st.idx = k === KEY_NEXT ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
       HOST_STATE.set(host, st);
-      requestAnimationFrame(() => injectOrUpdateBadge(host));
+      requestAnimationFrame(
+        () => requestAnimationFrame(() => injectOrUpdateBadge(host))
+      );
     };
-    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("keyup", onKeyUp, true);
     return {
       disconnect() {
         mo.disconnect();
@@ -6031,7 +6046,7 @@
         document.removeEventListener("pointerdown", onPointerDownNav, true);
         document.removeEventListener("pointerup", onPointerUpNav, true);
         document.removeEventListener("pointercancel", onPointerCancelNav, true);
-        document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("keyup", onKeyUp, true);
       }
     };
   }
