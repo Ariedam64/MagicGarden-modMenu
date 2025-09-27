@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.6
+// @version      1.2.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5723,7 +5723,6 @@
   var CLASS_BADGE = "qws-price-badge";
   var NEXT_SEL = 'button[aria-label^="Next"]';
   var PREV_SEL = 'button[aria-label^="Previous"]';
-  var NAV_ROOT_XPATH = '//*[@id="App"]/div[1]/div[1]/div[2]/div[2]/div[3]/div[1]';
   var XPATHS = [
     '//*[@id="App"]/div[1]/div[1]/div[2]/div[2]/div[3]/div[1]/div/div/div/div'
   ];
@@ -5936,8 +5935,6 @@
       HOST_STATE.set(host, st);
       requestAnimationFrame(() => injectOrUpdateBadge(container));
     };
-    const NAV_ROOTS = xpathSnapshot(NAV_ROOT_XPATH);
-    const EVENT_TARGETS = NAV_ROOTS.length ? NAV_ROOTS : [document.body];
     const presses = /* @__PURE__ */ new Map();
     const hitButtonAt = (x, y) => document.elementFromPoint(x, y)?.closest(`${NEXT_SEL},${PREV_SEL}`) ?? null;
     const onPointerDownNav = (ev) => {
@@ -5958,11 +5955,9 @@
     const onPointerCancelNav = (ev) => {
       presses.delete(ev.pointerId);
     };
-    EVENT_TARGETS.forEach((root) => {
-      root.addEventListener("pointerdown", onPointerDownNav, true);
-      root.addEventListener("pointerup", onPointerUpNav, true);
-      root.addEventListener("pointercancel", onPointerCancelNav, true);
-    });
+    document.addEventListener("pointerdown", onPointerDownNav, true);
+    document.addEventListener("pointerup", onPointerUpNav, true);
+    document.addEventListener("pointercancel", onPointerCancelNav, true);
     const onKey = (ev) => {
       const k = ev.key?.toLowerCase();
       if (k !== "c" && k !== "x") return;
@@ -5974,11 +5969,9 @@
         mo.disconnect();
         current.clear();
         ACTIVE_CONTAINERS.clear();
-        EVENT_TARGETS.forEach((root) => {
-          root.removeEventListener("pointerdown", onPointerDownNav, true);
-          root.removeEventListener("pointerup", onPointerUpNav, true);
-          root.removeEventListener("pointercancel", onPointerCancelNav, true);
-        });
+        document.removeEventListener("pointerdown", onPointerDownNav, true);
+        document.removeEventListener("pointerup", onPointerUpNav, true);
+        document.removeEventListener("pointercancel", onPointerCancelNav, true);
         document.removeEventListener("keydown", onKey, true);
       }
     };
