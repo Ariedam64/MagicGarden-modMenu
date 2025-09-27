@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.1
-// @match        https://*.discordsays.com/*
+// @version      1.2.2
+// @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
@@ -15,8 +15,8 @@
 // ==/UserScript==
 (() => {
   var __defProp = Object.defineProperty;
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+  var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
+  var __publicField = (obj, key2, value) => __defNormalProp(obj, typeof key2 !== "symbol" ? key2 + "" : key2, value);
 
   // src/core/state.ts
   var NativeWS = window.WebSocket;
@@ -375,10 +375,10 @@
     const clone = Array.isArray(root) ? root.slice() : { ...root ?? {} };
     let cur = clone;
     for (let i = 0; i < segs.length - 1; i++) {
-      const key = segs[i];
-      const src = cur[key];
+      const key2 = segs[i];
+      const src = cur[key2];
       const obj = typeof src === "object" && src !== null ? Array.isArray(src) ? src.slice() : { ...src } : {};
-      cur[key] = obj;
+      cur[key2] = obj;
       cur = obj;
     }
     cur[segs[segs.length - 1]] = nextValue;
@@ -476,7 +476,7 @@
       if ((mode === "array" || mode === "auto" && Array.isArray(value)) && Array.isArray(value)) {
         for (let i = 0; i < value.length; i++) {
           const item = value[i];
-          const key = opts.key ? opts.key(item, i, whole) : i;
+          const key2 = opts.key ? opts.key(item, i, whole) : i;
           const s = opts.sig ? opts.sig(item, i, whole) : opts.fields ? stablePick(item, opts.fields) : (() => {
             try {
               return JSON.stringify(item);
@@ -484,11 +484,11 @@
               return String(item);
             }
           })();
-          sig.set(key, s);
+          sig.set(key2, s);
         }
       } else {
         for (const [k, item] of Object.entries(value)) {
-          const key = opts.key ? opts.key(item, k, whole) : k;
+          const key2 = opts.key ? opts.key(item, k, whole) : k;
           const s = opts.sig ? opts.sig(item, k, whole) : opts.fields ? stablePick(item, opts.fields) : (() => {
             try {
               return JSON.stringify(item);
@@ -496,7 +496,7 @@
               return String(item);
             }
           })();
-          sig.set(key, s);
+          sig.set(key2, s);
         }
       }
       return { sig, keys: Array.from(sig.keys()) };
@@ -524,10 +524,10 @@
         }
       });
     }
-    async function subKey(key, cb) {
+    async function subKey(key2, cb) {
       let last = "__INIT__";
       return sub(({ value, changedKeys }) => {
-        if (changedKeys.includes(key)) cb({ value });
+        if (changedKeys.includes(key2)) cb({ value });
       });
     }
     async function subKeys(keys, cb) {
@@ -551,6 +551,7 @@
   var myData = makeAtom("myDataAtom");
   var myInventory = makeAtom("myInventoryAtom");
   var myCropInventory = makeAtom("myCropInventoryAtom");
+  var mySeedInventory = makeAtom("mySeedInventoryAtom");
   var myPetInfos = makeAtom("myPetInfosAtom");
   var myPetSlotInfos = makeAtom("myPetSlotInfosAtom");
   var shops = makeAtom("shopsAtom");
@@ -559,6 +560,8 @@
   var totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
   var myValidatedSelectedItemIndex = makeAtom("myValidatedSelectedItemIndexAtom");
   var setSelectedIndexToEnd = makeAtom("setSelectedIndexToEndAtom");
+  var mySelectedItemName = makeAtom("mySelectedItemNameAtom");
+  var myPossiblyNoLongerValidSelectedItemIndex = makeAtom("myPossiblyNoLongerValidSelectedItemIndexAtom");
   var activeModal = makeAtom("activeModalAtom");
   var garden = makeView("myDataAtom", { path: "garden" });
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
@@ -579,7 +582,7 @@
   }
   var GardenSlotsSig = gardenTileObjects.asSignature({
     mode: "record",
-    key: (_item, key) => Number(key),
+    key: (_item, key2) => Number(key2),
     sig: (item) => slotSig(item)
   });
   function petSig(p) {
@@ -627,7 +630,12 @@
     inventory: {
       myInventory,
       myCropInventory,
-      favoriteIds
+      mySeedInventory,
+      favoriteIds,
+      mySelectedItemName,
+      myPossiblyNoLongerValidSelectedItemIndex,
+      myValidatedSelectedItemIndex,
+      setSelectedIndexToEnd
     },
     pets: {
       myPetInfos,
@@ -636,9 +644,7 @@
     shop: {
       shops,
       myShopPurchases,
-      totalCropSellPrice,
-      myValidatedSelectedItemIndex,
-      setSelectedIndexToEnd
+      totalCropSellPrice
     }
   };
   function onFavoriteIds(cb) {
@@ -878,8 +884,6 @@
       } catch {
       }
     },
-    // NB: types littéraux {x:0,y:0} / "Boardwalk" / 64 provenaient de l'ancien code.
-    // Si tu préfères des types génériques, remplace par {x:number,y:number}, "Dirt"|"Boardwalk", number.
     async placePet(itemId, position2, tileType, localTileIndex) {
       try {
         sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
@@ -889,6 +893,12 @@
     async storePet(itemId) {
       try {
         sendToGame({ type: "StorePet", itemId });
+      } catch {
+      }
+    },
+    async wish(itemId) {
+      try {
+        sendToGame({ type: "Wish", itemId });
       } catch {
       }
     },
@@ -1103,12 +1113,133 @@
   };
 
   // src/data/hardcoded-data.clean.js
-  var rarity = { Common: "Common", Uncommon: "Uncommon", Rare: "Rare", Legendary: "Legendary", Mythic: "Mythical", Divine: "Divine", Celestial: "Celestial" };
-  var harvestType = { Single: "Single", Multiple: "Multiple" };
-  var tileRefsPlants = { Empty: 0, DirtPatch: 1, SproutFlower: 2, SproutVegetable: 3, SproutFruit: 4, SproutVine: 5, StemFlower: 6, Trellis: 7, Daffodil: 11, Tulip: 12, Sunflower: 13, Lily: 14, Starweaver: 15, StarweaverPlant: 16, AloePlant: 17, Aloe: 18, Blueberry: 21, Banana: 22, Strawberry: 23, Mango: 24, Grape: 25, Watermelon: 26, Lemon: 27, Apple: 28, Pepper: 31, Tomato: 32, BabyCarrot: 33, Carrot: 34, Pumpkin: 35, Corn: 36, PalmTreeTop: 39, BushyTree: 40, Coconut: 41, MushroomPlant: 42, PassionFruit: 43, DragonFruit: 44, Lychee: 45, Mushroom: 46, BurrosTail: 47, Cacao: 48, Echeveria: 49 };
-  var tileRefsTallPlants = { Empty: 0, Bamboo: 1, PalmTree: 2, Cactus: 3, Tree: 4 };
-  var tileRefsSeeds = { Empty: 0, Daffodil: 1, Tulip: 2, Sunflower: 3, Starweaver: 6, Blueberry: 11, Banana: 12, Strawberry: 13, Mango: 14, Grape: 15, Watermelon: 16, Lemon: 17, Apple: 18, Lily: 20, Pepper: 21, Tomato: 22, Carrot: 23, Pumpkin: 25, Corn: 26, Bamboo: 41, Coconut: 31, Mushroom: 32, PassionFruit: 33, DragonFruit: 34, Lychee: 35, BurrosTail: 37, Aloe: 39, Echeveria: 40, Cactus: 42 };
-  var tileRefsItems = { Empty: 0, Coin: 1, Shovel: 2, Seeds: 3, PlanterPot: 5, InventoryBag: 6, WateringCan: 14, Fertilizer: 15, RainbowPotion: 16, ArrowKeys: 41, Touchpad: 42 };
+  var rarity = {
+    Common: "Common",
+    Uncommon: "Uncommon",
+    Rare: "Rare",
+    Legendary: "Legendary",
+    Mythic: "Mythical",
+    Divine: "Divine",
+    Celestial: "Celestial"
+  };
+  var harvestType = {
+    Single: "Single",
+    Multiple: "Multiple"
+  };
+  var tileRefsPlants = {
+    Empty: 0,
+    DirtPatch: 1,
+    SproutFlower: 2,
+    SproutVegetable: 3,
+    SproutFruit: 4,
+    SproutVine: 5,
+    StemFlower: 6,
+    Trellis: 7,
+    Daffodil: 11,
+    Tulip: 12,
+    Sunflower: 13,
+    Lily: 14,
+    Starweaver: 15,
+    AloePlant: 17,
+    Aloe: 18,
+    Blueberry: 21,
+    Banana: 22,
+    Strawberry: 23,
+    Mango: 24,
+    Grape: 25,
+    Watermelon: 26,
+    Lemon: 27,
+    Apple: 28,
+    Pepper: 31,
+    Tomato: 32,
+    BabyCarrot: 33,
+    Carrot: 34,
+    Pumpkin: 35,
+    Corn: 36,
+    PalmTreeTop: 39,
+    BushyTree: 40,
+    Coconut: 41,
+    MushroomPlant: 42,
+    PassionFruit: 43,
+    DragonFruit: 44,
+    Lychee: 45,
+    Mushroom: 46,
+    BurrosTail: 47,
+    Cacao: 48,
+    Echeveria: 49,
+    // NEW Celestial crops
+    DawnCelestialCrop: 51,
+    // Sunbriar Bulb
+    MoonCelestialCrop: 52
+    // Mooncatcher Bulb
+  };
+  var tileRefsTallPlants = {
+    Empty: 0,
+    Bamboo: 1,
+    PalmTree: 2,
+    // NEW Dawn Celestial stack
+    DawnCelestialPlatform: 3,
+    DawnCelestialPlant: 4,
+    DawnCelestialPlantActive: 5,
+    DawnCelestialPlatformTopmostLayer: 6,
+    Cactus: 7,
+    Tree: 8,
+    // NEW Moon Celestial stack
+    MoonCelestialPlatform: 9,
+    MoonCelestialPlant: 10,
+    MoonCelestialPlantActive: 11,
+    // Starweaver
+    StarweaverPlatform: 13,
+    StarweaverPlant: 14
+  };
+  var tileRefsSeeds = {
+    Empty: 0,
+    Daffodil: 1,
+    Tulip: 2,
+    Sunflower: 3,
+    Starweaver: 6,
+    MoonCelestial: 7,
+    // NEW
+    DawnCelestial: 8,
+    // NEW
+    Blueberry: 11,
+    Banana: 12,
+    Strawberry: 13,
+    Mango: 14,
+    Grape: 15,
+    Watermelon: 16,
+    Lemon: 17,
+    Apple: 18,
+    Lily: 20,
+    Pepper: 21,
+    Tomato: 22,
+    Carrot: 23,
+    Pumpkin: 25,
+    Corn: 26,
+    Coconut: 31,
+    Mushroom: 32,
+    PassionFruit: 33,
+    DragonFruit: 34,
+    Lychee: 35,
+    BurrosTail: 37,
+    Aloe: 39,
+    Echeveria: 40,
+    Bamboo: 41,
+    Cactus: 42
+  };
+  var tileRefsItems = {
+    Empty: 0,
+    Coin: 1,
+    Shovel: 2,
+    Seeds: 3,
+    PlanterPot: 5,
+    InventoryBag: 6,
+    WateringCan: 14,
+    Fertilizer: 15,
+    RainbowPotion: 16,
+    ArrowKeys: 41,
+    Touchpad: 42
+  };
   var tileRefsPets = {
     Bee: 1,
     Chicken: 2,
@@ -1137,7 +1268,9 @@
     Chilled: 2,
     Frozen: 3,
     Dawnlit: 11,
-    Amberglow: 12
+    Amberlit: 12,
+    Dawncharged: 13,
+    Ambercharged: 14
   };
   var tileRefsDecor = {
     SmallRock: 11,
@@ -1178,11 +1311,331 @@
     WoodenWindmill: 64,
     StoneBirdbath: 65
   };
-  var plantCatalog = { Carrot: { seed: { tileRef: tileRefsSeeds.Carrot, name: "Carrot Seed", coinPrice: 10, creditPrice: 7, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.BabyCarrot, name: "Carrot Plant", harvestType: harvestType.Single, baseTileScale: 0.7 }, crop: { tileRef: tileRefsPlants.Carrot, name: "Carrot", baseSellPrice: 20, baseWeight: 0.1, baseTileScale: 0.6, maxScale: 3 } }, Strawberry: { seed: { tileRef: tileRefsSeeds.Strawberry, name: "Strawberry Seed", coinPrice: 50, creditPrice: 21, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.SproutFruit, name: "Strawberry Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }], secondsToMature: 70, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Strawberry, name: "Strawberry", baseSellPrice: 14, baseWeight: 0.05, baseTileScale: 0.25, maxScale: 2 } }, Aloe: { seed: { tileRef: tileRefsSeeds.Aloe, name: "Aloe Seed", coinPrice: 135, creditPrice: 18, rarity: rarity.Common }, plant: { tileRef: tileRefsPlants.AloePlant, name: "Aloe Plant", harvestType: harvestType.Single, baseTileScale: 0.9 }, crop: { tileRef: tileRefsPlants.Aloe, name: "Aloe", baseSellPrice: 310, baseWeight: 1.5, baseTileScale: 0.7, maxScale: 2.5 } }, Blueberry: { seed: { tileRef: tileRefsSeeds.Blueberry, name: "Blueberry Seed", coinPrice: 400, creditPrice: 49, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.SproutFruit, name: "Blueberry Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }], secondsToMature: 105, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Blueberry, name: "Blueberry", baseSellPrice: 23, baseWeight: 0.01, baseTileScale: 0.25, maxScale: 2 } }, Apple: { seed: { tileRef: tileRefsSeeds.Apple, name: "Apple Seed", coinPrice: 500, creditPrice: 67, rarity: rarity.Uncommon, unavailableSurfaces: ["discord"] }, plant: { tileRef: tileRefsTallPlants.Tree, name: "Apple Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.15, y: -1.9, rotation: -90 }, { x: 0, y: -1.5, rotation: -75 }, { x: 0.6, y: -1.7, rotation: -60 }, { x: 0.3, y: -1.15, rotation: -55 }, { x: 1.05, y: -1.4, rotation: -45 }, { x: 0.8, y: -1.2, rotation: -35 }, { x: 0.9, y: 0.6, rotation: -30 }], secondsToMature: 360 * 60, baseTileScale: 3, rotateSlotOffsetsRandomly: false, tileTransformOrigin: "bottom", nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Apple, name: "Apple", baseSellPrice: 73, baseWeight: 0.18, baseTileScale: 0.5, maxScale: 2 } }, OrangeTulip: { seed: { tileRef: tileRefsSeeds.Tulip, name: "Tulip Seed", coinPrice: 600, creditPrice: 14, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.Tulip, name: "Tulip Plant", harvestType: harvestType.Single, baseTileScale: 0.5 }, crop: { tileRef: tileRefsPlants.Tulip, name: "Tulip", baseSellPrice: 767, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 } }, Tomato: { seed: { tileRef: tileRefsSeeds.Tomato, name: "Tomato Seed", coinPrice: 800, creditPrice: 79, rarity: rarity.Uncommon }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Tomato Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }], secondsToMature: 1100, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Tomato, name: "Tomato", baseSellPrice: 27, baseWeight: 0.3, baseTileScale: 0.33, maxScale: 2 } }, Daffodil: { seed: { tileRef: tileRefsSeeds.Daffodil, name: "Daffodil Seed", coinPrice: 1e3, creditPrice: 19, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil Plant", harvestType: harvestType.Single, baseTileScale: 0.5 }, crop: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil", baseSellPrice: 1090, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 } }, Corn: { seed: { tileRef: tileRefsSeeds.Corn, name: "Corn Kernel", coinPrice: 1300, creditPrice: 135, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.SproutVegetable, name: "Corn Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: 0.4, rotation: 0 }], secondsToMature: 130, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Corn, name: "Corn", baseSellPrice: 36, baseWeight: 1.2, baseTileScale: 0.7, maxScale: 2 } }, Watermelon: { seed: { tileRef: tileRefsSeeds.Watermelon, name: "Watermelon Seed", coinPrice: 2500, creditPrice: 195, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon", baseSellPrice: 2708, baseWeight: 4.5, baseTileScale: 0.8, maxScale: 3 } }, Pumpkin: { seed: { tileRef: tileRefsSeeds.Pumpkin, name: "Pumpkin Seed", coinPrice: 3e3, creditPrice: 210, rarity: rarity.Rare }, plant: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin", baseSellPrice: 3700, baseWeight: 6, baseTileScale: 0.8, maxScale: 3 } }, Echeveria: { seed: { tileRef: tileRefsSeeds.Echeveria, name: "Echeveria Cutting", coinPrice: 4200, creditPrice: 113, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria", baseSellPrice: 4600, baseWeight: 0.8, baseTileScale: 0.8, maxScale: 2.75 } }, Coconut: { seed: { tileRef: tileRefsSeeds.Coconut, name: "Coconut Seed", coinPrice: 6e3, creditPrice: 235, rarity: rarity.Legendary }, plant: { tileRef: tileRefsTallPlants.PalmTree, name: "Coconut Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.3, y: -2.1, rotation: 0 }, { x: 0.2, y: -1.9, rotation: 51.4 }, { x: 0.7, y: -2, rotation: 102.9 }, { x: 0.25, y: -1.6, rotation: 154.3 }, { x: 0.5, y: -1.8, rotation: 205.7 }, { x: 0.8, y: -1.7, rotation: 257.1 }, { x: 0.55, y: -1.5, rotation: 308.6 }], secondsToMature: 720 * 60, baseTileScale: 3, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", nudgeY: 0.15 }, crop: { tileRef: tileRefsPlants.Coconut, name: "Coconut", baseSellPrice: 302, baseWeight: 5, baseTileScale: 0.25, maxScale: 3 } }, Banana: { seed: { tileRef: tileRefsSeeds.Banana, name: "Banana Seed", coinPrice: 7500, creditPrice: 199, rarity: rarity.Legendary, getCanSpawnInGuild: (t) => {
-    const e = t.slice(-1), s = parseInt(e, 10);
-    return !isNaN(s) && s % 2 === 0;
-  } }, plant: { tileRef: tileRefsTallPlants.PalmTree, name: "Banana Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: -1.2, rotation: 10 }, { x: 0.3, y: -1.2, rotation: -10 }, { x: 0.4, y: -1.2, rotation: -30 }, { x: 0.5, y: -1.2, rotation: -50 }, { x: 0.6, y: -1.2, rotation: -70 }], secondsToMature: 14400, baseTileScale: 2.5, rotateSlotOffsetsRandomly: false, tileTransformOrigin: "bottom", nudgeY: 0.1 }, crop: { tileRef: tileRefsPlants.Banana, name: "Banana", baseSellPrice: 1750, baseWeight: 0.12, baseTileScale: 0.5, maxScale: 1.7 } }, Lily: { seed: { tileRef: tileRefsSeeds.Lily, name: "Lily Seed", coinPrice: 2e4, creditPrice: 34, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: 0.4 }, crop: { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 } }, BurrosTail: { seed: { tileRef: tileRefsSeeds.BurrosTail, name: "Burro's Tail Cutting", coinPrice: 93e3, creditPrice: 338, rarity: rarity.Legendary }, plant: { tileRef: tileRefsPlants.Trellis, name: "Burro's Tail Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.37, y: 0.4, rotation: 0 }, { x: 0.67, y: 0.63, rotation: 0 }], secondsToMature: 1800, baseTileScale: 0.8, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.BurrosTail, name: "Burro's Tail", baseSellPrice: 6e3, baseWeight: 0.4, baseTileScale: 0.4, maxScale: 2.5 } }, Mushroom: { seed: { tileRef: tileRefsSeeds.Mushroom, name: "Mushroom Spore", coinPrice: 15e4, creditPrice: 249, rarity: rarity.Mythic }, plant: { tileRef: tileRefsPlants.MushroomPlant, name: "Mushroom Plant", harvestType: harvestType.Single, baseTileScale: 0.8 }, crop: { tileRef: tileRefsPlants.Mushroom, name: "Mushroom", baseSellPrice: 16e4, baseWeight: 25, baseTileScale: 0.8, maxScale: 3.5 } }, Cactus: { seed: { tileRef: tileRefsSeeds.Cactus, name: "Cactus Seed", coinPrice: 25e4, creditPrice: 250, rarity: rarity.Mythic }, plant: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.15 }, crop: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus", baseSellPrice: 261e3, baseWeight: 1500, baseTileScale: 2.5, maxScale: 1.8 } }, Bamboo: { seed: { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 4e5, creditPrice: 300, rarity: rarity.Mythic }, plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.1 }, crop: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 5e5, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 } }, Grape: { seed: { tileRef: tileRefsSeeds.Grape, name: "Grape Seed", coinPrice: 85e4, creditPrice: 599, rarity: rarity.Mythic, getCanSpawnInGuild: (t) => t.endsWith("1") }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Grape Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: 0.5, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.Grape, name: "Grape", baseSellPrice: 7085, baseWeight: 3, baseTileScale: 0.5, maxScale: 2 } }, Pepper: { seed: { tileRef: tileRefsSeeds.Pepper, name: "Pepper Seed", coinPrice: 1e6, creditPrice: 629, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Pepper Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.1, y: 0.1, rotation: 0 }, { x: 0.9, y: 0.1, rotation: 0 }, { x: 0.3, y: 0.3, rotation: 0 }, { x: 0.7, y: 0.3, rotation: 0 }, { x: 0.5, y: 0.5, rotation: 0 }, { x: 0.3, y: 0.7, rotation: 0 }, { x: 0.7, y: 0.7, rotation: 0 }, { x: 0.1, y: 0.9, rotation: 0 }, { x: 0.9, y: 0.9, rotation: 0 }], secondsToMature: 560, baseTileScale: 1, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Pepper, name: "Pepper", baseSellPrice: 7220, baseWeight: 0.5, baseTileScale: 0.3, maxScale: 2 } }, Lemon: { seed: { tileRef: tileRefsSeeds.Lemon, name: "Lemon Seed", coinPrice: 2e6, creditPrice: 500, rarity: rarity.Divine, getCanSpawnInGuild: (t) => t.endsWith("2") }, plant: { tileRef: tileRefsTallPlants.Tree, name: "Lemon Tree", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0, y: -1, rotation: 85 }, { x: 0.9, y: -1.1, rotation: 195 }, { x: 0.2, y: -0.68, rotation: 340 }, { x: 0.7, y: -0.7, rotation: 280 }, { x: 0.51, y: -1, rotation: 0 }, { x: 0.45, y: -1.3, rotation: 280 }], secondsToMature: 720 * 60, baseTileScale: 2.3, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Lemon, name: "Lemon", baseSellPrice: 1e4, baseWeight: 0.5, baseTileScale: 0.25, maxScale: 3 } }, PassionFruit: { seed: { tileRef: tileRefsSeeds.PassionFruit, name: "Passion Fruit Seed", coinPrice: 275e4, creditPrice: 679, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.SproutVine, name: "Passion Fruit Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1.1, rotateSlotOffsetsRandomly: false }, crop: { tileRef: tileRefsPlants.PassionFruit, name: "Passion Fruit", baseSellPrice: 24500, baseWeight: 9.5, baseTileScale: 0.35, maxScale: 2 } }, DragonFruit: { seed: { tileRef: tileRefsSeeds.DragonFruit, name: "Dragon Fruit Seed", coinPrice: 5e6, creditPrice: 715, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.PalmTreeTop, name: "Dragon Fruit Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.2, y: 0.1, rotation: 0 }, { x: 0.1, y: 0.45, rotation: 51.4 }, { x: 0.86, y: 0.2, rotation: 102.9 }, { x: 0.25, y: 0.8, rotation: 154.3 }, { x: 0.5, y: 0.4, rotation: 205.7 }, { x: 0.9, y: 0.6, rotation: 257.1 }, { x: 0.6, y: 0.7, rotation: 308.6 }], secondsToMature: 600, baseTileScale: 1.6, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.DragonFruit, name: "Dragon Fruit", baseSellPrice: 24500, baseWeight: 8.4, baseTileScale: 0.4, maxScale: 2 } }, Lychee: { seed: { tileRef: tileRefsSeeds.Lychee, name: "Lychee Pit", coinPrice: 25e6, creditPrice: 819, rarity: rarity.Divine, getCanSpawnInGuild: (t) => t.endsWith("2") }, plant: { tileRef: tileRefsPlants.BushyTree, name: "Lychee Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.1, y: 0.4, rotation: 85 }, { x: 0.8, y: 0.3, rotation: 195 }, { x: 0.2, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.4, rotation: 0 }, { x: 0.3, y: 0.2, rotation: 280 }], secondsToMature: 1440 * 60, baseTileScale: 1.2, rotateSlotOffsetsRandomly: true }, crop: { tileRef: tileRefsPlants.Lychee, name: "Lychee Fruit", baseSellPrice: 5e4, baseWeight: 9, baseTileScale: 0.2, maxScale: 2 } }, Sunflower: { seed: { tileRef: tileRefsSeeds.Sunflower, name: "Sunflower Seed", coinPrice: 1e8, creditPrice: 900, rarity: rarity.Divine }, plant: { tileRef: tileRefsPlants.StemFlower, name: "Sunflower Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.51, y: -0.1, rotation: 0 }], secondsToMature: 1440 * 60, rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", baseTileScale: 0.8, nudgeY: 0.15 }, crop: { tileRef: tileRefsPlants.Sunflower, name: "Sunflower", baseSellPrice: 75e4, baseWeight: 10, baseTileScale: 0.5, maxScale: 2.5 } }, Starweaver: { seed: { tileRef: tileRefsSeeds.Starweaver, name: "Starweaver Pod", coinPrice: 1e9, creditPrice: 1e3, rarity: rarity.Celestial }, plant: { tileRef: tileRefsPlants.StarweaverPlant, name: "Starweaver Plant", harvestType: harvestType.Multiple, slotOffsets: [{ x: 0.5, y: -0.158, rotation: 0 }], secondsToMature: 1440 * 60, baseTileScale: 1.5, rotateSlotOffsetsRandomly: false, nudgeY: 0.25 }, crop: { tileRef: tileRefsPlants.Starweaver, name: "Starweaver Fruit", baseSellPrice: 1e7, baseWeight: 10, baseTileScale: 0.6, maxScale: 2 } } };
-  var mutationCatalog = { Gold: { name: "Gold", baseChance: 0.01, coinMultiplier: 25 }, Rainbow: { name: "Rainbow", baseChance: 1e-3, coinMultiplier: 50 }, Wet: { name: "Wet", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Wet }, Chilled: { name: "Chilled", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Chilled }, Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen }, Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit }, Ambershine: { name: "Ambershine", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Ambershine } };
+  var plantCatalog = {
+    Carrot: {
+      seed: { tileRef: tileRefsSeeds.Carrot, name: "Carrot Seed", coinPrice: 10, creditPrice: 7, rarity: rarity.Common },
+      plant: { tileRef: tileRefsPlants.BabyCarrot, name: "Carrot Plant", harvestType: harvestType.Single, baseTileScale: 0.7 },
+      crop: { tileRef: tileRefsPlants.Carrot, name: "Carrot", baseSellPrice: 20, baseWeight: 0.1, baseTileScale: 0.6, maxScale: 3 }
+    },
+    Strawberry: {
+      seed: { tileRef: tileRefsSeeds.Strawberry, name: "Strawberry Seed", coinPrice: 50, creditPrice: 21, rarity: rarity.Common },
+      plant: {
+        tileRef: tileRefsPlants.SproutFruit,
+        name: "Strawberry Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }],
+        secondsToMature: 70,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true
+      },
+      crop: { tileRef: tileRefsPlants.Strawberry, name: "Strawberry", baseSellPrice: 14, baseWeight: 0.05, baseTileScale: 0.25, maxScale: 2 }
+    },
+    Aloe: {
+      seed: { tileRef: tileRefsSeeds.Aloe, name: "Aloe Seed", coinPrice: 135, creditPrice: 18, rarity: rarity.Common },
+      plant: { tileRef: tileRefsPlants.AloePlant, name: "Aloe Plant", harvestType: harvestType.Single, baseTileScale: 0.9 },
+      crop: { tileRef: tileRefsPlants.Aloe, name: "Aloe", baseSellPrice: 310, baseWeight: 1.5, baseTileScale: 0.7, maxScale: 2.5 }
+    },
+    Blueberry: {
+      seed: { tileRef: tileRefsSeeds.Blueberry, name: "Blueberry Seed", coinPrice: 400, creditPrice: 49, rarity: rarity.Uncommon },
+      plant: {
+        tileRef: tileRefsPlants.SproutFruit,
+        name: "Blueberry Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.3, y: 0.4, rotation: 85 }, { x: 0.675, y: 0.3, rotation: 195 }, { x: 0.32, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.51, rotation: 0 }],
+        secondsToMature: 105,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true
+      },
+      crop: { tileRef: tileRefsPlants.Blueberry, name: "Blueberry", baseSellPrice: 23, baseWeight: 0.01, baseTileScale: 0.25, maxScale: 2 }
+    },
+    Apple: {
+      seed: { tileRef: tileRefsSeeds.Apple, name: "Apple Seed", coinPrice: 500, creditPrice: 67, rarity: rarity.Uncommon, unavailableSurfaces: ["discord"] },
+      plant: {
+        tileRef: tileRefsTallPlants.Tree,
+        name: "Apple Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.15, y: -1.9, rotation: -90 }, { x: 0, y: -1.5, rotation: -75 }, { x: 0.6, y: -1.7, rotation: -60 }, { x: 0.3, y: -1.15, rotation: -55 }, { x: 1.05, y: -1.4, rotation: -45 }, { x: 0.8, y: -1.2, rotation: -35 }, { x: 0.9, y: 0.6, rotation: -30 }],
+        secondsToMature: 360 * 60,
+        baseTileScale: 3,
+        rotateSlotOffsetsRandomly: false,
+        tileTransformOrigin: "bottom",
+        nudgeY: 0.25
+      },
+      crop: { tileRef: tileRefsPlants.Apple, name: "Apple", baseSellPrice: 73, baseWeight: 0.18, baseTileScale: 0.5, maxScale: 2 }
+    },
+    OrangeTulip: {
+      seed: { tileRef: tileRefsSeeds.Tulip, name: "Tulip Seed", coinPrice: 600, creditPrice: 14, rarity: rarity.Uncommon },
+      plant: { tileRef: tileRefsPlants.Tulip, name: "Tulip Plant", harvestType: harvestType.Single, baseTileScale: 0.5 },
+      crop: { tileRef: tileRefsPlants.Tulip, name: "Tulip", baseSellPrice: 767, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 }
+    },
+    Tomato: {
+      seed: { tileRef: tileRefsSeeds.Tomato, name: "Tomato Seed", coinPrice: 800, creditPrice: 79, rarity: rarity.Uncommon },
+      plant: {
+        tileRef: tileRefsPlants.SproutVine,
+        name: "Tomato Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }],
+        secondsToMature: 1100,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: { tileRef: tileRefsPlants.Tomato, name: "Tomato", baseSellPrice: 27, baseWeight: 0.3, baseTileScale: 0.33, maxScale: 2 }
+    },
+    Daffodil: {
+      seed: { tileRef: tileRefsSeeds.Daffodil, name: "Daffodil Seed", coinPrice: 1e3, creditPrice: 19, rarity: rarity.Rare },
+      plant: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil Plant", harvestType: harvestType.Single, baseTileScale: 0.5 },
+      crop: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil", baseSellPrice: 1090, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 }
+    },
+    Corn: {
+      seed: { tileRef: tileRefsSeeds.Corn, name: "Corn Kernel", coinPrice: 1300, creditPrice: 135, rarity: rarity.Rare },
+      plant: {
+        tileRef: tileRefsPlants.SproutVegetable,
+        name: "Corn Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.5, y: 0.4, rotation: 0 }],
+        secondsToMature: 130,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: { tileRef: tileRefsPlants.Corn, name: "Corn", baseSellPrice: 36, baseWeight: 1.2, baseTileScale: 0.7, maxScale: 2 }
+    },
+    Watermelon: {
+      seed: { tileRef: tileRefsSeeds.Watermelon, name: "Watermelon Seed", coinPrice: 2500, creditPrice: 195, rarity: rarity.Rare },
+      plant: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
+      crop: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon", baseSellPrice: 2708, baseWeight: 4.5, baseTileScale: 0.8, maxScale: 3 }
+    },
+    Pumpkin: {
+      seed: { tileRef: tileRefsSeeds.Pumpkin, name: "Pumpkin Seed", coinPrice: 3e3, creditPrice: 210, rarity: rarity.Rare },
+      plant: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
+      crop: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin", baseSellPrice: 3700, baseWeight: 6, baseTileScale: 0.8, maxScale: 3 }
+    },
+    Echeveria: {
+      seed: { tileRef: tileRefsSeeds.Echeveria, name: "Echeveria Cutting", coinPrice: 4200, creditPrice: 113, rarity: rarity.Legendary },
+      plant: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
+      crop: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria", baseSellPrice: 4600, baseWeight: 0.8, baseTileScale: 0.8, maxScale: 2.75 }
+    },
+    Coconut: {
+      seed: { tileRef: tileRefsSeeds.Coconut, name: "Coconut Seed", coinPrice: 6e3, creditPrice: 235, rarity: rarity.Legendary },
+      plant: {
+        tileRef: tileRefsTallPlants.PalmTree,
+        name: "Coconut Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.3, y: -2.1, rotation: 0 }, { x: 0.2, y: -1.9, rotation: 51.4 }, { x: 0.7, y: -2, rotation: 102.9 }, { x: 0.25, y: -1.6, rotation: 154.3 }, { x: 0.5, y: -1.8, rotation: 205.7 }, { x: 0.8, y: -1.7, rotation: 257.1 }, { x: 0.55, y: -1.5, rotation: 308.6 }],
+        secondsToMature: 720 * 60,
+        baseTileScale: 3,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: 0.15
+      },
+      crop: { tileRef: tileRefsPlants.Coconut, name: "Coconut", baseSellPrice: 302, baseWeight: 5, baseTileScale: 0.25, maxScale: 3 }
+    },
+    Banana: {
+      seed: {
+        tileRef: tileRefsSeeds.Banana,
+        name: "Banana Seed",
+        coinPrice: 7500,
+        creditPrice: 199,
+        rarity: rarity.Legendary,
+        spawnRule: { type: "parity", parity: "even" }
+      },
+      plant: {
+        tileRef: tileRefsTallPlants.PalmTree,
+        name: "Banana Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.2, y: -1.2, rotation: 10 }, { x: 0.3, y: -1.2, rotation: -10 }, { x: 0.4, y: -1.2, rotation: -30 }, { x: 0.5, y: -1.2, rotation: -50 }, { x: 0.6, y: -1.2, rotation: -70 }],
+        secondsToMature: 14400,
+        baseTileScale: 2.5,
+        rotateSlotOffsetsRandomly: false,
+        tileTransformOrigin: "bottom",
+        nudgeY: 0.1
+      },
+      crop: { tileRef: tileRefsPlants.Banana, name: "Banana", baseSellPrice: 1750, baseWeight: 0.12, baseTileScale: 0.5, maxScale: 1.7 }
+    },
+    Lily: {
+      seed: { tileRef: tileRefsSeeds.Lily, name: "Lily Seed", coinPrice: 2e4, creditPrice: 34, rarity: rarity.Legendary },
+      plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: 0.4 },
+      crop: { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 }
+    },
+    BurrosTail: {
+      seed: { tileRef: tileRefsSeeds.BurrosTail, name: "Burro's Tail Cutting", coinPrice: 93e3, creditPrice: 338, rarity: rarity.Legendary },
+      plant: {
+        tileRef: tileRefsPlants.Trellis,
+        name: "Burro's Tail Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.37, y: 0.4, rotation: 0 }, { x: 0.67, y: 0.63, rotation: 0 }],
+        secondsToMature: 1800,
+        baseTileScale: 0.8,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: { tileRef: tileRefsPlants.BurrosTail, name: "Burro's Tail", baseSellPrice: 6e3, baseWeight: 0.4, baseTileScale: 0.4, maxScale: 2.5 }
+    },
+    Mushroom: {
+      seed: { tileRef: tileRefsSeeds.Mushroom, name: "Mushroom Spore", coinPrice: 15e4, creditPrice: 249, rarity: rarity.Mythic },
+      plant: { tileRef: tileRefsPlants.MushroomPlant, name: "Mushroom Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
+      crop: { tileRef: tileRefsPlants.Mushroom, name: "Mushroom", baseSellPrice: 16e4, baseWeight: 25, baseTileScale: 0.8, maxScale: 3.5 }
+    },
+    Cactus: {
+      seed: { tileRef: tileRefsSeeds.Cactus, name: "Cactus Seed", coinPrice: 25e4, creditPrice: 250, rarity: rarity.Mythic },
+      plant: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.15 },
+      crop: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus", baseSellPrice: 261e3, baseWeight: 1500, baseTileScale: 2.5, maxScale: 1.8 }
+    },
+    Bamboo: {
+      seed: { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 4e5, creditPrice: 300, rarity: rarity.Mythic },
+      plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: 0.1 },
+      crop: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 5e5, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 }
+    },
+    Grape: {
+      seed: {
+        tileRef: tileRefsSeeds.Grape,
+        name: "Grape Seed",
+        coinPrice: 85e4,
+        creditPrice: 599,
+        rarity: rarity.Mythic,
+        spawnRule: { type: "suffix", value: "1" }
+      },
+      plant: {
+        tileRef: tileRefsPlants.SproutVine,
+        name: "Grape Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.5, y: 0.5, rotation: 0 }],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: { tileRef: tileRefsPlants.Grape, name: "Grape", baseSellPrice: 7085, baseWeight: 3, baseTileScale: 0.5, maxScale: 2 }
+    },
+    Pepper: {
+      seed: { tileRef: tileRefsSeeds.Pepper, name: "Pepper Seed", coinPrice: 1e6, creditPrice: 629, rarity: rarity.Divine },
+      plant: {
+        tileRef: tileRefsPlants.SproutVine,
+        name: "Pepper Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.1, y: 0.1, rotation: 0 }, { x: 0.9, y: 0.1, rotation: 0 }, { x: 0.3, y: 0.3, rotation: 0 }, { x: 0.7, y: 0.3, rotation: 0 }, { x: 0.5, y: 0.5, rotation: 0 }, { x: 0.3, y: 0.7, rotation: 0 }, { x: 0.7, y: 0.7, rotation: 0 }, { x: 0.1, y: 0.9, rotation: 0 }, { x: 0.9, y: 0.9, rotation: 0 }],
+        secondsToMature: 560,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true
+      },
+      crop: { tileRef: tileRefsPlants.Pepper, name: "Pepper", baseSellPrice: 7220, baseWeight: 0.5, baseTileScale: 0.3, maxScale: 2 }
+    },
+    Lemon: {
+      seed: {
+        tileRef: tileRefsSeeds.Lemon,
+        name: "Lemon Seed",
+        coinPrice: 2e6,
+        creditPrice: 500,
+        rarity: rarity.Divine,
+        spawnRule: { type: "suffix", value: "2" }
+      },
+      plant: {
+        tileRef: tileRefsTallPlants.Tree,
+        name: "Lemon Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0, y: -1, rotation: 85 }, { x: 0.9, y: -1.1, rotation: 195 }, { x: 0.2, y: -0.68, rotation: 340 }, { x: 0.7, y: -0.7, rotation: 280 }, { x: 0.51, y: -1, rotation: 0 }, { x: 0.45, y: -1.3, rotation: 280 }],
+        secondsToMature: 720 * 60,
+        baseTileScale: 2.3,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: 0.25
+      },
+      crop: { tileRef: tileRefsPlants.Lemon, name: "Lemon", baseSellPrice: 1e4, baseWeight: 0.5, baseTileScale: 0.25, maxScale: 3 }
+    },
+    PassionFruit: {
+      seed: { tileRef: tileRefsSeeds.PassionFruit, name: "Passion Fruit Seed", coinPrice: 275e4, creditPrice: 679, rarity: rarity.Divine },
+      plant: {
+        tileRef: tileRefsPlants.SproutVine,
+        name: "Passion Fruit Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.2, y: 0.2, rotation: 0 }, { x: 0.8, y: 0.8, rotation: 0 }],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1.1,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: { tileRef: tileRefsPlants.PassionFruit, name: "Passion Fruit", baseSellPrice: 24500, baseWeight: 9.5, baseTileScale: 0.35, maxScale: 2 }
+    },
+    DragonFruit: {
+      seed: { tileRef: tileRefsSeeds.DragonFruit, name: "Dragon Fruit Seed", coinPrice: 5e6, creditPrice: 715, rarity: rarity.Divine },
+      plant: {
+        tileRef: tileRefsPlants.PalmTreeTop,
+        name: "Dragon Fruit Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.2, y: 0.1, rotation: 0 }, { x: 0.1, y: 0.45, rotation: 51.4 }, { x: 0.86, y: 0.2, rotation: 102.9 }, { x: 0.25, y: 0.8, rotation: 154.3 }, { x: 0.5, y: 0.4, rotation: 205.7 }, { x: 0.9, y: 0.6, rotation: 257.1 }, { x: 0.6, y: 0.7, rotation: 308.6 }],
+        secondsToMature: 600,
+        baseTileScale: 1.6,
+        rotateSlotOffsetsRandomly: true
+      },
+      crop: { tileRef: tileRefsPlants.DragonFruit, name: "Dragon Fruit", baseSellPrice: 24500, baseWeight: 8.4, baseTileScale: 0.4, maxScale: 2 }
+    },
+    Lychee: {
+      seed: {
+        tileRef: tileRefsSeeds.Lychee,
+        name: "Lychee Pit",
+        coinPrice: 25e6,
+        creditPrice: 819,
+        rarity: rarity.Divine,
+        spawnRule: { type: "suffix", value: "2" }
+      },
+      plant: {
+        tileRef: tileRefsPlants.BushyTree,
+        name: "Lychee Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.1, y: 0.4, rotation: 85 }, { x: 0.8, y: 0.3, rotation: 195 }, { x: 0.2, y: 0.72, rotation: 340 }, { x: 0.7, y: 0.7, rotation: 280 }, { x: 0.51, y: 0.4, rotation: 0 }, { x: 0.3, y: 0.2, rotation: 280 }],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1.2,
+        rotateSlotOffsetsRandomly: true
+      },
+      crop: { tileRef: tileRefsPlants.Lychee, name: "Lychee Fruit", baseSellPrice: 5e4, baseWeight: 9, baseTileScale: 0.2, maxScale: 2 }
+    },
+    Sunflower: {
+      seed: { tileRef: tileRefsSeeds.Sunflower, name: "Sunflower Seed", coinPrice: 1e8, creditPrice: 900, rarity: rarity.Divine },
+      plant: {
+        tileRef: tileRefsPlants.StemFlower,
+        name: "Sunflower Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.51, y: -0.1, rotation: 0 }],
+        secondsToMature: 1440 * 60,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        baseTileScale: 0.8,
+        nudgeY: 0.15
+      },
+      crop: { tileRef: tileRefsPlants.Sunflower, name: "Sunflower", baseSellPrice: 75e4, baseWeight: 10, baseTileScale: 0.5, maxScale: 2.5 }
+    },
+    Starweaver: {
+      seed: { tileRef: tileRefsSeeds.Starweaver, name: "Starweaver Pod", coinPrice: 1e9, creditPrice: 1e3, rarity: rarity.Celestial },
+      plant: {
+        tileRef: tileRefsPlants.StarweaverPlant,
+        name: "Starweaver Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{ x: 0.5, y: -0.158, rotation: 0 }],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1.5,
+        rotateSlotOffsetsRandomly: false,
+        nudgeY: 0.25
+      },
+      crop: { tileRef: tileRefsPlants.Starweaver, name: "Starweaver Fruit", baseSellPrice: 1e7, baseWeight: 10, baseTileScale: 0.6, maxScale: 2 }
+    },
+    DawnCelestial: {
+      seed: { tileRef: tileRefsSeeds.DawnCelestial, name: "Sunbriar Pod", coinPrice: 1e10, creditPrice: 1129, rarity: rarity.Celestial },
+      plant: { tileRef: tileRefsPlants.DawnCelestialPlant, name: "Sunbriar", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.3 },
+      crop: { tileRef: tileRefsPlants.DawnCelestial, name: "Sunbriar Bulb", baseSellPrice: 11e6, baseWeight: 6, baseTileScale: 0.4, maxScale: 2.5 }
+    },
+    MoonCelestial: {
+      seed: { tileRef: tileRefsSeeds.MoonCelestial, name: "Mooncatcher Pod", coinPrice: 5e10, creditPrice: 1249, rarity: rarity.Celestial },
+      plant: { tileRef: tileRefsPlants.MoonCelestialPlant, name: "Mooncatcher", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.5 },
+      crop: { tileRef: tileRefsPlants.MoonCelestial, name: "Mooncatcher Bulb", baseSellPrice: 11e6, baseWeight: 2, baseTileScale: 0.4, maxScale: 2 }
+    }
+  };
+  var mutationCatalog = {
+    Gold: { name: "Gold", baseChance: 0.01, coinMultiplier: 25 },
+    Rainbow: { name: "Rainbow", baseChance: 1e-3, coinMultiplier: 50 },
+    Wet: { name: "Wet", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Wet },
+    Chilled: { name: "Chilled", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Chilled },
+    Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
+    Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit },
+    Ambershine: { name: "Amberlit", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Ambershine },
+    Dawncharged: { name: "Dawn Radiant", baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
+    Ambercharged: { name: "Amber Radiant", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }
+  };
   var eggCatalog = {
     CommonEgg: { tileRef: tileRefsPets.CommonEgg, name: "Common Egg", coinPrice: 1e5, creditPrice: 19, rarity: rarity.Common, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 600, faunaSpawnWeights: { Worm: 60, Snail: 35, Bee: 5 } },
     UncommonEgg: { tileRef: tileRefsPets.UncommonEgg, name: "Uncommon Egg", coinPrice: 1e6, creditPrice: 48, rarity: rarity.Uncommon, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 3600, faunaSpawnWeights: { Chicken: 65, Bunny: 25, Dragonfly: 10 } },
@@ -1693,7 +2146,49 @@
       baseParameters: {}
     }
   };
-  var toolCatalog = { WateringCan: { tileRef: tileRefsItems.WateringCan, name: "Watering Can", coinPrice: 5e3, creditPrice: 2, rarity: rarity.Common, description: "Speeds up growth of plant by 5 minutes. SINGLE USE.", isOneTimePurchase: false, baseTileScale: 0.6, maxInventoryQuantity: 99 }, PlanterPot: { tileRef: tileRefsItems.PlanterPot, name: "Planter Pot", coinPrice: 25e3, creditPrice: 5, rarity: rarity.Common, description: "Extract a plant to your inventory (can be replanted). SINGLE USE.", isOneTimePurchase: false, baseTileScale: 0.8 }, Shovel: { tileRef: tileRefsItems.Shovel, name: "Shovel", coinPrice: 1e6, creditPrice: 100, rarity: rarity.Uncommon, description: "Remove plants from your garden. UNLIMITED USES.", isOneTimePurchase: true, baseTileScale: 0.7 }, RainbowPotion: { tileRef: tileRefsItems.RainbowPotion, name: "Rainbow Potion", coinPrice: 1 / 0, creditPrice: 1 / 0, rarity: rarity.Celestial, description: "Adds the Rainbow mutation to a crop in your garden. SINGLE USE.", isOneTimePurchase: true, baseTileScale: 1 } };
+  var toolCatalog = {
+    WateringCan: {
+      tileRef: tileRefsItems.WateringCan,
+      name: "Watering Can",
+      coinPrice: 5e3,
+      creditPrice: 2,
+      rarity: rarity.Common,
+      description: "Speeds up growth of plant by 5 minutes. SINGLE USE.",
+      isOneTimePurchase: false,
+      baseTileScale: 0.6,
+      maxInventoryQuantity: 99
+    },
+    PlanterPot: {
+      tileRef: tileRefsItems.PlanterPot,
+      name: "Planter Pot",
+      coinPrice: 25e3,
+      creditPrice: 5,
+      rarity: rarity.Common,
+      description: "Extract a plant to your inventory (can be replanted). SINGLE USE.",
+      isOneTimePurchase: false,
+      baseTileScale: 0.8
+    },
+    Shovel: {
+      tileRef: tileRefsItems.Shovel,
+      name: "Shovel",
+      coinPrice: 1e6,
+      creditPrice: 100,
+      rarity: rarity.Uncommon,
+      description: "Remove plants from your garden. UNLIMITED USES.",
+      isOneTimePurchase: true,
+      baseTileScale: 0.7
+    },
+    RainbowPotion: {
+      tileRef: tileRefsItems.RainbowPotion,
+      name: "Rainbow Potion",
+      coinPrice: 1 / 0,
+      creditPrice: 1 / 0,
+      rarity: rarity.Celestial,
+      description: "Adds the Rainbow mutation to a crop in your garden. SINGLE USE.",
+      isOneTimePurchase: true,
+      baseTileScale: 1
+    }
+  };
   var decorCatalog = {
     // Rochers
     SmallRock: {
@@ -1978,8 +2473,8 @@
     await gate.openAction();
   }
   async function _ensureFakeInstalled(config) {
-    const key = config.label;
-    const existing = _fakeRegistry.get(key);
+    const key2 = config.label;
+    const existing = _fakeRegistry.get(key2);
     if (existing?.installed) return existing;
     const atoms = _atomsByExactLabel(config.label);
     if (!atoms.length) throw new Error(`${config.label} introuvable`);
@@ -2026,7 +2521,7 @@
       });
     }
     state2.installed = true;
-    _fakeRegistry.set(key, state2);
+    _fakeRegistry.set(key2, state2);
     return state2;
   }
   async function fakeShow(config, payload, options) {
@@ -2146,6 +2641,11 @@
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openInventoryPanel();
+  }
+  async function fakeInventoryHide() {
+    await fakeHide(INVENTORY_ATOM_PATCH.label);
+    await fakeHide(SHARED_MYDATA_PATCH.label);
+    await closeInventoryPanel();
   }
   var JOURNAL_MODAL_ID = "journal";
   async function openJournalModal() {
@@ -2592,15 +3092,15 @@
       return wrap;
     }
     /** Bind LS: sauvegarde automatique via toStr/parse */
-    bindLS(key, read, write, parse, toStr) {
+    bindLS(key2, read, write, parse, toStr) {
       try {
-        const raw = localStorage.getItem(key);
+        const raw = localStorage.getItem(key2);
         if (raw != null) write(parse(raw));
       } catch {
       }
       return { save: () => {
         try {
-          localStorage.setItem(key, toStr(read()));
+          localStorage.setItem(key2, toStr(read()));
         } catch {
         }
       } };
@@ -3382,13 +3882,13 @@
   }
   var _AB = petAbilities ?? {};
   function _abilityName(id) {
-    const key = String(id ?? "");
-    const raw = typeof _AB?.[key]?.name === "string" && _AB[key].name.trim() ? _AB[key].name : key;
+    const key2 = String(id ?? "");
+    const raw = typeof _AB?.[key2]?.name === "string" && _AB[key2].name.trim() ? _AB[key2].name : key2;
     return String(raw);
   }
   function _abilityNameWithoutLevel(id) {
-    const key = String(id ?? "");
-    const raw = typeof _AB?.[key]?.name === "string" && _AB[key].name.trim() ? _AB[key].name : key;
+    const key2 = String(id ?? "");
+    const raw = typeof _AB?.[key2]?.name === "string" && _AB[key2].name.trim() ? _AB[key2].name : key2;
     return String(raw).replace(/(?:\s+|-)?(?:I|II|III|IV|V|VI|VII|VIII|IX|X)\s*$/, "").trim();
   }
   function _parseTeamSearch(raw) {
@@ -3445,7 +3945,11 @@
   }
   async function clearHandSelection() {
     try {
-      await Atoms.shop.setSelectedIndexToEnd.set("null");
+      await Atoms.inventory.setSelectedIndexToEnd.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
     } catch {
     }
     try {
@@ -3468,7 +3972,7 @@
         return null;
       }
       try {
-        const v = await Atoms.shop.myValidatedSelectedItemIndex.get();
+        const v = await Atoms.inventory.myValidatedSelectedItemIndex.get();
         if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
       } catch {
       }
@@ -3729,9 +4233,9 @@
       return _abilityNameWithoutLevel(id);
     },
     getAbilityInfo(id) {
-      const key = String(id ?? "");
-      const def = _AB?.[key];
-      return def ? { id: key, ...def } : null;
+      const key2 = String(id ?? "");
+      const def = _AB?.[key2];
+      return def ? { id: key2, ...def } : null;
     },
     async chooseSlotPet(teamId, slotIndex, searchOverride) {
       const idx = Math.max(0, Math.min(2, Math.floor(slotIndex || 0)));
@@ -3977,6 +4481,7 @@
     _logsCutoffSkewMs: 1500,
     /** Starts the watcher on myPetSlotInfos and feeds the ring buffer. */
     async startAbilityLogsWatcher() {
+      await _ensureInventoryWatchersStarted();
       const indexInfosByPetId = (list) => {
         const out = {};
         const arr = Array.isArray(list) ? list : [];
@@ -4562,7 +5067,7 @@
       return;
     }
     const launchEl = launch;
-    (function makeDraggable() {
+    (function makeDraggable2() {
       let sx = 0, sy = 0, or = 0, ob = 0, down = false;
       header.addEventListener("mousedown", (e) => {
         down = true;
@@ -5640,6 +6145,244 @@
     await sendToast({ title, description, variant, duration });
   }
 
+  // src/utils/calculators.ts
+  var key = (s) => String(s ?? "").trim();
+  function resolveSpeciesKey(species) {
+    const wanted = key(species).toLowerCase();
+    if (!wanted) return null;
+    for (const k of Object.keys(plantCatalog)) {
+      if (k.toLowerCase() === wanted) return k;
+    }
+    return null;
+  }
+  function findAnySellPriceNode(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
+      return obj.baseSellPrice;
+    }
+    for (const k of ["produce", "crop", "item", "items", "data"]) {
+      if (obj[k]) {
+        const v = findAnySellPriceNode(obj[k]);
+        if (v != null) return v;
+      }
+    }
+    try {
+      const seen = /* @__PURE__ */ new Set();
+      const stack = [obj];
+      while (stack.length) {
+        const cur = stack.pop();
+        if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+        seen.add(cur);
+        if (typeof cur.baseSellPrice === "number") {
+          const v = cur.baseSellPrice;
+          if (Number.isFinite(v)) return v;
+        }
+        for (const v of Object.values(cur)) if (v && typeof v === "object") stack.push(v);
+      }
+    } catch {
+    }
+    return null;
+  }
+  function defaultGetBasePrice(species) {
+    const spKey = resolveSpeciesKey(species);
+    if (!spKey) return null;
+    const node = plantCatalog[spKey];
+    const cands = [
+      node?.produce?.baseSellPrice,
+      node?.crop?.baseSellPrice,
+      node?.item?.baseSellPrice,
+      node?.items?.Produce?.baseSellPrice
+    ].filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (cands.length) return cands[0];
+    return findAnySellPriceNode(node);
+  }
+  function applyRounding(v, mode = "round") {
+    switch (mode) {
+      case "floor":
+        return Math.floor(v);
+      case "ceil":
+        return Math.ceil(v);
+      case "none":
+        return v;
+      case "round":
+      default:
+        return Math.round(v);
+    }
+  }
+  function friendBonusMultiplier(playersInRoom) {
+    if (!Number.isFinite(playersInRoom)) return 1;
+    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
+    return 1 + (n - 1) * 0.1;
+  }
+  var COLOR_MULT = {
+    Gold: 25,
+    Rainbow: 50
+  };
+  var WEATHER_MULT = {
+    Wet: 2,
+    Chilled: 2,
+    Frozen: 10
+  };
+  var TIME_MULT = {
+    Dawnlit: 2,
+    Dawnbound: 3,
+    Amberlit: 5,
+    Amberbound: 6
+  };
+  var WEATHER_TIME_COMBO = {
+    "Wet+Dawnlit": 3,
+    "Chilled+Dawnlit": 3,
+    "Wet+Amberlit": 6,
+    "Chilled+Amberlit": 6,
+    "Frozen+Dawnlit": 11,
+    "Frozen+Dawnbound": 12,
+    "Frozen+Amberlit": 14,
+    "Frozen+Amberbound": 15
+  };
+  function isColor(m) {
+    return m === "Gold" || m === "Rainbow";
+  }
+  function isWeather(m) {
+    return m === "Wet" || m === "Chilled" || m === "Frozen";
+  }
+  function isTime(m) {
+    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
+  }
+  function normalizeMutationName(m) {
+    const s = key(m).toLowerCase();
+    if (!s) return "";
+    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
+    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+    if (s === "gold") return "Gold";
+    if (s === "rainbow") return "Rainbow";
+    if (s === "wet") return "Wet";
+    if (s === "chilled") return "Chilled";
+    if (s === "frozen") return "Frozen";
+    if (s === "dawnlit") return "Dawnlit";
+    if (s === "dawnbound") return "Dawnbound";
+    if (s === "amberlit") return "Amberlit";
+    if (s === "amberbound") return "Amberbound";
+    return m;
+  }
+  function computeColorMultiplier(mutations) {
+    if (!Array.isArray(mutations)) return 1;
+    let best = 1;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isColor(m)) {
+        const mult = COLOR_MULT[m];
+        if (mult > best) best = mult;
+      }
+    }
+    return best;
+  }
+  function pickWeather(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isWeather(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function pickTime(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isTime(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function computeWeatherTimeMultiplier(weather, time) {
+    if (!weather && !time) return 1;
+    if (weather && !time) return WEATHER_MULT[weather];
+    if (!weather && time) return TIME_MULT[time];
+    const k = `${weather}+${time}`;
+    const combo = WEATHER_TIME_COMBO[k];
+    if (typeof combo === "number") return combo;
+    return Math.max(WEATHER_MULT[weather], TIME_MULT[time]);
+  }
+  function mutationsMultiplier(mutations) {
+    const color = computeColorMultiplier(mutations);
+    const weather = pickWeather(mutations);
+    const time = pickTime(mutations);
+    const wt = computeWeatherTimeMultiplier(weather, time);
+    return color * wt;
+  }
+  function estimateProduceValue(species, scale, mutations, opts) {
+    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
+    const sXform = opts?.scaleTransform ?? ((_, s) => s);
+    const round = opts?.rounding ?? "round";
+    const base = getBase(species);
+    if (!(Number.isFinite(base) && base > 0)) return 0;
+    const sc = Number(scale);
+    if (!Number.isFinite(sc) || sc <= 0) return 0;
+    const effScale = sXform(species, sc);
+    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
+    const mutMult = mutationsMultiplier(mutations);
+    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
+    const pre = base * effScale * mutMult * friendsMult;
+    const out = Math.max(0, applyRounding(pre, round));
+    return out;
+  }
+  function valueFromInventoryProduce(item, opts, playersInRoom) {
+    if (!item || item.itemType !== "Produce") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
+  }
+  function valueFromGardenSlot(slot, opts, playersInRoom) {
+    if (!slot) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
+  }
+  function valueFromGardenPlant(plant, opts, playersInRoom) {
+    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
+    return sum;
+  }
+  function sumInventoryValue(items, opts, playersInRoom) {
+    if (!Array.isArray(items)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const it of items) {
+      if (it?.itemType === "Produce") {
+        sum += valueFromInventoryProduce(it, merged);
+      }
+    }
+    return sum;
+  }
+  function sumGardenValue(garden2, opts, playersInRoom) {
+    if (!garden2 || typeof garden2 !== "object") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const k of Object.keys(garden2)) {
+      const p = garden2[k];
+      if (p?.objectType === "plant") {
+        sum += valueFromGardenPlant(p, merged);
+      }
+    }
+    return sum;
+  }
+  var DefaultPricing = Object.freeze({
+    getBasePrice: defaultGetBasePrice,
+    rounding: "round"
+  });
+
   // src/services/players.ts
   function findPlayersDeep(state2) {
     if (!state2 || typeof state2 !== "object") return [];
@@ -5713,6 +6456,15 @@
     ])) : void 0;
     return { produce: normProduce, pets: normPets };
   }
+  function extractGardenFromSlot(slot) {
+    const g = slot?.data?.garden ?? slot?.garden;
+    if (!g || typeof g !== "object") return null;
+    const to = g.tileObjects;
+    const bto = g.boardwalkTileObjects;
+    const tileObjects = to && typeof to === "object" ? to : {};
+    const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
+    return { tileObjects, boardwalkTileObjects };
+  }
   function getSlotByPlayerId(st, playerId) {
     for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
     return null;
@@ -5755,6 +6507,19 @@
       }
     }
     return out;
+  }
+  function clampPlayers(n) {
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v)) return 1;
+    return Math.max(1, Math.min(6, v));
+  }
+  async function getPlayersInRoom() {
+    try {
+      const raw = await Atoms.server.numPlayers.get();
+      return clampPlayers(raw);
+    } catch {
+      return 1;
+    }
   }
   var __cachedSpawnTiles = null;
   var __spawnLoadPromise = null;
@@ -5884,6 +6649,12 @@
       const j = extractJournalFromSlot(slot);
       return j ? normJournal(j) : null;
     },
+    async getGarden(playerId) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId);
+      return extractGardenFromSlot(slot);
+    },
     async getGardenPosition(playerId) {
       const list = await this.list();
       const p = list.find((x) => String(x.id) === String(playerId));
@@ -5923,6 +6694,27 @@
       const x = tileId % cols, y = Math.floor(tileId / cols);
       await PlayerService.teleport(x, y);
       await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}'s garden`, "success");
+    },
+    async getInventoryValue(playerId, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const inv = await this.getInventory(playerId);
+        const items = Array.isArray(inv?.items) ? inv.items : [];
+        if (!items.length) return 0;
+        return sumInventoryValue(items, opts, playersInRoom);
+      } catch {
+        return 0;
+      }
+    },
+    async getGardenValue(playerId, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const garden2 = await this.getGarden(playerId);
+        if (!garden2) return 0;
+        return sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
+      } catch {
+        return 0;
+      }
     },
     /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
     async openInventoryPreview(playerId, playerName) {
@@ -6098,6 +6890,7 @@
   async function readPlayers() {
     return PlayersService.list();
   }
+  var NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
   function truncateLabel(s, max = 22) {
     if (!s) return "";
     return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
@@ -6151,6 +6944,12 @@
     r.style.justifyContent = "center";
     r.style.flexWrap = "wrap";
     r.style.gap = "6px";
+    return r;
+  }
+  function rowLeft() {
+    const r = rowCenter();
+    r.style.justifyContent = "flex-start";
+    r.style.width = "100%";
     return r;
   }
   function ensureVtabsListScrollable(vtabsRoot) {
@@ -6257,6 +7056,31 @@
       info.style.opacity = "0.9";
       prof.append(head, info);
       col.appendChild(prof);
+      const infoWrap = document.createElement("div");
+      infoWrap.style.display = "grid";
+      infoWrap.style.gap = "6px";
+      infoWrap.style.justifySelf = "stretch";
+      infoWrap.style.width = "100%";
+      const invValueRow = rowLeft();
+      const invLabel = document.createElement("div");
+      invLabel.textContent = "Inventory: ";
+      invLabel.style.fontSize = "14px";
+      invLabel.style.opacity = "0.85";
+      const invValue = document.createElement("div");
+      invValue.textContent = "\u2026";
+      invValue.style.fontWeight = "700";
+      invValueRow.append(invLabel, invValue);
+      const gardenValueRow = rowLeft();
+      const gardenLabel = document.createElement("div");
+      gardenLabel.textContent = "Garden: ";
+      gardenLabel.style.fontSize = "14px";
+      gardenLabel.style.opacity = "0.85";
+      const gardenValue = document.createElement("div");
+      gardenValue.textContent = "\u2026";
+      gardenValue.style.fontWeight = "700";
+      gardenValueRow.append(gardenLabel, gardenValue);
+      infoWrap.append(invValueRow, gardenValueRow);
+      col.appendChild(sectionFramed("Informations", infoWrap));
       const teleRow = rowCenter();
       const btnToPlayer = document.createElement("button");
       const btnToGarden = document.createElement("button");
@@ -6331,6 +7155,22 @@
       });
       funRow.append(label2, sw);
       col.appendChild(sectionFramed("Fun", funRow));
+      (async () => {
+        try {
+          const total = await PlayersService.getInventoryValue(p.id);
+          invValue.textContent = `${NF_US_INT.format(Math.round(total))} coins`;
+          invValue.title = "Total inventory value";
+        } catch {
+          invValue.textContent = "\u2014";
+        }
+        try {
+          const total = await PlayersService.getGardenValue(p.id);
+          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))} coins`;
+          gardenValue.title = "Total garden value";
+        } catch {
+          gardenValue.textContent = "\u2014";
+        }
+      })();
     }
     let players = [];
     let lastSig = "";
@@ -6404,9 +7244,9 @@
   var activeTeamId = null;
   var activePetIdSet = /* @__PURE__ */ new Set();
   function getAbilityChipColors(id) {
-    const key = String(id || "");
-    const base = (PetsService.getAbilityNameWithoutLevel?.(key) || "").replace(/[\s\-_]+/g, "").toLowerCase();
-    const is = (prefix) => key.startsWith(prefix) || base === prefix.toLowerCase();
+    const key2 = String(id || "");
+    const base = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
+    const is = (prefix) => key2.startsWith(prefix) || base === prefix.toLowerCase();
     if (is("ProduceScaleBoost")) return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
     if (is("PlantGrowthBoost")) return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
     if (is("EggGrowthBoost")) return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
@@ -6443,7 +7283,7 @@
       };
     }
     if (is("SeedFinder")) {
-      const lv = key.replace(/.*?([IVX]+)$/, "$1");
+      const lv = key2.replace(/.*?([IVX]+)$/, "$1");
       if (lv === "II") return { bg: "rgba(183,121,31,0.9)", hover: "rgba(183,121,31,1)" };
       if (lv === "III") return { bg: "rgba(139,62,152,0.9)", hover: "rgba(139,62,152,1)" };
       return { bg: "rgba(94,172,70,0.9)", hover: "rgba(94,172,70,1)" };
@@ -7653,49 +8493,40 @@
     ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
   }
 
-  // src/ui/menus/misc.ts
-  function centerRow() {
-    const r = document.createElement("div");
-    r.style.display = "flex";
-    r.style.flexWrap = "wrap";
-    r.style.justifyContent = "center";
-    r.style.alignItems = "center";
-    r.style.gap = "8px";
-    return r;
-  }
+  // src/services/misc.ts
   var LS_GHOST_KEY = "qws:player:ghostMode";
-  var readLS = (k, def = false) => {
+  var LS_DELAY_KEY = "qws:ghost:delayMs";
+  var DEFAULT_DELAY_MS = 50;
+  var readGhostEnabled = (def = false) => {
     try {
-      return localStorage.getItem(k) === "1";
+      return localStorage.getItem(LS_GHOST_KEY) === "1";
     } catch {
       return def;
     }
   };
-  var writeLS = (k, v) => {
+  var writeGhostEnabled = (v) => {
     try {
-      localStorage.setItem(k, v ? "1" : "0");
+      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
+    } catch {
+    }
+  };
+  var getGhostDelayMs = () => {
+    try {
+      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
+      return Math.max(5, n);
+    } catch {
+      return DEFAULT_DELAY_MS;
+    }
+  };
+  var setGhostDelayMs = (n) => {
+    const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+    try {
+      localStorage.setItem(LS_DELAY_KEY, String(v));
     } catch {
     }
   };
   function createGhostController() {
-    const LS_DELAY_KEY = "qws:ghost:delayMs";
-    const DEFAULT_DELAY_MS = 50;
-    const readDelay = () => {
-      try {
-        return Math.max(5, Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS));
-      } catch {
-        return DEFAULT_DELAY_MS;
-      }
-    };
-    let DELAY_MS = readDelay();
-    function setDelayMs(n) {
-      const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
-      DELAY_MS = v;
-      try {
-        localStorage.setItem(LS_DELAY_KEY, String(DELAY_MS));
-      } catch {
-      }
-    }
+    let DELAY_MS = getGhostDelayMs();
     const KEYS = /* @__PURE__ */ new Set();
     const onKeyDownCapture = (e) => {
       const k = e.key.toLowerCase();
@@ -7744,6 +8575,7 @@
       } catch {
       }
     }
+    const CAPTURE = { capture: true };
     function frame(ts) {
       if (!lastTs) lastTs = ts;
       const dt = ts - lastTs;
@@ -7775,8 +8607,8 @@
         lastTs = 0;
         accMs = 0;
         inMove = false;
-        window.addEventListener("keydown", onKeyDownCapture, { capture: true });
-        window.addEventListener("keyup", onKeyUpCapture, { capture: true });
+        window.addEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.addEventListener("keyup", onKeyUpCapture, CAPTURE);
         window.addEventListener("blur", onBlur);
         document.addEventListener("visibilitychange", onVisibility);
         rafId = requestAnimationFrame(frame);
@@ -7787,67 +8619,817 @@
           rafId = null;
         }
         KEYS.clear();
-        window.removeEventListener("keydown", onKeyDownCapture, { capture: true });
-        window.removeEventListener("keyup", onKeyUpCapture, { capture: true });
+        window.removeEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.removeEventListener("keyup", onKeyUpCapture, CAPTURE);
         window.removeEventListener("blur", onBlur);
         document.removeEventListener("visibilitychange", onVisibility);
       },
-      setSpeed: setDelayMs,
-      getSpeed: readDelay
+      setSpeed(n) {
+        const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+        DELAY_MS = v;
+        setGhostDelayMs(v);
+      },
+      getSpeed() {
+        return DELAY_MS;
+      }
     };
   }
+  var selectedMap = /* @__PURE__ */ new Map();
+  var seedStockByName = /* @__PURE__ */ new Map();
+  var seedSourceCache = [];
+  var NF_US = new Intl.NumberFormat("en-US");
+  var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
+  async function clearUiSelectionAtoms() {
+    try {
+      await Atoms.inventory.mySelectedItemName.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+    } catch {
+    }
+  }
+  var OVERLAY_ID = "qws-seeddeleter-overlay";
+  var LIST_ID = "qws-seeddeleter-list";
+  var SUMMARY_ID = "qws-seeddeleter-summary";
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function buildDisplayNameToSpeciesFromCatalog() {
+    const map2 = /* @__PURE__ */ new Map();
+    try {
+      const cat = plantCatalog;
+      for (const species of Object.keys(cat || {})) {
+        const seedName = cat?.[species]?.seed?.name && String(cat?.[species]?.seed?.name) || `${species} Seed`;
+        const arr = map2.get(seedName) ?? [];
+        arr.push(species);
+        map2.set(seedName, arr);
+      }
+    } catch {
+    }
+    return map2;
+  }
+  async function buildSpeciesStockFromInventory() {
+    const inv = await getMySeedInventory();
+    const stock = /* @__PURE__ */ new Map();
+    for (const it of inv) {
+      const q = Math.max(0, Math.floor(it.quantity || 0));
+      if (q > 0) stock.set(it.species, (stock.get(it.species) ?? 0) + q);
+    }
+    return stock;
+  }
+  function allocateForRequestedName(requested, nameToSpecies, speciesStock) {
+    let remaining = Math.max(0, Math.floor(requested.qty || 0));
+    let candidates = nameToSpecies.get(requested.name) ?? [];
+    if (!candidates.length && / seed$/i.test(requested.name)) {
+      const fallbackSpecies = requested.name.replace(/\s+seed$/i, "");
+      if (plantCatalog?.[fallbackSpecies]) candidates = [fallbackSpecies];
+    }
+    if (!candidates.length || remaining <= 0) return [];
+    const ranked = candidates.map((sp) => ({ sp, available: speciesStock.get(sp) ?? 0 })).filter((x) => x.available > 0).sort((a, b) => b.available - a.available);
+    const out = [];
+    for (const { sp, available } of ranked) {
+      if (remaining <= 0) break;
+      const take = Math.min(available, remaining);
+      if (take > 0) {
+        out.push({ species: sp, qty: take });
+        remaining -= take;
+      }
+    }
+    return out;
+  }
+  var _seedDeleteAbort = null;
+  var _seedDeleteBusy = false;
+  async function deleteSelectedSeeds(opts = {}) {
+    if (_seedDeleteBusy) {
+      await toastSimple("Seed deleter", "Deletion already in progress.", "info");
+      return;
+    }
+    const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
+    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 16));
+    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values())).map((s) => ({ name: s.name, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
+    if (selection.length === 0) {
+      await toastSimple("Seed deleter", "No seeds selected.", "info");
+      return;
+    }
+    const nameToSpecies = buildDisplayNameToSpeciesFromCatalog();
+    const speciesStock = await buildSpeciesStockFromInventory();
+    const allocatedBySpecies = /* @__PURE__ */ new Map();
+    let requestedTotal = 0, cappedTotal = 0;
+    for (const req of selection) {
+      requestedTotal += req.qty;
+      const chunks = allocateForRequestedName(req, nameToSpecies, speciesStock);
+      const okForThis = chunks.reduce((a, c) => a + c.qty, 0);
+      cappedTotal += okForThis;
+      for (const c of chunks) {
+        allocatedBySpecies.set(c.species, (allocatedBySpecies.get(c.species) ?? 0) + c.qty);
+      }
+    }
+    if (cappedTotal <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete (not in inventory).", "info");
+      return;
+    }
+    if (cappedTotal < requestedTotal) {
+      await toastSimple(
+        "Seed deleter",
+        `Requested ${formatNum(requestedTotal)} but only ${formatNum(cappedTotal)} available. Proceeding.`,
+        "info"
+      );
+    }
+    const tasks = Array.from(allocatedBySpecies.entries()).map(([species, qty]) => ({ species, qty: Math.max(0, Math.floor(qty || 0)) })).filter((t) => t.qty > 0);
+    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+    if (total <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete.", "info");
+      return;
+    }
+    _seedDeleteBusy = true;
+    const abort = new AbortController();
+    _seedDeleteAbort = abort;
+    try {
+      await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
+      let done = 0;
+      for (const t of tasks) {
+        let remaining = t.qty;
+        while (remaining > 0) {
+          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+          const n = Math.min(batchSize, remaining);
+          for (let i = 0; i < n; i++) {
+            try {
+              await PlayerService.wish(t.species);
+            } catch {
+            }
+          }
+          done += n;
+          remaining -= n;
+          try {
+            opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
+            window.dispatchEvent(new CustomEvent("qws:seeddeleter:progress", {
+              detail: { done, total, species: t.species, remainingForSpecies: remaining }
+            }));
+          } catch {
+          }
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+        }
+      }
+      if (!opts.keepSelection) selectedMap.clear();
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
+    } catch (e) {
+      const msg = e?.message || "Deletion failed.";
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", msg, "error");
+    } finally {
+      _seedDeleteBusy = false;
+      _seedDeleteAbort = null;
+    }
+  }
+  function cancelSeedDeletion() {
+    try {
+      _seedDeleteAbort?.abort();
+    } catch {
+    }
+  }
+  function isSeedDeletionRunning() {
+    return _seedDeleteBusy;
+  }
+  try {
+    window.addEventListener("qws:seeddeleter:apply", async (e) => {
+      try {
+        const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : void 0;
+        await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
+      } catch {
+      }
+    });
+  } catch {
+  }
+  function seedDisplayNameFromSpecies(species) {
+    try {
+      const node = plantCatalog?.[species];
+      const n = node?.seed?.name;
+      if (typeof n === "string" && n) return n;
+    } catch {
+    }
+    return `${species} Seed`;
+  }
+  function normalizeSeedItem(x, _idx) {
+    if (!x || typeof x !== "object") return null;
+    const species = typeof x.species === "string" ? x.species.trim() : "";
+    const itemType = x.itemType === "Seed" ? "Seed" : null;
+    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+    if (!species || itemType !== "Seed" || quantity <= 0) return null;
+    return { species, itemType: "Seed", quantity, id: `seed:${species}` };
+  }
+  async function getMySeedInventory() {
+    try {
+      const raw = await Atoms.inventory.mySeedInventory.get();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      raw.forEach((x, i) => {
+        const s = normalizeSeedItem(x, i);
+        if (s) out.push(s);
+      });
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function buildInventoryShapeFrom(items) {
+    return { items, favoritedItemIds: [] };
+  }
+  function setStyles(el2, styles) {
+    Object.assign(el2.style, styles);
+  }
+  function styleOverlayBox(div) {
+    div.id = OVERLAY_ID;
+    setStyles(div, {
+      position: "fixed",
+      left: "12px",
+      top: "12px",
+      zIndex: "999999",
+      display: "grid",
+      gridTemplateRows: "auto auto 1px 1fr auto",
+      gap: "6px",
+      minWidth: "320px",
+      maxWidth: "420px",
+      maxHeight: "52vh",
+      padding: "8px",
+      border: "1px solid #39424c",
+      borderRadius: "10px",
+      background: "rgba(22,27,34,0.92)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      backdropFilter: "blur(2px)",
+      userSelect: "none",
+      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
+      fontSize: "12px",
+      lineHeight: "1.25"
+    });
+    div.dataset["qwsSeedDeleter"] = "1";
+  }
+  function makeDraggable(root, handle) {
+    let dragging = false;
+    let ox = 0, oy = 0;
+    const onDown = (e) => {
+      dragging = true;
+      const r = root.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp, { once: true });
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const nx = Math.max(4, e.clientX - ox);
+      const ny = Math.max(4, e.clientY - oy);
+      root.style.left = `${nx}px`;
+      root.style.top = `${ny}px`;
+    };
+    const onUp = () => {
+      dragging = false;
+      document.removeEventListener("mousemove", onMove);
+    };
+    handle.addEventListener("mousedown", onDown);
+  }
+  function createButton(label2, styleOverride) {
+    const b = document.createElement("button");
+    b.textContent = label2;
+    setStyles(b, {
+      padding: "4px 8px",
+      borderRadius: "8px",
+      border: "1px solid #4446",
+      background: "#161b22",
+      color: "#E7EEF7",
+      cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "12px",
+      ...styleOverride
+    });
+    b.onmouseenter = () => b.style.borderColor = "#6aa1";
+    b.onmouseleave = () => b.style.borderColor = "#4446";
+    return b;
+  }
+  var overlayKeyGuardsOn = false;
+  function isInsideOverlay(el2) {
+    return !!(el2 && el2.closest?.(`#${OVERLAY_ID}`));
+  }
+  function keyGuardCapture(e) {
+    const ae = document.activeElement;
+    if (!isInsideOverlay(ae)) return;
+    const tag = (ae?.tagName || "").toLowerCase();
+    const isEditable = tag === "input" || tag === "textarea" || ae && ae.isContentEditable;
+    if (!isEditable) return;
+    if (/^[0-9]$/.test(e.key)) {
+      e.stopImmediatePropagation();
+    }
+  }
+  function installOverlayKeyGuards() {
+    if (overlayKeyGuardsOn) return;
+    window.addEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = true;
+  }
+  function removeOverlayKeyGuards() {
+    if (!overlayKeyGuardsOn) return;
+    window.removeEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = false;
+  }
+  async function closeSeedInventoryPanel() {
+    try {
+      await fakeInventoryHide();
+    } catch {
+      try {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      } catch {
+      }
+    }
+  }
+  function createSeedOverlay() {
+    const box = document.createElement("div");
+    styleOverlayBox(box);
+    const header = document.createElement("div");
+    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+    const title = document.createElement("div");
+    title.textContent = "Seed deleter";
+    setStyles(title, { fontWeight: "700", fontSize: "13px" });
+    const hint = document.createElement("div");
+    hint.textContent = "Click seeds in inventory to toggle selection.";
+    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+    const hr = document.createElement("div");
+    setStyles(hr, { height: "1px", background: "#2d333b" });
+    const list = document.createElement("div");
+    list.id = LIST_ID;
+    setStyles(list, {
+      minHeight: "44px",
+      maxHeight: "26vh",
+      overflow: "auto",
+      padding: "4px",
+      border: "1px dashed #39424c",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.84)",
+      userSelect: "text"
+    });
+    const actions = document.createElement("div");
+    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+    const summary = document.createElement("div");
+    summary.id = SUMMARY_ID;
+    setStyles(summary, { fontWeight: "600" });
+    summary.textContent = "Selected: 0 species \xB7 0 seeds";
+    const btnClear = createButton("Clear");
+    btnClear.title = "Clear selection";
+    btnClear.onclick = async () => {
+      selectedMap.clear();
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    _btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+    _btnConfirm.disabled = true;
+    _btnConfirm.onclick = async () => {
+      await closeSeedInventoryPanel();
+    };
+    header.append(title);
+    actions.append(summary, btnClear, _btnConfirm);
+    box.append(header, hint, hr, list, actions);
+    makeDraggable(box, header);
+    return box;
+  }
+  function showSeedOverlay() {
+    if (document.getElementById(OVERLAY_ID)) return;
+    const el2 = createSeedOverlay();
+    document.body.appendChild(el2);
+    installOverlayKeyGuards();
+    refreshList();
+    updateSummary();
+  }
+  function hideSeedOverlay() {
+    const el2 = document.getElementById(OVERLAY_ID);
+    if (el2) el2.remove();
+    removeOverlayKeyGuards();
+  }
+  var _btnConfirm = null;
+  var unsubSelectedName = null;
+  function renderListRow(item) {
+    const row = document.createElement("div");
+    setStyles(row, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 6px",
+      borderBottom: "1px dashed #2d333b"
+    });
+    const name = document.createElement("div");
+    name.textContent = item.name;
+    setStyles(name, {
+      fontSize: "12px",
+      fontWeight: "600",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    });
+    const controls = document.createElement("div");
+    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "1";
+    qty.max = String(Math.max(1, item.maxQty));
+    qty.step = "1";
+    qty.value = String(item.qty);
+    qty.className = "qmm-input";
+    setStyles(qty, {
+      width: "68px",
+      height: "28px",
+      border: "1px solid #4446",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.90)",
+      padding: "0 8px",
+      fontSize: "12px"
+    });
+    const swallowDigits = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    qty.addEventListener("keydown", swallowDigits);
+    qty.onchange = () => {
+      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+      qty.value = String(v);
+      const cur = selectedMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      selectedMap.set(item.name, cur);
+      updateSummary();
+    };
+    qty.oninput = qty.onchange;
+    const remove = createButton("Remove", { background: "transparent" });
+    remove.onclick = async () => {
+      selectedMap.delete(item.name);
+      refreshList();
+      updateSummary();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    controls.append(qty, remove);
+    row.append(name, controls);
+    return row;
+  }
+  function refreshList() {
+    const list = document.getElementById(LIST_ID);
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No seeds selected.";
+      empty.style.opacity = "0.8";
+      list.appendChild(empty);
+      return;
+    }
+    for (const it of entries) list.appendChild(renderListRow(it));
+  }
+  function totalSelected() {
+    let species = 0, qty = 0;
+    for (const it of selectedMap.values()) {
+      species += 1;
+      qty += it.qty;
+    }
+    return { species, qty };
+  }
+  function updateSummary() {
+    const { species, qty } = totalSelected();
+    const el2 = document.getElementById(SUMMARY_ID);
+    if (el2) el2.textContent = `Selected: ${species} species \xB7 ${formatNum(qty)} seeds`;
+    if (_btnConfirm) {
+      _btnConfirm.textContent = "Confirm";
+      _btnConfirm.disabled = qty <= 0;
+      _btnConfirm.style.opacity = qty <= 0 ? "0.6" : "1";
+      _btnConfirm.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+    }
+  }
+  async function repatchFakeSeedInventoryWithSelection() {
+    const selectedNames = new Set(Array.from(selectedMap.keys()));
+    const filtered = (Array.isArray(seedSourceCache) ? seedSourceCache : []).filter((s) => {
+      const disp = seedDisplayNameFromSpecies(s.species);
+      return !selectedNames.has(disp);
+    });
+    try {
+      await fakeInventoryShow({ items: filtered, favoritedItemIds: [] }, { open: false });
+    } catch {
+    }
+  }
+  async function beginSelectedNameListener() {
+    if (unsubSelectedName) return;
+    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
+      const n = (name || "").trim();
+      if (!n) return;
+      if (selectedMap.has(n)) {
+        selectedMap.delete(n);
+      } else {
+        const max = Math.max(1, seedStockByName.get(n) ?? 1);
+        selectedMap.set(n, { name: n, qty: max, maxQty: max });
+      }
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    });
+    unsubSelectedName = typeof unsub === "function" ? unsub : null;
+  }
+  async function endSelectedNameListener() {
+    const fn = unsubSelectedName;
+    unsubSelectedName = null;
+    try {
+      await fn?.();
+    } catch {
+    }
+  }
+  async function openSeedInventoryPreview() {
+    try {
+      const src = await getMySeedInventory();
+      if (!src.length) {
+        await toastSimple("Seed inventory", "No seeds to display.", "info");
+        return;
+      }
+      await fakeInventoryShow(buildInventoryShapeFrom(src), { open: true });
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed inventory.", "error");
+    }
+  }
+  async function openSeedSelectorFlow(setWindowVisible) {
+    try {
+      setWindowVisible?.(false);
+      seedSourceCache = await getMySeedInventory();
+      seedStockByName = /* @__PURE__ */ new Map();
+      for (const s of seedSourceCache) {
+        const display = seedDisplayNameFromSpecies(s.species);
+        seedStockByName.set(display, Math.max(1, Math.floor(s.quantity || 0)));
+      }
+      selectedMap.clear();
+      showSeedOverlay();
+      await beginSelectedNameListener();
+      await fakeInventoryShow(buildInventoryShapeFrom(seedSourceCache), { open: true });
+      if (await isInventoryPanelOpen()) {
+        await waitInventoryPanelClosed();
+      }
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed selector.", "error");
+    } finally {
+      await endSelectedNameListener();
+      hideSeedOverlay();
+      seedSourceCache = [];
+      seedStockByName.clear();
+      setWindowVisible?.(true);
+    }
+  }
+  var MiscService = {
+    // ghost
+    readGhostEnabled,
+    writeGhostEnabled,
+    getGhostDelayMs,
+    setGhostDelayMs,
+    createGhostController,
+    // seeds
+    getMySeedInventory,
+    openSeedInventoryPreview,
+    openSeedSelectorFlow,
+    //delete
+    deleteSelectedSeeds,
+    cancelSeedDeletion,
+    isSeedDeletionRunning,
+    getCurrentSeedSelection() {
+      return Array.from(selectedMap.values());
+    },
+    clearSeedSelection() {
+      selectedMap.clear();
+    }
+  };
+
+  // src/ui/menus/misc.ts
+  function sectionFramed3(titleText, content, maxW = 440) {
+    const s = document.createElement("div");
+    s.style.display = "grid";
+    s.style.gap = "6px";
+    s.style.textAlign = "left";
+    s.style.border = "1px solid #4446";
+    s.style.borderRadius = "10px";
+    s.style.padding = "10px";
+    s.style.background = "#1f2328";
+    s.style.boxShadow = "0 0 0 1px #0002 inset";
+    s.style.width = `min(${maxW}px, 100%)`;
+    const h = document.createElement("div");
+    h.textContent = titleText;
+    h.style.fontWeight = "700";
+    h.style.textAlign = "center";
+    h.style.opacity = "0.95";
+    h.style.fontSize = "14px";
+    s.append(h, content);
+    return s;
+  }
+  function formGrid() {
+    const g = document.createElement("div");
+    g.style.display = "grid";
+    g.style.gridTemplateColumns = "max-content 1fr";
+    g.style.columnGap = "6px";
+    g.style.rowGap = "6px";
+    g.style.alignItems = "center";
+    return g;
+  }
+  function actionsBox() {
+    const d = document.createElement("div");
+    d.style.display = "flex";
+    d.style.justifyContent = "flex-start";
+    d.style.alignItems = "center";
+    d.style.gap = "6px";
+    d.style.flexWrap = "wrap";
+    return d;
+  }
+  function applyNeutralKind(b, kind) {
+    b.style.border = "1px solid #4446";
+    b.style.color = "#E7EEF7";
+    if (kind === "primary") {
+      b.style.background = "#1F2328CC";
+    } else {
+      b.style.background = "#161b22";
+    }
+  }
+  function hoverNeutralKind(b, kind) {
+    b.style.borderColor = "#6aa1";
+    b.style.background = kind === "primary" ? "#23282dcc" : "#1b2026";
+  }
+  function styleButton(b, kind = "secondary") {
+    b.dataset.kind = kind;
+    b.style.padding = "4px 10px";
+    b.style.borderRadius = "8px";
+    b.style.cursor = "pointer";
+    b.style.fontSize = "13px";
+    b.style.fontWeight = "600";
+    b.style.transition = "background 120ms, border-color 120ms, opacity 120ms, filter 120ms";
+    applyNeutralKind(b, kind);
+    b.onmouseenter = () => {
+      if (!b.disabled) hoverNeutralKind(b, kind);
+    };
+    b.onmouseleave = () => {
+      if (!b.disabled) applyNeutralKind(b, kind);
+    };
+  }
+  function setButtonEnabled(b, enabled) {
+    b.disabled = !enabled;
+    if (enabled) {
+      b.style.opacity = "1";
+      b.style.cursor = "pointer";
+      b.style.filter = "none";
+      applyNeutralKind(b, b.dataset.kind || "secondary");
+    } else {
+      b.style.opacity = "0.6";
+      b.style.cursor = "not-allowed";
+      b.style.filter = "grayscale(10%)";
+    }
+  }
+  var NF_US2 = new Intl.NumberFormat("en-US");
+  var formatNum2 = (n) => NF_US2.format(Math.max(0, Math.floor(n || 0)));
   async function renderMiscMenu(container) {
     const ui = new Menu({ id: "misc", compact: true });
     ui.mount(container);
     const view = ui.root.querySelector(".qmm-views");
     view.innerHTML = "";
     view.style.display = "grid";
-    view.style.gridTemplateRows = "auto 1fr";
-    view.style.gap = "10px";
+    view.style.gap = "8px";
     view.style.minHeight = "0";
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.alignItems = "center";
-    header.style.gap = "10px";
-    const title = ui.label("Player controls");
-    title.style.fontWeight = "700";
-    title.style.fontSize = "14px";
-    header.append(title);
-    view.appendChild(header);
-    const card = document.createElement("div");
-    card.className = "qmm-card";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "12px";
-    card.style.alignItems = "center";
-    card.style.overflow = "auto";
-    card.style.minHeight = "0";
-    view.appendChild(card);
-    const row = centerRow();
-    const swGhost = ui.switch(readLS(LS_GHOST_KEY));
-    swGhost.id = "player.ghostMode";
-    const labGhost = ui.label("Ghost mode");
-    const labDelay = ui.label("Move delay (ms)");
-    const inputDelay = ui.inputNumber(10, 1e3, 5, 50);
-    inputDelay.id = "player.moveDelay";
-    row.append(swGhost, labGhost, labDelay, inputDelay.wrap ?? inputDelay);
-    card.appendChild(row);
-    const ghost = createGhostController();
-    inputDelay.value = String(ghost.getSpeed?.() ?? 50);
-    inputDelay.addEventListener("change", () => {
-      const v = Math.max(10, Math.min(1e3, Math.floor(Number(inputDelay.value) || 50)));
-      inputDelay.value = String(v);
-      ghost.setSpeed?.(v);
-    });
-    if (swGhost.checked) ghost.start();
-    swGhost.onchange = () => {
-      const on = !!swGhost.checked;
-      writeLS(LS_GHOST_KEY, on);
-      on ? ghost.start() : ghost.stop();
-    };
-    card.__cleanup__ = () => {
+    view.style.justifyItems = "center";
+    const secPlayer = (() => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "12px";
+      row.style.flexWrap = "wrap";
+      const pair = (labelText, controlEl, labelId) => {
+        const wrap = document.createElement("div");
+        wrap.style.display = "inline-flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "6px";
+        const lab = ui.label(labelText);
+        lab.style.fontSize = "13px";
+        lab.style.margin = "0";
+        lab.style.justifySelf = "start";
+        if (labelId) lab.id = labelId;
+        wrap.append(lab, controlEl);
+        return wrap;
+      };
+      const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false));
+      ghostSwitch.id = "player.ghostMode";
+      const ghostPair = pair("Ghost", ghostSwitch, "label.ghost");
+      const delayInput = ui.inputNumber(10, 1e3, 5, 50);
+      delayInput.id = "player.moveDelay";
+      const delayWrap = delayInput.wrap ?? delayInput;
+      delayWrap.style && (delayWrap.style.margin = "0");
+      delayInput.style && (delayInput.style.width = "84px");
+      const delayPair = pair("Delay (ms)", delayWrap, "label.delay");
+      row.append(ghostPair, delayPair);
+      const ghost = MiscService.createGhostController();
+      delayInput.value = String(MiscService.getGhostDelayMs());
+      delayInput.addEventListener("change", () => {
+        const v = Math.max(10, Math.min(1e3, Math.floor(Number(delayInput.value) || 50)));
+        delayInput.value = String(v);
+        ghost.setSpeed?.(v);
+        MiscService.setGhostDelayMs(v);
+      });
+      if (ghostSwitch.checked) ghost.start();
+      ghostSwitch.onchange = () => {
+        const on = !!ghostSwitch.checked;
+        MiscService.writeGhostEnabled(on);
+        on ? ghost.start() : ghost.stop();
+      };
+      row.__cleanup__ = () => {
+        try {
+          ghost.stop();
+        } catch {
+        }
+      };
+      return sectionFramed3("Player controls", row, 440);
+    })();
+    const secSeed = (() => {
+      const grid = formGrid();
+      const selLabel = ui.label("Selected");
+      selLabel.style.fontSize = "13px";
+      selLabel.style.margin = "0";
+      selLabel.style.justifySelf = "start";
+      const selValue = document.createElement("div");
+      selValue.id = "misc.seedDeleter.summary";
+      selValue.style.fontSize = "13px";
+      selValue.style.opacity = "0.9";
+      selValue.textContent = "0 species \xB7 0 seeds";
+      grid.append(selLabel, selValue);
+      const actLabel = ui.label("Actions");
+      actLabel.style.fontSize = "13px";
+      actLabel.style.margin = "0";
+      actLabel.style.justifySelf = "start";
+      const actions = actionsBox();
+      const btnSelect = document.createElement("button");
+      btnSelect.textContent = "Select seeds";
+      styleButton(btnSelect, "primary");
+      const btnDelete = document.createElement("button");
+      btnDelete.textContent = "Delete";
+      styleButton(btnDelete, "secondary");
+      setButtonEnabled(btnDelete, false);
+      const btnClear = document.createElement("button");
+      btnClear.textContent = "Clear";
+      styleButton(btnClear, "secondary");
+      setButtonEnabled(btnClear, false);
+      actions.append(btnSelect, btnDelete, btnClear);
+      grid.append(actLabel, actions);
+      function readSelection() {
+        const sel = MiscService.getCurrentSeedSelection?.() || [];
+        const speciesCount = sel.length;
+        let totalQty = 0;
+        for (const it of sel) totalQty += Math.max(0, Math.floor(it?.qty || 0));
+        return { sel, speciesCount, totalQty };
+      }
+      function updateSummaryUI() {
+        const { speciesCount, totalQty } = readSelection();
+        selValue.textContent = `${speciesCount} species \xB7 ${formatNum2(totalQty)} seeds`;
+        const has = speciesCount > 0 && totalQty > 0;
+        setButtonEnabled(btnDelete, has);
+        setButtonEnabled(btnClear, has);
+      }
+      btnSelect.onclick = async () => {
+        await MiscService.openSeedSelectorFlow(ui.setWindowVisible.bind(ui));
+        updateSummaryUI();
+      };
+      btnClear.onclick = () => {
+        try {
+          MiscService.clearSeedSelection?.();
+        } catch {
+        }
+        updateSummaryUI();
+      };
+      btnDelete.onclick = async () => {
+        await MiscService.deleteSelectedSeeds();
+        updateSummaryUI();
+      };
+      return sectionFramed3("Seed deleter", grid, 440);
+    })();
+    const content = document.createElement("div");
+    content.style.display = "grid";
+    content.style.gap = "8px";
+    content.style.justifyItems = "center";
+    content.append(secPlayer, secSeed);
+    view.appendChild(content);
+    view.__cleanup__ = () => {
       try {
-        ghost.stop();
+        secPlayer.__cleanup__?.();
+      } catch {
+      }
+      try {
+        secSeed.__cleanup__?.();
       } catch {
       }
     };
