@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.2
+// @version      1.2.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -8957,7 +8957,7 @@
     const header = document.createElement("div");
     setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
     const title = document.createElement("div");
-    title.textContent = "Seed deleter";
+    title.textContent = "Seed deleter - Selection mode";
     setStyles(title, { fontWeight: "700", fontSize: "13px" });
     const hint = document.createElement("div");
     hint.textContent = "Click seeds in inventory to toggle selection.";
