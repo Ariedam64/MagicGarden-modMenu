@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.9
+// @version      1.3.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -564,6 +564,7 @@
   var myPossiblyNoLongerValidSelectedItemIndex = makeAtom("myPossiblyNoLongerValidSelectedItemIndexAtom");
   var myCurrentGardenObject = makeAtom("myCurrentGardenObjectAtom");
   var myCurrentSortedGrowSlotIndices = makeAtom("myCurrentSortedGrowSlotIndicesAtom");
+  var myCurrentGrowSlotIndex = makeAtom("myCurrentGrowSlotIndexAtom");
   var activeModal = makeAtom("activeModalAtom");
   var garden = makeView("myDataAtom", { path: "garden" });
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
@@ -629,7 +630,8 @@
       garden,
       gardenTileObjects,
       myCurrentGardenObject,
-      myCurrentSortedGrowSlotIndices
+      myCurrentSortedGrowSlotIndices,
+      myCurrentGrowSlotIndex
     },
     inventory: {
       myInventory,
@@ -5718,28 +5720,6 @@
   });
 
   // src/utils/tooltip.finder.ts
-  var NEXT_QUERY = 'button[aria-label^="Next"]';
-  var PREV_QUERY = 'button[aria-label^="Previous"]';
-  function isVisible(el2) {
-    if (!el2) return false;
-    const s = getComputedStyle(el2);
-    return s && s.visibility !== "hidden" && s.display !== "none";
-  }
-  function hasCanvas(el2) {
-    return !!el2.querySelector?.("canvas");
-  }
-  function hasNameText(el2) {
-    return !!el2.querySelector?.('p.chakra-text, p[class*="chakra-text"]');
-  }
-  function findTooltipRootFrom(start) {
-    let n = start || null;
-    while (n && n !== document.body) {
-      if (n.getAttribute?.("role") === "tooltip") return n;
-      if (hasCanvas(n) && hasNameText(n)) return n;
-      n = n.parentElement;
-    }
-    return null;
-  }
   function findBestTooltipDetailHostInside(root) {
     if (!root) return null;
     const name = root.querySelector?.("p.chakra-text") ?? root.querySelector?.('p[class*="chakra-text"]') ?? root.querySelector?.("p") ?? null;
@@ -5770,58 +5750,19 @@
     }
     return root || null;
   }
-  function findNavButtonsInside(root) {
-    if (!root) return { root: null, next: null, prev: null };
-    let next = root.querySelector?.(NEXT_QUERY) ?? null;
-    let prev = root.querySelector?.(PREV_QUERY) ?? null;
-    if (!next) next = root.querySelector?.('button.chakra-button[aria-label*="Next"]') ?? null;
-    if (!prev) prev = root.querySelector?.('button.chakra-button[aria-label*="Previous"]') ?? null;
-    if (next && !isVisible(next)) next = null;
-    if (prev && !isVisible(prev)) prev = null;
-    return { root, next, prev };
-  }
-  function findNearestNavButtonsFrom(start) {
-    const root = findTooltipRootFrom(start);
-    if (root) return findNavButtonsInside(root);
-    const all = Array.from(document.querySelectorAll(`${NEXT_QUERY},${PREV_QUERY}`)).filter(isVisible);
-    let best = null;
-    for (const btn of all) {
-      const r = findTooltipRootFrom(btn);
-      if (!r) continue;
-      const pair = findNavButtonsInside(r);
-      if (pair.next || pair.prev) {
-        best = pair;
-        break;
-      }
-    }
-    return best ?? { root: null, next: null, prev: null };
-  }
-  function findBestNavButtons(start) {
-    const byStart = start ? findNearestNavButtonsFrom(start) : null;
-    if (byStart && (byStart.next || byStart.prev)) return byStart;
-    const roots = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => hasCanvas(r) && hasNameText(r) && isVisible(r));
-    for (const r of roots) {
-      const pair = findNavButtonsInside(r);
-      if (pair.next || pair.prev) return pair;
-    }
-    return { root: null, next: null, prev: null };
-  }
 
   // src/services/domChanges.ts
   var STYLE_ID = "qws-price-badge-style";
   var ATTR_INJECTED = "data-qws-injected";
   var CLASS_BADGE = "qws-price-badge";
   var USER_SCOPE_ROOT = ".McFlex.css-1wu1jyg";
-  var KEY_NEXT = "c";
-  var KEY_PREV = "x";
   var nfUS = new Intl.NumberFormat("en-US");
   var fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
   var ACTIVE_HOSTS = /* @__PURE__ */ new Set();
-  var HOST_STATE = /* @__PURE__ */ new WeakMap();
-  var LAST_NAV_ROOT = null;
   var cur = null;
   var players;
   var sortedIdx = null;
+  var selectedIdx = null;
   var isPlantObject = (o) => !!o && o.objectType === "plant";
   var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
   var getOrder = () => {
@@ -5837,13 +5778,17 @@
     for (const i of ord) if (slots[i] != null) out.push(slots[i]);
     return out;
   };
-  var plantSig = (o) => !o ? "\u2205" : [
-    o.species ?? "",
-    o.plantedAt ?? 0,
-    o.maturedAt ?? 0,
-    `slots:${Array.isArray(o.slots) ? o.slots.length : 0}`,
-    `ord:${getOrder().join(",")}`
-  ].join("|");
+  function selectedOrderedPosition() {
+    if (!isPlantObject(cur)) return 0;
+    const slots = cur.slots ?? [];
+    const n = Array.isArray(slots) ? slots.length : 0;
+    if (!n) return 0;
+    const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
+    const clampedRaw = Math.max(0, Math.min(n - 1, raw));
+    const ord = getOrder();
+    const pos = ord.indexOf(clampedRaw);
+    return pos >= 0 ? pos : 0;
+  }
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
     const s = document.createElement("style");
@@ -5881,19 +5826,13 @@
     }
     return Array.from(set2).filter((r) => r.isConnected);
   }
-  function currentSlotValue(host) {
+  function currentSlotValue() {
     if (!isPlantObject(cur)) return null;
     const ordered = getOrderedSlots();
     if (!ordered.length) return null;
-    const sig = plantSig(cur);
-    const st = HOST_STATE.get(host);
-    let idx = st?.idx ?? 0;
-    if (!st || st.sig !== sig) {
-      idx = 0;
-      HOST_STATE.set(host, { idx, sig });
-    }
-    const safeIdx = (idx % ordered.length + ordered.length) % ordered.length;
-    const val = valueFromGardenSlot(ordered[safeIdx], DefaultPricing, players);
+    const pos = selectedOrderedPosition();
+    const slot = ordered[Math.max(0, Math.min(ordered.length - 1, pos))];
+    const val = valueFromGardenSlot(slot, DefaultPricing, players);
     return Number.isFinite(val) && val > 0 ? val : null;
   }
   function injectOrUpdateBadge(host) {
@@ -5905,7 +5844,7 @@
     if (getComputedStyle(host).position === "static") host.style.position = "relative";
     const reserve = measureBadgeReserve();
     if ((parseFloat(host.style.paddingBottom) || 0) < reserve) host.style.paddingBottom = `${reserve}px`;
-    const val = currentSlotValue(host) ?? (() => {
+    const val = currentSlotValue() ?? (() => {
       const v = valueFromGardenPlant(cur, DefaultPricing, players);
       return Number.isFinite(v) && v > 0 ? v : null;
     })();
@@ -5928,7 +5867,6 @@
       host.removeAttribute(ATTR_INJECTED);
       host.style.paddingBottom = "";
     }
-    HOST_STATE.delete(host);
   }
   function updateAllBadges() {
     const roots = collectTooltipRoots();
@@ -5956,9 +5894,6 @@
     });
     ACTIVE_HOSTS.clear();
   }
-  var resolveNavRootForKeys = () => {
-    return LAST_NAV_ROOT || document.querySelector(USER_SCOPE_ROOT) || (Array.from(ACTIVE_HOSTS)[0]?.closest(".McFlex, .css-0") ?? null) || findBestNavButtons().root || null;
-  };
   function watchTooltipsByXPath() {
     const rescan = () => updateAllBadges();
     rescan();
@@ -5971,82 +5906,10 @@
       });
     });
     mo.observe(document.body, { subtree: true, childList: true, attributes: true });
-    const presses = /* @__PURE__ */ new Map();
-    const onPointerDownNav = (ev) => {
-      const t = ev.target;
-      if (!t) return;
-      const pair = findNearestNavButtonsFrom(t);
-      if (!pair.root) return;
-      const pressedBtn = t.closest("button");
-      if (!pressedBtn) return;
-      let dir = null;
-      if (pair.next && pressedBtn === pair.next) dir = "NEXT";
-      else if (pair.prev && pressedBtn === pair.prev) dir = "PREV";
-      if (!dir) return;
-      LAST_NAV_ROOT = pair.root;
-      presses.set(ev.pointerId, { btn: pressedBtn, dir, root: pair.root });
-    };
-    const onPointerUpNav = (ev) => {
-      const rec = presses.get(ev.pointerId);
-      if (!rec) return;
-      presses.delete(ev.pointerId);
-      const upBtn = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("button");
-      if (upBtn !== rec.btn) return;
-      const host = rec.root ? findBestTooltipDetailHostInside(rec.root) : null;
-      if (!host || !isPlantObject(cur)) return;
-      const total = getOrderedSlots().length;
-      if (total <= 1) {
-        injectOrUpdateBadge(host);
-        return;
-      }
-      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
-      st.sig = plantSig(cur);
-      st.idx = rec.dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
-      HOST_STATE.set(host, st);
-      requestAnimationFrame(() => injectOrUpdateBadge(host));
-    };
-    const onPointerCancelNav = (ev) => {
-      presses.delete(ev.pointerId);
-    };
-    document.addEventListener("pointerdown", onPointerDownNav, true);
-    document.addEventListener("pointerup", onPointerUpNav, true);
-    document.addEventListener("pointercancel", onPointerCancelNav, true);
-    const onKeyUp = (ev) => {
-      const k = ev.key?.toLowerCase();
-      if (k !== KEY_NEXT && k !== KEY_PREV) return;
-      const t = ev.target;
-      const tag = t?.tagName?.toLowerCase();
-      if (t && (t.isContentEditable || tag === "input" || tag === "textarea")) return;
-      let root = resolveNavRootForKeys();
-      if (!root) {
-        const pair = findBestNavButtons();
-        root = pair.root || null;
-      }
-      if (!root) return;
-      const host = findBestTooltipDetailHostInside(root);
-      if (!host || !isPlantObject(cur)) return;
-      const total = getOrderedSlots().length;
-      if (total <= 1) {
-        injectOrUpdateBadge(host);
-        return;
-      }
-      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
-      st.sig = plantSig(cur);
-      st.idx = k === KEY_NEXT ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
-      HOST_STATE.set(host, st);
-      requestAnimationFrame(
-        () => requestAnimationFrame(() => injectOrUpdateBadge(host))
-      );
-    };
-    document.addEventListener("keyup", onKeyUp, true);
     return {
       disconnect() {
         mo.disconnect();
         ACTIVE_HOSTS.clear();
-        document.removeEventListener("pointerdown", onPointerDownNav, true);
-        document.removeEventListener("pointerup", onPointerUpNav, true);
-        document.removeEventListener("pointercancel", onPointerCancelNav, true);
-        document.removeEventListener("keyup", onKeyUp, true);
       }
     };
   }
@@ -6064,6 +5927,10 @@
       sortedIdx = Array.isArray(v) ? v.slice() : null;
     } catch {
     }
+    try {
+      selectedIdx = await myCurrentGrowSlotIndex.get();
+    } catch {
+    }
     myCurrentGardenObject.onChange((v) => {
       cur = v;
       isPlantObject(cur) ? updateAllBadges() : clearAllBadges();
@@ -6074,6 +5941,10 @@
     });
     myCurrentSortedGrowSlotIndices.onChange((v) => {
       sortedIdx = Array.isArray(v) ? v.slice() : null;
+      updateAllBadges();
+    });
+    myCurrentGrowSlotIndex.onChange((idx) => {
+      selectedIdx = Number.isFinite(idx) ? idx : 0;
       updateAllBadges();
     });
     watchTooltipsByXPath();
