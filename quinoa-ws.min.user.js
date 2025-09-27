@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.2.5
+// @version      1.2.6
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -362,26 +362,26 @@
   }
   function getAtPath(root, path) {
     const segs = toPathArray(path);
-    let cur = root;
+    let cur2 = root;
     for (const s of segs) {
-      if (cur == null) return void 0;
-      cur = cur[s];
+      if (cur2 == null) return void 0;
+      cur2 = cur2[s];
     }
-    return cur;
+    return cur2;
   }
   function setAtPath(root, path, nextValue) {
     const segs = toPathArray(path);
     if (!segs.length) return nextValue;
     const clone = Array.isArray(root) ? root.slice() : { ...root ?? {} };
-    let cur = clone;
+    let cur2 = clone;
     for (let i = 0; i < segs.length - 1; i++) {
       const key2 = segs[i];
-      const src = cur[key2];
+      const src = cur2[key2];
       const obj = typeof src === "object" && src !== null ? Array.isArray(src) ? src.slice() : { ...src } : {};
-      cur[key2] = obj;
-      cur = obj;
+      cur2[key2] = obj;
+      cur2 = obj;
     }
-    cur[segs[segs.length - 1]] = nextValue;
+    cur2[segs[segs.length - 1]] = nextValue;
     return clone;
   }
   var eq = {
@@ -562,6 +562,8 @@
   var setSelectedIndexToEnd = makeAtom("setSelectedIndexToEndAtom");
   var mySelectedItemName = makeAtom("mySelectedItemNameAtom");
   var myPossiblyNoLongerValidSelectedItemIndex = makeAtom("myPossiblyNoLongerValidSelectedItemIndexAtom");
+  var myCurrentGardenObject = makeAtom("myCurrentGardenObjectAtom");
+  var myCurrentSortedGrowSlotIndices = makeAtom("myCurrentSortedGrowSlotIndicesAtom");
   var activeModal = makeAtom("activeModalAtom");
   var garden = makeView("myDataAtom", { path: "garden" });
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
@@ -625,7 +627,9 @@
     data: {
       myData,
       garden,
-      gardenTileObjects
+      gardenTileObjects,
+      myCurrentGardenObject,
+      myCurrentSortedGrowSlotIndices
     },
     inventory: {
       myInventory,
@@ -921,18 +925,18 @@
       return set2.has(itemId);
     },
     async ensureFavoriteItem(itemId, shouldBeFavorite) {
-      const cur = await this.isFavoriteItem(itemId);
-      if (cur !== shouldBeFavorite) {
+      const cur2 = await this.isFavoriteItem(itemId);
+      if (cur2 !== shouldBeFavorite) {
         await this.toggleFavoriteItem(itemId);
         return shouldBeFavorite;
       }
-      return cur;
+      return cur2;
     },
     async ensureFavorites(items, shouldBeFavorite) {
       const set2 = await getFavoriteIdSet();
       for (const id of items) {
-        const cur = set2.has(id);
-        if (cur !== shouldBeFavorite) {
+        const cur2 = set2.has(id);
+        if (cur2 !== shouldBeFavorite) {
           try {
             await this.toggleFavoriteItem(id);
           } catch {
@@ -950,8 +954,8 @@
       return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     async onFavoriteSetChangeNow(cb) {
-      const cur = await getFavoriteIdSet();
-      cb(cur);
+      const cur2 = await getFavoriteIdSet();
+      cb(cur2);
       return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     /* --------------------------------- Garden -------------------------------- */
@@ -1021,11 +1025,11 @@
       });
     },
     async onPetsDiffNow(cb) {
-      let cur = await this.getPets();
+      let cur2 = await this.getPets();
       let prevSnap = snapshotPets(null);
-      let nextSnap = snapshotPets(cur);
+      let nextSnap = snapshotPets(cur2);
       const first = diffPetsSnapshot(prevSnap, nextSnap);
-      cb(cur, first);
+      cb(cur2, first);
       prevSnap = nextSnap;
       return Atoms.pets.myPetInfos.onChange((state2) => {
         nextSnap = snapshotPets(state2);
@@ -1071,11 +1075,11 @@
       });
     },
     async onCropInventoryDiffNow(cb) {
-      let cur = await Atoms.inventory.myCropInventory.get();
+      let cur2 = await Atoms.inventory.myCropInventory.get();
       let prevSnap = snapshotInventory(null);
-      let nextSnap = snapshotInventory(cur);
+      let nextSnap = snapshotInventory(cur2);
       const firstDiff = diffCropInventorySnapshot(prevSnap, nextSnap);
-      cb(cur, firstDiff);
+      cb(cur2, firstDiff);
       prevSnap = nextSnap;
       return Atoms.inventory.myCropInventory.onChange((inv) => {
         nextSnap = snapshotInventory(inv);
@@ -2948,7 +2952,7 @@
       const up = el("button", "qmm-step qmm-step--up", "\u25B2");
       const down = el("button", "qmm-step qmm-step--down", "\u25BC");
       up.type = down.type = "button";
-      const clamp = () => {
+      const clamp2 = () => {
         const n = Number(i.value);
         if (Number.isFinite(n)) {
           const lo = Number(i.min), hi = Number(i.max);
@@ -2959,7 +2963,7 @@
       const bump = (dir) => {
         if (dir < 0) i.stepDown();
         else i.stepUp();
-        clamp();
+        clamp2();
         i.dispatchEvent(new Event("input", { bubbles: true }));
         i.dispatchEvent(new Event("change", { bubbles: true }));
       };
@@ -3002,7 +3006,7 @@
       };
       addSpin(up, 1);
       addSpin(down, -1);
-      i.addEventListener("change", clamp);
+      i.addEventListener("change", clamp2);
       spin.append(up, down);
       wrap.append(i, spin);
       i.wrap = wrap;
@@ -4149,9 +4153,9 @@
   async function _startInventoryWatcher() {
     const unsub = await (async () => {
       try {
-        const cur = await Atoms.inventory.myInventory.get();
-        _invSig = _buildInvSigFromInventory(cur);
-        _invRaw = cur;
+        const cur2 = await Atoms.inventory.myInventory.get();
+        _invSig = _buildInvSigFromInventory(cur2);
+        _invRaw = cur2;
         _rebuildInvPets();
       } catch {
       }
@@ -4173,9 +4177,9 @@
   async function _startActivePetsWatcher() {
     const unsub = await (async () => {
       try {
-        const cur = await Atoms.pets.myPetInfos.get();
-        _activeSig = _buildActiveSig(cur);
-        _activeRaw = Array.isArray(cur) ? cur : [];
+        const cur2 = await Atoms.pets.myPetInfos.get();
+        _activeSig = _buildActiveSig(cur2);
+        _activeRaw = Array.isArray(cur2) ? cur2 : [];
         _rebuildInvPets();
       } catch {
       }
@@ -4395,11 +4399,11 @@
     saveTeam(patch) {
       const i = this._teams.findIndex((t) => t.id === patch.id);
       if (i < 0) return null;
-      const cur = this._teams[i];
+      const cur2 = this._teams[i];
       const next = {
-        id: cur.id,
-        name: typeof patch.name === "string" ? patch.name : cur.name,
-        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur.slots
+        id: cur2.id,
+        name: typeof patch.name === "string" ? patch.name : cur2.name,
+        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur2.slots
       };
       this._teams[i] = next;
       saveTeams(this._teams);
@@ -4409,11 +4413,11 @@
     updateTeam(teamId, patch) {
       const idx = _teams.findIndex((t) => t.id === teamId);
       if (idx < 0) return null;
-      const cur = _teams[idx];
+      const cur2 = _teams[idx];
       const next = {
-        ...cur,
+        ...cur2,
         ...patch,
-        slots: patch.slots ? [...patch.slots] : cur.slots
+        slots: patch.slots ? [...patch.slots] : cur2.slots
       };
       _teams[idx] = next;
       saveTeams(_teams);
@@ -4451,8 +4455,8 @@
       });
       let visible = filtered.filter((p) => !taken.has(p.id));
       if (current && !visible.some((p) => p.id === current)) {
-        const cur = _invPetsCache.find((p) => p.id === current);
-        if (cur) visible = [cur, ...visible];
+        const cur2 = _invPetsCache.find((p) => p.id === current);
+        if (cur2) visible = [cur2, ...visible];
       }
       return visible;
     },
@@ -4533,8 +4537,8 @@
         return out;
       };
       try {
-        const cur = await Atoms.pets.myPetSlotInfos.get();
-        this._ingestAbilityMap(extractFlat(cur));
+        const cur2 = await Atoms.pets.myPetSlotInfos.get();
+        this._ingestAbilityMap(extractFlat(cur2));
       } catch {
       }
       const stopSlots = await Atoms.pets.myPetSlotInfos.onChange((src) => {
@@ -5475,6 +5479,539 @@
     })();
   }
 
+  // src/utils/calculators.ts
+  var key = (s) => String(s ?? "").trim();
+  function resolveSpeciesKey(species) {
+    const wanted = key(species).toLowerCase();
+    if (!wanted) return null;
+    for (const k of Object.keys(plantCatalog)) {
+      if (k.toLowerCase() === wanted) return k;
+    }
+    return null;
+  }
+  function findAnySellPriceNode(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
+      return obj.baseSellPrice;
+    }
+    for (const k of ["produce", "crop", "item", "items", "data"]) {
+      if (obj[k]) {
+        const v = findAnySellPriceNode(obj[k]);
+        if (v != null) return v;
+      }
+    }
+    try {
+      const seen = /* @__PURE__ */ new Set();
+      const stack = [obj];
+      while (stack.length) {
+        const cur2 = stack.pop();
+        if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
+        seen.add(cur2);
+        if (typeof cur2.baseSellPrice === "number") {
+          const v = cur2.baseSellPrice;
+          if (Number.isFinite(v)) return v;
+        }
+        for (const v of Object.values(cur2)) if (v && typeof v === "object") stack.push(v);
+      }
+    } catch {
+    }
+    return null;
+  }
+  function defaultGetBasePrice(species) {
+    const spKey = resolveSpeciesKey(species);
+    if (!spKey) return null;
+    const node = plantCatalog[spKey];
+    const cands = [
+      node?.produce?.baseSellPrice,
+      node?.crop?.baseSellPrice,
+      node?.item?.baseSellPrice,
+      node?.items?.Produce?.baseSellPrice
+    ].filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (cands.length) return cands[0];
+    return findAnySellPriceNode(node);
+  }
+  function applyRounding(v, mode = "round") {
+    switch (mode) {
+      case "floor":
+        return Math.floor(v);
+      case "ceil":
+        return Math.ceil(v);
+      case "none":
+        return v;
+      case "round":
+      default:
+        return Math.round(v);
+    }
+  }
+  function friendBonusMultiplier(playersInRoom) {
+    if (!Number.isFinite(playersInRoom)) return 1;
+    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
+    return 1 + (n - 1) * 0.1;
+  }
+  var COLOR_MULT = {
+    Gold: 25,
+    Rainbow: 50
+  };
+  var WEATHER_MULT = {
+    Wet: 2,
+    Chilled: 2,
+    Frozen: 10
+  };
+  var TIME_MULT = {
+    Dawnlit: 2,
+    Dawnbound: 3,
+    Amberlit: 5,
+    Amberbound: 6
+  };
+  var WEATHER_TIME_COMBO = {
+    "Wet+Dawnlit": 3,
+    "Chilled+Dawnlit": 3,
+    "Wet+Amberlit": 6,
+    "Chilled+Amberlit": 6,
+    "Frozen+Dawnlit": 11,
+    "Frozen+Dawnbound": 12,
+    "Frozen+Amberlit": 14,
+    "Frozen+Amberbound": 15
+  };
+  function isColor(m) {
+    return m === "Gold" || m === "Rainbow";
+  }
+  function isWeather(m) {
+    return m === "Wet" || m === "Chilled" || m === "Frozen";
+  }
+  function isTime(m) {
+    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
+  }
+  function normalizeMutationName(m) {
+    const s = key(m).toLowerCase();
+    if (!s) return "";
+    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
+    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+    if (s === "gold") return "Gold";
+    if (s === "rainbow") return "Rainbow";
+    if (s === "wet") return "Wet";
+    if (s === "chilled") return "Chilled";
+    if (s === "frozen") return "Frozen";
+    if (s === "dawnlit") return "Dawnlit";
+    if (s === "dawnbound") return "Dawnbound";
+    if (s === "amberlit") return "Amberlit";
+    if (s === "amberbound") return "Amberbound";
+    return m;
+  }
+  function computeColorMultiplier(mutations) {
+    if (!Array.isArray(mutations)) return 1;
+    let best = 1;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isColor(m)) {
+        const mult = COLOR_MULT[m];
+        if (mult > best) best = mult;
+      }
+    }
+    return best;
+  }
+  function pickWeather(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isWeather(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function pickTime(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isTime(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function computeWeatherTimeMultiplier(weather, time) {
+    if (!weather && !time) return 1;
+    if (weather && !time) return WEATHER_MULT[weather];
+    if (!weather && time) return TIME_MULT[time];
+    const k = `${weather}+${time}`;
+    const combo = WEATHER_TIME_COMBO[k];
+    if (typeof combo === "number") return combo;
+    return Math.max(WEATHER_MULT[weather], TIME_MULT[time]);
+  }
+  function mutationsMultiplier(mutations) {
+    const color = computeColorMultiplier(mutations);
+    const weather = pickWeather(mutations);
+    const time = pickTime(mutations);
+    const wt = computeWeatherTimeMultiplier(weather, time);
+    return color * wt;
+  }
+  function estimateProduceValue(species, scale, mutations, opts) {
+    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
+    const sXform = opts?.scaleTransform ?? ((_, s) => s);
+    const round = opts?.rounding ?? "round";
+    const base = getBase(species);
+    if (!(Number.isFinite(base) && base > 0)) return 0;
+    const sc = Number(scale);
+    if (!Number.isFinite(sc) || sc <= 0) return 0;
+    const effScale = sXform(species, sc);
+    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
+    const mutMult = mutationsMultiplier(mutations);
+    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
+    const pre = base * effScale * mutMult * friendsMult;
+    const out = Math.max(0, applyRounding(pre, round));
+    return out;
+  }
+  function valueFromInventoryProduce(item, opts, playersInRoom) {
+    if (!item || item.itemType !== "Produce") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
+  }
+  function valueFromGardenSlot(slot, opts, playersInRoom) {
+    if (!slot) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
+  }
+  function valueFromGardenPlant(plant, opts, playersInRoom) {
+    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
+    return sum;
+  }
+  function sumInventoryValue(items, opts, playersInRoom) {
+    if (!Array.isArray(items)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const it of items) {
+      if (it?.itemType === "Produce") {
+        sum += valueFromInventoryProduce(it, merged);
+      }
+    }
+    return sum;
+  }
+  function sumGardenValue(garden2, opts, playersInRoom) {
+    if (!garden2 || typeof garden2 !== "object") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const k of Object.keys(garden2)) {
+      const p = garden2[k];
+      if (p?.objectType === "plant") {
+        sum += valueFromGardenPlant(p, merged);
+      }
+    }
+    return sum;
+  }
+  var DefaultPricing = Object.freeze({
+    getBasePrice: defaultGetBasePrice,
+    rounding: "round"
+  });
+
+  // src/services/domChanges.ts
+  var STYLE_ID = "qws-price-badge-style";
+  var ATTR_INJECTED = "data-qws-injected";
+  var CLASS_BADGE = "qws-price-badge";
+  var NEXT_SEL = 'button[aria-label^="Next"]';
+  var PREV_SEL = 'button[aria-label^="Previous"]';
+  var NAV_ROOT_XPATH = '//*[@id="App"]/div[1]/div[1]/div[2]/div[2]/div[3]/div[1]';
+  var XPATHS = [
+    '//*[@id="App"]/div[1]/div[1]/div[2]/div[2]/div[3]/div[1]/div/div/div/div'
+  ];
+  var nfUS = new Intl.NumberFormat("en-US");
+  var fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
+  var clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  var ACTIVE_CONTAINERS = /* @__PURE__ */ new Set();
+  var HOST_STATE = /* @__PURE__ */ new WeakMap();
+  var cur = null;
+  var players;
+  var sortedIdx = null;
+  var isPlantObject = (o) => !!o && o.objectType === "plant";
+  function xpathSnapshot(expr, root = document) {
+    const doc = root.ownerDocument || root;
+    const res = doc.evaluate(expr, root, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    const out = [];
+    for (let i = 0; i < res.snapshotLength; i++) {
+      const n = res.snapshotItem(i);
+      if (n && n.nodeType === 1) out.push(n);
+    }
+    return out;
+  }
+  var distinct = (els) => {
+    const seen = /* @__PURE__ */ new Set(), out = [];
+    for (const el2 of els) if (!seen.has(el2)) {
+      seen.add(el2);
+      out.push(el2);
+    }
+    return out;
+  };
+  var resolveContainersFromXPaths = (paths) => distinct(paths.flatMap((x) => xpathSnapshot(x))).filter((el2) => document.contains(el2));
+  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
+  var getOrder = () => {
+    const n = Array.isArray(cur?.slots) ? cur.slots.length : 0;
+    if (!n) return [];
+    return Array.isArray(sortedIdx) && sortedIdx.length === n ? sortedIdx : defaultOrder(n);
+  };
+  var getOrderedSlots = () => {
+    if (!isPlantObject(cur)) return [];
+    const slots = Array.isArray(cur.slots) ? cur.slots : [];
+    const ord = getOrder();
+    const out = [];
+    for (const i of ord) if (slots[i] != null) out.push(slots[i]);
+    return out;
+  };
+  var plantSig = (o) => !o ? "\u2205" : [
+    o.species ?? "",
+    o.plantedAt ?? 0,
+    o.maturedAt ?? 0,
+    `slots:${Array.isArray(o.slots) ? o.slots.length : 0}`,
+    `ord:${getOrder().join(",")}`
+  ].join("|");
+  function ensureStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const s = document.createElement("style");
+    s.id = STYLE_ID;
+    s.textContent = `
+    .${CLASS_BADGE}{
+      position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+      display:inline-flex; gap:6px; align-items:center; justify-content:center;
+      padding:4px 10px; border-radius:10px; font:800 12px/1.2 system-ui,sans-serif;
+      color:#FFD84D; z-index:1; pointer-events:none; white-space:nowrap;
+    }`;
+    document.head.appendChild(s);
+  }
+  var BADGE_RESERVE = 0;
+  function measureBadgeReserve() {
+    if (BADGE_RESERVE) return BADGE_RESERVE;
+    ensureStyle();
+    const probe = Object.assign(document.createElement("div"), { className: CLASS_BADGE, textContent: "000,000,000" });
+    Object.assign(probe.style, { position: "absolute", visibility: "hidden", left: "-9999px" });
+    document.body.appendChild(probe);
+    BADGE_RESERVE = Math.max(28, Math.ceil(probe.getBoundingClientRect().height + 10));
+    probe.remove();
+    return BADGE_RESERVE;
+  }
+  function findDetailsHost(container) {
+    const name = container.querySelector("p.chakra-text") ?? container.querySelector('p[class*="chakra-text"]') ?? container.querySelector("p");
+    if (!name) return container;
+    const hasCanvas = (el2) => !!el2.querySelector("canvas");
+    let node = name;
+    while (node && node !== container) {
+      const cs = getComputedStyle(node);
+      if (cs.display.includes("flex") && !hasCanvas(node)) {
+        const parent = node.parentElement;
+        if (parent && Array.from(parent.children).some((ch) => ch !== node && ch instanceof HTMLElement && hasCanvas(ch)))
+          return node;
+      }
+      node = node.parentElement;
+    }
+    return name.closest(".McFlex") || name.parentElement || container;
+  }
+  function currentSlotValue(host) {
+    if (!isPlantObject(cur)) return null;
+    const ordered = getOrderedSlots();
+    if (!ordered.length) return null;
+    const sig = plantSig(cur);
+    const st = HOST_STATE.get(host);
+    let idx = st?.idx ?? 0;
+    if (!st || st.sig !== sig) {
+      idx = 0;
+      HOST_STATE.set(host, { idx, sig });
+    }
+    const safeIdx = (idx % ordered.length + ordered.length) % ordered.length;
+    const val = valueFromGardenSlot(ordered[safeIdx], DefaultPricing, players);
+    return Number.isFinite(val) && val > 0 ? val : null;
+  }
+  function injectOrUpdateBadge(container) {
+    if (!isPlantObject(cur)) {
+      removeBadge(container);
+      return;
+    }
+    ensureStyle();
+    const host = findDetailsHost(container);
+    if (getComputedStyle(host).position === "static") host.style.position = "relative";
+    const reserve = measureBadgeReserve();
+    if ((parseFloat(host.style.paddingBottom) || 0) < reserve) host.style.paddingBottom = `${reserve}px`;
+    const val = currentSlotValue(host) ?? // fallback total si besoin
+    (() => {
+      const v = valueFromGardenPlant(cur, DefaultPricing, players);
+      return Number.isFinite(v) && v > 0 ? v : null;
+    })();
+    if (val == null) {
+      removeBadge(container);
+      return;
+    }
+    let badge = host.querySelector("." + CLASS_BADGE);
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.className = CLASS_BADGE;
+      host.appendChild(badge);
+      host.setAttribute(ATTR_INJECTED, "1");
+    }
+    badge.textContent = fmtCoins(val);
+  }
+  function removeBadge(container) {
+    const host = findDetailsHost(container);
+    host.querySelectorAll("." + CLASS_BADGE).forEach((n) => n.remove());
+    if (host.hasAttribute(ATTR_INJECTED)) {
+      host.removeAttribute(ATTR_INJECTED);
+      host.style.paddingBottom = "";
+    }
+    HOST_STATE.delete(host);
+  }
+  function updateAllBadges() {
+    for (const el2 of resolveContainersFromXPaths(XPATHS)) injectOrUpdateBadge(el2);
+  }
+  function clearAllBadges() {
+    document.querySelectorAll("." + CLASS_BADGE).forEach((el2) => el2.remove());
+    document.querySelectorAll(`[${ATTR_INJECTED}="1"]`).forEach((host) => {
+      host.style.paddingBottom = "";
+      host.removeAttribute(ATTR_INJECTED);
+    });
+    ACTIVE_CONTAINERS.clear();
+  }
+  function watchTooltipsByXPath(xpaths) {
+    const current = /* @__PURE__ */ new Set();
+    const rescan = () => {
+      const found = resolveContainersFromXPaths(xpaths);
+      for (const el2 of found) {
+        if (!current.has(el2)) {
+          current.add(el2);
+          ACTIVE_CONTAINERS.add(el2);
+        }
+        injectOrUpdateBadge(el2);
+      }
+      for (const el2 of Array.from(current)) {
+        if (!document.contains(el2) || !found.includes(el2)) {
+          removeBadge(el2);
+          current.delete(el2);
+          ACTIVE_CONTAINERS.delete(el2);
+        }
+      }
+    };
+    rescan();
+    let raf = 0;
+    const mo = new MutationObserver(() => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        rescan();
+      });
+    });
+    mo.observe(document.body, { subtree: true, childList: true, attributes: true });
+    const getNearestActiveContainerTo = (el2) => {
+      if (ACTIVE_CONTAINERS.size === 0) return null;
+      if (ACTIVE_CONTAINERS.size === 1) return Array.from(ACTIVE_CONTAINERS)[0];
+      const r = el2.getBoundingClientRect(), ex = r.left + r.width / 2, ey = r.top + r.height / 2;
+      let best = null;
+      for (const c of ACTIVE_CONTAINERS) {
+        const cr = c.getBoundingClientRect();
+        const px = clamp(ex, cr.left, cr.right), py = clamp(ey, cr.top, cr.bottom);
+        const d = (ex - px) ** 2 + (ey - py) ** 2;
+        if (!best || d < best.d) best = { c, d };
+      }
+      return best?.c ?? null;
+    };
+    const handleNavFrom = (el2, dir) => {
+      const container = getNearestActiveContainerTo(el2) ?? Array.from(ACTIVE_CONTAINERS)[0] ?? null;
+      if (!container || !isPlantObject(cur)) return;
+      const host = findDetailsHost(container);
+      const total = getOrderedSlots().length;
+      if (total <= 1) {
+        injectOrUpdateBadge(container);
+        return;
+      }
+      const st = HOST_STATE.get(host) ?? { idx: 0, sig: plantSig(cur) };
+      st.sig = plantSig(cur);
+      st.idx = dir === "NEXT" ? (st.idx + 1) % total : (st.idx - 1 + total) % total;
+      HOST_STATE.set(host, st);
+      requestAnimationFrame(() => injectOrUpdateBadge(container));
+    };
+    const NAV_ROOTS = xpathSnapshot(NAV_ROOT_XPATH);
+    const EVENT_TARGETS = NAV_ROOTS.length ? NAV_ROOTS : [document.body];
+    const presses = /* @__PURE__ */ new Map();
+    const hitButtonAt = (x, y) => document.elementFromPoint(x, y)?.closest(`${NEXT_SEL},${PREV_SEL}`) ?? null;
+    const onPointerDownNav = (ev) => {
+      const t = ev.target;
+      if (!t) return;
+      const btn = t.closest(`${NEXT_SEL},${PREV_SEL}`);
+      if (!btn) return;
+      presses.set(ev.pointerId, { btn, dir: btn.matches(NEXT_SEL) ? "NEXT" : "PREV" });
+    };
+    const onPointerUpNav = (ev) => {
+      const rec = presses.get(ev.pointerId);
+      if (!rec) return;
+      presses.delete(ev.pointerId);
+      const upBtn = hitButtonAt(ev.clientX, ev.clientY);
+      if (upBtn !== rec.btn) return;
+      handleNavFrom(rec.btn, rec.dir);
+    };
+    const onPointerCancelNav = (ev) => {
+      presses.delete(ev.pointerId);
+    };
+    EVENT_TARGETS.forEach((root) => {
+      root.addEventListener("pointerdown", onPointerDownNav, true);
+      root.addEventListener("pointerup", onPointerUpNav, true);
+      root.addEventListener("pointercancel", onPointerCancelNav, true);
+    });
+    const onKey = (ev) => {
+      const k = ev.key?.toLowerCase();
+      if (k !== "c" && k !== "x") return;
+      handleNavFrom(document.elementFromPoint(innerWidth / 2, innerHeight / 2) ?? document.body, k === "c" ? "NEXT" : "PREV");
+    };
+    document.addEventListener("keydown", onKey, true);
+    return {
+      disconnect() {
+        mo.disconnect();
+        current.clear();
+        ACTIVE_CONTAINERS.clear();
+        EVENT_TARGETS.forEach((root) => {
+          root.removeEventListener("pointerdown", onPointerDownNav, true);
+          root.removeEventListener("pointerup", onPointerUpNav, true);
+          root.removeEventListener("pointercancel", onPointerCancelNav, true);
+        });
+        document.removeEventListener("keydown", onKey, true);
+      }
+    };
+  }
+  (async () => {
+    try {
+      cur = await myCurrentGardenObject.get();
+    } catch {
+    }
+    try {
+      players = await numPlayers.get();
+    } catch {
+    }
+    try {
+      const v = await myCurrentSortedGrowSlotIndices.get();
+      sortedIdx = Array.isArray(v) ? v.slice() : null;
+    } catch {
+    }
+    myCurrentGardenObject.onChange((v) => {
+      cur = v;
+      isPlantObject(cur) ? updateAllBadges() : clearAllBadges();
+    });
+    numPlayers.onChange((n) => {
+      players = n;
+      updateAllBadges();
+    });
+    myCurrentSortedGrowSlotIndices.onChange((v) => {
+      sortedIdx = Array.isArray(v) ? v.slice() : null;
+      updateAllBadges();
+    });
+    watchTooltipsByXPath(XPATHS);
+  })();
+
   // src/ui/menus/debug-data.ts
   var fmtTime = (ms) => {
     const d = new Date(ms);
@@ -6145,244 +6682,6 @@
     await sendToast({ title, description, variant, duration });
   }
 
-  // src/utils/calculators.ts
-  var key = (s) => String(s ?? "").trim();
-  function resolveSpeciesKey(species) {
-    const wanted = key(species).toLowerCase();
-    if (!wanted) return null;
-    for (const k of Object.keys(plantCatalog)) {
-      if (k.toLowerCase() === wanted) return k;
-    }
-    return null;
-  }
-  function findAnySellPriceNode(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
-      return obj.baseSellPrice;
-    }
-    for (const k of ["produce", "crop", "item", "items", "data"]) {
-      if (obj[k]) {
-        const v = findAnySellPriceNode(obj[k]);
-        if (v != null) return v;
-      }
-    }
-    try {
-      const seen = /* @__PURE__ */ new Set();
-      const stack = [obj];
-      while (stack.length) {
-        const cur = stack.pop();
-        if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-        seen.add(cur);
-        if (typeof cur.baseSellPrice === "number") {
-          const v = cur.baseSellPrice;
-          if (Number.isFinite(v)) return v;
-        }
-        for (const v of Object.values(cur)) if (v && typeof v === "object") stack.push(v);
-      }
-    } catch {
-    }
-    return null;
-  }
-  function defaultGetBasePrice(species) {
-    const spKey = resolveSpeciesKey(species);
-    if (!spKey) return null;
-    const node = plantCatalog[spKey];
-    const cands = [
-      node?.produce?.baseSellPrice,
-      node?.crop?.baseSellPrice,
-      node?.item?.baseSellPrice,
-      node?.items?.Produce?.baseSellPrice
-    ].filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (cands.length) return cands[0];
-    return findAnySellPriceNode(node);
-  }
-  function applyRounding(v, mode = "round") {
-    switch (mode) {
-      case "floor":
-        return Math.floor(v);
-      case "ceil":
-        return Math.ceil(v);
-      case "none":
-        return v;
-      case "round":
-      default:
-        return Math.round(v);
-    }
-  }
-  function friendBonusMultiplier(playersInRoom) {
-    if (!Number.isFinite(playersInRoom)) return 1;
-    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
-    return 1 + (n - 1) * 0.1;
-  }
-  var COLOR_MULT = {
-    Gold: 25,
-    Rainbow: 50
-  };
-  var WEATHER_MULT = {
-    Wet: 2,
-    Chilled: 2,
-    Frozen: 10
-  };
-  var TIME_MULT = {
-    Dawnlit: 2,
-    Dawnbound: 3,
-    Amberlit: 5,
-    Amberbound: 6
-  };
-  var WEATHER_TIME_COMBO = {
-    "Wet+Dawnlit": 3,
-    "Chilled+Dawnlit": 3,
-    "Wet+Amberlit": 6,
-    "Chilled+Amberlit": 6,
-    "Frozen+Dawnlit": 11,
-    "Frozen+Dawnbound": 12,
-    "Frozen+Amberlit": 14,
-    "Frozen+Amberbound": 15
-  };
-  function isColor(m) {
-    return m === "Gold" || m === "Rainbow";
-  }
-  function isWeather(m) {
-    return m === "Wet" || m === "Chilled" || m === "Frozen";
-  }
-  function isTime(m) {
-    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
-  }
-  function normalizeMutationName(m) {
-    const s = key(m).toLowerCase();
-    if (!s) return "";
-    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
-    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
-    if (s === "gold") return "Gold";
-    if (s === "rainbow") return "Rainbow";
-    if (s === "wet") return "Wet";
-    if (s === "chilled") return "Chilled";
-    if (s === "frozen") return "Frozen";
-    if (s === "dawnlit") return "Dawnlit";
-    if (s === "dawnbound") return "Dawnbound";
-    if (s === "amberlit") return "Amberlit";
-    if (s === "amberbound") return "Amberbound";
-    return m;
-  }
-  function computeColorMultiplier(mutations) {
-    if (!Array.isArray(mutations)) return 1;
-    let best = 1;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isColor(m)) {
-        const mult = COLOR_MULT[m];
-        if (mult > best) best = mult;
-      }
-    }
-    return best;
-  }
-  function pickWeather(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isWeather(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function pickTime(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isTime(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function computeWeatherTimeMultiplier(weather, time) {
-    if (!weather && !time) return 1;
-    if (weather && !time) return WEATHER_MULT[weather];
-    if (!weather && time) return TIME_MULT[time];
-    const k = `${weather}+${time}`;
-    const combo = WEATHER_TIME_COMBO[k];
-    if (typeof combo === "number") return combo;
-    return Math.max(WEATHER_MULT[weather], TIME_MULT[time]);
-  }
-  function mutationsMultiplier(mutations) {
-    const color = computeColorMultiplier(mutations);
-    const weather = pickWeather(mutations);
-    const time = pickTime(mutations);
-    const wt = computeWeatherTimeMultiplier(weather, time);
-    return color * wt;
-  }
-  function estimateProduceValue(species, scale, mutations, opts) {
-    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
-    const sXform = opts?.scaleTransform ?? ((_, s) => s);
-    const round = opts?.rounding ?? "round";
-    const base = getBase(species);
-    if (!(Number.isFinite(base) && base > 0)) return 0;
-    const sc = Number(scale);
-    if (!Number.isFinite(sc) || sc <= 0) return 0;
-    const effScale = sXform(species, sc);
-    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
-    const mutMult = mutationsMultiplier(mutations);
-    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
-    const pre = base * effScale * mutMult * friendsMult;
-    const out = Math.max(0, applyRounding(pre, round));
-    return out;
-  }
-  function valueFromInventoryProduce(item, opts, playersInRoom) {
-    if (!item || item.itemType !== "Produce") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
-  }
-  function valueFromGardenSlot(slot, opts, playersInRoom) {
-    if (!slot) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
-  }
-  function valueFromGardenPlant(plant, opts, playersInRoom) {
-    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
-    return sum;
-  }
-  function sumInventoryValue(items, opts, playersInRoom) {
-    if (!Array.isArray(items)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const it of items) {
-      if (it?.itemType === "Produce") {
-        sum += valueFromInventoryProduce(it, merged);
-      }
-    }
-    return sum;
-  }
-  function sumGardenValue(garden2, opts, playersInRoom) {
-    if (!garden2 || typeof garden2 !== "object") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const k of Object.keys(garden2)) {
-      const p = garden2[k];
-      if (p?.objectType === "plant") {
-        sum += valueFromGardenPlant(p, merged);
-      }
-    }
-    return sum;
-  }
-  var DefaultPricing = Object.freeze({
-    getBasePrice: defaultGetBasePrice,
-    rounding: "round"
-  });
-
   // src/services/players.ts
   function findPlayersDeep(state2) {
     if (!state2 || typeof state2 !== "object") return [];
@@ -6390,11 +6689,11 @@
     const seen = /* @__PURE__ */ new Set();
     const stack = [state2];
     while (stack.length) {
-      const cur = stack.pop();
-      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-      seen.add(cur);
-      for (const k of Object.keys(cur)) {
-        const v = cur[k];
+      const cur2 = stack.pop();
+      if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
+      seen.add(cur2);
+      for (const k of Object.keys(cur2)) {
+        const v = cur2[k];
         if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
           const looks = v.some((p) => "id" in p && "name" in p);
           if (looks && /player/i.test(k)) out.push(...v);
@@ -6469,7 +6768,7 @@
     for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
     return null;
   }
-  function enrichPlayersWithSlots(players, st) {
+  function enrichPlayersWithSlots(players2, st) {
     const byPid = /* @__PURE__ */ new Map();
     for (const slot of getSlotsArray(st)) {
       if (!slot || typeof slot !== "object") continue;
@@ -6479,15 +6778,15 @@
       const inv = extractInventoryFromSlot(slot);
       byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
     }
-    return players.map((p) => {
+    return players2.map((p) => {
       const extra = byPid.get(String(p.id));
       return extra ? { ...p, ...extra } : { ...p, inventory: null };
     });
   }
-  function orderPlayersBySlots(players, st) {
+  function orderPlayersBySlots(players2, st) {
     const slots = getSlotsArray(st);
     const mapById = /* @__PURE__ */ new Map();
-    for (const p of players) mapById.set(String(p.id), p);
+    for (const p of players2) mapById.set(String(p.id), p);
     const out = [];
     const seen = /* @__PURE__ */ new Set();
     for (const s of slots) {
@@ -6499,7 +6798,7 @@
         seen.add(pid);
       }
     }
-    for (const p of players) {
+    for (const p of players2) {
       const pid = String(p.id);
       if (!seen.has(pid)) {
         out.push(p);
@@ -6541,16 +6840,16 @@
         const seen = /* @__PURE__ */ new Set();
         const stack = [st];
         while (stack.length) {
-          const cur = stack.pop();
-          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-          seen.add(cur);
-          const arr = cur?.spawnTiles;
+          const cur2 = stack.pop();
+          if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
+          seen.add(cur2);
+          const arr = cur2?.spawnTiles;
           if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
             __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
             return __cachedSpawnTiles;
           }
-          for (const k of Object.keys(cur)) {
-            const v = cur[k];
+          for (const k of Object.keys(cur2)) {
+            const v = cur2[k];
             if (v && typeof v === "object") stack.push(v);
           }
         }
@@ -6580,13 +6879,13 @@
     }
     return 81;
   }
-  function assignGardenPositions(players, spawnTilesSorted) {
-    if (!players.length || !spawnTilesSorted.length) {
-      return players.map((p) => ({ ...p, gardenPosition: null }));
+  function assignGardenPositions(players2, spawnTilesSorted) {
+    if (!players2.length || !spawnTilesSorted.length) {
+      return players2.map((p) => ({ ...p, gardenPosition: null }));
     }
     const out = [];
-    for (let i = 0; i < players.length; i++) {
-      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
+    for (let i = 0; i < players2.length; i++) {
+      out.push({ ...players2[i], gardenPosition: spawnTilesSorted[i] ?? null });
     }
     return out;
   }
@@ -6857,21 +7156,21 @@
       followingState.lastPos = { x: pos.x, y: pos.y };
       followingState.prevPos = null;
       followingState.steps = 0;
-      followingState.unsub = await this.onChange(async (players) => {
+      followingState.unsub = await this.onChange(async (players2) => {
         if (followingState.currentTargetId !== playerId) return;
-        const target = players.find((p) => p.id === playerId);
+        const target = players2.find((p) => p.id === playerId);
         if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
           await this.stopFollowing();
           await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
           return;
         }
-        const cur = { x: target.x, y: target.y };
+        const cur2 = { x: target.x, y: target.y };
         const last = followingState.lastPos;
         if (!last) {
-          followingState.lastPos = cur;
+          followingState.lastPos = cur2;
           return;
         }
-        if (cur.x !== last.x || cur.y !== last.y) {
+        if (cur2.x !== last.x || cur2.y !== last.y) {
           followingState.steps += 1;
           if (followingState.steps >= 2) {
             if (last) {
@@ -6879,7 +7178,7 @@
             }
           }
           followingState.prevPos = followingState.lastPos;
-          followingState.lastPos = cur;
+          followingState.lastPos = cur2;
         }
       });
       await toastSimple("Follow", "Follow enabled", "success");
@@ -7010,7 +7309,7 @@
     mo.observe(vt.root, { childList: true, subtree: true });
     async function renderRight(playerId) {
       right.innerHTML = "";
-      const p = playerId ? players.find((x) => x.id === playerId) || null : null;
+      const p = playerId ? players2.find((x) => x.id === playerId) || null : null;
       if (!p) {
         const empty = document.createElement("div");
         empty.style.opacity = "0.75";
@@ -7172,7 +7471,7 @@
         }
       })();
     }
-    let players = [];
+    let players2 = [];
     let lastSig = "";
     function signature(ps) {
       return ps.map(
@@ -7187,10 +7486,10 @@
         return;
       }
       lastSig = sig;
-      players = next;
-      vt.setItems(players.map(vItem));
+      players2 = next;
+      vt.setItems(players2.map(vItem));
       ensureVtabsListScrollable(vt.root);
-      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
+      const sel = keepSelection && prevSel && players2.some((p) => p.id === prevSel) ? prevSel : players2[0]?.id ?? null;
       if (sel !== null) vt.select(sel);
       else renderRight(null);
     }
@@ -8564,12 +8863,12 @@
     let rafId = null;
     let lastTs = 0, accMs = 0, inMove = false;
     async function step(dx, dy) {
-      let cur;
+      let cur2;
       try {
-        cur = await PlayerService.getPosition();
+        cur2 = await PlayerService.getPosition();
       } catch {
       }
-      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
+      const cx = Math.round(cur2?.x ?? 0), cy = Math.round(cur2?.y ?? 0);
       try {
         await PlayerService.move(cx + dx, cy + dy);
       } catch {
@@ -9064,10 +9363,10 @@
     qty.onchange = () => {
       const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
       qty.value = String(v);
-      const cur = selectedMap.get(item.name);
-      if (!cur) return;
-      cur.qty = v;
-      selectedMap.set(item.name, cur);
+      const cur2 = selectedMap.get(item.name);
+      if (!cur2) return;
+      cur2.qty = v;
+      selectedMap.set(item.name, cur2);
       updateSummary();
     };
     qty.oninput = qty.onchange;
@@ -9559,9 +9858,9 @@
     let pingTimer = null;
     async function pingPosition() {
       try {
-        const cur = await deps.getPosition();
-        if (!cur) return;
-        await deps.move(Math.round(cur.x), Math.round(cur.y));
+        const cur2 = await deps.getPosition();
+        if (!cur2) return;
+        await deps.move(Math.round(cur2.x), Math.round(cur2.y));
       } catch {
       }
     }
