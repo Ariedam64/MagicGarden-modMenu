@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.3.3
+// @version      1.3.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -123,7 +123,8 @@
     const hook = globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;
     if (!hook?.renderers?.size) return null;
     for (const [rid] of hook.renderers) {
-      const roots = hook.getFiberRoots(rid);
+      const roots = hook.getFiberRoots?.(rid);
+      if (!roots) continue;
       for (const root of roots) {
         const seen = /* @__PURE__ */ new Set();
         const stack = [root.current];
@@ -146,22 +147,33 @@
   }
   async function captureViaWriteOnce(timeoutMs = 5e3) {
     const cache = getAtomCache();
-    if (!cache) throw new Error("jotaiAtomCache.cache introuvable");
+    if (!cache) {
+      console.warn("[jotai-bridge] jotaiAtomCache.cache introuvable");
+      throw new Error("jotaiAtomCache.cache introuvable");
+    }
     let capturedGet = null;
     let capturedSet = null;
     const patched = [];
+    const restorePatched = () => {
+      for (const a of patched) {
+        try {
+          if (a.__origWrite) {
+            a.write = a.__origWrite;
+            delete a.__origWrite;
+          }
+        } catch {
+        }
+      }
+    };
     for (const atom of cache.values()) {
-      if (!atom || typeof atom.write !== "function") continue;
+      if (!atom || typeof atom.write !== "function" || atom.__origWrite) continue;
       const orig = atom.write;
       atom.__origWrite = orig;
       atom.write = function(get, set2, ...args) {
         if (!capturedSet) {
           capturedGet = get;
           capturedSet = set2;
-          for (const a of patched) {
-            a.write = a.__origWrite;
-            delete a.__origWrite;
-          }
+          restorePatched();
         }
         return orig.call(this, get, set2, ...args);
       };
@@ -177,13 +189,15 @@
       await wait(50);
     }
     if (!capturedSet) {
+      restorePatched();
       _lastCapturedVia = "polyfill";
+      console.warn("[jotai-bridge] write-once: timeout \u2192 polyfill");
       return {
         get: () => {
-          throw new Error("Store non captur\xE9: get indisponible");
+          throw new Error("Store non captur\xE9: get not avaible");
         },
         set: () => {
-          throw new Error("Store non captur\xE9: set indisponible");
+          throw new Error("Store non captur\xE9: set not avaible");
         },
         sub: () => () => {
         },
@@ -220,15 +234,24 @@
     };
   }
   async function ensureStore() {
-    if (_store) return _store;
+    if (_store && !_store.__polyfill) return _store;
     if (_captureInProgress) {
       const t0 = Date.now();
-      while (!_store && Date.now() - t0 < 3e3) await new Promise((r) => setTimeout(r, 25));
-      if (_store) return _store;
+      const maxWait = 5500;
+      while (!_store && Date.now() - t0 < maxWait) {
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      if (_store && !_store.__polyfill) return _store;
     }
     _captureInProgress = true;
     try {
-      _store = findStoreViaFiber() || await captureViaWriteOnce();
+      const viaFiber = findStoreViaFiber();
+      if (viaFiber) {
+        _store = viaFiber;
+        return _store;
+      }
+      const viaWrite = await captureViaWriteOnce();
+      _store = viaWrite;
       return _store;
     } catch (e) {
       _captureError = e;
@@ -266,7 +289,8 @@
     return out;
   }
   function getAtomByLabel(label2) {
-    return findAtomsByLabel(new RegExp("^" + label2 + "$"))[0] || null;
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return findAtomsByLabel(new RegExp("^" + escape(label2) + "$"))[0] || null;
   }
 
   // src/core/webSocketBridge.ts
@@ -5674,7 +5698,9 @@
       }
       try {
         const captured = isStoreCaptured();
+        console.log("isCaptured: ", captured);
         const info = getCapturedInfo();
+        console.log("getCapturedInfo: ", info);
         if (captured) {
           sStore.textContent = `store: ${info.via || "ready"}`;
           tag(sStore, "ok");
