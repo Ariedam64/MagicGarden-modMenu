@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.3.1
+// @version      1.3.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3082,6 +3082,109 @@
       scroller.appendChild(t);
       return { root: wrap, tbody };
     }
+    segmented(items, selected, onChange, opts) {
+      const root = document.createElement("div");
+      root.className = "qmm-seg";
+      if (opts?.fullWidth) root.classList.add("qmm-seg--full");
+      if (opts?.id) root.id = opts.id;
+      root.setAttribute("role", "radiogroup");
+      if (opts?.ariaLabel) root.setAttribute("aria-label", opts.ariaLabel);
+      const rail = document.createElement("div");
+      rail.className = "qmm-seg__indicator";
+      root.appendChild(rail);
+      let value = selected;
+      const btns = [];
+      const setSelected = (v, focus = false) => {
+        value = v;
+        for (const b of btns) {
+          const active = b.dataset.value === v;
+          b.setAttribute("aria-checked", active ? "true" : "false");
+          b.tabIndex = active ? 0 : -1;
+          b.classList.toggle("active", active);
+          if (active && focus) b.focus();
+        }
+        moveIndicator();
+        onChange?.(value);
+      };
+      const moveIndicator = () => {
+        const active = btns.find((b) => b.dataset.value === value);
+        if (!active) return;
+        const i = btns.indexOf(active);
+        const n = btns.length;
+        const cs = getComputedStyle(root);
+        const gap = parseFloat(cs.gap || cs.columnGap || "0") || 0;
+        const bL = parseFloat(cs.borderLeftWidth || "0") || 0;
+        const bR = parseFloat(cs.borderRightWidth || "0") || 0;
+        const rRoot = root.getBoundingClientRect();
+        const rBtn = active.getBoundingClientRect();
+        let left = rBtn.left - rRoot.left - bL;
+        let width = rBtn.width;
+        const padW = rRoot.width - bL - bR;
+        if (n === 1) {
+          left = 0;
+          width = padW;
+        } else if (i === 0) {
+          const rightEdge = left + width + gap / 2;
+          left = 0;
+          width = rightEdge - left;
+        } else if (i === n - 1) {
+          left = left - gap / 2;
+          width = padW - left;
+        } else {
+          left = left - gap / 2;
+          width = width + gap;
+        }
+        const dpr = window.devicePixelRatio || 1;
+        const snap = (x) => Math.round(x * dpr) / dpr;
+        rail.style.transform = `translate3d(${snap(left)}px,0,0)`;
+        rail.style.width = `${snap(width)}px`;
+      };
+      items.forEach(({ value: v, label: label2, disabled }) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "qmm-seg__btn";
+        b.dataset.value = String(v);
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", v === selected ? "true" : "false");
+        b.tabIndex = v === selected ? 0 : -1;
+        b.disabled = !!disabled;
+        b.textContent = label2;
+        b.addEventListener("click", () => {
+          if (!b.disabled) setSelected(v, false);
+        });
+        b.addEventListener("keydown", (e) => {
+          if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)) return;
+          e.preventDefault();
+          const idx = items.findIndex((it) => it.value === value);
+          if (e.key === "Home") {
+            setSelected(items[0].value, true);
+            return;
+          }
+          if (e.key === "End") {
+            setSelected(items[items.length - 1].value, true);
+            return;
+          }
+          const dir = e.key === "ArrowRight" ? 1 : -1;
+          let j = idx;
+          for (let k = 0; k < items.length; k++) {
+            j = (j + dir + items.length) % items.length;
+            if (!items[j].disabled) {
+              setSelected(items[j].value, true);
+              break;
+            }
+          }
+        });
+        btns.push(b);
+        root.appendChild(b);
+      });
+      const ro = window.ResizeObserver ? new ResizeObserver(moveIndicator) : null;
+      if (ro) ro.observe(root);
+      window.addEventListener("resize", moveIndicator);
+      queueMicrotask(moveIndicator);
+      root.get = () => value;
+      root.set = (v) => setSelected(v, false);
+      return root;
+    }
     radioGroup(name, options, selected, onChange) {
       const wrap = el("div", "qmm-radio-group");
       for (const { value, label: label2 } of options) {
@@ -3620,6 +3723,69 @@
   60%  { box-shadow: 0 0 0 12px rgba(122,162,255,0), 0 1px 16px rgba(0,0,0,.25); }
   100% { box-shadow: 0 0 0 0 rgba(122,162,255,0),  0 1px 16px rgba(0,0,0,.25); }
 }
+
+/* ---------- Segmented (minimal, modern) ---------- */
+.qmm-seg{
+  --seg-pad: 8px;
+  --seg-radius: 999px;
+  --seg-stroke: 1.2px;      /* \xE9paisseur du trait */
+  --seg-nudge-x: 0px;       /* micro-ajustements optionnels */
+  --seg-nudge-w: 0px;
+  --seg-fill: rgba(122,162,255,.05);           
+  --seg-stroke-color: rgba(122,162,255,.60);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--seg-pad);
+  border-radius: var(--seg-radius);
+  background: var(--qmm-bg-soft);
+  border: 1px solid var(--qmm-border-2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+  overflow: hidden;
+  background-clip: padding-box; /* important pour que le fond ne passe pas sous la bordure */
+}
+
+.qmm-seg--full{ display:flex; width:100% }
+
+.qmm-seg__btn{
+  position: relative;
+  z-index: 1;
+  appearance: none; background: transparent; border: 0; cursor: pointer;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: var(--qmm-text-dim);
+  font: inherit; line-height: 1; white-space: nowrap;
+  transition: color .15s ease, transform .06s ease;
+}
+.qmm-compact .qmm-seg__btn{ padding: 6px 10px }
+.qmm-seg__btn:hover{ color: var(--qmm-text); }
+.qmm-seg__btn.active{ color:#fff; font-weight:600; }
+.qmm-seg__btn:active{ transform: translateY(1px); }
+.qmm-seg__btn[disabled]{ opacity:.5; cursor:not-allowed; }
+
+.qmm-seg__indicator{
+  position: absolute;
+  top: 0; left: 0;
+  height: 100%;
+  width: 40px;                      /* maj en JS */
+  border-radius: inherit;
+  background: var(--seg-fill);              /* \u2B05\uFE0F applique la couleur */
+  outline: var(--seg-stroke,1.2px) solid var(--seg-stroke-color);
+  outline-offset: calc(-1 * var(--seg-stroke));
+
+  box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  transition: transform .18s cubic-bezier(.2,.8,.2,1),
+              width .18s cubic-bezier(.2,.8,.2,1);
+  pointer-events: none;
+}
+
+/* Accessibilit\xE9 */
+@media (prefers-reduced-motion: reduce){
+  .qmm-seg__indicator, .qmm-seg__btn { transition: none; }
+}  /* \u2190 manquait cette accolade */
+
     `;
       const st = document.createElement("style");
       st.id = "__qmm_css__";
@@ -3842,6 +4008,49 @@
   var LS_TEAMS_KEY = "qws:pets:teams:v1";
   var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
   var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
+  var _invMute = 0;
+  var _invPending = false;
+  var _invEmitTimer = null;
+  var _lastInvEmit = 0;
+  var INV_RELAX_MS = 150;
+  var INV_DEBOUNCE_MS = 120;
+  function _beginInvRead() {
+    _invMute++;
+  }
+  function _endInvRead() {
+    setTimeout(() => {
+      _invMute = Math.max(0, _invMute - 1);
+      _scheduleInvEmit();
+    }, INV_RELAX_MS);
+  }
+  function _doInvEmit() {
+    _lastInvEmit = performance.now();
+    _invPending = false;
+    const snap = _invPetsCache.slice();
+    _invSubs.forEach((fn) => {
+      try {
+        fn(snap);
+      } catch (e) {
+      }
+    });
+  }
+  function _scheduleInvEmit() {
+    if (_invMute > 0) {
+      _invPending = true;
+      return;
+    }
+    const now = performance.now();
+    const wait = _lastInvEmit + INV_DEBOUNCE_MS - now;
+    if (wait > 0) {
+      if (_invEmitTimer != null) return;
+      _invEmitTimer = window.setTimeout(() => {
+        _invEmitTimer = null;
+        _doInvEmit();
+      }, Math.ceil(wait));
+    } else {
+      _doInvEmit();
+    }
+  }
   var TEAM_HK_MAP = /* @__PURE__ */ new Map();
   var hkKeyForTeam = (id) => `${LS_TEAM_HK_PREFIX}${id}`;
   function setTeamsForHotkeys(teams) {
@@ -4144,13 +4353,7 @@
       if (p && p.id) map2.set(p.id, p);
     }
     _invPetsCache = Array.from(map2.values());
-    const snap = _invPetsCache.slice();
-    _invSubs.forEach((fn) => {
-      try {
-        fn(snap);
-      } catch {
-      }
-    });
+    _scheduleInvEmit();
   }
   async function _startInventoryWatcher() {
     const unsub = await (async () => {
@@ -4300,42 +4503,52 @@
       this._notifyTeamSubs();
     },
     async buildFilteredInventoryForTeam(teamId, opts) {
-      await _ensureInventoryWatchersStarted();
-      const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
-      let list = await this.getInventoryPets();
-      if (mode === "ability" && value) {
-        const idSet = await _abilityNameToPresentIds(value);
-        list = idSet.size ? list.filter((p) => Array.isArray(p.abilities) && p.abilities.some((a) => idSet.has(a))) : [];
-      } else if (mode === "species" && value) {
-        const vv = value.toLowerCase();
-        list = list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
-      } else if (value) {
-        list = list.filter((p) => _matchesQuery(p, value));
+      _beginInvRead();
+      try {
+        await _ensureInventoryWatchersStarted();
+        const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
+        let list = await this.getInventoryPets();
+        if (mode === "ability" && value) {
+          const idSet = await _abilityNameToPresentIds(value);
+          list = idSet.size ? list.filter((p) => Array.isArray(p.abilities) && p.abilities.some((a) => idSet.has(a))) : [];
+        } else if (mode === "species" && value) {
+          const vv = value.toLowerCase();
+          list = list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
+        } else if (value) {
+          list = list.filter((p) => _matchesQuery(p, value));
+        }
+        if (opts?.excludeIds?.size) {
+          const ex = opts.excludeIds;
+          list = list.filter((p) => !ex.has(p.id));
+        }
+        const items = list.map(_invPetToRawItem);
+        const favAll = await _favoriteIdsSafe();
+        const keep = new Set(list.map((p) => p.id));
+        const favoritedItemIds = favAll.filter((id) => keep.has(id));
+        return { items, favoritedItemIds };
+      } finally {
+        _endInvRead();
       }
-      if (opts?.excludeIds?.size) {
-        const ex = opts.excludeIds;
-        list = list.filter((p) => !ex.has(p.id));
-      }
-      const items = list.map(_invPetToRawItem);
-      const favAll = await _favoriteIdsSafe();
-      const keep = new Set(list.map((p) => p.id));
-      const favoritedItemIds = favAll.filter((id) => keep.has(id));
-      return { items, favoritedItemIds };
     },
     async buildFilteredInventoryByQuery(query, opts) {
-      await _ensureInventoryWatchersStarted();
-      const q = (query || "").toLowerCase().trim();
-      let list = await this.getInventoryPets();
-      list = list.filter((p) => _matchesQuery(p, q));
-      if (opts?.excludeIds?.size) {
-        const ex = opts.excludeIds;
-        list = list.filter((p) => !ex.has(p.id));
+      _beginInvRead();
+      try {
+        await _ensureInventoryWatchersStarted();
+        const q = (query || "").toLowerCase().trim();
+        let list = await this.getInventoryPets();
+        list = list.filter((p) => _matchesQuery(p, q));
+        if (opts?.excludeIds?.size) {
+          const ex = opts.excludeIds;
+          list = list.filter((p) => !ex.has(p.id));
+        }
+        const items = list.map(_invPetToRawItem);
+        const favAll = await _favoriteIdsSafe();
+        const keep = new Set(list.map((p) => p.id));
+        const favoritedItemIds = favAll.filter((id) => keep.has(id));
+        return { items, favoritedItemIds };
+      } finally {
+        _endInvRead();
       }
-      const items = list.map(_invPetToRawItem);
-      const favAll = await _favoriteIdsSafe();
-      const keep = new Set(list.map((p) => p.id));
-      const favoritedItemIds = favAll.filter((id) => keep.has(id));
-      return { items, favoritedItemIds };
     },
     /* --------------------------------- UI-less team APIs -------------------------------- */
     _teams: loadTeams(),
@@ -4380,15 +4593,15 @@
     duplicateTeam(teamId) {
       const src = this._teams.find((t) => t.id === teamId);
       if (!src) return null;
-      const copy = {
+      const copy2 = {
         id: _uid(),
         name: `${src.name} (copy)`,
         slots: src.slots.slice(0, 3)
       };
-      this._teams.push(copy);
+      this._teams.push(copy2);
       saveTeams(this._teams);
       this._notifyTeamSubs();
-      return copy;
+      return copy2;
     },
     deleteTeam(teamId) {
       const i = this._teams.findIndex((t) => t.id === teamId);
@@ -4445,37 +4658,47 @@
       return t ? { ...t, slots: t.slots.slice(0, 3) } : null;
     },
     async getTeamSlotOptions(teamId, slotIndex) {
-      await _ensureInventoryWatchersStarted();
-      const team = this.getTeamById(teamId);
-      const filtered = await this.getTeamFilteredInventoryPets(teamId);
-      if (!team) return filtered;
-      const idx = Math.max(0, Math.min(2, Math.floor(slotIndex)));
-      const current = team.slots[idx] || null;
-      const taken = /* @__PURE__ */ new Set();
-      team.slots.forEach((id, i) => {
-        if (i !== idx && id) taken.add(id);
-      });
-      let visible = filtered.filter((p) => !taken.has(p.id));
-      if (current && !visible.some((p) => p.id === current)) {
-        const cur2 = _invPetsCache.find((p) => p.id === current);
-        if (cur2) visible = [cur2, ...visible];
+      _beginInvRead();
+      try {
+        await _ensureInventoryWatchersStarted();
+        const team = this.getTeamById(teamId);
+        const filtered = await this.getTeamFilteredInventoryPets(teamId);
+        if (!team) return filtered;
+        const idx = Math.max(0, Math.min(2, Math.floor(slotIndex)));
+        const current = team.slots[idx] || null;
+        const taken = /* @__PURE__ */ new Set();
+        team.slots.forEach((id, i) => {
+          if (i !== idx && id) taken.add(id);
+        });
+        let visible = filtered.filter((p) => !taken.has(p.id));
+        if (current && !visible.some((p) => p.id === current)) {
+          const cur2 = _invPetsCache.find((p) => p.id === current);
+          if (cur2) visible = [cur2, ...visible];
+        }
+        return visible;
+      } finally {
+        _endInvRead();
       }
-      return visible;
     },
     async getTeamFilteredInventoryPets(teamId) {
-      await _ensureInventoryWatchersStarted();
-      const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
-      let list = _invPetsCache.slice();
-      if (mode === "ability" && value) {
-        const idSet = await _abilityNameToPresentIds(value);
-        return idSet.size ? list.filter((p) => p.abilities?.some((a) => idSet.has(a))) : [];
+      _beginInvRead();
+      try {
+        await _ensureInventoryWatchersStarted();
+        const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
+        let list = _invPetsCache.slice();
+        if (mode === "ability" && value) {
+          const idSet = await _abilityNameToPresentIds(value);
+          return idSet.size ? list.filter((p) => p.abilities?.some((a) => idSet.has(a))) : [];
+        }
+        if (mode === "species" && value) {
+          const vv = value.toLowerCase();
+          return list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
+        }
+        if (value) return list.filter((p) => _matchesQuery(p, value));
+        return list;
+      } finally {
+        _endInvRead();
       }
-      if (mode === "species" && value) {
-        const vv = value.toLowerCase();
-        return list.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
-      }
-      if (value) return list.filter((p) => _matchesQuery(p, value));
-      return list;
     },
     //* ============================ Ability Logs (for "Logs" tab) ============================ */
     _logs: [],
@@ -4746,7 +4969,7 @@
         }
         const pet = _invPetsCache.find((p) => String(p.id) === String(petId)) || null;
         const abilityIdStr = String(abilityId);
-        const log = {
+        const logLine = {
           petId,
           species: pet?.petSpecies || void 0,
           name: pet?.name ?? void 0,
@@ -4757,13 +4980,19 @@
           time12: fmtTime12(performedAtNum)
         };
         this._seenPerfByPet.set(petId, performedAtNum);
-        this._pushLog(log);
+        this._pushLog(logLine);
       }
     },
     /* ============================ Inventory (from myInventoryAtom) ============================ */
     async getInventoryPets() {
-      await _ensureInventoryWatchersStarted();
-      return _invPetsCache.slice();
+      _beginInvRead();
+      try {
+        await _ensureInventoryWatchersStarted();
+        const out = _invPetsCache.slice();
+        return out;
+      } finally {
+        _endInvRead();
+      }
     },
     async searchInventoryPets(q) {
       const list = await this.getInventoryPets();
@@ -5950,7 +6179,7 @@
     watchTooltipsByXPath();
   })();
 
-  // src/ui/menus/debug-data.ts
+  // src/services/debug-data.ts
   var fmtTime = (ms) => {
     const d = new Date(ms);
     const pad = (n, s = 2) => String(n).padStart(s, "0");
@@ -5974,25 +6203,40 @@
     }
   };
   var registry = /* @__PURE__ */ new Map();
+  function getWSInfos() {
+    return Array.from(registry.values());
+  }
+  function getWSStatusText() {
+    const anyOpen = sockets.some((ws) => ws.readyState === WebSocket.OPEN);
+    const viaW = workerFound ? "worker" : "page/auto";
+    return `status: ${anyOpen ? "OPEN" : "none"} \u2022 mode: ${viaW}`;
+  }
+  var HOOKED_CTOR_FLAG = Symbol.for("qmm.wsCtorHooked");
+  var WS_PATCHED_SEND = Symbol.for("qmm.wsPatchedSend");
   var hookedOnce = false;
   function installWSHookIfNeeded(onFrame) {
-    if (!hookedOnce) {
-      if (window.WebSocket === NativeWS) {
-        window.WebSocket = new Proxy(NativeWS, {
-          construct(target, args, newTarget) {
-            const ws = Reflect.construct(target, args, newTarget);
+    const Ctor = window.WebSocket;
+    if (!Ctor[HOOKED_CTOR_FLAG]) {
+      const ProxyCtor = new Proxy(Ctor, {
+        construct(target, args, newTarget) {
+          const ws = Reflect.construct(target, args, newTarget);
+          try {
             trackSocket(ws, "new", onFrame);
-            return ws;
+          } catch {
           }
-        });
-      }
-      sockets.forEach((ws) => trackSocket(ws, "existing", onFrame));
-      hookedOnce = true;
-    } else {
-      sockets.forEach((ws) => {
-        if (!registry.has(ws)) trackSocket(ws, "late", onFrame);
+          return ws;
+        }
       });
+      ProxyCtor[HOOKED_CTOR_FLAG] = true;
+      window.WebSocket = ProxyCtor;
     }
+    sockets.forEach((ws) => {
+      try {
+        trackSocket(ws, "existing", onFrame);
+      } catch {
+      }
+    });
+    if (!hookedOnce) hookedOnce = true;
   }
   function trackSocket(ws, why, onFrame) {
     if (registry.has(ws)) return;
@@ -6021,9 +6265,10 @@
     ws.addEventListener("close", onClose);
     info.listeners.push(() => ws.removeEventListener("open", onOpen));
     info.listeners.push(() => ws.removeEventListener("close", onClose));
-    if (!info.sendOrig) {
+    if (!ws[WS_PATCHED_SEND]) {
       const orig = ws.send.bind(ws);
       info.sendOrig = orig;
+      ws[WS_PATCHED_SEND] = true;
       ws.send = (data) => {
         try {
           const text = typeof data === "string" ? data : JSON.stringify(data);
@@ -6036,6 +6281,8 @@
     }
     registry.set(ws, info);
   }
+
+  // src/ui/menus/debug-data.ts
   async function renderDebugDataMenu(root) {
     const ui = new Menu({ id: "debug-tools", compact: true });
     ui.mount(root);
@@ -6044,42 +6291,46 @@
   }
   function renderJotaiTab(view, ui) {
     view.innerHTML = "";
-    const head = ui.section("Store");
-    const btnCap = ui.btn("Capture store", async () => {
-      try {
-        await ensureStore();
-      } catch {
-      }
-      capLbl.textContent = `captured: ${String(isStoreCaptured())}`;
-      appendOut({ capture: isStoreCaptured() });
-    });
-    const capLbl = ui.label(`captured: ${String(isStoreCaptured())}`);
-    head.appendChild(ui.row(btnCap, capLbl));
-    view.appendChild(head);
-    const grid = document.createElement("div");
-    grid.style.display = "grid";
-    grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(280px, 1fr))";
-    grid.style.gap = "12px";
-    view.appendChild(grid);
+    const grid2 = document.createElement("div");
+    grid2.style.display = "grid";
+    grid2.style.gridTemplateColumns = "minmax(340px,1fr) minmax(340px,1fr)";
+    grid2.style.gap = "12px";
+    view.appendChild(grid2);
+    const leftCol = document.createElement("div");
+    const rightCol = document.createElement("div");
+    grid2.appendChild(leftCol);
+    grid2.appendChild(rightCol);
+    {
+      const head = ui.section("Store");
+      const btnCap = ui.btn("Capture store", async () => {
+        try {
+          await ensureStore();
+        } catch {
+        }
+        capLbl.textContent = `captured: ${String(isStoreCaptured())}`;
+      });
+      const capLbl = ui.label(`captured: ${String(isStoreCaptured())}`);
+      head.appendChild(ui.row(btnCap, capLbl));
+      leftCol.appendChild(head);
+    }
     {
       const s = ui.section("Find / List atoms");
       const q = ui.inputText("regex label (eg: position|health)", "");
       const btnList = ui.btn("List", () => doList());
-      const btnCopy = ui.btn("Copy", () => copy(pre2.textContent || ""));
-      const pre2 = document.createElement("pre");
-      stylePre(pre2);
+      const btnCopy = ui.btn("Copy", () => copy(pre.textContent || ""));
+      const pre = document.createElement("pre");
+      stylePre(pre);
       async function doList() {
         const raw = q.value.trim();
         const rx = safeRegex(raw || ".*");
         const all = findAtomsByLabel(/.*/);
         const atoms = all.filter((a) => rx.test(String(a?.debugLabel || a?.label || "")));
         const labels = atoms.map((a) => String(a?.debugLabel || a?.label || "<?>"));
-        pre2.textContent = labels.join("\n");
-        appendOut({ list: { query: raw || ".*", count: labels.length } });
+        pre.textContent = labels.join("\n");
       }
       s.appendChild(ui.row(q, btnList, btnCopy));
-      s.appendChild(pre2);
-      grid.appendChild(s);
+      s.appendChild(pre);
+      leftCol.appendChild(s);
     }
     {
       const s = ui.section("Get / Subscribe");
@@ -6087,45 +6338,44 @@
       const btnGet = ui.btn("Get", async () => {
         const atom = getAtomByLabel(q.value.trim());
         if (!atom) {
-          pre2.textContent = `Atom "${q.value}" not found`;
+          pre.textContent = `Atom "${q.value}" not found`;
           return;
         }
         try {
-          setText(pre2, await jGet(atom));
-          appendOut({ get: { label: q.value, ok: true } });
+          setText(pre, await jGet(atom));
         } catch (e) {
-          setText(pre2, e?.message || String(e));
-          appendOut({ get: { label: q.value, ok: false, error: e?.message } });
+          setText(pre, e?.message || String(e));
         }
       });
       const btnSub = ui.btn("Subscribe", async () => {
         const label2 = q.value.trim();
         if (!label2) return;
         const atom = getAtomByLabel(label2);
-        if (!atom) return appendOut(`Atom "${label2}" not found`);
+        if (!atom) {
+          pre.textContent = `Atom "${label2}" not found`;
+          return;
+        }
         if (unsubRef) {
           unsubRef();
           unsubRef = null;
           btnSub.textContent = "Subscribe";
-          appendOut({ sub: { label: label2, status: "unsubscribed" } });
           return;
         }
         unsubRef = await jSub(atom, async () => {
           try {
-            setText(pre2, await jGet(atom));
+            setText(pre, await jGet(atom));
           } catch {
           }
         });
         btnSub.textContent = "Unsubscribe";
-        appendOut({ sub: { label: label2, status: "subscribed" } });
       });
-      const btnCopy = ui.btn("Copy", () => copy(pre2.textContent || ""));
-      const pre2 = document.createElement("pre");
-      stylePre(pre2);
+      const btnCopy = ui.btn("Copy", () => copy(pre.textContent || ""));
+      const pre = document.createElement("pre");
+      stylePre(pre);
       let unsubRef = null;
       s.appendChild(ui.row(q, btnGet, btnSub, btnCopy));
-      s.appendChild(pre2);
-      grid.appendChild(s);
+      s.appendChild(pre);
+      rightCol.appendChild(s);
     }
     {
       const s = ui.section("Set atom");
@@ -6133,18 +6383,21 @@
       const btnSet = ui.btn("Set", async () => {
         const label2 = q.value.trim();
         const atom = getAtomByLabel(label2);
-        if (!atom) return appendOut(`Atom "${label2}" not found`);
+        if (!atom) {
+          toast(`Atom "${label2}" not found`);
+          return;
+        }
         let val;
         try {
           val = JSON.parse(ta.value);
-        } catch (e) {
+        } catch {
           return toast("Invalid JSON");
         }
         try {
           await jSet(atom, val);
-          appendOut({ set: { label: label2, ok: true } });
+          toast("Set OK");
         } catch (e) {
-          appendOut({ set: { label: label2, ok: false, error: e?.message } });
+          toast(e?.message || "Set failed");
         }
       });
       const btnCopy = ui.btn("Copy json", () => copy(ta.value));
@@ -6155,40 +6408,7 @@
       ta.placeholder = `JSON value, eg: "inventory" or { "x": 1, "y": 2 }`;
       s.appendChild(ui.row(q, btnSet, btnCopy));
       s.appendChild(ta);
-      grid.appendChild(s);
-    }
-    const outBox = ui.section("Output");
-    const bar = ui.row(
-      ui.label("\u2014"),
-      (() => {
-        const sp = document.createElement("div");
-        sp.style.flex = "1";
-        return sp;
-      })(),
-      (() => {
-        const b = ui.btn("Copy", () => copy(pre.textContent || ""));
-        return b;
-      })(),
-      (() => {
-        const b = ui.btn("Clear", () => pre.textContent = "");
-        return b;
-      })()
-    );
-    const pre = document.createElement("pre");
-    stylePre(pre);
-    outBox.appendChild(bar);
-    outBox.appendChild(pre);
-    view.appendChild(outBox);
-    function appendOut(v) {
-      const ts = fmtTime(Date.now());
-      try {
-        pre.textContent += `[${ts}] ${JSON.stringify(v)}
-`;
-      } catch {
-        pre.textContent += `[${ts}] ${String(v)}
-`;
-      }
-      pre.scrollTop = pre.scrollHeight;
+      rightCol.appendChild(s);
     }
     function setText(el2, v) {
       el2.textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -6199,62 +6419,17 @@
       } catch {
       }
     }
-    function copy(text) {
-      const str = String(text ?? "");
-      if (!str.length) return;
-      const fallback = () => {
-        const ta = document.createElement("textarea");
-        ta.value = str;
-        ta.setAttribute("readonly", "true");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        let ok = false;
-        try {
-          ok = document.execCommand("copy");
-        } catch {
-        }
-        document.body.removeChild(ta);
-        try {
-          window.toastSimple?.(ok ? "Copied" : "Copy failed", "", ok ? "success" : "error");
-        } catch {
-        }
-      };
-      if (window.isSecureContext && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(str).then(() => {
-          try {
-            window.toastSimple?.("Copied", "", "success");
-          } catch {
-          }
-        }).catch(fallback);
-      } else {
-        fallback();
-      }
-    }
-    function safeRegex(q) {
-      try {
-        return new RegExp(q, "i");
-      } catch {
-        return /.*/i;
-      }
-    }
-    function stylePre(pre2) {
-      pre2.style.maxHeight = "260px";
-      pre2.style.overflow = "auto";
-      pre2.style.background = "#0f1318";
-      pre2.style.border = "1px solid #ffffff14";
-      pre2.style.borderRadius = "8px";
-      pre2.style.padding = "8px";
-      pre2.style.margin = "6px 0";
-      pre2.style.fontSize = "12px";
-      pre2.style.color = "#e7eef7";
-    }
   }
   function renderWSTab(view, ui) {
     view.innerHTML = "";
+    installWSHookIfNeeded((f) => {
+      if (paused) return;
+      const ex = { ...f, id: ++seq };
+      frames.push(ex);
+      framesMap.set(ex.id, ex);
+      lblConn.textContent = getWSStatusText();
+      appendOne(ex);
+    });
     const frames = new FrameBuffer(2e3);
     const framesMap = /* @__PURE__ */ new Map();
     let seq = 0;
@@ -6283,38 +6458,25 @@
       }
     };
     const matchesMutes = (text) => mutePatterns.some((rx) => rx.test(text));
-    function copy(text) {
-      const str = String(text ?? "");
-      if (!str.length) return;
-      const fallback = () => {
-        const taTmp = document.createElement("textarea");
-        taTmp.value = str;
-        taTmp.setAttribute("readonly", "true");
-        taTmp.style.position = "fixed";
-        taTmp.style.left = "-9999px";
-        taTmp.style.opacity = "0";
-        document.body.appendChild(taTmp);
-        taTmp.focus();
-        taTmp.select();
-        let ok = false;
-        try {
-          ok = document.execCommand("copy");
-        } catch {
-        }
-        document.body.removeChild(taTmp);
-        try {
-          window.toastSimple?.(ok ? "Copied" : "Copy failed", "", ok ? "success" : "error");
-        } catch {
-        }
-      };
-      if (window.isSecureContext && navigator.clipboard?.writeText) {
-        navigator.clipboard.writeText(str).then(() => {
-          try {
-            window.toastSimple?.("Copied", "", "success");
-          } catch {
-          }
-        }).catch(fallback);
-      } else fallback();
+    const sel = document.createElement("select");
+    sel.className = "qmm-input";
+    sel.style.minWidth = "260px";
+    function refreshSocketPicker() {
+      const wsArr = getWSInfos();
+      sel.innerHTML = "";
+      wsArr.forEach((info, idx) => {
+        const op = document.createElement("option");
+        op.value = String(idx);
+        op.textContent = info.id + (info.ws === quinoaWS ? " \u2022 page" : "");
+        sel.appendChild(op);
+      });
+      if (!sel.value && sel.options.length) sel.value = "0";
+      lblConn.textContent = getWSStatusText();
+    }
+    function currentWS() {
+      const idx = Number(sel.value);
+      const vals = getWSInfos();
+      return Number.isFinite(idx) ? vals[idx]?.ws ?? null : null;
     }
     const head = ui.section("Live log");
     const lblConn = ui.label("\u2014");
@@ -6351,6 +6513,8 @@
     const btnCopy = ui.btn("Copy visible", () => copyVisible());
     head.appendChild(ui.row(
       lblConn,
+      sel,
+      // <= socket picker ici, compact
       $spacer(),
       chIn,
       ui.label("IN"),
@@ -6399,29 +6563,6 @@
     muteSec.appendChild(ui.row(muteInput, btnAddMute));
     muteSec.appendChild(mutesWrap);
     view.appendChild(muteSec);
-    const pickSec = ui.section("Sockets");
-    const sel = document.createElement("select");
-    sel.className = "qmm-input";
-    sel.style.minWidth = "260px";
-    pickSec.appendChild(sel);
-    view.appendChild(pickSec);
-    function refreshSocketPicker() {
-      const wsArr = Array.from(registry.values());
-      sel.innerHTML = "";
-      wsArr.forEach((info, idx) => {
-        const op = document.createElement("option");
-        op.value = String(idx);
-        op.textContent = info.id + (info.ws === quinoaWS ? " \u2022 page" : "");
-        sel.appendChild(op);
-      });
-      if (!sel.value && sel.options.length) sel.value = "0";
-      lblConn.textContent = statusText();
-    }
-    function currentWS() {
-      const idx = Number(sel.value);
-      const vals = Array.from(registry.values());
-      return Number.isFinite(idx) ? vals[idx]?.ws ?? null : null;
-    }
     const logWrap = document.createElement("div");
     logWrap.style.border = "1px solid #ffffff14";
     logWrap.style.borderRadius = "10px";
@@ -6435,15 +6576,32 @@
     logWrap.style.userSelect = "text";
     const style = document.createElement("style");
     style.textContent = `
-    .ws-row{display:grid;grid-template-columns:92px 18px 1fr auto;gap:8px;padding:3px 4px;border-bottom:1px dashed #ffffff12;align-items:start}
-    .ws-row .ts{opacity:.8}
-    .ws-row .arrow{font-weight:600}
-    .ws-row .body{white-space:pre-wrap;word-break:break-word}
-    .ws-row .acts{display:none;gap:6px}
-    .ws-row:hover .acts{display:flex}
-    .ws-row.selected{background:rgba(120,160,255,.12)}
-    .ws-row .chip{border:1px solid #ffffff26;background:#ffffff14;border-radius:6px;padding:2px 6px;cursor:pointer}
-  `;
+  /* 3 colonnes: time | arrow | body \u2014 PAS de colonne actions */
+  .ws-row{
+    position:relative;                                   /* n\xE9cessaire pour l\u2019overlay */
+    display:grid;
+    grid-template-columns:92px 18px 1fr;                 /* <- supprime la 4e colonne */
+    gap:8px; padding:3px 4px;
+    border-bottom:1px dashed #ffffff12; align-items:start;
+  }
+  .ws-row .ts{opacity:.8}
+  .ws-row .arrow{font-weight:600}
+  .ws-row .body{white-space:pre-wrap;word-break:break-word}
+  .ws-row.selected{background:rgba(120,160,255,.12)}
+
+  /* Boutons en overlay (au-dessus du texte), visibles au hover */
+  .ws-row .acts{
+    position:absolute; top:2px; right:4px;               /* <- colle sur le texte */
+    display:flex; gap:6px;
+    padding:2px 4px;
+    background:rgba(15,19,24,.78);                       /* petit fond pour la lisibilit\xE9 */
+    border:1px solid #ffffff22; border-radius:6px;
+    opacity:0; visibility:hidden; transition:opacity .12s ease;
+    z-index:1;                                           /* passe au-dessus du contenu */
+  }
+  .ws-row:hover .acts{opacity:1; visibility:visible}
+  .ws-row .acts .qmm-btn{padding:1px 4px; font-size:11px}/* boutons compacts */
+`;
     logWrap.appendChild(style);
     view.appendChild(logWrap);
     const sendSec = ui.section("Send");
@@ -6473,7 +6631,7 @@
       const ex = { ...f, id: ++seq };
       frames.push(ex);
       framesMap.set(ex.id, ex);
-      lblConn.textContent = statusText();
+      lblConn.textContent = getWSStatusText();
       appendOne(ex);
     });
     refreshSocketPicker();
@@ -6484,11 +6642,6 @@
     view.__ws_cleanup__ = () => {
       window.clearInterval(pollId);
     };
-    function statusText() {
-      const anyOpen = sockets.some((ws) => ws.readyState === WebSocket.OPEN);
-      const viaW = workerFound ? "worker" : "page/auto";
-      return `status: ${anyOpen ? "OPEN" : "none"} \u2022 mode: ${viaW}`;
-    }
     function passesFilters(f) {
       if (f.dir === "in" && !showIn || f.dir === "out" && !showOut) return false;
       if (filterText && !f.text.toLowerCase().includes(filterText)) return false;
@@ -6554,7 +6707,7 @@
       logWrap.appendChild(row);
       if (autoScroll) logWrap.scrollTop = logWrap.scrollHeight;
     }
-    function repaint(full = false) {
+    function repaint(_full = false) {
       logWrap.querySelectorAll(".ws-row").forEach((n) => n.remove());
       frames.toArray().forEach((f) => {
         if (passesFilters(f)) logWrap.appendChild(buildRow(f));
@@ -6567,17 +6720,17 @@
       copy(lines);
     }
     function replayFrame(f) {
-      const wsTarget = replayToSource && f.ws ? f.ws : currentWS();
-      if (!wsTarget || wsTarget.readyState !== WebSocket.OPEN) return;
+      const target = replayToSource && f.ws ? f.ws : currentWS();
+      if (!target || target.readyState !== WebSocket.OPEN) return;
       const mode = asJson.querySelector('input[type="radio"]:checked')?.value || "text";
       if (mode === "json") {
         try {
-          wsTarget.send(JSON.parse(f.text));
+          target.send(JSON.parse(f.text));
         } catch {
-          wsTarget.send(f.text);
+          target.send(f.text);
         }
       } else {
-        wsTarget.send(f.text);
+        target.send(f.text);
       }
     }
     function doSend() {
@@ -6596,6 +6749,59 @@
         target.send(ta.value);
       }
     }
+  }
+  function copy(text) {
+    const str = String(text ?? "");
+    if (!str.length) return;
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = str;
+      ta.setAttribute("readonly", "true");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+      }
+      document.body.removeChild(ta);
+      try {
+        window.toastSimple?.(ok ? "Copied" : "Copy failed", "", ok ? "success" : "error");
+      } catch {
+      }
+    };
+    if (window.isSecureContext && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(str).then(() => {
+        try {
+          window.toastSimple?.("Copied", "", "success");
+        } catch {
+        }
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+  function safeRegex(q) {
+    try {
+      return new RegExp(q, "i");
+    } catch {
+      return /.*/i;
+    }
+  }
+  function stylePre(pre) {
+    pre.style.maxHeight = "260px";
+    pre.style.overflow = "auto";
+    pre.style.background = "#0f1318";
+    pre.style.border = "1px solid #ffffff14";
+    pre.style.borderRadius = "8px";
+    pre.style.padding = "8px";
+    pre.style.margin = "6px 0";
+    pre.style.fontSize = "12px";
+    pre.style.color = "#e7eef7";
   }
 
   // src/ui/toast.ts
@@ -7305,7 +7511,9 @@
       invLabel.style.opacity = "0.85";
       const invValue = document.createElement("div");
       invValue.textContent = "\u2026";
+      invValue.style.fontSize = "15px";
       invValue.style.fontWeight = "700";
+      invValue.style.color = "#FFD84D";
       invValueRow.append(invLabel, invValue);
       const gardenValueRow = rowLeft();
       const gardenLabel = document.createElement("div");
@@ -7315,9 +7523,11 @@
       const gardenValue = document.createElement("div");
       gardenValue.textContent = "\u2026";
       gardenValue.style.fontWeight = "700";
+      gardenValue.style.fontSize = "15px";
+      gardenValue.style.color = "#FFD84D";
       gardenValueRow.append(gardenLabel, gardenValue);
       infoWrap.append(invValueRow, gardenValueRow);
-      col.appendChild(sectionFramed("Crops values", infoWrap));
+      col.appendChild(sectionFramed("\u{1F331} Crops values", infoWrap));
       const teleRow = rowCenter();
       const btnToPlayer = document.createElement("button");
       const btnToGarden = document.createElement("button");
@@ -7340,7 +7550,7 @@
         }
       };
       teleRow.append(btnToPlayer, btnToGarden);
-      col.appendChild(sectionFramed("Teleport", teleRow));
+      col.appendChild(sectionFramed("\u{1F300} Teleport", teleRow));
       const invRow = rowCenter();
       const btnInv = document.createElement("button");
       const btnJournal = document.createElement("button");
@@ -7369,7 +7579,7 @@
         }
       };
       invRow.append(btnInv, btnJournal);
-      col.appendChild(sectionFramed("Inspect", invRow));
+      col.appendChild(sectionFramed("\u{1F50D} Inspect", invRow));
       const funRow = rowCenter();
       const label2 = document.createElement("div");
       label2.textContent = "Follow";
@@ -7391,18 +7601,18 @@
         }
       });
       funRow.append(label2, sw);
-      col.appendChild(sectionFramed("Fun", funRow));
+      col.appendChild(sectionFramed("\u{1F389} Fun", funRow));
       (async () => {
         try {
           const total = await PlayersService.getInventoryValue(p.id);
-          invValue.textContent = `${NF_US_INT.format(Math.round(total))} coins`;
+          invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
           invValue.title = "Total inventory value";
         } catch {
           invValue.textContent = "\u2014";
         }
         try {
           const total = await PlayersService.getGardenValue(p.id);
-          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))} coins`;
+          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
           gardenValue.title = "Total garden value";
         } catch {
           gardenValue.textContent = "\u2014";
@@ -7439,19 +7649,6 @@
   }
 
   // src/ui/menus/pets.ts
-  function styleBtnFullWidth(b, text) {
-    b.textContent = text;
-    b.style.flex = "1";
-    b.style.margin = "0";
-    b.style.padding = "6px 10px";
-    b.style.borderRadius = "8px";
-    b.style.border = "1px solid #4445";
-    b.style.background = "#1f2328";
-    b.style.color = "#e7eef7";
-    b.style.justifyContent = "center";
-    b.onmouseenter = () => b.style.borderColor = "#6aa1";
-    b.onmouseleave = () => b.style.borderColor = "#4445";
-  }
   function sectionFramed2(titleText, content) {
     const s = document.createElement("div");
     s.style.display = "grid";
@@ -7471,15 +7668,6 @@
     s.append(h, content);
     return s;
   }
-  var fmtTime2 = (ms) => {
-    const d = new Date(ms);
-    const p = (n, s = 2) => String(n).padStart(s, "0");
-    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${String(
-      d.getMilliseconds()
-    ).padStart(3, "0")}`;
-  };
-  var activeTeamId = null;
-  var activePetIdSet = /* @__PURE__ */ new Set();
   function getAbilityChipColors(id) {
     const key2 = String(id || "");
     const base = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
@@ -7529,25 +7717,30 @@
   }
   function renderManagerTab(view, ui) {
     view.innerHTML = "";
-    installPetTeamHotkeysOnce(async (teamId) => {
-      const t = teams.find((tt) => tt.id === teamId) || null;
-      try {
-        isApplyingTeam = true;
-        if (t) {
-          activeTeamId = t.id;
-          await refreshTeamList(true);
-        }
-        await PetsService.useTeam(teamId);
-        if (t) await waitForActiveTeam(t);
-        await hydrateEditor(getSelectedTeam());
-        await refreshTeamList();
-      } catch (e) {
-        console.warn("[Pets] hotkey useTeam failed:", e);
-        await refreshTeamList();
-      } finally {
-        isApplyingTeam = false;
-      }
-    });
+    let teams = [];
+    let selectedId = null;
+    let activeTeamId = null;
+    let activePetIdSet = /* @__PURE__ */ new Set();
+    let isApplyingTeam = false;
+    let draggingIdx = null;
+    let overInsertIdx = null;
+    let draggingHeight = 0;
+    let invCacheMap = null;
+    const lastRenderedSlotIds = [null, null, null];
+    function applySubtleBorder(btn, hex, alpha = 0.22) {
+      const toRgba = (h, a) => {
+        const m = h.replace("#", "");
+        const r = parseInt(m.length === 3 ? m[0] + m[0] : m.slice(0, 2), 16);
+        const g = parseInt(m.length === 3 ? m[1] + m[1] : m.slice(2, 4), 16);
+        const b = parseInt(m.length === 3 ? m[2] + m[2] : m.slice(4, 6), 16);
+        return `rgba(${r},${g},${b},${a})`;
+      };
+      const border = toRgba(hex, alpha);
+      btn.style.border = `1px solid ${border}`;
+      btn.style.background = "#1f2328";
+      btn.style.boxShadow = "none";
+      btn.style.transition = "none";
+    }
     const styleBtnFullWidthL2 = (b, text) => {
       b.textContent = text;
       b.style.width = "100%";
@@ -7603,15 +7796,11 @@
     btnNew.id = "pets.teams.new";
     const btnDel = document.createElement("button");
     btnDel.id = "pets.teams.delete";
-    styleBtnFullWidthL2(btnNew, "New");
-    styleBtnFullWidthL2(btnDel, "Delete");
+    styleBtnFullWidthL2(btnNew, "\u2795 New");
+    styleBtnFullWidthL2(btnDel, "\u{1F5D1}\uFE0F Delete");
+    applySubtleBorder(btnNew, "#22c55e", 0.22);
+    applySubtleBorder(btnDel, "#ef4444", 0.22);
     footer.append(btnNew, btnDel);
-    let teams = [];
-    let selectedId = null;
-    let isApplyingTeam = false;
-    let draggingIdx = null;
-    let overInsertIdx = null;
-    let draggingHeight = 0;
     function getSelectedTeam() {
       return teams.find((t) => t.id === selectedId) || null;
     }
@@ -7722,6 +7911,7 @@
       }
     }
     async function refreshTeamList(skipDetectActive = false) {
+      console.log("refreshteamlist");
       if (!skipDetectActive) {
         await refreshActiveIds();
       }
@@ -7785,7 +7975,7 @@
           const changed = selectedId !== t.id;
           if (changed) {
             selectedId = t.id;
-            refreshTeamList();
+            refreshTeamList(true);
           }
           void hydrateEditor(getSelectedTeam());
         };
@@ -7854,15 +8044,6 @@
           draggingHeight = 0;
           refreshTeamList();
         });
-        item.onclick = (ev) => {
-          if (ev.__byDrag) return;
-          const changed = selectedId !== t.id;
-          if (changed) {
-            selectedId = t.id;
-            void refreshTeamList();
-          }
-          void hydrateEditor(getSelectedTeam());
-        };
         item.appendChild(grab);
         teamList.appendChild(item);
       });
@@ -7925,7 +8106,7 @@
           if (!selectedId && teams.length) selectedId = teams[0].id;
           refreshTeamList();
           setTeamsForHotkeys(teams);
-          await PetsService.getInventoryPets();
+          await PetsService.getInventoryPets().catch(() => []);
           await hydrateEditor(getSelectedTeam());
         });
       } catch {
@@ -7959,7 +8140,7 @@
     btnUseTeam.disabled = true;
     const btnSave = document.createElement("button");
     btnSave.id = "pets.teams.save";
-    btnSave.textContent = "Save";
+    btnSave.textContent = "\u{1F4BE} Save";
     btnSave.style.padding = "6px 10px";
     btnSave.style.borderRadius = "8px";
     btnSave.style.border = "1px solid #4445";
@@ -7969,7 +8150,7 @@
     btnSave.onmouseenter = () => btnSave.style.borderColor = "#6aa1";
     btnSave.onmouseleave = () => btnSave.style.borderColor = "#4445";
     btnSave.disabled = true;
-    header.append(headerTitle, btnUseTeam, btnSave);
+    header.append(headerTitle, btnUseTeam);
     right.appendChild(header);
     const card = document.createElement("div");
     card.style.border = "1px solid #4445";
@@ -7984,109 +8165,88 @@
     right.appendChild(card);
     const secName = (() => {
       const r = row();
+      r.style.width = "100%";
       const nameInput = ui.inputText("Team name", "");
       nameInput.id = "pets.teams.editor.name";
-      nameInput.style.minWidth = "260px";
-      r.append(nameInput);
-      card.appendChild(framed("Team name", r));
+      nameInput.style.flex = "1";
+      nameInput.style.minWidth = "0";
+      btnSave.style.marginLeft = "auto";
+      btnSave.style.padding = "6px 10px";
+      r.append(nameInput, btnSave);
+      card.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
       return { nameInput };
     })();
     const secSearch = (() => {
-      const wrap2 = document.createElement("div");
-      wrap2.style.display = "grid";
-      wrap2.style.gap = "10px";
-      wrap2.style.justifyItems = "center";
-      const radiosRow = document.createElement("div");
-      radiosRow.style.display = "flex";
-      radiosRow.style.flexWrap = "wrap";
-      radiosRow.style.alignItems = "center";
-      radiosRow.style.justifyContent = "center";
-      radiosRow.style.gap = "10px";
-      const mkRadio = (name, value, label2, checked = false) => {
-        const lab = document.createElement("label");
-        lab.style.display = "inline-flex";
-        lab.style.alignItems = "center";
-        lab.style.gap = "6px";
-        const r = ui.radio(name, value, checked);
-        const t = document.createElement("span");
-        t.textContent = label2;
-        lab.append(r, t);
-        return { wrap: lab, input: r };
-      };
-      const rAbility = mkRadio("pets-search-mode", "ability", "Ability", true);
-      const rSpecies = mkRadio("pets-search-mode", "species", "Species", false);
-      radiosRow.append(rAbility.wrap, rSpecies.wrap);
+      const wrapOuter = document.createElement("div");
+      wrapOuter.style.display = "flex";
+      wrapOuter.style.flexDirection = "column";
+      wrapOuter.style.gap = "10px";
+      wrapOuter.style.alignItems = "center";
+      let isProgrammaticModeSet = false;
+      let currentMode = "ability";
+      const seg = ui.segmented(
+        [
+          { value: "ability", label: "\u2728 Ability" },
+          { value: "species", label: "\u{1F9EC} Species" }
+        ],
+        "ability",
+        async (val) => {
+          if (isProgrammaticModeSet) return;
+          currentMode = val;
+          await rebuildOptionsFromInventory();
+          select2.value = "";
+          applyFilterToTeam();
+        },
+        { ariaLabel: "Search mode" }
+      );
       const select2 = document.createElement("select");
       select2.className = "qmm-input";
       select2.id = "pets.teams.filter.select";
       select2.style.minWidth = "260px";
-      let currentMode = "ability";
       const getMode = () => currentMode;
       const setMode = (m) => {
         currentMode = m;
-        rAbility.input.checked = m === "ability";
-        rSpecies.input.checked = m === "species";
-        rAbility.input.type = "radio";
-        rSpecies.input.type = "radio";
-        rAbility.input.name = "pets-search-mode";
-        rSpecies.input.name = "pets-search-mode";
+        isProgrammaticModeSet = true;
+        seg.set(m);
+        isProgrammaticModeSet = false;
       };
-      const setOptions = (values) => {
+      const rebuildOptionsFromInventory = async () => {
+        const prev = select2.value;
+        const inv = await PetsService.getInventoryPets().catch(() => []);
         select2.innerHTML = "";
         const opt0 = document.createElement("option");
         opt0.value = "";
         opt0.textContent = "\u2014 No filter \u2014";
         select2.appendChild(opt0);
-        values.forEach((v) => {
-          const o = document.createElement("option");
-          o.value = v;
-          o.textContent = v;
-          select2.appendChild(o);
-        });
-      };
-      const rebuildOptionsFromInventory = async () => {
-        const inv = await PetsService.getInventoryPets().catch(() => []);
-        const mode = getMode();
         if (getMode() === "ability") {
           const nameSet = /* @__PURE__ */ new Set();
           for (const p of inv) {
             const abs = Array.isArray(p?.abilities) ? p.abilities.filter(Boolean) : [];
             for (const id of abs) {
-              const baseName = PetsService.getAbilityNameWithoutLevel(id);
-              if (baseName) nameSet.add(baseName);
+              const base = PetsService.getAbilityNameWithoutLevel?.(id) || "";
+              if (base) nameSet.add(base);
             }
           }
-          const names = Array.from(nameSet).sort((a, b) => a.localeCompare(b));
-          select2.innerHTML = "";
-          const opt0 = document.createElement("option");
-          opt0.value = "";
-          opt0.textContent = "\u2014 No filter \u2014";
-          select2.appendChild(opt0);
-          names.forEach((name) => {
+          for (const name of Array.from(nameSet).sort((a, b) => a.localeCompare(b))) {
             const o = document.createElement("option");
             o.value = name;
             o.textContent = name;
             select2.appendChild(o);
-          });
+          }
         } else {
           const set2 = /* @__PURE__ */ new Set();
           for (const p of inv) {
             const sp = String(p?.petSpecies || "").trim();
             if (sp) set2.add(sp);
           }
-          const values = Array.from(set2).sort((a, b) => a.localeCompare(b));
-          select2.innerHTML = "";
-          const opt0 = document.createElement("option");
-          opt0.value = "";
-          opt0.textContent = "\u2014 No filter \u2014";
-          select2.appendChild(opt0);
-          values.forEach((v) => {
+          for (const v of Array.from(set2).sort((a, b) => a.localeCompare(b))) {
             const o = document.createElement("option");
             o.value = v;
             o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
             select2.appendChild(o);
-          });
+          }
         }
+        if (Array.from(select2.options).some((o) => o.value === prev)) select2.value = prev;
       };
       const applyFilterToTeam = () => {
         const t = getSelectedTeam();
@@ -8095,23 +8255,20 @@
         const raw = getMode() === "ability" ? val ? `ab:${val}` : "" : val ? `sp:${val}` : "";
         PetsService.setTeamSearch(t.id, raw);
       };
-      rAbility.input.addEventListener("change", async () => {
-        if (!rAbility.input.checked) return;
-        setMode("ability");
-        await rebuildOptionsFromInventory();
-        select2.value = "";
-        applyFilterToTeam();
-      });
-      rSpecies.input.addEventListener("change", async () => {
-        if (!rSpecies.input.checked) return;
-        setMode("species");
-        await rebuildOptionsFromInventory();
-        select2.value = "";
-        applyFilterToTeam();
-      });
       select2.addEventListener("change", applyFilterToTeam);
-      wrap2.append(radiosRow, select2);
-      card.appendChild(framed("Search", wrap2));
+      wrapOuter.append(seg, select2);
+      card.appendChild(framed("\u{1F50D} Search", wrapOuter));
+      const ensureOptionExists = (val, pretty) => {
+        const v = (val || "").trim();
+        if (!v) return;
+        const has = Array.from(select2.options).some((o) => o.value === v);
+        if (!has) {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = pretty ?? v;
+          select2.appendChild(o);
+        }
+      };
       return {
         getMode,
         setMode,
@@ -8126,8 +8283,10 @@
             return;
           }
           const mode = m[1].toLowerCase() === "ab" ? "ability" : "species";
+          const val = (m[2] || "").trim();
           setMode(mode);
-          select2.value = m[2] || "";
+          ensureOptionExists(val, mode === "species" ? val.charAt(0).toUpperCase() + val.slice(1) : val);
+          select2.value = val;
         }
       };
     })();
@@ -8208,7 +8367,6 @@
           const speciesLabel = p.petSpecies ? p.petSpecies.charAt(0).toUpperCase() + p.petSpecies.slice(1) : "";
           const n = p.name?.trim() || speciesLabel || "Pet";
           nameEl.textContent = n;
-          nameEl.textContent = n;
           const abs = Array.isArray(p.abilities) ? p.abilities.filter(Boolean) : [];
           const fresh = abilitiesBadge(abs);
           fresh.style.display = "inline-block";
@@ -8275,7 +8433,7 @@
       wrapSlots.style.flexDirection = "column";
       wrapSlots.style.gap = "8px";
       wrapSlots.append(grid, extra);
-      card.appendChild(framed("Active pets (3 slots)", wrapSlots));
+      card.appendChild(framed("\u26A1 Active pets (3 slots)", wrapSlots));
       return {
         rows: [r0, r1, r2],
         btnUseCurrent,
@@ -8291,7 +8449,6 @@
         if (!team) return;
         const btn = ui.hotkeyButton(
           null,
-          // onChange -> remet à jour la map logique à partir du LS
           () => refreshTeamFromLS(team.id),
           {
             storageKey: hkKeyForTeam(team.id),
@@ -8303,22 +8460,40 @@
         holder.appendChild(btn);
       }
       r.append(holder);
-      card.appendChild(framed("Quick switch", r));
+      card.appendChild(framed("\u{1F579}\uFE0F Quick switch", r));
       return { setTeam };
     })();
     async function repaintSlots(sourceTeam) {
       const t = sourceTeam ?? getSelectedTeam();
       if (!t) return;
-      const allInv = await PetsService.getInventoryPets().catch(() => []);
-      const idToPet = /* @__PURE__ */ new Map();
-      for (const p of allInv) if (p?.id != null) idToPet.set(String(p.id), p);
+      let inv = await PetsService.getInventoryPets().catch(() => null);
+      if (!inv || inv.length === 0) {
+      } else {
+        invCacheMap = /* @__PURE__ */ new Map();
+        for (const p of inv) {
+          const id = p?.id != null ? String(p.id) : "";
+          if (id) invCacheMap.set(id, p);
+        }
+      }
+      const map2 = invCacheMap ?? /* @__PURE__ */ new Map();
       [0, 1, 2].forEach((i) => {
-        const id = t.slots[i] || "";
-        const pet = id ? idToPet.get(id) || null : null;
+        const id = t.slots[i] || null;
+        if (!id) {
+          if (lastRenderedSlotIds[i] !== null) {
+            secSlots.rows[i].update(null);
+            lastRenderedSlotIds[i] = null;
+          }
+          return;
+        }
+        const pet = map2.get(id);
+        if (!pet) return;
+        if (lastRenderedSlotIds[i] === id) return;
         secSlots.rows[i].update(pet);
+        lastRenderedSlotIds[i] = id;
       });
     }
     async function hydrateEditor(team) {
+      console.log("hydrate");
       const has = !!team;
       secName.nameInput.disabled = !has;
       secSlots.btnClear.disabled = !has;
@@ -8326,12 +8501,15 @@
       btnUseTeam.disabled = !has;
       btnSave.disabled = !has;
       secKeybinds.setTeam(team);
-      secSearch.setMode("ability");
-      await secSearch.rebuild();
       if (has) {
         const saved = PetsService.getTeamSearch(team.id) || "";
-        secSearch.setFromSearchString(saved);
-        secSearch.apply();
+        const m = saved.match(/^(ab|sp):\s*(.*)$/i);
+        const mode = m ? m[1].toLowerCase() === "ab" ? "ability" : "species" : "ability";
+        secSearch.setMode(mode);
+        await secSearch.rebuild();
+        if (m) secSearch.setFromSearchString(saved);
+      } else {
+        await secSearch.rebuild();
       }
       if (!has) {
         secSlots.rows.forEach((r) => r.update(null));
@@ -8418,7 +8596,7 @@
     (async () => {
       try {
         void repaintSlots();
-        unsubInv = await PetsService.onInventoryPetsChange(async () => {
+        unsubInv = await PetsService.onPetsChangeNow(async () => {
           if (isApplyingTeam) return;
           await repaintSlots(getSelectedTeam());
           await refreshTeamList();
@@ -8426,6 +8604,25 @@
       } catch {
       }
     })();
+    installPetTeamHotkeysOnce(async (teamId) => {
+      const t = teams.find((tt) => tt.id === teamId) || null;
+      try {
+        isApplyingTeam = true;
+        if (t) {
+          activeTeamId = t.id;
+          await refreshTeamList(true);
+        }
+        await PetsService.useTeam(teamId);
+        if (t) await waitForActiveTeam(t);
+        await hydrateEditor(getSelectedTeam());
+        await refreshTeamList();
+      } catch (e) {
+        console.warn("[Pets] hotkey useTeam failed:", e);
+        await refreshTeamList();
+      } finally {
+        isApplyingTeam = false;
+      }
+    });
     view.__cleanup__ = (() => {
       const prev = view.__cleanup__;
       return () => {
@@ -8446,6 +8643,19 @@
   }
   function renderLogsTab(view, ui) {
     view.innerHTML = "";
+    const styleBtnFullWidth = (b, text) => {
+      b.textContent = text;
+      b.style.width = "100%";
+      b.style.margin = "0";
+      b.style.padding = "10px";
+      b.style.borderRadius = "8px";
+      b.style.border = "1px solid #4445";
+      b.style.background = "#1f2328";
+      b.style.color = "#e7eef7";
+      b.style.justifyContent = "center";
+      b.onmouseenter = () => b.style.borderColor = "#6aa1";
+      b.onmouseleave = () => b.style.borderColor = "#4445";
+    };
     const wrap = document.createElement("div");
     wrap.style.display = "grid";
     wrap.style.gridTemplateRows = "auto 1fr";
@@ -8481,8 +8691,11 @@
     inputSearch.id = "pets.logs.search";
     inputSearch.style.minWidth = "220px";
     const btnClear = document.createElement("button");
-    styleBtnFullWidth(btnClear, "Clear");
+    styleBtnFullWidth(btnClear, "\u{1F9F9} Clear");
     btnClear.id = "pets.logs.clear";
+    btnClear.style.width = "auto";
+    btnClear.style.flex = "0 0 auto";
+    btnClear.style.padding = "6px 12px";
     header.append(
       ui.label("Ability"),
       selAbility,
@@ -8533,77 +8746,13 @@
     bodyGrid.style.minHeight = "0";
     card.appendChild(bodyGrid);
     let logs = [];
-    let abilitySet = /* @__PURE__ */ new Set();
     let abilityFilter = "";
     let sortDir = "desc";
     let q = "";
-    const NF_INT = new Intl.NumberFormat(void 0, { maximumFractionDigits: 0 });
-    function roundNumber(n) {
-      return Math.round(n);
-    }
-    function normalizeNumbersDeep(v) {
-      if (typeof v === "number") return roundNumber(v);
-      if (v === null || v === void 0) return v;
-      if (Array.isArray(v)) return v.map(normalizeNumbersDeep);
-      if (typeof v === "object") {
-        const o = {};
-        for (const k of Object.keys(v)) o[k] = normalizeNumbersDeep(v[k]);
-        return o;
-      }
-      return v;
-    }
-    function toDisplayString(v, depth = 0) {
-      if (v === null || v === void 0) return "";
-      if (typeof v === "number") return NF_INT.format(v);
-      if (typeof v === "string") return v;
-      if (typeof v === "boolean") return String(v);
-      if (Array.isArray(v)) {
-        return v.map((x) => toDisplayString(x, depth + 1)).join(", ");
-      }
-      if (typeof v === "object") {
-        const entries = Object.entries(v);
-        if (!entries.length) return "";
-        return entries.map(([k, val]) => {
-          if (val !== null && typeof val === "object") {
-            try {
-              const norm = normalizeNumbersDeep(val);
-              return `${k}: ${JSON.stringify(norm)}`;
-            } catch {
-              return `${k}: ${String(val)}`;
-            }
-          }
-          return `${k}: ${toDisplayString(val, depth + 1)}`;
-        }).join(", ");
-      }
-      return String(v);
-    }
-    function formatDetails(data) {
-      try {
-        const norm = normalizeNumbersDeep(data);
-        return toDisplayString(norm);
-      } catch {
-        try {
-          return JSON.stringify(data);
-        } catch {
-          return String(data ?? "");
-        }
-      }
-    }
-    function detailsForSearch(data) {
-      try {
-        return formatDetails(data).toLowerCase();
-      } catch {
-        try {
-          return JSON.stringify(data).toLowerCase();
-        } catch {
-          return "";
-        }
-      }
-    }
     function rebuildAbilityOptions() {
       const current = selAbility.value;
       selAbility.innerHTML = "";
-      const opts = [["", "All abilities"], ...Array.from(abilitySet).sort().map((a) => [a, a])];
+      const opts = [["", "All abilities"], ...PetsService.getSeenAbilityIds().map((a) => [a, a])];
       for (const [v, t] of opts) {
         const o = document.createElement("option");
         o.value = v;
@@ -8623,18 +8772,22 @@
       return el2;
     }
     function row(log) {
-      const time = cell(fmtTime2(log.performedAt), "center");
-      const timeFrt = cell(log.time12);
+      const time = cell(log.time12, "center");
       const petLabel = log.petName || log.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abId = cell(log.abilityId, "center");
-      const abName = cell(log.abilityName, "center");
-      const detText = formatDetails(log.data);
+      const abName = cell(log.abilityName || log.abilityId, "center");
+      const detText = typeof log.data === "string" ? log.data : (() => {
+        try {
+          return JSON.stringify(log.data);
+        } catch {
+          return "";
+        }
+      })();
       const det = cell(detText, "left");
-      bodyGrid.append(timeFrt, pet, abName, det);
+      bodyGrid.append(time, pet, abName, det);
     }
+    const normAbilityKey = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "").replace(/([ivx]+)$/i, "");
     function applyFilters() {
-      const normAbilityKey = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "").replace(/([ivx]+)$/i, "");
       let arr = logs.slice();
       if (abilityFilter && abilityFilter.trim()) {
         const f = normAbilityKey(abilityFilter);
@@ -8648,9 +8801,15 @@
         const qq = q.toLowerCase();
         arr = arr.filter((l) => {
           const pet = (l.petName || l.species || "").toLowerCase();
-          const abName = (PetsService.getAbilityNameWithoutLevel(l.abilityId) || "").toLowerCase();
+          const abName = (l.abilityName || "").toLowerCase();
           const abId = (l.abilityId || "").toLowerCase();
-          const det = detailsForSearch(l.data);
+          const det = (typeof l.data === "string" ? l.data : (() => {
+            try {
+              return JSON.stringify(l.data);
+            } catch {
+              return "";
+            }
+          })()).toLowerCase();
           return pet.includes(qq) || abName.includes(qq) || abId.includes(qq) || det.includes(qq) || (l.petId || "").toLowerCase().includes(qq);
         });
       }
@@ -8672,7 +8831,8 @@
         return;
       }
       arr.forEach(row);
-      bodyGrid.scrollTop = bodyGrid.scrollHeight + 32;
+      if (sortDir === "asc") bodyGrid.scrollTop = bodyGrid.scrollHeight + 32;
+      else bodyGrid.scrollTop = 0;
     }
     selAbility.onchange = () => {
       abilityFilter = selAbility.value;
@@ -8692,10 +8852,11 @@
       } catch {
       }
     };
+    let stopWatcher = null;
     let unsubLogs = null;
     (async () => {
       try {
-        abilitySet = new Set(PetsService.getSeenAbilityIds());
+        stopWatcher = await PetsService.startAbilityLogsWatcher();
         rebuildAbilityOptions();
         unsubLogs = PetsService.onAbilityLogs((all) => {
           logs = all.map((e) => ({
@@ -8708,26 +8869,36 @@
             performedAt: e.performedAt,
             time12: e.time12
           }));
-          abilitySet = new Set(PetsService.getSeenAbilityIds());
           rebuildAbilityOptions();
           repaint();
         });
       } catch {
       }
     })();
-    view.__cleanup__ = () => {
-      try {
-        unsubLogs?.();
-      } catch {
-      }
-    };
+    view.__cleanup__ = (() => {
+      const prev = view.__cleanup__;
+      return () => {
+        try {
+          unsubLogs?.();
+        } catch {
+        }
+        try {
+          stopWatcher?.();
+        } catch {
+        }
+        try {
+          prev?.();
+        } catch {
+        }
+      };
+    })();
     repaint();
   }
   function renderPetsMenu(root) {
     const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
-    ui.addTab("manager", "Manager", (view) => renderManagerTab(view, ui));
-    ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
+    ui.addTab("manager", "\u{1F9F0} Manager", (view) => renderManagerTab(view, ui));
+    ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 
   // src/services/misc.ts
@@ -9194,7 +9365,7 @@
     const header = document.createElement("div");
     setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
     const title = document.createElement("div");
-    title.textContent = "Seed deleter - Selection mode";
+    title.textContent = "\u{1F3AF} Selection mode";
     setStyles(title, { fontWeight: "700", fontSize: "13px" });
     const hint = document.createElement("div");
     hint.textContent = "Click seeds in inventory to toggle selection.";
@@ -9591,7 +9762,7 @@
         } catch {
         }
       };
-      return sectionFramed3("Player controls", row, 440);
+      return sectionFramed3("\u{1F3AE} Player controls", row, 440);
     })();
     const secSeed = (() => {
       const grid = formGrid();
@@ -9652,7 +9823,7 @@
         await MiscService.deleteSelectedSeeds();
         updateSummaryUI();
       };
-      return sectionFramed3("Seed deleter", grid, 440);
+      return sectionFramed3("\u{1F5D1}\uFE0F Seed deleter", grid, 440);
     })();
     const content = document.createElement("div");
     content.style.display = "grid";
@@ -9836,10 +10007,10 @@
     installPageWebSocketHook();
     mountHUD({
       onRegister(register) {
-        register("players", "Players", renderPlayersMenu);
-        register("pets", "Pets", renderPetsMenu);
-        register("misc", "Misc", renderMiscMenu);
-        register("debug-data", "Debug Data", renderDebugDataMenu);
+        register("players", "\u{1F465} Players", renderPlayersMenu);
+        register("pets", "\u{1F43E} Pets", renderPetsMenu);
+        register("misc", "\u{1F9E9} Misc", renderMiscMenu);
+        register("debug-data", "\u{1F527} Debug Data", renderDebugDataMenu);
       }
     });
     initWatchers();
