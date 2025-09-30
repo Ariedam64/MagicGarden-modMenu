@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.4.0
+// @version      1.4.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11193,7 +11193,7 @@
     card.style.minHeight = "0";
     wrap.appendChild(card);
     const headerGrid = document.createElement("div");
-    const COLS = "minmax(180px, 26ch) 9rem 7rem";
+    const COLS = "minmax(180px, 1fr) 9rem 7rem";
     headerGrid.style.display = "grid";
     headerGrid.style.gridTemplateColumns = COLS;
     headerGrid.style.justifyContent = "start";
