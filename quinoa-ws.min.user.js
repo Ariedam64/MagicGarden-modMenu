@@ -1,21 +1,14 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.4.3
+// @version      1.4.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
 // @run-at       document-start
 // @all-frames   true
-// @inject-into  content
-// @grant        GM.xmlHttpRequest
-// @grant        GM_xmlhttpRequest
-// @grant        GM.openInTab
-// @grant        GM_openInTab
-// @grant        GM.info
-// @grant        GM_info
-// @connect      raw.githubusercontent.com
+// @inject-into  page
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
