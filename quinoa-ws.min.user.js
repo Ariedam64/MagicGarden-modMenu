@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.4.1
+// @version      1.4.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -200,10 +200,10 @@
       console.warn("[jotai-bridge] write-once: timeout \u2192 polyfill");
       return {
         get: () => {
-          throw new Error("Store non captur\xE9: get not avaible");
+          throw new Error("Store non captur\xE9: get indisponible");
         },
         set: () => {
-          throw new Error("Store non captur\xE9: set not avaible");
+          throw new Error("Store non captur\xE9: set indisponible");
         },
         sub: () => () => {
         },
