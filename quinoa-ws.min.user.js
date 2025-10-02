@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.6.3
+// @version      1.6.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6126,12 +6126,12 @@
     persistLibrary() {
       if (this.suppressPersist > 0) return;
       try {
-        const entries = [];
+        const entries2 = [];
         for (const [name, data] of this.library.entries()) {
           if (this.builtinDefault && name === this.builtinDefault.name) continue;
-          entries.push({ name, data });
+          entries2.push({ name, data });
         }
-        localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries));
+        localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries2));
       } catch {
       }
     }
@@ -6223,14 +6223,14 @@
       this.defaultSoundName = name;
       this.persistSettings();
     }
-    resetLibrary(entries) {
+    resetLibrary(entries2) {
       const prevDefault = this.defaultSoundName;
       this.suppressPersist++;
       try {
         this.library.clear();
         this.ensureBuiltinPresent();
         const added = [];
-        for (const e of entries) {
+        for (const e of entries2) {
           const safeName = String(e?.name || "").trim();
           if (!safeName) continue;
           if (this.isProtectedSound(safeName)) continue;
@@ -7960,6 +7960,29 @@
   function initWatchers() {
     (async () => {
       await PetsService.startAbilityLogsWatcher();
+      try {
+        setTeamsForHotkeys(PetsService.getTeams());
+      } catch {
+      }
+      try {
+        await PetsService.onTeamsChangeNow((teams) => {
+          try {
+            setTeamsForHotkeys(teams);
+          } catch {
+          }
+        });
+      } catch {
+      }
+      try {
+        installPetTeamHotkeysOnce(async (teamId) => {
+          try {
+            await PetsService.useTeam(teamId);
+          } catch (e) {
+            console.warn("[Pets] hotkey useTeam failed:", e);
+          }
+        });
+      } catch {
+      }
       await renderOverlay();
     })();
   }
@@ -8536,6 +8559,38 @@
     registry.set(ws, info);
   }
 
+  // src/services/logger.ts
+  var entries = [];
+  var listeners = /* @__PURE__ */ new Set();
+  var sources = /* @__PURE__ */ new Map();
+  function notify(event) {
+    for (const cb of Array.from(listeners)) {
+      try {
+        cb(event);
+      } catch (err) {
+        try {
+          console.error("[Logger] listener error", err);
+        } catch {
+        }
+      }
+    }
+  }
+  function subscribeLogs(cb) {
+    listeners.add(cb);
+    for (const [id, label2] of sources.entries()) {
+      cb({ type: "source", id, label: label2 });
+    }
+    cb({ type: "snapshot", entries: [...entries] });
+    return () => {
+      listeners.delete(cb);
+    };
+  }
+  function clearLogs() {
+    if (!entries.length) return;
+    entries.length = 0;
+    notify({ type: "clear" });
+  }
+
   // src/ui/menus/debug-data.ts
   var stylesInjected = false;
   function ensureStyles() {
@@ -8572,6 +8627,28 @@
   .dd-send-controls .qmm-radio-group{display:flex;gap:10px;}
   .dd-textarea{min-height:140px;}
   .dd-inline-note{font-size:12px;opacity:.7;}
+  .dd-log-filter-group{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .dd-script-log{position:relative;border:1px solid #ffffff18;border-radius:16px;background:#0b1016;max-height:48vh;overflow:auto;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}
+  .dd-script-log__empty{padding:28px 12px;text-align:center;font-size:13px;opacity:.6;}
+  .dd-script-log__row{display:grid;grid-template-columns:minmax(92px,96px) minmax(70px,90px) minmax(120px,160px) minmax(0,1fr);gap:12px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.06);align-items:start;}
+  .dd-script-log__row:last-child{border-bottom:none;}
+  .dd-script-log__ts{font-size:12px;opacity:.7;font-family:var(--qmm-font-mono,monospace);}
+  .dd-script-log__level{display:inline-flex;align-items:center;justify-content:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;min-width:58px;}
+  .dd-script-log__level.is-debug{background:rgba(138,180,255,.14);color:#8ab4ff;border:1px solid rgba(138,180,255,.32);}
+  .dd-script-log__level.is-info{background:rgba(92,126,255,.14);color:#9fb6ff;border:1px solid rgba(92,126,255,.32);}
+  .dd-script-log__level.is-warn{background:rgba(255,183,96,.12);color:#ffb760;border:1px solid rgba(255,183,96,.32);}
+  .dd-script-log__level.is-error{background:rgba(255,108,132,.16);color:#ff6c84;border:1px solid rgba(255,108,132,.32);}
+  .dd-script-log__source{font-size:12px;font-weight:600;opacity:.85;}
+  .dd-script-log__context{display:block;font-size:11px;opacity:.6;margin-top:2px;text-transform:uppercase;letter-spacing:.05em;}
+  .dd-script-log__message-wrap{display:flex;flex-direction:column;gap:6px;}
+  .dd-script-log__message{font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+  .dd-script-log__actions{display:flex;gap:6px;justify-content:flex-end;align-self:flex-end;}
+  .dd-script-log__actions button{padding:2px 8px;font-size:11px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:inherit;cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+  .dd-script-log__actions button:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.28);}
+  .dd-script-log__details{grid-column:1/-1;margin:4px 0 0;background:#05080c;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;white-space:pre-wrap;font-family:var(--qmm-font-mono,monospace);font-size:12px;line-height:1.4;display:none;word-break:break-word;max-height:180px;overflow:auto;}
+  .dd-script-log__row.is-open .dd-script-log__details{display:block;}
+  .dd-log-source-chips{display:flex;flex-wrap:wrap;gap:6px;}
+  .dd-log-toolbar-spacer{flex:1 1 auto;}
   `;
     document.head.appendChild(style2);
   }
@@ -8579,8 +8656,326 @@
     ensureStyles();
     const ui = new Menu({ id: "debug-tools", compact: true });
     ui.mount(root);
+    ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
     ui.addTab("jotai", "Jotai", (view) => renderJotaiTab(view, ui));
     ui.addTab("websocket", "WebSocket", (view) => renderWSTab(view, ui));
+  }
+  function renderLogsTab(view, ui) {
+    if (typeof view.__log_cleanup__ === "function") {
+      try {
+        view.__log_cleanup__();
+      } catch {
+      }
+    }
+    view.innerHTML = "";
+    view.classList.add("dd-debug-view");
+    const card = ui.card("\u{1F4DD} Script logs", {
+      tone: "muted",
+      subtitle: "Inspect real-time activity emitted by menus and services."
+    });
+    view.appendChild(card.root);
+    const filters = {
+      search: "",
+      levels: /* @__PURE__ */ new Set(["error", "warn", "info", "debug"])
+    };
+    let sourceSelection = null;
+    const knownSources = /* @__PURE__ */ new Map();
+    const entries2 = [];
+    const detailCache = /* @__PURE__ */ new Map();
+    const toolbar = document.createElement("div");
+    toolbar.className = "dd-toolbar dd-toolbar--stretch";
+    card.body.appendChild(toolbar);
+    const searchInput = ui.inputText("search (text, source, context)", "");
+    searchInput.classList.add("dd-grow");
+    searchInput.addEventListener("input", () => {
+      filters.search = searchInput.value.trim().toLowerCase();
+      repaint(true);
+    });
+    const spacer = document.createElement("div");
+    spacer.className = "dd-log-toolbar-spacer";
+    const btnCopy = ui.btn("Copy visible", {
+      variant: "ghost",
+      icon: "\u{1F4CB}",
+      onClick: () => copyVisible()
+    });
+    const btnClear = ui.btn("Clear", {
+      variant: "ghost",
+      icon: "\u{1F9F9}",
+      onClick: () => {
+        clearLogs();
+      }
+    });
+    toolbar.append(searchInput, spacer, btnCopy, btnClear);
+    const levelRow = document.createElement("div");
+    levelRow.className = "dd-log-filter-group";
+    card.body.appendChild(levelRow);
+    const levelLabel = document.createElement("span");
+    levelLabel.className = "dd-inline-note";
+    levelLabel.textContent = "Levels:";
+    levelRow.appendChild(levelLabel);
+    const levelChipsWrap = document.createElement("div");
+    levelChipsWrap.className = "dd-log-source-chips";
+    levelRow.appendChild(levelChipsWrap);
+    const levelDefs = [
+      { id: "error", label: "Error", icon: "\u26D4" },
+      { id: "warn", label: "Warn", icon: "\u26A0\uFE0F" },
+      { id: "info", label: "Info", icon: "\u2139\uFE0F" },
+      { id: "debug", label: "Debug", icon: "\u{1F41E}" }
+    ];
+    levelDefs.forEach((def) => {
+      const chip = ui.toggleChip(def.label, {
+        checked: filters.levels.has(def.id),
+        icon: def.icon,
+        type: "checkbox"
+      });
+      chip.input.addEventListener("change", () => {
+        if (chip.input.checked) filters.levels.add(def.id);
+        else filters.levels.delete(def.id);
+        repaint(true);
+      });
+      levelChipsWrap.appendChild(chip.root);
+    });
+    const sourceRow = document.createElement("div");
+    sourceRow.className = "dd-log-filter-group";
+    card.body.appendChild(sourceRow);
+    const sourceLabel = document.createElement("span");
+    sourceLabel.className = "dd-inline-note";
+    sourceLabel.textContent = "Sources:";
+    sourceRow.appendChild(sourceLabel);
+    const btnAllSources = ui.btn("All", {
+      variant: "ghost",
+      icon: "\u{1F310}",
+      onClick: () => {
+        sourceSelection = null;
+        repaintSources();
+        repaint(true);
+      }
+    });
+    sourceRow.appendChild(btnAllSources);
+    const sourcesWrap = document.createElement("div");
+    sourcesWrap.className = "dd-log-source-chips";
+    sourceRow.appendChild(sourcesWrap);
+    const logWrap = document.createElement("div");
+    logWrap.className = "dd-script-log";
+    card.body.appendChild(logWrap);
+    const logList = document.createElement("div");
+    logWrap.appendChild(logList);
+    const empty = document.createElement("div");
+    empty.className = "dd-script-log__empty";
+    empty.textContent = "No logs yet.";
+    logWrap.appendChild(empty);
+    function updateEmptyState() {
+      empty.style.display = logList.childElementCount ? "none" : "";
+    }
+    function isSourceEnabled(id) {
+      return sourceSelection == null || sourceSelection.has(id);
+    }
+    function getDetails(entry) {
+      if (entry.details == null) return "";
+      if (detailCache.has(entry.id)) return detailCache.get(entry.id);
+      const val = formatDetails(entry.details);
+      detailCache.set(entry.id, val);
+      return val;
+    }
+    function passesFilters(entry) {
+      if (!filters.levels.has(entry.level)) return false;
+      if (!isSourceEnabled(entry.source)) return false;
+      if (!filters.search) return true;
+      const target = [
+        entry.message,
+        entry.sourceLabel,
+        entry.context || "",
+        getDetails(entry)
+      ].join("\n").toLowerCase();
+      return target.includes(filters.search);
+    }
+    function buildRow(entry) {
+      const row = document.createElement("div");
+      row.className = "dd-script-log__row";
+      const ts = document.createElement("span");
+      ts.className = "dd-script-log__ts";
+      ts.textContent = fmtTime(entry.ts);
+      const lvl = document.createElement("span");
+      lvl.className = `dd-script-log__level is-${entry.level}`;
+      lvl.textContent = entry.level.toUpperCase();
+      const src = document.createElement("div");
+      src.className = "dd-script-log__source";
+      src.textContent = entry.sourceLabel;
+      if (entry.context) {
+        const ctx = document.createElement("span");
+        ctx.className = "dd-script-log__context";
+        ctx.textContent = entry.context;
+        src.appendChild(ctx);
+      }
+      const msgWrap = document.createElement("div");
+      msgWrap.className = "dd-script-log__message-wrap";
+      const msg = document.createElement("div");
+      msg.className = "dd-script-log__message";
+      msg.innerHTML = escapeLite(entry.message);
+      msgWrap.appendChild(msg);
+      const actions = document.createElement("div");
+      actions.className = "dd-script-log__actions";
+      const btnCopyEntry = document.createElement("button");
+      btnCopyEntry.type = "button";
+      btnCopyEntry.textContent = "Copy";
+      btnCopyEntry.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        copyEntry(entry);
+      });
+      actions.appendChild(btnCopyEntry);
+      let detailsEl = null;
+      const detailText = getDetails(entry);
+      if (detailText) {
+        const btnDetails = document.createElement("button");
+        btnDetails.type = "button";
+        btnDetails.textContent = "Details";
+        btnDetails.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          row.classList.toggle("is-open");
+          if (row.classList.contains("is-open") && detailsEl) {
+            detailsEl.textContent = detailText;
+          }
+        });
+        actions.appendChild(btnDetails);
+        detailsEl = document.createElement("pre");
+        detailsEl.className = "dd-script-log__details";
+        detailsEl.textContent = detailText;
+        row.appendChild(detailsEl);
+      }
+      msgWrap.appendChild(actions);
+      row.append(ts, lvl, src, msgWrap);
+      row.addEventListener("dblclick", () => {
+        row.classList.toggle("is-open");
+        if (row.classList.contains("is-open") && detailsEl) {
+          detailsEl.textContent = detailText;
+        }
+      });
+      return row;
+    }
+    function repaint(full) {
+      if (full) {
+        logList.innerHTML = "";
+        entries2.forEach((entry) => {
+          if (passesFilters(entry)) logList.appendChild(buildRow(entry));
+        });
+        updateEmptyState();
+        maybeAutoScroll();
+      }
+    }
+    function maybeAutoScroll() {
+      const nearBottom = Math.abs(logWrap.scrollTop + logWrap.clientHeight - logWrap.scrollHeight) < 24;
+      if (nearBottom) logWrap.scrollTop = logWrap.scrollHeight;
+    }
+    function appendOne(entry) {
+      if (!passesFilters(entry)) return;
+      logList.appendChild(buildRow(entry));
+      updateEmptyState();
+      maybeAutoScroll();
+    }
+    function repaintSources() {
+      sourcesWrap.innerHTML = "";
+      const items = Array.from(knownSources.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+      if (!items.length) {
+        const none = document.createElement("span");
+        none.className = "dd-inline-note";
+        none.textContent = "No sources yet.";
+        sourcesWrap.appendChild(none);
+        return;
+      }
+      items.forEach(([id, label2]) => {
+        const chip = ui.toggleChip(label2, {
+          checked: isSourceEnabled(id),
+          type: "checkbox"
+        });
+        chip.input.addEventListener("change", () => {
+          if (!chip.input.checked) {
+            if (sourceSelection == null) {
+              sourceSelection = new Set(items.map(([sid]) => sid));
+            }
+            sourceSelection.delete(id);
+          } else {
+            if (sourceSelection == null) {
+            } else {
+              sourceSelection.add(id);
+              if (sourceSelection.size === items.length) sourceSelection = null;
+            }
+          }
+          repaint(true);
+          repaintSources();
+        });
+        sourcesWrap.appendChild(chip.root);
+      });
+    }
+    function formatDetails(value) {
+      if (value == null) return "";
+      if (typeof value === "string") return value;
+      if (value instanceof Error) {
+        const stack = value.stack && value.stack.trim().length ? value.stack : `${value.name}: ${value.message}`;
+        return stack;
+      }
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        try {
+          return String(value);
+        } catch {
+          return "";
+        }
+      }
+    }
+    function copyEntry(entry) {
+      const ctx = entry.context ? ` [${entry.context}]` : "";
+      const header = `[${fmtTime(entry.ts)}] ${entry.level.toUpperCase()} ${entry.sourceLabel}${ctx} \u2014 ${entry.message}`;
+      const detail = getDetails(entry);
+      copy(detail ? `${header}
+${detail}` : header);
+    }
+    function copyVisible() {
+      const lines = entries2.filter(passesFilters).map((entry) => {
+        const ctx = entry.context ? ` [${entry.context}]` : "";
+        const base = `[${fmtTime(entry.ts)}] ${entry.level.toUpperCase()} ${entry.sourceLabel}${ctx} \u2014 ${entry.message}`;
+        const detail = getDetails(entry);
+        return detail ? `${base}
+${detail}` : base;
+      }).join("\n\n");
+      copy(lines);
+    }
+    function handleEvent(ev) {
+      if (ev.type === "source") {
+        knownSources.set(ev.id, ev.label);
+        if (sourceSelection) sourceSelection.add(ev.id);
+        repaintSources();
+        return;
+      }
+      if (ev.type === "snapshot") {
+        entries2.length = 0;
+        entries2.push(...ev.entries);
+        const validIds = new Set(ev.entries.map((e) => e.id));
+        for (const id of Array.from(detailCache.keys())) {
+          if (!validIds.has(id)) detailCache.delete(id);
+        }
+        repaint(true);
+        return;
+      }
+      if (ev.type === "append") {
+        entries2.push(ev.entry);
+        appendOne(ev.entry);
+        return;
+      }
+      if (ev.type === "clear") {
+        entries2.length = 0;
+        detailCache.clear();
+        logList.innerHTML = "";
+        updateEmptyState();
+        return;
+      }
+    }
+    repaintSources();
+    updateEmptyState();
+    const unsubscribe = subscribeLogs(handleEvent);
+    view.__log_cleanup__ = () => {
+      unsubscribe();
+    };
   }
   function renderJotaiTab(view, ui) {
     view.innerHTML = "";
@@ -9183,14 +9578,14 @@
     const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
     if (Array.isArray(raw)) return raw;
     if (raw && typeof raw === "object") {
-      const entries = Object.entries(raw);
-      entries.sort((a, b) => {
+      const entries2 = Object.entries(raw);
+      entries2.sort((a, b) => {
         const ai = Number(a[0]);
         const bi = Number(b[0]);
         if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
         return a[0].localeCompare(b[0]);
       });
-      return entries.map(([, v]) => v);
+      return entries2.map(([, v]) => v);
     }
     return [];
   }
@@ -10906,7 +11301,7 @@
       };
     })();
   }
-  function renderLogsTab(view, ui) {
+  function renderLogsTab2(view, ui) {
     view.innerHTML = "";
     const wrap = document.createElement("div");
     wrap.style.display = "grid";
@@ -11141,7 +11536,7 @@
     const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     ui.addTab("manager", "\u{1F9F0} Manager", (view) => renderManagerTab(view, ui));
-    ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
+    ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab2(view, ui));
   }
 
   // src/services/misc.ts
@@ -11737,15 +12132,15 @@
     const list = document.getElementById(LIST_ID);
     if (!list) return;
     list.innerHTML = "";
-    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    if (entries.length === 0) {
+    const entries2 = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries2.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No seeds selected.";
       empty.style.opacity = "0.8";
       list.appendChild(empty);
       return;
     }
-    for (const it of entries) list.appendChild(renderListRow(it));
+    for (const it of entries2) list.appendChild(renderListRow(it));
   }
   function totalSelected() {
     let species = 0, qty = 0;
@@ -13889,7 +14284,7 @@
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
-    const listeners = [];
+    const listeners2 = [];
     function swallowAll() {
       const add = (target, t) => {
         const h = (e) => {
@@ -13897,7 +14292,7 @@
           e.preventDefault?.();
         };
         target.addEventListener(t, h, { capture: true });
-        listeners.push({ t, h, target });
+        listeners2.push({ t, h, target });
       };
       STOP_EVENTS.forEach((t) => {
         add(document, t);
@@ -13905,11 +14300,11 @@
       });
     }
     function unswallowAll() {
-      for (const { t, h, target } of listeners) try {
+      for (const { t, h, target } of listeners2) try {
         target.removeEventListener(t, h, { capture: true });
       } catch {
       }
-      listeners.length = 0;
+      listeners2.length = 0;
     }
     const docProto = Object.getPrototypeOf(document);
     const saved = {
