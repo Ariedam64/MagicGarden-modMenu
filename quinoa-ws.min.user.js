@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.6.6
+// @version      1.6.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5559,6 +5559,9 @@
       __publicField(this, "weatherStopConf", { mode: "manual" });
       __publicField(this, "weatherLoopIntervalMs", 1500);
       __publicField(this, "loops", /* @__PURE__ */ new Map());
+      __publicField(this, "oneshotQueue", []);
+      __publicField(this, "oneshotQueueTimer", null);
+      __publicField(this, "oneshotProcessing", false);
       __publicField(this, "weatherVolume", 0.7);
       __publicField(this, "weatherDefaultSoundName", null);
       // Optional purchase checker (for stop: purchase)
@@ -6035,7 +6038,7 @@
     // =========================
     async notify(context = "shops") {
       const du = this.resolveToDataUrl(null, context);
-      await this.playOnce(du, this.getVolume(context));
+      await this.playOnce(du, this.getVolume(context), context);
     }
     async playNotify(context = "shops") {
       await this.notify(context);
@@ -6068,7 +6071,7 @@
       if (mode === "oneshot") {
         this.stopLoop(key2);
         const du = this.resolveToDataUrl(sound ?? null, context);
-        await this.playOnce(du, baseVolume);
+        this.enqueueOneshot({ key: key2, dataUrl: du, volume: baseVolume, context });
         return;
       }
       this.stopLoop(key2);
@@ -6213,7 +6216,7 @@
     // =========================
     // Internals
     // =========================
-    async playOnce(dataUrl, volume) {
+    async playOnce(dataUrl, volume, _context, opts = {}) {
       if (!this.enabled) return true;
       const now = Date.now();
       if (now - this.lastPlayTs < this.minPlayGapMs) return false;
@@ -6239,9 +6242,26 @@
         a.volume = volume;
         a.muted = !this.enabled;
         a.crossOrigin = "anonymous";
+        const awaitEnd = opts?.awaitEnd === true;
+        let endPromise = null;
+        let resolveEnd = null;
+        if (awaitEnd) {
+          endPromise = new Promise((resolve2) => {
+            const cleanup = () => {
+              a.removeEventListener("ended", cleanup);
+              a.removeEventListener("error", cleanup);
+              resolve2();
+            };
+            resolveEnd = cleanup;
+            a.addEventListener("ended", cleanup);
+            a.addEventListener("error", cleanup);
+          });
+        }
         const p = a.play();
         if (p && typeof p.then === "function") await p.catch(() => {
+          resolveEnd?.();
         });
+        if (endPromise) await endPromise;
       } catch {
       }
       return true;
@@ -6260,7 +6280,12 @@
           }
         }
         const du = this.resolveToDataUrl(state2.soundOverride, state2.context);
-        const played = await this.playOnce(du, state2.volume);
+        const played = await this.playOnce(
+          du,
+          state2.volume,
+          state2.context,
+          { awaitEnd: true }
+        );
         if (played) state2.plays++;
         if (stopConf.mode === "repeat") {
           const max = Math.max(1, stopConf.repeats | 0);
@@ -6275,6 +6300,46 @@
       };
       if (delayMs > 0) state2.timer = setTimeout(run, delayMs);
       else run().catch(() => {
+      });
+    }
+    enqueueOneshot(entry) {
+      if (entry.context === "weather") {
+        const idx = this.oneshotQueue.findIndex((item) => item.context !== "weather");
+        if (idx === -1) this.oneshotQueue.push(entry);
+        else this.oneshotQueue.splice(idx, 0, entry);
+      } else {
+        this.oneshotQueue.push(entry);
+      }
+      this.scheduleOneshotProcessing();
+    }
+    scheduleOneshotProcessing() {
+      if (!this.oneshotQueue.length) return;
+      if (this.oneshotQueueTimer != null) return;
+      const delta = Date.now() - this.lastPlayTs;
+      const wait = Math.max(0, this.minPlayGapMs - delta);
+      this.oneshotQueueTimer = window.setTimeout(() => {
+        this.oneshotQueueTimer = null;
+        if (this.oneshotProcessing) return;
+        this.processOneshotQueue();
+      }, wait);
+    }
+    processOneshotQueue() {
+      if (this.oneshotProcessing) return;
+      if (!this.oneshotQueue.length) return;
+      const next = this.oneshotQueue.shift();
+      this.oneshotProcessing = true;
+      const run = async () => {
+        let replay = false;
+        try {
+          const played = await this.playOnce(next.dataUrl, next.volume, next.context);
+          replay = !played;
+        } finally {
+          this.oneshotProcessing = false;
+          if (replay) this.enqueueOneshot(next);
+          this.scheduleOneshotProcessing();
+        }
+      };
+      run().catch(() => {
       });
     }
     // ===== Helpers import/compress =====
@@ -7704,6 +7769,8 @@
       __publicField(this, "lastPurch", null);
       // Suivi des IDs visibles dans l’overlay (pour loops & diff)
       __publicField(this, "prevOverlayIds", /* @__PURE__ */ new Set());
+      __publicField(this, "currentOverlayIds", /* @__PURE__ */ new Set());
+      __publicField(this, "rulesById", /* @__PURE__ */ new Map());
       __publicField(this, "shopUpdates", 0);
       __publicField(this, "purchasesUpdates", 0);
       __publicField(this, "bootArmed", false);
@@ -7739,7 +7806,11 @@
         const t = e.target;
         if (!this.slot.contains(t)) this.panel.style.display = "none";
       });
-      audio.setPurchaseChecker((itemId) => purchasedCountForId(itemId, this.lastPurch) > 0);
+      audio.setPurchaseChecker((itemId) => {
+        if (!itemId) return false;
+        if (this.currentOverlayIds.has(itemId)) return false;
+        return purchasedCountForId(itemId, this.lastPurch) > 0;
+      });
     }
     destroy() {
       try {
@@ -7803,7 +7874,83 @@
     notifyStateUpdated() {
       void this.recompute();
     }
+    setRules(rules) {
+      this.rulesById.clear();
+      for (const [id, rule] of Object.entries(rules)) {
+        if (!id || !rule) continue;
+        this.rulesById.set(id, { ...rule });
+      }
+      this.refreshActiveLoops();
+    }
     /* ========= Core compute ========= */
+    buildTriggerOverrides(rule) {
+      if (!rule) return null;
+      const overrides = {};
+      if (rule.sound) overrides.sound = rule.sound;
+      if (rule.playbackMode === "loop" || rule.playbackMode === "oneshot") {
+        overrides.mode = rule.playbackMode;
+      }
+      if (rule.stopMode === "purchase") overrides.stop = { mode: "purchase" };
+      else if (rule.stopMode === "manual") overrides.stop = { mode: "manual" };
+      if (rule.loopIntervalMs != null && Number.isFinite(rule.loopIntervalMs)) {
+        overrides.loopIntervalMs = Math.max(150, Math.floor(Number(rule.loopIntervalMs)));
+      }
+      return Object.keys(overrides).length ? overrides : null;
+    }
+    triggerMany(ids) {
+      const entries2 = [];
+      for (const id of ids) {
+        const overrides = this.buildTriggerOverrides(this.rulesById.get(id)) ?? {};
+        const mode = this.resolvePlaybackMode(id);
+        const soundKey = overrides.sound ? `sound:${overrides.sound.trim().toLowerCase()}` : "sound:__default__";
+        entries2.push({ id, overrides, mode, soundKey });
+      }
+      if (!entries2.length) return;
+      const grouped = /* @__PURE__ */ new Map();
+      for (const entry of entries2) {
+        const bucket = grouped.get(entry.soundKey) ?? { loops: [], oneshots: [] };
+        if (entry.mode === "loop") bucket.loops.push(entry);
+        else bucket.oneshots.push(entry);
+        grouped.set(entry.soundKey, bucket);
+      }
+      for (const { loops, oneshots } of grouped.values()) {
+        if (loops.length) {
+          for (const entry of loops) {
+            audio.trigger(entry.id, entry.overrides, "shops").catch(() => {
+            });
+          }
+          continue;
+        }
+        if (oneshots.length) {
+          const first = oneshots[0];
+          audio.trigger(first.id, first.overrides, "shops").catch(() => {
+          });
+        }
+      }
+    }
+    triggerWithRule(id) {
+      this.triggerMany([id]);
+    }
+    resolvePlaybackMode(id) {
+      const rule = this.rulesById.get(id);
+      const baseMode = audio.getPlaybackMode("shops");
+      if (!rule) return baseMode;
+      if (rule.playbackMode === "loop") return "loop";
+      if (rule.playbackMode === "oneshot") return "oneshot";
+      if ((rule.stopMode || rule.loopIntervalMs != null) && baseMode === "loop") return "loop";
+      return baseMode;
+    }
+    refreshActiveLoops() {
+      if (!this.currentOverlayIds.size) return;
+      const loopIds = [];
+      for (const id of this.currentOverlayIds) {
+        if (this.resolvePlaybackMode(id) === "loop") {
+          audio.stopLoop(id);
+          loopIds.push(id);
+        }
+      }
+      if (loopIds.length) this.triggerMany(loopIds);
+    }
     async recompute() {
       if (!this.lastShops || !this.lastPurch) return;
       const out = [];
@@ -7813,36 +7960,18 @@
         if (!pref.popup) return;
         const bought = purchasedCountForId(id, this.lastPurch);
         const remaining = Math.max(initialStock - bought, 0);
-        if (remaining <= 0) return;
-        const rule = NotifierService.getRule?.(id) ?? null;
-        out.push({ id, qty: remaining, rule });
+        if (remaining > 0) out.push({ id, qty: remaining });
       };
       for (const it of this.lastShops.seed.inventory) consider(`Seed:${it.species}`, it.initialStock, it.canSpawnHere);
       for (const it of this.lastShops.tool.inventory) consider(`Tool:${it.toolId}`, it.initialStock, it.canSpawnHere);
       for (const it of this.lastShops.egg.inventory) consider(`Egg:${it.eggId}`, it.initialStock, it.canSpawnHere);
       for (const it of this.lastShops.decor.inventory) consider(`Decor:${it.decorId}`, it.initialStock, it.canSpawnHere);
       this.rows = out;
-      const ruleMap = new Map(out.map((r) => [r.id, r.rule ?? null]));
-      const getRuleFor = (id) => ruleMap.get(id) ?? (NotifierService.getRule?.(id) ?? null);
-      const triggerWithRule = (id) => {
-        const rule = getRuleFor(id);
-        const overrides = {};
-        if (rule?.sound) overrides.sound = rule.sound;
-        if (rule?.playbackMode) overrides.mode = rule.playbackMode;
-        if (rule?.stopMode === "purchase") {
-          overrides.stop = { mode: "purchase" };
-        }
-        if (rule?.loopIntervalMs != null) {
-          const interval = Number(rule.loopIntervalMs);
-          if (Number.isFinite(interval)) overrides.loopIntervalMs = interval;
-        }
-        audio.trigger(id, overrides).catch(() => {
-        });
-      };
       this.renderBadge();
       if (this.panel.style.display === "block") this.renderPanel();
       this.updateBellWiggle();
       const overlayIds = new Set(out.map((r) => r.id));
+      this.currentOverlayIds = overlayIds;
       const shopEmpty = (this.lastShops.seed?.inventory?.length ?? 0) + (this.lastShops.tool?.inventory?.length ?? 0) + (this.lastShops.egg?.inventory?.length ?? 0) + (this.lastShops.decor?.inventory?.length ?? 0) === 0;
       const ready = this.shopUpdates >= 3 && this.purchasesUpdates >= 2 && !shopEmpty;
       if (!this.bootArmed) {
@@ -7852,9 +7981,7 @@
         }
         this.bootArmed = true;
         if (overlayIds.size > 0) {
-          for (const id of overlayIds) {
-            triggerWithRule(id);
-          }
+          this.triggerMany(overlayIds);
         }
         this.prevOverlayIds = overlayIds;
         this.justRestocked = false;
@@ -7867,9 +7994,7 @@
         return;
       }
       if (this.justRestocked) {
-        for (const id of overlayIds) {
-          triggerWithRule(id);
-        }
+        this.triggerMany(overlayIds);
         for (const oldId of this.prevOverlayIds) {
           if (!overlayIds.has(oldId)) audio.stopLoop(oldId);
         }
@@ -7877,13 +8002,13 @@
         this.justRestocked = false;
         return;
       }
-      let startedAny = false;
+      const newIds = [];
       for (const id of overlayIds) {
         if (!this.prevOverlayIds.has(id)) {
-          triggerWithRule(id);
-          startedAny = true;
+          newIds.push(id);
         }
       }
+      if (newIds.length) this.triggerMany(newIds);
       for (const oldId of this.prevOverlayIds) {
         if (!overlayIds.has(oldId)) {
           audio.stopLoop(oldId);
@@ -8160,7 +8285,7 @@
     const unsubPurch = await NotifierService.onPurchasesChangeNow((p) => overlay.setPurchases(p));
     const unsubShops = await NotifierService.onShopsChangeNow((s) => overlay.setShops(s));
     const unsubState = await NotifierService.onChangeNow(() => overlay.notifyStateUpdated());
-    const unsubRules = await NotifierService.onRulesChangeNow(() => overlay.notifyStateUpdated());
+    const unsubRules = await NotifierService.onRulesChangeNow((rules) => overlay.setRules(rules));
     window.__qws_cleanup_notifier = () => {
       try {
         unsubShops();
@@ -8959,8 +9084,8 @@
     if (s === "frozen") return "Frozen";
     if (s === "dawnlit") return "Dawnlit";
     if (s === "dawnbound") return "Dawnbound";
-    if (s === "amberlit") return "Amberlit";
-    if (s === "amberbound") return "Amberbound";
+    if (s === "amberlit" || s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
+    if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
     return m;
   }
   function computeColorMultiplier(mutations) {
@@ -14159,6 +14284,7 @@ ${detail}` : base;
       }
       audio.setStopPurchase("shops");
       NotifierService.setContextStopDefaults("shops", { stopMode: "purchase", stopRepeats: null, loopIntervalMs: loopMs });
+      return loopMs;
     };
     for (const cfg of contextOrder) {
       const controls = contextControls[cfg.key];
@@ -14176,10 +14302,19 @@ ${detail}` : base;
         audio.setVolume(value / 100, cfg.key);
       });
       controls.modeOneshot.addEventListener("change", () => {
-        if (controls.modeOneshot.checked) applyMode(cfg.key, "oneshot");
+        if (!controls.modeOneshot.checked) return;
+        applyMode(cfg.key, "oneshot");
+        if (cfg.key === "shops") {
+          const loopMs = controls.loopInput ? sanitizeLoopInput(controls.loopInput, audio.getLoopInterval("shops")) : audio.getLoopInterval("shops");
+          audio.setLoopInterval(loopMs, "shops");
+          audio.setStopManual("shops");
+          NotifierService.setContextStopDefaults("shops", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
+        }
       });
       controls.modeLoop?.addEventListener("change", () => {
-        if (controls.modeLoop?.checked) applyMode(cfg.key, "loop");
+        if (!controls.modeLoop?.checked) return;
+        applyMode(cfg.key, "loop");
+        if (cfg.key === "shops") applyShopsStop();
       });
       if (cfg.allowPurchase) {
         controls.loopInput?.addEventListener("change", applyShopsStop);
@@ -14338,13 +14473,20 @@ ${detail}` : base;
       else controls.modeOneshot.checked = true;
       const defaults = NotifierService.getContextStopDefaults(context);
       const fallbackLoop = Math.max(150, Math.min(1e4, Math.floor(defaults.loopIntervalMs || settings.loopIntervalMs || 150)));
-      if (controls.loopInput) controls.loopInput.value = String(fallbackLoop);
+      const loopMs = controls.loopInput ? sanitizeLoopInput(controls.loopInput, fallbackLoop) : fallbackLoop;
+      audio.setLoopInterval(loopMs, context);
       if (context === "shops") {
-        applyShopsStop();
+        if (controls.modeLoop?.checked) {
+          audio.setStopPurchase("shops");
+          NotifierService.setContextStopDefaults("shops", { stopMode: "purchase", stopRepeats: null, loopIntervalMs: loopMs });
+        } else {
+          audio.setStopManual("shops");
+          NotifierService.setContextStopDefaults("shops", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
+        }
       } else {
         applyMode("weather", "oneshot");
         audio.setStopManual("weather");
-        NotifierService.setContextStopDefaults("weather", { stopMode: "manual", stopRepeats: null, loopIntervalMs: fallbackLoop });
+        NotifierService.setContextStopDefaults("weather", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
       }
       updateStopVisibility(context);
     };
