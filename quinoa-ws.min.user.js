@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.6.9
+// @version      1.7.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2943,9 +2943,13 @@
       __publicField(this, "currentId", null);
       __publicField(this, "lsKeyActive");
       __publicField(this, "_altDown", false);
+      __publicField(this, "_insertDown", false);
       __publicField(this, "_hovering", false);
       __publicField(this, "_onKey", (e) => {
-        const alt = e.altKey;
+        if (e.code === "Insert" || e.key === "Insert") {
+          this._insertDown = e.type === "keydown";
+        }
+        const alt = e.altKey || this._insertDown;
         if (alt !== this._altDown) {
           this._altDown = alt;
           this._updateAltCursor();
@@ -2953,6 +2957,7 @@
       });
       __publicField(this, "_onBlur", () => {
         this._altDown = false;
+        this._insertDown = false;
         this._updateAltCursor();
       });
       __publicField(this, "_onEnter", () => {
@@ -8430,7 +8435,7 @@
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
-      <button id="qws2-hide" class="btn" title="Hide (Alt+X)">\u2715</button>
+      <button id="qws2-hide" class="btn" title="Hide (Alt+X / Insert)">\u2715</button>
     </div>
 
     <!-- Status & store side-by-side (no mode label) -->
@@ -8444,6 +8449,56 @@
     </div>
   `;
     (document.documentElement || document.body).appendChild(box);
+    const setHUDHidden = (hidden) => {
+      box.classList.toggle("hidden", hidden);
+      try {
+        localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0");
+      } catch {
+      }
+      return hidden;
+    };
+    const toggleHUDHidden = () => setHUDHidden(!box.classList.contains("hidden"));
+    let insertDown = false;
+    let insertUsedAsModifier = false;
+    const isInsertKey = (e) => e.code === "Insert" || e.key === "Insert";
+    const isModifierActive = (e) => {
+      const alt = "altKey" in e && e.altKey;
+      const ctrl = "ctrlKey" in e && e.ctrlKey;
+      const meta = "metaKey" in e && e.metaKey;
+      const shift = "shiftKey" in e && e.shiftKey;
+      const insertModifier = insertDown && !alt && !ctrl && !meta;
+      if (insertModifier) insertUsedAsModifier = true;
+      return (alt || insertModifier) && !shift && !ctrl && !meta;
+    };
+    const onInsertKey = (e) => {
+      if (!isInsertKey(e)) return;
+      if (e.type === "keydown") {
+        if (!insertDown) insertUsedAsModifier = false;
+        insertDown = true;
+        return;
+      }
+      const target = e.target;
+      const editing = !!target && (target.isContentEditable || /^(input|textarea|select)$/i.test(target.tagName));
+      const usedAsModifier = insertUsedAsModifier;
+      insertDown = false;
+      insertUsedAsModifier = false;
+      if (!usedAsModifier && !editing) {
+        e.preventDefault();
+        toggleHUDHidden();
+      }
+    };
+    window.addEventListener("keydown", onInsertKey, true);
+    window.addEventListener("keyup", onInsertKey, true);
+    window.addEventListener("blur", () => {
+      insertDown = false;
+      insertUsedAsModifier = false;
+    }, true);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") {
+        insertDown = false;
+        insertUsedAsModifier = false;
+      }
+    });
     function clampRect(el2) {
       const rect = el2.getBoundingClientRect();
       const vw = window.innerWidth, vh = window.innerHeight;
@@ -8581,11 +8636,7 @@
       });
     };
     btnHide.onclick = () => {
-      box.classList.add("hidden");
-      try {
-        localStorage.setItem(LS_HIDDEN, "1");
-      } catch {
-      }
+      setHUDHidden(true);
     };
     window.addEventListener("keydown", (e) => {
       const t = e.target;
@@ -8593,13 +8644,13 @@
       if (editing) return;
       if (e.repeat) return;
       const isX = e.code === "KeyX" || typeof e.key === "string" && (e.key.toLowerCase() === "x" || e.key === "\u2248");
-      if (e.altKey && !e.shiftKey && !e.ctrlKey && !e.metaKey && isX) {
-        e.preventDefault();
-        const hidden = box.classList.toggle("hidden");
-        try {
-          localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0");
-        } catch {
+      const modifierActive = (e.altKey || insertDown) && !e.shiftKey && !e.ctrlKey && !e.metaKey;
+      if (modifierActive && isX) {
+        if (insertDown && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+          insertUsedAsModifier = true;
         }
+        e.preventDefault();
+        toggleHUDHidden();
       }
     }, true);
     const windows = /* @__PURE__ */ new Map();
@@ -8755,7 +8806,7 @@
         return el2.closest?.(".qws-win, .qws2") || null;
       };
       const onDown = (e) => {
-        if (!e.altKey || e.button !== 0) return;
+        if (!isModifierActive(e) || e.button !== 0) return;
         const root = pickRoot(e.target);
         if (!root || root.style.display === "none") return;
         const rect = root.getBoundingClientRect();
@@ -8941,7 +8992,6 @@
   }
   function initWatchers() {
     (async () => {
-      await PetsService.startAbilityLogsWatcher();
       try {
         setTeamsForHotkeys(PetsService.getTeams());
       } catch {
@@ -8965,6 +9015,7 @@
         });
       } catch {
       }
+      await PetsService.startAbilityLogsWatcher();
       await renderOverlay();
     })();
   }
