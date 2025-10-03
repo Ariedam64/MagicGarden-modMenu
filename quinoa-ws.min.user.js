@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Magic Garden ModMenu 
 // @namespace    Quinoa
-// @version      1.6.8
+// @version      1.6.9
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -9208,8 +9208,85 @@
   });
 
   // src/utils/tooltip.finder.ts
+  function hasCanvas(el2) {
+    return !!el2.querySelector?.("canvas");
+  }
+  function hasNameText(el2) {
+    return !!el2.querySelector?.('p.chakra-text, p[class*="chakra-text"]');
+  }
+  function findTooltipRootFrom(start) {
+    let n = start || null;
+    while (n && n !== document.body) {
+      if (n.getAttribute?.("role") === "tooltip") return n;
+      if (hasCanvas(n) && hasNameText(n)) return n;
+      n = n.parentElement;
+    }
+    return null;
+  }
   function findBestTooltipDetailHostInside(root) {
     if (!root) return null;
+    try {
+      const hasLocalCanvas = !!root.querySelector?.("canvas");
+      if (!hasLocalCanvas) {
+        const frame = findTooltipRootFrom(root);
+        if (frame) root = frame;
+      }
+    } catch {
+    }
+    try {
+      const grids = Array.from(root.querySelectorAll?.(".McGrid, [class*='McGrid']") ?? []).filter((g) => getComputedStyle(g).display !== "none");
+      for (const g of grids) {
+        const hasC = !!g.querySelector("canvas");
+        if (!hasC) continue;
+        const details = Array.from(g.children).find(
+          (ch) => ch instanceof HTMLElement && getComputedStyle(ch).display.includes("flex") && !ch.querySelector("canvas")
+        );
+        if (details) return details;
+      }
+    } catch {
+    }
+    try {
+      const rows = Array.from(root.querySelectorAll?.(".McFlex, [class*='McFlex']") ?? []).filter((r) => getComputedStyle(r).display.includes("flex") && !!r.querySelector("canvas"));
+      for (const row of rows) {
+        const kids = Array.from(row.children);
+        const imgCol = kids.find((ch) => ch instanceof HTMLElement && !!ch.querySelector("canvas")) || null;
+        const detCol = kids.find(
+          (ch) => ch instanceof HTMLElement && ch !== imgCol && !ch.querySelector("canvas") && !!ch.querySelector('p, [class*="chakra-text"]')
+        ) || null;
+        if (imgCol && detCol) return detCol;
+      }
+    } catch {
+    }
+    try {
+      const texts = Array.from(root.querySelectorAll?.("p.chakra-text, p[class*='chakra-text']") ?? []);
+      const timerRe = /(\d+\s*[hms]|\d+h\s*\d+m|\d+m\s*\d+s)/i;
+      for (const p of texts) {
+        const t = (p.textContent || "").trim();
+        if (!timerRe.test(t)) continue;
+        let cand = p;
+        while (cand && cand !== root) {
+          const cs = getComputedStyle(cand);
+          if (cs.display.includes("flex") && !cand.querySelector("canvas")) {
+            return cand;
+          }
+          cand = cand.parentElement;
+        }
+      }
+    } catch {
+    }
+    try {
+      const hasAnyCanvas = !!root.querySelector?.("canvas");
+      if (!hasAnyCanvas) {
+        const clickable = root.querySelector?.("span[tabindex]") ?? null;
+        if (clickable) {
+          const directMcFlex = clickable.querySelector?.(':scope > .McFlex, :scope > [class*="McFlex"]') ?? null;
+          if (directMcFlex && !directMcFlex.querySelector?.("canvas")) {
+            return directMcFlex;
+          }
+        }
+      }
+    } catch {
+    }
     const name = root.querySelector?.("p.chakra-text") ?? root.querySelector?.('p[class*="chakra-text"]') ?? root.querySelector?.("p") ?? null;
     if (name) {
       const hasCanvasLocal = (el2) => !!el2.querySelector("canvas");
@@ -9219,6 +9296,22 @@
         if (cs.display.includes("flex") && !hasCanvasLocal(node)) {
           const parent = node.parentElement;
           if (parent && Array.from(parent.children).some((ch) => ch !== node && ch instanceof HTMLElement && hasCanvasLocal(ch))) {
+            if (parent) {
+              const siblingWithCanvas = Array.from(parent.children).find(
+                (ch) => ch instanceof HTMLElement && ch !== node && !!ch.querySelector("canvas")
+              );
+              if (siblingWithCanvas) {
+                let details = Array.from(siblingWithCanvas.children).find(
+                  (ch) => ch instanceof HTMLElement && getComputedStyle(ch).display.includes("flex") && !ch.querySelector("canvas") && !!ch.querySelector('p, [class*="chakra-text"]')
+                );
+                if (!details) {
+                  details = Array.from(siblingWithCanvas.querySelectorAll('.McFlex, [class*="McFlex"]')).find(
+                    (el2) => el2 instanceof HTMLElement && getComputedStyle(el2).display.includes("flex") && !el2.querySelector("canvas") && !!el2.querySelector('p, [class*="chakra-text"]')
+                  );
+                }
+                if (details) return details;
+              }
+            }
             return node;
           }
         }
@@ -9240,6 +9333,7 @@
   }
 
   // src/services/domChanges.ts
+  var log2 = createMenuLogger("dom-changes-service", "DOM changes service");
   var STYLE_ID = "qws-price-badge-style";
   var ATTR_INJECTED = "data-qws-injected";
   var CLASS_BADGE = "qws-price-badge";
@@ -9289,6 +9383,7 @@
       color:#FFD84D; z-index:1; pointer-events:none; white-space:nowrap;
     }`;
     document.head.appendChild(s);
+    log2.debug("Injected badge style element");
   }
   var BADGE_RESERVE = 0;
   function measureBadgeReserve() {
@@ -9299,6 +9394,7 @@
     document.body.appendChild(probe);
     BADGE_RESERVE = Math.max(28, Math.ceil(probe.getBoundingClientRect().height + 10));
     probe.remove();
+    log2.debug("Measured badge reserve", { reserve: BADGE_RESERVE });
     return BADGE_RESERVE;
   }
   function collectTooltipRoots() {
@@ -9306,10 +9402,13 @@
     const userRoot = document.querySelector(USER_SCOPE_ROOT);
     if (userRoot) set2.add(userRoot);
     for (const h of ACTIVE_HOSTS) {
-      if (h && h.isConnected) set2.add(h.closest(".McFlex, .css-0") || h);
+      if (h && h.isConnected) {
+        const r = findTooltipRootFrom(h) || h.closest(".McFlex.css-1wu1jyg, .McFlex.css-fsggty, .McFlex, .css-0") || h;
+        set2.add(r);
+      }
     }
     if (set2.size === 0) {
-      const guess = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
+      const guess = Array.from(document.querySelectorAll(".McFlex.css-1wu1jyg, .McFlex.css-fsggty, .McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
       guess.slice(0, 3).forEach((r) => set2.add(r));
     }
     return Array.from(set2).filter((r) => r.isConnected);
@@ -9346,6 +9445,10 @@
       badge.className = CLASS_BADGE;
       host.appendChild(badge);
       host.setAttribute(ATTR_INJECTED, "1");
+      log2.debug("Created price badge", {
+        hostTag: host.tagName,
+        hostClasses: host.className
+      });
     }
     badge.textContent = fmtCoins(val);
   }
@@ -9355,6 +9458,10 @@
       host.removeAttribute(ATTR_INJECTED);
       host.style.paddingBottom = "";
     }
+    log2.debug("Removed badge from host", {
+      hostTag: host.tagName,
+      hostClasses: host.className
+    });
   }
   function updateAllBadges() {
     const roots = collectTooltipRoots();
@@ -9363,6 +9470,10 @@
       const host = findBestTooltipDetailHostInside(root);
       if (host) found.push(host);
     }
+    const uniqueFound = Array.from(new Set(found)).filter((h) => !found.some((o) => o !== h && h.contains(o)));
+    found.length = 0;
+    found.push(...uniqueFound);
+    const prevSize = ACTIVE_HOSTS.size;
     for (const host of found) {
       if (!ACTIVE_HOSTS.has(host)) ACTIVE_HOSTS.add(host);
       injectOrUpdateBadge(host);
@@ -9373,6 +9484,16 @@
         ACTIVE_HOSTS.delete(host);
       }
     }
+    if (!roots.length && prevSize > 0) {
+      log2.warn("No tooltip roots detected while badges were active");
+    }
+    if (ACTIVE_HOSTS.size !== prevSize) {
+      log2.info("Updated tooltip badges", {
+        previousHosts: prevSize,
+        currentHosts: ACTIVE_HOSTS.size,
+        roots: roots.length
+      });
+    }
   }
   function clearAllBadges() {
     document.querySelectorAll("." + CLASS_BADGE).forEach((el2) => el2.remove());
@@ -9381,6 +9502,7 @@
       host.removeAttribute(ATTR_INJECTED);
     });
     ACTIVE_HOSTS.clear();
+    log2.info("Cleared all tooltip badges");
   }
   function watchTooltipsByXPath() {
     const rescan = () => updateAllBadges();
@@ -9392,32 +9514,42 @@
         raf = 0;
         rescan();
       });
+      log2.debug("Scheduled tooltip rescan after mutation");
     });
     mo.observe(document.body, { subtree: true, childList: true, attributes: true });
+    log2.info("Started tooltip watcher");
     return {
       disconnect() {
         mo.disconnect();
         ACTIVE_HOSTS.clear();
+        log2.info("Disconnected tooltip watcher");
       }
     };
   }
   (async () => {
     try {
       cur = await myCurrentGardenObject.get();
-    } catch {
+      log2.debug("Loaded current garden object");
+    } catch (err) {
+      log2.error("Failed to load current garden object", err);
     }
     try {
       players = await numPlayers.get();
-    } catch {
+      log2.debug("Loaded current player count", { players });
+    } catch (err) {
+      log2.warn("Unable to read player count", { error: err });
     }
     try {
       const v = await myCurrentSortedGrowSlotIndices.get();
       sortedIdx = Array.isArray(v) ? v.slice() : null;
-    } catch {
+      log2.debug("Loaded sorted grow slot indices", { hasSorted: !!sortedIdx });
+    } catch (err) {
+      log2.error("Failed to read sorted grow slot indices", err);
     }
     try {
       selectedIdx = await myCurrentGrowSlotIndex.get();
-    } catch {
+    } catch (err) {
+      log2.warn("Could not read current grow slot index", { error: err });
     }
     myCurrentGardenObject.onChange((v) => {
       cur = v;
@@ -9436,6 +9568,7 @@
       updateAllBadges();
     });
     watchTooltipsByXPath();
+    log2.info("Initialized DOM changes service");
   })();
 
   // src/services/debug-data.ts
@@ -12359,14 +12492,14 @@ ${detail}` : base;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log2) {
-      const time = cell(log2.time12, "center");
-      const petLabel = log2.petName || log2.species || "Pet";
+    function row(log3) {
+      const time = cell(log3.time12, "center");
+      const petLabel = log3.petName || log3.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log2.abilityName || log2.abilityId, "center");
-      const detText = typeof log2.data === "string" ? log2.data : (() => {
+      const abName = cell(log3.abilityName || log3.abilityId, "center");
+      const detText = typeof log3.data === "string" ? log3.data : (() => {
         try {
-          return JSON.stringify(log2.data);
+          return JSON.stringify(log3.data);
         } catch {
           return "";
         }
