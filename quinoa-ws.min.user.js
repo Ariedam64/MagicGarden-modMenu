@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Magic Garden ModMenu 
+// @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.7.0
+// @version      1.7.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2705,6 +2705,77 @@
       notes: ["1 fois / 4h", "Ne se cumule pas avec Amberglow"]
     }
   };
+  var publicRooms = [
+    { name: "play#1", idRoom: "i-1414738784745951293-gc-808935495543160852-1265022148045701220" },
+    { name: "play#2", idRoom: "i-1416705483108257912-gc-808935495543160852-1389438720427425894" },
+    { name: "play#3", idRoom: "i-1414738624276205699-gc-808935495543160852-1389979453957996705" },
+    { name: "play#4", idRoom: "i-1423842359220768778-gc-808935495543160852-1389979475336233000" },
+    { name: "play#5", idRoom: "i-1416587436116541542-gc-808935495543160852-1391350549944733768" },
+    { name: "play#6", idRoom: "i-1418730822261018695-gc-808935495543160852-1391629723687452802" },
+    { name: "play#7", idRoom: "i-1414738652449345536-gc-808935495543160852-1392897701087019028" },
+    { name: "play#8", idRoom: "i-1422396781895094332-gc-808935495543160852-1417928182505672877" },
+    { name: "play#9", idRoom: "i-1423089570534133770-gc-808935495543160852-1392928961679331541" },
+    { name: "play#10", idRoom: "i-1419445048000380938-gc-808935495543160852-1394338319411970198" },
+    { name: "play#11", idRoom: "i-1421249275131859125-gc-808935495543160852-1394338344753959032" },
+    { name: "play#12", idRoom: "i-1417583142918950943-gc-808935495543160852-1394338361631703181" },
+    { name: "play#13", idRoom: "i-1417346597142003793-gc-808935495543160852-1394714064575271032" },
+    { name: "play#14", idRoom: "i-1421215237289545901-gc-808935495543160852-1394714079448399962" },
+    { name: "play#15", idRoom: "i-1421241053234593903-gc-808935495543160852-1394714101065974021" },
+    { name: "play#16", idRoom: "i-1421241053234593903-gc-808935495543160852-1394714101065974021" },
+    { name: "play#17", idRoom: "i-1421218224644816896-gc-808935495543160852-1394714159857270936" },
+    { name: "play#18", idRoom: "i-1417297684406079489-gc-808935495543160852-1395445357495718081" },
+    { name: "play#19", idRoom: "i-1421304901270638662-gc-808935495543160852-1421303964225372294" },
+    { name: "play#20", idRoom: "i-1422493272559058996-gc-808935495543160852-1395445408737788064" },
+    { name: "play#21", idRoom: "i-1419443845329850538-gc-808935495543160852-1406700719272104188" },
+    { name: "play#22", idRoom: "i-1418751419091124374-gc-808935495543160852-1413559836976873672" },
+    { name: "play#23", idRoom: "i-1421249904214544596-gc-808935495543160852-1414650590323277904" },
+    { name: "play#24", idRoom: "i-1423843817081147482-gc-808935495543160852-1414650614415102163" },
+    { name: "play#25", idRoom: "i-1422640525215006781-gc-808935495543160852-1414650635642732564" },
+    { name: "play#26", idRoom: "i-1417628577503121438-gc-808935495543160852-1415547820177625139" },
+    { name: "play#27", idRoom: "i-1418737613749092462-gc-808935495543160852-1415547932303687690" },
+    { name: "play#28", idRoom: "i-1417311042018742343-gc-808935495543160852-1415547947315236864" },
+    { name: "play#29", idRoom: "i-1415554758164484177-gc-808935495543160852-1415550373145350183" },
+    { name: "play#30", idRoom: "i-1421231228996292680-gc-808935495543160852-1420055125409661008" },
+    { name: "play#31", idRoom: "i-1417599346446176327-gc-808935495543160852-1415737760005755021" },
+    { name: "play#32", idRoom: "i-1422666286835433582-gc-808935495543160852-1415737783116628101" },
+    { name: "play#33", idRoom: "i-1421214996943081572-gc-808935495543160852-1415737800992751696" },
+    { name: "play#34", idRoom: "i-1416632731353219133-gc-808935495543160852-1415737817056940203" },
+    { name: "play#35", idRoom: "i-1422405753016287242-gc-808935495543160852-1415737832332329112" },
+    { name: "play#36", idRoom: "i-1422636257129005290-gc-808935495543160852-1415737848279335024" },
+    { name: "play#37", idRoom: "i-1418378533910347806-gc-808935495543160852-1415737865761194066" },
+    { name: "play#38", idRoom: "i-1421263900875292783-gc-808935495543160852-1415737879208001689" },
+    { name: "play#39", idRoom: "i-1415758299952971837-gc-808935495543160852-1415737894144053428" },
+    { name: "play#40", idRoom: "i-1421247473728622632-gc-808935495543160852-1415737913324605450" },
+    { name: "play-1", idRoom: "i-1423541753683644458-gc-808935495543160852-1257800870863699998" },
+    { name: "play-2", idRoom: "i-1423843599216545833-gc-808935495543160852-1395445510235754649" },
+    { name: "play-3", idRoom: "i-1422379279353774090-gc-808935495543160852-1399450370350256198" },
+    { name: "play-4", idRoom: "i-1423542863677100083-gc-808935495543160852-1399845784324673576" },
+    { name: "play-5", idRoom: "i-1423627201508544602-gc-808935495543160852-1407013589067370670" },
+    { name: "play-6", idRoom: "i-1423787194895564993-gc-808935495543160852-1407013620088443171" },
+    { name: "play-7", idRoom: "i-1423609323065708604-gc-808935495543160852-1407824061849141399" },
+    { name: "play-8", idRoom: "i-1422904768803766372-gc-808935495543160852-1407824119747055828" },
+    { name: "garlic-1", idRoom: "i-1420740716975493190-gc-1399110335469977781-1411124424676999308" },
+    { name: "garlic-2", idRoom: "i-1419137911063838720-gc-1399110335469977781-1411801827674030191" },
+    { name: "garlic-3", idRoom: "i-1423023328460931214-gc-1399110335469977781-1411801899489034471" },
+    { name: "garlic-4", idRoom: "i-1423581255622201486-gc-1399110335469977781-1411801931373875240" },
+    { name: "garlic-5", idRoom: "i-1423853424000106547-gc-1399110335469977781-1411801958616141864" },
+    { name: "garlic-6", idRoom: "i-1423853555164643488-gc-1399110335469977781-1411801990345916496" },
+    { name: "garlic-7", idRoom: "i-1423853749268512778-gc-1399110335469977781-1411802027255660644" },
+    { name: "garlic-8", idRoom: "i-1423853876494205122-gc-1399110335469977781-1411802063876128980" },
+    { name: "garlic-9", idRoom: "i-1423853340923662356-gc-1399110335469977781-1411802098533666837" },
+    { name: "garlic-10", idRoom: "i-1423854225879994499-gc-1399110335469977781-1411802136911548467" },
+    { name: "magicgarden1", idRoom: "MG1" },
+    { name: "magicgarden2", idRoom: "MG2" },
+    { name: "magicgarden3", idRoom: "MG3" },
+    { name: "magicgarden4", idRoom: "MG4" },
+    { name: "magicgarden5", idRoom: "MG5" },
+    { name: "magicgarden6", idRoom: "MG6" },
+    { name: "magicgarden7", idRoom: "MG7" },
+    { name: "magicgarden8", idRoom: "MG8" },
+    { name: "magicgarden9", idRoom: "MG9" },
+    { name: "magicgarden10", idRoom: "MG10" },
+    { name: "slay", idRoom: "SLAY" }
+  ];
 
   // src/services/fakeAtoms.ts
   var _fakeRegistry = /* @__PURE__ */ new Map();
@@ -9285,6 +9356,25 @@
     } catch {
     }
     try {
+      let wr = root;
+      while (wr && wr !== document.body) {
+        const kids = Array.from(wr.children);
+        const mcKids = kids.filter((k) => k.classList?.contains("McFlex"));
+        if (mcKids.length >= 2) {
+          const first = mcKids[0];
+          const second = mcKids[1];
+          const firstLooksMutation = !!first.querySelector("span[tabindex]") && !first.querySelector("canvas");
+          const secondHasCanvas = !!second.querySelector("canvas");
+          if (firstLooksMutation && secondHasCanvas) {
+            root = second;
+            break;
+          }
+        }
+        wr = wr.parentElement;
+      }
+    } catch {
+    }
+    try {
       const grids = Array.from(root.querySelectorAll?.(".McGrid, [class*='McGrid']") ?? []).filter((g) => getComputedStyle(g).display !== "none");
       for (const g of grids) {
         const hasC = !!g.querySelector("canvas");
@@ -9453,13 +9543,10 @@
     const userRoot = document.querySelector(USER_SCOPE_ROOT);
     if (userRoot) set2.add(userRoot);
     for (const h of ACTIVE_HOSTS) {
-      if (h && h.isConnected) {
-        const r = findTooltipRootFrom(h) || h.closest(".McFlex.css-1wu1jyg, .McFlex.css-fsggty, .McFlex, .css-0") || h;
-        set2.add(r);
-      }
+      if (h && h.isConnected) set2.add(h.closest(".McFlex, .css-0") || h);
     }
     if (set2.size === 0) {
-      const guess = Array.from(document.querySelectorAll(".McFlex.css-1wu1jyg, .McFlex.css-fsggty, .McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
+      const guess = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
       guess.slice(0, 3).forEach((r) => set2.add(r));
     }
     return Array.from(set2).filter((r) => r.isConnected);
@@ -12543,14 +12630,14 @@ ${detail}` : base;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log3) {
-      const time = cell(log3.time12, "center");
-      const petLabel = log3.petName || log3.species || "Pet";
+    function row(log4) {
+      const time = cell(log4.time12, "center");
+      const petLabel = log4.petName || log4.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log3.abilityName || log3.abilityId, "center");
-      const detText = typeof log3.data === "string" ? log3.data : (() => {
+      const abName = cell(log4.abilityName || log4.abilityId, "center");
+      const detText = typeof log4.data === "string" ? log4.data : (() => {
         try {
-          return JSON.stringify(log3.data);
+          return JSON.stringify(log4.data);
         } catch {
           return "";
         }
@@ -15932,6 +16019,691 @@ ${detail}` : base;
     view.appendChild(wrapper);
   }
 
+  // src/utils/api.ts
+  function detectEnvironment() {
+    const isInIframe = (() => {
+      try {
+        return window.top !== window.self;
+      } catch {
+        return true;
+      }
+    })();
+    const refHost = safeHost(document.referrer);
+    const parentLooksDiscord = isInIframe && !!refHost && /(^|\.)discord(app)?\.com$/i.test(refHost);
+    const host = location.hostname;
+    const surface = parentLooksDiscord ? "discord" : "web";
+    const platform = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "mobile" : "desktop";
+    return {
+      surface,
+      host,
+      origin: location.origin,
+      isInIframe,
+      platform
+    };
+  }
+  function isDiscordSurface() {
+    return detectEnvironment().surface === "discord";
+  }
+  function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
+    return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
+  }
+  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers,
+        signal: controller.signal
+      });
+      const body = await res.text();
+      return { status: res.status, ok: res.ok, body };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
+    return new Promise((resolve2, reject) => {
+      if (typeof GM_xmlhttpRequest !== "function") {
+        reject(new Error("GM_xmlhttpRequest is not available"));
+        return;
+      }
+      GM_xmlhttpRequest({
+        method: "GET",
+        url,
+        headers,
+        timeout: timeoutMs,
+        onload: (response) => resolve2({
+          status: response.status,
+          ok: response.status >= 200 && response.status < 300,
+          body: response.responseText
+        }),
+        onerror: (error) => reject(error),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timed out"))
+      });
+    });
+  }
+  async function requestRoomEndpoint(roomIdOrCode, options = {}) {
+    const endpoint = options.endpoint ?? "info";
+    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
+    const headers = {};
+    if (options.jwt) {
+      headers["Authorization"] = `Bearer ${options.jwt}`;
+    }
+    let rawResponse;
+    if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
+      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+    } else {
+      try {
+        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
+      } catch (error) {
+        if (typeof GM_xmlhttpRequest === "function") {
+          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+        } else {
+          throw error;
+        }
+      }
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawResponse.body);
+    } catch {
+    }
+    return { url, ...rawResponse, parsed };
+  }
+  function safeHost(url) {
+    if (!url) return null;
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return null;
+    }
+  }
+  function buildSoftJoinUrl(roomCode) {
+    const merged = new URLSearchParams(location.search);
+    const url = new URL(location.href);
+    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
+    url.search = merged.toString();
+    return url.toString();
+  }
+  function buildHardJoinUrl(roomCode) {
+    return buildSoftJoinUrl(roomCode);
+  }
+  function joinRoom(roomCode, options = {}) {
+    const env = detectEnvironment();
+    const isDiscord = env.surface === "discord";
+    const preferSoft = options.preferSoft ?? !isDiscord;
+    const hardIfSoftFails = options.hardIfSoftFails ?? true;
+    if (isDiscord) {
+      if (options.siteFallbackOnDiscord) {
+        const fallback = `https://magiccircle.gg/r/${encodeURIComponent(roomCode)}`;
+        if (options.openInNewTab) {
+          window.open(fallback, "_blank", "noopener,noreferrer");
+        } else {
+          location.assign(fallback);
+        }
+        return {
+          ok: true,
+          mode: "site-fallback",
+          url: fallback,
+          message: "Discord activity does not support room switching by code, redirecting to the official site."
+        };
+      }
+      return {
+        ok: false,
+        mode: "discord-unsupported",
+        message: "Discord activity does not support joining a room by code. Open the website or use an activity invite."
+      };
+    }
+    const softUrl = buildSoftJoinUrl(roomCode);
+    if (preferSoft) {
+      try {
+        const url = new URL(softUrl);
+        if (url.origin === location.origin) {
+          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
+          window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+          console.log("[joinRoom] soft \u2192", url.toString());
+          return { ok: true, mode: "soft", url: url.toString() };
+        }
+      } catch {
+      }
+      if (!hardIfSoftFails) {
+        return {
+          ok: false,
+          mode: "noop",
+          url: softUrl,
+          message: "Soft navigation failed because the origins differ."
+        };
+      }
+    }
+    const hardUrl = buildHardJoinUrl(roomCode);
+    console.log("[joinRoom] hard \u2192", hardUrl);
+    location.assign(hardUrl);
+    return { ok: true, mode: "hard", url: hardUrl };
+  }
+
+  // src/services/room.ts
+  var log3 = createMenuLogger("room-service", "Room service");
+  var MAX_PLAYERS = 6;
+  function deriveCategoryFromName(name) {
+    const match = /^([a-zA-Z]+)/.exec(name);
+    if (match && match[1]) {
+      return match[1].toLowerCase();
+    }
+    return "other";
+  }
+  var PUBLIC_ROOMS = publicRooms.map((room) => ({
+    name: room.name,
+    idRoom: room.idRoom,
+    category: deriveCategoryFromName(room.name)
+  }));
+  function clampPlayerCount(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(MAX_PLAYERS, Math.floor(value)));
+  }
+  function normalizeError(error) {
+    if (!error) return "Erreur inconnue.";
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message || "Erreur inconnue.";
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  var RoomService = {
+    getPublicRooms() {
+      return PUBLIC_ROOMS.map((room) => ({ ...room }));
+    },
+    async fetchPublicRoomsStatus() {
+      const definitions = this.getPublicRooms();
+      const now = Date.now();
+      const results = await Promise.all(
+        definitions.map(async (def) => {
+          try {
+            log3.debug("Fetching public room state", { room: def.idRoom, name: def.name });
+            const response = await requestRoomEndpoint(def.idRoom, {
+              endpoint: "info",
+              timeoutMs: 1e4
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            const payload = response.parsed ?? (() => {
+              try {
+                return JSON.parse(response.body);
+              } catch {
+                return void 0;
+              }
+            })();
+            const players2 = clampPlayerCount(
+              typeof payload?.numPlayers === "number" ? payload.numPlayers : 0
+            );
+            const capacity = MAX_PLAYERS;
+            const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
+            return {
+              ...def,
+              players: players2,
+              capacity,
+              isFull: players2 >= capacity,
+              lastUpdatedAt: now,
+              currentGame
+            };
+          } catch (error) {
+            const message = normalizeError(error);
+            log3.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
+            return {
+              ...def,
+              players: 0,
+              capacity: MAX_PLAYERS,
+              isFull: false,
+              lastUpdatedAt: now,
+              error: message
+            };
+          }
+        })
+      );
+      return results;
+    },
+    canJoinPublicRoom(room) {
+      if (room.error) return false;
+      if (room.isFull) return false;
+      if (this.isDiscordActivity()) return false;
+      return true;
+    },
+    isDiscordActivity() {
+      return isDiscordSurface();
+    },
+    joinPublicRoom(room) {
+      log3.info("Joining public room", { room: room.idRoom });
+      const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
+      if (!result.ok) {
+        log3.warn("Join room returned not ok", { room: room.idRoom, result });
+      }
+      return result;
+    }
+  };
+
+  // src/ui/menus/room.ts
+  var REFRESH_INTERVAL_MS = 1e4;
+  var TAB_ID = "public-rooms";
+  async function renderRoomMenu(root) {
+    const ui = new Menu({ id: "room", compact: true, windowSelector: ".qws-win" });
+    ui.addTab(TAB_ID, "\u{1F310} Public Rooms", (view) => renderPublicRoomsTab(view, ui));
+    ui.mount(root);
+  }
+  function renderPublicRoomsTab(view, ui) {
+    view.innerHTML = "";
+    view.style.display = "flex";
+    view.style.flexDirection = "column";
+    view.style.alignItems = "center";
+    view.style.padding = "12px";
+    view.style.boxSizing = "border-box";
+    view.style.height = "100%";
+    view.style.minHeight = "0";
+    const container = document.createElement("div");
+    container.style.display = "grid";
+    container.style.gap = "12px";
+    container.style.width = "100%";
+    container.style.maxWidth = "640px";
+    container.style.height = "100%";
+    container.style.gridTemplateRows = "max-content max-content 1fr max-content";
+    view.appendChild(container);
+    const heading = document.createElement("div");
+    heading.textContent = "Select a public room to quickly join a game.";
+    heading.style.fontSize = "14px";
+    heading.style.opacity = "0.9";
+    container.appendChild(heading);
+    if (RoomService.isDiscordActivity()) {
+      const discordWarning = document.createElement("div");
+      discordWarning.textContent = "You are using Discord: direct join is disabled. Open the official website to join a room.";
+      discordWarning.style.fontSize = "13px";
+      discordWarning.style.lineHeight = "1.4";
+      discordWarning.style.padding = "10px 12px";
+      discordWarning.style.borderRadius = "8px";
+      discordWarning.style.background = "#2e1f1f";
+      discordWarning.style.color = "#ffb4a2";
+      discordWarning.style.border = "1px solid rgba(255, 140, 105, 0.35)";
+      container.appendChild(discordWarning);
+    }
+    const filterBar = document.createElement("div");
+    filterBar.style.display = "flex";
+    filterBar.style.flexWrap = "wrap";
+    filterBar.style.alignItems = "center";
+    filterBar.style.gap = "8px";
+    filterBar.style.margin = "12px 0 6px";
+    filterBar.style.width = "100%";
+    container.appendChild(filterBar);
+    const listWrapper = document.createElement("div");
+    listWrapper.style.height = "54vh";
+    listWrapper.style.maxHeight = "54vh";
+    listWrapper.style.overflowY = "auto";
+    listWrapper.style.padding = "6px 2px";
+    listWrapper.style.borderRadius = "10px";
+    listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
+    listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
+    listWrapper.style.width = "100%";
+    listWrapper.style.boxSizing = "border-box";
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "10px";
+    list.style.padding = "4px";
+    listWrapper.appendChild(list);
+    container.appendChild(listWrapper);
+    const statusBar = document.createElement("div");
+    statusBar.style.fontSize = "12px";
+    statusBar.style.opacity = "0.75";
+    statusBar.textContent = "Loading rooms\u2026";
+    container.appendChild(statusBar);
+    let savedScrollTop = 0;
+    listWrapper.addEventListener("scroll", () => {
+      savedScrollTop = listWrapper.scrollTop;
+    });
+    let destroyed = false;
+    let refreshTimer = null;
+    let requestCounter = 0;
+    let firstLoad = true;
+    let selectedCategory = null;
+    let selectedPlayerFilter = "any";
+    let currentRooms = [];
+    const filterButtons = /* @__PURE__ */ new Map();
+    const updateFilterButtonStyles = () => {
+      for (const [category, button] of filterButtons) {
+        const isActive = category === selectedCategory;
+        button.dataset.active = isActive ? "true" : "false";
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        button.style.opacity = isActive ? "1" : "0.7";
+      }
+    };
+    const matchesPlayerFilter = (room) => {
+      switch (selectedPlayerFilter) {
+        case "any":
+          return true;
+        case "empty":
+          return room.players === 0;
+        case "few":
+          return room.players > 0 && room.players <= 3;
+        case "crowded":
+          return !room.isFull && room.players >= 4;
+        case "full":
+          return room.isFull;
+        default:
+          return true;
+      }
+    };
+    const renderRooms = (rooms) => {
+      currentRooms = rooms;
+      list.innerHTML = "";
+      const visibleRooms = rooms.filter((room) => {
+        if (selectedCategory !== null && room.category !== selectedCategory) {
+          return false;
+        }
+        if (!matchesPlayerFilter(room)) {
+          return false;
+        }
+        return true;
+      });
+      if (!visibleRooms.length) {
+        const empty = document.createElement("div");
+        empty.textContent = rooms.length ? "No rooms match the selected filter." : "No public rooms available.";
+        empty.style.padding = "16px";
+        empty.style.textAlign = "center";
+        empty.style.opacity = "0.7";
+        list.appendChild(empty);
+      } else {
+        for (const room of visibleRooms) {
+          list.appendChild(createRoomEntry(room, ui));
+        }
+      }
+      requestAnimationFrame(() => {
+        const maxScroll = Math.max(0, listWrapper.scrollHeight - listWrapper.clientHeight);
+        const nextScroll = Math.min(savedScrollTop, maxScroll);
+        listWrapper.scrollTop = nextScroll;
+        savedScrollTop = nextScroll;
+      });
+    };
+    const setCategoryFilter = (category) => {
+      if (selectedCategory === category) return;
+      selectedCategory = category;
+      savedScrollTop = 0;
+      updateFilterButtonStyles();
+      renderRooms(currentRooms);
+    };
+    const seenCategories = /* @__PURE__ */ new Set();
+    const categories = [];
+    for (const room of RoomService.getPublicRooms()) {
+      if (!seenCategories.has(room.category)) {
+        seenCategories.add(room.category);
+        categories.push(room.category);
+      }
+    }
+    const preferredOrder = ["play", "magicgarden", "garlic"];
+    categories.sort((a, b) => {
+      const indexA = preferredOrder.indexOf(a);
+      const indexB = preferredOrder.indexOf(b);
+      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    const createFilterButton = (label2, category) => {
+      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
+      button.addEventListener("click", () => {
+        if (category === null) {
+          setCategoryFilter(null);
+        } else if (selectedCategory === category) {
+          setCategoryFilter(null);
+        } else {
+          setCategoryFilter(category);
+        }
+      });
+      filterButtons.set(category, button);
+      filterBar.appendChild(button);
+    };
+    createFilterButton("All", null);
+    for (const category of categories) {
+      createFilterButton(category, category);
+    }
+    updateFilterButtonStyles();
+    const playerFilterContainer = document.createElement("div");
+    playerFilterContainer.style.display = "flex";
+    playerFilterContainer.style.alignItems = "center";
+    playerFilterContainer.style.gap = "6px";
+    playerFilterContainer.style.marginLeft = "auto";
+    playerFilterContainer.style.padding = "4px 6px";
+    playerFilterContainer.style.background = "rgba(24, 26, 36, 0.85)";
+    playerFilterContainer.style.borderRadius = "10px";
+    playerFilterContainer.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
+    const playerFilterLabel = document.createElement("span");
+    playerFilterLabel.textContent = "Players";
+    playerFilterLabel.style.fontSize = "12px";
+    playerFilterLabel.style.opacity = "0.75";
+    playerFilterLabel.style.paddingLeft = "2px";
+    playerFilterContainer.appendChild(playerFilterLabel);
+    const playerFilterSelect = document.createElement("select");
+    playerFilterSelect.style.background = "rgba(17, 18, 27, 0.95)";
+    playerFilterSelect.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    playerFilterSelect.style.color = "#f8fafc";
+    playerFilterSelect.style.borderRadius = "8px";
+    playerFilterSelect.style.padding = "4px 10px";
+    playerFilterSelect.style.fontSize = "12px";
+    playerFilterSelect.style.fontWeight = "500";
+    playerFilterSelect.style.outline = "none";
+    playerFilterSelect.style.cursor = "pointer";
+    playerFilterSelect.style.minWidth = "130px";
+    const playerFilters = [
+      { value: "any", label: "Any players" },
+      { value: "empty", label: "Empty rooms" },
+      { value: "few", label: "1 \u2013 3 players" },
+      { value: "crowded", label: "4 \u2013 5 players" },
+      { value: "full", label: "Full rooms" }
+    ];
+    for (const option of playerFilters) {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      playerFilterSelect.appendChild(opt);
+    }
+    playerFilterSelect.value = selectedPlayerFilter;
+    playerFilterSelect.addEventListener("change", () => {
+      selectedPlayerFilter = playerFilterSelect.value;
+      savedScrollTop = 0;
+      renderRooms(currentRooms);
+    });
+    playerFilterContainer.appendChild(playerFilterSelect);
+    filterBar.appendChild(playerFilterContainer);
+    const refreshRooms = async () => {
+      if (destroyed) return;
+      const currentRequest = ++requestCounter;
+      statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
+      try {
+        const rooms = await RoomService.fetchPublicRoomsStatus();
+        if (destroyed || currentRequest !== requestCounter) return;
+        renderRooms(rooms);
+        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+        statusBar.textContent = `Last update: ${time}`;
+      } catch (error) {
+        if (destroyed || currentRequest !== requestCounter) return;
+        statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
+      } finally {
+        firstLoad = false;
+        if (!destroyed) {
+          if (refreshTimer) window.clearTimeout(refreshTimer);
+          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
+        }
+      }
+    };
+    refreshRooms();
+    view.__cleanup__ = () => {
+      destroyed = true;
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+  }
+  function getCurrentRoomCode() {
+    const match = /^\/r\/([^/]+)/.exec(location.pathname);
+    if (!match) return null;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+  function createRoomEntry(room, ui) {
+    const isDiscord = RoomService.isDiscordActivity();
+    const currentRoomCode = getCurrentRoomCode();
+    const isCurrentRoom = currentRoomCode === room.idRoom;
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "grid";
+    wrapper.style.gap = "8px";
+    wrapper.style.padding = "14px 16px";
+    wrapper.style.borderRadius = "14px";
+    wrapper.style.background = "linear-gradient(135deg, rgba(30, 33, 46, 0.95), rgba(18, 19, 28, 0.95))";
+    wrapper.style.boxShadow = "0 10px 20px rgba(0, 0, 0, 0.35)";
+    wrapper.style.position = "relative";
+    const accentColor = (() => {
+      if (room.error) return "rgba(248, 180, 127, 0.9)";
+      if (room.isFull) return "rgba(248, 113, 113, 0.85)";
+      if (room.players <= 5) return "rgba(74, 222, 128, 0.75)";
+      return "rgba(96, 165, 250, 0.45)";
+    })();
+    wrapper.style.setProperty("--accent-color", accentColor);
+    wrapper.style.outline = "2px solid transparent";
+    wrapper.style.outlineOffset = "0";
+    wrapper.style.border = "1px solid rgba(255, 255, 255, 0.05)";
+    wrapper.style.boxShadow = "0 10px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 2px var(--accent-color)";
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.flexWrap = "wrap";
+    header.style.alignItems = "center";
+    header.style.justifyContent = "space-between";
+    header.style.gap = "12px";
+    const nameBlock = document.createElement("div");
+    nameBlock.style.display = "grid";
+    nameBlock.style.gap = "6px";
+    const nameRow = document.createElement("div");
+    nameRow.style.display = "flex";
+    nameRow.style.alignItems = "center";
+    nameRow.style.gap = "10px";
+    const name = document.createElement("div");
+    name.textContent = room.name;
+    name.style.fontWeight = "600";
+    name.style.fontSize = "16px";
+    name.style.letterSpacing = "0.01em";
+    name.style.color = "#f8fafc";
+    const categoryPill = document.createElement("span");
+    categoryPill.textContent = room.category;
+    categoryPill.style.fontSize = "11px";
+    categoryPill.style.letterSpacing = "0.08em";
+    categoryPill.style.textTransform = "uppercase";
+    categoryPill.style.padding = "4px 8px";
+    categoryPill.style.borderRadius = "999px";
+    categoryPill.style.background = "rgba(148, 163, 184, 0.12)";
+    categoryPill.style.border = "1px solid rgba(148, 163, 184, 0.22)";
+    categoryPill.style.color = "#cbd5f5";
+    nameRow.append(name, categoryPill);
+    nameBlock.appendChild(nameRow);
+    if (room.currentGame && room.currentGame.toLowerCase() !== "quinoa") {
+      const gameLabel = document.createElement("div");
+      gameLabel.textContent = room.currentGame;
+      gameLabel.style.fontSize = "12px";
+      gameLabel.style.opacity = "0.7";
+      gameLabel.style.color = "#e0f2fe";
+      nameBlock.appendChild(gameLabel);
+    }
+    const occupancyBlock = document.createElement("div");
+    occupancyBlock.style.display = "grid";
+    occupancyBlock.style.gap = "6px";
+    occupancyBlock.style.minWidth = "120px";
+    const meter = document.createElement("div");
+    meter.style.position = "relative";
+    meter.style.height = "20px";
+    meter.style.borderRadius = "999px";
+    meter.style.background = "rgba(255, 255, 255, 0.08)";
+    meter.style.overflow = "hidden";
+    meter.style.display = "flex";
+    meter.style.alignItems = "center";
+    meter.style.justifyContent = "center";
+    meter.style.fontWeight = "600";
+    meter.style.fontSize = "12px";
+    meter.style.color = "#f8fafc";
+    meter.style.fontVariantNumeric = "tabular-nums";
+    meter.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.55)";
+    const meterFill = document.createElement("div");
+    meterFill.style.position = "absolute";
+    meterFill.style.left = "0";
+    meterFill.style.top = "0";
+    meterFill.style.bottom = "0";
+    meterFill.style.height = "100%";
+    meterFill.style.width = `${Math.min(100, room.players / room.capacity * 100)}%`;
+    meterFill.style.background = room.isFull ? "linear-gradient(90deg, #ef4444, #f87171)" : "linear-gradient(90deg, #34d399, #2dd4bf)";
+    meterFill.style.borderRadius = "inherit";
+    meter.appendChild(meterFill);
+    const meterLabel = document.createElement("span");
+    meterLabel.textContent = `${room.players} / ${room.capacity} players`;
+    meterLabel.style.position = "relative";
+    meterLabel.style.zIndex = "1";
+    meter.appendChild(meterLabel);
+    occupancyBlock.appendChild(meter);
+    const actionBlock = document.createElement("div");
+    actionBlock.style.display = "grid";
+    actionBlock.style.justifyItems = "end";
+    actionBlock.style.gap = "6px";
+    const joinBtn = ui.btn("Join", { size: "sm", variant: "primary" });
+    joinBtn.style.minWidth = "86px";
+    joinBtn.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
+    actionBlock.appendChild(joinBtn);
+    const reasons = [];
+    if (room.error) reasons.push("Status unavailable");
+    if (room.isFull) reasons.push("Room is full");
+    if (isDiscord) reasons.push("Join is blocked on Discord");
+    if (isCurrentRoom) reasons.push("Already in this room");
+    const canJoin = !isCurrentRoom && RoomService.canJoinPublicRoom(room);
+    ui.setButtonEnabled(joinBtn, canJoin);
+    joinBtn.title = canJoin ? `Join ${room.name}` : reasons.join(" \xB7 ");
+    joinBtn.addEventListener("click", () => {
+      if (isCurrentRoom) return;
+      if (!RoomService.canJoinPublicRoom(room)) return;
+      RoomService.joinPublicRoom(room);
+    });
+    header.append(nameBlock, occupancyBlock, actionBlock);
+    wrapper.appendChild(header);
+    const badgeRow = document.createElement("div");
+    badgeRow.style.display = "flex";
+    badgeRow.style.flexWrap = "wrap";
+    badgeRow.style.gap = "6px";
+    const addBadge = (label2, color, background) => {
+      const badge = document.createElement("span");
+      badge.textContent = label2;
+      badge.style.fontSize = "11px";
+      badge.style.padding = "4px 8px";
+      badge.style.borderRadius = "999px";
+      badge.style.fontWeight = "600";
+      badge.style.letterSpacing = "0.04em";
+      badge.style.textTransform = "uppercase";
+      badge.style.color = color;
+      badge.style.background = background;
+      badge.style.border = `1px solid ${color}33`;
+      badgeRow.appendChild(badge);
+    };
+    if (isCurrentRoom) {
+      addBadge("Current room", "#86efac", "rgba(34, 197, 94, 0.12)");
+    }
+    if (room.error) {
+      addBadge("Status unavailable", "#fbbf24", "rgba(250, 204, 21, 0.1)");
+    }
+    if (isDiscord) {
+      addBadge("Discord activity", "#facc15", "rgba(251, 191, 36, 0.12)");
+    }
+    if (badgeRow.childElementCount > 0) {
+      wrapper.appendChild(badgeRow);
+    }
+    return wrapper;
+  }
+
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
@@ -16098,8 +16870,9 @@ ${detail}` : base;
       onRegister(register) {
         register("players", "\u{1F465} Players", renderPlayersMenu);
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
-        register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
+        register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
+        register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
         register("debug-data", "\u{1F527} Debug", renderDebugDataMenu);
       }
