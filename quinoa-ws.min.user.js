@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.9
+// @version      1.9.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
 // @run-at       document-idle
-// @inject-into  auto
+// @inject-into  page
 // @grant        GM_xmlhttpRequest
+// @grant        GM_info
+// @grant        GM_openInTab 
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
-// @grant        GM_info
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
@@ -11284,10 +11285,24 @@
       };
       setBadge("checking\u2026", "warn");
       setDownloadTarget(null);
+      const openDownloadLink = (url) => {
+        const shouldUseGM = isDiscordSurface();
+        const gmObject = globalThis.GM;
+        const gmOpen = typeof GM_openInTab === "function" ? GM_openInTab : typeof gmObject?.openInTab === "function" ? gmObject.openInTab.bind(gmObject) : null;
+        if (shouldUseGM && gmOpen) {
+          try {
+            gmOpen(url, { active: true, setParent: true });
+            return;
+          } catch (error) {
+            console.warn("[MagicGarden] GM_openInTab failed, falling back to window.open", error);
+          }
+        }
+        window.open(url, "_blank", "noopener,noreferrer");
+      };
       sVersion.addEventListener("click", () => {
         const url = sVersion.dataset.download;
         if (url) {
-          window.open(url, "_blank", "noopener,noreferrer");
+          openDownloadLink(url);
         }
       });
       (async () => {
