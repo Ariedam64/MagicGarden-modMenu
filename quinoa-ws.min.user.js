@@ -1,14 +1,17 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.8
+// @version      1.8.9
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
 // @run-at       document-idle
-// @inject-into  page
+// @inject-into  auto
 // @grant        GM_xmlhttpRequest
+// @connect      raw.githubusercontent.com
+// @connect      api.github.com
+// @grant        GM_info
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
