@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.2
+// @version      1.8.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -8491,18 +8491,102 @@
   }
 
   // src/utils/shopUtility.ts
+  var SHOP_TYPES = ["plant", "egg", "tool", "decor"];
   var BTN_CLASS = "romann-buyall-btn";
   var STYLE_ID = "tm-buyall-css";
   var ITEM_SELECTOR = "div.McFlex.css-1kkwxjt";
   var LIST_SELECTOR = "div.McFlex.css-1lfov12";
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
+  var INDEX_ATTR = "data-tm-shop-index";
   var RESCAN_MS = 20;
-  var BASE_SIZES = {
-    plant: Object.keys(plantCatalog).length,
-    egg: Object.keys(eggCatalog).length,
-    tool: Object.keys(toolCatalog).length,
-    decor: Object.keys(decorCatalog).length
+  var SHOP_ATOMS = {
+    plant: Atoms.shop.seedShop,
+    egg: Atoms.shop.eggShop,
+    tool: Atoms.shop.toolShop,
+    decor: Atoms.shop.decorShop
   };
+  var shopInventoryCache = {};
+  var shopInventoryLengths = {};
+  var shopInventoryInitStarted = false;
+  var shopInventoryUnsubs = {};
+  function extractInventoryId(shop, entry) {
+    if (!entry) return null;
+    if (shop === "plant") return entry?.species ? String(entry.species) : null;
+    if (shop === "egg") return entry?.eggId ? String(entry.eggId) : null;
+    if (shop === "tool") return entry?.toolId ? String(entry.toolId) : null;
+    if (shop === "decor") return entry?.decorId ? String(entry.decorId) : null;
+    return null;
+  }
+  function extractInventoryName(shop, entry) {
+    if (!entry) return null;
+    if (shop === "plant") return entry?.species ? String(entry.species) : null;
+    if (shop === "egg") return entry?.eggId ? String(entry.eggId) : null;
+    if (shop === "tool") return entry?.toolId ? String(entry.toolId) : null;
+    if (shop === "decor") return entry?.decorId ? String(entry.decorId) : null;
+    return null;
+  }
+  function normalizeInventory(shop, data) {
+    const rawInventory = Array.isArray(data?.inventory) ? data.inventory : [];
+    const normalized = [];
+    for (const entry of rawInventory) {
+      const id = extractInventoryId(shop, entry);
+      if (!id) continue;
+      normalized.push({ id, name: extractInventoryName(shop, entry), raw: entry });
+    }
+    return normalized;
+  }
+  function updateShopInventoryCache(shop, data) {
+    const normalized = normalizeInventory(shop, data);
+    shopInventoryCache[shop] = normalized;
+    shopInventoryLengths[shop] = normalized.length;
+  }
+  async function initShopInventoryWatchers() {
+    for (const shop of SHOP_TYPES) {
+      const atom = SHOP_ATOMS[shop];
+      if (!atom) continue;
+      if (!shopInventoryInitStarted) return;
+      try {
+        updateShopInventoryCache(shop, await atom.get());
+      } catch (error) {
+        console.warn(`[TM] buyAll failed to fetch ${shop} inventory`, error);
+      }
+      if (!shopInventoryInitStarted) return;
+      try {
+        const unsub = await atom.onChange((next) => {
+          updateShopInventoryCache(shop, next);
+        });
+        if (!shopInventoryInitStarted) {
+          try {
+            unsub();
+          } catch (error) {
+            console.warn(`[TM] buyAll failed to cancel stale ${shop} inventory watcher`, error);
+          }
+          return;
+        }
+        shopInventoryUnsubs[shop] = () => {
+          try {
+            unsub();
+          } catch (err) {
+            console.warn(`[TM] buyAll failed to unsubscribe ${shop} inventory`, err);
+          }
+        };
+      } catch (error) {
+        console.warn(`[TM] buyAll failed to subscribe to ${shop} inventory`, error);
+      }
+    }
+  }
+  function ensureShopInventories() {
+    if (shopInventoryInitStarted) return;
+    shopInventoryInitStarted = true;
+    void initShopInventoryWatchers().catch((error) => {
+      console.warn("[TM] buyAll inventory init error", error);
+    });
+  }
+  function getInventoryEntry(shop, index) {
+    const list = shopInventoryCache[shop];
+    if (!list || index < 0 || index >= list.length) return null;
+    return list[index] ?? null;
+  }
   var DEFAULT_OVERRIDES = { tool: 3 };
   var PURCHASE_FNS = {
     plant: (id) => PlayerService.purchaseSeed(id),
@@ -8526,17 +8610,21 @@
     }
   }
   function getExpectedSizes() {
-    const o = { ...DEFAULT_OVERRIDES, ...window.BuyAllConfig?.countOverride ?? {} };
-    return {
-      plant: o.plant ?? BASE_SIZES.plant,
-      egg: o.egg ?? BASE_SIZES.egg,
-      tool: o.tool ?? BASE_SIZES.tool,
-      decor: o.decor ?? BASE_SIZES.decor
-    };
+    const overrides = { ...DEFAULT_OVERRIDES, ...window.BuyAllConfig?.countOverride ?? {} };
+    const sizes = {};
+    for (const shop of SHOP_TYPES) {
+      const cached = shopInventoryLengths[shop];
+      if (typeof cached === "number") {
+        sizes[shop] = cached;
+      } else if (typeof overrides[shop] === "number") {
+        sizes[shop] = overrides[shop];
+      }
+    }
+    return sizes;
   }
   function detectShopByCount(total) {
     const sizes = getExpectedSizes();
-    const matches = Object.keys(sizes).filter((t) => sizes[t] === total);
+    const matches = SHOP_TYPES.filter((t) => typeof sizes[t] === "number" && sizes[t] === total);
     return matches.length === 1 ? matches[0] : null;
   }
   function parseCompactNumber(s) {
@@ -8564,81 +8652,6 @@
     } else {
       const val = Number(lastNum.replace(",", "."));
       return Number.isFinite(val) ? Math.round(val) : void 0;
-    }
-  }
-  function toNumberMaybe(jsValue) {
-    if (typeof jsValue === "number") {
-      return Number.isFinite(jsValue) ? jsValue : void 0;
-    }
-    if (jsValue == null) return void 0;
-    const v = Number(jsValue);
-    return Number.isFinite(v) ? v : void 0;
-  }
-  function filterPurchasable(meta) {
-    return meta.filter((m) => m.coin != null || m.credit != null);
-  }
-  function buildPlantMeta() {
-    const rec = plantCatalog;
-    const meta = Object.keys(rec).map((key2) => {
-      const e = rec[key2];
-      return {
-        id: e?.id ?? key2,
-        name: e?.seed?.name ?? key2,
-        coin: toNumberMaybe(e?.seed?.coinPrice),
-        credit: toNumberMaybe(e?.seed?.creditPrice)
-      };
-    });
-    return filterPurchasable(meta);
-  }
-  function buildEggMeta() {
-    const rec = eggCatalog;
-    const meta = Object.keys(rec).map((key2) => {
-      const e = rec[key2];
-      return {
-        id: e?.id ?? key2,
-        name: e?.name ?? key2,
-        coin: toNumberMaybe(e?.coinPrice),
-        credit: toNumberMaybe(e?.creditPrice)
-      };
-    });
-    return filterPurchasable(meta);
-  }
-  function buildToolMeta() {
-    const rec = toolCatalog;
-    const meta = Object.keys(rec).map((key2) => {
-      const e = rec[key2];
-      return {
-        id: e?.id ?? key2,
-        name: e?.name ?? key2,
-        coin: toNumberMaybe(e?.coinPrice),
-        credit: toNumberMaybe(e?.creditPrice)
-      };
-    });
-    return filterPurchasable(meta);
-  }
-  function buildDecorMeta() {
-    const rec = decorCatalog;
-    const meta = Object.keys(rec).map((key2) => {
-      const e = rec[key2];
-      return {
-        id: e?.id ?? key2,
-        name: e?.name ?? key2,
-        coin: toNumberMaybe(e?.coinPrice),
-        credit: toNumberMaybe(e?.creditPrice)
-      };
-    });
-    return filterPurchasable(meta);
-  }
-  function getCatalogMeta(shop) {
-    switch (shop) {
-      case "plant":
-        return buildPlantMeta();
-      case "egg":
-        return buildEggMeta();
-      case "tool":
-        return buildToolMeta();
-      case "decor":
-        return buildDecorMeta();
     }
   }
   var lastShops = null;
@@ -8819,9 +8832,13 @@
       const itemEl = btn.closest(ITEM_SELECTOR);
       const listRoot = itemEl?.closest(LIST_SELECTOR) || document.body;
       const items = getListItems(listRoot);
-      const idx0 = itemEl ? items.indexOf(itemEl) : -1;
-      const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
       const total = items.length;
+      const attrIndex = itemEl?.getAttribute(INDEX_ATTR);
+      let idx0 = attrIndex != null && attrIndex !== "" ? Number.parseInt(attrIndex, 10) : -1;
+      if (!Number.isFinite(idx0) || idx0 < 0) {
+        idx0 = itemEl ? items.indexOf(itemEl) : -1;
+      }
+      const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
       const shop = detectShopByCount(total);
       let itemId = null;
       let itemName = null;
@@ -8836,38 +8853,13 @@
           const creditBtn = me.nextElementSibling;
           coinParsed = parsePriceFromButton(coinBtn);
           creditParsed = parsePriceFromButton(creditBtn);
-          const meta = getCatalogMeta(shop);
-          if (coinParsed != null && creditParsed != null) {
-            const both = meta.filter((m) => m.coin === coinParsed && m.credit === creditParsed);
-            if (both.length === 1) {
-              itemId = both[0].id;
-              itemName = both[0].name;
-              reason = "coin+credit";
-            }
-          }
-          if (!itemId && coinParsed != null) {
-            const onlyCoin = meta.filter((m) => m.coin === coinParsed);
-            if (onlyCoin.length === 1) {
-              itemId = onlyCoin[0].id;
-              itemName = onlyCoin[0].name;
-              reason = "coin";
-            }
-          }
-          if (!itemId && creditParsed != null) {
-            const onlyCredit = meta.filter((m) => m.credit === creditParsed);
-            if (onlyCredit.length === 1) {
-              itemId = onlyCredit[0].id;
-              itemName = onlyCredit[0].name;
-              reason = "credit";
-            }
-          }
-          if (!itemId && meta.length === total && idx0 >= 0) {
-            const byIndex = meta[idx0];
-            if (byIndex) {
-              itemId = byIndex.id;
-              itemName = byIndex.name;
-              reason = "index";
-            }
+          const inventoryEntry = idx0 >= 0 ? getInventoryEntry(shop, idx0) : null;
+          if (inventoryEntry) {
+            itemId = inventoryEntry.id;
+            itemName = inventoryEntry.name ?? inventoryEntry.id;
+            reason = "inventory";
+          } else if (idx0 >= 0 && typeof coinParsed === "number" && typeof creditParsed === "number") {
+            reason = "index";
           }
         }
       }
@@ -8893,6 +8885,14 @@
     return btn;
   }
   function insertIntoItem(itemEl) {
+    const listRoot = itemEl.closest(LIST_SELECTOR);
+    if (listRoot && !itemEl.hasAttribute(INDEX_ATTR)) {
+      const items = getListItems(listRoot);
+      const idx = items.indexOf(itemEl);
+      if (idx >= 0) {
+        itemEl.setAttribute(INDEX_ATTR, String(idx));
+      }
+    }
     const row = itemEl.querySelector(ROW_SELECTOR) || Array.from(itemEl.querySelectorAll("div")).find((d) => d.querySelectorAll("button.chakra-button").length >= 2);
     if (!row) return;
     const btns = row.querySelectorAll("button.chakra-button");
@@ -8914,6 +8914,7 @@
   function setupBuyAll() {
     ensureGlobalStyles();
     ensureNotifierSnapshots();
+    ensureShopInventories();
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => scan());
     } else {
