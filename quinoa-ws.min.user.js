@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.3
+// @version      1.8.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1082,6 +1082,31 @@
         sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
       } catch (err) {
         log.error("Failed to send place pet command", err);
+      }
+    },
+    async petPositions(petPositions) {
+      const entries2 = Object.entries(petPositions ?? {});
+      if (!entries2.length) {
+        log.warn("No pet positions provided");
+        return;
+      }
+      const sanitized = {};
+      for (const [id, pos] of entries2) {
+        const x = Number(pos?.x);
+        const y = Number(pos?.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        sanitized[String(id)] = { x, y };
+      }
+      const validCount = Object.keys(sanitized).length;
+      if (!validCount) {
+        log.warn("No valid pet positions to send", { provided: entries2.length });
+        return;
+      }
+      log.info("Sending pet positions", { count: validCount });
+      try {
+        sendToGame({ type: "PetPositions", petPositions: sanitized });
+      } catch (err) {
+        log.error("Failed to send pet positions command", err);
       }
     },
     async storePet(itemId) {
@@ -11936,6 +11961,7 @@ ${detail}` : base;
   }
 
   // src/services/players.ts
+  var log4 = createMenuLogger("players-service", "Players service");
   function findPlayersDeep(state2) {
     if (!state2 || typeof state2 !== "object") return [];
     const out = [];
@@ -12165,6 +12191,49 @@ ${detail}` : base;
     prevPos: null,
     steps: 0
   };
+  var PET_FOLLOW_INTERVAL_MS = 20;
+  var PET_HISTORY_FACTOR = 3;
+  var PET_SPACING_STEPS = 1;
+  var petFollowState = {
+    targetId: null,
+    unsub: null,
+    timer: null,
+    pets: [],
+    history: [],
+    historyCap: 0
+  };
+  function clearPetFollowTimer() {
+    if (petFollowState.timer) {
+      clearInterval(petFollowState.timer);
+      petFollowState.timer = null;
+    }
+  }
+  async function resetPetFollowState() {
+    if (petFollowState.unsub) {
+      const fn = petFollowState.unsub;
+      petFollowState.unsub = null;
+      try {
+        await fn();
+      } catch {
+      }
+    } else {
+      petFollowState.unsub = null;
+    }
+    clearPetFollowTimer();
+    petFollowState.targetId = null;
+    petFollowState.pets = [];
+    petFollowState.history = [];
+    petFollowState.historyCap = 0;
+  }
+  function recordPetHistory(pos, force = false) {
+    const top = petFollowState.history[0];
+    if (!force && top && top.x === pos.x && top.y === pos.y) return;
+    petFollowState.history.unshift({ x: pos.x, y: pos.y });
+    const cap = petFollowState.historyCap || petFollowState.history.length;
+    if (petFollowState.history.length > cap) {
+      petFollowState.history.length = cap;
+    }
+  }
   var PlayersService = {
     async list() {
       const st = await Atoms.root.state.get();
@@ -12172,7 +12241,9 @@ ${detail}` : base;
       const base = enrichPlayersWithSlots(getPlayersArray(st), st);
       const ordered = orderPlayersBySlots(base, st);
       const spawns = await getSpawnTilesSorted();
-      return assignGardenPositions(ordered, spawns);
+      const players = assignGardenPositions(ordered, spawns);
+      log4.info("Computed player list", { count: players.length });
+      return players;
     },
     async onChange(cb) {
       return Atoms.root.state.onChange(async () => {
@@ -12186,20 +12257,26 @@ ${detail}` : base;
       const st = await Atoms.root.state.get();
       if (!st) return null;
       const slot = getSlotByPlayerId(st, playerId);
-      return extractPosFromSlot(slot);
+      const pos = extractPosFromSlot(slot);
+      log4.debug("Resolved player position", { playerId, position: pos });
+      return pos;
     },
     async getInventory(playerId) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
       const slot = getSlotByPlayerId(st, playerId);
-      return extractInventoryFromSlot(slot);
+      const inv = extractInventoryFromSlot(slot);
+      log4.debug("Fetched player inventory", { playerId, hasItems: !!inv?.items?.length });
+      return inv;
     },
     async getJournal(playerId) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
       const slot = getSlotByPlayerId(st, playerId);
       const j = extractJournalFromSlot(slot);
-      return j ? normJournal(j) : null;
+      const journal = j ? normJournal(j) : null;
+      log4.debug("Fetched player journal", { playerId, hasJournal: !!journal });
+      return journal;
     },
     async getGarden(playerId) {
       const st = await Atoms.root.state.get();
@@ -12233,6 +12310,7 @@ ${detail}` : base;
     async teleportToPlayer(playerId) {
       const pos = await this.getPosition(playerId);
       if (!pos) throw new Error("Unknown position for this player");
+      log4.info("Teleporting to player", { playerId, position: pos });
       PlayerService.teleport(pos.x, pos.y);
       toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}`, "success");
     },
@@ -12244,6 +12322,7 @@ ${detail}` : base;
       }
       const cols = await getMapCols();
       const x = tileId % cols, y = Math.floor(tileId / cols);
+      log4.info("Teleporting to garden", { playerId, tileId, x, y });
       await PlayerService.teleport(x, y);
       await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}'s garden`, "success");
     },
@@ -12253,7 +12332,9 @@ ${detail}` : base;
         const inv = await this.getInventory(playerId);
         const items = Array.isArray(inv?.items) ? inv.items : [];
         if (!items.length) return 0;
-        return sumInventoryValue(items, opts, playersInRoom);
+        const value = sumInventoryValue(items, opts, playersInRoom);
+        log4.info("Computed inventory value", { playerId, value });
+        return value;
       } catch {
         return 0;
       }
@@ -12263,7 +12344,9 @@ ${detail}` : base;
         const playersInRoom = await getPlayersInRoom();
         const garden2 = await this.getGarden(playerId);
         if (!garden2) return 0;
-        return sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
+        const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
+        log4.info("Computed garden value", { playerId, value });
+        return value;
       } catch {
         return 0;
       }
@@ -12274,22 +12357,27 @@ ${detail}` : base;
         const inv = await this.getInventory(playerId);
         if (!inv) {
           await toastSimple("Inventory", "No inventory object found for this player.", "error");
+          log4.warn("Inventory preview unavailable", { playerId });
           return;
         }
         const items = Array.isArray(inv.items) ? inv.items : [];
         if (items.length === 0) {
           await toastSimple("Inventory", "Inventory is empty for this player.", "info");
+          log4.info("Inventory preview empty", { playerId });
           return;
         }
         try {
           await fakeInventoryShow({ ...inv, items }, { open: true });
+          log4.info("Opened inventory preview", { playerId, itemCount: items.length });
         } catch (err) {
           await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
+          log4.error("Failed to show inventory preview", err);
           return;
         }
         if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
       } catch (e) {
         await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
+        log4.error("Inventory preview failed", e);
       }
     },
     /** Ouvre le Journal (produce + pets) avec garde + toasts. */
@@ -12298,18 +12386,22 @@ ${detail}` : base;
         const journal = await this.getJournal(playerId);
         if (!hasJournalData(journal)) {
           await toastSimple("Journal", "No journal data for this player.", "error");
+          log4.warn("Journal preview unavailable", { playerId });
           return;
         }
         const safe = journal ?? {};
         try {
           await fakeJournalShow(safe, { open: true });
+          log4.info("Opened journal preview", { playerId });
         } catch (err) {
           await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
+          log4.error("Failed to show journal", err);
           return;
         }
         if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+        log4.error("Journal preview failed", e);
       }
     },
     /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
@@ -12435,6 +12527,75 @@ ${detail}` : base;
         }
       });
       await toastSimple("Follow", "Follow enabled", "success");
+    },
+    /* ---------------- Pet Follow ---------------- */
+    async stopPetFollowing(opts) {
+      await resetPetFollowState();
+      if (!opts?.silent) {
+        await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
+      }
+    },
+    isPetFollowing(playerId) {
+      return petFollowState.targetId === playerId;
+    },
+    async startPetFollowing(playerId) {
+      await this.stopPetFollowing({ silent: true });
+      const petsRaw = await Atoms.pets.myPetInfos.get();
+      const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
+      if (!petIds.length) {
+        await toastSimple("Pet follow", "You don't have any active pets.", "error");
+        return;
+      }
+      const pos = await this.getPosition(playerId);
+      if (!pos) {
+        await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
+        return;
+      }
+      petFollowState.targetId = playerId;
+      petFollowState.pets = petIds;
+      petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
+      petFollowState.history = [];
+      for (let i = 0; i < petFollowState.historyCap; i += 1) {
+        recordPetHistory(pos, true);
+      }
+      const sendPositions = async () => {
+        if (petFollowState.targetId !== playerId) return;
+        if (!petFollowState.pets.length || !petFollowState.history.length) return;
+        const payload = {};
+        for (let i = 0; i < petFollowState.pets.length; i += 1) {
+          const petId = petFollowState.pets[i];
+          const historyIndex = Math.min(
+            petFollowState.history.length - 1,
+            (i + 1) * PET_SPACING_STEPS
+          );
+          const targetPos = petFollowState.history[historyIndex] ?? petFollowState.history[petFollowState.history.length - 1];
+          if (targetPos) {
+            payload[petId] = { x: targetPos.x, y: targetPos.y };
+          }
+        }
+        if (Object.keys(payload).length === 0) return;
+        try {
+          await PlayerService.petPositions(payload);
+        } catch (err) {
+          log4.error("Failed to send pet follow positions", err);
+        }
+      };
+      petFollowState.timer = setInterval(() => {
+        sendPositions().catch(() => {
+        });
+      }, PET_FOLLOW_INTERVAL_MS);
+      const initialSend = sendPositions();
+      petFollowState.unsub = await this.onChange(async (players) => {
+        if (petFollowState.targetId !== playerId) return;
+        const target = players.find((p) => p.id === playerId);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
+          return;
+        }
+        recordPetHistory({ x: target.x, y: target.y });
+      });
+      await initialSend;
+      await toastSimple("Pet follow", "Pets are now following the target.", "success");
     }
   };
 
@@ -13797,14 +13958,14 @@ ${detail}` : base;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log5) {
-      const time = cell(log5.time12, "center");
-      const petLabel = log5.petName || log5.species || "Pet";
+    function row(log6) {
+      const time = cell(log6.time12, "center");
+      const petLabel = log6.petName || log6.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log5.abilityName || log5.abilityId, "center");
-      const detText = typeof log5.data === "string" ? log5.data : (() => {
+      const abName = cell(log6.abilityName || log6.abilityId, "center");
+      const detText = typeof log6.data === "string" ? log6.data : (() => {
         try {
-          return JSON.stringify(log5.data);
+          return JSON.stringify(log6.data);
         } catch {
           return "";
         }
@@ -17351,7 +17512,7 @@ ${detail}` : base;
   }
 
   // src/services/room.ts
-  var log4 = createMenuLogger("room-service", "Room service");
+  var log5 = createMenuLogger("room-service", "Room service");
   var MAX_PLAYERS = 6;
   function deriveCategoryFromName(name) {
     const match = /^([a-zA-Z]+)/.exec(name);
@@ -17389,7 +17550,7 @@ ${detail}` : base;
       const results = await Promise.all(
         definitions.map(async (def) => {
           try {
-            log4.debug("Fetching public room state", { room: def.idRoom, name: def.name });
+            log5.debug("Fetching public room state", { room: def.idRoom, name: def.name });
             const response = await requestRoomEndpoint(def.idRoom, {
               endpoint: "info",
               timeoutMs: 1e4
@@ -17419,7 +17580,7 @@ ${detail}` : base;
             };
           } catch (error) {
             const message = normalizeError(error);
-            log4.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
+            log5.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
             return {
               ...def,
               players: 0,
@@ -17443,10 +17604,10 @@ ${detail}` : base;
       return isDiscordSurface();
     },
     joinPublicRoom(room) {
-      log4.info("Joining public room", { room: room.idRoom });
+      log5.info("Joining public room", { room: room.idRoom });
       const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
       if (!result.ok) {
-        log4.warn("Join room returned not ok", { room: room.idRoom, result });
+        log5.warn("Join room returned not ok", { room: room.idRoom, result });
       }
       return result;
     }
