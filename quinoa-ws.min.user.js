@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.6
+// @version      1.8.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
 // @run-at       document-idle
 // @inject-into  page
-// @grant        none
+// @grant        GM_xmlhttpRequest
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
@@ -17,14 +17,40 @@
   var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
   var __publicField = (obj, key2, value) => __defNormalProp(obj, typeof key2 !== "symbol" ? key2 + "" : key2, value);
 
+  // src/utils/page-context.ts
+  var sandboxWin = window;
+  var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
+  var pageWindow = pageWin;
+  var isIsolatedContext = pageWin !== sandboxWin;
+  function shareGlobal(name, value) {
+    try {
+      pageWin[name] = value;
+    } catch {
+    }
+    if (isIsolatedContext) {
+      try {
+        sandboxWin[name] = value;
+      } catch {
+      }
+    }
+  }
+  function readSharedGlobal(name) {
+    if (isIsolatedContext) {
+      const sandboxValue = sandboxWin[name];
+      if (sandboxValue !== void 0) return sandboxValue;
+    }
+    return pageWin[name];
+  }
+
   // src/core/state.ts
-  var NativeWS = window.WebSocket;
-  var NativeWorker = window.Worker;
+  var NativeWS = pageWindow.WebSocket;
+  var NativeWorker = pageWindow.Worker;
   var sockets = [];
   var quinoaWS = null;
   function setQWS(ws, why) {
     if (!quinoaWS) {
       quinoaWS = ws;
+      shareGlobal("quinoaWS", ws);
       try {
         console.log("[QuinoaWS] selected ->", why);
       } catch {
@@ -62,6 +88,7 @@
 
   // src/hooks/ws-hook.ts
   function installPageWebSocketHook() {
+    if (!pageWindow || !NativeWS) return;
     function WrappedWebSocket(url, protocols) {
       const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
       sockets.push(ws);
@@ -73,7 +100,7 @@
       ws.addEventListener("message", async (ev) => {
         const j = await parseWSData(ev.data);
         if (!j) return;
-        if (!window.quinoaWS && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
           setQWS(ws, "message:" + (j.type || "state"));
         }
       });
@@ -83,7 +110,7 @@
           let j = null;
           if (typeof data === "string") j = JSON.parse(data);
           else if (data instanceof ArrayBuffer) j = JSON.parse(new TextDecoder().decode(data));
-          if (!window.quinoaWS && j && Array.isArray(j.scopePath) && j.scopePath.join("/") === "Room/Quinoa") {
+          if (!hasSharedQuinoaWS() && j && Array.isArray(j.scopePath) && j.scopePath.join("/") === "Room/Quinoa") {
             setQWS(ws, "send:" + j.type);
           }
         } catch {
@@ -109,7 +136,17 @@
       WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
     } catch {
     }
-    window.WebSocket = WrappedWebSocket;
+    pageWindow.WebSocket = WrappedWebSocket;
+    if (pageWindow !== window) {
+      try {
+        window.WebSocket = WrappedWebSocket;
+      } catch {
+      }
+    }
+    function hasSharedQuinoaWS() {
+      const existing = readSharedGlobal("quinoaWS");
+      return !!existing;
+    }
   }
 
   // src/store/jotai.ts
@@ -117,9 +154,9 @@
   var _captureInProgress = false;
   var _captureError = null;
   var _lastCapturedVia = null;
-  var getAtomCache = () => globalThis.jotaiAtomCache?.cache;
+  var getAtomCache = () => pageWindow.jotaiAtomCache?.cache;
   function findStoreViaFiber() {
-    const hook = globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+    const hook = pageWindow.__REACT_DEVTOOLS_GLOBAL_HOOK__;
     if (!hook?.renderers?.size) return null;
     for (const [rid] of hook.renderers) {
       const roots = hook.getFiberRoots?.(rid);
@@ -181,7 +218,7 @@
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const t0 = Date.now();
     try {
-      globalThis.dispatchEvent?.(new Event("visibilitychange"));
+      pageWindow.dispatchEvent?.(new pageWindow.Event("visibilitychange"));
     } catch {
     }
     while (!capturedSet && Date.now() - t0 < timeoutMs) {
@@ -4882,6 +4919,9 @@
     if (metaCodes && (actual === "MetaLeft" || actual === "MetaRight")) return true;
     return false;
   }
+  function isMac() {
+    return navigator.platform?.toLowerCase().includes("mac") || /mac|iphone|ipad|ipod/i.test(navigator.userAgent);
+  }
   function eventToHotkey(e, allowModifierOnly = false) {
     const isModifier = _MOD_CODES.has(e.code) || e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta";
     if (isModifier && !allowModifierOnly) {
@@ -4927,6 +4967,42 @@
       else if (P === "meta" || P === "cmd" || P === "command") hk.meta = true;
     }
     return hk.code ? hk : null;
+  }
+  function prettyCode(code) {
+    if (code === "AltLeft" || code === "AltRight") return "Alt";
+    if (code === "ControlLeft" || code === "ControlRight") return "Ctrl";
+    if (code === "ShiftLeft" || code === "ShiftRight") return "Shift";
+    if (code === "MetaLeft" || code === "MetaRight") return isMac() ? "\u2318" : "Meta";
+    if (code.startsWith("Key")) return code.slice(3);
+    if (code.startsWith("Digit")) return code.slice(5);
+    if (code.startsWith("Numpad")) return "Numpad " + code.slice(6);
+    const arrows = { ArrowUp: "\u2191", ArrowDown: "\u2193", ArrowLeft: "\u2190", ArrowRight: "\u2192" };
+    if (arrows[code]) return arrows[code];
+    return code;
+  }
+  function hotkeyToPretty(h) {
+    if (!h) return "\u2014";
+    const mac = isMac();
+    const mods = [];
+    if (mac) {
+      if (h.ctrl) mods.push("\u2303");
+      if (h.alt) mods.push("\u2325");
+      if (h.shift) mods.push("\u21E7");
+      if (h.meta) mods.push("\u2318");
+    } else {
+      if (h.ctrl) mods.push("Ctrl");
+      if (h.alt) mods.push("Alt");
+      if (h.shift) mods.push("Shift");
+      if (h.meta) mods.push("Meta");
+    }
+    const modifierCode = h.alt && (h.code === "AltLeft" || h.code === "AltRight") || h.ctrl && (h.code === "ControlLeft" || h.code === "ControlRight") || h.shift && (h.code === "ShiftLeft" || h.code === "ShiftRight") || h.meta && (h.code === "MetaLeft" || h.code === "MetaRight");
+    const parts = mods.slice();
+    const codePretty = prettyCode(h.code);
+    if (!modifierCode || parts.length === 0) {
+      parts.push(codePretty);
+    }
+    if (!parts.length) return codePretty;
+    return parts.join(mac ? "" : " + ");
   }
 
   // src/services/pets.ts
@@ -5801,6 +5877,248 @@
     return { swapped, placed, skipped };
   }
 
+  // src/services/keybinds.ts
+  var SECTION_CONFIG = [
+    {
+      id: "gui",
+      title: "GUI",
+      icon: "\u{1F5A5}\uFE0F",
+      description: "Choose how you open and move the overlay.",
+      actions: [
+        {
+          id: "gui.toggle",
+          label: "Toggle menu visibility",
+          hint: "Opens or closes the Arie's Mod overlay.",
+          defaultHotkey: { alt: true, code: "KeyX" }
+        },
+        {
+          id: "gui.drag",
+          label: "Drag HUD",
+          hint: "Hold to drag menus interfaces around the screen.",
+          defaultHotkey: { alt: true, code: "AltLeft" },
+          allowModifierOnly: true
+        }
+      ]
+    },
+    {
+      id: "shops",
+      title: "Shops",
+      icon: "\u{1F6D2}",
+      description: "Quick shortcuts to every shop tab.",
+      actions: [
+        {
+          id: "shops.seeds",
+          label: "Seeds shop",
+          defaultHotkey: { alt: true, code: "KeyS" }
+        },
+        {
+          id: "shops.eggs",
+          label: "Eggs shop",
+          defaultHotkey: { alt: true, code: "KeyE" }
+        },
+        {
+          id: "shops.decors",
+          label: "Decors shop",
+          defaultHotkey: { alt: true, code: "KeyD" }
+        },
+        {
+          id: "shops.tools",
+          label: "Tools shop",
+          defaultHotkey: { alt: true, code: "KeyT" }
+        }
+      ]
+    },
+    {
+      id: "sell",
+      title: "Sell",
+      icon: "\u{1F4B0}",
+      description: "Streamline selling actions.",
+      actions: [
+        {
+          id: "sell.sell-all",
+          label: "All crops",
+          hint: "Trigger the sell-all flow for harvested crops.",
+          defaultHotkey: null
+        },
+        {
+          id: "sell.sell-all-pets",
+          label: "All pets",
+          hint: "Sell every non-favorited pet in your inventory.",
+          defaultHotkey: null
+        }
+      ]
+    }
+  ];
+  var STORAGE_PREFIX = "qws:keybind:";
+  var STORED_NONE = "__none__";
+  var actionMap = /* @__PURE__ */ new Map();
+  var defaultMap = /* @__PURE__ */ new Map();
+  var cache = /* @__PURE__ */ new Map();
+  var listeners2 = /* @__PURE__ */ new Map();
+  var keybindSections = SECTION_CONFIG.map((section) => {
+    const actions = section.actions.map((action) => {
+      const normalized = {
+        id: action.id,
+        sectionId: section.id,
+        label: action.label,
+        hint: action.hint,
+        allowModifierOnly: action.allowModifierOnly,
+        defaultHotkey: cloneHotkey(action.defaultHotkey)
+      };
+      actionMap.set(normalized.id, normalized);
+      defaultMap.set(normalized.id, cloneHotkey(action.defaultHotkey));
+      return normalized;
+    });
+    return {
+      id: section.id,
+      title: section.title,
+      description: section.description,
+      icon: section.icon,
+      actions
+    };
+  });
+  function cloneHotkey(hk) {
+    return hk ? { ...hk } : null;
+  }
+  function hotkeysEqual(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return hotkeyToString(a) === hotkeyToString(b);
+  }
+  function storageKey(id) {
+    return `${STORAGE_PREFIX}${id}`;
+  }
+  function readStored(id) {
+    if (typeof window === "undefined") return void 0;
+    let raw = null;
+    try {
+      raw = window.localStorage.getItem(storageKey(id));
+    } catch {
+      return void 0;
+    }
+    if (raw == null) return void 0;
+    if (raw === STORED_NONE) return null;
+    const parsed = stringToHotkey(raw);
+    return parsed ?? null;
+  }
+  function writeStored(id, hk) {
+    if (typeof window === "undefined") return;
+    try {
+      if (hk) {
+        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+      } else {
+        window.localStorage.setItem(storageKey(id), STORED_NONE);
+      }
+    } catch {
+    }
+  }
+  function emitChange(id) {
+    const set2 = listeners2.get(id);
+    if (!set2 || set2.size === 0) return;
+    const current = cloneHotkey(getKeybind(id));
+    for (const cb of set2) cb(current);
+  }
+  function ensureCache(id) {
+    if (cache.has(id)) {
+      return cloneHotkey(cache.get(id) ?? null);
+    }
+    const stored = readStored(id);
+    const resolved = stored === void 0 ? cloneHotkey(defaultMap.get(id) ?? null) : cloneHotkey(stored);
+    cache.set(id, resolved);
+    return cloneHotkey(resolved);
+  }
+  function getKeybind(id) {
+    return ensureCache(id);
+  }
+  function setKeybind(id, hk) {
+    const current = getKeybind(id);
+    if (hotkeysEqual(current, hk)) return;
+    const next = cloneHotkey(hk);
+    if (next) {
+      const asString = hotkeyToString(next);
+      for (const otherId of actionMap.keys()) {
+        if (otherId === id) continue;
+        const other = getKeybind(otherId);
+        if (!other) continue;
+        if (hotkeyToString(other) !== asString) continue;
+        cache.set(otherId, null);
+        writeStored(otherId, null);
+        emitChange(otherId);
+      }
+    }
+    cache.set(id, next);
+    writeStored(id, next);
+    emitChange(id);
+  }
+  function onKeybindChange(id, cb) {
+    const set2 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
+    if (!listeners2.has(id)) listeners2.set(id, set2);
+    set2.add(cb);
+    return () => {
+      set2.delete(cb);
+      if (set2.size === 0) listeners2.delete(id);
+    };
+  }
+  function eventMatchesKeybind(id, e) {
+    return matchHotkey(e, getKeybind(id));
+  }
+  function getKeybindLabel(id) {
+    return hotkeyToPretty(getKeybind(id));
+  }
+  function getKeybindSections() {
+    return keybindSections.map((section) => ({
+      ...section,
+      actions: section.actions.map((action) => ({
+        ...action,
+        defaultHotkey: cloneHotkey(action.defaultHotkey)
+      }))
+    }));
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
+      const id = event.key.slice(STORAGE_PREFIX.length);
+      if (!actionMap.has(id)) return;
+      cache.delete(id);
+      emitChange(id);
+    });
+  }
+
+  // src/utils/keyboard.ts
+  function shouldIgnoreKeydown2(e) {
+    const el2 = e.target;
+    if (!el2) return false;
+    return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
+  }
+
+  // src/services/shops.ts
+  var log2 = createMenuLogger("shops-service", "Shops service");
+  var SHOP_KEYBINDS = [
+    { id: "shops.seeds", modal: "seedShop" },
+    { id: "shops.eggs", modal: "eggShop" },
+    { id: "shops.decors", modal: "decorShop" },
+    { id: "shops.tools", modal: "toolShop" }
+  ];
+  var shopKeybindsInstalled = false;
+  function installShopKeybindsOnce() {
+    if (shopKeybindsInstalled || typeof window === "undefined") return;
+    shopKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown2(event)) return;
+        for (const { id, modal } of SHOP_KEYBINDS) {
+          if (!eventMatchesKeybind(id, event)) continue;
+          event.preventDefault();
+          event.stopPropagation();
+          void Atoms.ui.activeModal.set(modal);
+          break;
+        }
+      },
+      true
+    );
+  }
+
   // src/ui/toast.ts
   async function sendToast(toast) {
     const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
@@ -5821,6 +6139,371 @@
   }
   async function toastSimple(title, description, variant = "info", duration = 3500) {
     await sendToast({ title, description, variant, duration });
+  }
+
+  // src/utils/sellAllPets.ts
+  var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
+  var DEFAULT_THEME = {
+    text: "var(--chakra-colors-Neutral-TrueWhite, #FFFFFF)",
+    bg: "var(--chakra-colors-Blue-Magic, #0067B4)",
+    border: "var(--chakra-colors-Blue-Light, #48ADF4)",
+    hoverBg: "var(--chakra-colors-Blue-Light, #48ADF4)",
+    hoverBorder: "var(--chakra-colors-Blue-Baby, #25AAE2)",
+    activeBg: "var(--chakra-colors-Blue-Dark, #264093)",
+    ring: "var(--chakra-ring-color, rgba(66,153,225,0.6))"
+  };
+  var DEFAULTS = {
+    rootSelector: ".McFlex.css-1wu1jyg",
+    checkSelector: ".McFlex.css-bvyqr8",
+    buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
+    buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
+    targetText: "Sell Pet",
+    injectText: "Sell all Pets",
+    injectedClass: "tm-injected-sell-all",
+    styleId: "tm-injected-sell-all-style"
+  };
+  function startInjectSellAllPets(options = {}) {
+    if (!isBrowser()) return noSSRController();
+    const ROOT_SEL = options.rootSelector ?? DEFAULTS.rootSelector;
+    const CHECK_SEL = options.checkSelector ?? DEFAULTS.checkSelector;
+    const BTN_WIDE = options.buttonSelectorWide ?? DEFAULTS.buttonSelectorWide;
+    const BTN_STRICT = options.buttonSelectorStrict ?? DEFAULTS.buttonSelectorStrict;
+    const BTN_TEXT = options.targetText ?? DEFAULTS.targetText;
+    const INJ_TEXT = options.injectText ?? DEFAULTS.injectText;
+    const INJ_CLASS = options.injectedClass ?? DEFAULTS.injectedClass;
+    const THEME = options.theme ?? DEFAULT_THEME;
+    const OBS_HIST = options.observeHistory ?? true;
+    const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[injectSellAllPets]", ...a) : () => {
+    };
+    const HANDLE = options.onClick ?? createDefaultClickHandler(logger);
+    ensureStyle(INJ_CLASS, THEME);
+    let running = true;
+    let pending = false;
+    const processAll = () => {
+      if (!running || pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        try {
+          document.querySelectorAll(ROOT_SEL).forEach((root) => processRoot(root));
+        } finally {
+          pending = false;
+        }
+      });
+    };
+    function processRoot(root) {
+      const gate = root.querySelector(CHECK_SEL);
+      if (!gate) {
+        cleanup(root, INJ_CLASS);
+        return;
+      }
+      const target = findTargetButton(root, BTN_WIDE, BTN_STRICT, BTN_TEXT);
+      if (!target) {
+        cleanup(root, INJ_CLASS);
+        return;
+      }
+      ensureInjectedNextTo(target, INJ_CLASS, INJ_TEXT, (ev, ctx) => {
+        safeInvokeClick(HANDLE, ev, ctx, logger);
+      });
+    }
+    const mo = new MutationObserver(processAll);
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    processAll();
+    let unhookHistory = null;
+    if (OBS_HIST) {
+      unhookHistory = hookHistory(processAll);
+    }
+    return {
+      stop() {
+        if (!running) return;
+        running = false;
+        mo.disconnect();
+        unhookHistory?.();
+        logger("stopped");
+      },
+      runOnce() {
+        processAll();
+      },
+      isRunning() {
+        return running;
+      }
+    };
+  }
+  async function runSellAllPetsFlow(logger = () => {
+  }) {
+    const pets = await runDefaultSellAllPetsAction(logger);
+    if (pets.length === 0) return;
+    await sellPetsFromInventory(pets, logger);
+  }
+  async function getUnfavoritedInventoryPets() {
+    try {
+      await ensureStore();
+    } catch {
+    }
+    const [inventory, favoriteIds2] = await Promise.all([
+      Atoms.inventory.myInventory.get().catch(() => null),
+      Atoms.inventory.favoriteIds.get().catch(() => [])
+    ]);
+    const favSet = new Set(
+      Array.isArray(favoriteIds2) ? favoriteIds2.filter((id) => typeof id === "string") : []
+    );
+    const items = Array.isArray(inventory?.items) ? inventory.items : [];
+    return items.filter((item) => isInventoryPetItem(item)).filter((pet) => !favSet.has(pet.id));
+  }
+  function createDefaultClickHandler(logger) {
+    return async () => {
+      const pets = await runDefaultSellAllPetsAction(logger);
+      if (pets.length === 0) return;
+      await sellPetsFromInventory(pets, logger);
+    };
+  }
+  async function runDefaultSellAllPetsAction(logger) {
+    const pets = await getUnfavoritedInventoryPets();
+    const detail = { pets, count: pets.length };
+    globalThis.__sellAllPetsCandidates = pets;
+    try {
+      logger("collected-non-favorite-pets", detail);
+    } catch {
+    }
+    try {
+      globalThis.dispatchEvent?.(
+        new CustomEvent(SELL_ALL_PETS_EVENT, { detail })
+      );
+    } catch {
+    }
+    return pets;
+  }
+  async function sellPetsFromInventory(pets, logger) {
+    const toSell = pets.filter((pet) => typeof pet?.id === "string" && pet.id.trim().length > 0);
+    if (toSell.length === 0) {
+      try {
+        logger("no-sellable-pets", { requested: pets.length });
+      } catch {
+      }
+      try {
+        globalThis.__sellAllPetsResult = { attempted: 0, sold: 0, failures: [] };
+      } catch {
+      }
+      return;
+    }
+    const failures = [];
+    let sold = 0;
+    for (const pet of toSell) {
+      try {
+        logger("sell-pet:start", { id: pet.id, pet });
+      } catch {
+      }
+      try {
+        await PlayerService.sellPet(pet.id);
+        sold += 1;
+        try {
+          logger("sell-pet:success", { id: pet.id, pet });
+        } catch {
+        }
+      } catch (error) {
+        failures.push({ pet, error });
+        try {
+          logger("sell-pet:error", { id: pet.id, error, pet });
+        } catch {
+        }
+      }
+    }
+    if (failures.length === 0) {
+      console.info(`[sellAllPets] Tous les pets non favoris (${sold}) ont \xE9t\xE9 vendus avec succ\xE8s.`);
+      toastSimple("Sell all Pets", `${sold} pets have been sold!`, "success");
+    }
+    try {
+      globalThis.__sellAllPetsResult = { attempted: toSell.length, sold, failures };
+    } catch {
+    }
+    try {
+      logger("sell-pets:complete", { attempted: toSell.length, sold, failures });
+    } catch {
+    }
+  }
+  function safeInvokeClick(handler, ev, ctx, logger) {
+    try {
+      const result = handler(ev, ctx);
+      if (isPromiseLike(result)) {
+        result.catch((err) => logClickError(err, logger));
+      }
+    } catch (err) {
+      logClickError(err, logger);
+    }
+  }
+  function logClickError(error, logger) {
+    try {
+      logger("sell-all-click-error", error);
+    } catch {
+    }
+  }
+  function isPromiseLike(value) {
+    return !!value && (typeof value === "object" || typeof value === "function") && typeof value.then === "function";
+  }
+  function isInventoryPetItem(item) {
+    return !!item && item.itemType === "Pet" && typeof item.id === "string";
+  }
+  function isBrowser() {
+    return typeof window !== "undefined" && typeof document !== "undefined";
+  }
+  function noSSRController() {
+    return { stop() {
+    }, runOnce() {
+    }, isRunning: () => false };
+  }
+  function norm(s) {
+    return (s ?? "").replace(/\s+/g, " ").trim();
+  }
+  function hasPetWord(el2) {
+    const t = norm(el2.textContent);
+    const a = norm(el2.getAttribute("aria-label"));
+    return /pet/i.test(t) || /pet/i.test(a);
+  }
+  function findTargetButton(scope, btnWide, btnStrict, btnText) {
+    const btns = Array.from(scope.querySelectorAll(btnWide)).filter(
+      (b) => b instanceof HTMLButtonElement
+    );
+    const byText = btns.find((b) => norm(b.textContent) === btnText) ?? btns.find((b) => norm(b.getAttribute("aria-label")) === btnText);
+    if (byText) return byText;
+    const classCandidates = Array.from(scope.querySelectorAll(btnStrict)).filter((b) => b instanceof HTMLButtonElement);
+    const byClassAndWord = classCandidates.find((b) => hasPetWord(b));
+    return byClassAndWord ?? null;
+  }
+  function ensureInjectedNextTo(targetBtn, injectedClass, injectedText, onClick) {
+    const parent = targetBtn.parentElement || targetBtn.closest(".McFlex, .css-0") || targetBtn.parentNode;
+    if (!parent) return;
+    let injected = parent.querySelector(`.${injectedClass}`);
+    if (injected) {
+      if (targetBtn.nextElementSibling !== injected) {
+        parent.insertBefore(injected, targetBtn.nextSibling);
+      }
+      if (injected.textContent !== injectedText) injected.textContent = injectedText;
+      return;
+    }
+    injected = document.createElement("button");
+    injected.type = "button";
+    injected.className = `${injectedClass} chakra-button`;
+    injected.textContent = injectedText;
+    injected.setAttribute("aria-label", injectedText);
+    injected.title = injectedText;
+    injected.style.marginLeft = "8px";
+    const cs = getComputedStyle(parent);
+    if (cs.display !== "flex") {
+      injected.style.display = "inline-flex";
+      injected.style.alignItems = "center";
+    }
+    injected.addEventListener("click", (ev) => onClick(ev, {
+      host: targetBtn.closest(".McFlex.css-1wu1jyg"),
+      targetBtn,
+      injectedBtn: injected
+    }));
+    parent.insertBefore(injected, targetBtn.nextSibling);
+  }
+  function cleanup(root, injectedClass) {
+    root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
+  }
+  function ensureStyle(injectedClass, theme) {
+    const STYLE_ID2 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID2)) return;
+    const css = `
+.${injectedClass}{
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  cursor: pointer;
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  white-space: nowrap;
+  vertical-align: middle;
+
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  line-height: 1.2;
+
+  border-radius: 15px;                        /* aligns with provided design */
+  font-weight: 700;
+  height: auto;
+  min-width: var(--chakra-sizes-10, 2.5rem);
+  box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 12px;
+  transform: translateY(0px);
+  transition: 0.2s;
+
+  border: 2px solid ${theme.border};
+  color: ${theme.text};
+  background: ${theme.bg};
+
+  text-transform: none;
+  overflow: hidden;
+  font-size: 20px;
+  padding-inline-start: var(--chakra-space-4, 1rem);
+  padding-inline-end: var(--chakra-space-4, 1rem);
+  padding-top: var(--chakra-space-3, 0.75rem);
+  padding-bottom: var(--chakra-space-3, 0.75rem);
+
+  -webkit-tap-highlight-color: transparent;
+}
+.${injectedClass}:hover{
+  transform: translateY(-1px);
+  background: ${theme.hoverBg};
+  border-color: ${theme.hoverBorder};
+}
+.${injectedClass}:active{
+  transform: translateY(1px);
+  background: ${theme.activeBg};
+}
+.${injectedClass}:focus-visible{
+  box-shadow: 0 0 0 3px ${theme.ring};
+}
+`.trim();
+    const s = document.createElement("style");
+    s.id = STYLE_ID2;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+  function hookHistory(onNavigate) {
+    const p = history.pushState?.bind(history);
+    const r = history.replaceState?.bind(history);
+    const wrap = (fn) => fn ? function(...args) {
+      const ret = fn.apply(this, args);
+      onNavigate();
+      return ret;
+    } : fn;
+    if (p) history.pushState = wrap(p);
+    if (r) history.replaceState = wrap(r);
+    const onPop = () => onNavigate();
+    window.addEventListener("popstate", onPop);
+    return () => {
+      if (p) history.pushState = p;
+      if (r) history.replaceState = r;
+      window.removeEventListener("popstate", onPop);
+    };
+  }
+
+  // src/services/sell.ts
+  var sellKeybindsInstalled = false;
+  function installSellKeybindsOnce() {
+    if (sellKeybindsInstalled || typeof window === "undefined") return;
+    sellKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown2(event)) return;
+        if (eventMatchesKeybind("sell.sell-all", event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void PlayerService.sellAllCrops();
+          return;
+        }
+        if (eventMatchesKeybind("sell.sell-all-pets", event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void runSellAllPetsFlow();
+        }
+      },
+      true
+    );
   }
 
   // src/utils/audio.ts
@@ -6731,7 +7414,7 @@
   });
 
   // src/services/notifier.ts
-  var log2 = createMenuLogger("notifier-service", "Shop notifier service");
+  var log3 = createMenuLogger("notifier-service", "Shop notifier service");
   var LS_PREFS_KEY = "qws:shop:notifs:v1";
   var LS_RULES_KEY = "qws:shop:notifs:rules.v1";
   var LS_WEATHER_PREFS_KEY = "qws:weather:notifs:v1";
@@ -6745,7 +7428,7 @@
     [rarity.Divine]: "Divine",
     [rarity.Celestial]: "Celestial"
   };
-  var norm = (s) => String(s ?? "").toLowerCase();
+  var norm2 = (s) => String(s ?? "").toLowerCase();
   var formatRuleSummary = (rule) => {
     if (!rule) return "";
     const parts = [];
@@ -6919,7 +7602,7 @@
       });
     }
     _staticMeta = map2;
-    log2.info("Built static shop metadata", { entries: map2.size });
+    log3.info("Built static shop metadata", { entries: map2.size });
     return map2;
   }
   var _prefs = /* @__PURE__ */ new Map();
@@ -6950,10 +7633,10 @@
           if (norm4) _rules.set(String(id), norm4);
         }
       }
-      log2.info("Loaded notifier rules", { count: _rules.size });
+      log3.info("Loaded notifier rules", { count: _rules.size });
     } catch {
       _rules = /* @__PURE__ */ new Map();
-      log2.warn("Failed to load notifier rules from storage, starting fresh");
+      log3.warn("Failed to load notifier rules from storage, starting fresh");
     }
   }
   function _normalizeRule(raw) {
@@ -6973,7 +7656,7 @@
         obj[id] = { ...rule };
       }
       localStorage.setItem(LS_RULES_KEY, JSON.stringify(obj));
-      log2.debug("Saved notifier rules", { count: _rules.size });
+      log3.debug("Saved notifier rules", { count: _rules.size });
     } catch {
     }
   }
@@ -6996,10 +7679,10 @@
           _weatherPrefs.set(String(id), pref);
         }
       }
-      log2.info("Loaded weather notifier preferences", { count: _weatherPrefs.size });
+      log3.info("Loaded weather notifier preferences", { count: _weatherPrefs.size });
     } catch {
       _weatherPrefs = /* @__PURE__ */ new Map();
-      log2.warn("Failed to load weather notifier preferences, using defaults");
+      log3.warn("Failed to load weather notifier preferences, using defaults");
     }
   }
   function _saveWeatherPrefs() {
@@ -7262,10 +7945,10 @@
         }
       }
       _prefs = m;
-      log2.info("Loaded notifier preferences", { count: _prefs.size });
+      log3.info("Loaded notifier preferences", { count: _prefs.size });
     } catch {
       _prefs = /* @__PURE__ */ new Map();
-      log2.warn("Failed to load notifier preferences, using defaults");
+      log3.warn("Failed to load notifier preferences, using defaults");
     }
   }
   function _savePrefs() {
@@ -7273,7 +7956,7 @@
       const obj = {};
       for (const [k, v] of _prefs) obj[k] = v & 1;
       localStorage.setItem(LS_PREFS_KEY, JSON.stringify(obj));
-      log2.debug("Saved notifier preferences", { count: _prefs.size });
+      log3.debug("Saved notifier preferences", { count: _prefs.size });
     } catch {
     }
   }
@@ -7409,10 +8092,10 @@
     _state = next;
     if (changed) {
       _lastSig = sig;
-      log2.info("Notifier state recomputed", { items: rows.length, followed });
+      log3.info("Notifier state recomputed", { items: rows.length, followed });
       _notify();
     } else {
-      log2.debug("Notifier state unchanged after recompute");
+      log3.debug("Notifier state unchanged after recompute");
     }
   }
   function _recomputeFromCacheAndNotify() {
@@ -7437,7 +8120,7 @@
       rows,
       counts: { items: rows.length, followed }
     };
-    log2.debug("Notifier cache recomputed", { items: rows.length, followed });
+    log3.debug("Notifier cache recomputed", { items: rows.length, followed });
     _notify();
   }
   function _notify() {
@@ -7453,20 +8136,20 @@
   var _started = false;
   async function _ensureStarted() {
     if (_started) {
-      log2.debug("Notifier service already started");
+      log3.debug("Notifier service already started");
       return;
     }
     _started = true;
-    log2.info("Starting notifier service");
+    log3.info("Starting notifier service");
     _loadPrefs();
     _ensureRulesLoaded();
     try {
       const cur = await Atoms.shop.shops.get();
       _recomputeFromRaw(cur);
       _notifyShops(cur);
-      log2.debug("Loaded initial shop snapshot");
+      log3.debug("Loaded initial shop snapshot");
     } catch (err) {
-      log2.warn("Failed to load initial shop snapshot", { error: err });
+      log3.warn("Failed to load initial shop snapshot", { error: err });
     }
     try {
       _unsubShops = await Atoms.shop.shops.onChange((next) => {
@@ -7479,15 +8162,15 @@
         } catch {
         }
       });
-      log2.debug("Subscribed to shop updates");
+      log3.debug("Subscribed to shop updates");
     } catch (err) {
-      log2.warn("Failed to subscribe to shop updates", { error: err });
+      log3.warn("Failed to subscribe to shop updates", { error: err });
     }
     try {
       const curP = await Atoms.shop.myShopPurchases.get();
       _notifyPurchases(curP);
     } catch (err) {
-      log2.warn("Failed to load initial purchases snapshot", { error: err });
+      log3.warn("Failed to load initial purchases snapshot", { error: err });
     }
     try {
       _unsubPurchases = await Atoms.shop.myShopPurchases.onChange((next) => {
@@ -7496,9 +8179,9 @@
         } catch {
         }
       });
-      log2.debug("Subscribed to purchase updates");
+      log3.debug("Subscribed to purchase updates");
     } catch (err) {
-      log2.warn("Failed to subscribe to purchase updates", { error: err });
+      log3.warn("Failed to subscribe to purchase updates", { error: err });
     }
     try {
       const invAtom = _resolveToolInvAtom();
@@ -7506,7 +8189,7 @@
         try {
           _updateToolInv(await invAtom.get());
         } catch (err) {
-          log2.warn("Failed to read initial tool inventory", { error: err });
+          log3.warn("Failed to read initial tool inventory", { error: err });
         }
         try {
           _unsubToolInv = await invAtom.onChange((next) => {
@@ -7515,13 +8198,13 @@
             } catch {
             }
           });
-          log2.debug("Subscribed to tool inventory updates");
+          log3.debug("Subscribed to tool inventory updates");
         } catch (err) {
-          log2.warn("Failed to subscribe to tool inventory updates", { error: err });
+          log3.warn("Failed to subscribe to tool inventory updates", { error: err });
         }
       }
     } catch (err) {
-      log2.warn("Tool inventory hook unavailable", { error: err });
+      log3.warn("Tool inventory hook unavailable", { error: err });
     }
     try {
       const weatherAtom = Atoms.data?.weather;
@@ -7529,7 +8212,7 @@
         try {
           _handleWeatherUpdate(await weatherAtom.get(), { force: true });
         } catch (err) {
-          log2.warn("Failed to read initial weather state", { error: err });
+          log3.warn("Failed to read initial weather state", { error: err });
         }
         try {
           _unsubWeather = await weatherAtom.onChange((next) => {
@@ -7538,15 +8221,15 @@
             } catch {
             }
           });
-          log2.debug("Subscribed to weather updates");
+          log3.debug("Subscribed to weather updates");
         } catch (err) {
-          log2.warn("Failed to subscribe to weather updates", { error: err });
+          log3.warn("Failed to subscribe to weather updates", { error: err });
         }
       } else {
-        log2.warn("Weather atom unavailable");
+        log3.warn("Weather atom unavailable");
       }
     } catch (err) {
-      log2.warn("Weather hook unavailable", { error: err });
+      log3.warn("Weather hook unavailable", { error: err });
     }
   }
   function _stop() {
@@ -7579,7 +8262,7 @@
     _currentWeatherId = null;
     _currentWeatherValue = null;
     _started = false;
-    log2.info("Notifier service stopped");
+    log3.info("Notifier service stopped");
   }
   var NotifierService = {
     // lifecycle
@@ -7717,18 +8400,18 @@
       const bits = _getPrefBits(id);
       const next = enabled ? bits | 1 : bits & ~1;
       _setPrefBits(id, next);
-      log2.info("Updated popup preference", { id, enabled });
+      log3.info("Updated popup preference", { id, enabled });
     },
     setPrefs(id, prefs) {
       const bits = _getPrefBits(id);
       let next = bits;
       if (typeof prefs.popup === "boolean") next = prefs.popup ? next | 1 : next & ~1;
       _setPrefBits(id, next);
-      log2.debug("Updated notifier prefs", { id, prefs });
+      log3.debug("Updated notifier prefs", { id, prefs });
     },
     clearPrefs(id) {
       _setPrefBits(id, 0);
-      log2.info("Cleared notifier prefs", { id });
+      log3.info("Cleared notifier prefs", { id });
     },
     isIdCapped(id) {
       if (!id.startsWith("Tool:")) return false;
@@ -7743,7 +8426,7 @@
       }
       const fr = f.rarity ?? "all";
       if (fr !== "all") {
-        arr = arr.filter((r) => norm(r.rarity) === fr);
+        arr = arr.filter((r) => norm2(r.rarity) === fr);
       }
       return arr;
     },
@@ -7772,7 +8455,7 @@
       else _rules.delete(id);
       _saveRules();
       _emitRules();
-      log2.info("Updated notifier rule", { id });
+      log3.info("Updated notifier rule", { id });
     },
     clearRule(id) {
       if (!id) return;
@@ -7781,7 +8464,7 @@
       if (existed) {
         _saveRules();
         _emitRules();
-        log2.info("Cleared notifier rule", { id });
+        log3.info("Cleared notifier rule", { id });
       }
     },
     onRulesChange(cb) {
@@ -7799,11 +8482,11 @@
   };
 
   // src/utils/catalogIndex.ts
-  var norm2 = (s) => String(s || "").toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, " ").trim();
+  var norm3 = (s) => String(s || "").toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, " ").trim();
   var tileRefKey = (tr) => {
     const raw = String(tr ?? "");
     const last = raw.split(/[./]/).pop() || raw;
-    return norm2(last);
+    return norm3(last);
   };
   var _toDataURI = (s) => s ? s.startsWith("data:") ? s : `data:image/png;base64,${s}` : void 0;
   function seedNameFromSpecies(species, cat = plantCatalog) {
@@ -8973,13 +9656,13 @@
     if (document.hidden) stopRescan();
     else if (observer) startRescan();
   });
-  var DEFAULTS = {
+  var DEFAULTS2 = {
     containerSelector: ".McFlex.css-1lfov12",
     itemSelector: ".McFlex.css-1kkwxjt",
     flagSelector: ".chakra-text.css-rlkzj4"
   };
   function startReorderObserver(options = {}) {
-    if (!isBrowser()) {
+    if (!isBrowser2()) {
       return {
         stop() {
         },
@@ -8990,9 +9673,9 @@
         }
       };
     }
-    const CONTAINER_SEL = options.containerSelector ?? DEFAULTS.containerSelector;
-    const ITEM_SEL = options.itemSelector ?? DEFAULTS.itemSelector;
-    const FLAG_SEL = options.flagSelector ?? DEFAULTS.flagSelector;
+    const CONTAINER_SEL = options.containerSelector ?? DEFAULTS2.containerSelector;
+    const ITEM_SEL = options.itemSelector ?? DEFAULTS2.itemSelector;
+    const FLAG_SEL = options.flagSelector ?? DEFAULTS2.flagSelector;
     const ROOT = options.root ?? document;
     const OBSERVE_HISTORY = options.observeHistory ?? true;
     const PREFER_DIRECT = options.preferDirectChildren ?? false;
@@ -9020,7 +9703,7 @@
     processAll();
     let unhookHistory = null;
     if (OBSERVE_HISTORY) {
-      const { unhook } = hookHistory(processAll);
+      const { unhook } = hookHistory2(processAll);
       unhookHistory = unhook;
     }
     const controller = {
@@ -9041,7 +9724,7 @@
     };
     return controller;
   }
-  function isBrowser() {
+  function isBrowser2() {
     return typeof window !== "undefined" && typeof document !== "undefined";
   }
   function queryAll(root, selector) {
@@ -9084,7 +9767,7 @@
       }
     }
   }
-  function hookHistory(onNavigate) {
+  function hookHistory2(onNavigate) {
     const origPush = history.pushState?.bind(history);
     const origReplace = history.replaceState?.bind(history);
     function wrap(fn) {
@@ -9468,7 +10151,7 @@
   }
 
   // src/utils/cropValues.ts
-  var DEFAULTS2 = {
+  var DEFAULTS3 = {
     rootSelector: ".McFlex.css-fsggty",
     innerSelector: ".McFlex.css-1omaybc, .McFlex.css-1c3sifn",
     markerClass: "tm-crop-price"
@@ -9482,9 +10165,9 @@
       }, runOnce() {
       }, isRunning: () => false };
     }
-    const ROOT_SEL = options.rootSelector ?? DEFAULTS2.rootSelector;
-    const INNER_SEL = options.innerSelector ?? DEFAULTS2.innerSelector;
-    const MARKER = options.markerClass ?? DEFAULTS2.markerClass;
+    const ROOT_SEL = options.rootSelector ?? DEFAULTS3.rootSelector;
+    const INNER_SEL = options.innerSelector ?? DEFAULTS3.innerSelector;
+    const MARKER = options.markerClass ?? DEFAULTS3.markerClass;
     const ROOT = options.root ?? document;
     const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[AppendCropPrice/GO]", ...a) : () => {
     };
@@ -9586,608 +10269,278 @@
     if (inner.lastElementChild !== span) inner.appendChild(span);
   }
 
-  // src/utils/sellAllPets.ts
-  var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
-  var DEFAULT_THEME = {
-    text: "var(--chakra-colors-Neutral-TrueWhite, #FFFFFF)",
-    bg: "var(--chakra-colors-Blue-Magic, #0067B4)",
-    border: "var(--chakra-colors-Blue-Light, #48ADF4)",
-    hoverBg: "var(--chakra-colors-Blue-Light, #48ADF4)",
-    hoverBorder: "var(--chakra-colors-Blue-Baby, #25AAE2)",
-    activeBg: "var(--chakra-colors-Blue-Dark, #264093)",
-    ring: "var(--chakra-ring-color, rgba(66,153,225,0.6))"
-  };
-  var DEFAULTS3 = {
-    rootSelector: ".McFlex.css-1wu1jyg",
-    checkSelector: ".McFlex.css-bvyqr8",
-    buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
-    buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
-    targetText: "Sell Pet",
-    injectText: "Sell all Pets",
-    injectedClass: "tm-injected-sell-all",
-    styleId: "tm-injected-sell-all-style"
-  };
-  function startInjectSellAllPets(options = {}) {
-    if (!isBrowser2()) return noSSRController();
-    const ROOT_SEL = options.rootSelector ?? DEFAULTS3.rootSelector;
-    const CHECK_SEL = options.checkSelector ?? DEFAULTS3.checkSelector;
-    const BTN_WIDE = options.buttonSelectorWide ?? DEFAULTS3.buttonSelectorWide;
-    const BTN_STRICT = options.buttonSelectorStrict ?? DEFAULTS3.buttonSelectorStrict;
-    const BTN_TEXT = options.targetText ?? DEFAULTS3.targetText;
-    const INJ_TEXT = options.injectText ?? DEFAULTS3.injectText;
-    const INJ_CLASS = options.injectedClass ?? DEFAULTS3.injectedClass;
-    const THEME = options.theme ?? DEFAULT_THEME;
-    const OBS_HIST = options.observeHistory ?? true;
-    const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[injectSellAllPets]", ...a) : () => {
-    };
-    const HANDLE = options.onClick ?? createDefaultClickHandler(logger);
-    ensureStyle(INJ_CLASS, THEME);
-    let running = true;
-    let pending = false;
-    const processAll = () => {
-      if (!running || pending) return;
-      pending = true;
-      requestAnimationFrame(() => {
-        try {
-          document.querySelectorAll(ROOT_SEL).forEach((root) => processRoot(root));
-        } finally {
-          pending = false;
-        }
-      });
-    };
-    function processRoot(root) {
-      const gate = root.querySelector(CHECK_SEL);
-      if (!gate) {
-        cleanup(root, INJ_CLASS);
-        return;
+  // src/utils/api.ts
+  function detectEnvironment() {
+    const isInIframe = (() => {
+      try {
+        return window.top !== window.self;
+      } catch {
+        return true;
       }
-      const target = findTargetButton(root, BTN_WIDE, BTN_STRICT, BTN_TEXT);
-      if (!target) {
-        cleanup(root, INJ_CLASS);
-        return;
-      }
-      ensureInjectedNextTo(target, INJ_CLASS, INJ_TEXT, (ev, ctx) => {
-        safeInvokeClick(HANDLE, ev, ctx, logger);
-      });
-    }
-    const mo = new MutationObserver(processAll);
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-    processAll();
-    let unhookHistory = null;
-    if (OBS_HIST) {
-      unhookHistory = hookHistory2(processAll);
-    }
+    })();
+    const refHost = safeHost(document.referrer);
+    const parentLooksDiscord = isInIframe && !!refHost && /(^|\.)discord(app)?\.com$/i.test(refHost);
+    const host = location.hostname;
+    const surface = parentLooksDiscord ? "discord" : "web";
+    const platform = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "mobile" : "desktop";
     return {
-      stop() {
-        if (!running) return;
-        running = false;
-        mo.disconnect();
-        unhookHistory?.();
-        logger("stopped");
-      },
-      runOnce() {
-        processAll();
-      },
-      isRunning() {
-        return running;
-      }
+      surface,
+      host,
+      origin: location.origin,
+      isInIframe,
+      platform
     };
   }
-  async function runSellAllPetsFlow(logger = () => {
-  }) {
-    const pets = await runDefaultSellAllPetsAction(logger);
-    if (pets.length === 0) return;
-    await sellPetsFromInventory(pets, logger);
+  function isDiscordSurface() {
+    return detectEnvironment().surface === "discord";
   }
-  async function getUnfavoritedInventoryPets() {
+  function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
+    return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
+  }
+  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      await ensureStore();
-    } catch {
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers,
+        signal: controller.signal
+      });
+      const body = await res.text();
+      return { status: res.status, ok: res.ok, body };
+    } finally {
+      clearTimeout(timeout);
     }
-    const [inventory, favoriteIds2] = await Promise.all([
-      Atoms.inventory.myInventory.get().catch(() => null),
-      Atoms.inventory.favoriteIds.get().catch(() => [])
-    ]);
-    const favSet = new Set(
-      Array.isArray(favoriteIds2) ? favoriteIds2.filter((id) => typeof id === "string") : []
-    );
-    const items = Array.isArray(inventory?.items) ? inventory.items : [];
-    return items.filter((item) => isInventoryPetItem(item)).filter((pet) => !favSet.has(pet.id));
   }
-  function createDefaultClickHandler(logger) {
-    return async () => {
-      const pets = await runDefaultSellAllPetsAction(logger);
-      if (pets.length === 0) return;
-      await sellPetsFromInventory(pets, logger);
-    };
+  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
+    return new Promise((resolve2, reject) => {
+      if (typeof GM_xmlhttpRequest !== "function") {
+        reject(new Error("GM_xmlhttpRequest is not available"));
+        return;
+      }
+      GM_xmlhttpRequest({
+        method: "GET",
+        url,
+        headers,
+        timeout: timeoutMs,
+        onload: (response) => resolve2({
+          status: response.status,
+          ok: response.status >= 200 && response.status < 300,
+          body: response.responseText
+        }),
+        onerror: (error) => reject(error),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timed out"))
+      });
+    });
   }
-  async function runDefaultSellAllPetsAction(logger) {
-    const pets = await getUnfavoritedInventoryPets();
-    const detail = { pets, count: pets.length };
-    globalThis.__sellAllPetsCandidates = pets;
-    try {
-      logger("collected-non-favorite-pets", detail);
-    } catch {
+  async function requestRoomEndpoint(roomIdOrCode, options = {}) {
+    const endpoint = options.endpoint ?? "info";
+    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
+    const headers = {};
+    if (options.jwt) {
+      headers["Authorization"] = `Bearer ${options.jwt}`;
     }
-    try {
-      globalThis.dispatchEvent?.(
-        new CustomEvent(SELL_ALL_PETS_EVENT, { detail })
-      );
-    } catch {
-    }
-    return pets;
-  }
-  async function sellPetsFromInventory(pets, logger) {
-    const toSell = pets.filter((pet) => typeof pet?.id === "string" && pet.id.trim().length > 0);
-    if (toSell.length === 0) {
+    let rawResponse;
+    if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
+      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+    } else {
       try {
-        logger("no-sellable-pets", { requested: pets.length });
-      } catch {
-      }
-      try {
-        globalThis.__sellAllPetsResult = { attempted: 0, sold: 0, failures: [] };
-      } catch {
-      }
-      return;
-    }
-    const failures = [];
-    let sold = 0;
-    for (const pet of toSell) {
-      try {
-        logger("sell-pet:start", { id: pet.id, pet });
-      } catch {
-      }
-      try {
-        await PlayerService.sellPet(pet.id);
-        sold += 1;
-        try {
-          logger("sell-pet:success", { id: pet.id, pet });
-        } catch {
-        }
+        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
       } catch (error) {
-        failures.push({ pet, error });
-        try {
-          logger("sell-pet:error", { id: pet.id, error, pet });
-        } catch {
+        if (typeof GM_xmlhttpRequest === "function") {
+          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+        } else {
+          throw error;
         }
       }
     }
-    if (failures.length === 0) {
-      console.info(`[sellAllPets] Tous les pets non favoris (${sold}) ont \xE9t\xE9 vendus avec succ\xE8s.`);
-      toastSimple("Sell all Pets", `${sold} pets have been sold!`, "success");
-    }
+    let parsed;
     try {
-      globalThis.__sellAllPetsResult = { attempted: toSell.length, sold, failures };
+      parsed = JSON.parse(rawResponse.body);
     } catch {
     }
+    return { url, ...rawResponse, parsed };
+  }
+  function safeHost(url) {
+    if (!url) return null;
     try {
-      logger("sell-pets:complete", { attempted: toSell.length, sold, failures });
+      return new URL(url).hostname;
     } catch {
+      return null;
     }
   }
-  function safeInvokeClick(handler, ev, ctx, logger) {
-    try {
-      const result = handler(ev, ctx);
-      if (isPromiseLike(result)) {
-        result.catch((err) => logClickError(err, logger));
+  function buildSoftJoinUrl(roomCode) {
+    const merged = new URLSearchParams(location.search);
+    const url = new URL(location.href);
+    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
+    url.search = merged.toString();
+    return url.toString();
+  }
+  function buildHardJoinUrl(roomCode) {
+    return buildSoftJoinUrl(roomCode);
+  }
+  function joinRoom(roomCode, options = {}) {
+    const env = detectEnvironment();
+    const isDiscord = env.surface === "discord";
+    const preferSoft = options.preferSoft ?? !isDiscord;
+    const hardIfSoftFails = options.hardIfSoftFails ?? true;
+    if (isDiscord) {
+      if (options.siteFallbackOnDiscord) {
+        const fallback = `https://magiccircle.gg/r/${encodeURIComponent(roomCode)}`;
+        if (options.openInNewTab) {
+          window.open(fallback, "_blank", "noopener,noreferrer");
+        } else {
+          location.assign(fallback);
+        }
+        return {
+          ok: true,
+          mode: "site-fallback",
+          url: fallback,
+          message: "Discord activity does not support room switching by code, redirecting to the official site."
+        };
       }
-    } catch (err) {
-      logClickError(err, logger);
-    }
-  }
-  function logClickError(error, logger) {
-    try {
-      logger("sell-all-click-error", error);
-    } catch {
-    }
-  }
-  function isPromiseLike(value) {
-    return !!value && (typeof value === "object" || typeof value === "function") && typeof value.then === "function";
-  }
-  function isInventoryPetItem(item) {
-    return !!item && item.itemType === "Pet" && typeof item.id === "string";
-  }
-  function isBrowser2() {
-    return typeof window !== "undefined" && typeof document !== "undefined";
-  }
-  function noSSRController() {
-    return { stop() {
-    }, runOnce() {
-    }, isRunning: () => false };
-  }
-  function norm3(s) {
-    return (s ?? "").replace(/\s+/g, " ").trim();
-  }
-  function hasPetWord(el2) {
-    const t = norm3(el2.textContent);
-    const a = norm3(el2.getAttribute("aria-label"));
-    return /pet/i.test(t) || /pet/i.test(a);
-  }
-  function findTargetButton(scope, btnWide, btnStrict, btnText) {
-    const btns = Array.from(scope.querySelectorAll(btnWide)).filter(
-      (b) => b instanceof HTMLButtonElement
-    );
-    const byText = btns.find((b) => norm3(b.textContent) === btnText) ?? btns.find((b) => norm3(b.getAttribute("aria-label")) === btnText);
-    if (byText) return byText;
-    const classCandidates = Array.from(scope.querySelectorAll(btnStrict)).filter((b) => b instanceof HTMLButtonElement);
-    const byClassAndWord = classCandidates.find((b) => hasPetWord(b));
-    return byClassAndWord ?? null;
-  }
-  function ensureInjectedNextTo(targetBtn, injectedClass, injectedText, onClick) {
-    const parent = targetBtn.parentElement || targetBtn.closest(".McFlex, .css-0") || targetBtn.parentNode;
-    if (!parent) return;
-    let injected = parent.querySelector(`.${injectedClass}`);
-    if (injected) {
-      if (targetBtn.nextElementSibling !== injected) {
-        parent.insertBefore(injected, targetBtn.nextSibling);
-      }
-      if (injected.textContent !== injectedText) injected.textContent = injectedText;
-      return;
-    }
-    injected = document.createElement("button");
-    injected.type = "button";
-    injected.className = `${injectedClass} chakra-button`;
-    injected.textContent = injectedText;
-    injected.setAttribute("aria-label", injectedText);
-    injected.title = injectedText;
-    injected.style.marginLeft = "8px";
-    const cs = getComputedStyle(parent);
-    if (cs.display !== "flex") {
-      injected.style.display = "inline-flex";
-      injected.style.alignItems = "center";
-    }
-    injected.addEventListener("click", (ev) => onClick(ev, {
-      host: targetBtn.closest(".McFlex.css-1wu1jyg"),
-      targetBtn,
-      injectedBtn: injected
-    }));
-    parent.insertBefore(injected, targetBtn.nextSibling);
-  }
-  function cleanup(root, injectedClass) {
-    root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
-  }
-  function ensureStyle(injectedClass, theme) {
-    const STYLE_ID2 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID2)) return;
-    const css = `
-.${injectedClass}{
-  font-synthesis: none;
-  -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
-  cursor: pointer;
-  display: inline-flex;
-  appearance: none;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-  white-space: nowrap;
-  vertical-align: middle;
-
-  outline: transparent solid 2px;
-  outline-offset: 2px;
-  line-height: 1.2;
-
-  border-radius: 15px;                        /* aligns with provided design */
-  font-weight: 700;
-  height: auto;
-  min-width: var(--chakra-sizes-10, 2.5rem);
-  box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 12px;
-  transform: translateY(0px);
-  transition: 0.2s;
-
-  border: 2px solid ${theme.border};
-  color: ${theme.text};
-  background: ${theme.bg};
-
-  text-transform: none;
-  overflow: hidden;
-  font-size: 20px;
-  padding-inline-start: var(--chakra-space-4, 1rem);
-  padding-inline-end: var(--chakra-space-4, 1rem);
-  padding-top: var(--chakra-space-3, 0.75rem);
-  padding-bottom: var(--chakra-space-3, 0.75rem);
-
-  -webkit-tap-highlight-color: transparent;
-}
-.${injectedClass}:hover{
-  transform: translateY(-1px);
-  background: ${theme.hoverBg};
-  border-color: ${theme.hoverBorder};
-}
-.${injectedClass}:active{
-  transform: translateY(1px);
-  background: ${theme.activeBg};
-}
-.${injectedClass}:focus-visible{
-  box-shadow: 0 0 0 3px ${theme.ring};
-}
-`.trim();
-    const s = document.createElement("style");
-    s.id = STYLE_ID2;
-    s.textContent = css;
-    document.head.appendChild(s);
-  }
-  function hookHistory2(onNavigate) {
-    const p = history.pushState?.bind(history);
-    const r = history.replaceState?.bind(history);
-    const wrap = (fn) => fn ? function(...args) {
-      const ret = fn.apply(this, args);
-      onNavigate();
-      return ret;
-    } : fn;
-    if (p) history.pushState = wrap(p);
-    if (r) history.replaceState = wrap(r);
-    const onPop = () => onNavigate();
-    window.addEventListener("popstate", onPop);
-    return () => {
-      if (p) history.pushState = p;
-      if (r) history.replaceState = r;
-      window.removeEventListener("popstate", onPop);
-    };
-  }
-
-  // src/services/keybinds.ts
-  var SECTION_CONFIG = [
-    {
-      id: "gui",
-      title: "GUI",
-      icon: "\u{1F5A5}\uFE0F",
-      description: "Choose how you open and move the overlay.",
-      actions: [
-        {
-          id: "gui.toggle",
-          label: "Toggle menu visibility",
-          hint: "Opens or closes the Arie's Mod overlay.",
-          defaultHotkey: { alt: true, code: "KeyX" }
-        },
-        {
-          id: "gui.drag",
-          label: "Drag HUD",
-          hint: "Hold to drag menus interfaces around the screen.",
-          defaultHotkey: { alt: true, code: "AltLeft" },
-          allowModifierOnly: true
-        }
-      ]
-    },
-    {
-      id: "shops",
-      title: "Shops",
-      icon: "\u{1F6D2}",
-      description: "Quick shortcuts to every shop tab.",
-      actions: [
-        {
-          id: "shops.seeds",
-          label: "Seeds shop",
-          defaultHotkey: { alt: true, code: "KeyS" }
-        },
-        {
-          id: "shops.eggs",
-          label: "Eggs shop",
-          defaultHotkey: { alt: true, code: "KeyE" }
-        },
-        {
-          id: "shops.decors",
-          label: "Decors shop",
-          defaultHotkey: { alt: true, code: "KeyD" }
-        },
-        {
-          id: "shops.tools",
-          label: "Tools shop",
-          defaultHotkey: { alt: true, code: "KeyT" }
-        }
-      ]
-    },
-    {
-      id: "sell",
-      title: "Sell",
-      icon: "\u{1F4B0}",
-      description: "Streamline selling actions.",
-      actions: [
-        {
-          id: "sell.sell-all",
-          label: "All crops",
-          hint: "Trigger the sell-all flow for harvested crops.",
-          defaultHotkey: null
-        },
-        {
-          id: "sell.sell-all-pets",
-          label: "All pets",
-          hint: "Sell every non-favorited pet in your inventory.",
-          defaultHotkey: null
-        }
-      ]
-    }
-  ];
-  var STORAGE_PREFIX = "qws:keybind:";
-  var STORED_NONE = "__none__";
-  var actionMap = /* @__PURE__ */ new Map();
-  var defaultMap = /* @__PURE__ */ new Map();
-  var cache = /* @__PURE__ */ new Map();
-  var listeners2 = /* @__PURE__ */ new Map();
-  var keybindSections = SECTION_CONFIG.map((section) => {
-    const actions = section.actions.map((action) => {
-      const normalized = {
-        id: action.id,
-        sectionId: section.id,
-        label: action.label,
-        hint: action.hint,
-        allowModifierOnly: action.allowModifierOnly,
-        defaultHotkey: cloneHotkey(action.defaultHotkey)
+      return {
+        ok: false,
+        mode: "discord-unsupported",
+        message: "Discord activity does not support joining a room by code. Open the website or use an activity invite."
       };
-      actionMap.set(normalized.id, normalized);
-      defaultMap.set(normalized.id, cloneHotkey(action.defaultHotkey));
-      return normalized;
-    });
-    return {
-      id: section.id,
-      title: section.title,
-      description: section.description,
-      icon: section.icon,
-      actions
-    };
-  });
-  function cloneHotkey(hk) {
-    return hk ? { ...hk } : null;
-  }
-  function hotkeysEqual(a, b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return hotkeyToString(a) === hotkeyToString(b);
-  }
-  function storageKey(id) {
-    return `${STORAGE_PREFIX}${id}`;
-  }
-  function readStored(id) {
-    if (typeof window === "undefined") return void 0;
-    let raw = null;
-    try {
-      raw = window.localStorage.getItem(storageKey(id));
-    } catch {
-      return void 0;
     }
-    if (raw == null) return void 0;
-    if (raw === STORED_NONE) return null;
-    const parsed = stringToHotkey(raw);
-    return parsed ?? null;
+    const softUrl = buildSoftJoinUrl(roomCode);
+    if (preferSoft) {
+      try {
+        const url = new URL(softUrl);
+        if (url.origin === location.origin) {
+          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
+          window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+          console.log("[joinRoom] soft \u2192", url.toString());
+          return { ok: true, mode: "soft", url: url.toString() };
+        }
+      } catch {
+      }
+      if (!hardIfSoftFails) {
+        return {
+          ok: false,
+          mode: "noop",
+          url: softUrl,
+          message: "Soft navigation failed because the origins differ."
+        };
+      }
+    }
+    const hardUrl = buildHardJoinUrl(roomCode);
+    console.log("[joinRoom] hard \u2192", hardUrl);
+    location.assign(hardUrl);
+    return { ok: true, mode: "hard", url: hardUrl };
   }
-  function writeStored(id, hk) {
-    if (typeof window === "undefined") return;
+
+  // src/utils/version.ts
+  var REPO_OWNER = "Ariedam64";
+  var REPO_NAME = "MagicGarden-modMenu";
+  var REPO_BRANCH = "main";
+  var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
+  var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
+  var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
+  async function fetchTextWithFetch(url, options) {
+    const response = await fetch(url, { cache: "no-store", ...options });
+    if (!response.ok) {
+      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  }
+  async function fetchTextWithGM(url, options) {
+    return new Promise((resolve2, reject) => {
+      const xhr = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
+      if (!xhr) return reject(new Error("GM_xmlhttpRequest not available"));
+      xhr({
+        method: "GET",
+        url,
+        headers: options?.headers,
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) resolve2(res.responseText);
+          else reject(new Error(`GM_xhr failed: ${res.status}`));
+        },
+        onerror: (e) => reject(e)
+      });
+    });
+  }
+  async function fetchText(url, options) {
+    const preferGM = isDiscordSurface();
+    const hasGM = typeof GM_xmlhttpRequest === "function" || typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function";
+    if (preferGM && hasGM) {
+      return await fetchTextWithGM(url, options);
+    }
     try {
-      if (hk) {
-        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+      return await fetchTextWithFetch(url, options);
+    } catch (error) {
+      if (hasGM) {
+        return await fetchTextWithGM(url, options);
+      }
+      throw error;
+    }
+  }
+  async function fetchLatestCommitSha() {
+    try {
+      const responseText = await fetchText(COMMITS_API_URL, {
+        headers: { Accept: "application/vnd.github+json" }
+      });
+      const data = JSON.parse(responseText);
+      if (data && typeof data.sha === "string" && data.sha.trim().length > 0) {
+        return data.sha.trim();
+      }
+    } catch (error) {
+      console.warn("[MagicGarden] Failed to resolve latest commit SHA:", error);
+    }
+    return null;
+  }
+  async function fetchScriptSource() {
+    const commitSha = await fetchLatestCommitSha();
+    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
+    return await fetchText(scriptUrl);
+  }
+  async function fetchRemoteVersion() {
+    try {
+      const scriptSource = await fetchScriptSource();
+      const meta = extractUserscriptMetadata(scriptSource);
+      if (!meta) {
+        throw new Error("Metadata block not found in remote script");
+      }
+      const version = meta.get("version")?.[0];
+      const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+      return {
+        version,
+        download
+      };
+    } catch (error) {
+      console.error("Unable to retrieve remote version:", error);
+      return null;
+    }
+  }
+  function extractUserscriptMetadata(source) {
+    const headerMatch = source.match(/\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/);
+    if (!headerMatch) {
+      return null;
+    }
+    const metaBlock = headerMatch[1];
+    const entries2 = metaBlock.matchAll(/^\/\/\s*@([^\s]+)\s+(.+)$/gm);
+    const meta = /* @__PURE__ */ new Map();
+    for (const [, rawKey, rawValue] of entries2) {
+      const key2 = rawKey.trim().toLowerCase();
+      const value = rawValue.trim();
+      if (!key2) continue;
+      const current = meta.get(key2);
+      if (current) {
+        current.push(value);
       } else {
-        window.localStorage.setItem(storageKey(id), STORED_NONE);
-      }
-    } catch {
-    }
-  }
-  function emitChange(id) {
-    const set2 = listeners2.get(id);
-    if (!set2 || set2.size === 0) return;
-    const current = cloneHotkey(getKeybind(id));
-    for (const cb of set2) cb(current);
-  }
-  function ensureCache(id) {
-    if (cache.has(id)) {
-      return cloneHotkey(cache.get(id) ?? null);
-    }
-    const stored = readStored(id);
-    const resolved = stored === void 0 ? cloneHotkey(defaultMap.get(id) ?? null) : cloneHotkey(stored);
-    cache.set(id, resolved);
-    return cloneHotkey(resolved);
-  }
-  function getKeybind(id) {
-    return ensureCache(id);
-  }
-  function setKeybind(id, hk) {
-    const current = getKeybind(id);
-    if (hotkeysEqual(current, hk)) return;
-    const next = cloneHotkey(hk);
-    if (next) {
-      const asString = hotkeyToString(next);
-      for (const otherId of actionMap.keys()) {
-        if (otherId === id) continue;
-        const other = getKeybind(otherId);
-        if (!other) continue;
-        if (hotkeyToString(other) !== asString) continue;
-        cache.set(otherId, null);
-        writeStored(otherId, null);
-        emitChange(otherId);
+        meta.set(key2, [value]);
       }
     }
-    cache.set(id, next);
-    writeStored(id, next);
-    emitChange(id);
+    return meta;
   }
-  function onKeybindChange(id, cb) {
-    const set2 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
-    if (!listeners2.has(id)) listeners2.set(id, set2);
-    set2.add(cb);
-    return () => {
-      set2.delete(cb);
-      if (set2.size === 0) listeners2.delete(id);
-    };
-  }
-  function eventMatchesKeybind(id, e) {
-    return matchHotkey(e, getKeybind(id));
-  }
-  function getKeybindSections() {
-    return keybindSections.map((section) => ({
-      ...section,
-      actions: section.actions.map((action) => ({
-        ...action,
-        defaultHotkey: cloneHotkey(action.defaultHotkey)
-      }))
-    }));
-  }
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", (event) => {
-      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
-      const id = event.key.slice(STORAGE_PREFIX.length);
-      if (!actionMap.has(id)) return;
-      cache.delete(id);
-      emitChange(id);
-    });
-  }
-
-  // src/utils/keyboard.ts
-  function shouldIgnoreKeydown2(e) {
-    const el2 = e.target;
-    if (!el2) return false;
-    return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
-  }
-
-  // src/services/sell.ts
-  var sellKeybindsInstalled = false;
-  function installSellKeybindsOnce() {
-    if (sellKeybindsInstalled || typeof window === "undefined") return;
-    sellKeybindsInstalled = true;
-    window.addEventListener(
-      "keydown",
-      (event) => {
-        if (shouldIgnoreKeydown2(event)) return;
-        if (eventMatchesKeybind("sell.sell-all", event)) {
-          event.preventDefault();
-          event.stopPropagation();
-          void PlayerService.sellAllCrops();
-          return;
-        }
-        if (eventMatchesKeybind("sell.sell-all-pets", event)) {
-          event.preventDefault();
-          event.stopPropagation();
-          void runSellAllPetsFlow();
-        }
-      },
-      true
-    );
-  }
-
-  // src/services/shops.ts
-  var log3 = createMenuLogger("shops-service", "Shops service");
-  var SHOP_KEYBINDS = [
-    { id: "shops.seeds", modal: "seedShop" },
-    { id: "shops.eggs", modal: "eggShop" },
-    { id: "shops.decors", modal: "decorShop" },
-    { id: "shops.tools", modal: "toolShop" }
-  ];
-  var shopKeybindsInstalled = false;
-  function installShopKeybindsOnce() {
-    if (shopKeybindsInstalled || typeof window === "undefined") return;
-    shopKeybindsInstalled = true;
-    window.addEventListener(
-      "keydown",
-      (event) => {
-        if (shouldIgnoreKeydown2(event)) return;
-        for (const { id, modal } of SHOP_KEYBINDS) {
-          if (!eventMatchesKeybind(id, event)) continue;
-          event.preventDefault();
-          event.stopPropagation();
-          void Atoms.ui.activeModal.set(modal);
-          break;
-        }
-      },
-      true
-    );
+  function getLocalVersion() {
+    if (typeof GM_info !== "undefined" && GM_info?.script?.version) {
+      return GM_info.script.version;
+    }
+    return void 0;
   }
 
   // src/ui/hud.ts
@@ -10310,13 +10663,13 @@
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
-      <button id="qws2-hide" class="btn" title="Hide (Alt+X / Insert)">\u2715</button>
+      <button id="qws2-hide" class="btn" title="Hide">\u2715</button>
     </div>
 
     <!-- Status & store side-by-side (no mode label) -->
     <div class="row" style="margin:2px 0 2px 0;">
-      <span id="qws2-status2" class="pill warn">WS: \u2026</span>
-      <span id="qws2-store" class="pill warn">store: \u2026</span>
+      <span id="qws2-status" class="pill warn">status</span>
+      <span id="qws2-version" class="pill warn">\u2026</span>
     </div>
 
     <div class="body">
@@ -10335,15 +10688,72 @@
     const toggleHUDHidden = () => setHUDHidden(!box.classList.contains("hidden"));
     let insertDown = false;
     let insertUsedAsModifier = false;
+    const KEY_TOGGLE = "gui.toggle";
+    const KEY_DRAG = "gui.drag";
+    const downCodes = /* @__PURE__ */ new Set();
+    let toggleHotkey = getKeybind(KEY_TOGGLE);
+    let dragHotkey = getKeybind(KEY_DRAG);
+    let dragActive = false;
+    const codeEquals = (expected, actual) => {
+      if (expected === actual) return true;
+      if ((expected === "AltLeft" || expected === "AltRight") && (actual === "AltLeft" || actual === "AltRight")) return true;
+      if ((expected === "ControlLeft" || expected === "ControlRight") && (actual === "ControlLeft" || actual === "ControlRight")) return true;
+      if ((expected === "ShiftLeft" || expected === "ShiftRight") && (actual === "ShiftLeft" || actual === "ShiftRight")) return true;
+      if ((expected === "MetaLeft" || expected === "MetaRight") && (actual === "MetaLeft" || actual === "MetaRight")) return true;
+      return false;
+    };
+    const isCodePressed = (code) => {
+      for (const pressed of downCodes) {
+        if (codeEquals(code, pressed)) return true;
+      }
+      return false;
+    };
+    const matchesHotkey = (e, hk) => {
+      if (!hk) return false;
+      if (!!hk.ctrl !== e.ctrlKey) return false;
+      if (!!hk.shift !== e.shiftKey) return false;
+      if (!!hk.alt !== e.altKey) return false;
+      if (!!hk.meta !== e.metaKey) return false;
+      return codeEquals(hk.code, e.code);
+    };
+    const updateDragState = () => {
+      if (!dragHotkey) {
+        dragActive = false;
+        return;
+      }
+      const altDown = isCodePressed("AltLeft");
+      const ctrlDown = isCodePressed("ControlLeft");
+      const shiftDown = isCodePressed("ShiftLeft");
+      const metaDown = isCodePressed("MetaLeft");
+      if (!!dragHotkey.alt !== altDown) {
+        dragActive = false;
+        return;
+      }
+      if (!!dragHotkey.ctrl !== ctrlDown) {
+        dragActive = false;
+        return;
+      }
+      if (!!dragHotkey.shift !== shiftDown) {
+        dragActive = false;
+        return;
+      }
+      if (!!dragHotkey.meta !== metaDown) {
+        dragActive = false;
+        return;
+      }
+      dragActive = isCodePressed(dragHotkey.code);
+    };
+    updateDragState();
     const isInsertKey = (e) => e.code === "Insert" || e.key === "Insert";
     const isModifierActive = (e) => {
+      if (dragHotkey && dragActive) return true;
       const alt = "altKey" in e && e.altKey;
       const ctrl = "ctrlKey" in e && e.ctrlKey;
       const meta = "metaKey" in e && e.metaKey;
       const shift = "shiftKey" in e && e.shiftKey;
       const insertModifier = insertDown && !alt && !ctrl && !meta;
-      if (insertModifier) insertUsedAsModifier = true;
-      return (alt || insertModifier) && !shift && !ctrl && !meta;
+      if (insertModifier && !shift) insertUsedAsModifier = true;
+      return insertModifier && !shift;
     };
     const onInsertKey = (e) => {
       if (!isInsertKey(e)) return;
@@ -10367,11 +10777,15 @@
     window.addEventListener("blur", () => {
       insertDown = false;
       insertUsedAsModifier = false;
+      downCodes.clear();
+      updateDragState();
     }, true);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") {
         insertDown = false;
         insertUsedAsModifier = false;
+        downCodes.clear();
+        updateDragState();
       }
     });
     function clampRect(el2) {
@@ -10459,14 +10873,32 @@
     const btnMin = box.querySelector("#qws2-min");
     const btnHide = box.querySelector("#qws2-hide");
     const sMini = box.querySelector("#qws2-status-mini");
-    const sFull = box.querySelector("#qws2-status2");
-    const sStore = box.querySelector("#qws2-store");
+    const sFull = box.querySelector("#qws2-status");
+    const sVersion = box.querySelector("#qws2-version");
     const launch = box.querySelector("#qws-launch");
-    if (!header || !btnMin || !btnHide || !sMini || !sFull || !sStore || !launch) {
+    if (!header || !btnMin || !btnHide || !sMini || !sFull || !sVersion || !launch) {
       console.warn("[QuinoaWS] HUD elements missing, abort init");
       return;
     }
     const launchEl = launch;
+    const updateHideButtonTitle = () => {
+      const pieces = [];
+      if (toggleHotkey) {
+        const label2 = getKeybindLabel(KEY_TOGGLE);
+        if (label2 && label2 !== "\u2014") pieces.push(label2);
+      }
+      pieces.push("Insert");
+      btnHide.title = pieces.length ? `Hide (${pieces.join(" / ")})` : "Hide";
+    };
+    updateHideButtonTitle();
+    onKeybindChange(KEY_TOGGLE, (hk) => {
+      toggleHotkey = hk;
+      updateHideButtonTitle();
+    });
+    onKeybindChange(KEY_DRAG, (hk) => {
+      dragHotkey = hk;
+      updateDragState();
+    });
     (function makeDraggable2() {
       let sx = 0, sy = 0, or = 0, ob = 0, down = false;
       header.addEventListener("mousedown", (e) => {
@@ -10513,21 +10945,33 @@
     btnHide.onclick = () => {
       setHUDHidden(true);
     };
-    window.addEventListener("keydown", (e) => {
-      const t = e.target;
-      const editing = !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
-      if (editing) return;
-      if (e.repeat) return;
-      const isX = e.code === "KeyX" || typeof e.key === "string" && (e.key.toLowerCase() === "x" || e.key === "\u2248");
-      const modifierActive = (e.altKey || insertDown) && !e.shiftKey && !e.ctrlKey && !e.metaKey;
-      if (modifierActive && isX) {
-        if (insertDown && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-          insertUsedAsModifier = true;
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        downCodes.add(e.code);
+        updateDragState();
+        const t = e.target;
+        const editing = !!t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName));
+        if (editing) return;
+        if (e.repeat) return;
+        if (matchesHotkey(e, toggleHotkey)) {
+          if (insertDown && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+            insertUsedAsModifier = true;
+          }
+          e.preventDefault();
+          toggleHUDHidden();
         }
-        e.preventDefault();
-        toggleHUDHidden();
-      }
-    }, true);
+      },
+      true
+    );
+    window.addEventListener(
+      "keyup",
+      (e) => {
+        downCodes.delete(e.code);
+        updateDragState();
+      },
+      true
+    );
     const windows = /* @__PURE__ */ new Map();
     let cascade = 0;
     function openWindow(id, title, render) {
@@ -10728,7 +11172,13 @@
       };
       const onUp = () => stopDrag();
       const onKeyUp = (e) => {
-        if (e.key === "Alt" || e.key === "AltGraph") stopDrag();
+        if (!dragHotkey) {
+          stopDrag();
+          return;
+        }
+        if (matchesHotkey(e, dragHotkey) || !dragActive) {
+          stopDrag();
+        }
       };
       window.addEventListener("mousedown", onDown, true);
       window.addEventListener("mousemove", onMove, true);
@@ -10813,6 +11263,65 @@
     }
     patchInputsKeyTrap(box);
     enableAltDragAnywhere();
+    (function initVersionBadge() {
+      const setBadge = (text, cls) => {
+        sVersion.textContent = text;
+        tag(sVersion, cls);
+      };
+      const setDownloadTarget = (url) => {
+        if (url) {
+          sVersion.dataset.download = url;
+          sVersion.style.cursor = "pointer";
+          sVersion.title = `Download the new version`;
+        } else {
+          delete sVersion.dataset.download;
+          sVersion.style.removeProperty("cursor");
+          sVersion.removeAttribute("title");
+        }
+      };
+      setBadge("checking\u2026", "warn");
+      setDownloadTarget(null);
+      sVersion.addEventListener("click", () => {
+        const url = sVersion.dataset.download;
+        if (url) {
+          window.open(url, "_blank", "noopener,noreferrer");
+        }
+      });
+      (async () => {
+        const localVersion = getLocalVersion();
+        try {
+          const remoteData = await fetchRemoteVersion();
+          const remoteVersion = remoteData?.version?.trim();
+          if (!remoteVersion) {
+            if (localVersion) {
+              setBadge(localVersion, "warn");
+            } else {
+              setBadge("version inconnue", "warn");
+            }
+            return;
+          }
+          if (!localVersion) {
+            setBadge(remoteVersion, "warn");
+            setDownloadTarget(remoteData?.download || null);
+            return;
+          }
+          if (localVersion === remoteVersion) {
+            setBadge(localVersion, "ok");
+            setDownloadTarget(null);
+            return;
+          }
+          setBadge(`${localVersion} \u2192 ${remoteVersion}`, "warn");
+          setDownloadTarget(remoteData?.download || null);
+        } catch (error) {
+          console.error("[MagicGarden] Failed to check version:", error);
+          if (localVersion) {
+            setBadge(localVersion, "warn");
+          } else {
+            setBadge("Unknown", "warn");
+          }
+        }
+      })();
+    })();
     (async () => {
       try {
         await ensureStore();
@@ -10820,42 +11329,52 @@
       }
     })();
     setInterval(() => {
-      try {
-        const ws = getOpenPageWS();
-        sMini.textContent = "OPEN";
-        sFull.textContent = "WS: OPEN";
-        tag(sMini, "ok");
-        tag(sFull, "ok");
-      } catch {
-        const viaWorker = !!window.__QWS_workerFound || workerFound;
-        sMini.textContent = viaWorker ? "Worker" : "none";
-        sFull.textContent = "WS: " + (viaWorker ? "via Worker" : "none");
-        tag(sMini, viaWorker ? "ok" : "warn");
-        tag(sFull, viaWorker ? "ok" : "warn");
-      }
-      try {
-        const captured = isStoreCaptured();
-        const info = getCapturedInfo();
-        if (captured) {
-          sStore.textContent = `store: ${info.via || "ready"}`;
-          tag(sStore, "ok");
-        } else if (info.via === "polyfill" || info.polyfill) {
-          sStore.textContent = "store: polyfill";
-          tag(sStore, "warn");
-        } else {
-          sStore.textContent = "store: none";
-          tag(sStore, "bad");
-        }
-      } catch {
-        sStore.textContent = "store: error";
-        tag(sStore, "bad");
-      }
+      const wsStatus = getWSStatus();
+      const storeStatus = getStoreStatus();
+      const isStoreMissing = storeStatus.message === "store none";
+      const isWsMissing = wsStatus.level === "bad";
+      const level = isStoreMissing && isWsMissing ? "bad" : wsStatus.level === "ok" && storeStatus.level === "ok" ? "ok" : "warn";
+      const summary = `${wsStatus.message}, ${storeStatus.message}`;
+      sFull.textContent = "status";
+      sFull.title = summary;
+      tag(sFull, level);
+      const miniText = level === "ok" ? "OK" : level === "warn" ? "WARN" : "ISSUES";
+      sMini.textContent = miniText;
+      sMini.title = summary;
+      tag(sMini, level);
     }, 800);
     function getOpenPageWS() {
       for (let i = 0; i < sockets.length; i++) {
         if (sockets[i].readyState === NativeWS.OPEN) return sockets[i];
       }
       throw new Error("no page ws");
+    }
+    function getWSStatus() {
+      try {
+        getOpenPageWS();
+        return { level: "ok", message: "ws open" };
+      } catch {
+        const viaWorker = !!window.__QWS_workerFound || workerFound;
+        if (viaWorker) {
+          return { level: "ok", message: "ws via worker" };
+        }
+        return { level: "bad", message: "ws none" };
+      }
+    }
+    function getStoreStatus() {
+      try {
+        const captured = isStoreCaptured();
+        const info = getCapturedInfo();
+        if (captured) {
+          return { level: "ok", message: `store ${info.via || "ready"}` };
+        }
+        if (info.via === "polyfill" || info.polyfill) {
+          return { level: "warn", message: "store polyfill" };
+        }
+        return { level: "bad", message: "store none" };
+      } catch {
+        return { level: "bad", message: "store error" };
+      }
     }
     function tag(el2, cls) {
       el2.classList.remove("ok", "warn", "bad");
@@ -10866,9 +11385,9 @@
     }
   }
   function initWatchers() {
+    installShopKeybindsOnce();
+    installSellKeybindsOnce();
     (async () => {
-      installShopKeybindsOnce();
-      installSellKeybindsOnce();
       try {
         setTeamsForHotkeys(PetsService.getTeams());
       } catch {
@@ -17377,170 +17896,6 @@ ${detail}` : base;
     refreshButtonStates();
     wrapper.appendChild(cardsContainer);
     view.appendChild(wrapper);
-  }
-
-  // src/utils/api.ts
-  function detectEnvironment() {
-    const isInIframe = (() => {
-      try {
-        return window.top !== window.self;
-      } catch {
-        return true;
-      }
-    })();
-    const refHost = safeHost(document.referrer);
-    const parentLooksDiscord = isInIframe && !!refHost && /(^|\.)discord(app)?\.com$/i.test(refHost);
-    const host = location.hostname;
-    const surface = parentLooksDiscord ? "discord" : "web";
-    const platform = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "mobile" : "desktop";
-    return {
-      surface,
-      host,
-      origin: location.origin,
-      isInIframe,
-      platform
-    };
-  }
-  function isDiscordSurface() {
-    return detectEnvironment().surface === "discord";
-  }
-  function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
-    return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
-  }
-  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers,
-        signal: controller.signal
-      });
-      const body = await res.text();
-      return { status: res.status, ok: res.ok, body };
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
-    return new Promise((resolve2, reject) => {
-      if (typeof GM_xmlhttpRequest !== "function") {
-        reject(new Error("GM_xmlhttpRequest is not available"));
-        return;
-      }
-      GM_xmlhttpRequest({
-        method: "GET",
-        url,
-        headers,
-        timeout: timeoutMs,
-        onload: (response) => resolve2({
-          status: response.status,
-          ok: response.status >= 200 && response.status < 300,
-          body: response.responseText
-        }),
-        onerror: (error) => reject(error),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timed out"))
-      });
-    });
-  }
-  async function requestRoomEndpoint(roomIdOrCode, options = {}) {
-    const endpoint = options.endpoint ?? "info";
-    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
-    const headers = {};
-    if (options.jwt) {
-      headers["Authorization"] = `Bearer ${options.jwt}`;
-    }
-    let rawResponse;
-    if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
-      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
-    } else {
-      try {
-        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
-      } catch (error) {
-        if (typeof GM_xmlhttpRequest === "function") {
-          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
-        } else {
-          throw error;
-        }
-      }
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(rawResponse.body);
-    } catch {
-    }
-    return { url, ...rawResponse, parsed };
-  }
-  function safeHost(url) {
-    if (!url) return null;
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return null;
-    }
-  }
-  function buildSoftJoinUrl(roomCode) {
-    const merged = new URLSearchParams(location.search);
-    const url = new URL(location.href);
-    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
-    url.search = merged.toString();
-    return url.toString();
-  }
-  function buildHardJoinUrl(roomCode) {
-    return buildSoftJoinUrl(roomCode);
-  }
-  function joinRoom(roomCode, options = {}) {
-    const env = detectEnvironment();
-    const isDiscord = env.surface === "discord";
-    const preferSoft = options.preferSoft ?? !isDiscord;
-    const hardIfSoftFails = options.hardIfSoftFails ?? true;
-    if (isDiscord) {
-      if (options.siteFallbackOnDiscord) {
-        const fallback = `https://magiccircle.gg/r/${encodeURIComponent(roomCode)}`;
-        if (options.openInNewTab) {
-          window.open(fallback, "_blank", "noopener,noreferrer");
-        } else {
-          location.assign(fallback);
-        }
-        return {
-          ok: true,
-          mode: "site-fallback",
-          url: fallback,
-          message: "Discord activity does not support room switching by code, redirecting to the official site."
-        };
-      }
-      return {
-        ok: false,
-        mode: "discord-unsupported",
-        message: "Discord activity does not support joining a room by code. Open the website or use an activity invite."
-      };
-    }
-    const softUrl = buildSoftJoinUrl(roomCode);
-    if (preferSoft) {
-      try {
-        const url = new URL(softUrl);
-        if (url.origin === location.origin) {
-          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
-          window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-          console.log("[joinRoom] soft \u2192", url.toString());
-          return { ok: true, mode: "soft", url: url.toString() };
-        }
-      } catch {
-      }
-      if (!hardIfSoftFails) {
-        return {
-          ok: false,
-          mode: "noop",
-          url: softUrl,
-          message: "Soft navigation failed because the origins differ."
-        };
-      }
-    }
-    const hardUrl = buildHardJoinUrl(roomCode);
-    console.log("[joinRoom] hard \u2192", hardUrl);
-    location.assign(hardUrl);
-    return { ok: true, mode: "hard", url: hardUrl };
   }
 
   // src/services/room.ts
