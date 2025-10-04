@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.8.4
+// @version      1.8.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12784,9 +12784,17 @@ ${detail}` : base;
       const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
       inspectCard.body.append(invRow);
       col.appendChild(inspectCard.root);
-      const funRow = ui.flexRow({ justify: "center" });
+      const funWrap = document.createElement("div");
+      funWrap.style.display = "grid";
+      funWrap.style.gap = "10px";
+      const followRow = ui.flexRow({ justify: "center" });
+      followRow.style.gap = "16px";
+      const playerFollowGroup = document.createElement("div");
+      playerFollowGroup.style.display = "flex";
+      playerFollowGroup.style.alignItems = "center";
+      playerFollowGroup.style.gap = "8px";
       const label2 = document.createElement("div");
-      label2.textContent = "Follow";
+      label2.textContent = "Follow player";
       label2.style.fontSize = "14px";
       label2.style.opacity = "0.85";
       const sw = ui.switch(PlayersService.isFollowing(p.id));
@@ -12804,9 +12812,33 @@ ${detail}` : base;
           sw.checked = !sw.checked;
         }
       });
-      funRow.append(label2, sw);
+      playerFollowGroup.append(label2, sw);
+      const petFollowGroup = document.createElement("div");
+      petFollowGroup.style.display = "flex";
+      petFollowGroup.style.alignItems = "center";
+      petFollowGroup.style.gap = "4px";
+      const petsLabel = document.createElement("div");
+      petsLabel.textContent = "Follow pet";
+      petsLabel.style.fontSize = "14px";
+      petsLabel.style.opacity = "0.85";
+      const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
+      petsSwitch.addEventListener("change", async () => {
+        try {
+          if (petsSwitch.checked) {
+            await PlayersService.startPetFollowing(p.id);
+          } else {
+            await PlayersService.stopPetFollowing();
+          }
+        } catch (e) {
+          await toastSimple("Pet follow", e?.message || "Error", "error");
+          petsSwitch.checked = !petsSwitch.checked;
+        }
+      });
+      petFollowGroup.append(petsLabel, petsSwitch);
+      followRow.append(playerFollowGroup, petFollowGroup);
+      funWrap.append(followRow);
       const funCard = ui.card("\u{1F389} Fun", { tone: "muted", align: "center" });
-      funCard.body.append(funRow);
+      funCard.body.append(funWrap);
       col.appendChild(funCard.root);
       (async () => {
         try {
