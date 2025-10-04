@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.7.1
+// @version      1.8.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -145,8 +145,8 @@
     return null;
   }
   async function captureViaWriteOnce(timeoutMs = 5e3) {
-    const cache = getAtomCache();
-    if (!cache) {
+    const cache2 = getAtomCache();
+    if (!cache2) {
       console.warn("[jotai-bridge] jotaiAtomCache.cache introuvable");
       throw new Error("jotaiAtomCache.cache introuvable");
     }
@@ -164,7 +164,7 @@
         }
       }
     };
-    for (const atom of cache.values()) {
+    for (const atom of cache2.values()) {
       if (!atom || typeof atom.write !== "function" || atom.__origWrite) continue;
       const orig = atom.write;
       atom.__origWrite = orig;
@@ -278,10 +278,10 @@
     return s.sub(atom, cb);
   }
   function findAtomsByLabel(regex) {
-    const cache = getAtomCache();
-    if (!cache) return [];
+    const cache2 = getAtomCache();
+    if (!cache2) return [];
     const out = [];
-    for (const a of cache.values()) {
+    for (const a of cache2.values()) {
       const label2 = a?.debugLabel || a?.label || "";
       if (regex.test(String(label2))) out.push(a);
     }
@@ -385,26 +385,26 @@
   }
   function getAtPath(root, path) {
     const segs = toPathArray(path);
-    let cur2 = root;
+    let cur = root;
     for (const s of segs) {
-      if (cur2 == null) return void 0;
-      cur2 = cur2[s];
+      if (cur == null) return void 0;
+      cur = cur[s];
     }
-    return cur2;
+    return cur;
   }
   function setAtPath(root, path, nextValue) {
     const segs = toPathArray(path);
     if (!segs.length) return nextValue;
     const clone = Array.isArray(root) ? root.slice() : { ...root ?? {} };
-    let cur2 = clone;
+    let cur = clone;
     for (let i = 0; i < segs.length - 1; i++) {
       const key2 = segs[i];
-      const src = cur2[key2];
+      const src = cur[key2];
       const obj = typeof src === "object" && src !== null ? Array.isArray(src) ? src.slice() : { ...src } : {};
-      cur2[key2] = obj;
-      cur2 = obj;
+      cur[key2] = obj;
+      cur = obj;
     }
-    cur2[segs[segs.length - 1]] = nextValue;
+    cur[segs[segs.length - 1]] = nextValue;
     return clone;
   }
   var eq = {
@@ -579,6 +579,10 @@
   var myPetInfos = makeAtom("myPetInfosAtom");
   var myPetSlotInfos = makeAtom("myPetSlotInfosAtom");
   var shops = makeAtom("shopsAtom");
+  var seedShop = makeAtom("seedShopAtom");
+  var toolShop = makeAtom("toolShopAtom");
+  var eggShop = makeAtom("eggShopAtom");
+  var decorShop = makeAtom("decorShopAtom");
   var myShopPurchases = makeAtom("myShopPurchasesAtom");
   var numPlayers = makeAtom("numPlayersAtom");
   var totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
@@ -682,7 +686,11 @@
     shop: {
       shops,
       myShopPurchases,
-      totalCropSellPrice
+      totalCropSellPrice,
+      seedShop,
+      toolShop,
+      eggShop,
+      decorShop
     }
   };
   function onFavoriteIds(cb) {
@@ -717,7 +725,103 @@
     return new Set(Array.isArray(arr) ? arr : []);
   }
 
+  // src/services/logger.ts
+  var MAX_ENTRIES_DEFAULT = 1500;
+  var maxEntries = MAX_ENTRIES_DEFAULT;
+  var seq = 0;
+  var entries = [];
+  var listeners = /* @__PURE__ */ new Set();
+  var sources = /* @__PURE__ */ new Map();
+  function notify(event) {
+    for (const cb of Array.from(listeners)) {
+      try {
+        cb(event);
+      } catch (err) {
+        try {
+          console.error("[Logger] listener error", err);
+        } catch {
+        }
+      }
+    }
+  }
+  function registerSource(id, label2) {
+    const sanitizedLabel = label2 && label2.trim().length ? label2 : id;
+    const prev = sources.get(id);
+    if (!prev || prev !== sanitizedLabel) {
+      sources.set(id, sanitizedLabel);
+      notify({ type: "source", id, label: sanitizedLabel });
+    }
+  }
+  function pushEntry(level, source, message, details, context) {
+    if (!source) source = "global";
+    registerSource(source, sources.get(source) || source);
+    const entry = {
+      id: ++seq,
+      ts: Date.now(),
+      level,
+      source,
+      sourceLabel: sources.get(source) || source,
+      context: context ?? null,
+      message,
+      details
+    };
+    entries.push(entry);
+    let trimmed = 0;
+    while (entries.length > maxEntries) {
+      entries.shift();
+      trimmed++;
+    }
+    if (trimmed > 0) {
+      notify({ type: "snapshot", entries: [...entries] });
+    } else {
+      notify({ type: "append", entry });
+    }
+  }
+  var Logger = class _Logger {
+    constructor(sourceId, label2, context = null) {
+      this.sourceId = sourceId;
+      this.label = label2;
+      this.context = context;
+      registerSource(sourceId, label2);
+    }
+    debug(message, details) {
+      pushEntry("debug", this.sourceId, message, details, this.context);
+    }
+    info(message, details) {
+      pushEntry("info", this.sourceId, message, details, this.context);
+    }
+    warn(message, details) {
+      pushEntry("warn", this.sourceId, message, details, this.context);
+    }
+    error(message, details) {
+      pushEntry("error", this.sourceId, message, details, this.context);
+    }
+    child(context) {
+      const ctx = context?.trim() ? context.trim() : null;
+      return new _Logger(this.sourceId, this.label, ctx);
+    }
+  };
+  function createMenuLogger(sourceId, label2) {
+    return new Logger(sourceId, label2 ?? sourceId, null);
+  }
+  function subscribeLogs(cb) {
+    listeners.add(cb);
+    for (const [id, label2] of sources.entries()) {
+      cb({ type: "source", id, label: label2 });
+    }
+    cb({ type: "snapshot", entries: [...entries] });
+    return () => {
+      listeners.delete(cb);
+    };
+  }
+  function clearLogs() {
+    if (!entries.length) return;
+    entries.length = 0;
+    notify({ type: "clear" });
+  }
+
   // src/services/player.ts
+  var log = createMenuLogger("player-service", "Player service");
   function slotSig2(o) {
     if (!o) return "\u2205";
     return [
@@ -850,121 +954,187 @@
       await Atoms.player.position.set({ x, y });
     },
     async teleport(x, y) {
+      log.info("Teleporting player", { x, y });
       try {
         await this.setPosition(x, y);
-      } catch {
+      } catch (err) {
+        log.warn("Failed to update local position before teleport", { error: err });
       }
       try {
         sendToGame({ type: "Teleport", position: { x, y } });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send teleport command", err);
       }
     },
     async move(x, y) {
+      log.debug("Moving player", { x, y });
       try {
         await this.setPosition(x, y);
-      } catch {
+      } catch (err) {
+        log.warn("Failed to update local position", { error: err });
       }
       try {
         sendToGame({ type: "PlayerPosition", position: { x, y } });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send move command", err);
       }
     },
     /* ------------------------------ Actions jeu ------------------------------ */
     async plantSeed(slot, species) {
+      log.info("Planting seed", { slot, species });
       try {
         sendToGame({ type: "PlantSeed", slot, species });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send plant seed command", err);
       }
     },
     async sellAllCrops() {
+      log.info("Selling all crops");
       try {
         sendToGame({ type: "SellAllCrops" });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send sell all crops command", err);
       }
     },
     async sellPet(itemId) {
+      log.info("Selling pet", { itemId });
       try {
         sendToGame({ type: "SellPet", itemId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send sell pet command", err);
       }
     },
     async waterPlant(slot) {
+      log.debug("Watering plant", { slot });
       try {
         sendToGame({ type: "WaterPlant", slot });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send water plant command", err);
       }
     },
     async setSelectedItem(itemIndex) {
+      log.debug("Setting selected item", { itemIndex });
       try {
         sendToGame({ type: "SetSelectedItem", itemIndex });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send set selected item command", err);
       }
     },
     async pickupObject() {
+      log.debug("Pickup object command");
       try {
         sendToGame({ type: "PickupObject" });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send pickup object command", err);
       }
     },
     async dropObject() {
+      log.debug("Drop object command");
       try {
         sendToGame({ type: "DropObject" });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send drop object command", err);
       }
     },
     async harvestCrop(slot, slotsIndex) {
+      log.debug("Harvesting crop", { slot, slotsIndex });
       try {
         sendToGame({ type: "HarvestCrop", slot, slotsIndex });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send harvest crop command", err);
       }
     },
     async feedPet(petItemId, cropItemId) {
+      log.info("Feeding pet", { petItemId, cropItemId });
       try {
         sendToGame({ type: "FeedPet", petItemId, cropItemId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send feed pet command", err);
       }
     },
     async hatchEgg(slot) {
+      log.info("Hatching egg", { slot });
       try {
         sendToGame({ type: "HatchEgg", slot });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send hatch egg command", err);
       }
     },
     async placeDecor(tileType, localTileIndex, decorId) {
+      log.info("Placing decor", { tileType, localTileIndex, decorId });
       try {
         sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send place decor command", err);
       }
     },
     async swapPet(petSlotId, petInventoryId) {
+      log.info("Swapping pet", { petSlotId, petInventoryId });
       try {
         sendToGame({ type: "SwapPet", petSlotId, petInventoryId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send swap pet command", err);
       }
     },
     async placePet(itemId, position2, tileType, localTileIndex) {
+      log.info("Placing pet", { itemId, position: position2, tileType, localTileIndex });
       try {
         sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send place pet command", err);
       }
     },
     async storePet(itemId) {
+      log.info("Storing pet", { itemId });
       try {
         sendToGame({ type: "StorePet", itemId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send store pet command", err);
       }
     },
     async wish(itemId) {
+      log.debug("Wishing item", { itemId });
       try {
         sendToGame({ type: "Wish", itemId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send wish command", err);
+      }
+    },
+    async purchaseSeed(species) {
+      try {
+        sendToGame({ type: "PurchaseSeed", species });
+      } catch (err) {
+        log.error("Failed to send wish command", err);
+      }
+    },
+    async purchaseDecor(decorId) {
+      try {
+        sendToGame({ type: "PurchaseDecor", decorId });
+      } catch (err) {
+        log.error("Failed to send wish command", err);
+      }
+    },
+    async purchaseEgg(eggId) {
+      try {
+        sendToGame({ type: "PurchaseEgg", eggId });
+      } catch (err) {
+        log.error("Failed to send wish command", err);
+      }
+    },
+    async purchaseTool(toolId) {
+      try {
+        sendToGame({ type: "PurchaseTool", toolId });
+      } catch (err) {
+        log.error("Failed to send wish command", err);
       }
     },
     /* -------------------------------- Favorites ------------------------------ */
     async toggleFavoriteItem(itemId) {
+      log.debug("Toggling favorite", { itemId });
       try {
         sendToGame({ type: "ToggleFavoriteItem", itemId });
-      } catch {
+      } catch (err) {
+        log.error("Failed to send toggle favorite command", err);
       }
     },
     async getFavoriteIds() {
@@ -979,18 +1149,18 @@
       return set2.has(itemId);
     },
     async ensureFavoriteItem(itemId, shouldBeFavorite) {
-      const cur2 = await this.isFavoriteItem(itemId);
-      if (cur2 !== shouldBeFavorite) {
+      const cur = await this.isFavoriteItem(itemId);
+      if (cur !== shouldBeFavorite) {
         await this.toggleFavoriteItem(itemId);
         return shouldBeFavorite;
       }
-      return cur2;
+      return cur;
     },
     async ensureFavorites(items, shouldBeFavorite) {
       const set2 = await getFavoriteIdSet();
       for (const id of items) {
-        const cur2 = set2.has(id);
-        if (cur2 !== shouldBeFavorite) {
+        const cur = set2.has(id);
+        if (cur !== shouldBeFavorite) {
           try {
             await this.toggleFavoriteItem(id);
           } catch {
@@ -1008,8 +1178,8 @@
       return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     async onFavoriteSetChangeNow(cb) {
-      const cur2 = await getFavoriteIdSet();
-      cb(cur2);
+      const cur = await getFavoriteIdSet();
+      cb(cur);
       return onFavoriteIds((ids) => cb(new Set(Array.isArray(ids) ? ids : [])));
     },
     /* --------------------------------- Garden -------------------------------- */
@@ -1079,11 +1249,11 @@
       });
     },
     async onPetsDiffNow(cb) {
-      let cur2 = await this.getPets();
+      let cur = await this.getPets();
       let prevSnap = snapshotPets(null);
-      let nextSnap = snapshotPets(cur2);
+      let nextSnap = snapshotPets(cur);
       const first = diffPetsSnapshot(prevSnap, nextSnap);
-      cb(cur2, first);
+      cb(cur, first);
       prevSnap = nextSnap;
       return Atoms.pets.myPetInfos.onChange((state2) => {
         nextSnap = snapshotPets(state2);
@@ -1129,11 +1299,11 @@
       });
     },
     async onCropInventoryDiffNow(cb) {
-      let cur2 = await Atoms.inventory.myCropInventory.get();
+      let cur = await Atoms.inventory.myCropInventory.get();
       let prevSnap = snapshotInventory(null);
-      let nextSnap = snapshotInventory(cur2);
+      let nextSnap = snapshotInventory(cur);
       const firstDiff = diffCropInventorySnapshot(prevSnap, nextSnap);
-      cb(cur2, firstDiff);
+      cb(cur, firstDiff);
       prevSnap = nextSnap;
       return Atoms.inventory.myCropInventory.onChange((inv) => {
         nextSnap = snapshotInventory(inv);
@@ -3507,7 +3677,7 @@
       const up = el("button", "qmm-step qmm-step--up", "\u25B2");
       const down = el("button", "qmm-step qmm-step--down", "\u25BC");
       up.type = down.type = "button";
-      const clamp = () => {
+      const clamp2 = () => {
         const n = Number(i.value);
         if (Number.isFinite(n)) {
           const lo = Number(i.min), hi = Number(i.max);
@@ -3518,7 +3688,7 @@
       const bump = (dir) => {
         if (dir < 0) i.stepDown();
         else i.stepUp();
-        clamp();
+        clamp2();
         i.dispatchEvent(new Event("input", { bubbles: true }));
         i.dispatchEvent(new Event("change", { bubbles: true }));
       };
@@ -3561,7 +3731,7 @@
       };
       addSpin(up, 1);
       addSpin(down, -1);
-      i.addEventListener("change", clamp);
+      i.addEventListener("change", clamp2);
       spin.append(up, down);
       wrap.append(i, spin);
       i.wrap = wrap;
@@ -3803,6 +3973,7 @@
       const render = () => {
         btn.classList.toggle("is-recording", recording);
         btn.classList.toggle("is-empty", !hk);
+        btn.classList.toggle("is-assigned", !recording && !!hk);
         if (recording) {
           btn.textContent = listeningLabel;
           btn.title = "Listening\u2026 press a key (Esc to cancel, Backspace to clear)";
@@ -3813,6 +3984,13 @@
           btn.textContent = hotkeyToString(hk);
           btn.title = "Click to rebind \u2022 Right-click to clear";
         }
+      };
+      const applyHotkey = (value, skipRender = false) => {
+        hk = value ? { ...value } : null;
+        if (!skipRender) render();
+      };
+      btn.refreshHotkey = (value) => {
+        applyHotkey(value);
       };
       const stopRecording = (commit) => {
         recording = false;
@@ -3843,17 +4021,17 @@
           return;
         }
         if ((e.key === "Backspace" || e.key === "Delete") && clearable) {
-          hk = null;
+          applyHotkey(null, true);
           save();
           stopRecording(true);
           window.removeEventListener("keydown", handleKeyDown, true);
           return;
         }
-        const next = eventToHotkey(e);
+        const next = eventToHotkey(e, opts?.allowModifierOnly ?? false);
         if (!next) {
           return;
         }
-        hk = next;
+        applyHotkey(next, true);
         save();
         stopRecording(true);
         window.removeEventListener("keydown", handleKeyDown, true);
@@ -3871,7 +4049,7 @@
         btn.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           if (hk) {
-            hk = null;
+            applyHotkey(null, true);
             save();
             render();
           }
@@ -4395,6 +4573,11 @@
   font-style:italic;
 }
 
+.qmm-hotkey.is-assigned{
+  border-color: rgba(122,162,255,.45);
+  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(122,162,255,.24);
+}
+
 .qmm-hotkey.is-recording{
   outline:2px solid var(--qmm-accent);
   outline-offset:2px;
@@ -4659,8 +4842,21 @@
     "MetaLeft",
     "MetaRight"
   ]);
-  function eventToHotkey(e) {
-    if (_MOD_CODES.has(e.code) || e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") {
+  function codesMatch(expected, actual) {
+    if (expected === actual) return true;
+    const altCodes = expected === "AltLeft" || expected === "AltRight";
+    const ctrlCodes = expected === "ControlLeft" || expected === "ControlRight";
+    const shiftCodes = expected === "ShiftLeft" || expected === "ShiftRight";
+    const metaCodes = expected === "MetaLeft" || expected === "MetaRight";
+    if (altCodes && (actual === "AltLeft" || actual === "AltRight")) return true;
+    if (ctrlCodes && (actual === "ControlLeft" || actual === "ControlRight")) return true;
+    if (shiftCodes && (actual === "ShiftLeft" || actual === "ShiftRight")) return true;
+    if (metaCodes && (actual === "MetaLeft" || actual === "MetaRight")) return true;
+    return false;
+  }
+  function eventToHotkey(e, allowModifierOnly = false) {
+    const isModifier = _MOD_CODES.has(e.code) || e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta";
+    if (isModifier && !allowModifierOnly) {
       return null;
     }
     return {
@@ -4677,7 +4873,7 @@
     if (!!h.shift !== e.shiftKey) return false;
     if (!!h.alt !== e.altKey) return false;
     if (!!h.meta !== e.metaKey) return false;
-    return e.code === h.code;
+    return codesMatch(h.code, e.code);
   }
   function hotkeyToString(hk) {
     if (!hk) return "";
@@ -4915,9 +5111,9 @@
   async function _startInventoryWatcher() {
     const unsub = await (async () => {
       try {
-        const cur2 = await Atoms.inventory.myInventory.get();
-        _invSig = _buildInvSigFromInventory(cur2);
-        _invRaw = cur2;
+        const cur = await Atoms.inventory.myInventory.get();
+        _invSig = _buildInvSigFromInventory(cur);
+        _invRaw = cur;
         _rebuildInvPets();
       } catch {
       }
@@ -4939,9 +5135,9 @@
   async function _startActivePetsWatcher() {
     const unsub = await (async () => {
       try {
-        const cur2 = await Atoms.pets.myPetInfos.get();
-        _activeSig = _buildActiveSig(cur2);
-        _activeRaw = Array.isArray(cur2) ? cur2 : [];
+        const cur = await Atoms.pets.myPetInfos.get();
+        _activeSig = _buildActiveSig(cur);
+        _activeRaw = Array.isArray(cur) ? cur : [];
         _rebuildInvPets();
       } catch {
       }
@@ -5152,11 +5348,11 @@
     saveTeam(patch) {
       const i = this._teams.findIndex((t) => t.id === patch.id);
       if (i < 0) return null;
-      const cur2 = this._teams[i];
+      const cur = this._teams[i];
       const next = {
-        id: cur2.id,
-        name: typeof patch.name === "string" ? patch.name : cur2.name,
-        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur2.slots
+        id: cur.id,
+        name: typeof patch.name === "string" ? patch.name : cur.name,
+        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur.slots
       };
       this._teams[i] = next;
       saveTeams(this._teams);
@@ -5311,8 +5507,8 @@
         return out;
       };
       try {
-        const cur2 = await Atoms.pets.myPetSlotInfos.get();
-        this._ingestAbilityMap(extractFlat(cur2));
+        const cur = await Atoms.pets.myPetSlotInfos.get();
+        this._ingestAbilityMap(extractFlat(cur));
       } catch {
       }
       const stopSlots = await Atoms.pets.myPetSlotInfos.onChange((src) => {
@@ -6323,14 +6519,14 @@
         let resolveEnd = null;
         if (awaitEnd) {
           endPromise = new Promise((resolve2) => {
-            const cleanup = () => {
-              a.removeEventListener("ended", cleanup);
-              a.removeEventListener("error", cleanup);
+            const cleanup2 = () => {
+              a.removeEventListener("ended", cleanup2);
+              a.removeEventListener("error", cleanup2);
               resolve2();
             };
-            resolveEnd = cleanup;
-            a.addEventListener("ended", cleanup);
-            a.addEventListener("error", cleanup);
+            resolveEnd = cleanup2;
+            a.addEventListener("ended", cleanup2);
+            a.addEventListener("error", cleanup2);
           });
         }
         const p = a.play();
@@ -6506,103 +6702,8 @@
     volume: 0.7
   });
 
-  // src/services/logger.ts
-  var MAX_ENTRIES_DEFAULT = 1500;
-  var maxEntries = MAX_ENTRIES_DEFAULT;
-  var seq = 0;
-  var entries = [];
-  var listeners = /* @__PURE__ */ new Set();
-  var sources = /* @__PURE__ */ new Map();
-  function notify(event) {
-    for (const cb of Array.from(listeners)) {
-      try {
-        cb(event);
-      } catch (err) {
-        try {
-          console.error("[Logger] listener error", err);
-        } catch {
-        }
-      }
-    }
-  }
-  function registerSource(id, label2) {
-    const sanitizedLabel = label2 && label2.trim().length ? label2 : id;
-    const prev = sources.get(id);
-    if (!prev || prev !== sanitizedLabel) {
-      sources.set(id, sanitizedLabel);
-      notify({ type: "source", id, label: sanitizedLabel });
-    }
-  }
-  function pushEntry(level, source, message, details, context) {
-    if (!source) source = "global";
-    registerSource(source, sources.get(source) || source);
-    const entry = {
-      id: ++seq,
-      ts: Date.now(),
-      level,
-      source,
-      sourceLabel: sources.get(source) || source,
-      context: context ?? null,
-      message,
-      details
-    };
-    entries.push(entry);
-    let trimmed = 0;
-    while (entries.length > maxEntries) {
-      entries.shift();
-      trimmed++;
-    }
-    if (trimmed > 0) {
-      notify({ type: "snapshot", entries: [...entries] });
-    } else {
-      notify({ type: "append", entry });
-    }
-  }
-  var Logger = class _Logger {
-    constructor(sourceId, label2, context = null) {
-      this.sourceId = sourceId;
-      this.label = label2;
-      this.context = context;
-      registerSource(sourceId, label2);
-    }
-    debug(message, details) {
-      pushEntry("debug", this.sourceId, message, details, this.context);
-    }
-    info(message, details) {
-      pushEntry("info", this.sourceId, message, details, this.context);
-    }
-    warn(message, details) {
-      pushEntry("warn", this.sourceId, message, details, this.context);
-    }
-    error(message, details) {
-      pushEntry("error", this.sourceId, message, details, this.context);
-    }
-    child(context) {
-      const ctx = context?.trim() ? context.trim() : null;
-      return new _Logger(this.sourceId, this.label, ctx);
-    }
-  };
-  function createMenuLogger(sourceId, label2) {
-    return new Logger(sourceId, label2 ?? sourceId, null);
-  }
-  function subscribeLogs(cb) {
-    listeners.add(cb);
-    for (const [id, label2] of sources.entries()) {
-      cb({ type: "source", id, label: label2 });
-    }
-    cb({ type: "snapshot", entries: [...entries] });
-    return () => {
-      listeners.delete(cb);
-    };
-  }
-  function clearLogs() {
-    if (!entries.length) return;
-    entries.length = 0;
-    notify({ type: "clear" });
-  }
-
   // src/services/notifier.ts
-  var log = createMenuLogger("notifier-service", "Shop notifier service");
+  var log2 = createMenuLogger("notifier-service", "Shop notifier service");
   var LS_PREFS_KEY = "qws:shop:notifs:v1";
   var LS_RULES_KEY = "qws:shop:notifs:rules.v1";
   var LS_WEATHER_PREFS_KEY = "qws:weather:notifs:v1";
@@ -6790,7 +6891,7 @@
       });
     }
     _staticMeta = map2;
-    log.info("Built static shop metadata", { entries: map2.size });
+    log2.info("Built static shop metadata", { entries: map2.size });
     return map2;
   }
   var _prefs = /* @__PURE__ */ new Map();
@@ -6817,14 +6918,14 @@
       const obj = raw ? JSON.parse(raw) : null;
       if (obj && typeof obj === "object") {
         for (const [id, value] of Object.entries(obj)) {
-          const norm3 = _normalizeRule(value);
-          if (norm3) _rules.set(String(id), norm3);
+          const norm4 = _normalizeRule(value);
+          if (norm4) _rules.set(String(id), norm4);
         }
       }
-      log.info("Loaded notifier rules", { count: _rules.size });
+      log2.info("Loaded notifier rules", { count: _rules.size });
     } catch {
       _rules = /* @__PURE__ */ new Map();
-      log.warn("Failed to load notifier rules from storage, starting fresh");
+      log2.warn("Failed to load notifier rules from storage, starting fresh");
     }
   }
   function _normalizeRule(raw) {
@@ -6844,7 +6945,7 @@
         obj[id] = { ...rule };
       }
       localStorage.setItem(LS_RULES_KEY, JSON.stringify(obj));
-      log.debug("Saved notifier rules", { count: _rules.size });
+      log2.debug("Saved notifier rules", { count: _rules.size });
     } catch {
     }
   }
@@ -6867,10 +6968,10 @@
           _weatherPrefs.set(String(id), pref);
         }
       }
-      log.info("Loaded weather notifier preferences", { count: _weatherPrefs.size });
+      log2.info("Loaded weather notifier preferences", { count: _weatherPrefs.size });
     } catch {
       _weatherPrefs = /* @__PURE__ */ new Map();
-      log.warn("Failed to load weather notifier preferences, using defaults");
+      log2.warn("Failed to load weather notifier preferences, using defaults");
     }
   }
   function _saveWeatherPrefs() {
@@ -7133,10 +7234,10 @@
         }
       }
       _prefs = m;
-      log.info("Loaded notifier preferences", { count: _prefs.size });
+      log2.info("Loaded notifier preferences", { count: _prefs.size });
     } catch {
       _prefs = /* @__PURE__ */ new Map();
-      log.warn("Failed to load notifier preferences, using defaults");
+      log2.warn("Failed to load notifier preferences, using defaults");
     }
   }
   function _savePrefs() {
@@ -7144,7 +7245,7 @@
       const obj = {};
       for (const [k, v] of _prefs) obj[k] = v & 1;
       localStorage.setItem(LS_PREFS_KEY, JSON.stringify(obj));
-      log.debug("Saved notifier preferences", { count: _prefs.size });
+      log2.debug("Saved notifier preferences", { count: _prefs.size });
     } catch {
     }
   }
@@ -7280,10 +7381,10 @@
     _state = next;
     if (changed) {
       _lastSig = sig;
-      log.info("Notifier state recomputed", { items: rows.length, followed });
+      log2.info("Notifier state recomputed", { items: rows.length, followed });
       _notify();
     } else {
-      log.debug("Notifier state unchanged after recompute");
+      log2.debug("Notifier state unchanged after recompute");
     }
   }
   function _recomputeFromCacheAndNotify() {
@@ -7308,7 +7409,7 @@
       rows,
       counts: { items: rows.length, followed }
     };
-    log.debug("Notifier cache recomputed", { items: rows.length, followed });
+    log2.debug("Notifier cache recomputed", { items: rows.length, followed });
     _notify();
   }
   function _notify() {
@@ -7324,20 +7425,20 @@
   var _started = false;
   async function _ensureStarted() {
     if (_started) {
-      log.debug("Notifier service already started");
+      log2.debug("Notifier service already started");
       return;
     }
     _started = true;
-    log.info("Starting notifier service");
+    log2.info("Starting notifier service");
     _loadPrefs();
     _ensureRulesLoaded();
     try {
-      const cur2 = await Atoms.shop.shops.get();
-      _recomputeFromRaw(cur2);
-      _notifyShops(cur2);
-      log.debug("Loaded initial shop snapshot");
+      const cur = await Atoms.shop.shops.get();
+      _recomputeFromRaw(cur);
+      _notifyShops(cur);
+      log2.debug("Loaded initial shop snapshot");
     } catch (err) {
-      log.warn("Failed to load initial shop snapshot", { error: err });
+      log2.warn("Failed to load initial shop snapshot", { error: err });
     }
     try {
       _unsubShops = await Atoms.shop.shops.onChange((next) => {
@@ -7350,15 +7451,15 @@
         } catch {
         }
       });
-      log.debug("Subscribed to shop updates");
+      log2.debug("Subscribed to shop updates");
     } catch (err) {
-      log.warn("Failed to subscribe to shop updates", { error: err });
+      log2.warn("Failed to subscribe to shop updates", { error: err });
     }
     try {
       const curP = await Atoms.shop.myShopPurchases.get();
       _notifyPurchases(curP);
     } catch (err) {
-      log.warn("Failed to load initial purchases snapshot", { error: err });
+      log2.warn("Failed to load initial purchases snapshot", { error: err });
     }
     try {
       _unsubPurchases = await Atoms.shop.myShopPurchases.onChange((next) => {
@@ -7367,9 +7468,9 @@
         } catch {
         }
       });
-      log.debug("Subscribed to purchase updates");
+      log2.debug("Subscribed to purchase updates");
     } catch (err) {
-      log.warn("Failed to subscribe to purchase updates", { error: err });
+      log2.warn("Failed to subscribe to purchase updates", { error: err });
     }
     try {
       const invAtom = _resolveToolInvAtom();
@@ -7377,7 +7478,7 @@
         try {
           _updateToolInv(await invAtom.get());
         } catch (err) {
-          log.warn("Failed to read initial tool inventory", { error: err });
+          log2.warn("Failed to read initial tool inventory", { error: err });
         }
         try {
           _unsubToolInv = await invAtom.onChange((next) => {
@@ -7386,13 +7487,13 @@
             } catch {
             }
           });
-          log.debug("Subscribed to tool inventory updates");
+          log2.debug("Subscribed to tool inventory updates");
         } catch (err) {
-          log.warn("Failed to subscribe to tool inventory updates", { error: err });
+          log2.warn("Failed to subscribe to tool inventory updates", { error: err });
         }
       }
     } catch (err) {
-      log.warn("Tool inventory hook unavailable", { error: err });
+      log2.warn("Tool inventory hook unavailable", { error: err });
     }
     try {
       const weatherAtom = Atoms.data?.weather;
@@ -7400,7 +7501,7 @@
         try {
           _handleWeatherUpdate(await weatherAtom.get(), { force: true });
         } catch (err) {
-          log.warn("Failed to read initial weather state", { error: err });
+          log2.warn("Failed to read initial weather state", { error: err });
         }
         try {
           _unsubWeather = await weatherAtom.onChange((next) => {
@@ -7409,15 +7510,15 @@
             } catch {
             }
           });
-          log.debug("Subscribed to weather updates");
+          log2.debug("Subscribed to weather updates");
         } catch (err) {
-          log.warn("Failed to subscribe to weather updates", { error: err });
+          log2.warn("Failed to subscribe to weather updates", { error: err });
         }
       } else {
-        log.warn("Weather atom unavailable");
+        log2.warn("Weather atom unavailable");
       }
     } catch (err) {
-      log.warn("Weather hook unavailable", { error: err });
+      log2.warn("Weather hook unavailable", { error: err });
     }
   }
   function _stop() {
@@ -7450,7 +7551,7 @@
     _currentWeatherId = null;
     _currentWeatherValue = null;
     _started = false;
-    log.info("Notifier service stopped");
+    log2.info("Notifier service stopped");
   }
   var NotifierService = {
     // lifecycle
@@ -7588,18 +7689,18 @@
       const bits = _getPrefBits(id);
       const next = enabled ? bits | 1 : bits & ~1;
       _setPrefBits(id, next);
-      log.info("Updated popup preference", { id, enabled });
+      log2.info("Updated popup preference", { id, enabled });
     },
     setPrefs(id, prefs) {
       const bits = _getPrefBits(id);
       let next = bits;
       if (typeof prefs.popup === "boolean") next = prefs.popup ? next | 1 : next & ~1;
       _setPrefBits(id, next);
-      log.debug("Updated notifier prefs", { id, prefs });
+      log2.debug("Updated notifier prefs", { id, prefs });
     },
     clearPrefs(id) {
       _setPrefBits(id, 0);
-      log.info("Cleared notifier prefs", { id });
+      log2.info("Cleared notifier prefs", { id });
     },
     isIdCapped(id) {
       if (!id.startsWith("Tool:")) return false;
@@ -7643,7 +7744,7 @@
       else _rules.delete(id);
       _saveRules();
       _emitRules();
-      log.info("Updated notifier rule", { id });
+      log2.info("Updated notifier rule", { id });
     },
     clearRule(id) {
       if (!id) return;
@@ -7652,7 +7753,7 @@
       if (existed) {
         _saveRules();
         _emitRules();
-        log.info("Cleared notifier rule", { id });
+        log2.info("Cleared notifier rule", { id });
       }
     },
     onRulesChange(cb) {
@@ -8292,12 +8393,12 @@
       try {
         const tabbable = c.closest("span[tabindex]");
         if (tabbable && tabbable.parentElement) return tabbable.parentElement;
-        let cur2 = c;
-        while (cur2 && cur2.parentElement) {
-          const p = cur2.parentElement;
+        let cur = c;
+        while (cur && cur.parentElement) {
+          const p = cur.parentElement;
           const cs = getComputedStyle(p);
           if (cs.display.includes("flex") && p.children.length <= 3) return p;
-          cur2 = p;
+          cur = p;
         }
         return null;
       } catch {
@@ -8384,6 +8485,1655 @@
       } catch {
       }
     };
+  }
+
+  // src/utils/shopUtility.ts
+  var BTN_CLASS = "romann-buyall-btn";
+  var STYLE_ID = "tm-buyall-css";
+  var ITEM_SELECTOR = "div.McFlex.css-1kkwxjt";
+  var LIST_SELECTOR = "div.McFlex.css-1lfov12";
+  var ROW_SELECTOR = "div.McFlex.css-b9riu6";
+  var RESCAN_MS = 20;
+  var BASE_SIZES = {
+    plant: Object.keys(plantCatalog).length,
+    egg: Object.keys(eggCatalog).length,
+    tool: Object.keys(toolCatalog).length,
+    decor: Object.keys(decorCatalog).length
+  };
+  var DEFAULT_OVERRIDES = { tool: 3 };
+  var PURCHASE_FNS = {
+    plant: (id) => PlayerService.purchaseSeed(id),
+    egg: (id) => PlayerService.purchaseEgg(id),
+    tool: (id) => PlayerService.purchaseTool(id),
+    decor: (id) => PlayerService.purchaseDecor(id)
+  };
+  async function purchaseRemainingItems(shop, itemId, remaining) {
+    if (!shop || !itemId) return;
+    const purchase = PURCHASE_FNS[shop];
+    if (!purchase) return;
+    const totalToBuy = typeof remaining === "number" ? Math.max(0, Math.floor(remaining)) : 0;
+    if (totalToBuy <= 0) return;
+    for (let bought = 0; bought < totalToBuy; bought += 1) {
+      try {
+        await purchase(itemId);
+      } catch (error) {
+        console.warn("[TM] buyAll purchase failed", { shop, itemId, attempt: bought + 1, error });
+        break;
+      }
+    }
+  }
+  function getExpectedSizes() {
+    const o = { ...DEFAULT_OVERRIDES, ...window.BuyAllConfig?.countOverride ?? {} };
+    return {
+      plant: o.plant ?? BASE_SIZES.plant,
+      egg: o.egg ?? BASE_SIZES.egg,
+      tool: o.tool ?? BASE_SIZES.tool,
+      decor: o.decor ?? BASE_SIZES.decor
+    };
+  }
+  function detectShopByCount(total) {
+    const sizes = getExpectedSizes();
+    const matches = Object.keys(sizes).filter((t) => sizes[t] === total);
+    return matches.length === 1 ? matches[0] : null;
+  }
+  function parseCompactNumber(s) {
+    if (!s) return void 0;
+    const txt = s.replace(/\u00A0|\u202F/g, " ").trim();
+    const re = /(\d{1,3}(?:[ \u00A0\u202F.,]\d{3})+|\d+(?:[.,]\d+)?)(\s*[kKmMbBtT])?/g;
+    let m;
+    let lastNum = null;
+    let lastSuf = null;
+    while (m = re.exec(txt)) {
+      lastNum = m[1];
+      lastSuf = (m[2] || "").trim().toUpperCase() || null;
+    }
+    if (!lastNum) return void 0;
+    if (lastSuf) {
+      const base = Number(lastNum.replace(/[ \u00A0\u202F]/g, "").replace(",", "."));
+      if (!Number.isFinite(base)) return void 0;
+      const mult = lastSuf === "K" ? 1e3 : lastSuf === "M" ? 1e6 : lastSuf === "B" ? 1e9 : lastSuf === "T" ? 1e12 : 1;
+      return Math.round(base * mult);
+    }
+    const hasThousandsSep = /[ \u00A0\u202F.,]\d{3}/.test(lastNum);
+    if (hasThousandsSep) {
+      const val = Number(lastNum.replace(/[ \u00A0\u202F.,]/g, ""));
+      return Number.isFinite(val) ? val : void 0;
+    } else {
+      const val = Number(lastNum.replace(",", "."));
+      return Number.isFinite(val) ? Math.round(val) : void 0;
+    }
+  }
+  function toNumberMaybe(jsValue) {
+    if (typeof jsValue === "number") {
+      return Number.isFinite(jsValue) ? jsValue : void 0;
+    }
+    if (jsValue == null) return void 0;
+    const v = Number(jsValue);
+    return Number.isFinite(v) ? v : void 0;
+  }
+  function filterPurchasable(meta) {
+    return meta.filter((m) => m.coin != null || m.credit != null);
+  }
+  function buildPlantMeta() {
+    const rec = plantCatalog;
+    const meta = Object.keys(rec).map((key2) => {
+      const e = rec[key2];
+      return {
+        id: e?.id ?? key2,
+        name: e?.seed?.name ?? key2,
+        coin: toNumberMaybe(e?.seed?.coinPrice),
+        credit: toNumberMaybe(e?.seed?.creditPrice)
+      };
+    });
+    return filterPurchasable(meta);
+  }
+  function buildEggMeta() {
+    const rec = eggCatalog;
+    const meta = Object.keys(rec).map((key2) => {
+      const e = rec[key2];
+      return {
+        id: e?.id ?? key2,
+        name: e?.name ?? key2,
+        coin: toNumberMaybe(e?.coinPrice),
+        credit: toNumberMaybe(e?.creditPrice)
+      };
+    });
+    return filterPurchasable(meta);
+  }
+  function buildToolMeta() {
+    const rec = toolCatalog;
+    const meta = Object.keys(rec).map((key2) => {
+      const e = rec[key2];
+      return {
+        id: e?.id ?? key2,
+        name: e?.name ?? key2,
+        coin: toNumberMaybe(e?.coinPrice),
+        credit: toNumberMaybe(e?.creditPrice)
+      };
+    });
+    return filterPurchasable(meta);
+  }
+  function buildDecorMeta() {
+    const rec = decorCatalog;
+    const meta = Object.keys(rec).map((key2) => {
+      const e = rec[key2];
+      return {
+        id: e?.id ?? key2,
+        name: e?.name ?? key2,
+        coin: toNumberMaybe(e?.coinPrice),
+        credit: toNumberMaybe(e?.creditPrice)
+      };
+    });
+    return filterPurchasable(meta);
+  }
+  function getCatalogMeta(shop) {
+    switch (shop) {
+      case "plant":
+        return buildPlantMeta();
+      case "egg":
+        return buildEggMeta();
+      case "tool":
+        return buildToolMeta();
+      case "decor":
+        return buildDecorMeta();
+    }
+  }
+  var lastShops = null;
+  var lastPurchases = null;
+  var shopsSubStarted = false;
+  var purchasesSubStarted = false;
+  function purchasedCountForId2(id, purchases) {
+    if (!purchases) return 0;
+    const [type, raw] = String(id).split(":");
+    const section = type === "Seed" ? purchases.seed : type === "Egg" ? purchases.egg : type === "Tool" ? purchases.tool : purchases.decor;
+    if (!section || !section.purchases) return 0;
+    const n = section.purchases[raw];
+    return typeof n === "number" && n > 0 ? n : 0;
+  }
+  function toNotifierItemId(shop, itemId) {
+    if (!shop || !itemId) return null;
+    const raw = String(itemId);
+    switch (shop) {
+      case "plant":
+        return `Seed:${raw}`;
+      case "egg":
+        return `Egg:${raw}`;
+      case "tool":
+        return `Tool:${raw}`;
+      case "decor":
+        return `Decor:${raw}`;
+      default:
+        return null;
+    }
+  }
+  function ensureNotifierSnapshots() {
+    if (!shopsSubStarted) {
+      shopsSubStarted = true;
+      NotifierService.onShopsChangeNow((snap) => {
+        lastShops = snap;
+      }).catch((err) => {
+        shopsSubStarted = false;
+        console.warn("[TM] buyAll notifier shops subscription failed", err);
+      });
+    }
+    if (!purchasesSubStarted) {
+      purchasesSubStarted = true;
+      NotifierService.onPurchasesChangeNow((snap) => {
+        lastPurchases = snap;
+      }).catch((err) => {
+        purchasesSubStarted = false;
+        console.warn("[TM] buyAll notifier purchases subscription failed", err);
+      });
+    }
+  }
+  function extractInitialStock(shop, rawId) {
+    if (!shop || !rawId || !lastShops) return { initialStock: null, canSpawn: false };
+    const byShop = shop === "plant" ? lastShops.seed?.inventory ?? [] : shop === "egg" ? lastShops.egg?.inventory ?? [] : shop === "tool" ? lastShops.tool?.inventory ?? [] : lastShops.decor?.inventory ?? [];
+    const match = byShop.find((entry) => {
+      if (!entry) return false;
+      if (shop === "plant") return String(entry.species) === rawId;
+      if (shop === "egg") return String(entry.eggId) === rawId;
+      if (shop === "tool") return String(entry.toolId) === rawId;
+      return String(entry.decorId) === rawId;
+    });
+    if (!match) return { initialStock: null, canSpawn: false };
+    const initial = Number(match.initialStock);
+    const normalized = Number.isFinite(initial) ? initial : null;
+    const canSpawn = !!match.canSpawnHere;
+    return { initialStock: normalized, canSpawn };
+  }
+  function getRemainingDetails(shop, itemId) {
+    const notifierItemId = toNotifierItemId(shop, itemId);
+    if (!notifierItemId) {
+      return { notifierItemId: null, initialStock: null, purchased: null, remaining: null };
+    }
+    const rawId = notifierItemId.split(":")[1] ?? null;
+    const { initialStock, canSpawn } = extractInitialStock(shop, rawId);
+    if (initialStock == null) {
+      return { notifierItemId, initialStock, purchased: null, remaining: null };
+    }
+    if (!canSpawn) {
+      return { notifierItemId, initialStock, purchased: null, remaining: 0 };
+    }
+    const purchased = purchasedCountForId2(notifierItemId, lastPurchases);
+    const remaining = Math.max(0, initialStock - purchased);
+    return { notifierItemId, initialStock, purchased, remaining };
+  }
+  function isItemDisabled(itemEl) {
+    if (!itemEl) return false;
+    return !!itemEl.querySelector(".chakra-text.css-fcn4vq");
+  }
+  function getListItems(listRoot) {
+    const direct = listRoot.querySelectorAll(`:scope > ${ITEM_SELECTOR}`);
+    if (direct.length) return Array.from(direct);
+    return Array.from(listRoot.querySelectorAll(ITEM_SELECTOR));
+  }
+  function parsePriceFromButton(btn) {
+    if (!btn) return void 0;
+    const label2 = btn.querySelector(".css-1uduba2");
+    const raw = (label2?.innerText ?? btn.textContent ?? "").trim();
+    return parseCompactNumber(raw);
+  }
+  function findRowForItem(itemEl) {
+    const bySelector = itemEl.querySelector(ROW_SELECTOR);
+    if (bySelector) return bySelector;
+    const any = Array.from(itemEl.querySelectorAll("div")).find((d) => d.querySelectorAll("button.chakra-button").length >= 2);
+    return any ?? null;
+  }
+  function ensureGlobalStyles() {
+    if (document.getElementById(STYLE_ID)) return;
+    const css = `
+    .${BTN_CLASS}{
+      background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
+      border-color: var(--chakra-colors-Blue-Dark, #264093) !important;
+      color: #fff !important;
+      border-width: 2px;
+      border-radius: 5px;
+      text-transform: uppercase;
+      height: 40px;
+      padding-inline: 24px;
+      padding-top: 12px;
+      padding-bottom: 12px;
+      width: 100%;
+    }
+    .${BTN_CLASS}:hover{
+      background: var(--chakra-colors-Blue-Light, #48ADF4) !important;
+      border-color: var(--chakra-colors-Blue-Magic, #0067B4) !important;
+    }
+    .${BTN_CLASS}:focus-visible{
+      outline: transparent solid 2px;
+      outline-offset: 2px;
+      box-shadow: var(--chakra-ring-offset-shadow, 0 0 #0000),
+                  var(--chakra-ring-shadow, 0 0 #0000),
+                  0 0 0 3px var(--chakra-ring-color, rgba(66,153,225,0.6));
+    }
+    /* \xC9tat disabled : couleurs/gris EXACTES demand\xE9es + blocage du hover */
+    .${BTN_CLASS}[disabled],
+    .${BTN_CLASS}[aria-disabled="true"]{
+      background: var(--chakra-colors-Neutral-Grey) !important;
+      border-color: var(--chakra-colors-Neutral-EarlGrey) !important;
+      color: var(--chakra-colors-Neutral-EarlGrey) !important;
+      opacity: 0.7 !important;
+      cursor: not-allowed !important;
+      box-shadow: none !important;
+      pointer-events: none; /* pour l\u2019aria-disabled \xE9ventuel */
+    }
+    .${BTN_CLASS}[disabled]:hover,
+    .${BTN_CLASS}[disabled]:focus,
+    .${BTN_CLASS}[aria-disabled="true"]:hover,
+    .${BTN_CLASS}[aria-disabled="true"]:focus{
+      background: var(--chakra-colors-Neutral-Grey) !important;
+      border-color: var(--chakra-colors-Neutral-EarlGrey) !important;
+      color: var(--chakra-colors-Neutral-EarlGrey) !important;
+      box-shadow: none !important;
+    }
+  `.trim();
+    const style2 = document.createElement("style");
+    style2.id = STYLE_ID;
+    style2.textContent = css;
+    document.head.appendChild(style2);
+  }
+  function createButton(templateBtn) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    if (templateBtn?.className) {
+      const classes = `${templateBtn.className} ${BTN_CLASS}`.replace(new RegExp(`\\b${BTN_CLASS}\\b`, "g"), "").trim();
+      btn.className = `${classes} ${BTN_CLASS}`.trim();
+    } else {
+      btn.className = `chakra-button ${BTN_CLASS}`;
+    }
+    const flex = document.createElement("div");
+    flex.className = "McFlex css-1fxg3mj";
+    const label2 = document.createElement("span");
+    label2.className = "css-1uduba2";
+    label2.textContent = "Buy all";
+    flex.appendChild(label2);
+    btn.appendChild(flex);
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (btn.disabled) return;
+      const itemEl = btn.closest(ITEM_SELECTOR);
+      const listRoot = itemEl?.closest(LIST_SELECTOR) || document.body;
+      const items = getListItems(listRoot);
+      const idx0 = itemEl ? items.indexOf(itemEl) : -1;
+      const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
+      const total = items.length;
+      const shop = detectShopByCount(total);
+      let itemId = null;
+      let itemName = null;
+      let reason = "none";
+      let coinParsed;
+      let creditParsed;
+      if (shop && itemEl) {
+        const row = findRowForItem(itemEl);
+        if (row) {
+          const me = btn;
+          const coinBtn = me.previousElementSibling;
+          const creditBtn = me.nextElementSibling;
+          coinParsed = parsePriceFromButton(coinBtn);
+          creditParsed = parsePriceFromButton(creditBtn);
+          const meta = getCatalogMeta(shop);
+          if (coinParsed != null && creditParsed != null) {
+            const both = meta.filter((m) => m.coin === coinParsed && m.credit === creditParsed);
+            if (both.length === 1) {
+              itemId = both[0].id;
+              itemName = both[0].name;
+              reason = "coin+credit";
+            }
+          }
+          if (!itemId && coinParsed != null) {
+            const onlyCoin = meta.filter((m) => m.coin === coinParsed);
+            if (onlyCoin.length === 1) {
+              itemId = onlyCoin[0].id;
+              itemName = onlyCoin[0].name;
+              reason = "coin";
+            }
+          }
+          if (!itemId && creditParsed != null) {
+            const onlyCredit = meta.filter((m) => m.credit === creditParsed);
+            if (onlyCredit.length === 1) {
+              itemId = onlyCredit[0].id;
+              itemName = onlyCredit[0].name;
+              reason = "credit";
+            }
+          }
+          if (!itemId && meta.length === total && idx0 >= 0) {
+            const byIndex = meta[idx0];
+            if (byIndex) {
+              itemId = byIndex.id;
+              itemName = byIndex.name;
+              reason = "index";
+            }
+          }
+        }
+      }
+      const remainingDetails = getRemainingDetails(shop ?? null, itemId);
+      void purchaseRemainingItems(shop, itemId, remainingDetails.remaining);
+      window.dispatchEvent(new CustomEvent("tm:buyAll", {
+        detail: {
+          index1: idx1,
+          index0: idx0,
+          total,
+          shopType: shop,
+          itemId,
+          itemName,
+          reason,
+          coin: coinParsed,
+          credit: creditParsed,
+          element: itemEl,
+          remaining: remainingDetails.remaining,
+          notifierItemId: remainingDetails.notifierItemId
+        }
+      }));
+    });
+    return btn;
+  }
+  function insertIntoItem(itemEl) {
+    const row = itemEl.querySelector(ROW_SELECTOR) || Array.from(itemEl.querySelectorAll("div")).find((d) => d.querySelectorAll("button.chakra-button").length >= 2);
+    if (!row) return;
+    const btns = row.querySelectorAll("button.chakra-button");
+    if (btns.length < 2) return;
+    let middle = row.querySelector(`button.${BTN_CLASS}`);
+    if (!middle) {
+      middle = createButton(btns[0]);
+      row.insertBefore(middle, btns[1]);
+    }
+    const disabled = isItemDisabled(itemEl);
+    middle.disabled = disabled;
+    middle.setAttribute("aria-disabled", disabled ? "true" : "false");
+  }
+  function scan(root = document) {
+    root.querySelectorAll(ITEM_SELECTOR).forEach(insertIntoItem);
+  }
+  var observer = null;
+  var intervalId = null;
+  function setupBuyAll() {
+    ensureGlobalStyles();
+    ensureNotifierSnapshots();
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => scan());
+    } else {
+      scan();
+    }
+    observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const n of m.addedNodes) {
+          if (!(n instanceof Element)) continue;
+          if (n.matches(ITEM_SELECTOR)) insertIntoItem(n);
+          n.querySelectorAll?.(ITEM_SELECTOR).forEach(insertIntoItem);
+        }
+      }
+    });
+    const startObserver = () => observer.observe(document.body, { childList: true, subtree: true });
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startObserver);
+    else startObserver();
+    startRescan();
+  }
+  function startRescan() {
+    if (intervalId != null) return;
+    intervalId = window.setInterval(() => scan(), RESCAN_MS);
+  }
+  function stopRescan() {
+    if (intervalId != null) {
+      window.clearInterval(intervalId);
+      intervalId = null;
+    }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopRescan();
+    else if (observer) startRescan();
+  });
+  var DEFAULTS = {
+    containerSelector: ".McFlex.css-1lfov12",
+    itemSelector: ".McFlex.css-1kkwxjt",
+    flagSelector: ".chakra-text.css-rlkzj4"
+  };
+  function startReorderObserver(options = {}) {
+    if (!isBrowser()) {
+      return {
+        stop() {
+        },
+        runOnce() {
+        },
+        isRunning() {
+          return false;
+        }
+      };
+    }
+    const CONTAINER_SEL = options.containerSelector ?? DEFAULTS.containerSelector;
+    const ITEM_SEL = options.itemSelector ?? DEFAULTS.itemSelector;
+    const FLAG_SEL = options.flagSelector ?? DEFAULTS.flagSelector;
+    const ROOT = options.root ?? document;
+    const OBSERVE_HISTORY = options.observeHistory ?? true;
+    const PREFER_DIRECT = options.preferDirectChildren ?? false;
+    const logger = typeof options.log === "function" ? options.log : options.log ? (...args) => console.debug("[ReorderObserver]", ...args) : () => {
+    };
+    let running = true;
+    let pending = false;
+    function processAll() {
+      if (!running || pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        try {
+          const containers = queryAll(ROOT, CONTAINER_SEL);
+          for (const c of containers) {
+            reorderContainer(c, ITEM_SEL, FLAG_SEL, PREFER_DIRECT);
+          }
+        } finally {
+          pending = false;
+        }
+      });
+    }
+    const observeTarget = ROOT.documentElement ?? ROOT;
+    const mo = new MutationObserver(processAll);
+    mo.observe(observeTarget, { childList: true, subtree: true });
+    processAll();
+    let unhookHistory = null;
+    if (OBSERVE_HISTORY) {
+      const { unhook } = hookHistory(processAll);
+      unhookHistory = unhook;
+    }
+    const controller = {
+      stop() {
+        if (!running) return;
+        running = false;
+        mo.disconnect();
+        unhookHistory?.();
+        unhookHistory = null;
+        logger("Stopped.");
+      },
+      runOnce() {
+        processAll();
+      },
+      isRunning() {
+        return running;
+      }
+    };
+    return controller;
+  }
+  function isBrowser() {
+    return typeof window !== "undefined" && typeof document !== "undefined";
+  }
+  function queryAll(root, selector) {
+    return Array.from(root.querySelectorAll(selector));
+  }
+  function supportsScope() {
+    try {
+      document.querySelector(":scope");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function childrenOrDescendants(container, itemSel) {
+    if (supportsScope()) {
+      const direct = Array.from(container.querySelectorAll(`:scope > ${itemSel}`));
+      if (direct.length > 0) return direct;
+    }
+    return Array.from(container.querySelectorAll(itemSel));
+  }
+  function reorderContainer(container, itemSel, flagSel, preferDirectChildren) {
+    const items = preferDirectChildren ? Array.from(container.children).filter((n) => n instanceof Element && n.matches(itemSel)) : childrenOrDescendants(container, itemSel);
+    if (items.length === 0) return;
+    const withFlag = [];
+    const withoutFlag = [];
+    for (const el2 of items) {
+      (el2.querySelector(flagSel) ? withFlag : withoutFlag).push(el2);
+    }
+    if (withFlag.length === 0) return;
+    let seenRest = false;
+    for (const el2 of items) {
+      const flagged = !!el2.querySelector(flagSel);
+      if (!flagged) seenRest = true;
+      else if (seenRest) {
+        const frag = document.createDocumentFragment();
+        for (const e of withFlag) frag.appendChild(e);
+        for (const e of withoutFlag) frag.appendChild(e);
+        container.appendChild(frag);
+        return;
+      }
+    }
+  }
+  function hookHistory(onNavigate) {
+    const origPush = history.pushState?.bind(history);
+    const origReplace = history.replaceState?.bind(history);
+    function wrap(fn) {
+      if (!fn) return fn;
+      const wrapped = function(...args) {
+        const ret = fn.apply(this, args);
+        onNavigate();
+        return ret;
+      };
+      return wrapped;
+    }
+    const onPop = () => onNavigate();
+    if (origPush) history.pushState = wrap(origPush);
+    if (origReplace) history.replaceState = wrap(origReplace);
+    window.addEventListener("popstate", onPop);
+    return {
+      unhook() {
+        if (origPush) history.pushState = origPush;
+        if (origReplace) history.replaceState = origReplace;
+        window.removeEventListener("popstate", onPop);
+      }
+    };
+  }
+
+  // src/utils/calculators.ts
+  var key = (s) => String(s ?? "").trim();
+  function resolveSpeciesKey(species) {
+    const wanted = key(species).toLowerCase();
+    if (!wanted) return null;
+    for (const k of Object.keys(plantCatalog)) {
+      if (k.toLowerCase() === wanted) return k;
+    }
+    return null;
+  }
+  function findAnySellPriceNode(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
+      return obj.baseSellPrice;
+    }
+    for (const k of ["produce", "crop", "item", "items", "data"]) {
+      if (obj[k]) {
+        const v = findAnySellPriceNode(obj[k]);
+        if (v != null) return v;
+      }
+    }
+    try {
+      const seen = /* @__PURE__ */ new Set();
+      const stack = [obj];
+      while (stack.length) {
+        const cur = stack.pop();
+        if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+        seen.add(cur);
+        if (typeof cur.baseSellPrice === "number") {
+          const v = cur.baseSellPrice;
+          if (Number.isFinite(v)) return v;
+        }
+        for (const v of Object.values(cur)) if (v && typeof v === "object") stack.push(v);
+      }
+    } catch {
+    }
+    return null;
+  }
+  function defaultGetBasePrice(species) {
+    const spKey = resolveSpeciesKey(species);
+    if (!spKey) return null;
+    const node = plantCatalog[spKey];
+    const cands = [
+      node?.produce?.baseSellPrice,
+      node?.crop?.baseSellPrice,
+      node?.item?.baseSellPrice,
+      node?.items?.Produce?.baseSellPrice
+    ].filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (cands.length) return cands[0];
+    return findAnySellPriceNode(node);
+  }
+  function applyRounding(v, mode = "round") {
+    switch (mode) {
+      case "floor":
+        return Math.floor(v);
+      case "ceil":
+        return Math.ceil(v);
+      case "none":
+        return v;
+      case "round":
+      default:
+        return Math.round(v);
+    }
+  }
+  function friendBonusMultiplier(playersInRoom) {
+    if (!Number.isFinite(playersInRoom)) return 1;
+    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
+    return 1 + (n - 1) * 0.1;
+  }
+  var COLOR_MULT = {
+    Gold: 25,
+    Rainbow: 50
+  };
+  var WEATHER_MULT = {
+    Wet: 2,
+    Chilled: 2,
+    Frozen: 10
+  };
+  var TIME_MULT = {
+    Dawnlit: 2,
+    Dawnbound: 3,
+    Amberlit: 5,
+    Amberbound: 6
+  };
+  var WEATHER_TIME_COMBO = {
+    "Wet+Dawnlit": 3,
+    "Chilled+Dawnlit": 3,
+    "Wet+Amberlit": 6,
+    "Chilled+Amberlit": 6,
+    "Frozen+Dawnlit": 11,
+    "Frozen+Dawnbound": 12,
+    "Frozen+Amberlit": 14,
+    "Frozen+Amberbound": 15
+  };
+  function isColor(m) {
+    return m === "Gold" || m === "Rainbow";
+  }
+  function isWeather(m) {
+    return m === "Wet" || m === "Chilled" || m === "Frozen";
+  }
+  function isTime(m) {
+    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
+  }
+  function normalizeMutationName(m) {
+    const s = key(m).toLowerCase();
+    if (!s) return "";
+    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
+    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+    if (s === "gold") return "Gold";
+    if (s === "rainbow") return "Rainbow";
+    if (s === "wet") return "Wet";
+    if (s === "chilled") return "Chilled";
+    if (s === "frozen") return "Frozen";
+    if (s === "dawnlit") return "Dawnlit";
+    if (s === "dawnbound") return "Dawnbound";
+    if (s === "amberlit" || s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
+    if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
+    return m;
+  }
+  function computeColorMultiplier(mutations) {
+    if (!Array.isArray(mutations)) return 1;
+    let best = 1;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isColor(m)) {
+        const mult = COLOR_MULT[m];
+        if (mult > best) best = mult;
+      }
+    }
+    return best;
+  }
+  function pickWeather(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isWeather(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function pickTime(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isTime(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function computeWeatherTimeMultiplier(weather2, time) {
+    if (!weather2 && !time) return 1;
+    if (weather2 && !time) return WEATHER_MULT[weather2];
+    if (!weather2 && time) return TIME_MULT[time];
+    const k = `${weather2}+${time}`;
+    const combo = WEATHER_TIME_COMBO[k];
+    if (typeof combo === "number") return combo;
+    return Math.max(WEATHER_MULT[weather2], TIME_MULT[time]);
+  }
+  function mutationsMultiplier(mutations) {
+    const color = computeColorMultiplier(mutations);
+    const weather2 = pickWeather(mutations);
+    const time = pickTime(mutations);
+    const wt = computeWeatherTimeMultiplier(weather2, time);
+    return color * wt;
+  }
+  function estimateProduceValue(species, scale, mutations, opts) {
+    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
+    const sXform = opts?.scaleTransform ?? ((_, s) => s);
+    const round = opts?.rounding ?? "round";
+    const base = getBase(species);
+    if (!(Number.isFinite(base) && base > 0)) return 0;
+    const sc = Number(scale);
+    if (!Number.isFinite(sc) || sc <= 0) return 0;
+    const effScale = sXform(species, sc);
+    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
+    const mutMult = mutationsMultiplier(mutations);
+    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
+    const pre = base * effScale * mutMult * friendsMult;
+    const out = Math.max(0, applyRounding(pre, round));
+    return out;
+  }
+  function valueFromInventoryProduce(item, opts, playersInRoom) {
+    if (!item || item.itemType !== "Produce") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
+  }
+  function valueFromGardenSlot(slot, opts, playersInRoom) {
+    if (!slot) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
+  }
+  function valueFromGardenPlant(plant, opts, playersInRoom) {
+    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
+    return sum;
+  }
+  function sumInventoryValue(items, opts, playersInRoom) {
+    if (!Array.isArray(items)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const it of items) {
+      if (it?.itemType === "Produce") {
+        sum += valueFromInventoryProduce(it, merged);
+      }
+    }
+    return sum;
+  }
+  function sumGardenValue(garden2, opts, playersInRoom) {
+    if (!garden2 || typeof garden2 !== "object") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const k of Object.keys(garden2)) {
+      const p = garden2[k];
+      if (p?.objectType === "plant") {
+        sum += valueFromGardenPlant(p, merged);
+      }
+    }
+    return sum;
+  }
+  var DefaultPricing = Object.freeze({
+    getBasePrice: defaultGetBasePrice,
+    rounding: "round"
+  });
+
+  // src/utils/cropPrice.ts
+  var isPlantObject = (o) => !!o && o.objectType === "plant";
+  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
+  var clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  function startCropPriceWatcherViaGardenObject() {
+    let cur = null;
+    let players = void 0;
+    let sortedIdx = null;
+    let selectedIdx = null;
+    let lastPrice = null;
+    const listeners3 = /* @__PURE__ */ new Set();
+    const notify2 = () => {
+      for (const fn of listeners3) try {
+        fn();
+      } catch {
+      }
+    };
+    let scheduled = false;
+    const scheduleRecomputeAndNotify = () => {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        recomputeAndNotify();
+      });
+    };
+    function getOrder() {
+      const n = Array.isArray(cur?.slots) ? cur.slots.length : 0;
+      if (!n) return [];
+      return Array.isArray(sortedIdx) && sortedIdx.length === n ? sortedIdx : defaultOrder(n);
+    }
+    function selectedOrderedPosition() {
+      if (!isPlantObject(cur)) return 0;
+      const slots = cur.slots ?? [];
+      const n = Array.isArray(slots) ? slots.length : 0;
+      if (!n) return 0;
+      const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
+      const clampedRaw = clamp(raw, 0, n - 1);
+      const ord = getOrder();
+      const pos = ord.indexOf(clampedRaw);
+      return pos >= 0 ? pos : 0;
+    }
+    function getOrderedSlots() {
+      if (!isPlantObject(cur)) return [];
+      const slots = Array.isArray(cur.slots) ? cur.slots : [];
+      const ord = getOrder();
+      const out = [];
+      for (const i of ord) if (slots[i] != null) out.push(slots[i]);
+      return out;
+    }
+    function computeSelectedSlotPrice() {
+      if (!isPlantObject(cur)) return null;
+      const ordered = getOrderedSlots();
+      if (!ordered.length) return null;
+      const pos = selectedOrderedPosition();
+      const slot = ordered[clamp(pos, 0, ordered.length - 1)];
+      const val = valueFromGardenSlot(slot, DefaultPricing, players);
+      return Number.isFinite(val) && val > 0 ? val : null;
+    }
+    function computeWholePlantPrice() {
+      if (!isPlantObject(cur)) return null;
+      const v = valueFromGardenPlant(cur, DefaultPricing, players);
+      return Number.isFinite(v) && v > 0 ? v : null;
+    }
+    function recomputeAndNotify() {
+      const slotVal = computeSelectedSlotPrice();
+      const next = slotVal ?? computeWholePlantPrice() ?? null;
+      if (next !== lastPrice) {
+        lastPrice = next;
+        notify2();
+      }
+    }
+    (async () => {
+      try {
+        cur = await myCurrentGardenObject.get();
+      } catch {
+      }
+      try {
+        players = await numPlayers.get();
+      } catch {
+      }
+      try {
+        const v = await myCurrentSortedGrowSlotIndices.get();
+        sortedIdx = Array.isArray(v) ? v.slice() : null;
+      } catch {
+      }
+      try {
+        selectedIdx = await myCurrentGrowSlotIndex.get();
+      } catch {
+      }
+      numPlayers.onChange((n) => {
+        players = n;
+      });
+      myCurrentSortedGrowSlotIndices.onChange((v) => {
+        sortedIdx = Array.isArray(v) ? v.slice() : null;
+      });
+      myCurrentGardenObject.onChange((v) => {
+        cur = v;
+        scheduleRecomputeAndNotify();
+      });
+      myCurrentGrowSlotIndex.onChange((idx) => {
+        selectedIdx = Number.isFinite(idx) ? idx : 0;
+        scheduleRecomputeAndNotify();
+      });
+      recomputeAndNotify();
+    })();
+    return {
+      get() {
+        return lastPrice;
+      },
+      onChange(cb) {
+        listeners3.add(cb);
+        return () => listeners3.delete(cb);
+      },
+      stop() {
+        listeners3.clear();
+      }
+    };
+  }
+
+  // src/utils/cropValues.ts
+  var DEFAULTS2 = {
+    rootSelector: ".McFlex.css-fsggty",
+    innerSelector: ".McFlex.css-1omaybc, .McFlex.css-1c3sifn",
+    markerClass: "tm-crop-price"
+  };
+  var OMA_SEL = ".McFlex.css-1omaybc";
+  function startCropValuesObserverFromGardenAtom(options = {}) {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return { stop() {
+      }, runOnce() {
+      }, isRunning: () => false };
+    }
+    const ROOT_SEL = options.rootSelector ?? DEFAULTS2.rootSelector;
+    const INNER_SEL = options.innerSelector ?? DEFAULTS2.innerSelector;
+    const MARKER = options.markerClass ?? DEFAULTS2.markerClass;
+    const ROOT = options.root ?? document;
+    const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[AppendCropPrice/GO]", ...a) : () => {
+    };
+    const nfUS = new Intl.NumberFormat("en-US");
+    const fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
+    let running = true;
+    const priceWatcher = startCropPriceWatcherViaGardenObject();
+    const writePriceOnce = () => {
+      if (!running) return;
+      const v = priceWatcher.get();
+      const text = v == null ? "\u2014" : fmtCoins(v);
+      queryAll2(ROOT, ROOT_SEL).forEach((rootEl) => {
+        queryAll2(rootEl, INNER_SEL).forEach((inner) => {
+          if (shouldSkipInner(inner, MARKER)) {
+            removeMarker(inner, MARKER);
+            return;
+          }
+          ensureSpanAtEnd(inner, text, MARKER);
+        });
+      });
+      logger("render", { value: v });
+    };
+    writePriceOnce();
+    const off = priceWatcher.onChange(() => writePriceOnce());
+    return {
+      stop() {
+        if (!running) return;
+        running = false;
+        off?.();
+        priceWatcher.stop();
+        logger("stopped");
+      },
+      runOnce() {
+        writePriceOnce();
+      },
+      isRunning() {
+        return running;
+      }
+    };
+  }
+  function queryAll2(root, sel) {
+    return Array.from(root.querySelectorAll(sel));
+  }
+  function shouldSkipInner(inner, markerClass) {
+    if (!(inner instanceof Element)) return false;
+    if (!inner.matches(OMA_SEL)) return false;
+    const realChildren = getRealElementChildren(inner, markerClass);
+    return realChildren.length === 1;
+  }
+  function getRealElementChildren(inner, markerClass) {
+    const children = Array.from(inner.children);
+    return children.filter(
+      (el2) => !(el2.tagName === "SPAN" && el2.classList.contains(markerClass))
+    );
+  }
+  function removeMarker(inner, markerClass) {
+    const markers = inner.querySelectorAll(`:scope > span.${CSS.escape(markerClass)}`);
+    markers.forEach((m) => m.remove());
+  }
+  function ensureSpanAtEnd(inner, text, markerClass) {
+    const spans = Array.from(
+      inner.querySelectorAll(`:scope > span.${CSS.escape(markerClass)}`)
+    );
+    let span = spans[0] ?? null;
+    for (let i = 1; i < spans.length; i++) spans[i].remove();
+    if (!span) {
+      span = document.createElement("span");
+      span.className = markerClass;
+    }
+    span.style.display = "block";
+    span.style.marginTop = "6px";
+    span.style.fontWeight = "700";
+    span.style.color = "#FFD84D";
+    span.style.fontSize = "14px";
+    if (span.textContent !== text) span.textContent = text;
+    if (inner.lastElementChild !== span) inner.appendChild(span);
+  }
+
+  // src/utils/sellAllPets.ts
+  var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
+  var DEFAULT_THEME = {
+    text: "var(--chakra-colors-Neutral-TrueWhite, #FFFFFF)",
+    bg: "var(--chakra-colors-Blue-Magic, #0067B4)",
+    border: "var(--chakra-colors-Blue-Light, #48ADF4)",
+    hoverBg: "var(--chakra-colors-Blue-Light, #48ADF4)",
+    hoverBorder: "var(--chakra-colors-Blue-Baby, #25AAE2)",
+    activeBg: "var(--chakra-colors-Blue-Dark, #264093)",
+    ring: "var(--chakra-ring-color, rgba(66,153,225,0.6))"
+  };
+  var DEFAULTS3 = {
+    rootSelector: ".McFlex.css-1wu1jyg",
+    checkSelector: ".McFlex.css-bvyqr8",
+    buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
+    buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
+    targetText: "Sell Pet",
+    injectText: "Sell all Pets",
+    injectedClass: "tm-injected-sell-all",
+    styleId: "tm-injected-sell-all-style"
+  };
+  function startInjectSellAllPets(options = {}) {
+    if (!isBrowser2()) return noSSRController();
+    const ROOT_SEL = options.rootSelector ?? DEFAULTS3.rootSelector;
+    const CHECK_SEL = options.checkSelector ?? DEFAULTS3.checkSelector;
+    const BTN_WIDE = options.buttonSelectorWide ?? DEFAULTS3.buttonSelectorWide;
+    const BTN_STRICT = options.buttonSelectorStrict ?? DEFAULTS3.buttonSelectorStrict;
+    const BTN_TEXT = options.targetText ?? DEFAULTS3.targetText;
+    const INJ_TEXT = options.injectText ?? DEFAULTS3.injectText;
+    const INJ_CLASS = options.injectedClass ?? DEFAULTS3.injectedClass;
+    const THEME = options.theme ?? DEFAULT_THEME;
+    const OBS_HIST = options.observeHistory ?? true;
+    const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[injectSellAllPets]", ...a) : () => {
+    };
+    const HANDLE = options.onClick ?? createDefaultClickHandler(logger);
+    ensureStyle(INJ_CLASS, THEME);
+    let running = true;
+    let pending = false;
+    const processAll = () => {
+      if (!running || pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        try {
+          document.querySelectorAll(ROOT_SEL).forEach((root) => processRoot(root));
+        } finally {
+          pending = false;
+        }
+      });
+    };
+    function processRoot(root) {
+      const gate = root.querySelector(CHECK_SEL);
+      if (!gate) {
+        cleanup(root, INJ_CLASS);
+        return;
+      }
+      const target = findTargetButton(root, BTN_WIDE, BTN_STRICT, BTN_TEXT);
+      if (!target) {
+        cleanup(root, INJ_CLASS);
+        return;
+      }
+      ensureInjectedNextTo(target, INJ_CLASS, INJ_TEXT, (ev, ctx) => {
+        safeInvokeClick(HANDLE, ev, ctx, logger);
+      });
+    }
+    const mo = new MutationObserver(processAll);
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    processAll();
+    let unhookHistory = null;
+    if (OBS_HIST) {
+      unhookHistory = hookHistory2(processAll);
+    }
+    return {
+      stop() {
+        if (!running) return;
+        running = false;
+        mo.disconnect();
+        unhookHistory?.();
+        logger("stopped");
+      },
+      runOnce() {
+        processAll();
+      },
+      isRunning() {
+        return running;
+      }
+    };
+  }
+  async function runSellAllPetsFlow(logger = () => {
+  }) {
+    const pets = await runDefaultSellAllPetsAction(logger);
+    if (pets.length === 0) return;
+    await sellPetsFromInventory(pets, logger);
+  }
+  async function getUnfavoritedInventoryPets() {
+    try {
+      await ensureStore();
+    } catch {
+    }
+    const [inventory, favoriteIds2] = await Promise.all([
+      Atoms.inventory.myInventory.get().catch(() => null),
+      Atoms.inventory.favoriteIds.get().catch(() => [])
+    ]);
+    const favSet = new Set(
+      Array.isArray(favoriteIds2) ? favoriteIds2.filter((id) => typeof id === "string") : []
+    );
+    const items = Array.isArray(inventory?.items) ? inventory.items : [];
+    return items.filter((item) => isInventoryPetItem(item)).filter((pet) => !favSet.has(pet.id));
+  }
+  function createDefaultClickHandler(logger) {
+    return async () => {
+      const pets = await runDefaultSellAllPetsAction(logger);
+      if (pets.length === 0) return;
+      await sellPetsFromInventory(pets, logger);
+    };
+  }
+  async function runDefaultSellAllPetsAction(logger) {
+    const pets = await getUnfavoritedInventoryPets();
+    const detail = { pets, count: pets.length };
+    globalThis.__sellAllPetsCandidates = pets;
+    try {
+      logger("collected-non-favorite-pets", detail);
+    } catch {
+    }
+    try {
+      globalThis.dispatchEvent?.(
+        new CustomEvent(SELL_ALL_PETS_EVENT, { detail })
+      );
+    } catch {
+    }
+    return pets;
+  }
+  async function sellPetsFromInventory(pets, logger) {
+    const toSell = pets.filter((pet) => typeof pet?.id === "string" && pet.id.trim().length > 0);
+    if (toSell.length === 0) {
+      try {
+        logger("no-sellable-pets", { requested: pets.length });
+      } catch {
+      }
+      try {
+        globalThis.__sellAllPetsResult = { attempted: 0, sold: 0, failures: [] };
+      } catch {
+      }
+      return;
+    }
+    const failures = [];
+    let sold = 0;
+    for (const pet of toSell) {
+      try {
+        logger("sell-pet:start", { id: pet.id, pet });
+      } catch {
+      }
+      try {
+        await PlayerService.sellPet(pet.id);
+        sold += 1;
+        try {
+          logger("sell-pet:success", { id: pet.id, pet });
+        } catch {
+        }
+      } catch (error) {
+        failures.push({ pet, error });
+        try {
+          logger("sell-pet:error", { id: pet.id, error, pet });
+        } catch {
+        }
+      }
+    }
+    if (failures.length === 0) {
+      console.info(`[sellAllPets] Tous les pets non favoris (${sold}) ont \xE9t\xE9 vendus avec succ\xE8s.`);
+      toastSimple("Sell all Pets", `${sold} pets have been sold!`, "success");
+    }
+    try {
+      globalThis.__sellAllPetsResult = { attempted: toSell.length, sold, failures };
+    } catch {
+    }
+    try {
+      logger("sell-pets:complete", { attempted: toSell.length, sold, failures });
+    } catch {
+    }
+  }
+  function safeInvokeClick(handler, ev, ctx, logger) {
+    try {
+      const result = handler(ev, ctx);
+      if (isPromiseLike(result)) {
+        result.catch((err) => logClickError(err, logger));
+      }
+    } catch (err) {
+      logClickError(err, logger);
+    }
+  }
+  function logClickError(error, logger) {
+    try {
+      logger("sell-all-click-error", error);
+    } catch {
+    }
+  }
+  function isPromiseLike(value) {
+    return !!value && (typeof value === "object" || typeof value === "function") && typeof value.then === "function";
+  }
+  function isInventoryPetItem(item) {
+    return !!item && item.itemType === "Pet" && typeof item.id === "string";
+  }
+  function isBrowser2() {
+    return typeof window !== "undefined" && typeof document !== "undefined";
+  }
+  function noSSRController() {
+    return { stop() {
+    }, runOnce() {
+    }, isRunning: () => false };
+  }
+  function norm3(s) {
+    return (s ?? "").replace(/\s+/g, " ").trim();
+  }
+  function hasPetWord(el2) {
+    const t = norm3(el2.textContent);
+    const a = norm3(el2.getAttribute("aria-label"));
+    return /pet/i.test(t) || /pet/i.test(a);
+  }
+  function findTargetButton(scope, btnWide, btnStrict, btnText) {
+    const btns = Array.from(scope.querySelectorAll(btnWide)).filter(
+      (b) => b instanceof HTMLButtonElement
+    );
+    const byText = btns.find((b) => norm3(b.textContent) === btnText) ?? btns.find((b) => norm3(b.getAttribute("aria-label")) === btnText);
+    if (byText) return byText;
+    const classCandidates = Array.from(scope.querySelectorAll(btnStrict)).filter((b) => b instanceof HTMLButtonElement);
+    const byClassAndWord = classCandidates.find((b) => hasPetWord(b));
+    return byClassAndWord ?? null;
+  }
+  function ensureInjectedNextTo(targetBtn, injectedClass, injectedText, onClick) {
+    const parent = targetBtn.parentElement || targetBtn.closest(".McFlex, .css-0") || targetBtn.parentNode;
+    if (!parent) return;
+    let injected = parent.querySelector(`.${injectedClass}`);
+    if (injected) {
+      if (targetBtn.nextElementSibling !== injected) {
+        parent.insertBefore(injected, targetBtn.nextSibling);
+      }
+      if (injected.textContent !== injectedText) injected.textContent = injectedText;
+      return;
+    }
+    injected = document.createElement("button");
+    injected.type = "button";
+    injected.className = `${injectedClass} chakra-button`;
+    injected.textContent = injectedText;
+    injected.setAttribute("aria-label", injectedText);
+    injected.title = injectedText;
+    injected.style.marginLeft = "8px";
+    const cs = getComputedStyle(parent);
+    if (cs.display !== "flex") {
+      injected.style.display = "inline-flex";
+      injected.style.alignItems = "center";
+    }
+    injected.addEventListener("click", (ev) => onClick(ev, {
+      host: targetBtn.closest(".McFlex.css-1wu1jyg"),
+      targetBtn,
+      injectedBtn: injected
+    }));
+    parent.insertBefore(injected, targetBtn.nextSibling);
+  }
+  function cleanup(root, injectedClass) {
+    root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
+  }
+  function ensureStyle(injectedClass, theme) {
+    const STYLE_ID2 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID2)) return;
+    const css = `
+.${injectedClass}{
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  cursor: pointer;
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  white-space: nowrap;
+  vertical-align: middle;
+
+  outline: transparent solid 2px;
+  outline-offset: 2px;
+  line-height: 1.2;
+
+  border-radius: 15px;                        /* aligns with provided design */
+  font-weight: 700;
+  height: auto;
+  min-width: var(--chakra-sizes-10, 2.5rem);
+  box-shadow: rgba(0, 0, 0, 0.3) 0px 4px 12px;
+  transform: translateY(0px);
+  transition: 0.2s;
+
+  border: 2px solid ${theme.border};
+  color: ${theme.text};
+  background: ${theme.bg};
+
+  text-transform: none;
+  overflow: hidden;
+  font-size: 20px;
+  padding-inline-start: var(--chakra-space-4, 1rem);
+  padding-inline-end: var(--chakra-space-4, 1rem);
+  padding-top: var(--chakra-space-3, 0.75rem);
+  padding-bottom: var(--chakra-space-3, 0.75rem);
+
+  -webkit-tap-highlight-color: transparent;
+}
+.${injectedClass}:hover{
+  transform: translateY(-1px);
+  background: ${theme.hoverBg};
+  border-color: ${theme.hoverBorder};
+}
+.${injectedClass}:active{
+  transform: translateY(1px);
+  background: ${theme.activeBg};
+}
+.${injectedClass}:focus-visible{
+  box-shadow: 0 0 0 3px ${theme.ring};
+}
+`.trim();
+    const s = document.createElement("style");
+    s.id = STYLE_ID2;
+    s.textContent = css;
+    document.head.appendChild(s);
+  }
+  function hookHistory2(onNavigate) {
+    const p = history.pushState?.bind(history);
+    const r = history.replaceState?.bind(history);
+    const wrap = (fn) => fn ? function(...args) {
+      const ret = fn.apply(this, args);
+      onNavigate();
+      return ret;
+    } : fn;
+    if (p) history.pushState = wrap(p);
+    if (r) history.replaceState = wrap(r);
+    const onPop = () => onNavigate();
+    window.addEventListener("popstate", onPop);
+    return () => {
+      if (p) history.pushState = p;
+      if (r) history.replaceState = r;
+      window.removeEventListener("popstate", onPop);
+    };
+  }
+
+  // src/services/keybinds.ts
+  var SECTION_CONFIG = [
+    {
+      id: "gui",
+      title: "GUI",
+      icon: "\u{1F5A5}\uFE0F",
+      description: "Choose how you open and move the overlay.",
+      actions: [
+        {
+          id: "gui.toggle",
+          label: "Toggle menu visibility",
+          hint: "Opens or closes the Arie's Mod overlay.",
+          defaultHotkey: { alt: true, code: "KeyX" }
+        },
+        {
+          id: "gui.drag",
+          label: "Drag HUD",
+          hint: "Hold to drag menus interfaces around the screen.",
+          defaultHotkey: { alt: true, code: "AltLeft" },
+          allowModifierOnly: true
+        }
+      ]
+    },
+    {
+      id: "shops",
+      title: "Shops",
+      icon: "\u{1F6D2}",
+      description: "Quick shortcuts to every shop tab.",
+      actions: [
+        {
+          id: "shops.seeds",
+          label: "Seeds shop",
+          defaultHotkey: { alt: true, code: "KeyS" }
+        },
+        {
+          id: "shops.eggs",
+          label: "Eggs shop",
+          defaultHotkey: { alt: true, code: "KeyE" }
+        },
+        {
+          id: "shops.decors",
+          label: "Decors shop",
+          defaultHotkey: { alt: true, code: "KeyD" }
+        },
+        {
+          id: "shops.tools",
+          label: "Tools shop",
+          defaultHotkey: { alt: true, code: "KeyT" }
+        }
+      ]
+    },
+    {
+      id: "sell",
+      title: "Sell",
+      icon: "\u{1F4B0}",
+      description: "Streamline selling actions.",
+      actions: [
+        {
+          id: "sell.sell-all",
+          label: "All crops",
+          hint: "Trigger the sell-all flow for harvested crops.",
+          defaultHotkey: null
+        },
+        {
+          id: "sell.sell-all-pets",
+          label: "All pets",
+          hint: "Sell every non-favorited pet in your inventory.",
+          defaultHotkey: null
+        }
+      ]
+    }
+  ];
+  var STORAGE_PREFIX = "qws:keybind:";
+  var STORED_NONE = "__none__";
+  var actionMap = /* @__PURE__ */ new Map();
+  var defaultMap = /* @__PURE__ */ new Map();
+  var cache = /* @__PURE__ */ new Map();
+  var listeners2 = /* @__PURE__ */ new Map();
+  var keybindSections = SECTION_CONFIG.map((section) => {
+    const actions = section.actions.map((action) => {
+      const normalized = {
+        id: action.id,
+        sectionId: section.id,
+        label: action.label,
+        hint: action.hint,
+        allowModifierOnly: action.allowModifierOnly,
+        defaultHotkey: cloneHotkey(action.defaultHotkey)
+      };
+      actionMap.set(normalized.id, normalized);
+      defaultMap.set(normalized.id, cloneHotkey(action.defaultHotkey));
+      return normalized;
+    });
+    return {
+      id: section.id,
+      title: section.title,
+      description: section.description,
+      icon: section.icon,
+      actions
+    };
+  });
+  function cloneHotkey(hk) {
+    return hk ? { ...hk } : null;
+  }
+  function hotkeysEqual(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return hotkeyToString(a) === hotkeyToString(b);
+  }
+  function storageKey(id) {
+    return `${STORAGE_PREFIX}${id}`;
+  }
+  function readStored(id) {
+    if (typeof window === "undefined") return void 0;
+    let raw = null;
+    try {
+      raw = window.localStorage.getItem(storageKey(id));
+    } catch {
+      return void 0;
+    }
+    if (raw == null) return void 0;
+    if (raw === STORED_NONE) return null;
+    const parsed = stringToHotkey(raw);
+    return parsed ?? null;
+  }
+  function writeStored(id, hk) {
+    if (typeof window === "undefined") return;
+    try {
+      if (hk) {
+        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+      } else {
+        window.localStorage.setItem(storageKey(id), STORED_NONE);
+      }
+    } catch {
+    }
+  }
+  function emitChange(id) {
+    const set2 = listeners2.get(id);
+    if (!set2 || set2.size === 0) return;
+    const current = cloneHotkey(getKeybind(id));
+    for (const cb of set2) cb(current);
+  }
+  function ensureCache(id) {
+    if (cache.has(id)) {
+      return cloneHotkey(cache.get(id) ?? null);
+    }
+    const stored = readStored(id);
+    const resolved = stored === void 0 ? cloneHotkey(defaultMap.get(id) ?? null) : cloneHotkey(stored);
+    cache.set(id, resolved);
+    return cloneHotkey(resolved);
+  }
+  function getKeybind(id) {
+    return ensureCache(id);
+  }
+  function setKeybind(id, hk) {
+    const current = getKeybind(id);
+    if (hotkeysEqual(current, hk)) return;
+    const next = cloneHotkey(hk);
+    if (next) {
+      const asString = hotkeyToString(next);
+      for (const otherId of actionMap.keys()) {
+        if (otherId === id) continue;
+        const other = getKeybind(otherId);
+        if (!other) continue;
+        if (hotkeyToString(other) !== asString) continue;
+        cache.set(otherId, null);
+        writeStored(otherId, null);
+        emitChange(otherId);
+      }
+    }
+    cache.set(id, next);
+    writeStored(id, next);
+    emitChange(id);
+  }
+  function onKeybindChange(id, cb) {
+    const set2 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
+    if (!listeners2.has(id)) listeners2.set(id, set2);
+    set2.add(cb);
+    return () => {
+      set2.delete(cb);
+      if (set2.size === 0) listeners2.delete(id);
+    };
+  }
+  function eventMatchesKeybind(id, e) {
+    return matchHotkey(e, getKeybind(id));
+  }
+  function getKeybindSections() {
+    return keybindSections.map((section) => ({
+      ...section,
+      actions: section.actions.map((action) => ({
+        ...action,
+        defaultHotkey: cloneHotkey(action.defaultHotkey)
+      }))
+    }));
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
+      const id = event.key.slice(STORAGE_PREFIX.length);
+      if (!actionMap.has(id)) return;
+      cache.delete(id);
+      emitChange(id);
+    });
+  }
+
+  // src/utils/keyboard.ts
+  function shouldIgnoreKeydown2(e) {
+    const el2 = e.target;
+    if (!el2) return false;
+    return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
+  }
+
+  // src/services/sell.ts
+  var sellKeybindsInstalled = false;
+  function installSellKeybindsOnce() {
+    if (sellKeybindsInstalled || typeof window === "undefined") return;
+    sellKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown2(event)) return;
+        if (eventMatchesKeybind("sell.sell-all", event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void PlayerService.sellAllCrops();
+          return;
+        }
+        if (eventMatchesKeybind("sell.sell-all-pets", event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void runSellAllPetsFlow();
+        }
+      },
+      true
+    );
+  }
+
+  // src/services/shops.ts
+  var log3 = createMenuLogger("shops-service", "Shops service");
+  var SHOP_KEYBINDS = [
+    { id: "shops.seeds", modal: "seedShop" },
+    { id: "shops.eggs", modal: "eggShop" },
+    { id: "shops.decors", modal: "decorShop" },
+    { id: "shops.tools", modal: "toolShop" }
+  ];
+  var shopKeybindsInstalled = false;
+  function installShopKeybindsOnce() {
+    if (shopKeybindsInstalled || typeof window === "undefined") return;
+    shopKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown2(event)) return;
+        for (const { id, modal } of SHOP_KEYBINDS) {
+          if (!eventMatchesKeybind(id, event)) continue;
+          event.preventDefault();
+          event.stopPropagation();
+          void Atoms.ui.activeModal.set(modal);
+          break;
+        }
+      },
+      true
+    );
   }
 
   // src/ui/hud.ts
@@ -9063,6 +10813,8 @@
   }
   function initWatchers() {
     (async () => {
+      installShopKeybindsOnce();
+      installSellKeybindsOnce();
       try {
         setTeamsForHotkeys(PetsService.getTeams());
       } catch {
@@ -9088,626 +10840,12 @@
       }
       await PetsService.startAbilityLogsWatcher();
       await renderOverlay();
+      setupBuyAll();
+      startReorderObserver();
+      startCropValuesObserverFromGardenAtom();
+      startInjectSellAllPets();
     })();
   }
-
-  // src/utils/calculators.ts
-  var key = (s) => String(s ?? "").trim();
-  function resolveSpeciesKey(species) {
-    const wanted = key(species).toLowerCase();
-    if (!wanted) return null;
-    for (const k of Object.keys(plantCatalog)) {
-      if (k.toLowerCase() === wanted) return k;
-    }
-    return null;
-  }
-  function findAnySellPriceNode(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
-      return obj.baseSellPrice;
-    }
-    for (const k of ["produce", "crop", "item", "items", "data"]) {
-      if (obj[k]) {
-        const v = findAnySellPriceNode(obj[k]);
-        if (v != null) return v;
-      }
-    }
-    try {
-      const seen = /* @__PURE__ */ new Set();
-      const stack = [obj];
-      while (stack.length) {
-        const cur2 = stack.pop();
-        if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
-        seen.add(cur2);
-        if (typeof cur2.baseSellPrice === "number") {
-          const v = cur2.baseSellPrice;
-          if (Number.isFinite(v)) return v;
-        }
-        for (const v of Object.values(cur2)) if (v && typeof v === "object") stack.push(v);
-      }
-    } catch {
-    }
-    return null;
-  }
-  function defaultGetBasePrice(species) {
-    const spKey = resolveSpeciesKey(species);
-    if (!spKey) return null;
-    const node = plantCatalog[spKey];
-    const cands = [
-      node?.produce?.baseSellPrice,
-      node?.crop?.baseSellPrice,
-      node?.item?.baseSellPrice,
-      node?.items?.Produce?.baseSellPrice
-    ].filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (cands.length) return cands[0];
-    return findAnySellPriceNode(node);
-  }
-  function applyRounding(v, mode = "round") {
-    switch (mode) {
-      case "floor":
-        return Math.floor(v);
-      case "ceil":
-        return Math.ceil(v);
-      case "none":
-        return v;
-      case "round":
-      default:
-        return Math.round(v);
-    }
-  }
-  function friendBonusMultiplier(playersInRoom) {
-    if (!Number.isFinite(playersInRoom)) return 1;
-    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
-    return 1 + (n - 1) * 0.1;
-  }
-  var COLOR_MULT = {
-    Gold: 25,
-    Rainbow: 50
-  };
-  var WEATHER_MULT = {
-    Wet: 2,
-    Chilled: 2,
-    Frozen: 10
-  };
-  var TIME_MULT = {
-    Dawnlit: 2,
-    Dawnbound: 3,
-    Amberlit: 5,
-    Amberbound: 6
-  };
-  var WEATHER_TIME_COMBO = {
-    "Wet+Dawnlit": 3,
-    "Chilled+Dawnlit": 3,
-    "Wet+Amberlit": 6,
-    "Chilled+Amberlit": 6,
-    "Frozen+Dawnlit": 11,
-    "Frozen+Dawnbound": 12,
-    "Frozen+Amberlit": 14,
-    "Frozen+Amberbound": 15
-  };
-  function isColor(m) {
-    return m === "Gold" || m === "Rainbow";
-  }
-  function isWeather(m) {
-    return m === "Wet" || m === "Chilled" || m === "Frozen";
-  }
-  function isTime(m) {
-    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
-  }
-  function normalizeMutationName(m) {
-    const s = key(m).toLowerCase();
-    if (!s) return "";
-    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
-    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
-    if (s === "gold") return "Gold";
-    if (s === "rainbow") return "Rainbow";
-    if (s === "wet") return "Wet";
-    if (s === "chilled") return "Chilled";
-    if (s === "frozen") return "Frozen";
-    if (s === "dawnlit") return "Dawnlit";
-    if (s === "dawnbound") return "Dawnbound";
-    if (s === "amberlit" || s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
-    if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
-    return m;
-  }
-  function computeColorMultiplier(mutations) {
-    if (!Array.isArray(mutations)) return 1;
-    let best = 1;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isColor(m)) {
-        const mult = COLOR_MULT[m];
-        if (mult > best) best = mult;
-      }
-    }
-    return best;
-  }
-  function pickWeather(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isWeather(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function pickTime(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isTime(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function computeWeatherTimeMultiplier(weather2, time) {
-    if (!weather2 && !time) return 1;
-    if (weather2 && !time) return WEATHER_MULT[weather2];
-    if (!weather2 && time) return TIME_MULT[time];
-    const k = `${weather2}+${time}`;
-    const combo = WEATHER_TIME_COMBO[k];
-    if (typeof combo === "number") return combo;
-    return Math.max(WEATHER_MULT[weather2], TIME_MULT[time]);
-  }
-  function mutationsMultiplier(mutations) {
-    const color = computeColorMultiplier(mutations);
-    const weather2 = pickWeather(mutations);
-    const time = pickTime(mutations);
-    const wt = computeWeatherTimeMultiplier(weather2, time);
-    return color * wt;
-  }
-  function estimateProduceValue(species, scale, mutations, opts) {
-    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
-    const sXform = opts?.scaleTransform ?? ((_, s) => s);
-    const round = opts?.rounding ?? "round";
-    const base = getBase(species);
-    if (!(Number.isFinite(base) && base > 0)) return 0;
-    const sc = Number(scale);
-    if (!Number.isFinite(sc) || sc <= 0) return 0;
-    const effScale = sXform(species, sc);
-    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
-    const mutMult = mutationsMultiplier(mutations);
-    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
-    const pre = base * effScale * mutMult * friendsMult;
-    const out = Math.max(0, applyRounding(pre, round));
-    return out;
-  }
-  function valueFromInventoryProduce(item, opts, playersInRoom) {
-    if (!item || item.itemType !== "Produce") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
-  }
-  function valueFromGardenSlot(slot, opts, playersInRoom) {
-    if (!slot) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
-  }
-  function valueFromGardenPlant(plant, opts, playersInRoom) {
-    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
-    return sum;
-  }
-  function sumInventoryValue(items, opts, playersInRoom) {
-    if (!Array.isArray(items)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const it of items) {
-      if (it?.itemType === "Produce") {
-        sum += valueFromInventoryProduce(it, merged);
-      }
-    }
-    return sum;
-  }
-  function sumGardenValue(garden2, opts, playersInRoom) {
-    if (!garden2 || typeof garden2 !== "object") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const k of Object.keys(garden2)) {
-      const p = garden2[k];
-      if (p?.objectType === "plant") {
-        sum += valueFromGardenPlant(p, merged);
-      }
-    }
-    return sum;
-  }
-  var DefaultPricing = Object.freeze({
-    getBasePrice: defaultGetBasePrice,
-    rounding: "round"
-  });
-
-  // src/utils/tooltip.finder.ts
-  function hasCanvas(el2) {
-    return !!el2.querySelector?.("canvas");
-  }
-  function hasNameText(el2) {
-    return !!el2.querySelector?.('p.chakra-text, p[class*="chakra-text"]');
-  }
-  function findTooltipRootFrom(start) {
-    let n = start || null;
-    while (n && n !== document.body) {
-      if (n.getAttribute?.("role") === "tooltip") return n;
-      if (hasCanvas(n) && hasNameText(n)) return n;
-      n = n.parentElement;
-    }
-    return null;
-  }
-  function findBestTooltipDetailHostInside(root) {
-    if (!root) return null;
-    try {
-      const hasLocalCanvas = !!root.querySelector?.("canvas");
-      if (!hasLocalCanvas) {
-        const frame = findTooltipRootFrom(root);
-        if (frame) root = frame;
-      }
-    } catch {
-    }
-    try {
-      let wr = root;
-      while (wr && wr !== document.body) {
-        const kids = Array.from(wr.children);
-        const mcKids = kids.filter((k) => k.classList?.contains("McFlex"));
-        if (mcKids.length >= 2) {
-          const first = mcKids[0];
-          const second = mcKids[1];
-          const firstLooksMutation = !!first.querySelector("span[tabindex]") && !first.querySelector("canvas");
-          const secondHasCanvas = !!second.querySelector("canvas");
-          if (firstLooksMutation && secondHasCanvas) {
-            root = second;
-            break;
-          }
-        }
-        wr = wr.parentElement;
-      }
-    } catch {
-    }
-    try {
-      const grids = Array.from(root.querySelectorAll?.(".McGrid, [class*='McGrid']") ?? []).filter((g) => getComputedStyle(g).display !== "none");
-      for (const g of grids) {
-        const hasC = !!g.querySelector("canvas");
-        if (!hasC) continue;
-        const details = Array.from(g.children).find(
-          (ch) => ch instanceof HTMLElement && getComputedStyle(ch).display.includes("flex") && !ch.querySelector("canvas")
-        );
-        if (details) return details;
-      }
-    } catch {
-    }
-    try {
-      const rows = Array.from(root.querySelectorAll?.(".McFlex, [class*='McFlex']") ?? []).filter((r) => getComputedStyle(r).display.includes("flex") && !!r.querySelector("canvas"));
-      for (const row of rows) {
-        const kids = Array.from(row.children);
-        const imgCol = kids.find((ch) => ch instanceof HTMLElement && !!ch.querySelector("canvas")) || null;
-        const detCol = kids.find(
-          (ch) => ch instanceof HTMLElement && ch !== imgCol && !ch.querySelector("canvas") && !!ch.querySelector('p, [class*="chakra-text"]')
-        ) || null;
-        if (imgCol && detCol) return detCol;
-      }
-    } catch {
-    }
-    try {
-      const texts = Array.from(root.querySelectorAll?.("p.chakra-text, p[class*='chakra-text']") ?? []);
-      const timerRe = /(\d+\s*[hms]|\d+h\s*\d+m|\d+m\s*\d+s)/i;
-      for (const p of texts) {
-        const t = (p.textContent || "").trim();
-        if (!timerRe.test(t)) continue;
-        let cand = p;
-        while (cand && cand !== root) {
-          const cs = getComputedStyle(cand);
-          if (cs.display.includes("flex") && !cand.querySelector("canvas")) {
-            return cand;
-          }
-          cand = cand.parentElement;
-        }
-      }
-    } catch {
-    }
-    try {
-      const hasAnyCanvas = !!root.querySelector?.("canvas");
-      if (!hasAnyCanvas) {
-        const clickable = root.querySelector?.("span[tabindex]") ?? null;
-        if (clickable) {
-          const directMcFlex = clickable.querySelector?.(':scope > .McFlex, :scope > [class*="McFlex"]') ?? null;
-          if (directMcFlex && !directMcFlex.querySelector?.("canvas")) {
-            return directMcFlex;
-          }
-        }
-      }
-    } catch {
-    }
-    const name = root.querySelector?.("p.chakra-text") ?? root.querySelector?.('p[class*="chakra-text"]') ?? root.querySelector?.("p") ?? null;
-    if (name) {
-      const hasCanvasLocal = (el2) => !!el2.querySelector("canvas");
-      let node = name;
-      while (node && node !== root) {
-        const cs = getComputedStyle(node);
-        if (cs.display.includes("flex") && !hasCanvasLocal(node)) {
-          const parent = node.parentElement;
-          if (parent && Array.from(parent.children).some((ch) => ch !== node && ch instanceof HTMLElement && hasCanvasLocal(ch))) {
-            if (parent) {
-              const siblingWithCanvas = Array.from(parent.children).find(
-                (ch) => ch instanceof HTMLElement && ch !== node && !!ch.querySelector("canvas")
-              );
-              if (siblingWithCanvas) {
-                let details = Array.from(siblingWithCanvas.children).find(
-                  (ch) => ch instanceof HTMLElement && getComputedStyle(ch).display.includes("flex") && !ch.querySelector("canvas") && !!ch.querySelector('p, [class*="chakra-text"]')
-                );
-                if (!details) {
-                  details = Array.from(siblingWithCanvas.querySelectorAll('.McFlex, [class*="McFlex"]')).find(
-                    (el2) => el2 instanceof HTMLElement && getComputedStyle(el2).display.includes("flex") && !el2.querySelector("canvas") && !!el2.querySelector('p, [class*="chakra-text"]')
-                  );
-                }
-                if (details) return details;
-              }
-            }
-            return node;
-          }
-        }
-        node = node.parentElement;
-      }
-      const mc = name.closest(".McFlex");
-      if (mc) return mc;
-      if (name.parentElement) return name.parentElement;
-    }
-    const candidates = Array.from(root.querySelectorAll?.(".McFlex, [class*='McFlex']") ?? []);
-    for (const c of candidates) {
-      const cs = getComputedStyle(c);
-      if (!cs.display.includes("flex")) continue;
-      if (c.querySelector("canvas")) continue;
-      if (!c.querySelector('p, [class*="chakra-text"]')) continue;
-      return c;
-    }
-    return root || null;
-  }
-
-  // src/services/domChanges.ts
-  var log2 = createMenuLogger("dom-changes-service", "DOM changes service");
-  var STYLE_ID = "qws-price-badge-style";
-  var ATTR_INJECTED = "data-qws-injected";
-  var CLASS_BADGE = "qws-price-badge";
-  var USER_SCOPE_ROOT = ".McFlex.css-1wu1jyg";
-  var nfUS = new Intl.NumberFormat("en-US");
-  var fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
-  var ACTIVE_HOSTS = /* @__PURE__ */ new Set();
-  var cur = null;
-  var players;
-  var sortedIdx = null;
-  var selectedIdx = null;
-  var isPlantObject = (o) => !!o && o.objectType === "plant";
-  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
-  var getOrder = () => {
-    const n = Array.isArray(cur?.slots) ? cur.slots.length : 0;
-    if (!n) return [];
-    return Array.isArray(sortedIdx) && sortedIdx.length === n ? sortedIdx : defaultOrder(n);
-  };
-  var getOrderedSlots = () => {
-    if (!isPlantObject(cur)) return [];
-    const slots = Array.isArray(cur.slots) ? cur.slots : [];
-    const ord = getOrder();
-    const out = [];
-    for (const i of ord) if (slots[i] != null) out.push(slots[i]);
-    return out;
-  };
-  function selectedOrderedPosition() {
-    if (!isPlantObject(cur)) return 0;
-    const slots = cur.slots ?? [];
-    const n = Array.isArray(slots) ? slots.length : 0;
-    if (!n) return 0;
-    const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
-    const clampedRaw = Math.max(0, Math.min(n - 1, raw));
-    const ord = getOrder();
-    const pos = ord.indexOf(clampedRaw);
-    return pos >= 0 ? pos : 0;
-  }
-  function ensureStyle() {
-    if (document.getElementById(STYLE_ID)) return;
-    const s = document.createElement("style");
-    s.id = STYLE_ID;
-    s.textContent = `
-    .${CLASS_BADGE}{
-      position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
-      display:inline-flex; gap:6px; align-items:center; justify-content:center;
-      padding:4px 10px; border-radius:10px; font:800 12px/1.2 system-ui,sans-serif;
-      color:#FFD84D; z-index:1; pointer-events:none; white-space:nowrap;
-    }`;
-    document.head.appendChild(s);
-    log2.debug("Injected badge style element");
-  }
-  var BADGE_RESERVE = 0;
-  function measureBadgeReserve() {
-    if (BADGE_RESERVE) return BADGE_RESERVE;
-    ensureStyle();
-    const probe = Object.assign(document.createElement("div"), { className: CLASS_BADGE, textContent: "000,000,000" });
-    Object.assign(probe.style, { position: "absolute", visibility: "hidden", left: "-9999px" });
-    document.body.appendChild(probe);
-    BADGE_RESERVE = Math.max(28, Math.ceil(probe.getBoundingClientRect().height + 10));
-    probe.remove();
-    log2.debug("Measured badge reserve", { reserve: BADGE_RESERVE });
-    return BADGE_RESERVE;
-  }
-  function collectTooltipRoots() {
-    const set2 = /* @__PURE__ */ new Set();
-    const userRoot = document.querySelector(USER_SCOPE_ROOT);
-    if (userRoot) set2.add(userRoot);
-    for (const h of ACTIVE_HOSTS) {
-      if (h && h.isConnected) set2.add(h.closest(".McFlex, .css-0") || h);
-    }
-    if (set2.size === 0) {
-      const guess = Array.from(document.querySelectorAll(".McFlex, .css-0, [role='tooltip']")).filter((r) => r.querySelector("canvas") && r.querySelector('p.chakra-text, p[class*="chakra-text"]'));
-      guess.slice(0, 3).forEach((r) => set2.add(r));
-    }
-    return Array.from(set2).filter((r) => r.isConnected);
-  }
-  function currentSlotValue() {
-    if (!isPlantObject(cur)) return null;
-    const ordered = getOrderedSlots();
-    if (!ordered.length) return null;
-    const pos = selectedOrderedPosition();
-    const slot = ordered[Math.max(0, Math.min(ordered.length - 1, pos))];
-    const val = valueFromGardenSlot(slot, DefaultPricing, players);
-    return Number.isFinite(val) && val > 0 ? val : null;
-  }
-  function injectOrUpdateBadge(host) {
-    if (!isPlantObject(cur)) {
-      removeBadge(host);
-      return;
-    }
-    ensureStyle();
-    if (getComputedStyle(host).position === "static") host.style.position = "relative";
-    const reserve = measureBadgeReserve();
-    if ((parseFloat(host.style.paddingBottom) || 0) < reserve) host.style.paddingBottom = `${reserve}px`;
-    const val = currentSlotValue() ?? (() => {
-      const v = valueFromGardenPlant(cur, DefaultPricing, players);
-      return Number.isFinite(v) && v > 0 ? v : null;
-    })();
-    if (val == null) {
-      removeBadge(host);
-      return;
-    }
-    let badge = host.querySelector("." + CLASS_BADGE);
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.className = CLASS_BADGE;
-      host.appendChild(badge);
-      host.setAttribute(ATTR_INJECTED, "1");
-      log2.debug("Created price badge", {
-        hostTag: host.tagName,
-        hostClasses: host.className
-      });
-    }
-    badge.textContent = fmtCoins(val);
-  }
-  function removeBadge(host) {
-    host.querySelectorAll("." + CLASS_BADGE).forEach((n) => n.remove());
-    if (host.hasAttribute(ATTR_INJECTED)) {
-      host.removeAttribute(ATTR_INJECTED);
-      host.style.paddingBottom = "";
-    }
-    log2.debug("Removed badge from host", {
-      hostTag: host.tagName,
-      hostClasses: host.className
-    });
-  }
-  function updateAllBadges() {
-    const roots = collectTooltipRoots();
-    const found = [];
-    for (const root of roots) {
-      const host = findBestTooltipDetailHostInside(root);
-      if (host) found.push(host);
-    }
-    const uniqueFound = Array.from(new Set(found)).filter((h) => !found.some((o) => o !== h && h.contains(o)));
-    found.length = 0;
-    found.push(...uniqueFound);
-    const prevSize = ACTIVE_HOSTS.size;
-    for (const host of found) {
-      if (!ACTIVE_HOSTS.has(host)) ACTIVE_HOSTS.add(host);
-      injectOrUpdateBadge(host);
-    }
-    for (const host of Array.from(ACTIVE_HOSTS)) {
-      if (!document.contains(host) || !found.includes(host)) {
-        removeBadge(host);
-        ACTIVE_HOSTS.delete(host);
-      }
-    }
-    if (!roots.length && prevSize > 0) {
-      log2.warn("No tooltip roots detected while badges were active");
-    }
-    if (ACTIVE_HOSTS.size !== prevSize) {
-      log2.info("Updated tooltip badges", {
-        previousHosts: prevSize,
-        currentHosts: ACTIVE_HOSTS.size,
-        roots: roots.length
-      });
-    }
-  }
-  function clearAllBadges() {
-    document.querySelectorAll("." + CLASS_BADGE).forEach((el2) => el2.remove());
-    document.querySelectorAll(`[${ATTR_INJECTED}="1"]`).forEach((host) => {
-      host.style.paddingBottom = "";
-      host.removeAttribute(ATTR_INJECTED);
-    });
-    ACTIVE_HOSTS.clear();
-    log2.info("Cleared all tooltip badges");
-  }
-  function watchTooltipsByXPath() {
-    const rescan = () => updateAllBadges();
-    rescan();
-    let raf = 0;
-    const mo = new MutationObserver(() => {
-      if (raf) return;
-      raf = requestAnimationFrame(() => {
-        raf = 0;
-        rescan();
-      });
-      log2.debug("Scheduled tooltip rescan after mutation");
-    });
-    mo.observe(document.body, { subtree: true, childList: true, attributes: true });
-    log2.info("Started tooltip watcher");
-    return {
-      disconnect() {
-        mo.disconnect();
-        ACTIVE_HOSTS.clear();
-        log2.info("Disconnected tooltip watcher");
-      }
-    };
-  }
-  (async () => {
-    try {
-      cur = await myCurrentGardenObject.get();
-      log2.debug("Loaded current garden object");
-    } catch (err) {
-      log2.error("Failed to load current garden object", err);
-    }
-    try {
-      players = await numPlayers.get();
-      log2.debug("Loaded current player count", { players });
-    } catch (err) {
-      log2.warn("Unable to read player count", { error: err });
-    }
-    try {
-      const v = await myCurrentSortedGrowSlotIndices.get();
-      sortedIdx = Array.isArray(v) ? v.slice() : null;
-      log2.debug("Loaded sorted grow slot indices", { hasSorted: !!sortedIdx });
-    } catch (err) {
-      log2.error("Failed to read sorted grow slot indices", err);
-    }
-    try {
-      selectedIdx = await myCurrentGrowSlotIndex.get();
-    } catch (err) {
-      log2.warn("Could not read current grow slot index", { error: err });
-    }
-    myCurrentGardenObject.onChange((v) => {
-      cur = v;
-      isPlantObject(cur) ? updateAllBadges() : clearAllBadges();
-    });
-    numPlayers.onChange((n) => {
-      players = n;
-      updateAllBadges();
-    });
-    myCurrentSortedGrowSlotIndices.onChange((v) => {
-      sortedIdx = Array.isArray(v) ? v.slice() : null;
-      updateAllBadges();
-    });
-    myCurrentGrowSlotIndex.onChange((idx) => {
-      selectedIdx = Number.isFinite(idx) ? idx : 0;
-      updateAllBadges();
-    });
-    watchTooltipsByXPath();
-    log2.info("Initialized DOM changes service");
-  })();
 
   // src/services/debug-data.ts
   var fmtTime = (ms) => {
@@ -10775,11 +11913,11 @@ ${detail}` : base;
     const seen = /* @__PURE__ */ new Set();
     const stack = [state2];
     while (stack.length) {
-      const cur2 = stack.pop();
-      if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
-      seen.add(cur2);
-      for (const k of Object.keys(cur2)) {
-        const v = cur2[k];
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const k of Object.keys(cur)) {
+        const v = cur[k];
         if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
           const looks = v.some((p) => "id" in p && "name" in p);
           if (looks && /player/i.test(k)) out.push(...v);
@@ -10854,7 +11992,7 @@ ${detail}` : base;
     for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
     return null;
   }
-  function enrichPlayersWithSlots(players2, st) {
+  function enrichPlayersWithSlots(players, st) {
     const byPid = /* @__PURE__ */ new Map();
     for (const slot of getSlotsArray(st)) {
       if (!slot || typeof slot !== "object") continue;
@@ -10864,15 +12002,15 @@ ${detail}` : base;
       const inv = extractInventoryFromSlot(slot);
       byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
     }
-    return players2.map((p) => {
+    return players.map((p) => {
       const extra = byPid.get(String(p.id));
       return extra ? { ...p, ...extra } : { ...p, inventory: null };
     });
   }
-  function orderPlayersBySlots(players2, st) {
+  function orderPlayersBySlots(players, st) {
     const slots = getSlotsArray(st);
     const mapById = /* @__PURE__ */ new Map();
-    for (const p of players2) mapById.set(String(p.id), p);
+    for (const p of players) mapById.set(String(p.id), p);
     const out = [];
     const seen = /* @__PURE__ */ new Set();
     for (const s of slots) {
@@ -10884,7 +12022,7 @@ ${detail}` : base;
         seen.add(pid);
       }
     }
-    for (const p of players2) {
+    for (const p of players) {
       const pid = String(p.id);
       if (!seen.has(pid)) {
         out.push(p);
@@ -10926,16 +12064,16 @@ ${detail}` : base;
         const seen = /* @__PURE__ */ new Set();
         const stack = [st];
         while (stack.length) {
-          const cur2 = stack.pop();
-          if (!cur2 || typeof cur2 !== "object" || seen.has(cur2)) continue;
-          seen.add(cur2);
-          const arr = cur2?.spawnTiles;
+          const cur = stack.pop();
+          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+          seen.add(cur);
+          const arr = cur?.spawnTiles;
           if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
             __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
             return __cachedSpawnTiles;
           }
-          for (const k of Object.keys(cur2)) {
-            const v = cur2[k];
+          for (const k of Object.keys(cur)) {
+            const v = cur[k];
             if (v && typeof v === "object") stack.push(v);
           }
         }
@@ -10965,13 +12103,13 @@ ${detail}` : base;
     }
     return 81;
   }
-  function assignGardenPositions(players2, spawnTilesSorted) {
-    if (!players2.length || !spawnTilesSorted.length) {
-      return players2.map((p) => ({ ...p, gardenPosition: null }));
+  function assignGardenPositions(players, spawnTilesSorted) {
+    if (!players.length || !spawnTilesSorted.length) {
+      return players.map((p) => ({ ...p, gardenPosition: null }));
     }
     const out = [];
-    for (let i = 0; i < players2.length; i++) {
-      out.push({ ...players2[i], gardenPosition: spawnTilesSorted[i] ?? null });
+    for (let i = 0; i < players.length; i++) {
+      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
     }
     return out;
   }
@@ -11242,21 +12380,21 @@ ${detail}` : base;
       followingState.lastPos = { x: pos.x, y: pos.y };
       followingState.prevPos = null;
       followingState.steps = 0;
-      followingState.unsub = await this.onChange(async (players2) => {
+      followingState.unsub = await this.onChange(async (players) => {
         if (followingState.currentTargetId !== playerId) return;
-        const target = players2.find((p) => p.id === playerId);
+        const target = players.find((p) => p.id === playerId);
         if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
           await this.stopFollowing();
           await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
           return;
         }
-        const cur2 = { x: target.x, y: target.y };
+        const cur = { x: target.x, y: target.y };
         const last = followingState.lastPos;
         if (!last) {
-          followingState.lastPos = cur2;
+          followingState.lastPos = cur;
           return;
         }
-        if (cur2.x !== last.x || cur2.y !== last.y) {
+        if (cur.x !== last.x || cur.y !== last.y) {
           followingState.steps += 1;
           if (followingState.steps >= 2) {
             if (last) {
@@ -11264,7 +12402,7 @@ ${detail}` : base;
             }
           }
           followingState.prevPos = followingState.lastPos;
-          followingState.lastPos = cur2;
+          followingState.lastPos = cur;
         }
       });
       await toastSimple("Follow", "Follow enabled", "success");
@@ -11323,7 +12461,7 @@ ${detail}` : base;
     }
     async function renderRight(playerId) {
       right.innerHTML = "";
-      const p = playerId ? players2.find((x) => x.id === playerId) || null : null;
+      const p = playerId ? players.find((x) => x.id === playerId) || null : null;
       if (!p) {
         const empty = document.createElement("div");
         empty.style.opacity = "0.75";
@@ -11497,7 +12635,7 @@ ${detail}` : base;
         }
       })();
     }
-    let players2 = [];
+    let players = [];
     let lastSig = "";
     function signature(ps) {
       return ps.map(
@@ -11512,9 +12650,9 @@ ${detail}` : base;
         return;
       }
       lastSig = sig;
-      players2 = next;
-      vt.setItems(players2.map(vItem));
-      const sel = keepSelection && prevSel && players2.some((p) => p.id === prevSel) ? prevSel : players2[0]?.id ?? null;
+      players = next;
+      vt.setItems(players.map(vItem));
+      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
       if (sel !== null) vt.select(sel);
       else renderRight(null);
     }
@@ -12630,14 +13768,14 @@ ${detail}` : base;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log4) {
-      const time = cell(log4.time12, "center");
-      const petLabel = log4.petName || log4.species || "Pet";
+    function row(log5) {
+      const time = cell(log5.time12, "center");
+      const petLabel = log5.petName || log5.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log4.abilityName || log4.abilityId, "center");
-      const detText = typeof log4.data === "string" ? log4.data : (() => {
+      const abName = cell(log5.abilityName || log5.abilityId, "center");
+      const detText = typeof log5.data === "string" ? log5.data : (() => {
         try {
-          return JSON.stringify(log4.data);
+          return JSON.stringify(log5.data);
         } catch {
           return "";
         }
@@ -12831,12 +13969,12 @@ ${detail}` : base;
     let rafId = null;
     let lastTs = 0, accMs = 0, inMove = false;
     async function step(dx, dy) {
-      let cur2;
+      let cur;
       try {
-        cur2 = await PlayerService.getPosition();
+        cur = await PlayerService.getPosition();
       } catch {
       }
-      const cx = Math.round(cur2?.x ?? 0), cy = Math.round(cur2?.y ?? 0);
+      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
       try {
         await PlayerService.move(cx + dx, cy + dy);
       } catch {
@@ -13166,7 +14304,7 @@ ${detail}` : base;
     };
     handle.addEventListener("mousedown", onDown);
   }
-  function createButton(label2, styleOverride) {
+  function createButton2(label2, styleOverride) {
     const b = document.createElement("button");
     b.textContent = label2;
     setStyles(b, {
@@ -13249,7 +14387,7 @@ ${detail}` : base;
     summary.id = SUMMARY_ID;
     setStyles(summary, { fontWeight: "600" });
     summary.textContent = "Selected: 0 species \xB7 0 seeds";
-    const btnClear = createButton("Clear");
+    const btnClear = createButton2("Clear");
     btnClear.title = "Clear selection";
     btnClear.onclick = async () => {
       selectedMap.clear();
@@ -13258,7 +14396,7 @@ ${detail}` : base;
       await clearUiSelectionAtoms();
       await repatchFakeSeedInventoryWithSelection();
     };
-    _btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+    _btnConfirm = createButton2("Confirm", { background: "#1F2328CC" });
     _btnConfirm.disabled = true;
     _btnConfirm.onclick = async () => {
       await closeSeedInventoryPanel();
@@ -13331,14 +14469,14 @@ ${detail}` : base;
     qty.onchange = () => {
       const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
       qty.value = String(v);
-      const cur2 = selectedMap.get(item.name);
-      if (!cur2) return;
-      cur2.qty = v;
-      selectedMap.set(item.name, cur2);
+      const cur = selectedMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      selectedMap.set(item.name, cur);
       updateSummary();
     };
     qty.oninput = qty.onchange;
-    const remove = createButton("Remove", { background: "transparent" });
+    const remove = createButton2("Remove", { background: "transparent" });
     remove.onclick = async () => {
       selectedMap.delete(item.name);
       refreshList();
@@ -15161,8 +16299,8 @@ ${detail}` : base;
           NotifierService.setPopup(row.id, !!on);
         } catch {
         }
-        const cur2 = NotifierService.getPref(row.id);
-        itemCell.dataset.follow = cur2.followed ? "1" : "0";
+        const cur = NotifierService.getPref(row.id);
+        itemCell.dataset.follow = cur.followed ? "1" : "0";
       });
       setSwitchVisual(popupSwitch, !!row.popup);
       popupSwitch.style.padding = "0";
@@ -16184,7 +17322,7 @@ ${detail}` : base;
   }
 
   // src/services/room.ts
-  var log3 = createMenuLogger("room-service", "Room service");
+  var log4 = createMenuLogger("room-service", "Room service");
   var MAX_PLAYERS = 6;
   function deriveCategoryFromName(name) {
     const match = /^([a-zA-Z]+)/.exec(name);
@@ -16222,7 +17360,7 @@ ${detail}` : base;
       const results = await Promise.all(
         definitions.map(async (def) => {
           try {
-            log3.debug("Fetching public room state", { room: def.idRoom, name: def.name });
+            log4.debug("Fetching public room state", { room: def.idRoom, name: def.name });
             const response = await requestRoomEndpoint(def.idRoom, {
               endpoint: "info",
               timeoutMs: 1e4
@@ -16237,22 +17375,22 @@ ${detail}` : base;
                 return void 0;
               }
             })();
-            const players2 = clampPlayerCount(
+            const players = clampPlayerCount(
               typeof payload?.numPlayers === "number" ? payload.numPlayers : 0
             );
             const capacity = MAX_PLAYERS;
             const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
             return {
               ...def,
-              players: players2,
+              players,
               capacity,
-              isFull: players2 >= capacity,
+              isFull: players >= capacity,
               lastUpdatedAt: now,
               currentGame
             };
           } catch (error) {
             const message = normalizeError(error);
-            log3.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
+            log4.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
             return {
               ...def,
               players: 0,
@@ -16276,10 +17414,10 @@ ${detail}` : base;
       return isDiscordSurface();
     },
     joinPublicRoom(room) {
-      log3.info("Joining public room", { room: room.idRoom });
+      log4.info("Joining public room", { room: room.idRoom });
       const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
       if (!result.ok) {
-        log3.warn("Join room returned not ok", { room: room.idRoom, result });
+        log4.warn("Join room returned not ok", { room: room.idRoom, result });
       }
       return result;
     }
@@ -16704,10 +17842,84 @@ ${detail}` : base;
     return wrapper;
   }
 
+  // src/ui/menus/keybinds.ts
+  function createKeybindRow(ui, action) {
+    const controls = document.createElement("div");
+    controls.style.display = "flex";
+    controls.style.alignItems = "center";
+    controls.style.flexWrap = "wrap";
+    controls.style.gap = "8px";
+    const button = ui.hotkeyButton(
+      getKeybind(action.id),
+      (hk) => setKeybind(action.id, hk),
+      {
+        emptyLabel: "Unassigned",
+        listeningLabel: "Press a key\u2026",
+        clearable: true,
+        allowModifierOnly: action.allowModifierOnly
+      }
+    );
+    const stop = onKeybindChange(action.id, (hk) => {
+      button.refreshHotkey(hk);
+    });
+    ui.on("unmounted", stop);
+    controls.appendChild(button);
+    const row = ui.formRow(action.label, controls, { labelWidth: "180px" });
+    row.label.style.fontSize = "13px";
+    row.label.style.opacity = "0.92";
+    if (action.hint) {
+      const hintEl = document.createElement("div");
+      hintEl.textContent = action.hint;
+      hintEl.style.fontSize = "11px";
+      hintEl.style.opacity = "0.7";
+      hintEl.style.marginTop = "2px";
+      hintEl.style.gridColumn = "2 / 3";
+      row.root.appendChild(hintEl);
+    }
+    return row.root;
+  }
+  async function renderKeybindsMenu(container) {
+    const ui = new Menu({ id: "keybinds", compact: true });
+    ui.mount(container);
+    const view = ui.root.querySelector(".qmm-views");
+    view.innerHTML = "";
+    view.style.display = "flex";
+    view.style.flexDirection = "column";
+    view.style.gap = "12px";
+    view.style.padding = "8px";
+    view.style.maxHeight = "60vh";
+    view.style.overflowY = "auto";
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "grid";
+    wrapper.style.gap = "12px";
+    wrapper.style.width = "100%";
+    wrapper.style.maxWidth = "720px";
+    wrapper.style.margin = "0 auto";
+    for (const section of getKeybindSections()) {
+      const card = ui.card(`${section.icon} ${section.title}`, { tone: "muted", align: "stretch" });
+      card.root.dataset.section = section.id;
+      card.body.style.display = "flex";
+      card.body.style.flexDirection = "column";
+      card.body.style.gap = "10px";
+      const desc = document.createElement("p");
+      desc.textContent = section.description;
+      desc.style.margin = "0";
+      desc.style.fontSize = "12px";
+      desc.style.opacity = "0.78";
+      card.body.appendChild(desc);
+      for (const action of section.actions) {
+        const row = createKeybindRow(ui, action);
+        card.body.appendChild(row);
+      }
+      wrapper.appendChild(card.root);
+    }
+    view.appendChild(wrapper);
+  }
+
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
-    const listeners2 = [];
+    const listeners3 = [];
     function swallowAll() {
       const add = (target, t) => {
         const h = (e) => {
@@ -16715,7 +17927,7 @@ ${detail}` : base;
           e.preventDefault?.();
         };
         target.addEventListener(t, h, { capture: true });
-        listeners2.push({ t, h, target });
+        listeners3.push({ t, h, target });
       };
       STOP_EVENTS.forEach((t) => {
         add(document, t);
@@ -16723,11 +17935,11 @@ ${detail}` : base;
       });
     }
     function unswallowAll() {
-      for (const { t, h, target } of listeners2) try {
+      for (const { t, h, target } of listeners3) try {
         target.removeEventListener(t, h, { capture: true });
       } catch {
       }
-      listeners2.length = 0;
+      listeners3.length = 0;
     }
     const docProto = Object.getPrototypeOf(document);
     const saved = {
@@ -16828,9 +18040,9 @@ ${detail}` : base;
     let pingTimer = null;
     async function pingPosition() {
       try {
-        const cur2 = await deps.getPosition();
-        if (!cur2) return;
-        await deps.move(Math.round(cur2.x), Math.round(cur2.y));
+        const cur = await deps.getPosition();
+        if (!cur) return;
+        await deps.move(Math.round(cur.x), Math.round(cur.y));
       } catch {
       }
     }
@@ -16874,6 +18086,7 @@ ${detail}` : base;
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
         register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
+        register("keybinds", "\u2328\uFE0F Keybinds", renderKeybindsMenu);
         register("debug-data", "\u{1F527} Debug", renderDebugDataMenu);
       }
     });
