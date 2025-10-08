@@ -15,7 +15,7 @@ The userscript injects a floating HUD called **Arie's Mod** with draggable windo
 ## 🚀 Installation (players)
 
 1. Install a userscript manager (Tampermonkey is the one I target).
-2. Open the [meta installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/meta.userscript.js) and let your manager install it.
+2. Open the [script installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/dist/quinoa-ws.min.user.js) and let your manager install it.
 3. Reload the game on either **https://magicgarden.gg** or within the Discord activity. The HUD pops up in the bottom-right corner when the websocket connects.
 
 Updating happens automatically: the meta script points to `quinoa-ws.min.user.js` on the same branch, so every reload fetches the newest build.
