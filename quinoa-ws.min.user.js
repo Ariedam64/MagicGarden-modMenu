@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.9.7
+// @version      1.9.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -686,6 +686,7 @@
 
   // src/services/locker.ts
   var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
+  var LOCKER_NO_WEATHER_TAG = "NoWeatherEffect";
   var emptySlotInfo = () => ({
     isPlant: false,
     originalIndex: null,
@@ -1403,7 +1404,15 @@
           if (!Array.isArray(recipe) || recipe.length === 0) continue;
           let matches = true;
           for (let j = 0; j < recipe.length; j++) {
-            if (!weather2.includes(recipe[j])) {
+            const required = recipe[j];
+            if (required === LOCKER_NO_WEATHER_TAG) {
+              if (weather2.length !== 0) {
+                matches = false;
+                break;
+              }
+              continue;
+            }
+            if (!weather2.includes(required)) {
               matches = false;
               break;
             }
@@ -1414,13 +1423,26 @@
       }
       if (!selected.length) return false;
       if (mode === "ALL") {
+        let hasRequirement = false;
         for (let i = 0; i < selected.length; i++) {
-          if (!weather2.includes(selected[i])) return false;
+          const required = selected[i];
+          if (required === LOCKER_NO_WEATHER_TAG) {
+            hasRequirement = true;
+            if (weather2.length !== 0) return false;
+            continue;
+          }
+          hasRequirement = true;
+          if (!weather2.includes(required)) return false;
         }
-        return true;
+        return hasRequirement;
       }
       for (let i = 0; i < selected.length; i++) {
-        if (weather2.includes(selected[i])) return true;
+        const required = selected[i];
+        if (required === LOCKER_NO_WEATHER_TAG) {
+          if (weather2.length === 0) return true;
+          continue;
+        }
+        if (weather2.includes(required)) return true;
       }
       return false;
     }
@@ -17375,6 +17397,7 @@ next: ${next}`;
   }
 
   // src/ui/menus/locker.ts
+  var NO_WEATHER_TAG = "NoWeatherEffect";
   var SEED_EMOJIS = [
     "\u{1F955}",
     "\u{1F353}",
@@ -17446,6 +17469,31 @@ next: ${next}`;
     label: formatMutationLabel(key2),
     tileRef: value
   }));
+  var createNoWeatherIcon = (options) => {
+    const size = Math.max(24, options?.size ?? 48);
+    const wrap = applyStyles(document.createElement("div"), {
+      width: `${size}px`,
+      height: `${size}px`,
+      display: "grid",
+      placeItems: "center"
+    });
+    const glyph = applyStyles(document.createElement("span"), {
+      color: "#ff5c5c",
+      fontSize: `${Math.round(size * 0.65)}px`,
+      fontWeight: "700",
+      textShadow: "0 1px 2px rgba(0, 0, 0, 0.6)",
+      lineHeight: "1"
+    });
+    glyph.textContent = "\u2716";
+    wrap.appendChild(glyph);
+    return wrap;
+  };
+  WEATHER_MUTATIONS.unshift({
+    key: NO_WEATHER_TAG,
+    label: "No weather effect",
+    tileRef: null,
+    iconFactory: createNoWeatherIcon
+  });
   var WEATHER_RECIPE_GROUPS = {
     Wet: "condition",
     Chilled: "condition",
@@ -17743,7 +17791,7 @@ next: ${next}`;
   }
   async function fetchMutationSprite(tag) {
     const entry = WEATHER_MUTATIONS.find((info) => info.key === tag);
-    if (!entry) return null;
+    if (!entry || entry.tileRef == null) return null;
     const [base] = mutationSheetBases();
     const index = toTileIndex(entry.tileRef, base ? [base] : []);
     if (index == null || !base) return null;
@@ -17816,7 +17864,9 @@ next: ${next}`;
     } catch {
     }
     WEATHER_MUTATIONS.forEach((info) => {
-      loadMutationSprite(info.key);
+      if (info.tileRef != null) {
+        loadMutationSprite(info.key);
+      }
     });
   }
   if (typeof window !== "undefined") {
@@ -18000,7 +18050,8 @@ next: ${next}`;
     label: label2,
     spriteSize,
     dense,
-    kind = "main"
+    kind = "main",
+    iconFactory
   }) {
     const isMain = kind === "main" && !dense;
     const gap = dense ? "3px" : isMain ? "3px" : "6px";
@@ -18038,14 +18089,15 @@ next: ${next}`;
     input.dataset.weatherToggle = kind;
     wrap.appendChild(input);
     wrap.dataset.weatherToggle = kind;
-    const sprite = createMutationSprite(key2, {
-      size: Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72)),
+    const iconSize = Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72));
+    const icon = iconFactory ? iconFactory({ size: iconSize, fallback: label2.charAt(0) || "?" }) : createMutationSprite(key2, {
+      size: iconSize,
       fallback: label2.charAt(0) || "?"
     });
-    applyStyles(sprite, {
+    applyStyles(icon, {
       filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))"
     });
-    wrap.appendChild(sprite);
+    wrap.appendChild(icon);
     const caption = applyStyles(document.createElement("div"), {
       fontSize: dense ? "11px" : "11.5px",
       fontWeight: dense ? "500" : "600",
@@ -18284,7 +18336,8 @@ next: ${next}`;
       const toggle = createWeatherMutationToggle({
         key: info.key,
         label: info.label,
-        kind: "main"
+        kind: "main",
+        iconFactory: info.iconFactory
       });
       toggle.input.addEventListener(
         "change",
@@ -18399,7 +18452,8 @@ next: ${next}`;
       repaintRecipes();
       opts.onChange?.();
     };
-    const buildRecipeBadge = (tag, label2) => {
+    const buildRecipeBadge = (info) => {
+      const { key: tag, label: label2 } = info;
       const badge = document.createElement("div");
       applyStyles(badge, {
         display: "inline-flex",
@@ -18414,7 +18468,7 @@ next: ${next}`;
         fontWeight: "600",
         letterSpacing: "0.2px"
       });
-      const sprite = createMutationSprite(tag, {
+      const sprite = info.iconFactory ? info.iconFactory({ size: 20, fallback: label2.charAt(0) || "?" }) : createMutationSprite(tag, {
         size: 20,
         fallback: label2.charAt(0) || "?"
       });
@@ -18439,7 +18493,7 @@ next: ${next}`;
       WEATHER_MUTATIONS.forEach((info) => {
         if (!selection.has(info.key)) return;
         count += 1;
-        badges.appendChild(buildRecipeBadge(info.key, info.label));
+        badges.appendChild(buildRecipeBadge(info));
       });
       if (count === 0) {
         const empty = document.createElement("div");
@@ -18481,7 +18535,8 @@ next: ${next}`;
           label: info.label,
           spriteSize: 40,
           dense: true,
-          kind: "recipe"
+          kind: "recipe",
+          iconFactory: info.iconFactory
         });
         toggles.set(info.key, toggle);
         toggle.setChecked(selection.has(toggle.key));
