@@ -10,7 +10,9 @@ import {
 
 // Reuse tag definitions from garden menu for consistency
 type VisualTag = "Gold" | "Rainbow";
-type WeatherTag = keyof typeof tileRefsMutations & string;
+const NO_WEATHER_TAG = "NoWeatherEffect" as const;
+
+type WeatherTag = (keyof typeof tileRefsMutations | typeof NO_WEATHER_TAG) & string;
 type WeatherMode = "ANY" | "ALL" | "RECIPES";
 type WeatherRecipeGroup = "condition" | "lighting";
 
@@ -103,10 +105,13 @@ type SpriteOptions = {
   fallback?: string;
 };
 
+type WeatherIconFactory = (options?: SpriteOptions) => HTMLElement;
+
 type WeatherMutationInfo = {
   key: WeatherTag;
   label: string;
-  tileRef: number;
+  tileRef?: number | null;
+  iconFactory?: WeatherIconFactory;
 };
 
 function formatMutationLabel(key: string): string {
@@ -132,7 +137,36 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
     tileRef: value,
   }));
 
-const WEATHER_RECIPE_GROUPS: Record<WeatherTag, WeatherRecipeGroup> = {
+const createNoWeatherIcon: WeatherIconFactory = options => {
+  const size = Math.max(24, options?.size ?? 48);
+  const wrap = applyStyles(document.createElement("div"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "grid",
+    placeItems: "center",
+  });
+
+  const glyph = applyStyles(document.createElement("span"), {
+    color: "#ff5c5c",
+    fontSize: `${Math.round(size * 0.65)}px`,
+    fontWeight: "700",
+    textShadow: "0 1px 2px rgba(0, 0, 0, 0.6)",
+    lineHeight: "1",
+  });
+  glyph.textContent = "✖";
+  wrap.appendChild(glyph);
+
+  return wrap;
+};
+
+WEATHER_MUTATIONS.unshift({
+  key: NO_WEATHER_TAG,
+  label: "No weather effect",
+  tileRef: null,
+  iconFactory: createNoWeatherIcon,
+});
+
+const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
   Wet: "condition",
   Chilled: "condition",
   Frozen: "condition",
@@ -485,9 +519,9 @@ function notifyMutationSpriteSubscribers(tag: WeatherTag, src: string | null): v
 
 async function fetchMutationSprite(tag: WeatherTag): Promise<string | null> {
   const entry = WEATHER_MUTATIONS.find(info => info.key === tag);
-  if (!entry) return null;
+  if (!entry || entry.tileRef == null) return null;
   const [base] = mutationSheetBases();
-  
+
   const index = toTileIndex(entry.tileRef, base ? [base] : []);
   if (index == null || !base) return null;
 
@@ -576,7 +610,9 @@ function preloadLockerSprites(): void {
   }
 
   WEATHER_MUTATIONS.forEach(info => {
-    loadMutationSprite(info.key);
+    if (info.tileRef != null) {
+      loadMutationSprite(info.key);
+    }
   });
 }
 
@@ -797,6 +833,7 @@ type WeatherMutationToggleOptions = {
   spriteSize?: number;
   dense?: boolean;
   kind?: "main" | "recipe";
+  iconFactory?: WeatherIconFactory;
 };
 
 function createWeatherMutationToggle({
@@ -805,6 +842,7 @@ function createWeatherMutationToggle({
   spriteSize,
   dense,
   kind = "main",
+  iconFactory,
 }: WeatherMutationToggleOptions): WeatherMutationToggle {
   const isMain = kind === "main" && !dense;
   const gap = dense ? "3px" : isMain ? "3px" : "6px";
@@ -844,14 +882,17 @@ function createWeatherMutationToggle({
   wrap.appendChild(input);
   wrap.dataset.weatherToggle = kind;
 
-  const sprite = createMutationSprite(key, {
-    size: Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72)),
-    fallback: label.charAt(0) || "?",
-  });
-  applyStyles(sprite, {
+  const iconSize = Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72));
+  const icon = iconFactory
+    ? iconFactory({ size: iconSize, fallback: label.charAt(0) || "?" })
+    : createMutationSprite(key, {
+        size: iconSize,
+        fallback: label.charAt(0) || "?",
+      });
+  applyStyles(icon, {
     filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))",
   });
-  wrap.appendChild(sprite);
+  wrap.appendChild(icon);
 
   const caption = applyStyles(document.createElement("div"), {
     fontSize: dense ? "11px" : "11.5px",
@@ -1140,6 +1181,7 @@ function createLockerSettingsCard(
       key: info.key,
       label: info.label,
       kind: "main",
+      iconFactory: info.iconFactory,
     });
     toggle.input.addEventListener("change", () =>
       updateMainWeatherSelection(info.key, toggle.input.checked),
@@ -1267,7 +1309,8 @@ function createLockerSettingsCard(
     opts.onChange?.();
   };
 
-  const buildRecipeBadge = (tag: WeatherTag, label: string) => {
+  const buildRecipeBadge = (info: WeatherMutationInfo) => {
+    const { key: tag, label } = info;
     const badge = document.createElement("div");
     applyStyles(badge, {
       display: "inline-flex",
@@ -1283,10 +1326,12 @@ function createLockerSettingsCard(
       letterSpacing: "0.2px",
     });
 
-    const sprite = createMutationSprite(tag, {
-      size: 20,
-      fallback: label.charAt(0) || "?",
-    });
+    const sprite = info.iconFactory
+      ? info.iconFactory({ size: 20, fallback: label.charAt(0) || "?" })
+      : createMutationSprite(tag, {
+          size: 20,
+          fallback: label.charAt(0) || "?",
+        });
     applyStyles(sprite, {
       filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))",
     });
@@ -1312,7 +1357,7 @@ function createLockerSettingsCard(
     WEATHER_MUTATIONS.forEach(info => {
       if (!selection.has(info.key)) return;
       count += 1;
-      badges.appendChild(buildRecipeBadge(info.key, info.label));
+      badges.appendChild(buildRecipeBadge(info));
     });
 
     if (count === 0) {
@@ -1361,6 +1406,7 @@ function createLockerSettingsCard(
         spriteSize: 40,
         dense: true,
         kind: "recipe",
+        iconFactory: info.iconFactory,
       });
       toggles.set(info.key, toggle);
       toggle.setChecked(selection.has(toggle.key));

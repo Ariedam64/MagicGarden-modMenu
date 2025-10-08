@@ -11,10 +11,9 @@ import {
   type PlantSlotTiming,
 } from "../store/atoms";
 
-import { Atoms } from "../store/atoms";
-
 /** Référence des mutations visuelles reconnues par le locker. */
 const VISUAL_MUTATIONS = new Set(["Gold", "Rainbow"] as const);
+const LOCKER_NO_WEATHER_TAG = "NoWeatherEffect" as const;
 
 type VisualTag = "Gold" | "Rainbow";
 type WeatherTag = string;
@@ -960,7 +959,15 @@ export class LockerService {
         if (!Array.isArray(recipe) || recipe.length === 0) continue;
         let matches = true;
         for (let j = 0; j < recipe.length; j++) {
-          if (!weather.includes(recipe[j]!)) {
+          const required = recipe[j]!;
+          if (required === LOCKER_NO_WEATHER_TAG) {
+            if (weather.length !== 0) {
+              matches = false;
+              break;
+            }
+            continue;
+          }
+          if (!weather.includes(required)) {
             matches = false;
             break;
           }
@@ -973,15 +980,28 @@ export class LockerService {
     if (!selected.length) return false;
 
     if (mode === "ALL") {
+      let hasRequirement = false;
       for (let i = 0; i < selected.length; i++) {
-        if (!weather.includes(selected[i]!)) return false;
+        const required = selected[i]!;
+        if (required === LOCKER_NO_WEATHER_TAG) {
+          hasRequirement = true;
+          if (weather.length !== 0) return false;
+          continue;
+        }
+        hasRequirement = true;
+        if (!weather.includes(required)) return false;
       }
-      return true;
+      return hasRequirement;
     }
 
     // mode ANY
     for (let i = 0; i < selected.length; i++) {
-      if (weather.includes(selected[i]!)) return true;
+      const required = selected[i]!;
+      if (required === LOCKER_NO_WEATHER_TAG) {
+        if (weather.length === 0) return true;
+        continue;
+      }
+      if (weather.includes(required)) return true;
     }
     return false;
   }
