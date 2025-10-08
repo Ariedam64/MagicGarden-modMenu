@@ -4,7 +4,7 @@
 
 ## ⚠️ Heads-up
 
-- This codebase is still a giant spaghetti bowl. Expect duplicated logic, long files, and hacks everywhere. I will clean it up later—right now the goal was to ship something usable.
+- This codebase is still a giant spaghetti bowl. Expect duplicated logic, long files, and hacks everywhere. I will clean it up later, right now the goal was to ship something usable.
 - Performance tuning is basically non-existent. The mod works on both the official **magicgarden.gg** website and the Discord Activities version, yet you might notice jank on low-end machines.
 - Please report crashes or visual glitches, but also remember that the whole thing is held together with duct tape.
 
