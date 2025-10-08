@@ -1,4 +1,4 @@
-# MagicGarden Mod Menu — first rough cut
+# MagicGarden Mod Menu, first rough cut
 
 > "It works, I promise." This is the very first release of my Magic Garden mod menu. It is rough, it is messy, it is absolutely not optimised… but it does what I need for now.
 
