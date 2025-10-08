@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.9.1
+// @version      1.9.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
-// @run-at       document-idle
+// @run-at       document-start
 // @inject-into  page
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
@@ -88,69 +88,6 @@
     } catch {
     }
     return null;
-  }
-
-  // src/hooks/ws-hook.ts
-  function installPageWebSocketHook() {
-    if (!pageWindow || !NativeWS) return;
-    function WrappedWebSocket(url, protocols) {
-      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
-      sockets.push(ws);
-      ws.addEventListener("open", () => {
-        setTimeout(() => {
-          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
-        }, 800);
-      });
-      ws.addEventListener("message", async (ev) => {
-        const j = await parseWSData(ev.data);
-        if (!j) return;
-        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
-          setQWS(ws, "message:" + (j.type || "state"));
-        }
-      });
-      const nativeSend = ws.send.bind(ws);
-      ws.send = function(data) {
-        try {
-          let j = null;
-          if (typeof data === "string") j = JSON.parse(data);
-          else if (data instanceof ArrayBuffer) j = JSON.parse(new TextDecoder().decode(data));
-          if (!hasSharedQuinoaWS() && j && Array.isArray(j.scopePath) && j.scopePath.join("/") === "Room/Quinoa") {
-            setQWS(ws, "send:" + j.type);
-          }
-        } catch {
-        }
-        return nativeSend(data);
-      };
-      return ws;
-    }
-    WrappedWebSocket.prototype = NativeWS.prototype;
-    try {
-      WrappedWebSocket.OPEN = NativeWS.OPEN;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
-    } catch {
-    }
-    pageWindow.WebSocket = WrappedWebSocket;
-    if (pageWindow !== window) {
-      try {
-        window.WebSocket = WrappedWebSocket;
-      } catch {
-      }
-    }
-    function hasSharedQuinoaWS() {
-      const existing = readSharedGlobal("quinoaWS");
-      return !!existing;
-    }
   }
 
   // src/store/jotai.ts
@@ -331,49 +268,6 @@
   function getAtomByLabel(label2) {
     const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return findAtomsByLabel(new RegExp("^" + escape(label2) + "$"))[0] || null;
-  }
-
-  // src/core/webSocketBridge.ts
-  function postAllToWorkers(msg) {
-    if (Workers.forEach) Workers.forEach((w) => {
-      try {
-        w.postMessage(msg);
-      } catch {
-      }
-    });
-    else for (const w of Workers._a) {
-      try {
-        w.postMessage(msg);
-      } catch {
-      }
-    }
-  }
-  function getPageWS() {
-    if (quinoaWS && quinoaWS.readyState === NativeWS.OPEN) return quinoaWS;
-    let any = null;
-    if (sockets.find) any = sockets.find((s) => s.readyState === NativeWS.OPEN) || null;
-    if (!any) {
-      for (let i = 0; i < sockets.length; i++) if (sockets[i].readyState === NativeWS.OPEN) {
-        any = sockets[i];
-        break;
-      }
-    }
-    if (any) {
-      setQWS(any, "getPageWS");
-      return any;
-    }
-    throw new Error("No page WebSocket open");
-  }
-  function sendToGame(payloadObj) {
-    const msg = { scopePath: ["Room", "Quinoa"], ...payloadObj };
-    try {
-      const ws = getPageWS();
-      ws.send(JSON.stringify(msg));
-      return true;
-    } catch {
-      postAllToWorkers({ __QWS_CMD: "send", payload: JSON.stringify(msg) });
-      return true;
-    }
   }
 
   // src/store/api.ts
@@ -612,6 +506,8 @@
   var position = makeAtom("positionAtom");
   var state = makeAtom("stateAtom");
   var map = makeAtom("mapAtom");
+  var player = makeAtom("playerAtom");
+  var action = makeAtom("actionAtom");
   var myData = makeAtom("myDataAtom");
   var myInventory = makeAtom("myInventoryAtom");
   var myCropInventory = makeAtom("myCropInventoryAtom");
@@ -619,6 +515,7 @@
   var myToolInventory = makeAtom("myToolInventoryAtom");
   var myPetInfos = makeAtom("myPetInfosAtom");
   var myPetSlotInfos = makeAtom("myPetSlotInfosAtom");
+  var totalPetSellPrice = makeAtom("totalPetSellPriceAtom");
   var shops = makeAtom("shopsAtom");
   var seedShop = makeAtom("seedShopAtom");
   var toolShop = makeAtom("toolShopAtom");
@@ -634,11 +531,17 @@
   var myCurrentGardenObject = makeAtom("myCurrentGardenObjectAtom");
   var myCurrentSortedGrowSlotIndices = makeAtom("myCurrentSortedGrowSlotIndicesAtom");
   var myCurrentGrowSlotIndex = makeAtom("myCurrentGrowSlotIndexAtom");
+  var myOwnCurrentGardenObject = makeAtom("myOwnCurrentGardenObjectAtom");
+  var isCurrentGrowSlotMature = makeAtom("isCurrentGrowSlotMatureAtom");
+  var myOwnCurrentDirtTileIndex = makeAtom("myOwnCurrentDirtTileIndexAtom");
   var weather = makeAtom("weatherAtom");
   var activeModal = makeAtom("activeModalAtom");
+  var avatarTriggerAnimationAtom = makeAtom("avatarTriggerAnimationAtom");
   var garden = makeView("myDataAtom", { path: "garden" });
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
   var favoriteIds = makeView("myInventoryAtom", { path: "favoritedItemIds" });
+  var playerId = makeView("playerAtom", { path: "id" });
+  var myOwnCurrentGardenObjectType = makeView("myOwnCurrentGardenObjectAtom", { path: "objectType" });
   var stateChild = makeView("stateAtom", { path: "child" });
   var stateChildData = makeView("stateAtom", { path: "child.data" });
   var stateShops = makeView("stateAtom", { path: "child.data.shops" });
@@ -698,7 +601,20 @@
   var Atoms = {
     ui: { activeModal },
     server: { numPlayers },
-    player: { position },
+    player: {
+      position,
+      avatarTriggerAnimationAtom,
+      player,
+      action,
+      playerId
+    },
+    garden: {
+      myOwnCurrentGardenObject,
+      isCurrentGrowSlotMature,
+      myOwnCurrentGardenObjectType,
+      myOwnCurrentDirtTileIndex,
+      myCurrentGrowSlotIndex
+    },
     root: { state, map },
     data: {
       myData,
@@ -722,7 +638,8 @@
     },
     pets: {
       myPetInfos,
-      myPetSlotInfos
+      myPetSlotInfos,
+      totalPetSellPrice
     },
     shop: {
       shops,
@@ -766,103 +683,1112 @@
     return new Set(Array.isArray(arr) ? arr : []);
   }
 
-  // src/services/logger.ts
-  var MAX_ENTRIES_DEFAULT = 1500;
-  var maxEntries = MAX_ENTRIES_DEFAULT;
-  var seq = 0;
-  var entries = [];
-  var listeners = /* @__PURE__ */ new Set();
-  var sources = /* @__PURE__ */ new Map();
-  function notify(event) {
-    for (const cb of Array.from(listeners)) {
-      try {
-        cb(event);
-      } catch (err) {
+  // src/services/locker.ts
+  var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
+  var emptySlotInfo = () => ({
+    isPlant: false,
+    originalIndex: null,
+    orderedIndex: null,
+    totalSlots: 0,
+    availableSlotCount: 0,
+    slot: null,
+    seedKey: null,
+    sizePercent: null,
+    mutations: []
+  });
+  var now = () => typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  var shallowEqualStrings = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b) return (a?.length ?? 0) === (b?.length ?? 0);
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  };
+  var slotInfosEqual = (a, b) => a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && shallowEqualStrings(a.mutations, b.mutations);
+  var isPlantObject = (o) => !!o && o.objectType === "plant";
+  var slotSignature = (slot) => {
+    if (!slot) return "\u2205";
+    const species = slot.species ?? "";
+    const start = Number.isFinite(slot.startTime) ? slot.startTime : 0;
+    const end = Number.isFinite(slot.endTime) ? slot.endTime : 0;
+    const target = Number.isFinite(slot.targetScale) ? slot.targetScale : 0;
+    const muts = Array.isArray(slot.mutations) ? slot.mutations.join(",") : "";
+    return `${species}|${start}|${end}|${target}|${muts}`;
+  };
+  var gardenObjectSignature = (obj) => {
+    if (!obj) return "\u2205";
+    if (!isPlantObject(obj)) {
+      if (!obj || typeof obj !== "object") return String(obj);
+      const entries = Object.keys(obj).sort().map((key2) => `${key2}:${JSON.stringify(obj[key2])}`);
+      return `other|${entries.join(";")}`;
+    }
+    const base = `${obj.objectType}|${obj.species ?? ""}|${obj.plantedAt ?? 0}|${obj.maturedAt ?? 0}`;
+    const slots = Array.isArray(obj.slots) ? obj.slots.map((slot) => slotSignature(slot)).join("||") : "";
+    return `${base}|slots:${slots}`;
+  };
+  var arraySignature = (arr) => Array.isArray(arr) ? arr.join(",") : "\u2205";
+  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
+  var clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  var extractSeedKey = (obj) => {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.seedKey === "string") {
+      return obj.seedKey;
+    }
+    if (typeof obj.species === "string" && obj.species) {
+      return obj.species;
+    }
+    const asAny = obj;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = asAny[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  };
+  var clampPercent = (value, min, max) => Math.max(min, Math.min(max, value));
+  var extractSizePercent = (slot) => {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent);
+    if (Number.isFinite(direct)) {
+      return clampPercent(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent(pct, 0, 100);
+    }
+    return 100;
+  };
+  function startLockerSlotWatcherViaGardenObject() {
+    if (typeof window === "undefined") {
+      return {
+        get: () => emptySlotInfo(),
+        onChange: () => () => {
+        },
+        stop() {
+        },
+        recompute() {
+        }
+      };
+    }
+    let cur = null;
+    let sortedIdx = null;
+    let sortedIdxSig = arraySignature(sortedIdx);
+    let selectedIdx = null;
+    let lastInfo = emptySlotInfo();
+    let curSig = gardenObjectSignature(cur);
+    const listeners2 = /* @__PURE__ */ new Set();
+    const notify = () => {
+      for (const fn of listeners2) {
         try {
-          console.error("[Logger] listener error", err);
+          fn(lastInfo);
+        } catch {
+        }
+      }
+    };
+    let scheduled = false;
+    const scheduleRecomputeAndNotify = () => {
+      recomputeAndNotify();
+      if (scheduled) return;
+      scheduled = true;
+      const run = () => {
+        scheduled = false;
+        recomputeAndNotify();
+      };
+      if (typeof globalThis !== "undefined" && typeof globalThis.queueMicrotask === "function") {
+        globalThis.queueMicrotask(run);
+      } else if (typeof Promise !== "undefined") {
+        Promise.resolve().then(run);
+      } else if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+        window.setTimeout(run, 0);
+      } else {
+        run();
+      }
+    };
+    function getOrder(slotCount) {
+      if (!slotCount) return [];
+      if (Array.isArray(sortedIdx) && sortedIdx.length === slotCount) {
+        return sortedIdx.slice();
+      }
+      return defaultOrder(slotCount);
+    }
+    function selectedOrderedPosition(order, slotCount) {
+      if (!slotCount || !order.length) return 0;
+      const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
+      const clampedRaw = clamp(raw, 0, slotCount - 1);
+      const pos = order.indexOf(clampedRaw);
+      return pos >= 0 ? pos : 0;
+    }
+    function sanitizeMutations2(raw) {
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      for (let i = 0; i < raw.length; i++) {
+        const value = raw[i];
+        if (typeof value === "string") {
+          if (value) out.push(value);
+        } else if (value != null) {
+          const str = String(value);
+          if (str) out.push(str);
+        }
+      }
+      return out;
+    }
+    function computeSlotInfo() {
+      const seedKey = extractSeedKey(cur);
+      if (!isPlantObject(cur)) {
+        return {
+          isPlant: false,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: 0,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const slots = Array.isArray(cur.slots) ? cur.slots : [];
+      const slotCount = slots.length;
+      if (!slotCount) {
+        return {
+          isPlant: true,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: 0,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const order = getOrder(slotCount);
+      const availableIndices = [];
+      for (const idx of order) {
+        if (Number.isInteger(idx) && idx >= 0 && idx < slotCount) {
+          if (slots[idx] != null) availableIndices.push(idx);
+        }
+      }
+      const availableCount = availableIndices.length;
+      if (!availableCount) {
+        return {
+          isPlant: true,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: slotCount,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const pos = selectedOrderedPosition(order, slotCount);
+      const clampedPos = clamp(pos, 0, availableCount - 1);
+      const originalIndex = availableIndices[clampedPos] ?? null;
+      const slot = typeof originalIndex === "number" ? slots[originalIndex] ?? null : null;
+      const sizePercent = slot ? extractSizePercent(slot) : null;
+      const mutations = slot ? sanitizeMutations2(slot.mutations) : [];
+      return {
+        isPlant: true,
+        originalIndex: typeof originalIndex === "number" ? originalIndex : null,
+        orderedIndex: clampedPos,
+        totalSlots: slotCount,
+        availableSlotCount: availableCount,
+        slot: slot ?? null,
+        seedKey,
+        sizePercent,
+        mutations
+      };
+    }
+    function mutationsEqual(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    function infosEqual(a, b) {
+      return a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && mutationsEqual(a.mutations, b.mutations);
+    }
+    function recomputeAndNotify() {
+      const next = computeSlotInfo();
+      if (!infosEqual(next, lastInfo)) {
+        lastInfo = next;
+        notify();
+      }
+    }
+    (async () => {
+      try {
+        selectedIdx = await myCurrentGrowSlotIndex.get();
+      } catch {
+      }
+      try {
+        const v = await myCurrentSortedGrowSlotIndices.get();
+        sortedIdx = Array.isArray(v) ? v.slice() : null;
+        sortedIdxSig = arraySignature(sortedIdx);
+      } catch {
+      }
+      try {
+        cur = await myCurrentGardenObject.get();
+        curSig = gardenObjectSignature(cur);
+      } catch {
+      }
+      const refreshSorted = (v) => {
+        const next = Array.isArray(v) ? v.slice() : null;
+        const sig = arraySignature(next);
+        if (sig === sortedIdxSig) return false;
+        sortedIdx = next;
+        sortedIdxSig = sig;
+        return true;
+      };
+      const refreshGarden = (v) => {
+        const sig = gardenObjectSignature(v ?? null);
+        if (sig === curSig) return false;
+        cur = v;
+        curSig = sig;
+        return true;
+      };
+      let awaitIndexBeforeRecompute = false;
+      let awaitIndexTimer = null;
+      const clearAwaitIndexTimer = () => {
+        if (awaitIndexTimer == null) return;
+        if (typeof globalThis !== "undefined") {
+          const clearer = globalThis.clearTimeout;
+          if (typeof clearer === "function") {
+            clearer.call(globalThis, awaitIndexTimer);
+          }
+        }
+        awaitIndexTimer = null;
+      };
+      const deferUntilIndexChanges = () => {
+        awaitIndexBeforeRecompute = true;
+        if (awaitIndexTimer != null) return;
+        const run = () => {
+          awaitIndexTimer = null;
+          if (!awaitIndexBeforeRecompute) return;
+          awaitIndexBeforeRecompute = false;
+          scheduleRecomputeAndNotify();
+        };
+        if (typeof globalThis !== "undefined") {
+          const setter = globalThis.setTimeout;
+          if (typeof setter === "function") {
+            awaitIndexTimer = setter.call(globalThis, run, 0);
+            return;
+          }
+        }
+        run();
+      };
+      myCurrentSortedGrowSlotIndices.onChange((v) => {
+        const changed = refreshSorted(v);
+        if (!changed) return;
+        deferUntilIndexChanges();
+      });
+      myCurrentGardenObject.onChange((v) => {
+        const changed = refreshGarden(v);
+        if (!changed) return;
+        deferUntilIndexChanges();
+      });
+      myCurrentGrowSlotIndex.onChange((idx) => {
+        selectedIdx = Number.isFinite(idx) ? idx : 0;
+        void (async () => {
+          try {
+            refreshSorted(await myCurrentSortedGrowSlotIndices.get());
+          } catch {
+          }
+          try {
+            refreshGarden(await myCurrentGardenObject.get());
+          } catch {
+          }
+          if (awaitIndexBeforeRecompute) {
+            awaitIndexBeforeRecompute = false;
+            clearAwaitIndexTimer();
+          }
+          scheduleRecomputeAndNotify();
+        })();
+      });
+      recomputeAndNotify();
+    })();
+    return {
+      get() {
+        return lastInfo;
+      },
+      onChange(cb) {
+        listeners2.add(cb);
+        return () => listeners2.delete(cb);
+      },
+      stop() {
+        listeners2.clear();
+      },
+      recompute() {
+        recomputeAndNotify();
+      }
+    };
+  }
+  function defaultSettings() {
+    return {
+      minScalePct: 50,
+      minInventory: 91,
+      avoidNormal: false,
+      includeNormal: true,
+      visualMutations: [],
+      weatherMode: "ANY",
+      weatherSelected: [],
+      weatherRecipes: []
+    };
+  }
+  function defaultState() {
+    return {
+      enabled: false,
+      settings: defaultSettings(),
+      overrides: {}
+    };
+  }
+  var LS_KEY = "garden.locker.state.v2";
+  var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+  function sanitizeSettings(raw) {
+    const base = defaultSettings();
+    const minScale = Number(raw?.minScalePct);
+    base.minScalePct = Number.isFinite(minScale) ? clampNumber(Math.round(minScale), 50, 100) : 50;
+    const minInv = Number(raw?.minInventory);
+    base.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
+    if (typeof raw?.avoidNormal === "boolean") {
+      base.avoidNormal = raw.avoidNormal;
+    } else {
+      base.avoidNormal = raw?.includeNormal === false;
+    }
+    base.includeNormal = !base.avoidNormal;
+    base.visualMutations = Array.isArray(raw?.visualMutations) ? Array.from(new Set(raw.visualMutations.filter((m) => VISUAL_MUTATIONS.has(m)))) : [];
+    const mode = raw?.weatherMode;
+    base.weatherMode = mode === "ALL" || mode === "RECIPES" ? mode : "ANY";
+    base.weatherSelected = Array.isArray(raw?.weatherSelected) ? Array.from(new Set(raw.weatherSelected.map((m) => String(m || "")).filter(Boolean))) : [];
+    base.weatherRecipes = Array.isArray(raw?.weatherRecipes) ? raw.weatherRecipes.map(
+      (recipe) => Array.isArray(recipe) ? Array.from(new Set(recipe.map((m) => String(m || "")).filter(Boolean))) : []
+    ).filter((arr) => arr.length > 0) : [];
+    return base;
+  }
+  function sanitizeState(raw) {
+    const state2 = defaultState();
+    if (!raw || typeof raw !== "object") return state2;
+    state2.enabled = raw.enabled === true;
+    state2.settings = sanitizeSettings(raw.settings);
+    state2.overrides = {};
+    if (raw.overrides && typeof raw.overrides === "object") {
+      for (const [key2, value] of Object.entries(raw.overrides)) {
+        if (!key2) continue;
+        state2.overrides[key2] = {
+          enabled: value?.enabled === true,
+          settings: sanitizeSettings(value?.settings)
+        };
+      }
+    }
+    return state2;
+  }
+  function cloneSettings(settings) {
+    return {
+      minScalePct: settings.minScalePct,
+      minInventory: settings.minInventory,
+      avoidNormal: settings.avoidNormal,
+      includeNormal: settings.includeNormal,
+      visualMutations: settings.visualMutations.slice(),
+      weatherMode: settings.weatherMode,
+      weatherSelected: settings.weatherSelected.slice(),
+      weatherRecipes: settings.weatherRecipes.map((recipe) => recipe.slice())
+    };
+  }
+  function cloneState(state2) {
+    const overrides = {};
+    for (const [key2, value] of Object.entries(state2.overrides)) {
+      overrides[key2] = { enabled: value.enabled, settings: cloneSettings(value.settings) };
+    }
+    return {
+      enabled: state2.enabled,
+      settings: cloneSettings(state2.settings),
+      overrides
+    };
+  }
+  function cloneSlotInfo(info) {
+    return {
+      isPlant: info.isPlant,
+      originalIndex: info.originalIndex,
+      orderedIndex: info.orderedIndex,
+      totalSlots: info.totalSlots,
+      availableSlotCount: info.availableSlotCount,
+      slot: info.slot,
+      seedKey: info.seedKey,
+      sizePercent: info.sizePercent,
+      mutations: info.mutations.slice()
+    };
+  }
+  function mutationsToArrays(raw) {
+    let hasGold = false;
+    let hasRainbow = false;
+    const weather2 = [];
+    if (!Array.isArray(raw)) {
+      return { hasGold, hasRainbow, weather: weather2 };
+    }
+    for (let i = 0; i < raw.length; i++) {
+      const tag = String(raw[i] || "");
+      if (!tag) continue;
+      if (tag === "Gold") {
+        hasGold = true;
+      } else if (tag === "Rainbow") {
+        hasRainbow = true;
+      } else {
+        weather2.push(tag);
+      }
+    }
+    return { hasGold, hasRainbow, weather: weather2 };
+  }
+  var LockerService = class {
+    constructor() {
+      __publicField(this, "state", defaultState());
+      __publicField(this, "listeners", /* @__PURE__ */ new Set());
+      __publicField(this, "slotInfoListeners", /* @__PURE__ */ new Set());
+      __publicField(this, "slotWatcher", null);
+      __publicField(this, "slotWatcherUnsub", null);
+      __publicField(this, "currentSlotInfo", emptySlotInfo());
+      __publicField(this, "currentSlotHarvestAllowed", null);
+      __publicField(this, "lastSlotChangeDetectedAt", null);
+      this.load();
+      this.updateSlotWatcher();
+    }
+    load() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") {
+        this.state = defaultState();
+        return;
+      }
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) {
+          this.state = defaultState();
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        this.state = sanitizeState(parsed);
+      } catch {
+        this.state = defaultState();
+      }
+    }
+    save() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(this.state));
+      } catch {
+      }
+    }
+    emit() {
+      if (!this.listeners.size) return;
+      const snapshot = this.getState();
+      const event = { type: "locker-state-changed", state: snapshot };
+      for (const listener of this.listeners) {
+        try {
+          listener(event);
         } catch {
         }
       }
     }
-  }
-  function registerSource(id, label2) {
-    const sanitizedLabel = label2 && label2.trim().length ? label2 : id;
-    const prev = sources.get(id);
-    if (!prev || prev !== sanitizedLabel) {
-      sources.set(id, sanitizedLabel);
-      notify({ type: "source", id, label: sanitizedLabel });
+    setState(next) {
+      this.state = next;
+      this.updateSlotWatcher();
+      this.save();
+      this.emit();
+      this.requestSlotWatcherRecompute();
+      this.reapplyCurrentSlotInfo();
     }
-  }
-  function pushEntry(level, source, message, details, context) {
-    if (!source) source = "global";
-    registerSource(source, sources.get(source) || source);
-    const entry = {
-      id: ++seq,
-      ts: Date.now(),
-      level,
-      source,
-      sourceLabel: sources.get(source) || source,
-      context: context ?? null,
-      message,
-      details
-    };
-    entries.push(entry);
-    let trimmed = 0;
-    while (entries.length > maxEntries) {
-      entries.shift();
-      trimmed++;
+    updateSlotWatcher() {
+      const shouldWatch = this.state.enabled;
+      if (shouldWatch) {
+        if (!this.slotWatcher) {
+          this.slotWatcher = startLockerSlotWatcherViaGardenObject();
+        }
+        if (this.slotWatcher && !this.slotWatcherUnsub) {
+          try {
+            this.slotWatcherUnsub = this.slotWatcher.onChange((info) => this.handleSlotInfo(info));
+          } catch {
+            this.slotWatcherUnsub = null;
+          }
+        }
+        try {
+          const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
+          this.handleSlotInfo(info, { silent: true });
+        } catch {
+          this.handleSlotInfo(emptySlotInfo(), { silent: true });
+        }
+        return;
+      }
+      this.detachSlotWatcher();
     }
-    if (trimmed > 0) {
-      notify({ type: "snapshot", entries: [...entries] });
-    } else {
-      notify({ type: "append", entry });
+    getState() {
+      return cloneState(this.state);
     }
-  }
-  var Logger = class _Logger {
-    constructor(sourceId, label2, context = null) {
-      this.sourceId = sourceId;
-      this.label = label2;
-      this.context = context;
-      registerSource(sourceId, label2);
+    setGlobalState(next) {
+      const current = this.state;
+      const sanitized = sanitizeSettings(next.settings);
+      const updated = {
+        enabled: !!next.enabled,
+        settings: sanitized,
+        overrides: { ...current.overrides }
+      };
+      this.setState(updated);
     }
-    debug(message, details) {
-      pushEntry("debug", this.sourceId, message, details, this.context);
+    setOverride(seedKey, override) {
+      if (!seedKey) return;
+      const sanitized = {
+        enabled: !!override?.enabled,
+        settings: sanitizeSettings(override?.settings)
+      };
+      const overrides = { ...this.state.overrides, [seedKey]: sanitized };
+      this.setState({ ...this.state, overrides });
     }
-    info(message, details) {
-      pushEntry("info", this.sourceId, message, details, this.context);
+    removeOverride(seedKey) {
+      if (!seedKey) return;
+      if (!(seedKey in this.state.overrides)) return;
+      const overrides = { ...this.state.overrides };
+      delete overrides[seedKey];
+      this.setState({ ...this.state, overrides });
     }
-    warn(message, details) {
-      pushEntry("warn", this.sourceId, message, details, this.context);
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
     }
-    error(message, details) {
-      pushEntry("error", this.sourceId, message, details, this.context);
+    onSlotInfoChange(listener) {
+      this.slotInfoListeners.add(listener);
+      return () => this.slotInfoListeners.delete(listener);
     }
-    child(context) {
-      const ctx = context?.trim() ? context.trim() : null;
-      return new _Logger(this.sourceId, this.label, ctx);
+    getCurrentSlotSnapshot() {
+      return {
+        info: cloneSlotInfo(this.currentSlotInfo),
+        harvestAllowed: this.currentSlotHarvestAllowed,
+        detectedAt: this.lastSlotChangeDetectedAt
+      };
+    }
+    requestSlotWatcherRecompute() {
+      if (!this.slotWatcher) return;
+      try {
+        this.slotWatcher.recompute();
+      } catch {
+      }
+    }
+    detachSlotWatcher() {
+      if (this.slotWatcherUnsub) {
+        try {
+          this.slotWatcherUnsub();
+        } catch {
+        }
+        this.slotWatcherUnsub = null;
+      }
+      if (this.slotWatcher) {
+        try {
+          this.slotWatcher.stop();
+        } catch {
+        }
+        this.slotWatcher = null;
+      }
+      this.handleSlotInfo(emptySlotInfo(), { silent: true });
+    }
+    handleSlotInfo(info, opts = {}) {
+      const { silent = false } = opts;
+      const prevInfo = this.currentSlotInfo;
+      const prevHarvestAllowed = this.currentSlotHarvestAllowed;
+      const normalizedMutations = Array.isArray(info.mutations) ? info.mutations.slice() : [];
+      const nextInfo = { ...info, mutations: normalizedMutations };
+      let computedSizePercent = null;
+      let harvestAllowed = null;
+      if (nextInfo.isPlant && nextInfo.slot) {
+        if (typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent)) {
+          computedSizePercent = nextInfo.sizePercent;
+        } else {
+          computedSizePercent = extractSizePercent(nextInfo.slot);
+        }
+        try {
+          harvestAllowed = this.allowsHarvest({
+            seedKey: nextInfo.seedKey ?? null,
+            sizePercent: computedSizePercent ?? 0,
+            mutations: normalizedMutations
+          });
+        } catch {
+          harvestAllowed = null;
+        }
+      } else {
+        computedSizePercent = typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent) ? nextInfo.sizePercent : null;
+        harvestAllowed = null;
+      }
+      this.currentSlotInfo = nextInfo;
+      this.currentSlotHarvestAllowed = harvestAllowed;
+      if (!silent) {
+        if (nextInfo.isPlant) {
+          if (nextInfo.slot) {
+            console.log("[Locker] Slot selection", {
+              seedKey: nextInfo.seedKey ?? null,
+              slotIndex: nextInfo.originalIndex,
+              orderedIndex: nextInfo.orderedIndex,
+              sizePercent: computedSizePercent,
+              harvestAllowed,
+              mutations: normalizedMutations,
+              slot: nextInfo.slot
+            });
+          } else {
+            console.log("[Locker] Slot selection", {
+              isPlant: true,
+              slotIndex: nextInfo.originalIndex,
+              orderedIndex: nextInfo.orderedIndex,
+              totalSlots: nextInfo.totalSlots,
+              availableSlotCount: nextInfo.availableSlotCount,
+              seedKey: nextInfo.seedKey ?? null,
+              slot: nextInfo.slot
+            });
+          }
+        } else {
+          console.log("[Locker] Slot selection", { isPlant: false, slot: nextInfo.slot });
+        }
+        const infoChanged = !slotInfosEqual(prevInfo, nextInfo) || (prevHarvestAllowed ?? null) !== (harvestAllowed ?? null);
+        if (infoChanged) {
+          this.lastSlotChangeDetectedAt = now();
+        }
+      }
+      this.emitSlotInfoChange();
+    }
+    reapplyCurrentSlotInfo() {
+      try {
+        const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
+        this.handleSlotInfo(info, { silent: true });
+      } catch {
+        this.handleSlotInfo(emptySlotInfo(), { silent: true });
+      }
+    }
+    recomputeCurrentSlot() {
+      this.requestSlotWatcherRecompute();
+      this.reapplyCurrentSlotInfo();
+    }
+    effectiveSettings(seedKey) {
+      if (!this.state.enabled) {
+        return { enabled: false, settings: this.state.settings };
+      }
+      if (seedKey) {
+        const override = this.state.overrides[seedKey];
+        if (override?.enabled) {
+          return { enabled: true, settings: override.settings };
+        }
+      }
+      return { enabled: true, settings: this.state.settings };
+    }
+    slotShouldBeBlocked(settings, args) {
+      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 100);
+      if (args.sizePercent < minScale) return true;
+      const { hasGold, hasRainbow, weather: weather2 } = mutationsToArrays(args.mutations);
+      const isNormal = !hasGold && !hasRainbow;
+      if (isNormal) {
+        if (settings.avoidNormal) return true;
+      } else {
+        const avoidGold = settings.visualMutations.includes("Gold");
+        const avoidRainbow = settings.visualMutations.includes("Rainbow");
+        if (avoidGold && hasGold || avoidRainbow && hasRainbow) return true;
+      }
+      const selected = settings.weatherSelected ?? [];
+      const mode = settings.weatherMode ?? "ANY";
+      if (mode === "RECIPES") {
+        const recipes = settings.weatherRecipes ?? [];
+        if (!recipes.length) return false;
+        for (let i = 0; i < recipes.length; i++) {
+          const recipe = recipes[i];
+          if (!Array.isArray(recipe) || recipe.length === 0) continue;
+          let matches = true;
+          for (let j = 0; j < recipe.length; j++) {
+            if (!weather2.includes(recipe[j])) {
+              matches = false;
+              break;
+            }
+          }
+          if (matches) return true;
+        }
+        return false;
+      }
+      if (!selected.length) return false;
+      if (mode === "ALL") {
+        for (let i = 0; i < selected.length; i++) {
+          if (!weather2.includes(selected[i])) return false;
+        }
+        return true;
+      }
+      for (let i = 0; i < selected.length; i++) {
+        if (weather2.includes(selected[i])) return true;
+      }
+      return false;
+    }
+    emitSlotInfoChange() {
+      if (!this.slotInfoListeners.size) {
+        return;
+      }
+      const snapshot = {
+        type: "locker-slot-info-changed",
+        info: cloneSlotInfo(this.currentSlotInfo),
+        harvestAllowed: this.currentSlotHarvestAllowed,
+        detectedAt: this.lastSlotChangeDetectedAt
+      };
+      for (const listener of this.slotInfoListeners) {
+        try {
+          listener(snapshot);
+        } catch {
+        }
+      }
+    }
+    allowsHarvest(args) {
+      const effective = this.effectiveSettings(args.seedKey);
+      if (!effective.enabled) {
+        return true;
+      }
+      const blocked = this.slotShouldBeBlocked(effective.settings, args);
+      return !blocked;
     }
   };
-  function createMenuLogger(sourceId, label2) {
-    return new Logger(sourceId, label2 ?? sourceId, null);
-  }
-  function subscribeLogs(cb) {
-    listeners.add(cb);
-    for (const [id, label2] of sources.entries()) {
-      cb({ type: "source", id, label: label2 });
+  var lockerService = new LockerService();
+
+  // src/hooks/ws-hook.ts
+  function installPageWebSocketHook() {
+    if (!pageWindow || !NativeWS) return;
+    function WrappedWebSocket(url, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+      sockets.push(ws);
+      ws.addEventListener("open", () => {
+        setTimeout(() => {
+          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
+        }, 800);
+      });
+      ws.addEventListener("message", async (ev) => {
+        const j = await parseWSData(ev.data);
+        if (!j) return;
+        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+          setQWS(ws, "message:" + (j.type || "state"));
+        }
+      });
+      return ws;
     }
-    cb({ type: "snapshot", entries: [...entries] });
+    WrappedWebSocket.prototype = NativeWS.prototype;
+    try {
+      WrappedWebSocket.OPEN = NativeWS.OPEN;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
+    } catch {
+    }
+    pageWindow.WebSocket = WrappedWebSocket;
+    if (pageWindow !== window) {
+      try {
+        window.WebSocket = WrappedWebSocket;
+      } catch {
+      }
+    }
+    function hasSharedQuinoaWS() {
+      const existing = readSharedGlobal("quinoaWS");
+      return !!existing;
+    }
+    installHarvestCropInterceptor();
+  }
+  var interceptorsByType = /* @__PURE__ */ new Map();
+  var interceptorStatus = readSharedGlobal(
+    "__tmMessageHookInstalled"
+  ) ? "installed" : "idle";
+  var interceptorPoll = null;
+  var interceptorTimeout = null;
+  function registerMessageInterceptor(type, interceptor) {
+    const list = interceptorsByType.get(type);
+    if (list) {
+      list.push(interceptor);
+    } else {
+      interceptorsByType.set(type, [interceptor]);
+    }
+    ensureMessageInterceptorInstalled();
     return () => {
-      listeners.delete(cb);
+      const current = interceptorsByType.get(type);
+      if (!current) return;
+      const index = current.indexOf(interceptor);
+      if (index !== -1) current.splice(index, 1);
+      if (current.length === 0) interceptorsByType.delete(type);
     };
   }
-  function clearLogs() {
-    if (!entries.length) return;
-    entries.length = 0;
-    notify({ type: "clear" });
+  function ensureMessageInterceptorInstalled() {
+    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
+    interceptorStatus = "installing";
+    const tryInstall = () => {
+      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
+      if (!Conn) return false;
+      const original = resolveSendMessage(Conn);
+      if (!original) return false;
+      const wrap = function(message, ...rest) {
+        let currentMessage = message;
+        try {
+          const type = currentMessage?.type;
+          if (type && interceptorsByType.size > 0) {
+            const context = { thisArg: this, args: rest };
+            const result = applyInterceptors(type, currentMessage, context);
+            if (result.drop) return;
+            currentMessage = result.message;
+          }
+        } catch (error) {
+          console.error("[MG-mod] Erreur dans le hook WS :", error);
+        }
+        return original.fn.call(this, currentMessage, ...rest);
+      };
+      if (original.kind === "static") {
+        Conn.sendMessage = wrap;
+      } else {
+        Conn.prototype.sendMessage = wrap;
+      }
+      interceptorStatus = "installed";
+      shareGlobal("__tmMessageHookInstalled", true);
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorTimeout !== null) {
+        clearTimeout(interceptorTimeout);
+        interceptorTimeout = null;
+      }
+      return true;
+    };
+    if (tryInstall()) return;
+    interceptorPoll = window.setInterval(() => {
+      if (tryInstall()) {
+        if (interceptorPoll !== null) {
+          clearInterval(interceptorPoll);
+          interceptorPoll = null;
+        }
+      }
+    }, 200);
+    interceptorTimeout = window.setTimeout(() => {
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorStatus !== "installed") {
+        interceptorStatus = "idle";
+      }
+      interceptorTimeout = null;
+    }, 2e4);
+  }
+  function applyInterceptors(type, initialMessage, context) {
+    const interceptors = interceptorsByType.get(type);
+    if (!interceptors || interceptors.length === 0) {
+      return { message: initialMessage, drop: false };
+    }
+    let currentMessage = initialMessage;
+    for (const interceptor of [...interceptors]) {
+      try {
+        const result = interceptor(currentMessage, context);
+        if (!result) continue;
+        if (result.kind === "drop") {
+          return { message: currentMessage, drop: true };
+        }
+        if (result.kind === "replace") {
+          currentMessage = result.message;
+        }
+      } catch (error) {
+      }
+    }
+    return { message: currentMessage, drop: false };
+  }
+  function installHarvestCropInterceptor() {
+    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
+    let latestGardenState = null;
+    void (async () => {
+      try {
+        latestGardenState = await Atoms.data.garden.get() ?? null;
+      } catch {
+      }
+      try {
+        await Atoms.data.garden.onChange((next) => {
+          latestGardenState = next ?? null;
+        });
+      } catch {
+      }
+    })();
+    registerMessageInterceptor("HarvestCrop", (message) => {
+      const lockerEnabled = (() => {
+        try {
+          return lockerService.getState().enabled;
+        } catch {
+          return false;
+        }
+      })();
+      if (!lockerEnabled) {
+        return;
+      }
+      const slot = message.slot;
+      const slotsIndex = message.slotsIndex;
+      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
+        return;
+      }
+      const garden2 = latestGardenState;
+      const tileObjects = garden2?.tileObjects;
+      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
+      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
+        return;
+      }
+      const slots = Array.isArray(tile.slots) ? tile.slots : [];
+      const cropSlot = slots[slotsIndex];
+      if (!cropSlot || typeof cropSlot !== "object") {
+        return;
+      }
+      const seedKey = extractSeedKey2(tile);
+      const sizePercent = extractSizePercent2(cropSlot);
+      const mutations = sanitizeMutations(cropSlot?.mutations);
+      let harvestAllowed = true;
+      try {
+        harvestAllowed = lockerService.allowsHarvest({
+          seedKey,
+          sizePercent,
+          mutations
+        });
+      } catch {
+        harvestAllowed = true;
+      }
+      if (!harvestAllowed) {
+        console.log("[HarvestCrop] Blocked by locker", {
+          slot,
+          slotsIndex,
+          seedKey,
+          sizePercent,
+          mutations
+        });
+        return { kind: "drop" };
+      }
+      void (async () => {
+        try {
+          const garden3 = await Atoms.data.garden.get();
+          const tileObjects2 = garden3?.tileObjects ?? null;
+          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
+          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
+          console.log("[HarvestCrop]", {
+            slot,
+            slotsIndex,
+            cropSlot: cropSlot2
+          });
+        } catch (error) {
+          console.error("[HarvestCrop] Unable to log crop slot", error);
+        }
+      })();
+    });
+    shareGlobal("__tmHarvestHookInstalled", true);
+  }
+  function extractSeedKey2(tile) {
+    if (!tile || typeof tile !== "object") return null;
+    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
+    if (typeof tile.species === "string" && tile.species) return tile.species;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = tile[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  }
+  function extractSizePercent2(slot) {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(
+      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
+    );
+    if (Number.isFinite(direct)) {
+      return clampPercent2(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent2(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent2(pct, 0, 100);
+    }
+    return 100;
+  }
+  function sanitizeMutations(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const value = raw[i];
+      if (typeof value === "string") {
+        if (value) out.push(value);
+      } else if (value != null) {
+        const str = String(value);
+        if (str) out.push(str);
+      }
+    }
+    return out;
+  }
+  function clampPercent2(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+  function resolveSendMessage(Conn) {
+    const isFn = (value) => typeof value === "function";
+    if (isFn(Conn.sendMessage)) {
+      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
+    }
+    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
+      return { kind: "proto", fn: Conn.prototype.sendMessage };
+    }
+    return null;
+  }
+
+  // src/core/webSocketBridge.ts
+  function postAllToWorkers(msg) {
+    if (Workers.forEach) Workers.forEach((w) => {
+      try {
+        w.postMessage(msg);
+      } catch {
+      }
+    });
+    else for (const w of Workers._a) {
+      try {
+        w.postMessage(msg);
+      } catch {
+      }
+    }
+  }
+  function getPageWS() {
+    if (quinoaWS && quinoaWS.readyState === NativeWS.OPEN) return quinoaWS;
+    let any = null;
+    if (sockets.find) any = sockets.find((s) => s.readyState === NativeWS.OPEN) || null;
+    if (!any) {
+      for (let i = 0; i < sockets.length; i++) if (sockets[i].readyState === NativeWS.OPEN) {
+        any = sockets[i];
+        break;
+      }
+    }
+    if (any) {
+      setQWS(any, "getPageWS");
+      return any;
+    }
+    throw new Error("No page WebSocket open");
+  }
+  function sendToGame(payloadObj) {
+    const msg = { scopePath: ["Room", "Quinoa"], ...payloadObj };
+    try {
+      const ws = getPageWS();
+      ws.send(JSON.stringify(msg));
+      return true;
+    } catch {
+      postAllToWorkers({ __QWS_CMD: "send", payload: JSON.stringify(msg) });
+      return true;
+    }
   }
 
   // src/services/player.ts
-  var log = createMenuLogger("player-service", "Player service");
   function slotSig2(o) {
     if (!o) return "\u2205";
     return [
@@ -995,144 +1921,111 @@
       await Atoms.player.position.set({ x, y });
     },
     async teleport(x, y) {
-      log.info("Teleporting player", { x, y });
       try {
         await this.setPosition(x, y);
       } catch (err) {
-        log.warn("Failed to update local position before teleport", { error: err });
       }
       try {
         sendToGame({ type: "Teleport", position: { x, y } });
       } catch (err) {
-        log.error("Failed to send teleport command", err);
       }
     },
     async move(x, y) {
-      log.debug("Moving player", { x, y });
       try {
         await this.setPosition(x, y);
       } catch (err) {
-        log.warn("Failed to update local position", { error: err });
       }
       try {
         sendToGame({ type: "PlayerPosition", position: { x, y } });
       } catch (err) {
-        log.error("Failed to send move command", err);
       }
     },
     /* ------------------------------ Actions jeu ------------------------------ */
     async plantSeed(slot, species) {
-      log.info("Planting seed", { slot, species });
       try {
         sendToGame({ type: "PlantSeed", slot, species });
       } catch (err) {
-        log.error("Failed to send plant seed command", err);
       }
     },
     async sellAllCrops() {
-      log.info("Selling all crops");
       try {
         sendToGame({ type: "SellAllCrops" });
       } catch (err) {
-        log.error("Failed to send sell all crops command", err);
       }
     },
     async sellPet(itemId) {
-      log.info("Selling pet", { itemId });
       try {
         sendToGame({ type: "SellPet", itemId });
       } catch (err) {
-        log.error("Failed to send sell pet command", err);
       }
     },
     async waterPlant(slot) {
-      log.debug("Watering plant", { slot });
       try {
         sendToGame({ type: "WaterPlant", slot });
       } catch (err) {
-        log.error("Failed to send water plant command", err);
       }
     },
     async setSelectedItem(itemIndex) {
-      log.debug("Setting selected item", { itemIndex });
       try {
         sendToGame({ type: "SetSelectedItem", itemIndex });
       } catch (err) {
-        log.error("Failed to send set selected item command", err);
       }
     },
     async pickupObject() {
-      log.debug("Pickup object command");
       try {
         sendToGame({ type: "PickupObject" });
       } catch (err) {
-        log.error("Failed to send pickup object command", err);
       }
     },
     async dropObject() {
-      log.debug("Drop object command");
       try {
         sendToGame({ type: "DropObject" });
       } catch (err) {
-        log.error("Failed to send drop object command", err);
       }
     },
     async harvestCrop(slot, slotsIndex) {
-      log.debug("Harvesting crop", { slot, slotsIndex });
       try {
         sendToGame({ type: "HarvestCrop", slot, slotsIndex });
       } catch (err) {
-        log.error("Failed to send harvest crop command", err);
       }
     },
     async feedPet(petItemId, cropItemId) {
-      log.info("Feeding pet", { petItemId, cropItemId });
       try {
         sendToGame({ type: "FeedPet", petItemId, cropItemId });
       } catch (err) {
-        log.error("Failed to send feed pet command", err);
       }
     },
     async hatchEgg(slot) {
-      log.info("Hatching egg", { slot });
       try {
         sendToGame({ type: "HatchEgg", slot });
       } catch (err) {
-        log.error("Failed to send hatch egg command", err);
       }
     },
     async placeDecor(tileType, localTileIndex, decorId) {
-      log.info("Placing decor", { tileType, localTileIndex, decorId });
       try {
         sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId });
       } catch (err) {
-        log.error("Failed to send place decor command", err);
       }
     },
     async swapPet(petSlotId, petInventoryId) {
-      log.info("Swapping pet", { petSlotId, petInventoryId });
       try {
         sendToGame({ type: "SwapPet", petSlotId, petInventoryId });
       } catch (err) {
-        log.error("Failed to send swap pet command", err);
       }
     },
     async placePet(itemId, position2, tileType, localTileIndex) {
-      log.info("Placing pet", { itemId, position: position2, tileType, localTileIndex });
       try {
         sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
       } catch (err) {
-        log.error("Failed to send place pet command", err);
       }
     },
     async petPositions(petPositions) {
-      const entries2 = Object.entries(petPositions ?? {});
-      if (!entries2.length) {
-        log.warn("No pet positions provided");
+      const entries = Object.entries(petPositions ?? {});
+      if (!entries.length) {
         return;
       }
       const sanitized = {};
-      for (const [id, pos] of entries2) {
+      for (const [id, pos] of entries) {
         const x = Number(pos?.x);
         const y = Number(pos?.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
@@ -1140,67 +2033,57 @@
       }
       const validCount = Object.keys(sanitized).length;
       if (!validCount) {
-        log.warn("No valid pet positions to send", { provided: entries2.length });
         return;
       }
-      log.info("Sending pet positions", { count: validCount });
       try {
         sendToGame({ type: "PetPositions", petPositions: sanitized });
       } catch (err) {
-        log.error("Failed to send pet positions command", err);
       }
     },
     async storePet(itemId) {
-      log.info("Storing pet", { itemId });
       try {
         sendToGame({ type: "StorePet", itemId });
       } catch (err) {
-        log.error("Failed to send store pet command", err);
       }
     },
     async wish(itemId) {
-      log.debug("Wishing item", { itemId });
       try {
         sendToGame({ type: "Wish", itemId });
       } catch (err) {
-        log.error("Failed to send wish command", err);
       }
     },
     async purchaseSeed(species) {
       try {
         sendToGame({ type: "PurchaseSeed", species });
       } catch (err) {
-        log.error("Failed to send wish command", err);
       }
     },
     async purchaseDecor(decorId) {
       try {
         sendToGame({ type: "PurchaseDecor", decorId });
       } catch (err) {
-        log.error("Failed to send wish command", err);
       }
     },
     async purchaseEgg(eggId) {
       try {
         sendToGame({ type: "PurchaseEgg", eggId });
       } catch (err) {
-        log.error("Failed to send wish command", err);
       }
     },
     async purchaseTool(toolId) {
       try {
         sendToGame({ type: "PurchaseTool", toolId });
       } catch (err) {
-        log.error("Failed to send wish command", err);
       }
+    },
+    async triggerAnimation(playerId2, animation) {
+      Atoms.player.avatarTriggerAnimationAtom.set({ playerId: playerId2, animation });
     },
     /* -------------------------------- Favorites ------------------------------ */
     async toggleFavoriteItem(itemId) {
-      log.debug("Toggling favorite", { itemId });
       try {
         sendToGame({ type: "ToggleFavoriteItem", itemId });
       } catch (err) {
-        log.error("Failed to send toggle favorite command", err);
       }
     },
     async getFavoriteIds() {
@@ -1420,8 +2303,25 @@
     Single: "Single",
     Multiple: "Multiple"
   };
+  var tileRefsMap = {
+    Dirt1: 6,
+    Dirt2: 7,
+    Dirt3: 8,
+    Bush1: 28,
+    Bush2: 38,
+    BushHomer: 48,
+    Sky0: 24,
+    Sky1: 25,
+    Sky2: 26,
+    Sky3: 27,
+    Sky4: 35,
+    Sky5: 36,
+    Sky6: 37,
+    Sky7: 45,
+    Sky8: 46,
+    Sky9: 47
+  };
   var tileRefsPlants = {
-    Empty: 0,
     DirtPatch: 1,
     SproutFlower: 2,
     SproutVegetable: 3,
@@ -1468,7 +2368,6 @@
     // Mooncatcher Bulb
   };
   var tileRefsTallPlants = {
-    Empty: 0,
     Bamboo: 1,
     PalmTree: 2,
     // NEW Dawn Celestial stack
@@ -1487,7 +2386,6 @@
     StarweaverPlant: 14
   };
   var tileRefsSeeds = {
-    Empty: 0,
     Daffodil: 1,
     Tulip: 2,
     Sunflower: 3,
@@ -1522,7 +2420,6 @@
     Cactus: 42
   };
   var tileRefsItems = {
-    Empty: 0,
     Coin: 1,
     Shovel: 2,
     Seeds: 3,
@@ -1533,6 +2430,13 @@
     RainbowPotion: 16,
     ArrowKeys: 41,
     Touchpad: 42
+  };
+  var tileRefsAnimations = {
+    Rain: 10,
+    Frost: 20,
+    Sunny: 30,
+    AmberMoon: 40,
+    Dawn: 50
   };
   var tileRefsPets = {
     Bee: 1,
@@ -1561,6 +2465,7 @@
     Wet: 1,
     Chilled: 2,
     Frozen: 3,
+    Puddle: 5,
     Dawnlit: 11,
     Amberlit: 12,
     Dawncharged: 13,
@@ -1901,7 +2806,7 @@
     Starweaver: {
       seed: { tileRef: tileRefsSeeds.Starweaver, name: "Starweaver Pod", coinPrice: 1e9, creditPrice: 1e3, rarity: rarity.Celestial, img64: "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" },
       plant: {
-        tileRef: tileRefsPlants.StarweaverPlant,
+        tileRef: tileRefsTallPlants.StarweaverPlant,
         name: "Starweaver Plant",
         harvestType: harvestType.Multiple,
         slotOffsets: [{ x: 0.5, y: -0.158, rotation: 0 }],
@@ -1914,13 +2819,13 @@
     },
     DawnCelestial: {
       seed: { tileRef: tileRefsSeeds.DawnCelestial, name: "Sunbriar Pod", coinPrice: 1e10, creditPrice: 1129, rarity: rarity.Celestial, img64: "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" },
-      plant: { tileRef: tileRefsPlants.DawnCelestialPlant, name: "Sunbriar", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.3 },
-      crop: { tileRef: tileRefsPlants.DawnCelestial, name: "Sunbriar Bulb", baseSellPrice: 11e6, baseWeight: 6, baseTileScale: 0.4, maxScale: 2.5 }
+      plant: { tileRef: tileRefsTallPlants.DawnCelestialPlant, name: "Sunbriar", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.3 },
+      crop: { tileRef: tileRefsPlants.DawnCelestialCrop, name: "Sunbriar Bulb", baseSellPrice: 11e6, baseWeight: 6, baseTileScale: 0.4, maxScale: 2.5 }
     },
     MoonCelestial: {
       seed: { tileRef: tileRefsSeeds.MoonCelestial, name: "Mooncatcher Pod", coinPrice: 5e10, creditPrice: 1249, rarity: rarity.Celestial, img64: "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" },
-      plant: { tileRef: tileRefsPlants.MoonCelestialPlant, name: "Mooncatcher", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.5 },
-      crop: { tileRef: tileRefsPlants.MoonCelestial, name: "Mooncatcher Bulb", baseSellPrice: 11e6, baseWeight: 2, baseTileScale: 0.4, maxScale: 2 }
+      plant: { tileRef: tileRefsTallPlants.MoonCelestialPlant, name: "Mooncatcher", harvestType: harvestType.Multiple, secondsToMature: 1440 * 60, baseTileScale: 2.5 },
+      crop: { tileRef: tileRefsPlants.MoonCelestialCrop, name: "Mooncatcher Bulb", baseSellPrice: 11e6, baseWeight: 2, baseTileScale: 0.4, maxScale: 2 }
     }
   };
   var mutationCatalog = {
@@ -3050,7 +3955,9 @@
     const existing = _fakeRegistry.get(key2);
     if (existing?.installed) return existing;
     const atoms = _atomsByExactLabel(config.label);
-    if (!atoms.length) throw new Error(`${config.label} introuvable`);
+    if (!atoms.length) {
+      throw new Error(`${config.label} introuvable`);
+    }
     const state2 = existing ?? {
       config,
       enabled: false,
@@ -3066,13 +3973,13 @@
       a[readKey] = (get) => {
         try {
           if (gateAtom) get(gateAtom);
-        } catch {
+        } catch (err) {
         }
         for (const dep of config.extraDeps || []) {
           try {
             const d = getAtomByLabel(dep);
             d && get(d);
-          } catch {
+          } catch (err) {
           }
         }
         const real = orig(get);
@@ -3086,7 +3993,7 @@
         let v;
         try {
           v = await jGet(gateAtom);
-        } catch {
+        } catch (err) {
           v = null;
         }
         const isOpen = config.gate?.isOpen ? config.gate.isOpen(v) : !!v;
@@ -3132,13 +4039,13 @@
   async function openModal(modalId) {
     try {
       await Atoms.ui.activeModal.set(modalId);
-    } catch {
+    } catch (err) {
     }
   }
   async function closeModal(_modalId) {
     try {
       await Atoms.ui.activeModal.set(null);
-    } catch {
+    } catch (err) {
     }
   }
   function isModalOpen(value, modalId) {
@@ -3148,7 +4055,7 @@
     try {
       const v = await Atoms.ui.activeModal.get();
       return isModalOpen(v, modalId);
-    } catch {
+    } catch (err) {
       return false;
     }
   }
@@ -3746,7 +4653,7 @@
       const up = el("button", "qmm-step qmm-step--up", "\u25B2");
       const down = el("button", "qmm-step qmm-step--down", "\u25BC");
       up.type = down.type = "button";
-      const clamp2 = () => {
+      const clamp3 = () => {
         const n = Number(i.value);
         if (Number.isFinite(n)) {
           const lo = Number(i.min), hi = Number(i.max);
@@ -3757,7 +4664,7 @@
       const bump = (dir) => {
         if (dir < 0) i.stepDown();
         else i.stepUp();
-        clamp2();
+        clamp3();
         i.dispatchEvent(new Event("input", { bubbles: true }));
         i.dispatchEvent(new Event("change", { bubbles: true }));
       };
@@ -3800,7 +4707,7 @@
       };
       addSpin(up, 1);
       addSpin(down, -1);
-      i.addEventListener("change", clamp2);
+      i.addEventListener("change", clamp3);
       spin.append(up, down);
       wrap.append(i, spin);
       i.wrap = wrap;
@@ -4050,7 +4957,7 @@
           btn.textContent = emptyLabel;
           btn.title = "No key assigned";
         } else {
-          btn.textContent = hotkeyToString(hk);
+          btn.textContent = hotkeyToPretty(hk);
           btn.title = "Click to rebind \u2022 Right-click to clear";
         }
       };
@@ -4961,7 +5868,7 @@
     if (!s) return null;
     const parts = s.split("+").map((p) => p.trim()).filter(Boolean);
     if (!parts.length) return null;
-    const code = parts.pop() || "";
+    const code = canonicalizeCode(parts.pop() || "");
     const hk = { code };
     for (const p of parts) {
       const P = p.toLowerCase();
@@ -4971,6 +5878,82 @@
       else if (P === "meta" || P === "cmd" || P === "command") hk.meta = true;
     }
     return hk.code ? hk : null;
+  }
+  var CANONICAL_CODES = {
+    space: "Space",
+    enter: "Enter",
+    escape: "Escape",
+    tab: "Tab",
+    backspace: "Backspace",
+    delete: "Delete",
+    insert: "Insert",
+    home: "Home",
+    end: "End",
+    pageup: "PageUp",
+    pagedown: "PageDown",
+    arrowup: "ArrowUp",
+    arrowdown: "ArrowDown",
+    arrowleft: "ArrowLeft",
+    arrowright: "ArrowRight",
+    bracketleft: "BracketLeft",
+    bracketright: "BracketRight",
+    backslash: "Backslash",
+    slash: "Slash",
+    minus: "Minus",
+    equal: "Equal",
+    semicolon: "Semicolon",
+    quote: "Quote",
+    backquote: "Backquote",
+    comma: "Comma",
+    period: "Period",
+    dot: "Period",
+    capslock: "CapsLock",
+    numlock: "NumLock",
+    scrolllock: "ScrollLock",
+    pause: "Pause",
+    contextmenu: "ContextMenu",
+    printscreen: "PrintScreen",
+    metaleft: "MetaLeft",
+    metaright: "MetaRight",
+    altleft: "AltLeft",
+    altright: "AltRight",
+    controlleft: "ControlLeft",
+    controlright: "ControlRight",
+    shiftleft: "ShiftLeft",
+    shiftright: "ShiftRight"
+  };
+  function canonicalizeCode(rawCode) {
+    const trimmed = rawCode.trim();
+    if (!trimmed) return "";
+    const lower = trimmed.toLowerCase();
+    const keyMatch = lower.match(/^key([a-z])$/);
+    if (keyMatch) return `Key${keyMatch[1].toUpperCase()}`;
+    const digitMatch = lower.match(/^digit([0-9])$/);
+    if (digitMatch) return `Digit${digitMatch[1]}`;
+    const numpadDigitMatch = lower.match(/^numpad([0-9])$/);
+    if (numpadDigitMatch) return `Numpad${numpadDigitMatch[1]}`;
+    if (lower.startsWith("numpad")) {
+      const suffix = lower.slice(6);
+      if (!suffix) return "Numpad";
+      const mappedSuffix = CANONICAL_CODES[suffix] ?? capitalizeWord(suffix);
+      return `Numpad${mappedSuffix}`;
+    }
+    const fMatch = lower.match(/^f([0-9]{1,2})$/);
+    if (fMatch) return `F${fMatch[1]}`;
+    const arrowMatch = lower.match(/^arrow([a-z]+)$/);
+    if (arrowMatch) {
+      const suffix = arrowMatch[1];
+      const mappedSuffix = CANONICAL_CODES[suffix] ?? capitalizeWord(suffix);
+      return `Arrow${mappedSuffix}`;
+    }
+    if (CANONICAL_CODES[lower]) {
+      return CANONICAL_CODES[lower];
+    }
+    return trimmed[0].toUpperCase() + trimmed.slice(1);
+  }
+  function capitalizeWord(word) {
+    if (!word) return "";
+    return word[0].toUpperCase() + word.slice(1);
   }
   function prettyCode(code) {
     if (code === "AltLeft" || code === "AltRight") return "Alt";
@@ -5009,43 +5992,1244 @@
     return parts.join(mac ? "" : " + ");
   }
 
-  // src/services/pets.ts
-  var LS_TEAMS_KEY = "qws:pets:teams:v1";
-  var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
-  var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
-  function petImg64From(species, mutation) {
-    const spRaw = String(species || "").trim();
-    if (!spRaw) return void 0;
-    const sp = _canonicalSpecies(spRaw);
-    const entry = petCatalog[sp];
-    const imgs = entry?.img64;
-    if (!imgs) return void 0;
-    const toLower = (v) => String(v || "").toLowerCase();
-    const muts = Array.isArray(mutation) ? mutation.map(toLower) : [toLower(mutation)];
-    const has = (s) => muts.some((m) => m.includes(s));
-    const key2 = has("rainbow") ? "rainbow" : has("gold") ? "gold" : "normal";
-    const src = imgs?.[key2] || imgs.normal;
-    if (!src) return void 0;
-    return String(src).startsWith("data:") ? src : `data:image/png;base64,${src}`;
+  // src/core/ingameHotkeys.ts
+  var resolveContext = (context) => {
+    if (context) return context;
+    const win = pageWindow ?? window;
+    const doc = win.document ?? document;
+    return { window: win, document: doc };
+  };
+  var KEYCODE_TABLE = {
+    KeyA: 65,
+    KeyB: 66,
+    KeyC: 67,
+    KeyD: 68,
+    KeyE: 69,
+    KeyF: 70,
+    KeyG: 71,
+    KeyH: 72,
+    KeyI: 73,
+    KeyJ: 74,
+    KeyK: 75,
+    KeyL: 76,
+    KeyM: 77,
+    KeyN: 78,
+    KeyO: 79,
+    KeyP: 80,
+    KeyQ: 81,
+    KeyR: 82,
+    KeyS: 83,
+    KeyT: 84,
+    KeyU: 85,
+    KeyV: 86,
+    KeyW: 87,
+    KeyX: 88,
+    KeyY: 89,
+    KeyZ: 90,
+    Digit0: 48,
+    Digit1: 49,
+    Digit2: 50,
+    Digit3: 51,
+    Digit4: 52,
+    Digit5: 53,
+    Digit6: 54,
+    Digit7: 55,
+    Digit8: 56,
+    Digit9: 57,
+    Space: 32,
+    Enter: 13,
+    Escape: 27,
+    Tab: 9,
+    Backspace: 8,
+    Delete: 46,
+    Insert: 45,
+    ArrowLeft: 37,
+    ArrowUp: 38,
+    ArrowRight: 39,
+    ArrowDown: 40
+  };
+  var codeToKey = (code, shift = false) => {
+    if (!code) return "";
+    if (/^Key[A-Z]$/.test(code)) return shift ? code.slice(3).toUpperCase() : code.slice(3).toLowerCase();
+    if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+    if (code === "Space") return " ";
+    return code;
+  };
+  var isEditableTarget = (t) => {
+    const el2 = t;
+    if (!el2 || !el2.tagName) return false;
+    const tag = el2.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea") return true;
+    const ce = el2.getAttribute && el2.getAttribute("contenteditable");
+    return !!(ce && ce !== "false");
+  };
+  var normalizeCombo = (c) => {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    const mods = [];
+    let code = "";
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") mods.push("ctrl");
+      else if (P === "shift") mods.push("shift");
+      else if (P === "alt") mods.push("alt");
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") mods.push("meta");
+      else code = p;
+    }
+    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
+    return (mods.length ? mods.join("+") + "+" : "") + code;
+  };
+  var parseCombo = (c) => {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    const spec = {};
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") spec.ctrl = true;
+      else if (P === "shift") spec.shift = true;
+      else if (P === "alt") spec.alt = true;
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") spec.meta = true;
+      else spec.code = p;
+    }
+    if (spec.code && spec.key === void 0) spec.key = codeToKey(spec.code, !!spec.shift);
+    return spec;
+  };
+  var evToCombo = (e) => {
+    const mods = [];
+    if (e.ctrlKey) mods.push("ctrl");
+    if (e.shiftKey) mods.push("shift");
+    if (e.altKey) mods.push("alt");
+    if (e.metaKey) mods.push("meta");
+    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
+    return (mods.length ? mods.join("+") + "+" : "") + (e.code || "");
+  };
+  var REMAP_FLAG = "__inGameHotkeysRemapped__";
+  var RAPID_SYN_FLAG = "__inGameHotkeysRapidSynthetic__";
+  var InGameHotkeys = class {
+    constructor(autoAttach = true, context) {
+      __publicField(this, "win");
+      __publicField(this, "doc");
+      // remapper
+      __publicField(this, "enabled", true);
+      __publicField(this, "map", /* @__PURE__ */ new Map());
+      // combo normalisé -> spec destination
+      __publicField(this, "blockedSet", /* @__PURE__ */ new Set());
+      // combos bloqués
+      __publicField(this, "eventBlockers", /* @__PURE__ */ new Set());
+      __publicField(this, "attachedDocs", /* @__PURE__ */ new WeakSet());
+      // docs déjà hookés
+      __publicField(this, "observers", []);
+      __publicField(this, "handlers", /* @__PURE__ */ new Map());
+      __publicField(this, "passthrough", /* @__PURE__ */ new Set(["F5", "F12"]));
+      // rapid-fire manager
+      __publicField(this, "sessions", /* @__PURE__ */ new Map());
+      const ctx = resolveContext(context);
+      this.win = ctx.window;
+      this.doc = ctx.document;
+      if (autoAttach) {
+        this.attachDoc(this.doc);
+        this.attachAllFrames();
+        if (this.win.MutationObserver) {
+          const mo = new this.win.MutationObserver(() => this.attachAllFrames());
+          mo.observe(this.doc.documentElement || this.doc, { childList: true, subtree: true });
+          this.observers.push(mo);
+        }
+      }
+    }
+    /* --------- on/off remapper --------- */
+    enable(flag = true) {
+      this.enabled = !!flag;
+    }
+    disable() {
+      this.enabled = false;
+    }
+    isEnabled() {
+      return this.enabled;
+    }
+    /* --------- remaps --------- */
+    setMap(m) {
+      this.map.clear();
+      for (const [from, to] of Object.entries(m || {})) this.map.set(normalizeCombo(from), parseCombo(to));
+    }
+    add(from, to) {
+      this.map.set(normalizeCombo(from), parseCombo(to));
+    }
+    remove(from) {
+      this.map.delete(normalizeCombo(from));
+    }
+    clear() {
+      this.map.clear();
+    }
+    current() {
+      const out = {};
+      for (const [k, v] of this.map.entries()) {
+        const mods = [];
+        if (v.ctrl) mods.push("Ctrl");
+        if (v.shift) mods.push("Shift");
+        if (v.alt) mods.push("Alt");
+        if (v.meta) mods.push("Meta");
+        out[k] = (mods.length ? mods.join("+") + "+" : "") + (v.code || "");
+      }
+      return out;
+    }
+    /* --------- blocages --------- */
+    block(combo) {
+      this.blockedSet.add(normalizeCombo(combo));
+    }
+    unblock(combo) {
+      this.blockedSet.delete(normalizeCombo(combo));
+    }
+    blocked() {
+      return Array.from(this.blockedSet);
+    }
+    addEventBlocker(blocker) {
+      if (typeof blocker !== "function") {
+        return () => {
+        };
+      }
+      this.eventBlockers.add(blocker);
+      return () => {
+        this.eventBlockers.delete(blocker);
+      };
+    }
+    /* --------- helpers de binding --------- */
+    /** Déplace l’action bindée sur oldBase vers newPhysical et désactive oldBase. */
+    replace(oldBase, newPhysical) {
+      const oldN = normalizeCombo(oldBase);
+      const newN = normalizeCombo(newPhysical);
+      this.blockedSet.add(oldN);
+      this.map.set(newN, parseCombo(oldN));
+    }
+    /** Échange réciproquement deux touches (ne bloque pas). */
+    swap(a, b) {
+      const an = normalizeCombo(a), bn = normalizeCombo(b);
+      this.map.set(an, parseCombo(bn));
+      this.map.set(bn, parseCombo(an));
+    }
+    /* --------- frames & cleanup --------- */
+    attachAllFrames() {
+      this.doc.querySelectorAll("iframe").forEach((f) => {
+        try {
+          const d = f.contentDocument;
+          const origin = d?.location?.origin;
+          if (d && origin && origin === this.win.location.origin) this.attachDoc(d);
+        } catch {
+        }
+      });
+    }
+    destroy() {
+      for (const [doc, handler] of this.handlers.entries()) {
+        try {
+          const win = doc.defaultView || this.win;
+          win.removeEventListener("keydown", handler, true);
+          win.removeEventListener("keypress", handler, true);
+          win.removeEventListener("keyup", handler, true);
+        } catch {
+        }
+      }
+      this.handlers.clear();
+      this.attachedDocs = /* @__PURE__ */ new WeakSet();
+      for (const mo of this.observers) mo.disconnect();
+      this.observers = [];
+      this.stopAllRapidFires();
+      this.eventBlockers.clear();
+    }
+    /* --------- rapid-fire (API) --------- */
+    startRapidFire(opts) {
+      const trigger = normalizeCombo(opts.trigger);
+      const emit = normalizeCombo(opts.emit ?? opts.trigger);
+      const rateMs = 1e3 / Math.max(1, opts.rateHz ?? 12);
+      const mode = opts.mode ?? "tap";
+      const keyupDelayMs = opts.keyupDelayMs ?? 20;
+      this.sessions.set(trigger, {
+        trigger: parseRapid(trigger),
+        emit: parseRapid(emit),
+        rateMs,
+        mode,
+        keyupDelayMs,
+        pressed: false,
+        lastTarget: null,
+        tickTimer: null,
+        upTimer: null
+      });
+    }
+    stopRapidFire(trigger) {
+      if (!trigger) {
+        this.stopAllRapidFires();
+        return;
+      }
+      const key2 = normalizeCombo(trigger);
+      const s = this.sessions.get(key2);
+      if (!s) return;
+      this.endSession(s);
+      this.sessions.delete(key2);
+    }
+    stopAllRapidFires() {
+      for (const s of this.sessions.values()) this.endSession(s);
+      this.sessions.clear();
+    }
+    isRapidFireActive(trigger) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      return !!(s && s.pressed);
+    }
+    setRapidFireRate(trigger, hz) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      if (!s) return;
+      s.rateMs = 1e3 / Math.max(1, hz);
+      if (s.pressed) this.restartLoop(s);
+    }
+    setRapidFireMode(trigger, mode) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      if (!s) return;
+      s.mode = mode;
+    }
+    listRapidFires() {
+      const out = [];
+      for (const [key2, s] of this.sessions.entries()) {
+        out.push({
+          trigger: key2,
+          emit: joinRapid(s.emit),
+          rateHz: Math.round(1e3 / s.rateMs),
+          mode: s.mode
+        });
+      }
+      return out;
+    }
+    /* ================= internes ================= */
+    attachDoc(doc) {
+      if (!doc || this.attachedDocs.has(doc)) return;
+      const handler = this.makeHandler(doc);
+      const win = doc.defaultView || this.win;
+      win.addEventListener("keydown", handler, true);
+      win.addEventListener("keypress", handler, true);
+      win.addEventListener("keyup", handler, true);
+      this.handlers.set(doc, handler);
+      this.attachedDocs.add(doc);
+    }
+    makeHandler(doc) {
+      return (evt) => {
+        const e = evt;
+        if (e[REMAP_FLAG]) return;
+        const isRapidSynthetic = !!e[RAPID_SYN_FLAG];
+        if (!isRapidSynthetic) this.handleRapidFireInput(doc, e);
+        if (!isRapidSynthetic && this.eventBlockers.size) {
+          for (const blocker of Array.from(this.eventBlockers)) {
+            let shouldBlock = false;
+            try {
+              shouldBlock = blocker(e);
+            } catch {
+              shouldBlock = false;
+            }
+            if (shouldBlock) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              return;
+            }
+          }
+        }
+        if (!this.enabled) return;
+        if (isEditableTarget(e.target)) return;
+        if (this.passthrough.has(e.code)) return;
+        const combo = evToCombo(e);
+        if (this.blockedSet.has(combo)) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return;
+        }
+        const spec = this.map.get(combo);
+        if (!spec) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        const code = spec.code || "";
+        const key2 = spec.key !== void 0 ? spec.key : codeToKey(code, e.shiftKey);
+        const ctrl = spec.ctrl ?? e.ctrlKey;
+        const shift = spec.shift ?? e.shiftKey;
+        const alt = spec.alt ?? e.altKey;
+        const meta = spec.meta ?? e.metaKey;
+        const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
+        const eventWindow = doc.defaultView || this.win;
+        const ne = new eventWindow.KeyboardEvent(e.type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          key: key2,
+          code,
+          ctrlKey: ctrl,
+          shiftKey: shift,
+          altKey: alt,
+          metaKey: meta,
+          repeat: e.repeat,
+          location: e.location
+        });
+        Object.defineProperties(ne, {
+          keyCode: { get: () => kc },
+          which: { get: () => kc },
+          charCode: { get: () => kc },
+          [REMAP_FLAG]: { value: true }
+        });
+        const target = e.target || doc;
+        target.dispatchEvent(ne);
+      };
+    }
+    /* ---------- Rapid-fire internes ---------- */
+    handleRapidFireInput(doc, e) {
+      if (isEditableTarget(e.target)) return;
+      if (e.type === "keydown" && !e.repeat) {
+        for (const s of this.sessions.values()) {
+          if (this.matches(e, s.trigger)) {
+            s.pressed = true;
+            s.lastTarget = e.target || doc;
+            this.startLoop(doc, s);
+          }
+        }
+      } else if (e.type === "keyup") {
+        for (const s of this.sessions.values()) {
+          if (this.matches(e, s.trigger)) {
+            s.pressed = false;
+            this.stopLoop(doc, s);
+          }
+        }
+      }
+    }
+    matches(e, c) {
+      return e.code === c.code && !!e.ctrlKey === !!c.ctrl && !!e.shiftKey === !!c.shift && !!e.altKey === !!c.alt && !!e.metaKey === !!c.meta;
+    }
+    startLoop(doc, s) {
+      this.stopLoop(doc, s);
+      const tick = () => {
+        if (!s.pressed) return;
+        this.dispatchKey(doc, s.lastTarget || doc, "keydown", s.emit, true);
+        if (s.mode === "tap") {
+          if (s.upTimer) this.win.clearTimeout(s.upTimer);
+          s.upTimer = this.win.setTimeout(() => {
+            this.dispatchKey(doc, s.lastTarget || doc, "keyup", s.emit, false);
+          }, s.keyupDelayMs);
+        }
+      };
+      tick();
+      s.tickTimer = this.win.setInterval(tick, s.rateMs);
+    }
+    stopLoop(doc, s) {
+      if (s.tickTimer) {
+        this.win.clearInterval(s.tickTimer);
+        s.tickTimer = null;
+      }
+      if (s.upTimer) {
+        this.win.clearTimeout(s.upTimer);
+        s.upTimer = null;
+      }
+      if (s.mode === "hold" && s.lastTarget) {
+        this.dispatchKey(doc, s.lastTarget, "keyup", s.emit, false);
+      }
+    }
+    restartLoop(s) {
+      if (!s.pressed) return;
+      const anyDoc = this.doc;
+      this.startLoop(anyDoc, s);
+    }
+    endSession(s) {
+      this.stopLoop(this.doc, s);
+      s.pressed = false;
+      s.lastTarget = null;
+    }
+    dispatchKey(doc, target, type, c, repeat) {
+      const code = c.code;
+      const key2 = codeToKey(code, c.shift);
+      const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
+      const eventWindow = doc.defaultView || this.win;
+      const ev = new eventWindow.KeyboardEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        key: key2,
+        code,
+        ctrlKey: c.ctrl,
+        shiftKey: c.shift,
+        altKey: c.alt,
+        metaKey: c.meta,
+        repeat
+      });
+      Object.defineProperties(ev, {
+        keyCode: { get: () => kc },
+        which: { get: () => kc },
+        charCode: { get: () => kc },
+        [RAPID_SYN_FLAG]: { value: true }
+      });
+      try {
+        target.dispatchEvent(ev);
+      } catch {
+        doc.dispatchEvent(ev);
+      }
+    }
+  };
+  function parseRapid(c) {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    let code = "";
+    let ctrl = false, shift = false, alt = false, meta = false;
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") ctrl = true;
+      else if (P === "shift") shift = true;
+      else if (P === "alt") alt = true;
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") meta = true;
+      else code = p;
+    }
+    return { code, ctrl, shift, alt, meta };
   }
-  var TEAM_HK_MAP = /* @__PURE__ */ new Map();
-  var hkKeyForTeam = (id) => `${LS_TEAM_HK_PREFIX}${id}`;
-  function setTeamsForHotkeys(teams) {
-    TEAM_HK_MAP.clear();
-    for (const t of teams) {
-      const hk = stringToHotkey(localStorage.getItem(hkKeyForTeam(t.id)) || "");
-      if (hk) TEAM_HK_MAP.set(t.id, hk);
+  function joinRapid(c) {
+    const mods = [];
+    if (c.ctrl) mods.push("Ctrl");
+    if (c.shift) mods.push("Shift");
+    if (c.alt) mods.push("Alt");
+    if (c.meta) mods.push("Meta");
+    mods.push(c.code);
+    return mods.join("+");
+  }
+  var defaultContext = resolveContext();
+  var inGameHotkeys = new InGameHotkeys(true, defaultContext);
+  shareGlobal("inGameHotkeys", inGameHotkeys);
+  try {
+    window.inGameHotkeys = inGameHotkeys;
+  } catch {
+  }
+
+  // src/services/keybinds.ts
+  var SECTION_CONFIG = [
+    {
+      id: "gui",
+      title: "GUI",
+      icon: "\u{1F5A5}\uFE0F",
+      description: "Choose how you open and move the overlay.",
+      actions: [
+        {
+          id: "gui.toggle",
+          label: "\u{1F441}\uFE0F Toggle menu visibility",
+          hint: "Opens or closes the Arie's Mod overlay.",
+          defaultHotkey: { alt: true, code: "KeyX" }
+        },
+        {
+          id: "gui.drag",
+          label: "\u270B Drag HUD",
+          hint: "Hold to drag menus interfaces around the screen.",
+          defaultHotkey: { alt: true, code: "AltLeft" },
+          allowModifierOnly: true
+        }
+      ]
+    },
+    {
+      id: "shops",
+      title: "Shops",
+      icon: "\u{1F6D2}",
+      description: "Quick shortcuts to every shop tab.",
+      actions: [
+        {
+          id: "shops.seeds",
+          label: "\u{1F330} Seeds shop",
+          defaultHotkey: { alt: true, code: "KeyS" }
+        },
+        {
+          id: "shops.eggs",
+          label: "\u{1F95A} Eggs shop",
+          defaultHotkey: { alt: true, code: "KeyE" }
+        },
+        {
+          id: "shops.decors",
+          label: "\u{1FA91} Decors shop",
+          defaultHotkey: { alt: true, code: "KeyD" }
+        },
+        {
+          id: "shops.tools",
+          label: "\u{1F9FA} Tools shop",
+          defaultHotkey: { alt: true, code: "KeyT" }
+        }
+      ]
+    },
+    {
+      id: "game",
+      title: "Game",
+      icon: "\u{1F3AE}",
+      description: "Remap the in-game actions",
+      actions: [
+        {
+          id: "game.action",
+          label: "\u26A1 Action",
+          defaultHotkey: { code: "Space" },
+          holdDetection: {
+            label: "Hold to repeat",
+            defaultEnabled: false
+          }
+        },
+        {
+          id: "game.inventory",
+          label: "\u{1F392} Inventory",
+          defaultHotkey: { code: "KeyE" }
+        },
+        {
+          id: "game.move-up",
+          label: "\u2B06 Move up",
+          defaultHotkey: { code: "KeyW" }
+        },
+        {
+          id: "game.move-down",
+          label: "\u2B07 Move down",
+          defaultHotkey: { code: "KeyS" }
+        },
+        {
+          id: "game.move-left",
+          label: "\u2B05 Move left",
+          defaultHotkey: { code: "KeyA" }
+        },
+        {
+          id: "game.move-right",
+          label: "\u27A1 Move right",
+          defaultHotkey: { code: "KeyD" }
+        }
+      ]
+    },
+    {
+      id: "sell",
+      title: "Sell",
+      icon: "\u{1F4B0}",
+      description: "Streamline selling actions.",
+      actions: [
+        {
+          id: "sell.sell-all",
+          label: "\u{1F33E} All crops",
+          hint: "Trigger the sell-all flow for harvested crops.",
+          defaultHotkey: null
+        },
+        {
+          id: "sell.sell-all-pets",
+          label: "\u{1F43E} All pets",
+          hint: "Sell every non-favorited pet in your inventory.",
+          defaultHotkey: null
+        }
+      ]
+    }
+  ];
+  var STORAGE_PREFIX = "qws:keybind:";
+  var HOLD_STORAGE_PREFIX = "qws:keybind-hold:";
+  var STORED_NONE = "__none__";
+  var actionMap = /* @__PURE__ */ new Map();
+  var defaultMap = /* @__PURE__ */ new Map();
+  var cache = /* @__PURE__ */ new Map();
+  var listeners = /* @__PURE__ */ new Map();
+  var holdDefaultMap = /* @__PURE__ */ new Map();
+  var holdCache = /* @__PURE__ */ new Map();
+  var holdListeners = /* @__PURE__ */ new Map();
+  var keybindSections = SECTION_CONFIG.map((section) => {
+    const actions = section.actions.map((action2) => {
+      const normalized = {
+        id: action2.id,
+        sectionId: section.id,
+        label: action2.label,
+        hint: action2.hint,
+        allowModifierOnly: action2.allowModifierOnly,
+        defaultHotkey: cloneHotkey(action2.defaultHotkey),
+        holdDetection: action2.holdDetection ? {
+          label: action2.holdDetection.label,
+          description: action2.holdDetection.description,
+          defaultEnabled: action2.holdDetection.defaultEnabled
+        } : void 0
+      };
+      actionMap.set(normalized.id, normalized);
+      defaultMap.set(normalized.id, cloneHotkey(action2.defaultHotkey));
+      if (action2.holdDetection) {
+        holdDefaultMap.set(normalized.id, !!action2.holdDetection.defaultEnabled);
+      }
+      return normalized;
+    });
+    return {
+      id: section.id,
+      title: section.title,
+      description: section.description,
+      icon: section.icon,
+      actions
+    };
+  });
+  var PET_SECTION_ID = "pets";
+  var PET_TEAM_ACTION_PREFIX = "pets.team.";
+  var PET_TEAM_NEXT_ID = "pets.team.next";
+  var PET_TEAM_PREV_ID = "pets.team.prev";
+  var petSection = {
+    id: PET_SECTION_ID,
+    title: "Pets",
+    icon: "\u{1F437}",
+    description: "Assign shortcuts to your pet teams and cycle through them instantly.",
+    actions: []
+  };
+  keybindSections.push(petSection);
+  var petActionIds = /* @__PURE__ */ new Set();
+  function getPetTeamActionId(teamId) {
+    return `${PET_TEAM_ACTION_PREFIX}${teamId}`;
+  }
+  function disposePetAction(id) {
+    actionMap.delete(id);
+    defaultMap.delete(id);
+    cache.delete(id);
+    listeners.delete(id);
+    holdDefaultMap.delete(id);
+    holdCache.delete(id);
+    holdListeners.delete(id);
+  }
+  function registerPetAction(action2, defaultHotkey) {
+    const normalized = {
+      id: action2.id,
+      sectionId: PET_SECTION_ID,
+      label: action2.label,
+      hint: action2.hint,
+      allowModifierOnly: action2.allowModifierOnly,
+      defaultHotkey: cloneHotkey(defaultHotkey),
+      holdDetection: action2.holdDetection ? {
+        label: action2.holdDetection.label,
+        description: action2.holdDetection.description,
+        defaultEnabled: action2.holdDetection.defaultEnabled
+      } : void 0
+    };
+    actionMap.set(normalized.id, normalized);
+    defaultMap.set(normalized.id, cloneHotkey(defaultHotkey));
+    petActionIds.add(normalized.id);
+    petSection.actions.push(normalized);
+  }
+  function updatePetKeybinds(teams) {
+    for (const id of petActionIds) {
+      disposePetAction(id);
+    }
+    petActionIds.clear();
+    petSection.actions = [];
+    registerPetAction(
+      {
+        id: PET_TEAM_PREV_ID,
+        sectionId: PET_SECTION_ID,
+        label: "\u25C0\uFE0F Previous team",
+        defaultHotkey: null
+      },
+      null
+    );
+    registerPetAction(
+      {
+        id: PET_TEAM_NEXT_ID,
+        sectionId: PET_SECTION_ID,
+        label: "\u25B6\uFE0F Next team",
+        defaultHotkey: null
+      },
+      null
+    );
+    teams.forEach((team, index) => {
+      const name = String(team?.name || "").trim();
+      const labelName = name.length ? name : `Team ${index + 1}`;
+      registerPetAction(
+        {
+          id: getPetTeamActionId(team.id),
+          sectionId: PET_SECTION_ID,
+          label: `Use team \u2014 ${labelName}`,
+          defaultHotkey: null
+        },
+        null
+      );
+    });
+  }
+  updatePetKeybinds([]);
+  var GAME_KEYBIND_TARGETS = {
+    "game.action": "Space",
+    "game.inventory": "KeyE",
+    "game.move-up": "KeyW",
+    // Z (AZERTY) == KeyW
+    "game.move-down": "KeyS",
+    // S
+    "game.move-left": "KeyA",
+    // Q (AZERTY) == KeyA
+    "game.move-right": "KeyD"
+    // D
+  };
+  var GAME_KEYBIND_IDS = [
+    "game.action",
+    "game.inventory",
+    "game.move-up",
+    "game.move-down",
+    "game.move-left",
+    "game.move-right"
+  ];
+  var gameActiveStates = /* @__PURE__ */ new Map();
+  var gameKeybindsInstalled = false;
+  var GAME_ACTION_ID = "game.action";
+  var gameActionBlockers = /* @__PURE__ */ new Set();
+  var gameActionBlockedCombos = /* @__PURE__ */ new Set();
+  function getCombosForGameAction() {
+    const state2 = gameActiveStates.get(GAME_ACTION_ID);
+    if (!state2) return [];
+    const combo = state2.combo;
+    return typeof combo === "string" && combo.length ? [combo] : [];
+  }
+  function applyGameActionBlockers() {
+    const shouldBlock = gameActionBlockers.size > 0;
+    const desired = /* @__PURE__ */ new Set();
+    if (shouldBlock) {
+      for (const combo of getCombosForGameAction()) {
+        if (combo) desired.add(combo);
+      }
+    }
+    for (const combo of gameActionBlockedCombos) {
+      if (!desired.has(combo)) {
+        try {
+          inGameHotkeys.unblock(combo);
+        } catch {
+        }
+      }
+    }
+    if (shouldBlock) {
+      for (const combo of desired) {
+        if (!gameActionBlockedCombos.has(combo)) {
+          try {
+            inGameHotkeys.block(combo);
+          } catch {
+          }
+        }
+      }
+    }
+    gameActionBlockedCombos.clear();
+    if (shouldBlock) {
+      for (const combo of desired) gameActionBlockedCombos.add(combo);
     }
   }
-  function refreshTeamFromLS(teamId) {
-    const hk = stringToHotkey(localStorage.getItem(hkKeyForTeam(teamId)) || "");
-    if (hk) TEAM_HK_MAP.set(teamId, hk);
-    else TEAM_HK_MAP.delete(teamId);
+  function hotkeyToCombo(hk) {
+    if (!hk) return null;
+    const combo = hotkeyToString(hk);
+    return combo.length ? combo : null;
   }
+  function purgeTargetBindings(emitCombo) {
+    try {
+      inGameHotkeys.unblock(emitCombo);
+    } catch {
+    }
+    try {
+      const curr = inGameHotkeys.current();
+      for (const [from, to] of Object.entries(curr)) {
+        const toCode = String(to).split("+").pop();
+        if (toCode === emitCombo) {
+          try {
+            inGameHotkeys.remove(from);
+          } catch {
+          }
+        }
+      }
+    } catch {
+    }
+  }
+  function isMac2() {
+    return typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.platform || "");
+  }
+  function codeToDisplay(code) {
+    if (!code) return "";
+    const mKey = code.match(/^Key([A-Z])$/);
+    if (mKey) return mKey[1];
+    const mDigit = code.match(/^Digit([0-9])$/);
+    if (mDigit) return mDigit[1];
+    if (code === "ControlLeft" || code === "ControlRight") return "Ctrl";
+    if (code === "AltLeft" || code === "AltRight") return "Alt";
+    if (code === "ShiftLeft" || code === "ShiftRight") return "Shift";
+    if (code === "MetaLeft" || code === "MetaRight") return isMac2() ? "\u2318" : "Win";
+    if (code === "Space") return "Space";
+    if (code === "Enter") return "Enter";
+    if (code === "Escape") return "Esc";
+    if (code === "Tab") return "Tab";
+    if (code === "Backspace") return "Backspace";
+    if (code === "Delete") return "Del";
+    if (code === "Insert") return "Ins";
+    if (code === "ArrowUp") return "\u2191";
+    if (code === "ArrowDown") return "\u2193";
+    if (code === "ArrowLeft") return "\u2190";
+    if (code === "ArrowRight") return "\u2192";
+    return code;
+  }
+  function prettyHotkey(hk) {
+    if (!hk) return "\u2014";
+    const mods = [];
+    if (hk.ctrl) mods.push("Ctrl");
+    if (hk.shift) mods.push("Shift");
+    if (hk.alt) mods.push("Alt");
+    if (hk.meta) mods.push(isMac2() ? "\u2318" : "Win");
+    let base = "";
+    const k = hk.key;
+    if (typeof k === "string" && k.length === 1) {
+      base = k.toUpperCase();
+    } else {
+      base = codeToDisplay(hk.code);
+    }
+    const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "\u2318", "Win"].includes(base);
+    const parts = baseIsModifier ? mods : mods.concat(base ? [base] : []);
+    return parts.join(" + ");
+  }
+  function syncGameKeybind(id) {
+    if (typeof window === "undefined") return;
+    const emitCombo = GAME_KEYBIND_TARGETS[id];
+    purgeTargetBindings(emitCombo);
+    const prev = gameActiveStates.get(id);
+    if (prev) {
+      if (prev.rapidFire) {
+        try {
+          inGameHotkeys.stopRapidFire(prev.combo);
+        } catch {
+        }
+      }
+      gameActiveStates.delete(id);
+    }
+    const combo = hotkeyToCombo(getKeybind(id));
+    if (!combo) {
+      if (id === GAME_ACTION_ID) {
+        applyGameActionBlockers();
+      }
+      return;
+    }
+    const holdEnabled = getKeybindHoldDetection(id);
+    let replaced = false;
+    if (combo !== emitCombo) {
+      try {
+        inGameHotkeys.replace(emitCombo, combo);
+        replaced = true;
+      } catch {
+      }
+    }
+    let rapidFire = false;
+    if (holdEnabled) {
+      try {
+        inGameHotkeys.startRapidFire({
+          trigger: combo,
+          // on tient la touche choisie
+          emit: combo,
+          // remapper convertira en emitCombo si replace() actif
+          mode: "tap",
+          rateHz: 10
+        });
+        rapidFire = true;
+      } catch {
+      }
+    }
+    gameActiveStates.set(id, { combo, replaced, rapidFire });
+    if (id === GAME_ACTION_ID) {
+      applyGameActionBlockers();
+    }
+  }
+  function cloneHotkey(hk) {
+    return hk ? { ...hk } : null;
+  }
+  function hotkeysEqual(a, b) {
+    if (!a && !b) return true;
+    if (!a || !b) return false;
+    return hotkeyToString(a) === hotkeyToString(b);
+  }
+  function storageKey(id) {
+    return `${STORAGE_PREFIX}${id}`;
+  }
+  function holdStorageKey(id) {
+    return `${HOLD_STORAGE_PREFIX}${id}`;
+  }
+  function readStored(id) {
+    if (typeof window === "undefined") return void 0;
+    let raw = null;
+    try {
+      raw = window.localStorage.getItem(storageKey(id));
+    } catch {
+      return void 0;
+    }
+    if (raw == null) return void 0;
+    if (raw === STORED_NONE) return null;
+    const parsed = stringToHotkey(raw);
+    return parsed ?? null;
+  }
+  function writeStored(id, hk) {
+    if (typeof window === "undefined") return;
+    try {
+      if (hk) {
+        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+      } else {
+        window.localStorage.setItem(storageKey(id), STORED_NONE);
+      }
+    } catch {
+    }
+  }
+  function removeStored(id) {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(storageKey(id));
+    } catch {
+    }
+  }
+  function readHoldStored(id) {
+    if (typeof window === "undefined") return void 0;
+    let raw = null;
+    try {
+      raw = window.localStorage.getItem(holdStorageKey(id));
+    } catch {
+      return void 0;
+    }
+    if (raw == null) return void 0;
+    return raw === "1";
+  }
+  function writeHoldStored(id, enabled) {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(holdStorageKey(id), enabled ? "1" : "0");
+    } catch {
+    }
+  }
+  function emitHoldChange(id) {
+    const set2 = holdListeners.get(id);
+    if (!set2 || set2.size === 0) return;
+    const current = getKeybindHoldDetection(id);
+    for (const cb of set2) cb(current);
+  }
+  function emitChange(id) {
+    const set2 = listeners.get(id);
+    if (!set2 || set2.size === 0) return;
+    const current = cloneHotkey(getKeybind(id));
+    for (const cb of set2) cb(current);
+  }
+  function ensureCache(id) {
+    if (cache.has(id)) {
+      return cloneHotkey(cache.get(id) ?? null);
+    }
+    const stored = readStored(id);
+    const resolved = stored === void 0 ? cloneHotkey(defaultMap.get(id) ?? null) : cloneHotkey(stored);
+    cache.set(id, resolved);
+    return cloneHotkey(resolved);
+  }
+  function ensureHoldCache(id) {
+    if (!holdDefaultMap.has(id)) return false;
+    if (holdCache.has(id)) {
+      return holdCache.get(id) ?? false;
+    }
+    const stored = readHoldStored(id);
+    const resolved = stored === void 0 ? !!holdDefaultMap.get(id) : stored;
+    holdCache.set(id, resolved);
+    return resolved;
+  }
+  function getKeybind(id) {
+    return ensureCache(id);
+  }
+  function getDefaultKeybind(id) {
+    return cloneHotkey(defaultMap.get(id) ?? null);
+  }
+  function setKeybind(id, hk) {
+    const current = getKeybind(id);
+    if (hotkeysEqual(current, hk)) return;
+    const next = cloneHotkey(hk);
+    if (next) {
+      const asString = hotkeyToString(next);
+      for (const otherId of actionMap.keys()) {
+        if (otherId === id) continue;
+        const other = getKeybind(otherId);
+        if (!other) continue;
+        if (hotkeyToString(other) !== asString) continue;
+        cache.set(otherId, null);
+        writeStored(otherId, null);
+        emitChange(otherId);
+      }
+    }
+    cache.set(id, next);
+    writeStored(id, next);
+    emitChange(id);
+  }
+  function resetKeybind(id) {
+    cache.delete(id);
+    removeStored(id);
+    emitChange(id);
+  }
+  function getKeybindHoldDetection(id) {
+    return ensureHoldCache(id);
+  }
+  function setKeybindHoldDetection(id, enabled) {
+    if (!holdDefaultMap.has(id)) return;
+    const current = ensureHoldCache(id);
+    if (current === enabled) return;
+    holdCache.set(id, enabled);
+    writeHoldStored(id, enabled);
+    emitHoldChange(id);
+  }
+  function onKeybindHoldDetectionChange(id, cb) {
+    if (!holdDefaultMap.has(id)) {
+      return () => {
+      };
+    }
+    const set2 = holdListeners.get(id) ?? /* @__PURE__ */ new Set();
+    if (!holdListeners.has(id)) holdListeners.set(id, set2);
+    set2.add(cb);
+    return () => {
+      set2.delete(cb);
+      if (set2.size === 0) holdListeners.delete(id);
+    };
+  }
+  function onKeybindChange(id, cb) {
+    const set2 = listeners.get(id) ?? /* @__PURE__ */ new Set();
+    if (!listeners.has(id)) listeners.set(id, set2);
+    set2.add(cb);
+    return () => {
+      set2.delete(cb);
+      if (set2.size === 0) listeners.delete(id);
+    };
+  }
+  function eventMatchesKeybind(id, e) {
+    return matchHotkey(e, getKeybind(id));
+  }
+  function installGameKeybindsOnce() {
+    if (gameKeybindsInstalled || typeof window === "undefined") return;
+    gameKeybindsInstalled = true;
+    for (const id of GAME_KEYBIND_IDS) {
+      syncGameKeybind(id);
+      onKeybindChange(id, () => syncGameKeybind(id));
+      onKeybindHoldDetectionChange(id, () => syncGameKeybind(id));
+    }
+  }
+  function getKeybindLabel(id) {
+    return prettyHotkey(getKeybind(id));
+  }
+  function getKeybindSections() {
+    return keybindSections.map((section) => ({
+      ...section,
+      actions: section.actions.map((action2) => ({
+        ...action2,
+        defaultHotkey: cloneHotkey(action2.defaultHotkey),
+        holdDetection: action2.holdDetection ? {
+          label: action2.holdDetection.label,
+          description: action2.holdDetection.description,
+          defaultEnabled: action2.holdDetection.defaultEnabled
+        } : void 0
+      }))
+    }));
+  }
+  if (typeof window !== "undefined") {
+    window.addEventListener("storage", (event) => {
+      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
+      const id = event.key.slice(STORAGE_PREFIX.length);
+      if (!actionMap.has(id)) return;
+      cache.delete(id);
+      emitChange(id);
+    });
+    window.addEventListener("storage", (event) => {
+      if (!event.key || !event.key.startsWith(HOLD_STORAGE_PREFIX)) return;
+      const id = event.key.slice(HOLD_STORAGE_PREFIX.length);
+      if (!holdDefaultMap.has(id)) return;
+      holdCache.delete(id);
+      emitHoldChange(id);
+    });
+  }
+
+  // src/utils/keyboard.ts
   function shouldIgnoreKeydown(e) {
     const el2 = e.target;
     if (!el2) return false;
     return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
+  }
+
+  // src/services/pets.ts
+  var LS_OVERRIDES_KEY = "qws:pets:overrides:v1";
+  var LS_UI_KEY = "qws:pets:ui:v1";
+  var LS_TEAMS_KEY = "qws:pets:teams:v1";
+  var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
+  var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
+  var TEAM_HK_MAP = /* @__PURE__ */ new Map();
+  var TEAM_HK_UNSUBS = /* @__PURE__ */ new Map();
+  var hkNextTeam = null;
+  var hkPrevTeam = null;
+  var unsubNextHotkey = null;
+  var unsubPrevHotkey = null;
+  var orderedTeamIds = [];
+  var lastUsedTeamId = null;
+  var legacyKeyForTeam = (id) => `${LS_TEAM_HK_PREFIX}${id}`;
+  function syncTeamHotkey(teamId) {
+    const hk = getKeybind(getPetTeamActionId(teamId));
+    if (hk) TEAM_HK_MAP.set(teamId, hk);
+    else TEAM_HK_MAP.delete(teamId);
+  }
+  function syncNextTeamHotkey() {
+    hkNextTeam = getKeybind(PET_TEAM_NEXT_ID);
+  }
+  function syncPrevTeamHotkey() {
+    hkPrevTeam = getKeybind(PET_TEAM_PREV_ID);
+  }
+  function ensureLegacyTeamHotkeyMigration(teamId) {
+    if (typeof window === "undefined") return;
+    try {
+      const legacy = localStorage.getItem(legacyKeyForTeam(teamId));
+      if (!legacy) return;
+      const actionId = getPetTeamActionId(teamId);
+      const existing = getKeybind(actionId);
+      if (!existing) {
+        const hk = stringToHotkey(legacy);
+        if (hk) {
+          setKeybind(actionId, hk);
+        }
+      }
+      localStorage.removeItem(legacyKeyForTeam(teamId));
+    } catch {
+    }
+  }
+  function normalizeTeamList(teams) {
+    if (!Array.isArray(teams)) return [];
+    return teams.map((t) => ({ id: String(t?.id ?? ""), name: t?.name ?? null })).filter((t) => t.id.length > 0);
+  }
+  function ensureLastUsedTeamIsValid() {
+    if (!orderedTeamIds.length) {
+      lastUsedTeamId = null;
+      return;
+    }
+    if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
+      lastUsedTeamId = orderedTeamIds[0] ?? null;
+    }
+  }
+  function adjacentTeam(direction) {
+    if (!orderedTeamIds.length) return null;
+    if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
+      return direction === 1 ? orderedTeamIds[0] ?? null : orderedTeamIds[orderedTeamIds.length - 1] ?? null;
+    }
+    if (orderedTeamIds.length === 1) return orderedTeamIds[0] ?? null;
+    const currentIndex = orderedTeamIds.indexOf(lastUsedTeamId);
+    let nextIndex = currentIndex + direction;
+    if (nextIndex < 0) nextIndex = orderedTeamIds.length - 1;
+    if (nextIndex >= orderedTeamIds.length) nextIndex = 0;
+    return orderedTeamIds[nextIndex] ?? null;
+  }
+  function markTeamAsUsed(teamId) {
+    lastUsedTeamId = teamId ? String(teamId) : null;
+  }
+  function setTeamsForHotkeys(rawTeams) {
+    for (const unsub of TEAM_HK_UNSUBS.values()) {
+      try {
+        unsub();
+      } catch {
+      }
+    }
+    TEAM_HK_UNSUBS.clear();
+    if (unsubNextHotkey) {
+      try {
+        unsubNextHotkey();
+      } catch {
+      }
+      unsubNextHotkey = null;
+    }
+    if (unsubPrevHotkey) {
+      try {
+        unsubPrevHotkey();
+      } catch {
+      }
+      unsubPrevHotkey = null;
+    }
+    const teams = normalizeTeamList(rawTeams);
+    updatePetKeybinds(teams);
+    orderedTeamIds = teams.map((t) => t.id);
+    ensureLastUsedTeamIsValid();
+    const keep = new Set(orderedTeamIds);
+    for (const teamId of Array.from(TEAM_HK_MAP.keys())) {
+      if (!keep.has(teamId)) TEAM_HK_MAP.delete(teamId);
+    }
+    teams.forEach((team) => {
+      ensureLegacyTeamHotkeyMigration(team.id);
+      syncTeamHotkey(team.id);
+      const unsub = onKeybindChange(getPetTeamActionId(team.id), () => syncTeamHotkey(team.id));
+      TEAM_HK_UNSUBS.set(team.id, unsub);
+    });
+    syncNextTeamHotkey();
+    syncPrevTeamHotkey();
+    unsubNextHotkey = onKeybindChange(PET_TEAM_NEXT_ID, () => syncNextTeamHotkey());
+    unsubPrevHotkey = onKeybindChange(PET_TEAM_PREV_ID, () => syncPrevTeamHotkey());
   }
   function installPetTeamHotkeysOnce(onUseTeam) {
     const FLAG = "__qws_pet_team_hk_installed";
@@ -5054,11 +7238,34 @@
       "keydown",
       (e) => {
         if (shouldIgnoreKeydown(e)) return;
+        const useTeam = (teamId) => {
+          if (!teamId) return;
+          markTeamAsUsed(teamId);
+          onUseTeam(teamId);
+        };
+        if (hkPrevTeam && matchHotkey(e, hkPrevTeam)) {
+          const target = adjacentTeam(-1);
+          if (target) {
+            e.preventDefault();
+            e.stopPropagation();
+            useTeam(target);
+            return;
+          }
+        }
+        if (hkNextTeam && matchHotkey(e, hkNextTeam)) {
+          const target = adjacentTeam(1);
+          if (target) {
+            e.preventDefault();
+            e.stopPropagation();
+            useTeam(target);
+            return;
+          }
+        }
         for (const [teamId, hk] of TEAM_HK_MAP) {
           if (matchHotkey(e, hk)) {
             e.preventDefault();
             e.stopPropagation();
-            onUseTeam(teamId);
+            useTeam(teamId);
             break;
           }
         }
@@ -5067,11 +7274,23 @@
     );
     window[FLAG] = true;
   }
-  window.addEventListener("storage", (e) => {
-    if (!e.key || !e.key.startsWith(LS_TEAM_HK_PREFIX)) return;
-    const teamId = e.key.slice(LS_TEAM_HK_PREFIX.length);
-    refreshTeamFromLS(teamId);
-  });
+  function petImg64From(species, mutation) {
+    const spRaw = String(species || "").trim();
+    if (!spRaw) return void 0;
+    const sp = _canonicalSpecies(spRaw);
+    const entry = petCatalog[sp];
+    const imgs = entry?.img64;
+    if (!imgs) {
+      return void 0;
+    }
+    const toLower = (v) => String(v || "").toLowerCase();
+    const muts = Array.isArray(mutation) ? mutation.map(toLower) : [toLower(mutation)];
+    const has = (s) => muts.some((m) => m.includes(s));
+    const key2 = has("rainbow") ? "rainbow" : has("gold") ? "gold" : "normal";
+    const src = imgs?.[key2] || imgs.normal;
+    if (!src) return void 0;
+    return String(src).startsWith("data:") ? src : `data:image/png;base64,${src}`;
+  }
   var _AB = petAbilities ?? {};
   function _abilityName(id) {
     const key2 = String(id ?? "");
@@ -5097,9 +7316,7 @@
     for (const p of _invPetsCache) {
       const abs = Array.isArray(p.abilities) ? p.abilities : [];
       for (const id of abs) {
-        if (_abilityNameWithoutLevel(id).toLowerCase() === target) {
-          ids.add(id);
-        }
+        if (_abilityNameWithoutLevel(id).toLowerCase() === target) ids.add(id);
       }
     }
     return ids;
@@ -5127,6 +7344,51 @@
       abilities: Array.isArray(p.abilities) ? p.abilities.slice() : []
     };
   }
+  function loadTeams() {
+    try {
+      const raw = localStorage.getItem(LS_TEAMS_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return [];
+      return arr.map((t) => ({
+        id: String(t?.id || ""),
+        name: String(t?.name || "Team"),
+        slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
+      })).filter((t) => t.id);
+    } catch {
+      return [];
+    }
+  }
+  function saveTeams(arr) {
+    try {
+      localStorage.setItem(LS_TEAMS_KEY, JSON.stringify(arr));
+    } catch {
+    }
+  }
+  function _uid() {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `t_${Date.now().toString(36)}_${Math.random().toString(16).slice(2)}`;
+    }
+  }
+  function _loadTeamSearchMap() {
+    try {
+      const raw = localStorage.getItem(LS_TEAM_SEARCH_KEY);
+      const obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === "object" ? obj : {};
+    } catch {
+      return {};
+    }
+  }
+  function _saveTeamSearchMap(map2) {
+    try {
+      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map2));
+    } catch {
+    }
+  }
+  var _teams = loadTeams();
+  var _teamSearch = _loadTeamSearchMap();
   var _invRaw = null;
   var _activeRaw = [];
   var _invPetsCache = [];
@@ -5285,19 +7547,19 @@
   async function clearHandSelection() {
     try {
       await Atoms.inventory.setSelectedIndexToEnd.set(null);
-    } catch {
+    } catch (err) {
     }
     try {
       await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
-    } catch {
+    } catch (err) {
     }
     try {
       await PlayerService.setSelectedItem(null);
-    } catch {
+    } catch (err) {
     }
     try {
       await PlayerService.dropObject();
-    } catch {
+    } catch (err) {
     }
   }
   async function _waitValidatedInventoryIndex(timeoutMs = 2e4) {
@@ -5319,93 +7581,273 @@
     }
     return null;
   }
-  function loadTeams() {
+  var _belowThreshold = /* @__PURE__ */ new Map();
+  var DEFAULT_OVERRIDE = { enabled: false, thresholdPct: 10, crops: {} };
+  var DEFAULT_UI = { selectedPetId: null };
+  var _currentPets = [];
+  var _userTriggerCb = null;
+  function saveOverrides(map2) {
     try {
-      const raw = localStorage.getItem(LS_TEAMS_KEY);
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return [];
-      return arr.map((t) => ({
-        id: String(t?.id || ""),
-        name: String(t?.name || "Team"),
-        slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
-      })).filter((t) => t.id);
-    } catch {
-      return [];
+      localStorage.setItem(LS_OVERRIDES_KEY, JSON.stringify(map2));
+    } catch (err) {
     }
   }
-  function saveTeams(arr) {
+  function loadOverrides() {
     try {
-      localStorage.setItem(LS_TEAMS_KEY, JSON.stringify(arr));
-    } catch {
-    }
-  }
-  function _uid() {
-    try {
-      return crypto.randomUUID();
-    } catch {
-      return `t_${Date.now().toString(36)}_${Math.random().toString(16).slice(2)}`;
-    }
-  }
-  var _teams = loadTeams();
-  function _loadTeamSearchMap() {
-    try {
-      const raw = localStorage.getItem(LS_TEAM_SEARCH_KEY);
-      const obj = raw ? JSON.parse(raw) : {};
-      return obj && typeof obj === "object" ? obj : {};
-    } catch {
+      const raw = localStorage.getItem(LS_OVERRIDES_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      const out = obj && typeof obj === "object" ? obj : {};
+      return out;
+    } catch (err) {
       return {};
     }
   }
-  function _saveTeamSearchMap(map2) {
+  function saveUIState(next) {
     try {
-      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map2));
+      localStorage.setItem(LS_UI_KEY, JSON.stringify(next));
+    } catch (err) {
+    }
+  }
+  function loadUIState() {
+    try {
+      const raw = localStorage.getItem(LS_UI_KEY);
+      if (!raw) return { ...DEFAULT_UI };
+      const obj = JSON.parse(raw);
+      const merged = { ...DEFAULT_UI, ...obj || {} };
+      return merged;
+    } catch (err) {
+      return { ...DEFAULT_UI };
+    }
+  }
+  function cloneOverride(o) {
+    const src = o ?? DEFAULT_OVERRIDE;
+    return {
+      enabled: !!src.enabled,
+      thresholdPct: Math.min(100, Math.max(1, Number(src.thresholdPct) || DEFAULT_OVERRIDE.thresholdPct)),
+      crops: { ...src.crops || {} }
+    };
+  }
+  function clampPct(n) {
+    return Math.max(0, Math.min(100, n));
+  }
+  function getCompatibleCropsFromData(species) {
+    const PC = petCatalog;
+    const entry = PC?.[species];
+    const raw = entry?.diet ?? entry?.compatibleCrops ?? entry?.crops ?? [];
+    const arr = Array.isArray(raw) ? raw : [];
+    return arr.filter((c) => typeof c === "string" && c.length > 0);
+  }
+  function getMaxHungerFromData(species) {
+    const v = petCatalog?.[species]?.coinsToFullyReplenishHunger;
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+    return 3e3;
+  }
+  async function findPetById(petId) {
+    try {
+      const list = await PlayerService.getPets();
+      const arr = Array.isArray(list) ? list : [];
+      return arr.find((p) => String(p?.slot?.id || "") === String(petId)) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function findFirstCompatibleInvItem(allowed, inv) {
+    const arr = Array.isArray(inv) ? inv : [];
+    for (const it of arr) {
+      const species = String(it?.species || "");
+      if (species && allowed.has(species)) return it;
+    }
+    return null;
+  }
+  function _emitTrigger(payload) {
+    try {
+      _userTriggerCb?.(payload);
     } catch {
     }
   }
-  var _teamSearch = _loadTeamSearchMap();
+  async function _evaluatePet(pet) {
+    const petId = String(pet?.slot?.id || "");
+    if (!petId) return;
+    const ov = PetsService.getOverride(petId);
+    if (!ov.enabled) {
+      _belowThreshold.set(petId, false);
+      return;
+    }
+    const hungerPct = PetsService.getHungerPctFor(pet);
+    const thresholdPct = Math.max(1, Math.min(100, ov.thresholdPct | 0 || 10));
+    const previouslyBelow = _belowThreshold.get(petId) === true;
+    const nowBelow = hungerPct < thresholdPct;
+    if (nowBelow && !previouslyBelow) {
+      let allowedSet;
+      try {
+        allowedSet = await PetsService.getPetAllowedCrops(petId);
+      } catch {
+        const species = String(pet?.slot?.petSpecies || "");
+        allowedSet = new Set(PetsService.getCompatibleCropsForSpecies(species));
+      }
+      const allowed = Array.from(allowedSet);
+      let chosen = null;
+      let didUnfavorite = false;
+      try {
+        const [invRaw, favIdsRaw] = await Promise.all([
+          PlayerService.getCropInventoryState(),
+          PlayerService.getFavoriteIds?.() ?? []
+        ]);
+        const inv = Array.isArray(invRaw) ? invRaw : [];
+        const favSet = new Set(Array.isArray(favIdsRaw) ? favIdsRaw : []);
+        const invNonFav = inv.filter((it) => !favSet.has(String(it?.id)));
+        chosen = findFirstCompatibleInvItem(allowedSet, invNonFav);
+        if (chosen?.id && PlayerService.feedPet) {
+          try {
+            await PlayerService.feedPet(petId, chosen.id);
+          } catch {
+          }
+        }
+      } catch {
+      }
+      _emitTrigger({
+        pet,
+        petId,
+        species: String(pet?.slot?.petSpecies || ""),
+        hungerPct,
+        thresholdPct,
+        allowedCrops: allowed,
+        chosenItem: chosen,
+        didUnfavorite
+      });
+    }
+    _belowThreshold.set(petId, nowBelow);
+  }
+  async function _evaluateAll() {
+    const arr = Array.isArray(_currentPets) ? _currentPets : [];
+    for (const p of arr) {
+      try {
+        await _evaluatePet(p);
+      } catch {
+      }
+    }
+  }
   var PetsService = {
-    /* ----- Player-facing (UI) ----- */
+    /* --------- Player-facing (UI list/subscribe) --------- */
     getPets() {
       return PlayerService.getPets();
     },
+    onPetsChange(cb) {
+      return PlayerService.onPetsChange(cb);
+    },
+    onPetsChangeNow(cb) {
+      return PlayerService.onPetsChangeNow(cb);
+    },
+    /* ------------------------- Abilities utils ------------------------- */
     getAbilityName(id) {
       return _abilityName(id);
     },
     getAbilityNameWithoutLevel(id) {
       return _abilityNameWithoutLevel(id);
     },
-    async chooseSlotPet(teamId, slotIndex, searchOverride) {
-      const idx = Math.max(0, Math.min(2, Math.floor(slotIndex || 0)));
-      const team = this.getTeamById(teamId);
-      if (!team) return null;
-      const exclude = /* @__PURE__ */ new Set();
-      team.slots.forEach((id, i) => {
-        if (i !== idx && id) exclude.add(String(id));
+    /* ------------------------- Autofeed + per-pet UI state ------------------------- */
+    setUIState(next) {
+      const cur = loadUIState();
+      const merged = { ...cur, ...next || {} };
+      saveUIState(merged);
+      return merged;
+    },
+    setSelectedPet(id) {
+      return this.setUIState({ selectedPetId: id });
+    },
+    getSelectedPetId() {
+      return loadUIState().selectedPetId ?? null;
+    },
+    getOverride(petId) {
+      const all = loadOverrides();
+      return cloneOverride(all[petId]);
+    },
+    setOverride(petId, patch) {
+      const all = loadOverrides();
+      const cur = cloneOverride(all[petId]);
+      const next = {
+        enabled: patch.enabled ?? cur.enabled,
+        thresholdPct: Number.isFinite(patch.thresholdPct) ? Math.min(100, Math.max(1, Number(patch.thresholdPct))) : cur.thresholdPct,
+        crops: { ...cur.crops, ...patch.crops || {} }
+      };
+      all[petId] = next;
+      saveOverrides(all);
+      void _evaluateAll();
+      return next;
+    },
+    updateOverride(petId, fn) {
+      const all = loadOverrides();
+      const cur = cloneOverride(all[petId]);
+      const next = cloneOverride(fn(cur));
+      all[petId] = next;
+      saveOverrides(all);
+      void _evaluateAll();
+      return next;
+    },
+    async setPetAutofeedEnabled(petId, enabled) {
+      return this.setOverride(petId, { enabled: !!enabled });
+    },
+    getPetAutofeedEnabled(petId) {
+      return this.getOverride(petId).enabled;
+    },
+    async setPetAutofeedThresholdPct(petId, pct) {
+      const v = Math.min(100, Math.max(1, Math.floor(Number(pct) || 10)));
+      return this.setOverride(petId, { thresholdPct: v });
+    },
+    getPetAutofeedThresholdPct(petId) {
+      return this.getOverride(petId).thresholdPct;
+    },
+    async setPetAllowedCrop(petId, crop, allowed) {
+      return this.updateOverride(petId, (cur) => {
+        const next = cloneOverride(cur);
+        const entry = next.crops[crop] ?? { allowed: true };
+        next.crops[crop] = { allowed: allowed ?? entry.allowed };
+        return next;
       });
-      const payload = searchOverride && searchOverride.trim().length ? await this.buildFilteredInventoryByQuery(searchOverride, { excludeIds: exclude }) : await this.buildFilteredInventoryForTeam(teamId, { excludeIds: exclude });
-      const items = Array.isArray(payload?.items) ? payload.items : [];
-      if (!items.length) return null;
-      await fakeInventoryShow(payload, { open: true });
-      const selIndex = await _waitValidatedInventoryIndex(2e4);
-      await closeInventoryPanel();
-      if (selIndex == null || selIndex < 0 || selIndex >= items.length) return null;
-      const chosenPet = _inventoryItemToPet(items[selIndex]);
-      if (!chosenPet) return null;
-      const next = team.slots.slice(0, 3);
-      next[idx] = String(chosenPet.id);
-      this.saveTeam({ id: team.id, slots: next });
-      try {
-        await clearHandSelection();
-      } catch {
+    },
+    async getPetAllowedCrops(petId) {
+      const ov = this.getOverride(petId);
+      const pet = await findPetById(petId);
+      const species = pet?.slot?.petSpecies || "";
+      const compatibles = this.getCompatibleCropsForSpecies(species);
+      const allowed = /* @__PURE__ */ new Set();
+      for (const c of compatibles) {
+        const rule = ov.crops[c];
+        if (rule ? !!rule.allowed : true) allowed.add(c);
       }
-      return chosenPet;
+      return allowed;
     },
-    async getInventoryPets() {
-      await _ensureInventoryWatchersStarted();
-      return _invPetsCache.slice();
+    getCompatibleCropsForSpecies(species) {
+      return getCompatibleCropsFromData(species);
     },
-    /* ----- Teams (UI) ----- */
+    getMaxHungerForSpecies(species) {
+      return getMaxHungerFromData(species);
+    },
+    getHungerPctFor(pet) {
+      const cur = Number(pet?.slot?.hunger) || 0;
+      const species = String(pet?.slot?.petSpecies || "");
+      const max = this.getMaxHungerForSpecies(species);
+      const pct = cur / max * 100;
+      return +clampPct(pct).toFixed(1);
+    },
+    async startAutofeedWatcher(onTrigger) {
+      _userTriggerCb = onTrigger ?? null;
+      const stop = await PlayerService.onPetsChangeNow((arr) => {
+        _currentPets = Array.isArray(arr) ? arr.slice() : [];
+        void _evaluateAll();
+      });
+      return () => {
+        try {
+          stop();
+        } catch {
+        }
+        _currentPets = [];
+        _belowThreshold.clear();
+        _userTriggerCb = null;
+      };
+    },
+    /* ------------------------- Teams (UI-less core used by UI) ------------------------- */
     _teams: loadTeams(),
     _teamSubs: /* @__PURE__ */ new Set(),
     _notifyTeamSubs() {
@@ -5493,7 +7935,11 @@
       _teamSearch[teamId] = (q || "").trim();
       _saveTeamSearchMap(_teamSearch);
     },
-    /* ----- Inventory filters for fake-inventory picker ----- */
+    /* ------------------------- Inventory filters + pickers ------------------------- */
+    async getInventoryPets() {
+      await _ensureInventoryWatchersStarted();
+      return _invPetsCache.slice();
+    },
     async buildFilteredInventoryForTeam(teamId, opts) {
       await _ensureInventoryWatchersStarted();
       const { mode, value } = _parseTeamSearch(this.getTeamSearch(teamId) || "");
@@ -5547,18 +7993,56 @@
       }
       return { items, favoritedItemIds };
     },
-    /* ----- Team switching ----- */
+    async chooseSlotPet(teamId, slotIndex, searchOverride) {
+      const idx = Math.max(0, Math.min(2, Math.floor(slotIndex || 0)));
+      const team = this.getTeamById(teamId);
+      if (!team) return null;
+      const exclude = /* @__PURE__ */ new Set();
+      team.slots.forEach((id, i) => {
+        if (i !== idx && id) exclude.add(String(id));
+      });
+      const payload = searchOverride && searchOverride.trim().length ? await this.buildFilteredInventoryByQuery(searchOverride, { excludeIds: exclude }) : await this.buildFilteredInventoryForTeam(teamId, { excludeIds: exclude });
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      if (!items.length) return null;
+      await fakeInventoryShow(payload, { open: true });
+      const selIndex = await _waitValidatedInventoryIndex(2e4);
+      await closeInventoryPanel();
+      if (selIndex == null || selIndex < 0 || selIndex >= items.length) return null;
+      const chosenPet = _inventoryItemToPet(items[selIndex]);
+      if (!chosenPet) return null;
+      const next = team.slots.slice(0, 3);
+      next[idx] = String(chosenPet.id);
+      this.saveTeam({ id: team.id, slots: next });
+      try {
+        await clearHandSelection();
+      } catch {
+      }
+      return chosenPet;
+    },
+    async pickPetViaFakeInventory(search) {
+      const payload = await this.buildFilteredInventoryByQuery(search || "");
+      const items = Array.isArray(payload?.items) ? payload.items : [];
+      if (!items.length) return null;
+      await fakeInventoryShow(payload, { open: true });
+      const selIndex = await _waitValidatedInventoryIndex(2e4);
+      await closeInventoryPanel();
+      if (selIndex == null || selIndex < 0 || selIndex >= items.length) return null;
+      await clearHandSelection();
+      return _inventoryItemToPet(items[selIndex]);
+    },
+    /* ------------------------- Team switching ------------------------- */
     async useTeam(teamId) {
       const t = this.getTeams().find((tt) => tt.id === teamId) || null;
       if (!t) throw new Error("Team not found");
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      return _applyTeam(targetInvIds);
+      const res = await _applyTeam(targetInvIds);
+      markTeamAsUsed(teamId);
+      return res;
     },
-    /* ----- Ability Logs (UI Logs tab) ----- */
+    /* ------------------------- Ability logs ------------------------- */
     _logs: [],
     _logsMax: 500,
     _seenPerfByPet: /* @__PURE__ */ new Map(),
-    // petId -> last performedAt pushed
     _logSubs: /* @__PURE__ */ new Set(),
     _logsCutoffMs: 0,
     _logsCutoffSkewMs: 1500,
@@ -5575,8 +8059,7 @@
       };
       let myInfosMap = {};
       try {
-        const curInfos = await Atoms.pets.myPetInfos.get();
-        myInfosMap = indexInfosByPetId(curInfos);
+        myInfosMap = indexInfosByPetId(await Atoms.pets.myPetInfos.get());
       } catch {
       }
       let stopInfos = null;
@@ -5615,8 +8098,7 @@
         return out;
       };
       try {
-        const cur = await Atoms.pets.myPetSlotInfos.get();
-        this._ingestAbilityMap(extractFlat(cur));
+        this._ingestAbilityMap(extractFlat(await Atoms.pets.myPetSlotInfos.get()));
       } catch {
       }
       const stopSlots = await Atoms.pets.myPetSlotInfos.onChange((src) => {
@@ -5856,9 +8338,7 @@
       }
     }
     const alreadyActive = /* @__PURE__ */ new Set();
-    for (const invId of targetInvIds) {
-      if (activeSlots.includes(invId)) alreadyActive.add(invId);
-    }
+    for (const invId of targetInvIds) if (activeSlots.includes(invId)) alreadyActive.add(invId);
     let swapped = 0, placed = 0, skipped = 0;
     if (alreadyActive.size) {
       activeSlots = activeSlots.filter((slotId) => !alreadyActive.has(slotId));
@@ -5881,222 +8361,7 @@
     return { swapped, placed, skipped };
   }
 
-  // src/services/keybinds.ts
-  var SECTION_CONFIG = [
-    {
-      id: "gui",
-      title: "GUI",
-      icon: "\u{1F5A5}\uFE0F",
-      description: "Choose how you open and move the overlay.",
-      actions: [
-        {
-          id: "gui.toggle",
-          label: "Toggle menu visibility",
-          hint: "Opens or closes the Arie's Mod overlay.",
-          defaultHotkey: { alt: true, code: "KeyX" }
-        },
-        {
-          id: "gui.drag",
-          label: "Drag HUD",
-          hint: "Hold to drag menus interfaces around the screen.",
-          defaultHotkey: { alt: true, code: "AltLeft" },
-          allowModifierOnly: true
-        }
-      ]
-    },
-    {
-      id: "shops",
-      title: "Shops",
-      icon: "\u{1F6D2}",
-      description: "Quick shortcuts to every shop tab.",
-      actions: [
-        {
-          id: "shops.seeds",
-          label: "Seeds shop",
-          defaultHotkey: { alt: true, code: "KeyS" }
-        },
-        {
-          id: "shops.eggs",
-          label: "Eggs shop",
-          defaultHotkey: { alt: true, code: "KeyE" }
-        },
-        {
-          id: "shops.decors",
-          label: "Decors shop",
-          defaultHotkey: { alt: true, code: "KeyD" }
-        },
-        {
-          id: "shops.tools",
-          label: "Tools shop",
-          defaultHotkey: { alt: true, code: "KeyT" }
-        }
-      ]
-    },
-    {
-      id: "sell",
-      title: "Sell",
-      icon: "\u{1F4B0}",
-      description: "Streamline selling actions.",
-      actions: [
-        {
-          id: "sell.sell-all",
-          label: "All crops",
-          hint: "Trigger the sell-all flow for harvested crops.",
-          defaultHotkey: null
-        },
-        {
-          id: "sell.sell-all-pets",
-          label: "All pets",
-          hint: "Sell every non-favorited pet in your inventory.",
-          defaultHotkey: null
-        }
-      ]
-    }
-  ];
-  var STORAGE_PREFIX = "qws:keybind:";
-  var STORED_NONE = "__none__";
-  var actionMap = /* @__PURE__ */ new Map();
-  var defaultMap = /* @__PURE__ */ new Map();
-  var cache = /* @__PURE__ */ new Map();
-  var listeners2 = /* @__PURE__ */ new Map();
-  var keybindSections = SECTION_CONFIG.map((section) => {
-    const actions = section.actions.map((action) => {
-      const normalized = {
-        id: action.id,
-        sectionId: section.id,
-        label: action.label,
-        hint: action.hint,
-        allowModifierOnly: action.allowModifierOnly,
-        defaultHotkey: cloneHotkey(action.defaultHotkey)
-      };
-      actionMap.set(normalized.id, normalized);
-      defaultMap.set(normalized.id, cloneHotkey(action.defaultHotkey));
-      return normalized;
-    });
-    return {
-      id: section.id,
-      title: section.title,
-      description: section.description,
-      icon: section.icon,
-      actions
-    };
-  });
-  function cloneHotkey(hk) {
-    return hk ? { ...hk } : null;
-  }
-  function hotkeysEqual(a, b) {
-    if (!a && !b) return true;
-    if (!a || !b) return false;
-    return hotkeyToString(a) === hotkeyToString(b);
-  }
-  function storageKey(id) {
-    return `${STORAGE_PREFIX}${id}`;
-  }
-  function readStored(id) {
-    if (typeof window === "undefined") return void 0;
-    let raw = null;
-    try {
-      raw = window.localStorage.getItem(storageKey(id));
-    } catch {
-      return void 0;
-    }
-    if (raw == null) return void 0;
-    if (raw === STORED_NONE) return null;
-    const parsed = stringToHotkey(raw);
-    return parsed ?? null;
-  }
-  function writeStored(id, hk) {
-    if (typeof window === "undefined") return;
-    try {
-      if (hk) {
-        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
-      } else {
-        window.localStorage.setItem(storageKey(id), STORED_NONE);
-      }
-    } catch {
-    }
-  }
-  function emitChange(id) {
-    const set2 = listeners2.get(id);
-    if (!set2 || set2.size === 0) return;
-    const current = cloneHotkey(getKeybind(id));
-    for (const cb of set2) cb(current);
-  }
-  function ensureCache(id) {
-    if (cache.has(id)) {
-      return cloneHotkey(cache.get(id) ?? null);
-    }
-    const stored = readStored(id);
-    const resolved = stored === void 0 ? cloneHotkey(defaultMap.get(id) ?? null) : cloneHotkey(stored);
-    cache.set(id, resolved);
-    return cloneHotkey(resolved);
-  }
-  function getKeybind(id) {
-    return ensureCache(id);
-  }
-  function setKeybind(id, hk) {
-    const current = getKeybind(id);
-    if (hotkeysEqual(current, hk)) return;
-    const next = cloneHotkey(hk);
-    if (next) {
-      const asString = hotkeyToString(next);
-      for (const otherId of actionMap.keys()) {
-        if (otherId === id) continue;
-        const other = getKeybind(otherId);
-        if (!other) continue;
-        if (hotkeyToString(other) !== asString) continue;
-        cache.set(otherId, null);
-        writeStored(otherId, null);
-        emitChange(otherId);
-      }
-    }
-    cache.set(id, next);
-    writeStored(id, next);
-    emitChange(id);
-  }
-  function onKeybindChange(id, cb) {
-    const set2 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
-    if (!listeners2.has(id)) listeners2.set(id, set2);
-    set2.add(cb);
-    return () => {
-      set2.delete(cb);
-      if (set2.size === 0) listeners2.delete(id);
-    };
-  }
-  function eventMatchesKeybind(id, e) {
-    return matchHotkey(e, getKeybind(id));
-  }
-  function getKeybindLabel(id) {
-    return hotkeyToPretty(getKeybind(id));
-  }
-  function getKeybindSections() {
-    return keybindSections.map((section) => ({
-      ...section,
-      actions: section.actions.map((action) => ({
-        ...action,
-        defaultHotkey: cloneHotkey(action.defaultHotkey)
-      }))
-    }));
-  }
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", (event) => {
-      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
-      const id = event.key.slice(STORAGE_PREFIX.length);
-      if (!actionMap.has(id)) return;
-      cache.delete(id);
-      emitChange(id);
-    });
-  }
-
-  // src/utils/keyboard.ts
-  function shouldIgnoreKeydown2(e) {
-    const el2 = e.target;
-    if (!el2) return false;
-    return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
-  }
-
   // src/services/shops.ts
-  var log2 = createMenuLogger("shops-service", "Shops service");
   var SHOP_KEYBINDS = [
     { id: "shops.seeds", modal: "seedShop" },
     { id: "shops.eggs", modal: "eggShop" },
@@ -6110,7 +8375,7 @@
     window.addEventListener(
       "keydown",
       (event) => {
-        if (shouldIgnoreKeydown2(event)) return;
+        if (shouldIgnoreKeydown(event)) return;
         for (const { id, modal } of SHOP_KEYBINDS) {
           if (!eventMatchesKeybind(id, event)) continue;
           event.preventDefault();
@@ -6145,6 +8410,404 @@
     await sendToast({ title, description, variant, duration });
   }
 
+  // src/core/audioPlayer.ts
+  var AudioPlayer = class {
+    constructor(opts = {}) {
+      __publicField(this, "found", /* @__PURE__ */ new Set());
+      __publicField(this, "meta", /* @__PURE__ */ new Map());
+      __publicField(this, "groupsMap", /* @__PURE__ */ new Map());
+      // config volume
+      __publicField(this, "atomKey");
+      __publicField(this, "min");
+      __publicField(this, "max");
+      __publicField(this, "gainFactor");
+      // Howler cache local
+      __publicField(this, "howler", null);
+      // options
+      __publicField(this, "minVariantsPerAutoGroup");
+      this.atomKey = opts.atomKey ?? "soundEffectsVolumeAtom";
+      this.min = opts.min ?? 1e-3;
+      this.max = opts.max ?? 0.2000000000000001;
+      this.gainFactor = opts.gainFactor ?? 1;
+      this.minVariantsPerAutoGroup = opts.minVariantsPerAutoGroup ?? 2;
+      if (opts.autoScan) void this.init();
+    }
+    /** Lance un scan initial et reconstruit les groupes auto. */
+    async init() {
+      await this.scanAll();
+    }
+    // ----------------- Utils -----------------
+    abs(u) {
+      try {
+        return new URL(u, location.href).href;
+      } catch {
+        return u;
+      }
+    }
+    isMP3(u) {
+      return /\.mp3(?:[\?#][^\s'"]*)?$/i.test(u);
+    }
+    fileName(u) {
+      try {
+        return new URL(u, location.href).pathname.split("/").pop() || u;
+      } catch {
+        return String(u);
+      }
+    }
+    logicalName(fileName) {
+      return fileName.replace(/-[A-Za-z0-9_=-]{6,}(?=\.mp3$)/i, "");
+    }
+    clamp(x, a, b) {
+      return Math.max(a, Math.min(b, x));
+    }
+    choose(arr) {
+      return arr && arr.length ? arr[Math.random() * arr.length | 0] : void 0;
+    }
+    toKey(name) {
+      return String(name || "").trim().toLowerCase();
+    }
+    add(u, sourceTag) {
+      if (!u || !this.isMP3(u)) return;
+      const url = this.abs(u);
+      if (!this.found.has(url)) {
+        this.found.add(url);
+        const name = this.fileName(url);
+        this.meta.set(url, { from: /* @__PURE__ */ new Set([sourceTag]), name, logicalName: this.logicalName(name) });
+      } else {
+        this.meta.get(url)?.from.add(sourceTag);
+      }
+    }
+    refreshHowler() {
+      this.howler = window.Howler && Array.isArray(window.Howler._howls) ? window.Howler : null;
+      return this.howler;
+    }
+    sameAsset(a, b) {
+      try {
+        const A = new URL(a, location.href).href;
+        const B = new URL(b, location.href).href;
+        if (A === B) return true;
+        const fn = (p) => new URL(p, location.href).pathname.split("/").pop();
+        const la = this.logicalName(fn(A));
+        const lb = this.logicalName(fn(B));
+        return la === lb;
+      } catch {
+        return a === b;
+      }
+    }
+    readAtomRaw() {
+      const raw = localStorage.getItem(this.atomKey);
+      if (raw == null) return null;
+      try {
+        const val = JSON.parse(raw);
+        if (typeof val === "number") return val;
+        const m = JSON.stringify(val).match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : null;
+      } catch {
+        const m = String(raw).match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : null;
+      }
+    }
+    howlerMaster() {
+      try {
+        return window.Howler && typeof window.Howler.volume === "function" ? window.Howler.volume() : 1;
+      } catch {
+        return 1;
+      }
+    }
+    // 0.001 est considéré comme un vrai mute (→ 0)
+    finalVolumeObj() {
+      let raw = this.readAtomRaw();
+      if (raw == null) raw = this.max;
+      const clamped = this.clamp(raw, this.min, this.max);
+      const nearMute = Math.abs(clamped - this.min) < 1e-6 ? 0 : clamped;
+      const vol = nearMute * this.howlerMaster() * this.gainFactor;
+      return { raw, clamped, vol };
+    }
+    // ----------------- Scanners -----------------
+    async scanPerformance() {
+      performance.getEntriesByType("resource").map((e) => e.name).filter(Boolean).forEach((u) => this.add(u, "perf"));
+    }
+    async scanHowler() {
+      this.refreshHowler();
+      if (!this.howler) return;
+      this.howler._howls.forEach((h) => {
+        const src = h && (h._src || h._urls && h._urls[0]);
+        if (src) this.add(src, "howler");
+      });
+    }
+    async scanCaches() {
+      if (!("caches" in window)) return;
+      try {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          const c = await caches.open(k);
+          const reqs = await c.keys();
+          for (const r of reqs) {
+            const u = r.url;
+            if (this.isMP3(u)) this.add(u, `cache:${k}`);
+          }
+        }
+      } catch {
+      }
+    }
+    async fetchText(u) {
+      try {
+        const res = await fetch(u, { mode: "same-origin", credentials: "same-origin" });
+        if (!res.ok) return "";
+        const ct = res.headers.get("content-type") || "";
+        if (!/javascript|ecmascript|css|html/i.test(ct)) return "";
+        return await res.text();
+      } catch {
+        return "";
+      }
+    }
+    extractMp3s(text) {
+      if (!text) return [];
+      const re = /["'`](\/?[^"'`)\s]+?\.mp3(?:\?[^"'`\s]*)?)["'`]/ig;
+      const out = [];
+      let m;
+      while (m = re.exec(text)) out.push(m[1]);
+      return out;
+    }
+    async scanResourcesForRefs() {
+      const urls = /* @__PURE__ */ new Set();
+      document.querySelectorAll('script[src],link[rel="stylesheet"][href]').forEach((el2) => {
+        const u = el2.src || el2.href;
+        try {
+          const url = new URL(u, location.href);
+          if (url.origin === location.origin) urls.add(url.href);
+        } catch {
+        }
+      });
+      urls.add(location.href);
+      const texts = await Promise.all([...urls].map((u) => this.fetchText(u)));
+      texts.forEach((t, i) => {
+        for (const match of this.extractMp3s(t)) this.add(match, `ref:${[...urls][i]}`);
+      });
+    }
+    async scanDOM() {
+      document.querySelectorAll("audio[src]").forEach((a) => this.add(a.getAttribute("src") || "", "dom"));
+      document.querySelectorAll("source[src]").forEach((s) => this.add(s.getAttribute("src") || "", "dom"));
+      const html = document.documentElement?.outerHTML || "";
+      for (const m of this.extractMp3s(html)) this.add(m, "html");
+    }
+    async scanAll() {
+      this.found.clear();
+      this.meta.clear();
+      await Promise.all([
+        this.scanPerformance(),
+        this.scanHowler(),
+        this.scanCaches(),
+        this.scanDOM()
+      ]);
+      await this.scanResourcesForRefs();
+      this.autoGroups({ overwrite: true });
+      return this.urls();
+    }
+    // ----------------- Groupes -----------------
+    inferGroupKey(logicalName) {
+      const base = String(logicalName || "").replace(/\.mp3$/i, "");
+      let m = base.match(/^([A-Za-z]+)[_\-]/);
+      if (m) return m[1].toLowerCase();
+      m = base.match(/^([A-Za-z]+)\d+$/);
+      if (m) return m[1].toLowerCase();
+      m = base.match(/^([A-Za-z]+)/);
+      return m ? m[1].toLowerCase() : base.toLowerCase();
+    }
+    defineGroup(name, matcher) {
+      const key2 = this.toKey(name);
+      const set2 = /* @__PURE__ */ new Set();
+      const items = this.urls().map((u) => [u, this.meta.get(u)]);
+      const test = (url, meta) => {
+        if (!matcher) return false;
+        if (typeof matcher === "function") return !!matcher(url, meta);
+        const ln = meta?.logicalName || meta?.name || url;
+        if (matcher instanceof RegExp) return matcher.test(ln) || matcher.test(url);
+        const txt = String(matcher).toLowerCase();
+        return ln.toLowerCase().startsWith(txt) || url.toLowerCase().includes("/" + txt);
+      };
+      for (const [url, meta] of items)
+        if (test(url, meta && { name: meta.name, logicalName: meta.logicalName })) set2.add(url);
+      this.groupsMap.set(key2, set2);
+      return [...set2];
+    }
+    undefineGroup(name) {
+      this.groupsMap.delete(this.toKey(name));
+    }
+    // --- Unique implémentation publique ---
+    autoGroups({ overwrite = false, minVariants = this.minVariantsPerAutoGroup } = {}) {
+      this.rebuildAutoGroups(overwrite, minVariants);
+      return this.groups();
+    }
+    // Helper privé appelé par autoGroups()
+    rebuildAutoGroups(overwrite, minVariants) {
+      const tmp = /* @__PURE__ */ new Map();
+      for (const [url, m] of this.meta.entries()) {
+        const grp = this.inferGroupKey(m?.logicalName || m?.name || url);
+        if (!tmp.has(grp)) tmp.set(grp, /* @__PURE__ */ new Set());
+        tmp.get(grp).add(url);
+      }
+      for (const [grp, set2] of tmp.entries()) {
+        if (set2.size < minVariants) continue;
+        if (overwrite || !this.groupsMap.has(grp)) this.groupsMap.set(grp, set2);
+      }
+    }
+    groups() {
+      const out = {};
+      for (const [k, set2] of this.groupsMap.entries()) out[k] = [...set2];
+      return out;
+    }
+    getGroup(name) {
+      const set2 = this.groupsMap.get(this.toKey(name));
+      return set2 ? [...set2] : [];
+    }
+    pick(name) {
+      const g = this.getGroup(name);
+      return this.choose(g);
+    }
+    // ----------------- Lecture -----------------
+    findExistingHowlByUrl(url) {
+      this.refreshHowler();
+      if (!this.howler) return null;
+      for (const h of this.howler._howls) {
+        const src = h && (h._src || h._urls && h._urls[0]);
+        if (src && this.sameAsset(src, url)) return h;
+      }
+      return null;
+    }
+    /** Volume calculé selon config + atom du jeu. */
+    getGameSfxVolume() {
+      return this.finalVolumeObj();
+    }
+    /** Ajoute un offset global (sans toucher à l’atom du jeu). */
+    setGainFactor(g = 1) {
+      this.gainFactor = +g || 1;
+    }
+    /** Permet d’adapter la clé et la plage de l’atom si ça change côté jeu. */
+    setAtomConfig(key2 = "soundEffectsVolumeAtom", min = 1e-3, max = 0.2000000000000001) {
+      this.atomKey = key2;
+      this.min = min;
+      this.max = max;
+    }
+    /** Joue une URL en respectant le volume du jeu et Howler si dispo. */
+    playUrl(url) {
+      const { vol } = this.finalVolumeObj();
+      const existing = this.findExistingHowlByUrl(url);
+      if (existing) {
+        try {
+          existing.play();
+          return existing;
+        } catch {
+        }
+      }
+      const Howl = window.Howl && window.Howler ? window.Howl : null;
+      if (Howl) {
+        try {
+          const h = new Howl({ src: [url], volume: vol });
+          h.play();
+          return h;
+        } catch {
+        }
+      }
+      try {
+        const a = new Audio(url);
+        a.volume = Math.max(0, Math.min(1, vol));
+        void a.play().catch(() => {
+        });
+        return a;
+      } catch {
+        return null;
+      }
+    }
+    /** Joue par motif (RegExp ou texte partiel). */
+    playBy(matcher) {
+      const list = this.urls();
+      const re = matcher instanceof RegExp ? matcher : new RegExp(String(matcher).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const hit = list.find((u) => re.test(u));
+      return hit ? this.playUrl(hit) : null;
+    }
+    /** Joue par nom logique exact si possible, sinon via motif. */
+    play(nameOrRegex) {
+      if (typeof nameOrRegex === "string") {
+        const m = this.map();
+        if (m[nameOrRegex]?.[0]) return this.playUrl(m[nameOrRegex][0]);
+      }
+      return this.playBy(nameOrRegex);
+    }
+    /** Joue une entrée d’un groupe (index fixe, ou aléatoire). */
+    playGroup(name, opts = {}) {
+      const { index, random = true, filter } = opts;
+      let list = this.getGroup(name);
+      if (!list.length) return null;
+      if (typeof filter === "function") {
+        list = list.filter((u) => {
+          const m = this.meta.get(u);
+          return filter(u, m && { name: m.name, logicalName: m.logicalName });
+        });
+        if (!list.length) return null;
+      }
+      const url = typeof index === "number" ? list[(index % list.length + list.length) % list.length] : random ? this.choose(list) : list[0];
+      return this.playUrl(url);
+    }
+    /** Alias pratique pour jouer une variation aléatoire d’un groupe (ex: "harvest"). */
+    playRandom(name) {
+      return this.playGroup(name, { random: true });
+    }
+    // ----------------- Tables & export -----------------
+    urls() {
+      return [...this.found];
+    }
+    map() {
+      const map2 = {};
+      for (const [url, m] of this.meta.entries()) {
+        const key2 = m.logicalName || m.name;
+        (map2[key2] || (map2[key2] = [])).push(url);
+      }
+      return map2;
+    }
+    info() {
+      return this.urls().map((u) => {
+        const m = this.meta.get(u);
+        return { url: u, name: m?.name, logicalName: m?.logicalName, sources: [...m?.from || []].join(",") };
+      });
+    }
+    /** Exporte JSON (URLs + groupes). Retourne la string. */
+    exportJSON() {
+      return JSON.stringify({ urls: this.info(), groups: this.groups() }, null, 2);
+    }
+    /** Scan public de commodité. */
+    async scan() {
+      return this.scanAll();
+    }
+    /* Helpers */
+    playHarvest() {
+      return this.playGroup("harvest");
+    }
+    playPlantSeed() {
+      return this.playGroup("plantseed");
+    }
+    playWaterPlant() {
+      return this.playBy("water");
+    }
+    playDestroyPlant() {
+      return this.playBy("Break_Dirt");
+    }
+    playDestroyStone() {
+      return this.playBy("Break_Stone");
+    }
+    playSellNotification() {
+      return this.playBy("Score_PlusOne");
+    }
+    playInfoNotification() {
+      return this.playBy("Keyboard_Enter_01");
+    }
+    playBuy() {
+      return this.playGroup("coinbuy");
+    }
+  };
+  var audioPlayer = new AudioPlayer({ autoScan: true });
+  window.__audioPlayer = audioPlayer;
+
   // src/utils/sellAllPets.ts
   var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
   var DEFAULT_THEME = {
@@ -6162,6 +8825,7 @@
     buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
     buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
     targetText: "Sell Pet",
+    // Back-compat only
     injectText: "Sell all Pets",
     injectedClass: "tm-injected-sell-all",
     styleId: "tm-injected-sell-all-style"
@@ -6251,7 +8915,14 @@
       Array.isArray(favoriteIds2) ? favoriteIds2.filter((id) => typeof id === "string") : []
     );
     const items = Array.isArray(inventory?.items) ? inventory.items : [];
-    return items.filter((item) => isInventoryPetItem(item)).filter((pet) => !favSet.has(pet.id));
+    const availablePets = [];
+    items.forEach((item, index) => {
+      if (!isInventoryPetItem(item)) return;
+      if (favSet.has(item.id)) return;
+      console.log("[sellAllPets] inventory index", index, item);
+      availablePets.push({ ...item, inventoryIndex: index });
+    });
+    return availablePets;
   }
   function createDefaultClickHandler(logger) {
     return async () => {
@@ -6291,6 +8962,11 @@
     }
     const failures = [];
     let sold = 0;
+    const totalValue = await computeTotalPetSellValue(toSell, logger);
+    try {
+      logger("sell-pets:total-value", { attempted: toSell.length, totalValue });
+    } catch {
+    }
     for (const pet of toSell) {
       try {
         logger("sell-pet:start", { id: pet.id, pet });
@@ -6312,17 +8988,99 @@
       }
     }
     if (failures.length === 0) {
-      console.info(`[sellAllPets] Tous les pets non favoris (${sold}) ont \xE9t\xE9 vendus avec succ\xE8s.`);
-      toastSimple("Sell all Pets", `${sold} pets have been sold!`, "success");
+      toastSimple("Sell all Pets", `${sold} pets have been sold for ${totalValue} coins!`, "success");
     }
     try {
       globalThis.__sellAllPetsResult = { attempted: toSell.length, sold, failures };
     } catch {
     }
+    audioPlayer.playSellNotification();
     try {
       logger("sell-pets:complete", { attempted: toSell.length, sold, failures });
     } catch {
     }
+  }
+  async function computeTotalPetSellValue(pets, logger) {
+    if (!pets.length) return "";
+    const selectionSnapshot = await captureInventorySelection();
+    let total = 0;
+    for (const pet of pets) {
+      const index = getInventoryIndex(pet);
+      if (index === null) continue;
+      try {
+        await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(index);
+      } catch (error) {
+        try {
+          logger("sell-pet:selection-error", { id: pet.id, index, error, pet });
+        } catch {
+        }
+        continue;
+      }
+      const value = await readSellPriceForSelection(index, pet, logger);
+      if (value !== null) {
+        total += value;
+      }
+    }
+    await restoreInventorySelection(selectionSnapshot, logger);
+    return total.toLocaleString("en-US");
+  }
+  async function captureInventorySelection() {
+    try {
+      const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
+      if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+        return { value, valid: true };
+      }
+      if (value === null) {
+        return { value: null, valid: true };
+      }
+    } catch {
+    }
+    return { value: null, valid: false };
+  }
+  async function restoreInventorySelection(snapshot, logger) {
+    if (!snapshot.valid) return;
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(snapshot.value);
+    } catch (error) {
+      try {
+        logger("sell-pet:selection-restore-error", error);
+      } catch {
+      }
+    }
+  }
+  function getInventoryIndex(pet) {
+    const idx = pet.inventoryIndex;
+    if (typeof idx === "number" && Number.isInteger(idx) && idx >= 0) return idx;
+    return null;
+  }
+  async function readSellPriceForSelection(index, pet, logger, attempts = 3, delayMs = 50) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const value = await Atoms.pets.totalPetSellPrice.get();
+        const numericValue = Number(value);
+        if (Number.isFinite(numericValue)) {
+          return numericValue;
+        }
+      } catch (error) {
+        if (attempt === attempts - 1) {
+          try {
+            logger("sell-pet:price-read-error", { id: pet.id, index, error, pet });
+          } catch {
+          }
+        }
+      }
+      if (attempt < attempts - 1) {
+        await delay(delayMs);
+      }
+    }
+    try {
+      logger("sell-pet:price-missing", { id: pet.id, index, pet });
+    } catch {
+    }
+    return null;
+  }
+  function delay(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function safeInvokeClick(handler, ev, ctx, logger) {
     try {
@@ -6357,20 +9115,26 @@
   function norm(s) {
     return (s ?? "").replace(/\s+/g, " ").trim();
   }
-  function hasPetWord(el2) {
+  function getLabel(el2) {
     const t = norm(el2.textContent);
+    if (t) return t;
     const a = norm(el2.getAttribute("aria-label"));
-    return /pet/i.test(t) || /pet/i.test(a);
+    return a;
   }
-  function findTargetButton(scope, btnWide, btnStrict, btnText) {
-    const btns = Array.from(scope.querySelectorAll(btnWide)).filter(
-      (b) => b instanceof HTMLButtonElement
-    );
-    const byText = btns.find((b) => norm(b.textContent) === btnText) ?? btns.find((b) => norm(b.getAttribute("aria-label")) === btnText);
-    if (byText) return byText;
-    const classCandidates = Array.from(scope.querySelectorAll(btnStrict)).filter((b) => b instanceof HTMLButtonElement);
-    const byClassAndWord = classCandidates.find((b) => hasPetWord(b));
-    return byClassAndWord ?? null;
+  function getWords(label2) {
+    return label2.trim().split(/\s+/).filter(Boolean);
+  }
+  function isSellTwoWordLabel(label2) {
+    const words = getWords(label2);
+    return words.length === 2 && /^sell$/i.test(words[0]);
+  }
+  function findTargetButton(scope, btnWide, btnStrict, _btnText) {
+    const all = Array.from(/* @__PURE__ */ new Set([
+      ...Array.from(scope.querySelectorAll(btnWide)),
+      ...Array.from(scope.querySelectorAll(btnStrict))
+    ])).filter((b) => b instanceof HTMLButtonElement).filter((b) => !b.classList.contains(DEFAULTS.injectedClass));
+    const target = all.find((b) => isSellTwoWordLabel(getLabel(b)));
+    return target ?? null;
   }
   function ensureInjectedNextTo(targetBtn, injectedClass, injectedText, onClick) {
     const parent = targetBtn.parentElement || targetBtn.closest(".McFlex, .css-0") || targetBtn.parentNode;
@@ -6493,7 +9257,7 @@
     window.addEventListener(
       "keydown",
       (event) => {
-        if (shouldIgnoreKeydown2(event)) return;
+        if (shouldIgnoreKeydown(event)) return;
         if (eventMatchesKeybind("sell.sell-all", event)) {
           event.preventDefault();
           event.stopPropagation();
@@ -6647,12 +9411,12 @@
     persistLibrary() {
       if (this.suppressPersist > 0) return;
       try {
-        const entries2 = [];
+        const entries = [];
         for (const [name, data] of this.library.entries()) {
           if (this.builtinDefault && name === this.builtinDefault.name) continue;
-          entries2.push({ name, data });
+          entries.push({ name, data });
         }
-        localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries2));
+        localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries));
       } catch {
       }
     }
@@ -6835,7 +9599,7 @@
       }
       this.persistSettings();
     }
-    resetLibrary(entries2) {
+    resetLibrary(entries) {
       const prevDefault = this.defaultSoundName;
       const prevWeatherDefault = this.weatherDefaultSoundName;
       this.suppressPersist++;
@@ -6843,7 +9607,7 @@
         this.library.clear();
         this.ensureBuiltinPresent();
         const added = [];
-        for (const e of entries2) {
+        for (const e of entries) {
           const safeName = String(e?.name || "").trim();
           if (!safeName) continue;
           if (this.isProtectedSound(safeName)) continue;
@@ -7205,9 +9969,9 @@
     // =========================
     async playOnce(dataUrl, volume, _context, opts = {}) {
       if (!this.enabled) return true;
-      const now = Date.now();
-      if (now - this.lastPlayTs < this.minPlayGapMs) return false;
-      this.lastPlayTs = now;
+      const now2 = Date.now();
+      if (now2 - this.lastPlayTs < this.minPlayGapMs) return false;
+      this.lastPlayTs = now2;
       if (!dataUrl) {
         if (this.primed && this.audioCtx) {
           try {
@@ -7418,7 +10182,6 @@
   });
 
   // src/services/notifier.ts
-  var log3 = createMenuLogger("notifier-service", "Shop notifier service");
   var LS_PREFS_KEY = "qws:shop:notifs:v1";
   var LS_RULES_KEY = "qws:shop:notifs:rules.v1";
   var LS_WEATHER_PREFS_KEY = "qws:weather:notifs:v1";
@@ -7462,8 +10225,8 @@
       return { label: "Now", title };
     }
     if (!timestamp) return { label: "Never", title: "Never seen" };
-    const now = Date.now();
-    const diff = Math.max(0, now - timestamp);
+    const now2 = Date.now();
+    const diff = Math.max(0, now2 - timestamp);
     let label2;
     if (diff < 45e3) label2 = "Just now";
     else if (diff < 9e4) label2 = "1 min ago";
@@ -7531,7 +10294,7 @@
     return items;
   };
   var WEATHER_DEFS = (() => {
-    const entries2 = [];
+    const entries = [];
     for (const [rawName, rawValue] of Object.entries(weatherCatalog ?? {})) {
       const safeName = String(rawName || "").trim();
       if (!safeName) continue;
@@ -7544,7 +10307,7 @@
       const weightInCycle = normalizeNumber(rawValue?.weightInCycle);
       const cycle = normalizeCycle(rawValue?.cycle);
       const mutations = normalizeMutations(rawValue?.mutations);
-      entries2.push({
+      entries.push({
         id: `Weather:${safeName}`,
         name: displayName || safeName,
         atomValue,
@@ -7556,7 +10319,7 @@
         mutations
       });
     }
-    return entries2;
+    return entries;
   })();
   var WEATHER_BY_ID = /* @__PURE__ */ new Map();
   var WEATHER_BY_ATOM = /* @__PURE__ */ new Map();
@@ -7606,7 +10369,6 @@
       });
     }
     _staticMeta = map2;
-    log3.info("Built static shop metadata", { entries: map2.size });
     return map2;
   }
   var _prefs = /* @__PURE__ */ new Map();
@@ -7637,10 +10399,8 @@
           if (norm4) _rules.set(String(id), norm4);
         }
       }
-      log3.info("Loaded notifier rules", { count: _rules.size });
     } catch {
       _rules = /* @__PURE__ */ new Map();
-      log3.warn("Failed to load notifier rules from storage, starting fresh");
     }
   }
   function _normalizeRule(raw) {
@@ -7660,7 +10420,6 @@
         obj[id] = { ...rule };
       }
       localStorage.setItem(LS_RULES_KEY, JSON.stringify(obj));
-      log3.debug("Saved notifier rules", { count: _rules.size });
     } catch {
     }
   }
@@ -7683,10 +10442,8 @@
           _weatherPrefs.set(String(id), pref);
         }
       }
-      log3.info("Loaded weather notifier preferences", { count: _weatherPrefs.size });
     } catch {
       _weatherPrefs = /* @__PURE__ */ new Map();
-      log3.warn("Failed to load weather notifier preferences, using defaults");
     }
   }
   function _saveWeatherPrefs() {
@@ -7784,7 +10541,7 @@
     _ensureWeatherPrefsLoaded();
     const rows = WEATHER_DEFS.map((def) => {
       const pref = _getWeatherPref(def.id);
-      const notify2 = !!pref.notify;
+      const notify = !!pref.notify;
       const lastSeen = typeof pref.lastSeen === "number" && Number.isFinite(pref.lastSeen) ? pref.lastSeen : null;
       return {
         id: def.id,
@@ -7792,7 +10549,7 @@
         type: def.type,
         sprite: def.sprite,
         atomValue: def.atomValue,
-        notify: notify2,
+        notify,
         lastSeen,
         isCurrent: def.id === _currentWeatherId,
         description: def.description,
@@ -7840,10 +10597,10 @@
       def = WEATHER_BY_NAME.get(noSpace);
     }
     const prevId = _currentWeatherId;
-    const now = Date.now();
+    const now2 = Date.now();
     if (def) {
       const pref = _getWeatherPref(def.id);
-      pref.lastSeen = now;
+      pref.lastSeen = now2;
       _weatherPrefs.set(def.id, pref);
     }
     _currentWeatherId = def?.id ?? null;
@@ -7949,10 +10706,8 @@
         }
       }
       _prefs = m;
-      log3.info("Loaded notifier preferences", { count: _prefs.size });
     } catch {
       _prefs = /* @__PURE__ */ new Map();
-      log3.warn("Failed to load notifier preferences, using defaults");
     }
   }
   function _savePrefs() {
@@ -7960,7 +10715,6 @@
       const obj = {};
       for (const [k, v] of _prefs) obj[k] = v & 1;
       localStorage.setItem(LS_PREFS_KEY, JSON.stringify(obj));
-      log3.debug("Saved notifier preferences", { count: _prefs.size });
     } catch {
     }
   }
@@ -8096,10 +10850,8 @@
     _state = next;
     if (changed) {
       _lastSig = sig;
-      log3.info("Notifier state recomputed", { items: rows.length, followed });
       _notify();
     } else {
-      log3.debug("Notifier state unchanged after recompute");
     }
   }
   function _recomputeFromCacheAndNotify() {
@@ -8124,7 +10876,6 @@
       rows,
       counts: { items: rows.length, followed }
     };
-    log3.debug("Notifier cache recomputed", { items: rows.length, followed });
     _notify();
   }
   function _notify() {
@@ -8140,20 +10891,16 @@
   var _started = false;
   async function _ensureStarted() {
     if (_started) {
-      log3.debug("Notifier service already started");
       return;
     }
     _started = true;
-    log3.info("Starting notifier service");
     _loadPrefs();
     _ensureRulesLoaded();
     try {
       const cur = await Atoms.shop.shops.get();
       _recomputeFromRaw(cur);
       _notifyShops(cur);
-      log3.debug("Loaded initial shop snapshot");
     } catch (err) {
-      log3.warn("Failed to load initial shop snapshot", { error: err });
     }
     try {
       _unsubShops = await Atoms.shop.shops.onChange((next) => {
@@ -8166,15 +10913,12 @@
         } catch {
         }
       });
-      log3.debug("Subscribed to shop updates");
     } catch (err) {
-      log3.warn("Failed to subscribe to shop updates", { error: err });
     }
     try {
       const curP = await Atoms.shop.myShopPurchases.get();
       _notifyPurchases(curP);
     } catch (err) {
-      log3.warn("Failed to load initial purchases snapshot", { error: err });
     }
     try {
       _unsubPurchases = await Atoms.shop.myShopPurchases.onChange((next) => {
@@ -8183,9 +10927,7 @@
         } catch {
         }
       });
-      log3.debug("Subscribed to purchase updates");
     } catch (err) {
-      log3.warn("Failed to subscribe to purchase updates", { error: err });
     }
     try {
       const invAtom = _resolveToolInvAtom();
@@ -8193,7 +10935,6 @@
         try {
           _updateToolInv(await invAtom.get());
         } catch (err) {
-          log3.warn("Failed to read initial tool inventory", { error: err });
         }
         try {
           _unsubToolInv = await invAtom.onChange((next) => {
@@ -8202,13 +10943,10 @@
             } catch {
             }
           });
-          log3.debug("Subscribed to tool inventory updates");
         } catch (err) {
-          log3.warn("Failed to subscribe to tool inventory updates", { error: err });
         }
       }
     } catch (err) {
-      log3.warn("Tool inventory hook unavailable", { error: err });
     }
     try {
       const weatherAtom = Atoms.data?.weather;
@@ -8216,7 +10954,6 @@
         try {
           _handleWeatherUpdate(await weatherAtom.get(), { force: true });
         } catch (err) {
-          log3.warn("Failed to read initial weather state", { error: err });
         }
         try {
           _unsubWeather = await weatherAtom.onChange((next) => {
@@ -8225,15 +10962,11 @@
             } catch {
             }
           });
-          log3.debug("Subscribed to weather updates");
         } catch (err) {
-          log3.warn("Failed to subscribe to weather updates", { error: err });
         }
       } else {
-        log3.warn("Weather atom unavailable");
       }
     } catch (err) {
-      log3.warn("Weather hook unavailable", { error: err });
     }
   }
   function _stop() {
@@ -8266,7 +10999,6 @@
     _currentWeatherId = null;
     _currentWeatherValue = null;
     _started = false;
-    log3.info("Notifier service stopped");
   }
   var NotifierService = {
     // lifecycle
@@ -8404,18 +11136,15 @@
       const bits = _getPrefBits(id);
       const next = enabled ? bits | 1 : bits & ~1;
       _setPrefBits(id, next);
-      log3.info("Updated popup preference", { id, enabled });
     },
     setPrefs(id, prefs) {
       const bits = _getPrefBits(id);
       let next = bits;
       if (typeof prefs.popup === "boolean") next = prefs.popup ? next | 1 : next & ~1;
       _setPrefBits(id, next);
-      log3.debug("Updated notifier prefs", { id, prefs });
     },
     clearPrefs(id) {
       _setPrefBits(id, 0);
-      log3.info("Cleared notifier prefs", { id });
     },
     isIdCapped(id) {
       if (!id.startsWith("Tool:")) return false;
@@ -8459,7 +11188,6 @@
       else _rules.delete(id);
       _saveRules();
       _emitRules();
-      log3.info("Updated notifier rule", { id });
     },
     clearRule(id) {
       if (!id) return;
@@ -8468,7 +11196,6 @@
       if (existed) {
         _saveRules();
         _emitRules();
-        log3.info("Cleared notifier rule", { id });
       }
     },
     onRulesChange(cb) {
@@ -8790,16 +11517,16 @@
       return Object.keys(overrides).length ? overrides : null;
     }
     triggerMany(ids) {
-      const entries2 = [];
+      const entries = [];
       for (const id of ids) {
         const overrides = this.buildTriggerOverrides(this.rulesById.get(id)) ?? {};
         const mode = this.resolvePlaybackMode(id);
         const soundKey = overrides.sound ? `sound:${overrides.sound.trim().toLowerCase()}` : "sound:__default__";
-        entries2.push({ id, overrides, mode, soundKey });
+        entries.push({ id, overrides, mode, soundKey });
       }
-      if (!entries2.length) return;
+      if (!entries.length) return;
       const grouped = /* @__PURE__ */ new Map();
-      for (const entry of entries2) {
+      for (const entry of entries) {
         const bucket = grouped.get(entry.soundKey) ?? { loops: [], oneshots: [] };
         if (entry.mode === "loop") bucket.loops.push(entry);
         else bucket.oneshots.push(entry);
@@ -10035,18 +12762,18 @@
   });
 
   // src/utils/cropPrice.ts
-  var isPlantObject = (o) => !!o && o.objectType === "plant";
-  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
-  var clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  var isPlantObject2 = (o) => !!o && o.objectType === "plant";
+  var defaultOrder2 = (n) => Array.from({ length: n }, (_, i) => i);
+  var clamp2 = (n, min, max) => Math.max(min, Math.min(max, n));
   function startCropPriceWatcherViaGardenObject() {
     let cur = null;
     let players = void 0;
     let sortedIdx = null;
     let selectedIdx = null;
     let lastPrice = null;
-    const listeners3 = /* @__PURE__ */ new Set();
-    const notify2 = () => {
-      for (const fn of listeners3) try {
+    const listeners2 = /* @__PURE__ */ new Set();
+    const notify = () => {
+      for (const fn of listeners2) try {
         fn();
       } catch {
       }
@@ -10063,21 +12790,21 @@
     function getOrder() {
       const n = Array.isArray(cur?.slots) ? cur.slots.length : 0;
       if (!n) return [];
-      return Array.isArray(sortedIdx) && sortedIdx.length === n ? sortedIdx : defaultOrder(n);
+      return Array.isArray(sortedIdx) && sortedIdx.length === n ? sortedIdx : defaultOrder2(n);
     }
     function selectedOrderedPosition() {
-      if (!isPlantObject(cur)) return 0;
+      if (!isPlantObject2(cur)) return 0;
       const slots = cur.slots ?? [];
       const n = Array.isArray(slots) ? slots.length : 0;
       if (!n) return 0;
       const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
-      const clampedRaw = clamp(raw, 0, n - 1);
+      const clampedRaw = clamp2(raw, 0, n - 1);
       const ord = getOrder();
       const pos = ord.indexOf(clampedRaw);
       return pos >= 0 ? pos : 0;
     }
     function getOrderedSlots() {
-      if (!isPlantObject(cur)) return [];
+      if (!isPlantObject2(cur)) return [];
       const slots = Array.isArray(cur.slots) ? cur.slots : [];
       const ord = getOrder();
       const out = [];
@@ -10085,16 +12812,16 @@
       return out;
     }
     function computeSelectedSlotPrice() {
-      if (!isPlantObject(cur)) return null;
+      if (!isPlantObject2(cur)) return null;
       const ordered = getOrderedSlots();
       if (!ordered.length) return null;
       const pos = selectedOrderedPosition();
-      const slot = ordered[clamp(pos, 0, ordered.length - 1)];
+      const slot = ordered[clamp2(pos, 0, ordered.length - 1)];
       const val = valueFromGardenSlot(slot, DefaultPricing, players);
       return Number.isFinite(val) && val > 0 ? val : null;
     }
     function computeWholePlantPrice() {
-      if (!isPlantObject(cur)) return null;
+      if (!isPlantObject2(cur)) return null;
       const v = valueFromGardenPlant(cur, DefaultPricing, players);
       return Number.isFinite(v) && v > 0 ? v : null;
     }
@@ -10103,7 +12830,7 @@
       const next = slotVal ?? computeWholePlantPrice() ?? null;
       if (next !== lastPrice) {
         lastPrice = next;
-        notify2();
+        notify();
       }
     }
     (async () => {
@@ -10145,11 +12872,11 @@
         return lastPrice;
       },
       onChange(cb) {
-        listeners3.add(cb);
-        return () => listeners3.delete(cb);
+        listeners2.add(cb);
+        return () => listeners2.delete(cb);
       },
       stop() {
-        listeners3.clear();
+        listeners2.clear();
       }
     };
   }
@@ -10163,6 +12890,16 @@
   var OMA_SEL = ".McFlex.css-1omaybc";
   var ICON_CLASS = "tm-crop-price-icon";
   var LABEL_CLASS = "tm-crop-price-label";
+  var LOCK_TEXT_SELECTOR = ":scope > .chakra-text.css-1uvlb8k";
+  var LOCK_EMOJI = "\u{1F512}";
+  var LOCKED_TEXT_DISPLAY = "inline-flex";
+  var LOCKED_TEXT_ALIGN = "center";
+  var DATASET_KEY_COLOR = "tmLockerOriginalColor";
+  var DATASET_KEY_DISPLAY = "tmLockerOriginalDisplay";
+  var DATASET_KEY_ALIGN = "tmLockerOriginalAlign";
+  var DATASET_KEY_TEXT = "tmLockerOriginalHtml";
+  var LOCK_CONTENT_PREFIX = `${LOCK_EMOJI}\xA0`;
+  var LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
   function startCropValuesObserverFromGardenAtom(options = {}) {
     if (typeof window === "undefined" || typeof document === "undefined") {
       return { stop() {
@@ -10179,6 +12916,13 @@
     const fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
     let running = true;
     const priceWatcher = startCropPriceWatcherViaGardenObject();
+    let lockerHarvestAllowed = null;
+    let lockerOff = null;
+    try {
+      lockerHarvestAllowed = lockerService.getCurrentSlotSnapshot().harvestAllowed ?? null;
+    } catch {
+      lockerHarvestAllowed = null;
+    }
     const writePriceOnce = () => {
       if (!running) return;
       const v = priceWatcher.get();
@@ -10187,13 +12931,27 @@
         queryAll2(rootEl, INNER_SEL).forEach((inner) => {
           if (shouldSkipInner(inner, MARKER)) {
             removeMarker(inner, MARKER);
+            updateLockEmoji(inner, false);
             return;
           }
+          const locked = lockerHarvestAllowed === false;
+          updateLockEmoji(inner, locked);
           ensureSpanAtEnd(inner, text, MARKER);
         });
       });
       logger("render", { value: v });
     };
+    const subscribeLocker = () => {
+      try {
+        lockerOff = lockerService.onSlotInfoChange((event) => {
+          lockerHarvestAllowed = event.harvestAllowed ?? null;
+          writePriceOnce();
+        });
+      } catch {
+        lockerOff = null;
+      }
+    };
+    subscribeLocker();
     writePriceOnce();
     const off = priceWatcher.onChange(() => writePriceOnce());
     return {
@@ -10201,6 +12959,12 @@
         if (!running) return;
         running = false;
         off?.();
+        if (typeof lockerOff === "function") {
+          try {
+            lockerOff();
+          } catch {
+          }
+        }
         priceWatcher.stop();
         logger("stopped");
       },
@@ -10230,6 +12994,103 @@
   function removeMarker(inner, markerClass) {
     const markers = inner.querySelectorAll(`:scope > span.${CSS.escape(markerClass)}`);
     markers.forEach((m) => m.remove());
+  }
+  function updateLockEmoji(inner, locked) {
+    if (!(inner instanceof HTMLElement)) return;
+    inner.querySelectorAll(":scope > span.tm-locker-lock-emoji").forEach((node) => node.remove());
+    const textTarget = inner.querySelector(LOCK_TEXT_SELECTOR) ?? inner.querySelector(":scope > .chakra-text");
+    if (!locked) {
+      if (textTarget) {
+        restoreTextContent(textTarget);
+        restoreTextStyles(textTarget);
+      }
+      return;
+    }
+    if (!textTarget) {
+      return;
+    }
+    const originalHtml = storeOriginalTextContent(textTarget);
+    storeOriginalTextStyles(textTarget);
+    applyLockedTextStyles(textTarget);
+    applyLockedTextContent(textTarget, originalHtml);
+  }
+  function storeOriginalTextStyles(textTarget) {
+    if (textTarget.dataset[DATASET_KEY_COLOR] === void 0) {
+      textTarget.dataset[DATASET_KEY_COLOR] = textTarget.style.color ?? "";
+    }
+    if (textTarget.dataset[DATASET_KEY_DISPLAY] === void 0) {
+      textTarget.dataset[DATASET_KEY_DISPLAY] = textTarget.style.display ?? "";
+    }
+    if (textTarget.dataset[DATASET_KEY_ALIGN] === void 0) {
+      textTarget.dataset[DATASET_KEY_ALIGN] = textTarget.style.alignItems ?? "";
+    }
+  }
+  function applyLockedTextStyles(textTarget) {
+    textTarget.style.display = LOCKED_TEXT_DISPLAY;
+    textTarget.style.alignItems = LOCKED_TEXT_ALIGN;
+  }
+  function restoreTextStyles(textTarget) {
+    const originalColor = textTarget.dataset[DATASET_KEY_COLOR];
+    if (originalColor !== void 0) {
+      if (originalColor) {
+        textTarget.style.color = originalColor;
+      } else {
+        textTarget.style.removeProperty("color");
+      }
+      delete textTarget.dataset[DATASET_KEY_COLOR];
+    } else {
+      textTarget.style.removeProperty("color");
+    }
+    const originalDisplay = textTarget.dataset[DATASET_KEY_DISPLAY];
+    if (originalDisplay !== void 0) {
+      if (originalDisplay) {
+        textTarget.style.display = originalDisplay;
+      } else {
+        textTarget.style.removeProperty("display");
+      }
+      delete textTarget.dataset[DATASET_KEY_DISPLAY];
+    } else {
+      textTarget.style.removeProperty("display");
+    }
+    const originalAlign = textTarget.dataset[DATASET_KEY_ALIGN];
+    if (originalAlign !== void 0) {
+      if (originalAlign) {
+        textTarget.style.alignItems = originalAlign;
+      } else {
+        textTarget.style.removeProperty("align-items");
+      }
+      delete textTarget.dataset[DATASET_KEY_ALIGN];
+    } else {
+      textTarget.style.removeProperty("align-items");
+    }
+  }
+  function storeOriginalTextContent(textTarget) {
+    const sanitizedHtml = stripLockPrefix(textTarget.innerHTML);
+    textTarget.dataset[DATASET_KEY_TEXT] = sanitizedHtml;
+    return sanitizedHtml;
+  }
+  function applyLockedTextContent(textTarget, originalHtml) {
+    const baseHtml = originalHtml ?? textTarget.dataset[DATASET_KEY_TEXT] ?? stripLockPrefix(textTarget.innerHTML);
+    const desiredHtml = `${LOCK_CONTENT_PREFIX}${baseHtml}`;
+    if (textTarget.innerHTML !== desiredHtml) {
+      textTarget.innerHTML = desiredHtml;
+    }
+  }
+  function restoreTextContent(textTarget) {
+    const originalHtml = textTarget.dataset[DATASET_KEY_TEXT];
+    if (originalHtml !== void 0) {
+      textTarget.innerHTML = originalHtml;
+      delete textTarget.dataset[DATASET_KEY_TEXT];
+      return;
+    }
+    const currentHtml = textTarget.innerHTML;
+    const sanitizedHtml = stripLockPrefix(currentHtml);
+    if (sanitizedHtml !== currentHtml) {
+      textTarget.innerHTML = sanitizedHtml;
+    }
+  }
+  function stripLockPrefix(content) {
+    return content.replace(LOCK_PREFIX_REGEX, "");
   }
   function ensureSpanAtEnd(inner, text, markerClass) {
     const spans = Array.from(
@@ -10525,9 +13386,9 @@
       return null;
     }
     const metaBlock = headerMatch[1];
-    const entries2 = metaBlock.matchAll(/^\/\/\s*@([^\s]+)\s+(.+)$/gm);
+    const entries = metaBlock.matchAll(/^\/\/\s*@([^\s]+)\s+(.+)$/gm);
     const meta = /* @__PURE__ */ new Map();
-    for (const [, rawKey, rawValue] of entries2) {
+    for (const [, rawKey, rawValue] of entries) {
       const key2 = rawKey.trim().toLowerCase();
       const value = rawValue.trim();
       if (!key2) continue;
@@ -11405,6 +14266,7 @@
   function initWatchers() {
     installShopKeybindsOnce();
     installSellKeybindsOnce();
+    installGameKeybindsOnce();
     (async () => {
       try {
         setTeamsForHotkeys(PetsService.getTeams());
@@ -11436,6 +14298,821 @@
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
     })();
+  }
+
+  // src/core/sprite.ts
+  function isImageUrl(u) {
+    try {
+      if (!u || u.startsWith("blob:")) return false;
+      return /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|ktx2|basis)$/i.test(u);
+    } catch {
+      return false;
+    }
+  }
+  function toAbs(u) {
+    try {
+      return new URL(u, location.href).href;
+    } catch {
+      return String(u);
+    }
+  }
+  function fileBase(url) {
+    const name = decodeURIComponent(url.split("/").pop() || "");
+    return name.replace(/\.[a-z0-9]+$/i, "");
+  }
+  function isTilesUrl(u) {
+    return /\/assets\/tiles\//i.test(u) || /(map|plants|allplants|items|seeds|pets|animations|mutations)\.(png|webp)$/i.test(u);
+  }
+  function isUiUrl(u) {
+    return /\/assets\/ui\//i.test(u);
+  }
+  var SpritesCore = class {
+    constructor(autoStart = true) {
+      /** Configuration (ajuste à la volée si besoin) */
+      __publicField(this, "cfg", {
+        skipAlphaBelow: 1,
+        blackBelow: 8,
+        tolerance: 5e-3,
+        ruleAllplants512: /allplants/i
+      });
+      __publicField(this, "initialized", false);
+      __publicField(this, "onAssetCb");
+      __publicField(this, "onMessageListener");
+      // URLs récoltées
+      __publicField(this, "ui", /* @__PURE__ */ new Set());
+      __publicField(this, "tiles", /* @__PURE__ */ new Set());
+      __publicField(this, "all", /* @__PURE__ */ new Set());
+      // Caches de sprites découpés par feuille et par mode
+      __publicField(this, "tileCacheBitmap", /* @__PURE__ */ new Map());
+      __publicField(this, "tileCacheCanvas", /* @__PURE__ */ new Map());
+      __publicField(this, "tileCacheDataURL", /* @__PURE__ */ new Map());
+      // Images UI chargées
+      __publicField(this, "uiCache", /* @__PURE__ */ new Map());
+      // Hooks / sniffers
+      __publicField(this, "observers", []);
+      __publicField(this, "patched", {});
+      __publicField(this, "blobText", /* @__PURE__ */ new WeakMap());
+      if (autoStart) this.init();
+    }
+    init(opts) {
+      if (opts?.config) Object.assign(this.cfg, opts.config);
+      if (opts?.onAsset) this.onAssetCb = opts.onAsset;
+      if (this.initialized) return this;
+      this.installMainSniffers();
+      this.installWorkerHooks();
+      this.onMessageListener = (e) => {
+        const d = e.data;
+        if (d && d.__awc && d.url) this.add(d.url, "worker");
+      };
+      window.addEventListener("message", this.onMessageListener, true);
+      this.initialized = true;
+      return this;
+    }
+    /** Désinstalle les hooks et nettoie. */
+    destroy() {
+      if (!this.initialized) return;
+      this.observers.forEach((o) => {
+        try {
+          o.disconnect();
+        } catch {
+        }
+      });
+      this.observers = [];
+      if (this.patched.imgDesc) {
+        Object.defineProperty(HTMLImageElement.prototype, "src", this.patched.imgDesc);
+        this.patched.imgDesc = void 0;
+      }
+      if (this.patched.setAttr) {
+        HTMLImageElement.prototype.setAttribute = this.patched.setAttr;
+        this.patched.setAttr = void 0;
+      }
+      if (this.patched.Worker) {
+        window.Worker = this.patched.Worker;
+        this.patched.Worker = void 0;
+      }
+      if (this.patched.Blob) {
+        window.Blob = this.patched.Blob;
+        this.patched.Blob = void 0;
+      }
+      if (this.patched.createObjectURL) {
+        URL.createObjectURL = this.patched.createObjectURL;
+        this.patched.createObjectURL = void 0;
+      }
+      if (this.onMessageListener) {
+        window.removeEventListener("message", this.onMessageListener, true);
+        this.onMessageListener = void 0;
+      }
+      this.initialized = false;
+    }
+    /* ===================== PUBLIC API ===================== */
+    /** URLs collectées */
+    lists() {
+      return { all: [...this.all], ui: [...this.ui], tiles: [...this.tiles] };
+    }
+    /** Liste des tilesheets par catégorie de nom (regex sur l'URL) */
+    listTilesByCategory(re) {
+      return [...this.tiles].filter((u) => re.test(u));
+    }
+    listPlants() {
+      const urls = new Set(this.listTilesByCategory(/plants/i));
+      for (const url of this.listAllPlants()) urls.add(url);
+      return [...urls];
+    }
+    listAllPlants() {
+      return this.listTilesByCategory(this.cfg.ruleAllplants512);
+    }
+    listItems() {
+      return this.listTilesByCategory(/items/i);
+    }
+    listSeeds() {
+      return this.listTilesByCategory(/seeds/i);
+    }
+    listPets() {
+      return this.listTilesByCategory(/pets/i);
+    }
+    listMap() {
+      return this.listTilesByCategory(/map\.(png|webp)$/i);
+    }
+    /** Charge toutes les images UI (retourne Map<basename, HTMLImageElement>) */
+    async loadUI() {
+      const out = /* @__PURE__ */ new Map();
+      for (const u of this.ui) {
+        if (!this.uiCache.has(u)) {
+          const im = await this.loadImage(u);
+          this.uiCache.set(u, im);
+        }
+        out.set(fileBase(u), this.uiCache.get(u));
+      }
+      return out;
+    }
+    /** Charge & découpe les tilesheets (retourne Map<basename, TileInfo[]>) */
+    async loadTiles(options = {}) {
+      const {
+        mode = "bitmap",
+        includeBlanks = false,
+        forceSize,
+        onlySheets
+      } = options;
+      const out = /* @__PURE__ */ new Map();
+      const list = onlySheets ? [...this.tiles].filter((u) => onlySheets.test(u)) : [...this.tiles];
+      for (const u of list) {
+        const base = fileBase(u);
+        let cached;
+        if (mode === "bitmap") cached = this.tileCacheBitmap.get(u);
+        else if (mode === "canvas") cached = this.tileCacheCanvas.get(u);
+        else cached = this.tileCacheDataURL.get(u);
+        if (!cached) {
+          const tiles = await this.sliceOne(u, { mode, includeBlanks, forceSize });
+          if (mode === "bitmap") this.tileCacheBitmap.set(u, tiles);
+          else if (mode === "canvas") this.tileCacheCanvas.set(u, tiles);
+          else this.tileCacheDataURL.set(u, tiles);
+          cached = tiles;
+        }
+        out.set(base, cached);
+      }
+      return out;
+    }
+    /** Raccourcis pratiques */
+    async loadTilesAuto() {
+      return this.loadTiles({ mode: "bitmap" });
+    }
+    async loadTiles256() {
+      return this.loadTiles({ mode: "bitmap", forceSize: 256 });
+    }
+    async loadTiles512() {
+      return this.loadTiles({ mode: "bitmap", forceSize: 512 });
+    }
+    /** Récupère un sprite précis (par feuille + index) */
+    async getTile(sheetBase, index, mode = "bitmap") {
+      const url = [...this.tiles].find((u) => fileBase(u) === sheetBase);
+      if (!url) return null;
+      const map2 = await this.loadTiles({ mode, onlySheets: new RegExp(sheetBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\.(png|webp)$", "i") });
+      const tiles = map2.get(sheetBase) || [];
+      const tile = tiles.find((t) => t.index === index);
+      return tile ?? null;
+    }
+    /** Aplatis toutes les tiles en un seul tableau (utile pour un index global) */
+    async flatTiles(options = {}) {
+      const maps = await this.loadTiles(options);
+      const all = [];
+      maps.forEach((arr) => all.push(...arr));
+      return all;
+    }
+    /** Exporte les UI en ZIP (brut, sans découpe) */
+    async zipUI(name = "ui_assets.zip") {
+      const zip = new JSZip();
+      const list = [...this.ui];
+      let i = 0;
+      for (const u of list) {
+        try {
+          const b = await this.fetchBlob(u);
+          const fn = decodeURIComponent(u.split("/").pop() || "").replace(/\?.*$/, "");
+          zip.file(fn, b);
+        } catch {
+        }
+        if (++i % 10 === 0) console.log(`[zipUI] ${i}/${list.length}`);
+      }
+      await this.saveZip(zip, name);
+    }
+    /** Exporte les tiles découpées en ZIP (auto 256/512 selon règle allplants) */
+    async zipTilesAuto(name = "tiles_auto.zip") {
+      await this.zipTiles({ name, mode: "bitmap" });
+    }
+    /** Exporte les tiles en ZIP (forcé 256/512) */
+    async zipTiles256(name = "tiles_256.zip") {
+      await this.zipTiles({ name, mode: "bitmap", forceSize: 256 });
+    }
+    async zipTiles512(name = "tiles_512.zip") {
+      await this.zipTiles({ name, mode: "bitmap", forceSize: 512 });
+    }
+    /** Vide les caches */
+    clearCaches() {
+      this.tileCacheBitmap.forEach((arr) => arr.forEach((t) => t.data.close?.()));
+      this.tileCacheBitmap.clear();
+      this.tileCacheCanvas.clear();
+      this.tileCacheDataURL.clear();
+      this.uiCache.clear();
+    }
+    /** Applique l’effet Gold sur une tuile — retourne un NOUVEAU canvas. */
+    effectGold(tile, opts) {
+      const srcCan = this.tileToCanvas(tile);
+      const w = srcCan.width, h = srcCan.height;
+      const out = document.createElement("canvas");
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(srcCan, 0, 0);
+      const alpha = opts?.alpha ?? 0.7;
+      const color = opts?.color ?? "rgb(255, 215, 0)";
+      ctx.save();
+      ctx.globalCompositeOperation = "source-atop";
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+      return out;
+    }
+    /** Applique l’effet Rainbow (dégradé masqué + blend 'color' si dispo, sinon 'source-atop') */
+    /** Rainbow identique au jeu (masked + blend 'color' + angle 130°). */
+    effectRainbow(tile, opts) {
+      const srcCan = this.tileToCanvas(tile);
+      const w = srcCan.width, h = srcCan.height;
+      const out = document.createElement("canvas");
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(srcCan, 0, 0);
+      const angle = opts?.angle ?? 130;
+      const colors = opts?.colors ?? ["#FF1744", "#FF9100", "#FFEA00", "#00E676", "#2979FF", "#D500F9"];
+      const tmp = document.createElement("canvas");
+      tmp.width = w;
+      tmp.height = h;
+      const tctx = tmp.getContext("2d");
+      tctx.imageSmoothingEnabled = false;
+      const size = w;
+      const rad = (angle - 90) * Math.PI / 180;
+      const cx = w / 2, cy = h / 2;
+      const x1 = cx - Math.cos(rad) * (size / 2);
+      const y1 = cy - Math.sin(rad) * (size / 2);
+      const x2 = cx + Math.cos(rad) * (size / 2);
+      const y2 = cy + Math.sin(rad) * (size / 2);
+      const grad = tctx.createLinearGradient(x1, y1, x2, y2);
+      if (colors.length <= 1) {
+        const c0 = colors[0] ?? "#ffffff";
+        grad.addColorStop(0, c0);
+        grad.addColorStop(1, c0);
+      } else {
+        colors.forEach((c, i) => grad.addColorStop(i / (colors.length - 1), c));
+      }
+      tctx.fillStyle = grad;
+      tctx.fillRect(0, 0, w, h);
+      tctx.globalCompositeOperation = "destination-in";
+      tctx.drawImage(srcCan, 0, 0);
+      tctx.globalCompositeOperation = "source-over";
+      ctx.save();
+      ctx.globalCompositeOperation = "color";
+      ctx.drawImage(tmp, 0, 0);
+      ctx.restore();
+      return out;
+    }
+    /** Helper générique: applique "Gold" ou "Rainbow" selon le nom */
+    effectApply(name, tile, opts) {
+      return name === "Gold" ? this.effectGold(tile, opts) : this.effectRainbow(tile, opts);
+    }
+    /* ===================== INTERNE: chargement/découpe ===================== */
+    async loadImage(url) {
+      return await new Promise((res, rej) => {
+        const im = new Image();
+        im.crossOrigin = "anonymous";
+        im.onload = () => res(im);
+        im.onerror = rej;
+        im.src = url;
+      });
+    }
+    guessSize(url, img, forced) {
+      if (forced) return forced;
+      if (this.cfg.ruleAllplants512.test(url)) return 512;
+      if (img.width % 256 === 0 && img.height % 256 === 0) return 256;
+      if (img.width % 512 === 0 && img.height % 512 === 0) return 512;
+      return 256;
+    }
+    isBlankOrBlack(data) {
+      const aThr = this.cfg.skipAlphaBelow;
+      const bThr = this.cfg.blackBelow;
+      const tol = this.cfg.tolerance;
+      const d = data.data;
+      const maxColored = Math.ceil(d.length / 4 * tol);
+      let colored = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3];
+        if (a > aThr) {
+          const r = d[i], g = d[i + 1], b = d[i + 2];
+          if (r > bThr || g > bThr || b > bThr) {
+            if (++colored > maxColored) return false;
+          }
+        }
+      }
+      return true;
+    }
+    async sliceOne(url, opts) {
+      const img = await this.loadImage(url);
+      const size = this.guessSize(url, img, opts.forceSize);
+      const cols = Math.floor(img.width / size);
+      const rows = Math.floor(img.height / size);
+      const base = fileBase(url);
+      const can = document.createElement("canvas");
+      can.width = size;
+      can.height = size;
+      const ctx = can.getContext("2d", { willReadFrequently: true });
+      ctx.imageSmoothingEnabled = false;
+      const list = [];
+      let idx = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          ctx.clearRect(0, 0, size, size);
+          ctx.drawImage(img, col * size, row * size, size, size, 0, 0, size, size);
+          let blank = false;
+          try {
+            const data = ctx.getImageData(0, 0, size, size);
+            blank = this.isBlankOrBlack(data);
+          } catch {
+            blank = false;
+          }
+          if (!opts.includeBlanks && blank) {
+            idx++;
+            continue;
+          }
+          if (opts.mode === "bitmap") {
+            const bmp = await createImageBitmap(can);
+            list.push({ sheet: base, url, index: idx, col, row, size, data: bmp });
+          } else if (opts.mode === "canvas") {
+            const clone = document.createElement("canvas");
+            clone.width = size;
+            clone.height = size;
+            clone.getContext("2d").drawImage(can, 0, 0);
+            list.push({ sheet: base, url, index: idx, col, row, size, data: clone });
+          } else {
+            const dataURL = await new Promise((resolve2, reject) => {
+              can.toBlob((blob) => {
+                if (!blob) {
+                  reject(new Error("toBlob returned null"));
+                  return;
+                }
+                const fr = new FileReader();
+                fr.onerror = reject;
+                fr.onload = () => resolve2(fr.result);
+                fr.readAsDataURL(blob);
+              }, "image/png");
+            });
+            list.push({ sheet: base, url, index: idx, col, row, size, data: dataURL });
+          }
+          idx++;
+        }
+      }
+      return list;
+    }
+    async zipTiles(opts) {
+      const zip = new JSZip();
+      for (const u of this.tiles) {
+        const tiles = await this.sliceOne(u, { mode: "canvas", includeBlanks: false, forceSize: opts.forceSize });
+        const base = fileBase(u);
+        let k = 0;
+        for (const t of tiles) {
+          const can = t.data;
+          const blob = await new Promise((res) => can.toBlob((b) => res(b), "image/png"));
+          zip.file(`${base}/tile_${String(++k).padStart(4, "0")}.png`, blob);
+        }
+      }
+      await this.saveZip(zip, opts.name);
+    }
+    /** Teste si un mode de blend est supporté par le Canvas 2D */
+    supportsBlend(op) {
+      try {
+        const c = document.createElement("canvas");
+        c.width = c.height = 1;
+        const g = c.getContext("2d");
+        const before = g.globalCompositeOperation;
+        g.globalCompositeOperation = op;
+        const ok = g.globalCompositeOperation === op;
+        g.globalCompositeOperation = before;
+        return ok;
+      } catch {
+        return false;
+      }
+    }
+    /** Convertit tile.data -> Canvas (ImageBitmap/Canvas). Refuse dataURL (string). */
+    tileToCanvas(tile) {
+      const src = tile.data;
+      let w = tile.size, h = tile.size;
+      const out = document.createElement("canvas");
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext("2d");
+      ctx.imageSmoothingEnabled = false;
+      if (src instanceof HTMLCanvasElement) {
+        w = src.width;
+        h = src.height;
+        out.width = w;
+        out.height = h;
+        ctx.drawImage(src, 0, 0);
+      } else if (typeof ImageBitmap !== "undefined" && src instanceof ImageBitmap) {
+        w = src.width;
+        h = src.height;
+        out.width = w;
+        out.height = h;
+        ctx.drawImage(src, 0, 0);
+      } else if (typeof src === "string") {
+        throw new Error("Sprites: tile.data est un dataURL (string). Recharge la tuile en mode 'canvas' ou 'bitmap'.");
+      } else {
+        ctx.drawImage(src, 0, 0);
+      }
+      return out;
+    }
+    /** Crée un gradient linéaire à un angle (deg) couvrant tout le canvas */
+    makeAngleGradient(ctx, w, h, angleDeg) {
+      const rad = angleDeg * Math.PI / 180;
+      const cx = w / 2, cy = h / 2;
+      const R = Math.hypot(w, h);
+      const x0 = cx - Math.cos(rad) * R, y0 = cy - Math.sin(rad) * R;
+      const x1 = cx + Math.cos(rad) * R, y1 = cy + Math.sin(rad) * R;
+      return ctx.createLinearGradient(x0, y0, x1, y1);
+    }
+    /* ===================== SNIFFERS (UI + Tiles) ===================== */
+    add(url, _why = "") {
+      const abs = toAbs(url);
+      if (!isImageUrl(abs) || this.all.has(abs)) return;
+      if (isUiUrl(abs)) {
+        this.ui.add(abs);
+        this.all.add(abs);
+        this.onAssetCb?.(abs, "ui");
+      } else if (isTilesUrl(abs)) {
+        this.tiles.add(abs);
+        this.all.add(abs);
+        this.onAssetCb?.(abs, "tiles");
+      }
+    }
+    installMainSniffers() {
+      try {
+        const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+        if (desc && !this.patched.imgDesc) {
+          this.patched.imgDesc = desc;
+          Object.defineProperty(HTMLImageElement.prototype, "src", {
+            set: function(v) {
+              window.Sprites?.add?.(v, "img");
+              return desc.set.call(this, v);
+            },
+            get: desc.get,
+            configurable: true,
+            enumerable: desc.enumerable
+          });
+          const proto = HTMLImageElement.prototype;
+          const nativeSetAttr = proto.setAttribute;
+          this.patched.setAttr = nativeSetAttr;
+          const self = this;
+          proto.setAttribute = function(name, value) {
+            try {
+              if (String(name).toLowerCase() === "src" && typeof value === "string") {
+                self.add(value, "img-attr");
+              }
+            } catch {
+            }
+            return nativeSetAttr.call(this, name, value);
+          };
+        }
+      } catch {
+      }
+      try {
+        if ("PerformanceObserver" in window) {
+          const po = new PerformanceObserver((list) => {
+            list.getEntries().forEach((e) => this.add(e.name, "po"));
+          });
+          po.observe({ entryTypes: ["resource"] });
+          this.observers.push(po);
+        }
+      } catch {
+      }
+    }
+    workerPreludeSource() {
+      return `
+      (function(){
+        const IMG=/\\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|ktx2|basis)$/i;
+        const isImg=(u)=>{ try{return IMG.test(u)&&!String(u).startsWith('blob:')}catch{return false} };
+        const post=(o)=>{ try{ self.postMessage(Object.assign({__awc:1}, o)); }catch{} };
+
+        const F=self.fetch;
+        if(F){
+          self.fetch=async function(...a){
+            let u=a[0]; try{ u=typeof u==='string'?u:(u&&u.url)||u; }catch{}
+            const r=await F.apply(this,a);
+            try{
+              const ct=(r.headers&&r.headers.get&&r.headers.get('content-type'))||'';
+              if((u&&isImg(u)) || /^image\\//i.test(ct)) post({ url:(typeof u==='string'?u:(u&&u.url)||String(u)), src:'worker:fetch', ct });
+            }catch{}
+            return r;
+          };
+        }
+
+        const CIB=self.createImageBitmap;
+        if(CIB){
+          self.createImageBitmap=async function(b,...rest){
+            try{ if(b&&/^image\\//i.test(b.type)) post({ url:'blob://imagebitmap', src:'worker:cib', ct:b.type }); }catch{}
+            return CIB.call(this,b,...rest);
+          };
+        }
+
+        const IS=self.importScripts;
+        if(IS){
+          self.importScripts=function(...urls){
+            try{ urls.forEach(u=>post({ url:u, src:'worker:importScripts' })); }catch{}
+            return IS.apply(this,urls);
+          };
+        }
+      })();
+    `;
+    }
+    installWorkerHooks() {
+      const NativeWorker2 = window.Worker;
+      const NativeCreate = URL.createObjectURL.bind(URL);
+      const NativeBlob = window.Blob;
+      if (!NativeBlob) return;
+      if (!this.patched.Blob) {
+        this.patched.Blob = NativeBlob;
+        const OriginalBlob = this.patched.Blob;
+        const self = this;
+        window.Blob = function(parts = [], opts = {}) {
+          const b = new OriginalBlob(parts, opts);
+          const type = opts && opts.type || "";
+          if (/javascript|ecmascript/i.test(type)) {
+            let ok = true, txt = "";
+            for (const p of parts) {
+              if (typeof p === "string") txt += p;
+              else {
+                ok = false;
+                break;
+              }
+            }
+            if (ok) self.blobText.set(b, txt);
+          }
+          return b;
+        };
+        window.Blob.prototype = OriginalBlob.prototype;
+      }
+      if (!this.patched.createObjectURL) {
+        this.patched.createObjectURL = URL.createObjectURL;
+        const prelude = this.workerPreludeSource();
+        const self = this;
+        URL.createObjectURL = function(obj) {
+          if (obj instanceof Blob) {
+            const type = (obj.type || "").toLowerCase();
+            const txt = self.blobText.get(obj) || "";
+            const looksWorkerJS = /javascript/.test(type) || /onmessage|fetch\(|importScripts/.test(txt);
+            if (looksWorkerJS && txt) {
+              const patched = new NativeBlob([prelude + "\n" + txt + "\n//# sourceURL=sprites-blob.js"], { type: type || "application/javascript" });
+              return NativeCreate(patched);
+            }
+          }
+          return NativeCreate(obj);
+        };
+      }
+      if (!this.patched.Worker) {
+        this.patched.Worker = window.Worker;
+        const prelude = this.workerPreludeSource();
+        const self = this;
+        window.Worker = function(url, opts) {
+          try {
+            const abs = new URL(String(url), location.href).href;
+            if (!abs.startsWith("blob:")) {
+              const isModule = opts && opts.type === "module";
+              const src = isModule ? `${prelude}
+import "${abs}";
+//# sourceURL=sprites-wrapper-module.js` : `${prelude}
+try{importScripts("${abs}")}catch(e){}
+//# sourceURL=sprites-wrapper-classic.js`;
+              const blob = new NativeBlob([src], { type: "text/javascript" });
+              const u = URL.createObjectURL(blob);
+              const w2 = new self.patched.Worker(u, isModule ? { type: "module" } : {});
+              self.attachWorkerListener(w2);
+              return w2;
+            }
+          } catch {
+          }
+          const w = new self.patched.Worker(url, opts);
+          self.attachWorkerListener(w);
+          return w;
+        };
+        window.Worker.toString = () => this.patched.Worker.toString();
+      }
+    }
+    attachWorkerListener(w) {
+      try {
+        w.addEventListener("message", (e) => {
+          const d = e.data;
+          if (d && d.__awc && d.url) this.add(d.url, d.src || "worker");
+        });
+      } catch {
+      }
+    }
+    /* ===================== Utils ZIP ===================== */
+    async fetchBlob(u) {
+      const r = await fetch(u, { credentials: "include" });
+      if (!r.ok) throw new Error(`HTTP ${r.status} for ${u}`);
+      return r.blob();
+    }
+    async saveZip(zip, name) {
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1e4);
+    }
+  };
+  window.Sprites = new SpritesCore(false);
+  var Sprites = new SpritesCore(false);
+  function initSprites(options) {
+    Sprites.init(options);
+    window.Sprites = Sprites;
+    return Sprites;
+  }
+  window.initSprites = initSprites;
+
+  // src/data/sprites.ts
+  var SOURCE_LABELS = {
+    tileRefsMap: "Map tiles",
+    tileRefsPlants: "Plants",
+    tileRefsTallPlants: "Tall plants",
+    tileRefsSeeds: "Seeds",
+    tileRefsItems: "Items",
+    tileRefsAnimations: "Animations",
+    tileRefsPets: "Pets",
+    tileRefsMutations: "Mutations",
+    tileRefsDecor: "Decor"
+  };
+  function formatDisplayName(key2) {
+    const spaced = key2.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim();
+    if (!spaced) return key2;
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+  function buildEntries(config) {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const { source, refs } of config.sources) {
+      const sourceLabel = SOURCE_LABELS[source] ?? source;
+      for (const [key2, value] of Object.entries(refs)) {
+        if (typeof value !== "number" || Number.isNaN(value)) continue;
+        const index = value > 0 ? value - 1 : value;
+        const entry = {
+          index,
+          key: key2,
+          source,
+          sourceLabel,
+          qualifiedName: `${source}.${key2}`,
+          displayName: formatDisplayName(key2)
+        };
+        const current = map2.get(index);
+        if (current) {
+          current.push(entry);
+        } else {
+          map2.set(index, [entry]);
+        }
+      }
+    }
+    return map2;
+  }
+  var rawMatchers = [
+    {
+      id: "plants-tall",
+      label: "Tall plants",
+      test: (sheet) => sheet.includes("tall"),
+      sources: [{ source: "tileRefsTallPlants", refs: tileRefsTallPlants }]
+    },
+    {
+      id: "plants",
+      label: "Plants",
+      test: (sheet) => sheet.includes("plants"),
+      sources: [{ source: "tileRefsPlants", refs: tileRefsPlants }]
+    },
+    {
+      id: "mutations",
+      label: "Mutations",
+      test: (sheet) => sheet.includes("mutation"),
+      sources: [{ source: "tileRefsMutations", refs: tileRefsMutations }]
+    },
+    {
+      id: "seeds",
+      label: "Seeds",
+      test: (sheet) => sheet.includes("seed"),
+      sources: [{ source: "tileRefsSeeds", refs: tileRefsSeeds }]
+    },
+    {
+      id: "items",
+      label: "Items",
+      test: (sheet) => sheet.includes("item"),
+      sources: [{ source: "tileRefsItems", refs: tileRefsItems }]
+    },
+    {
+      id: "pets",
+      label: "Pets",
+      test: (sheet) => sheet.includes("pet"),
+      sources: [{ source: "tileRefsPets", refs: tileRefsPets }]
+    },
+    {
+      id: "decor",
+      label: "Decor",
+      test: (sheet) => sheet.includes("decor"),
+      sources: [{ source: "tileRefsDecor", refs: tileRefsDecor }]
+    },
+    {
+      id: "animations",
+      label: "Animations",
+      test: (sheet) => sheet.includes("anim"),
+      sources: [{ source: "tileRefsAnimations", refs: tileRefsAnimations }]
+    },
+    {
+      id: "map",
+      label: "Map",
+      test: (sheet) => sheet.includes("map"),
+      sources: [{ source: "tileRefsMap", refs: tileRefsMap }]
+    }
+  ];
+  var matchers = rawMatchers.map((config) => ({
+    ...config,
+    entries: buildEntries(config)
+  }));
+  var matchersBySource = /* @__PURE__ */ new Map();
+  for (const matcher of matchers) {
+    for (const { source } of matcher.sources) {
+      const existing = matchersBySource.get(source);
+      if (existing) existing.push(matcher);
+      else matchersBySource.set(source, [matcher]);
+    }
+  }
+  var fallbackEntries = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const matcher of matchers) {
+      for (const [index, entries] of matcher.entries) {
+        const existing = map2.get(index);
+        if (existing) {
+          existing.push(...entries);
+        } else {
+          map2.set(index, [...entries]);
+        }
+      }
+    }
+    return map2;
+  })();
+  function normalizeSheet(sheet) {
+    return sheet.toLowerCase();
+  }
+  function findTileRefMatch(sheet, index) {
+    const normalized = normalizeSheet(sheet);
+    for (const matcher of matchers) {
+      if (!matcher.test(normalized)) continue;
+      const entries = matcher.entries.get(index);
+      if (entries?.length) {
+        return {
+          sheetId: matcher.id,
+          sheetLabel: matcher.label,
+          entries: [...entries]
+        };
+      }
+    }
+    const fallback = fallbackEntries.get(index);
+    if (fallback?.length === 1) {
+      const entry = fallback[0];
+      const sourceMatchers = matchersBySource.get(entry.source);
+      if (!sourceMatchers || sourceMatchers.some((m) => m.test(normalized))) {
+        return {
+          sheetId: entry.source,
+          sheetLabel: entry.sourceLabel,
+          entries: [...fallback]
+        };
+      }
+    }
+    return null;
   }
 
   // src/services/debug-data.ts
@@ -11481,7 +15158,7 @@
           const ws = Reflect.construct(target, args, newTarget);
           try {
             trackSocket(ws, "new", onFrame);
-          } catch {
+          } catch (err) {
           }
           return ws;
         }
@@ -11492,13 +15169,18 @@
     sockets.forEach((ws) => {
       try {
         trackSocket(ws, "existing", onFrame);
-      } catch {
+      } catch (err) {
       }
     });
-    if (!hookedOnce) hookedOnce = true;
+    if (!hookedOnce) {
+      hookedOnce = true;
+    } else {
+    }
   }
   function trackSocket(ws, why, onFrame) {
-    if (registry.has(ws)) return;
+    if (registry.has(ws)) {
+      return;
+    }
     const id = `WS#${1 + registry.size} (${label(ws.readyState)})`;
     const info = { ws, id, listeners: [] };
     if (!sockets.includes(ws)) sockets.push(ws);
@@ -11537,6 +15219,7 @@
         }
         return orig(data);
       };
+    } else {
     }
     registry.set(ws, info);
   }
@@ -11550,9 +15233,15 @@
     style2.id = "mg-debug-data-styles";
     style2.textContent = `
   .dd-debug-view{display:flex;flex-direction:column;gap:16px;}
-  .dd-debug-columns{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));align-items:start;}
+  .dd-debug-columns{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(320px,1fr));align-items:start;}
+  @media (max-width:720px){.dd-debug-columns{grid-template-columns:minmax(0,1fr);}}
   .dd-debug-column{display:flex;flex-direction:column;gap:16px;min-width:0;}
   .dd-card-description{font-size:13px;opacity:.72;margin:0;}
+  .dd-atom-list{display:flex;flex-direction:column;gap:4px;margin-top:8px;max-height:40vh;overflow:auto;padding-right:4px;}
+  .dd-atom-list__item{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 6px;border-radius:8px;border:1px solid transparent;cursor:pointer;transition:background .12s ease,border-color .12s ease;}
+  .dd-atom-list__item:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);}
+  .dd-atom-list__checkbox{accent-color:#5c7eff;}
+  .dd-atom-list__label{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .dd-status-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.01em;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#f5f7ff;}
   .dd-status-chip.is-ok{color:#49d389;background:rgba(73,211,137,.14);border-color:rgba(73,211,137,.32);}
   .dd-status-chip.is-warn{color:#ffb760;background:rgba(255,183,96,.12);border-color:rgba(255,183,96,.32);}
@@ -11599,337 +15288,55 @@
   .dd-script-log__row.is-open .dd-script-log__details{display:block;}
   .dd-log-source-chips{display:flex;flex-wrap:wrap;gap:6px;}
   .dd-log-toolbar-spacer{flex:1 1 auto;}
+  .dd-audio-summary{display:grid;gap:4px;font-size:13px;}
+  .dd-audio-summary strong{font-size:14px;}
+  .dd-audio-volume{font-family:var(--qmm-font-mono,monospace);font-size:12px;opacity:.78;}
+  .dd-audio-list{display:flex;flex-direction:column;gap:8px;margin-top:4px;max-height:48vh;overflow:auto;padding-right:4px;}
+  .dd-audio-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(9,12,18,.72);}
+  .dd-audio-row__info{flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:6px;}
+  .dd-audio-row__title{font-weight:600;font-size:13px;word-break:break-word;}
+  .dd-audio-meta{font-size:12px;opacity:.72;display:flex;flex-wrap:wrap;gap:8px;}
+  .dd-audio-url{font-family:var(--qmm-font-mono,monospace);font-size:11px;word-break:break-all;color:#d6dcffb3;}
+  .dd-audio-actions{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+  .dd-audio-empty{padding:24px 12px;text-align:center;font-size:13px;opacity:.6;}
+  .dd-sprite-controls{display:flex;flex-direction:column;gap:12px;}
+  .dd-sprite-mode{display:flex;flex-wrap:wrap;gap:8px;}
+  .dd-sprite-category{display:flex;flex-wrap:wrap;gap:6px;}
+  .dd-sprite-category.is-hidden{display:none;}
+  .dd-sprite-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;}
+  .dd-sprite-toolbar .qmm-input{flex:1 1 220px;min-width:180px;padding:6px 10px;border-radius:8px;font-size:13px;}
+  .dd-sprite-btn{padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid rgba(124,148,255,.38);background:linear-gradient(180deg,rgba(122,150,255,.26),rgba(82,108,214,.14));color:#f5f7ff;box-shadow:0 3px 10px rgba(78,104,214,.22);text-shadow:0 1px 0 rgba(0,0,0,.24);}
+  .dd-sprite-btn:hover{border-color:rgba(148,172,255,.45);background:linear-gradient(180deg,rgba(136,162,255,.34),rgba(98,122,226,.18));}
+  .dd-sprite-btn:active{transform:translateY(1px);}
+  .dd-sprite-btn .qmm-btn__icon{font-size:1.05em;}
+  .dd-sprite-btn--ghost{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);box-shadow:none;color:inherit;text-shadow:none;}
+  .dd-sprite-btn--ghost:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);}
+  .dd-sprite-list{display:flex;flex-direction:column;gap:6px;max-height:48vh;overflow:auto;padding-right:4px;}
+  .dd-sprite-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border-radius:10px;border:1px solid transparent;background:rgba(255,255,255,.02);cursor:pointer;text-align:left;transition:background .12s ease,border-color .12s ease,transform .12s ease;}
+  .dd-sprite-item:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);}
+  .dd-sprite-item.is-active{border-color:rgba(92,126,255,.45);background:rgba(92,126,255,.18);}
+  .dd-sprite-item__title{font-weight:600;font-size:13px;}
+  .dd-sprite-item__subtitle{font-size:11px;opacity:.7;word-break:break-all;}
+  .dd-sprite-empty{padding:20px 12px;text-align:center;font-size:13px;opacity:.68;}
+  .dd-sprite-preview-body{display:flex;flex-direction:column;gap:12px;}
+  .dd-sprite-preview-scroll{max-height:60vh;overflow:auto;padding-right:4px;}
+  .dd-sprite-url{font-size:12px;opacity:.75;word-break:break-all;}
+  .dd-sprite-tiles-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
+  .dd-sprite-tile{display:flex;flex-direction:column;gap:6px;align-items:center;padding:8px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);}
+  .dd-sprite-tile canvas{width:100%;height:auto;image-rendering:pixelated;background:#05080c;border-radius:8px;}
+  .dd-sprite-tile__name{font-weight:600;font-size:12px;text-align:center;}
+  .dd-sprite-tile__refs{font-size:11px;opacity:.68;text-align:center;font-family:var(--qmm-font-mono,monospace);word-break:break-word;}
+  .dd-sprite-tile__meta{font-size:11px;opacity:.75;text-align:center;font-family:var(--qmm-font-mono,monospace);}
+  .dd-sprite-ui-preview{display:flex;flex-direction:column;align-items:center;gap:12px;background:rgba(0,0,0,.28);padding:12px;border-radius:12px;}
+  .dd-sprite-variant-grid{display:grid;gap:8px;width:100%;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));}
+  .dd-sprite-variant-grid.is-wide{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));max-width:100%;}
+  .dd-sprite-variant{display:flex;flex-direction:column;gap:4px;align-items:center;}
+  .dd-sprite-variant__label{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em;text-align:center;}
+  .dd-sprite-variant__canvas{width:100%;height:auto;image-rendering:pixelated;background:#05080c;border-radius:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
   `;
     document.head.appendChild(style2);
   }
-  async function renderDebugDataMenu(root) {
-    ensureStyles();
-    const ui = new Menu({ id: "debug-tools", compact: true });
-    ui.mount(root);
-    ui.addTab("logs", "Logs", (view) => renderLogsTab(view, ui));
-    ui.addTab("jotai", "Jotai", (view) => renderJotaiTab(view, ui));
-    ui.addTab("websocket", "WebSocket", (view) => renderWSTab(view, ui));
-  }
-  function renderLogsTab(view, ui) {
-    if (typeof view.__log_cleanup__ === "function") {
-      try {
-        view.__log_cleanup__();
-      } catch {
-      }
-    }
-    view.innerHTML = "";
-    view.classList.add("dd-debug-view");
-    const card = ui.card("\u{1F4DD} Script logs", {
-      tone: "muted",
-      subtitle: "Inspect real-time activity emitted by menus and services."
-    });
-    view.appendChild(card.root);
-    const filters = {
-      search: "",
-      levels: /* @__PURE__ */ new Set(["error", "warn", "info", "debug"])
-    };
-    let sourceSelection = null;
-    const knownSources = /* @__PURE__ */ new Map();
-    const entries2 = [];
-    const detailCache = /* @__PURE__ */ new Map();
-    const toolbar = document.createElement("div");
-    toolbar.className = "dd-toolbar dd-toolbar--stretch";
-    card.body.appendChild(toolbar);
-    const searchInput = ui.inputText("search (text, source, context)", "");
-    searchInput.classList.add("dd-grow");
-    searchInput.addEventListener("input", () => {
-      filters.search = searchInput.value.trim().toLowerCase();
-      repaint(true);
-    });
-    const spacer = document.createElement("div");
-    spacer.className = "dd-log-toolbar-spacer";
-    const btnCopy = ui.btn("Copy visible", {
-      variant: "ghost",
-      icon: "\u{1F4CB}",
-      onClick: () => copyVisible()
-    });
-    const btnClear = ui.btn("Clear", {
-      variant: "ghost",
-      icon: "\u{1F9F9}",
-      onClick: () => {
-        clearLogs();
-      }
-    });
-    toolbar.append(searchInput, spacer, btnCopy, btnClear);
-    const levelRow = document.createElement("div");
-    levelRow.className = "dd-log-filter-group";
-    card.body.appendChild(levelRow);
-    const levelLabel = document.createElement("span");
-    levelLabel.className = "dd-inline-note";
-    levelLabel.textContent = "Levels:";
-    levelRow.appendChild(levelLabel);
-    const levelChipsWrap = document.createElement("div");
-    levelChipsWrap.className = "dd-log-source-chips";
-    levelRow.appendChild(levelChipsWrap);
-    const levelDefs = [
-      { id: "error", label: "Error", icon: "\u26D4" },
-      { id: "warn", label: "Warn", icon: "\u26A0\uFE0F" },
-      { id: "info", label: "Info", icon: "\u2139\uFE0F" },
-      { id: "debug", label: "Debug", icon: "\u{1F41E}" }
-    ];
-    levelDefs.forEach((def) => {
-      const chip = ui.toggleChip(def.label, {
-        checked: filters.levels.has(def.id),
-        icon: def.icon,
-        type: "checkbox"
-      });
-      chip.input.addEventListener("change", () => {
-        if (chip.input.checked) filters.levels.add(def.id);
-        else filters.levels.delete(def.id);
-        repaint(true);
-      });
-      levelChipsWrap.appendChild(chip.root);
-    });
-    const sourceRow = document.createElement("div");
-    sourceRow.className = "dd-log-filter-group";
-    card.body.appendChild(sourceRow);
-    const sourceLabel = document.createElement("span");
-    sourceLabel.className = "dd-inline-note";
-    sourceLabel.textContent = "Sources:";
-    sourceRow.appendChild(sourceLabel);
-    const btnAllSources = ui.btn("All", {
-      variant: "ghost",
-      icon: "\u{1F310}",
-      onClick: () => {
-        sourceSelection = null;
-        repaintSources();
-        repaint(true);
-      }
-    });
-    sourceRow.appendChild(btnAllSources);
-    const sourcesWrap = document.createElement("div");
-    sourcesWrap.className = "dd-log-source-chips";
-    sourceRow.appendChild(sourcesWrap);
-    const logWrap = document.createElement("div");
-    logWrap.className = "dd-script-log";
-    card.body.appendChild(logWrap);
-    const logList = document.createElement("div");
-    logWrap.appendChild(logList);
-    const empty = document.createElement("div");
-    empty.className = "dd-script-log__empty";
-    empty.textContent = "No logs yet.";
-    logWrap.appendChild(empty);
-    function updateEmptyState() {
-      empty.style.display = logList.childElementCount ? "none" : "";
-    }
-    function isSourceEnabled(id) {
-      return sourceSelection == null || sourceSelection.has(id);
-    }
-    function getDetails(entry) {
-      if (entry.details == null) return "";
-      if (detailCache.has(entry.id)) return detailCache.get(entry.id);
-      const val = formatDetails(entry.details);
-      detailCache.set(entry.id, val);
-      return val;
-    }
-    function passesFilters(entry) {
-      if (!filters.levels.has(entry.level)) return false;
-      if (!isSourceEnabled(entry.source)) return false;
-      if (!filters.search) return true;
-      const target = [
-        entry.message,
-        entry.sourceLabel,
-        entry.context || "",
-        getDetails(entry)
-      ].join("\n").toLowerCase();
-      return target.includes(filters.search);
-    }
-    function buildRow(entry) {
-      const row = document.createElement("div");
-      row.className = "dd-script-log__row";
-      const ts = document.createElement("span");
-      ts.className = "dd-script-log__ts";
-      ts.textContent = fmtTime(entry.ts);
-      const lvl = document.createElement("span");
-      lvl.className = `dd-script-log__level is-${entry.level}`;
-      lvl.textContent = entry.level.toUpperCase();
-      const src = document.createElement("div");
-      src.className = "dd-script-log__source";
-      src.textContent = entry.sourceLabel;
-      if (entry.context) {
-        const ctx = document.createElement("span");
-        ctx.className = "dd-script-log__context";
-        ctx.textContent = entry.context;
-        src.appendChild(ctx);
-      }
-      const msgWrap = document.createElement("div");
-      msgWrap.className = "dd-script-log__message-wrap";
-      const msg = document.createElement("div");
-      msg.className = "dd-script-log__message";
-      msg.innerHTML = escapeLite(entry.message);
-      msgWrap.appendChild(msg);
-      const actions = document.createElement("div");
-      actions.className = "dd-script-log__actions";
-      const btnCopyEntry = document.createElement("button");
-      btnCopyEntry.type = "button";
-      btnCopyEntry.textContent = "Copy";
-      btnCopyEntry.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        copyEntry(entry);
-      });
-      actions.appendChild(btnCopyEntry);
-      let detailsEl = null;
-      const detailText = getDetails(entry);
-      if (detailText) {
-        const btnDetails = document.createElement("button");
-        btnDetails.type = "button";
-        btnDetails.textContent = "Details";
-        btnDetails.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          row.classList.toggle("is-open");
-          if (row.classList.contains("is-open") && detailsEl) {
-            detailsEl.textContent = detailText;
-          }
-        });
-        actions.appendChild(btnDetails);
-        detailsEl = document.createElement("pre");
-        detailsEl.className = "dd-script-log__details";
-        detailsEl.textContent = detailText;
-        row.appendChild(detailsEl);
-      }
-      msgWrap.appendChild(actions);
-      row.append(ts, lvl, src, msgWrap);
-      row.addEventListener("dblclick", () => {
-        row.classList.toggle("is-open");
-        if (row.classList.contains("is-open") && detailsEl) {
-          detailsEl.textContent = detailText;
-        }
-      });
-      return row;
-    }
-    function repaint(full) {
-      if (full) {
-        logList.innerHTML = "";
-        entries2.forEach((entry) => {
-          if (passesFilters(entry)) logList.appendChild(buildRow(entry));
-        });
-        updateEmptyState();
-        maybeAutoScroll();
-      }
-    }
-    function maybeAutoScroll() {
-      const nearBottom = Math.abs(logWrap.scrollTop + logWrap.clientHeight - logWrap.scrollHeight) < 24;
-      if (nearBottom) logWrap.scrollTop = logWrap.scrollHeight;
-    }
-    function appendOne(entry) {
-      if (!passesFilters(entry)) return;
-      logList.appendChild(buildRow(entry));
-      updateEmptyState();
-      maybeAutoScroll();
-    }
-    function repaintSources() {
-      sourcesWrap.innerHTML = "";
-      const items = Array.from(knownSources.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-      if (!items.length) {
-        const none = document.createElement("span");
-        none.className = "dd-inline-note";
-        none.textContent = "No sources yet.";
-        sourcesWrap.appendChild(none);
-        return;
-      }
-      items.forEach(([id, label2]) => {
-        const chip = ui.toggleChip(label2, {
-          checked: isSourceEnabled(id),
-          type: "checkbox"
-        });
-        chip.input.addEventListener("change", () => {
-          if (!chip.input.checked) {
-            if (sourceSelection == null) {
-              sourceSelection = new Set(items.map(([sid]) => sid));
-            }
-            sourceSelection.delete(id);
-          } else {
-            if (sourceSelection == null) {
-            } else {
-              sourceSelection.add(id);
-              if (sourceSelection.size === items.length) sourceSelection = null;
-            }
-          }
-          repaint(true);
-          repaintSources();
-        });
-        sourcesWrap.appendChild(chip.root);
-      });
-    }
-    function formatDetails(value) {
-      if (value == null) return "";
-      if (typeof value === "string") return value;
-      if (value instanceof Error) {
-        const stack = value.stack && value.stack.trim().length ? value.stack : `${value.name}: ${value.message}`;
-        return stack;
-      }
-      try {
-        return JSON.stringify(value, null, 2);
-      } catch {
-        try {
-          return String(value);
-        } catch {
-          return "";
-        }
-      }
-    }
-    function copyEntry(entry) {
-      const ctx = entry.context ? ` [${entry.context}]` : "";
-      const header = `[${fmtTime(entry.ts)}] ${entry.level.toUpperCase()} ${entry.sourceLabel}${ctx} \u2014 ${entry.message}`;
-      const detail = getDetails(entry);
-      copy(detail ? `${header}
-${detail}` : header);
-    }
-    function copyVisible() {
-      const lines = entries2.filter(passesFilters).map((entry) => {
-        const ctx = entry.context ? ` [${entry.context}]` : "";
-        const base = `[${fmtTime(entry.ts)}] ${entry.level.toUpperCase()} ${entry.sourceLabel}${ctx} \u2014 ${entry.message}`;
-        const detail = getDetails(entry);
-        return detail ? `${base}
-${detail}` : base;
-      }).join("\n\n");
-      copy(lines);
-    }
-    function handleEvent(ev) {
-      if (ev.type === "source") {
-        knownSources.set(ev.id, ev.label);
-        if (sourceSelection) sourceSelection.add(ev.id);
-        repaintSources();
-        return;
-      }
-      if (ev.type === "snapshot") {
-        entries2.length = 0;
-        entries2.push(...ev.entries);
-        const validIds = new Set(ev.entries.map((e) => e.id));
-        for (const id of Array.from(detailCache.keys())) {
-          if (!validIds.has(id)) detailCache.delete(id);
-        }
-        repaint(true);
-        return;
-      }
-      if (ev.type === "append") {
-        entries2.push(ev.entry);
-        appendOne(ev.entry);
-        return;
-      }
-      if (ev.type === "clear") {
-        entries2.length = 0;
-        detailCache.clear();
-        logList.innerHTML = "";
-        updateEmptyState();
-        return;
-      }
-    }
-    repaintSources();
-    updateEmptyState();
-    const unsubscribe = subscribeLogs(handleEvent);
-    view.__log_cleanup__ = () => {
-      unsubscribe();
-    };
-  }
-  function renderJotaiTab(view, ui) {
-    view.innerHTML = "";
-    view.classList.add("dd-debug-view");
+  function createTwoColumns(view) {
     const columns = document.createElement("div");
     columns.className = "dd-debug-columns";
     view.appendChild(columns);
@@ -11938,6 +15345,22 @@ ${detail}` : base;
     const rightCol = document.createElement("div");
     rightCol.className = "dd-debug-column";
     columns.append(leftCol, rightCol);
+    return { columns, leftCol, rightCol };
+  }
+  async function renderDebugDataMenu(root) {
+    ensureStyles();
+    const ui = new Menu({ id: "debug-tools", compact: true });
+    ui.mount(root);
+    ui.addTab("jotai", "Jotai", (view) => renderJotaiTab(view, ui));
+    ui.addTab("atoms-live", "Live atoms", (view) => renderLiveAtomsTab(view, ui));
+    ui.addTab("sprites", "Sprites", (view) => renderSpritesTab(view, ui));
+    ui.addTab("audio-player", "Audio player", (view) => renderAudioPlayerTab(view, ui));
+    ui.addTab("websocket", "WebSocket", (view) => renderWSTab(view, ui));
+  }
+  function renderJotaiTab(view, ui) {
+    view.innerHTML = "";
+    view.classList.add("dd-debug-view");
+    const { leftCol, rightCol } = createTwoColumns(view);
     {
       const card = ui.card("\u{1F5C4}\uFE0F Capture store", {
         tone: "muted",
@@ -12064,26 +15487,47 @@ ${detail}` : base;
       q.classList.add("dd-grow");
       const ta = document.createElement("textarea");
       ta.className = "qmm-input dd-textarea";
-      ta.placeholder = `JSON value, e.g. "inventory" or { "x": 1, "y": 2 }`;
+      ta.placeholder = `JSON or text value, e.g. inventory or { "x": 1, "y": 2 }`;
       const btnSet = ui.btn("Set", {
         icon: "\u2705",
         variant: "primary",
         onClick: async () => {
           const label2 = q.value.trim();
+          if (!label2) {
+            toast("Enter an atom label");
+            return;
+          }
+          try {
+            await ensureStore();
+          } catch (e) {
+            toast(e?.message || "Unable to capture store");
+            return;
+          }
+          if (!isStoreCaptured()) {
+            toast('Store not captured. Use "Capture store" first.');
+            return;
+          }
           const atom = getAtomByLabel(label2);
           if (!atom) {
             toast(`Atom "${label2}" not found`);
             return;
           }
-          let val;
-          try {
-            val = JSON.parse(ta.value);
-          } catch {
-            return toast("Invalid JSON");
+          const raw = ta.value;
+          const trimmed = raw.trim();
+          let val = raw;
+          let fallback = false;
+          if (trimmed) {
+            try {
+              val = JSON.parse(trimmed);
+            } catch {
+              fallback = true;
+            }
+          } else {
+            val = "";
           }
           try {
             await jSet(atom, val);
-            toast("Set OK");
+            toast(fallback ? "Set OK (raw text)" : "Set OK");
           } catch (e) {
             toast(e?.message || "Set failed");
           }
@@ -12103,6 +15547,1388 @@ ${detail}` : base;
       }
     }
   }
+  function renderLiveAtomsTab(view, ui) {
+    if (typeof view.__atoms_live_cleanup__ === "function") {
+      try {
+        view.__atoms_live_cleanup__();
+      } catch {
+      }
+    }
+    view.innerHTML = "";
+    view.classList.add("dd-debug-view");
+    const entries = /* @__PURE__ */ new Map();
+    const records = [];
+    let recording = false;
+    let selectedRecord = null;
+    const { leftCol, rightCol } = createTwoColumns(view);
+    const selectCard = ui.card("\u{1F9EA} Pick atoms", {
+      tone: "muted",
+      subtitle: "Filter labels with a regex then toggle atoms to monitor."
+    });
+    leftCol.appendChild(selectCard.root);
+    const filterRow = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
+    const filterInput = ui.inputText("regex label (ex: position|health)", "");
+    filterInput.classList.add("dd-grow");
+    const btnFilter = ui.btn("Refresh", { icon: "\u{1F50D}", onClick: () => refreshMatches() });
+    filterRow.append(filterInput, btnFilter);
+    const matchesWrap = document.createElement("div");
+    matchesWrap.className = "dd-atom-list";
+    const emptyMatches = document.createElement("p");
+    emptyMatches.className = "dd-card-description";
+    emptyMatches.textContent = "No atoms match the current filter.";
+    emptyMatches.style.display = "none";
+    const selectedInfo = document.createElement("p");
+    selectedInfo.className = "dd-card-description";
+    selectedInfo.style.marginTop = "8px";
+    selectCard.body.append(filterRow, matchesWrap, emptyMatches, selectedInfo);
+    filterInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        refreshMatches();
+      }
+    });
+    const logCard = ui.card("\u{1F4E1} Live atom log", {
+      tone: "muted",
+      subtitle: "Start recording to capture updates for the selected atoms."
+    });
+    rightCol.appendChild(logCard.root);
+    const controlsRow = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
+    const btnRecord = ui.btn("Start recording", {
+      variant: "primary",
+      onClick: () => toggleRecording()
+    });
+    const btnClear = ui.btn("Clear log", {
+      variant: "ghost",
+      icon: "\u{1F9F9}",
+      onClick: () => {
+        records.length = 0;
+        selectedRecord = null;
+        renderRecords(false);
+        updateDetails(null);
+        updateControls();
+      }
+    });
+    const btnCopyLog = ui.btn("Copy log", {
+      variant: "ghost",
+      icon: "\u{1F4CB}",
+      onClick: () => copyLog()
+    });
+    controlsRow.append(btnRecord, btnClear, btnCopyLog);
+    logCard.body.appendChild(controlsRow);
+    const logWrap = document.createElement("div");
+    logWrap.className = "dd-log";
+    logWrap.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    const logEmpty = document.createElement("div");
+    logEmpty.className = "dd-log__empty";
+    logEmpty.textContent = "No updates yet.";
+    logWrap.appendChild(logEmpty);
+    logCard.body.appendChild(logWrap);
+    const detailHeader = document.createElement("p");
+    detailHeader.className = "dd-card-description";
+    detailHeader.textContent = "Select a log entry to inspect previous and next values.";
+    const detailWrap = ui.flexRow({ gap: 12, wrap: true, fullWidth: true });
+    const prevBox = document.createElement("div");
+    prevBox.style.flex = "1 1 320px";
+    const prevTitle = document.createElement("strong");
+    prevTitle.textContent = "Previous";
+    prevTitle.style.display = "block";
+    prevTitle.style.marginBottom = "6px";
+    const prevPre = document.createElement("pre");
+    stylePre(prevPre);
+    prevPre.style.minHeight = "140px";
+    prevPre.textContent = "";
+    prevBox.append(prevTitle, prevPre);
+    const nextBox = document.createElement("div");
+    nextBox.style.flex = "1 1 320px";
+    const nextTitle = document.createElement("strong");
+    nextTitle.textContent = "Next";
+    nextTitle.style.display = "block";
+    nextTitle.style.marginBottom = "6px";
+    const nextPre = document.createElement("pre");
+    stylePre(nextPre);
+    nextPre.style.minHeight = "140px";
+    nextPre.textContent = "";
+    nextBox.append(nextTitle, nextPre);
+    const historyBox = document.createElement("div");
+    historyBox.style.flex = "1 1 100%";
+    historyBox.style.minWidth = "0";
+    const historyTitle = document.createElement("strong");
+    historyTitle.textContent = "History";
+    historyTitle.style.display = "block";
+    historyTitle.style.marginBottom = "6px";
+    const historyList = document.createElement("div");
+    historyList.style.display = "flex";
+    historyList.style.flexDirection = "column";
+    historyList.style.gap = "10px";
+    historyList.style.maxHeight = "320px";
+    historyList.style.overflow = "auto";
+    historyBox.append(historyTitle, historyList);
+    detailWrap.append(prevBox, nextBox, historyBox);
+    logCard.body.append(detailHeader, detailWrap);
+    function refreshMatches() {
+      const raw = filterInput.value.trim();
+      const rx = safeRegex(raw || ".*");
+      const atoms = findAtomsByLabel(rx);
+      matchesWrap.innerHTML = "";
+      emptyMatches.style.display = atoms.length ? "none" : "block";
+      atoms.map((atom) => ({ atom, label: String(atom?.debugLabel || atom?.label || "<unknown>") })).sort((a, b) => a.label.localeCompare(b.label)).forEach(({ atom, label: label2 }) => {
+        const row = document.createElement("label");
+        row.className = "dd-atom-list__item";
+        row.title = label2;
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = entries.has(label2);
+        checkbox.className = "dd-atom-list__checkbox";
+        const text = document.createElement("span");
+        text.className = "dd-atom-list__label";
+        text.textContent = label2;
+        row.append(checkbox, text);
+        checkbox.addEventListener("change", async () => {
+          if (checkbox.checked) {
+            const existing = entries.get(label2);
+            if (existing) {
+              existing.atom = atom;
+            } else {
+              entries.set(label2, { atom, lastValue: null, unsubscribe: null });
+            }
+            if (recording) {
+              const ok = await attachEntry(label2);
+              if (!ok) checkbox.checked = false;
+            }
+          } else {
+            const existing = entries.get(label2);
+            if (existing?.unsubscribe) {
+              try {
+                existing.unsubscribe();
+              } catch {
+              }
+            }
+            entries.delete(label2);
+          }
+          updateSelectedInfo();
+          updateControls();
+        });
+        matchesWrap.appendChild(row);
+        if (entries.has(label2)) {
+          const existing = entries.get(label2);
+          if (existing) existing.atom = atom;
+        }
+      });
+      updateSelectedInfo();
+    }
+    function updateSelectedInfo() {
+      const size = entries.size;
+      selectedInfo.textContent = size ? `${size} atom${size > 1 ? "s" : ""} selected.` : "No atom selected.";
+    }
+    function updateControls() {
+      setBtnLabel(btnRecord, recording ? "Stop recording" : "Start recording");
+      btnRecord.classList.toggle("active", recording);
+      btnRecord.disabled = !recording && !entries.size;
+      btnClear.disabled = records.length === 0;
+      btnCopyLog.disabled = records.length === 0;
+    }
+    function renderRecords(autoScroll = false) {
+      logWrap.innerHTML = "";
+      if (!records.length) {
+        logWrap.appendChild(logEmpty);
+        renderHistoryFor(null, null);
+        return;
+      }
+      records.forEach((rec, idx) => {
+        const row = document.createElement("div");
+        row.className = "atoms-log-row";
+        row.dataset.idx = String(idx);
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "minmax(120px, 160px) minmax(0, 1fr)";
+        row.style.gap = "12px";
+        row.style.padding = "10px 12px";
+        row.style.margin = "4px 0";
+        row.style.borderRadius = "12px";
+        row.style.border = "1px solid rgba(255,255,255,.12)";
+        const isSelected = selectedRecord === idx;
+        row.style.background = isSelected ? "rgba(92,126,255,.16)" : "rgba(11,16,22,.85)";
+        row.style.borderColor = isSelected ? "rgba(92,126,255,.42)" : "rgba(255,255,255,.12)";
+        row.style.cursor = "pointer";
+        row.addEventListener("mouseenter", () => {
+          row.style.borderColor = "rgba(255,255,255,.28)";
+        });
+        row.addEventListener("mouseleave", () => {
+          const sel = selectedRecord === idx;
+          row.style.borderColor = sel ? "rgba(92,126,255,.42)" : "rgba(255,255,255,.12)";
+        });
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.flexDirection = "column";
+        left.style.gap = "2px";
+        const lbl = document.createElement("strong");
+        lbl.textContent = rec.label;
+        const ts = document.createElement("span");
+        ts.style.opacity = "0.7";
+        ts.style.fontSize = "12px";
+        ts.textContent = `${fmtTime(rec.timestamp)}${rec.type === "initial" ? " \u2022 initial" : ""}`;
+        left.append(lbl, ts);
+        const summary = document.createElement("div");
+        summary.style.fontSize = "12px";
+        summary.style.lineHeight = "1.45";
+        summary.style.whiteSpace = "pre-wrap";
+        const prefix = rec.type === "initial" ? "[initial] " : "";
+        summary.textContent = prefix + summarizeValue(rec.next);
+        row.append(left, summary);
+        row.addEventListener("click", () => {
+          selectedRecord = idx;
+          renderRecords(false);
+          updateDetails(rec);
+        });
+        logWrap.appendChild(row);
+      });
+      if (autoScroll) logWrap.scrollTop = logWrap.scrollHeight;
+      if (selectedRecord != null && !records[selectedRecord]) {
+        selectedRecord = records.length ? Math.min(selectedRecord, records.length - 1) : null;
+      }
+      if (selectedRecord != null) {
+        renderHistoryFor(records[selectedRecord]?.label ?? null, selectedRecord);
+      }
+    }
+    function updateDetails(rec) {
+      if (!rec) {
+        detailHeader.textContent = "Select a log entry to inspect previous and next values.";
+        prevTitle.textContent = "Previous";
+        prevPre.textContent = "";
+        nextTitle.textContent = "Next";
+        nextPre.textContent = "";
+        renderHistoryFor(null, null);
+        return;
+      }
+      const typeSuffix = rec.type === "initial" ? " (initial)" : "";
+      detailHeader.textContent = `${rec.label} \u2014 ${fmtTime(rec.timestamp)}${typeSuffix}`;
+      prevTitle.textContent = rec.type === "initial" ? "Previous (none)" : "Previous";
+      prevPre.textContent = rec.type === "initial" ? "(no previous snapshot)" : stringify(rec.previous);
+      nextTitle.textContent = rec.type === "initial" ? "Initial value" : "Next";
+      nextPre.textContent = stringify(rec.next);
+      renderHistoryFor(rec.label, selectedRecord);
+    }
+    function renderHistoryFor(label2, selectedIdx) {
+      historyList.innerHTML = "";
+      if (!label2) {
+        const empty = document.createElement("p");
+        empty.className = "dd-card-description";
+        empty.textContent = "Select a log entry to inspect the value history.";
+        historyList.appendChild(empty);
+        return;
+      }
+      const relevant = records.map((rec, idx) => ({ rec, idx })).filter(({ rec }) => rec.label === label2);
+      if (!relevant.length) {
+        const empty = document.createElement("p");
+        empty.className = "dd-card-description";
+        empty.textContent = "No history recorded yet.";
+        historyList.appendChild(empty);
+        return;
+      }
+      relevant.forEach(({ rec, idx }, order) => {
+        const item = document.createElement("div");
+        item.style.display = "flex";
+        item.style.flexDirection = "column";
+        item.style.gap = "6px";
+        item.style.padding = "10px 12px";
+        item.style.borderRadius = "12px";
+        item.style.border = "1px solid rgba(255,255,255,.12)";
+        const isSelected = idx === selectedIdx;
+        item.style.background = isSelected ? "rgba(92,126,255,.16)" : "rgba(11,16,22,.85)";
+        item.style.borderColor = isSelected ? "rgba(92,126,255,.42)" : "rgba(255,255,255,.12)";
+        item.style.cursor = "pointer";
+        item.addEventListener("mouseenter", () => {
+          if (!isSelected) item.style.borderColor = "rgba(255,255,255,.24)";
+        });
+        item.addEventListener("mouseleave", () => {
+          item.style.borderColor = isSelected ? "rgba(92,126,255,.42)" : "rgba(255,255,255,.12)";
+        });
+        item.addEventListener("click", () => {
+          selectedRecord = idx;
+          renderRecords(false);
+          updateDetails(records[selectedRecord]);
+        });
+        const head = document.createElement("div");
+        head.style.display = "flex";
+        head.style.alignItems = "center";
+        head.style.justifyContent = "space-between";
+        const meta = document.createElement("div");
+        meta.style.display = "flex";
+        meta.style.alignItems = "center";
+        meta.style.gap = "8px";
+        const orderBadge = document.createElement("span");
+        orderBadge.textContent = `#${order + 1}`;
+        orderBadge.style.fontSize = "11px";
+        orderBadge.style.letterSpacing = ".04em";
+        orderBadge.style.textTransform = "uppercase";
+        orderBadge.style.padding = "2px 6px";
+        orderBadge.style.borderRadius = "999px";
+        orderBadge.style.background = "rgba(255,255,255,.08)";
+        orderBadge.style.border = "1px solid rgba(255,255,255,.16)";
+        const type = document.createElement("span");
+        type.textContent = rec.type === "initial" ? "Initial" : "Update";
+        type.style.fontSize = "11px";
+        type.style.opacity = "0.75";
+        type.style.textTransform = "uppercase";
+        meta.append(orderBadge, type);
+        const ts = document.createElement("span");
+        ts.textContent = fmtTime(rec.timestamp);
+        ts.style.fontSize = "12px";
+        ts.style.opacity = "0.75";
+        head.append(meta, ts);
+        const val = document.createElement("pre");
+        stylePre(val);
+        val.style.margin = "0";
+        val.textContent = stringify(rec.next);
+        item.append(head, val);
+        historyList.appendChild(item);
+      });
+    }
+    async function toggleRecording() {
+      if (recording) {
+        stopRecording();
+        return;
+      }
+      if (!entries.size) {
+        toast("Select at least one atom");
+        return;
+      }
+      try {
+        await ensureStore();
+      } catch (e) {
+        toast(e?.message || "Unable to capture store");
+        return;
+      }
+      recording = true;
+      updateControls();
+      for (const label2 of Array.from(entries.keys())) {
+        const ok = await attachEntry(label2);
+        if (!ok) entries.delete(label2);
+      }
+      if (!entries.size) {
+        stopRecording();
+      }
+      updateSelectedInfo();
+      updateControls();
+    }
+    function stopRecording() {
+      if (!recording) return;
+      recording = false;
+      for (const entry of entries.values()) {
+        if (entry.unsubscribe) {
+          try {
+            entry.unsubscribe();
+          } catch {
+          }
+          entry.unsubscribe = null;
+        }
+      }
+      updateControls();
+    }
+    async function attachEntry(label2) {
+      const entry = entries.get(label2);
+      if (!entry) return false;
+      if (entry.unsubscribe) {
+        try {
+          entry.unsubscribe();
+        } catch {
+        }
+        entry.unsubscribe = null;
+      }
+      try {
+        const initialValue = snapshot(await jGet(entry.atom));
+        entry.lastValue = initialValue;
+        const unsub = await jSub(entry.atom, async () => {
+          const previous = snapshot(entry.lastValue);
+          let nextValue;
+          try {
+            nextValue = await jGet(entry.atom);
+          } catch (err) {
+            nextValue = err?.message || String(err);
+          }
+          const nextSnap = snapshot(nextValue);
+          entry.lastValue = nextSnap;
+          const rec = {
+            label: label2,
+            timestamp: Date.now(),
+            previous,
+            next: nextSnap,
+            type: "update"
+          };
+          records.push(rec);
+          if (selectedRecord == null) selectedRecord = records.length - 1;
+          renderRecords(true);
+          updateDetails(records[selectedRecord]);
+          updateControls();
+        });
+        const initialRecord = {
+          label: label2,
+          timestamp: Date.now(),
+          previous: null,
+          next: snapshot(initialValue),
+          type: "initial"
+        };
+        records.push(initialRecord);
+        if (selectedRecord == null) selectedRecord = records.length - 1;
+        renderRecords(true);
+        updateDetails(records[selectedRecord]);
+        entry.unsubscribe = () => {
+          try {
+            unsub();
+          } catch {
+          }
+          ;
+        };
+        return true;
+      } catch (err) {
+        toast(err?.message || `Unable to subscribe to ${label2}`);
+        entries.delete(label2);
+        updateSelectedInfo();
+        updateControls();
+        return false;
+      }
+    }
+    function copyLog() {
+      if (!records.length) return;
+      const text = records.map((rec) => {
+        const prev = rec.previous == null ? "(no previous snapshot)" : stringify(rec.previous);
+        const next = stringify(rec.next);
+        const type = rec.type === "initial" ? "initial" : "update";
+        return `[${fmtTime(rec.timestamp)}] ${rec.label} (${type})
+previous: ${prev}
+next: ${next}`;
+      }).join("\n\n");
+      copy(text);
+    }
+    function snapshot(value) {
+      if (value == null) return value;
+      try {
+        if (typeof structuredClone === "function") return structuredClone(value);
+      } catch {
+      }
+      try {
+        return JSON.parse(JSON.stringify(value));
+      } catch {
+        return value;
+      }
+    }
+    function stringify(value) {
+      if (typeof value === "string") return value;
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch {
+        return String(value);
+      }
+    }
+    function summarizeValue(value) {
+      const str = stringify(value).replace(/\s+/g, " ").trim();
+      return str.length > 140 ? str.slice(0, 140) + "\u2026" : str;
+    }
+    function setBtnLabel(btn, text) {
+      const label2 = btn.querySelector(".label");
+      if (label2) label2.textContent = text;
+      else btn.textContent = text;
+    }
+    function toast(msg, type = "warn") {
+      try {
+        window.toastSimple?.(msg, "", type);
+      } catch {
+      }
+    }
+    refreshMatches();
+    updateControls();
+    view.__atoms_live_cleanup__ = () => {
+      stopRecording();
+      for (const entry of entries.values()) {
+        if (entry.unsubscribe) {
+          try {
+            entry.unsubscribe();
+          } catch {
+          }
+        }
+      }
+      entries.clear();
+      records.length = 0;
+      selectedRecord = null;
+    };
+  }
+  function renderSpritesTab(view, ui) {
+    view.innerHTML = "";
+    view.classList.add("dd-debug-view");
+    const { leftCol, rightCol } = createTwoColumns(view);
+    const tileCategoryBase = [
+      { id: "all", label: "All tiles", icon: "\u{1F5C2}\uFE0F", getUrls: () => Sprites.lists().tiles },
+      { id: "map", label: "Map", icon: "\u{1F5FA}\uFE0F", getUrls: () => Sprites.listMap() },
+      {
+        id: "plants",
+        label: "Plants",
+        icon: "\u{1F33F}",
+        getUrls: () => {
+          const urls = /* @__PURE__ */ new Set([
+            ...Sprites.listPlants(),
+            ...Sprites.listAllPlants()
+          ]);
+          return [...urls];
+        }
+      },
+      { id: "seeds", label: "Seeds", icon: "\u{1F330}", getUrls: () => Sprites.listSeeds() },
+      { id: "items", label: "Items", icon: "\u{1F381}", getUrls: () => Sprites.listItems() },
+      { id: "pets", label: "Pets", icon: "\u{1F43E}", getUrls: () => Sprites.listPets() }
+    ];
+    const tileCategories = [
+      ...tileCategoryBase,
+      {
+        id: "other",
+        label: "Other",
+        icon: "\u{1F9E9}",
+        getUrls: () => {
+          const rest = new Set(Sprites.lists().tiles);
+          tileCategoryBase.filter((cat) => cat.id !== "all").forEach((cat) => {
+            for (const url of cat.getUrls()) rest.delete(url);
+          });
+          return [...rest];
+        }
+      }
+    ];
+    let mode = "tiles";
+    let category = "all";
+    let selectedBase = null;
+    let allEntries = [];
+    let filteredEntries = [];
+    let previewToken = 0;
+    let variantFilter = "all";
+    const controlsCard = ui.card("\u{1F3A8} Sprites explorer", {
+      tone: "muted",
+      subtitle: "Browse captured tile sheets and UI assets detected by the sprite sniffer."
+    });
+    controlsCard.body.classList.add("dd-sprite-controls");
+    leftCol.appendChild(controlsCard.root);
+    const modeRow = document.createElement("div");
+    modeRow.className = "dd-sprite-mode";
+    controlsCard.body.appendChild(modeRow);
+    const tileModeChip = ui.toggleChip("Tiles", {
+      type: "radio",
+      name: "sprite-mode",
+      value: "tiles",
+      checked: true,
+      icon: "\u{1F9F1}"
+    });
+    const uiModeChip = ui.toggleChip("UI", {
+      type: "radio",
+      name: "sprite-mode",
+      value: "ui",
+      icon: "\u{1F5BC}\uFE0F"
+    });
+    modeRow.append(tileModeChip.root, uiModeChip.root);
+    const { input: tileModeInput } = tileModeChip;
+    const { input: uiModeInput } = uiModeChip;
+    const categoryRow = document.createElement("div");
+    categoryRow.className = "dd-sprite-category";
+    controlsCard.body.appendChild(categoryRow);
+    tileCategories.forEach((cat) => {
+      const chip = ui.toggleChip(`${cat.icon} ${cat.label}`, {
+        type: "radio",
+        name: "sprite-category",
+        value: cat.id,
+        checked: cat.id === category
+      });
+      const { input } = chip;
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        category = cat.id;
+        updateListTitle();
+        refreshList2({ preserveSelection: false });
+      });
+      categoryRow.appendChild(chip.root);
+    });
+    const variantRow = document.createElement("div");
+    variantRow.className = "dd-sprite-variant-filter";
+    controlsCard.body.appendChild(variantRow);
+    const variantOptions = [
+      { id: "all", label: "All variants", icon: "\u2728" },
+      { id: "normal", label: "Normal", icon: "\u{1F3A8}" },
+      { id: "gold", label: "Gold", icon: "\u{1F947}" },
+      { id: "rainbow", label: "Rainbow", icon: "\u{1F308}" }
+    ];
+    variantOptions.forEach((option) => {
+      const chip = ui.toggleChip(`${option.icon} ${option.label}`, {
+        type: "radio",
+        name: "sprite-variant-filter",
+        value: option.id,
+        checked: option.id === variantFilter
+      });
+      const { input } = chip;
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        variantFilter = option.id;
+        void renderCurrentPreview();
+      });
+      variantRow.appendChild(chip.root);
+    });
+    const controlsFooter = ui.flexRow({ gap: 8, wrap: true, fullWidth: true });
+    controlsFooter.classList.add("dd-sprite-toolbar");
+    const btnRefresh = ui.btn("Refresh lists", {
+      icon: "\u{1F504}",
+      size: "sm",
+      onClick: () => refreshList2({ preserveSelection: true })
+    });
+    btnRefresh.classList.add("dd-sprite-btn");
+    controlsFooter.appendChild(btnRefresh);
+    controlsCard.body.appendChild(controlsFooter);
+    const listCard = ui.card("\u{1F5C2}\uFE0F Tile sheets", {
+      tone: "muted",
+      subtitle: "Select a sprite sheet to preview its tiles."
+    });
+    listCard.body.style.display = "flex";
+    listCard.body.style.flexDirection = "column";
+    listCard.body.style.gap = "12px";
+    leftCol.appendChild(listCard.root);
+    const filterRow = ui.flexRow({ gap: 8, wrap: true, fullWidth: true });
+    filterRow.classList.add("dd-sprite-toolbar");
+    const filterInput = ui.inputText("filter (regex)", "");
+    filterInput.classList.add("dd-grow");
+    const btnClearFilter = ui.btn("Clear", {
+      icon: "\u{1F9F9}",
+      size: "sm",
+      onClick: () => {
+        filterInput.value = "";
+        applyFilter(true);
+        filterInput.focus();
+      }
+    });
+    btnClearFilter.classList.add("dd-sprite-btn", "dd-sprite-btn--ghost");
+    filterRow.append(filterInput, btnClearFilter);
+    listCard.body.appendChild(filterRow);
+    const listInfo = document.createElement("div");
+    listInfo.className = "dd-card-description";
+    listCard.body.appendChild(listInfo);
+    const listContainer = document.createElement("div");
+    listContainer.className = "dd-sprite-list";
+    listCard.body.appendChild(listContainer);
+    const listEmpty = document.createElement("div");
+    listEmpty.className = "dd-sprite-empty";
+    listEmpty.style.display = "none";
+    listCard.body.appendChild(listEmpty);
+    const previewCard = ui.card("\u{1F441}\uFE0F Preview", {
+      tone: "muted",
+      subtitle: "Visualize the slices for a tile sheet or inspect a UI sprite."
+    });
+    previewCard.body.classList.add("dd-sprite-preview-body");
+    rightCol.appendChild(previewCard.root);
+    const previewBody = previewCard.body;
+    const placeholder = document.createElement("div");
+    placeholder.className = "dd-sprite-empty";
+    placeholder.textContent = "Select a sprite sheet or UI asset from the list.";
+    previewBody.appendChild(placeholder);
+    function setMode(next) {
+      if (mode === next) return;
+      mode = next;
+      updateCategoryVisibility();
+      updateListTitle();
+      refreshList2({ preserveSelection: false });
+    }
+    function updateCategoryVisibility() {
+      categoryRow.classList.toggle("is-hidden", mode !== "tiles");
+    }
+    function refreshList2(opts = {}) {
+      const preserve = !!opts.preserveSelection;
+      const previous = preserve ? selectedBase : null;
+      const urls = mode === "tiles" ? getCategoryUrls(category) : Array.from(new Set(Sprites.lists().ui));
+      allEntries = toEntries(urls);
+      if (preserve && previous && allEntries.some((entry) => entry.base === previous)) {
+        selectedBase = previous;
+      } else {
+        selectedBase = allEntries[0]?.base ?? null;
+      }
+      updateListTitle();
+      applyFilter(true);
+    }
+    function getCategoryUrls(catId) {
+      const cat = tileCategories.find((c) => c.id === catId) ?? tileCategories[0];
+      try {
+        return Array.from(new Set(cat.getUrls()));
+      } catch {
+        return [];
+      }
+    }
+    function toEntries(urls) {
+      return urls.map((url) => ({ url, base: baseName(url) })).sort((a, b) => a.base.localeCompare(b.base));
+    }
+    function applyFilter(preserveSelection) {
+      const query = filterInput.value.trim();
+      const rx = query ? safeRegex(query) : /.*/i;
+      filteredEntries = allEntries.filter((entry) => rx.test(entry.base) || rx.test(entry.url));
+      if (preserveSelection) {
+        if (selectedBase && !filteredEntries.some((entry) => entry.base === selectedBase)) {
+          selectedBase = filteredEntries[0]?.base ?? null;
+        }
+      } else {
+        selectedBase = filteredEntries[0]?.base ?? null;
+      }
+      renderListItems();
+      updateInfoLine();
+      updateEmptyState();
+      updateSelectionStyles();
+      void renderCurrentPreview();
+    }
+    function renderListItems() {
+      listContainer.innerHTML = "";
+      for (const entry of filteredEntries) {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "dd-sprite-item";
+        item.dataset.base = entry.base;
+        if (entry.base === selectedBase) item.classList.add("is-active");
+        const title = document.createElement("span");
+        title.className = "dd-sprite-item__title";
+        title.textContent = entry.base;
+        const subtitle = document.createElement("span");
+        subtitle.className = "dd-sprite-item__subtitle";
+        subtitle.textContent = shortenUrl(entry.url);
+        item.append(title, subtitle);
+        item.addEventListener("click", () => setSelected(entry.base));
+        listContainer.appendChild(item);
+      }
+    }
+    function updateSelectionStyles() {
+      listContainer.querySelectorAll(".dd-sprite-item").forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.base === selectedBase);
+      });
+    }
+    function updateInfoLine() {
+      const total = allEntries.length;
+      const visible = filteredEntries.length;
+      const label2 = mode === "tiles" ? "tile sheet" : "UI asset";
+      if (!total) {
+        listInfo.textContent = mode === "tiles" ? "No tile sheets captured yet. Trigger in-game actions then refresh." : "No UI sprites captured yet. Interact with the UI then refresh.";
+        return;
+      }
+      let text = `${visible} ${label2}${visible === 1 ? "" : "s"} visible`;
+      if (visible !== total) text += ` (total ${total})`;
+      if (mode === "tiles" && category !== "all") {
+        const cat = tileCategories.find((c) => c.id === category);
+        if (cat) text += ` \xB7 ${cat.label}`;
+      }
+      listInfo.textContent = text;
+    }
+    function updateEmptyState() {
+      if (filteredEntries.length) {
+        listEmpty.style.display = "none";
+      } else {
+        listEmpty.style.display = "";
+        if (!allEntries.length) {
+          listEmpty.textContent = mode === "tiles" ? "No tile sheets captured yet. Trigger in-game actions then refresh." : "No UI sprites captured yet. Interact with the UI then refresh.";
+        } else {
+          listEmpty.textContent = mode === "tiles" ? "No tile sheets match the current filters." : "No UI assets match the current filters.";
+        }
+      }
+    }
+    function setSelected(base) {
+      if (selectedBase === base) return;
+      selectedBase = base;
+      updateSelectionStyles();
+      void renderCurrentPreview();
+    }
+    async function renderCurrentPreview() {
+      const entry = filteredEntries.find((item) => item.base === selectedBase) ?? allEntries.find((item) => item.base === selectedBase) ?? null;
+      const token = ++previewToken;
+      await renderPreview(entry, token);
+    }
+    async function renderPreview(entry, token) {
+      if (!entry) {
+        previewCard.setTitle("\u{1F441}\uFE0F Preview");
+        previewBody.replaceChildren(
+          createEmptyMessage(
+            mode === "tiles" ? "Select a tile sheet to preview its tiles." : "Select a UI asset to inspect it."
+          )
+        );
+        return;
+      }
+      previewCard.setTitle(`\u{1F441}\uFE0F Preview \xB7 ${entry.base}`);
+      const loading = createEmptyMessage("Loading\u2026");
+      previewBody.replaceChildren(loading);
+      try {
+        if (mode === "tiles") {
+          await renderTilesPreview(entry, token);
+        } else {
+          await renderUiPreview(entry, token);
+        }
+      } catch (error) {
+        if (token !== previewToken) return;
+        const message = error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+        previewBody.replaceChildren(createEmptyMessage(`Failed to load sprite: ${message}`));
+      }
+    }
+    function createVariantGrid(variants, opts) {
+      const grid = document.createElement("div");
+      grid.className = "dd-sprite-variant-grid";
+      if (opts?.wide) grid.classList.add("is-wide");
+      variants.forEach(({ icon, label: label2, canvas }) => {
+        canvas.classList.add("dd-sprite-variant__canvas");
+        const item = document.createElement("div");
+        item.className = "dd-sprite-variant";
+        const caption = document.createElement("div");
+        caption.className = "dd-sprite-variant__label";
+        caption.textContent = `${icon} ${label2}`;
+        item.append(canvas, caption);
+        grid.appendChild(item);
+      });
+      return grid;
+    }
+    function tileToCanvasCopy(tile) {
+      const src = tile.data;
+      if (typeof src === "string" || !src) return null;
+      const fallbackSize = tile.size ?? 0;
+      const width = Math.max(typeof src.width === "number" ? src.width : fallbackSize, 1);
+      const height = Math.max(typeof src.height === "number" ? src.height : fallbackSize, 1);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = false;
+      try {
+        ctx.drawImage(src, 0, 0, width, height);
+      } catch {
+        return null;
+      }
+      return canvas;
+    }
+    function filterVariantsForDisplay(variants) {
+      if (variantFilter === "all") return variants;
+      return variants.filter((variant) => variant.type === variantFilter);
+    }
+    function buildVariants(tile) {
+      const variants = [];
+      const base = tileToCanvasCopy(tile);
+      if (base) {
+        variants.push({ type: "normal", icon: "\u{1F3A8}", label: "Normal", canvas: base });
+      }
+      const addVariant = (type, label2, icon, factory) => {
+        try {
+          const canvas = factory();
+          variants.push({ type, icon, label: label2, canvas });
+        } catch {
+        }
+      };
+      if (base) {
+        addVariant("gold", "Gold", "\u{1F947}", () => Sprites.effectGold(tile));
+        addVariant("rainbow", "Rainbow", "\u{1F308}", () => Sprites.effectRainbow(tile));
+      }
+      return variants;
+    }
+    async function renderTilesPreview(entry, token) {
+      const escaped = entry.base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(`${escaped}.(png|webp)$`, "i");
+      const map2 = await Sprites.loadTiles({ mode: "canvas", includeBlanks: false, onlySheets: rx });
+      if (token !== previewToken) return;
+      const tiles = map2.get(entry.base) || [];
+      previewBody.innerHTML = "";
+      if (!tiles.length) {
+        previewBody.append(createEmptyMessage("No tiles available for this sheet."));
+        return;
+      }
+      const summary = document.createElement("div");
+      summary.className = "dd-card-description";
+      const size = tiles[0]?.size ?? 0;
+      summary.textContent = `${tiles.length} tile${tiles.length === 1 ? "" : "s"} \xB7 ${size ? `${size}\xD7${size}px` : "unknown size"}`;
+      const urlLine = createUrlLine(entry.url);
+      const scroll = document.createElement("div");
+      scroll.className = "dd-sprite-preview-scroll";
+      const grid = document.createElement("div");
+      grid.className = "dd-sprite-tiles-grid";
+      scroll.appendChild(grid);
+      tiles.forEach((tile) => {
+        const cell = document.createElement("div");
+        cell.className = "dd-sprite-tile";
+        const variants = filterVariantsForDisplay(buildVariants(tile));
+        if (variants.length) {
+          cell.appendChild(createVariantGrid(variants));
+        }
+        const match = findTileRefMatch(tile.sheet, tile.index);
+        if (match) {
+          const displayNames = Array.from(
+            new Set(match.entries.map((entry2) => entry2.displayName || entry2.key))
+          );
+          const titleLine = document.createElement("div");
+          titleLine.className = "dd-sprite-tile__name";
+          titleLine.textContent = displayNames.length ? `${match.sheetLabel}: ${displayNames.join(", ")}` : match.sheetLabel;
+          cell.appendChild(titleLine);
+          const refsLine = document.createElement("div");
+          refsLine.className = "dd-sprite-tile__refs";
+          const refsText = match.entries.map((entry2) => `${entry2.qualifiedName} (#${entry2.index})`).join(" \xB7 ");
+          refsLine.textContent = refsText;
+          refsLine.title = refsText;
+          cell.appendChild(refsLine);
+        }
+        const meta = document.createElement("div");
+        meta.className = "dd-sprite-tile__meta";
+        meta.textContent = `#${tile.index} \xB7 col ${tile.col} \xB7 row ${tile.row}`;
+        cell.appendChild(meta);
+        grid.appendChild(cell);
+      });
+      previewBody.append(summary, urlLine, scroll);
+    }
+    async function renderUiPreview(entry, token) {
+      const map2 = await Sprites.loadUI();
+      if (token !== previewToken) return;
+      const img = map2.get(entry.base);
+      previewBody.innerHTML = "";
+      if (!img) {
+        previewBody.append(createEmptyMessage("This UI asset was not found in the cache yet."));
+        return;
+      }
+      const dimensions = document.createElement("div");
+      dimensions.className = "dd-card-description";
+      dimensions.textContent = "Dimensions: \u2026";
+      const urlLine = createUrlLine(entry.url);
+      const wrap = document.createElement("div");
+      wrap.className = "dd-sprite-ui-preview";
+      const naturalWidth = img.naturalWidth || img.width;
+      const naturalHeight = img.naturalHeight || img.height;
+      if (naturalWidth && naturalHeight) {
+        dimensions.textContent = `Dimensions: ${naturalWidth}\xD7${naturalHeight}px`;
+      } else {
+        dimensions.textContent = "Dimensions: unknown";
+      }
+      const baseCanvas = document.createElement("canvas");
+      baseCanvas.width = naturalWidth || img.width || 1;
+      baseCanvas.height = naturalHeight || img.height || 1;
+      const ctx = baseCanvas.getContext("2d");
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false;
+        try {
+          ctx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
+        } catch {
+        }
+      }
+      const baseTile = {
+        sheet: entry.base,
+        url: entry.url,
+        index: 0,
+        col: 0,
+        row: 0,
+        size: Math.max(baseCanvas.width, baseCanvas.height, 1),
+        data: baseCanvas
+      };
+      const variants = filterVariantsForDisplay(buildVariants(baseTile));
+      if (variants.length) {
+        wrap.appendChild(createVariantGrid(variants, { wide: true }));
+      }
+      previewBody.append(dimensions, urlLine, wrap);
+    }
+    function updateListTitle() {
+      if (mode === "tiles") {
+        const cat = tileCategories.find((c) => c.id === category);
+        listCard.setTitle(`${cat?.icon ?? "\u{1F5C2}\uFE0F"} ${cat?.label ?? "Tiles"}`);
+      } else {
+        listCard.setTitle("\u{1F5BC}\uFE0F UI assets");
+      }
+    }
+    function createUrlLine(url) {
+      const line = document.createElement("div");
+      line.className = "dd-sprite-url";
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = url;
+      line.appendChild(link);
+      return line;
+    }
+    function createEmptyMessage(text) {
+      const div = document.createElement("div");
+      div.className = "dd-sprite-empty";
+      div.textContent = text;
+      return div;
+    }
+    function baseName(url) {
+      try {
+        const clean = decodeURIComponent(url.split(/[#?]/)[0]);
+        const parts = clean.split("/");
+        const file = parts.pop() || "";
+        return file.replace(/\.[a-z0-9]+$/i, "") || file || clean;
+      } catch {
+        return url;
+      }
+    }
+    function shortenUrl(url) {
+      try {
+        const parsed = new URL(url, location.href);
+        const path = parsed.pathname.replace(/^\//, "");
+        return path || parsed.hostname;
+      } catch {
+        return url;
+      }
+    }
+    function onSpriteDetected() {
+      refreshList2({ preserveSelection: true });
+    }
+    filterInput.addEventListener("input", () => applyFilter(true));
+    filterInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        applyFilter(true);
+      }
+    });
+    tileModeInput.addEventListener("change", () => {
+      if (tileModeInput.checked) setMode("tiles");
+    });
+    uiModeInput.addEventListener("change", () => {
+      if (uiModeInput.checked) setMode("ui");
+    });
+    updateCategoryVisibility();
+    updateListTitle();
+    refreshList2({ preserveSelection: false });
+    const existingListener = view.__spriteListener;
+    if (existingListener) window.removeEventListener("mg:sprite-detected", existingListener);
+    view.__spriteListener = onSpriteDetected;
+    window.addEventListener("mg:sprite-detected", onSpriteDetected);
+    const offUnmount = ui.on("unmounted", () => {
+      window.removeEventListener("mg:sprite-detected", onSpriteDetected);
+      view.__spriteListener = void 0;
+      offUnmount();
+    });
+  }
+  function renderAudioPlayerTab(view, ui) {
+    view.innerHTML = "";
+    view.classList.add("dd-debug-view");
+    const { leftCol, rightCol } = createTwoColumns(view);
+    let infoList = [];
+    let groupEntries = [];
+    let visibleSounds = [];
+    const overviewCard = ui.card("\u{1F3A7} Audio player", {
+      tone: "muted",
+      subtitle: "Inspect detected sounds, auto groups and Howler status."
+    });
+    leftCol.appendChild(overviewCard.root);
+    const summary = document.createElement("div");
+    summary.className = "dd-audio-summary";
+    const summarySounds = document.createElement("div");
+    const summaryGroups = document.createElement("div");
+    const summarySources = document.createElement("div");
+    summary.append(summarySounds, summaryGroups, summarySources);
+    const volumeLine = document.createElement("div");
+    volumeLine.className = "dd-audio-volume";
+    const finalLine = document.createElement("div");
+    finalLine.className = "dd-audio-volume";
+    const overviewError = ui.errorBar();
+    const actionsRow = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
+    const btnScan = ui.btn("Rescan sounds", {
+      icon: "\u{1F504}",
+      variant: "primary",
+      onClick: () => {
+        void refreshAll({ rescan: true });
+      }
+    });
+    const btnRefresh = ui.btn("Refresh snapshot", {
+      icon: "\u{1F501}",
+      onClick: () => {
+        void refreshAll();
+      }
+    });
+    const btnCopyJson = ui.btn("Copy JSON", {
+      icon: "\u{1F4CB}",
+      onClick: () => copy(audioPlayer.exportJSON())
+    });
+    actionsRow.append(btnScan, btnRefresh, btnCopyJson);
+    overviewCard.body.append(summary, volumeLine, finalLine, overviewError.el, actionsRow);
+    const groupsCard = ui.card("\u{1F39B}\uFE0F Groups", {
+      tone: "muted",
+      subtitle: "Browse auto-generated groups and play random variations."
+    });
+    leftCol.appendChild(groupsCard.root);
+    const groupToolbar = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
+    const groupFilter = ui.inputText("filter groups (regex)", "");
+    groupFilter.classList.add("dd-grow");
+    const btnGroupClear = ui.btn("Clear", {
+      icon: "\u{1F9F9}",
+      onClick: () => {
+        groupFilter.value = "";
+        renderGroups();
+        groupFilter.focus();
+      }
+    });
+    groupToolbar.append(groupFilter, btnGroupClear);
+    const groupInfo = document.createElement("p");
+    groupInfo.className = "dd-card-description";
+    groupInfo.style.margin = "0";
+    const groupList = document.createElement("div");
+    groupList.className = "dd-audio-list";
+    const groupEmpty = document.createElement("div");
+    groupEmpty.className = "dd-audio-empty";
+    groupEmpty.textContent = "No groups match the current filter.";
+    groupsCard.body.append(groupToolbar, groupInfo, groupList, groupEmpty);
+    const soundsCard = ui.card("\u{1F509} Sounds", {
+      tone: "muted",
+      subtitle: "Inspect detected files and trigger playback."
+    });
+    rightCol.appendChild(soundsCard.root);
+    const soundToolbar = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
+    const soundFilter = ui.inputText("filter sounds (regex)", "");
+    soundFilter.classList.add("dd-grow");
+    const btnSoundClear = ui.btn("Clear", {
+      icon: "\u{1F9F9}",
+      onClick: () => {
+        soundFilter.value = "";
+        renderSounds();
+        soundFilter.focus();
+      }
+    });
+    const btnCopyVisible = ui.btn("Copy visible URLs", {
+      icon: "\u{1F4CB}",
+      onClick: () => {
+        if (!visibleSounds.length) return;
+        copy(visibleSounds.map((s) => s.url).join("\n"));
+      }
+    });
+    soundToolbar.append(soundFilter, btnSoundClear, btnCopyVisible);
+    const soundInfo = document.createElement("p");
+    soundInfo.className = "dd-card-description";
+    soundInfo.style.margin = "0";
+    const soundList = document.createElement("div");
+    soundList.className = "dd-audio-list";
+    const soundEmpty = document.createElement("div");
+    soundEmpty.className = "dd-audio-empty";
+    soundEmpty.textContent = "No sounds match the current filter.";
+    soundsCard.body.append(soundToolbar, soundInfo, soundList, soundEmpty);
+    groupFilter.addEventListener("input", () => renderGroups());
+    groupFilter.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        renderGroups();
+      }
+    });
+    soundFilter.addEventListener("input", () => renderSounds());
+    soundFilter.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        renderSounds();
+      }
+    });
+    let busy = false;
+    function labelForSound(info) {
+      return info.logicalName || info.name || fileNameFromUrl(info.url);
+    }
+    function fileNameFromUrl(url) {
+      try {
+        return new URL(url, location.href).pathname.split("/").pop() || url;
+      } catch {
+        return url;
+      }
+    }
+    function formatNumber(value, digits = 3) {
+      return value == null || Number.isNaN(value) || !Number.isFinite(value) ? "\u2014" : value.toFixed(digits);
+    }
+    function setButtonEnabled(btn, enabled) {
+      const setter = btn.setEnabled;
+      if (typeof setter === "function") setter(enabled);
+      else btn.disabled = !enabled;
+    }
+    const scanLabel = btnScan.querySelector(".label");
+    const defaultScanText = scanLabel?.textContent ?? "Rescan sounds";
+    function setScanButtonLoading(loading) {
+      setButtonEnabled(btnScan, !loading);
+      if (scanLabel) scanLabel.textContent = loading ? "Scanning\u2026" : defaultScanText;
+    }
+    function refreshData() {
+      infoList = audioPlayer.info().slice().sort((a, b) => labelForSound(a).localeCompare(labelForSound(b)));
+      groupEntries = Object.entries(audioPlayer.groups()).sort((a, b) => a[0].localeCompare(b[0]));
+    }
+    function updateOverview() {
+      const sources = /* @__PURE__ */ new Set();
+      infoList.forEach((info) => {
+        (info.sources || "").split(",").map((s) => s.trim()).filter(Boolean).forEach((src) => sources.add(src));
+      });
+      const vol = audioPlayer.getGameSfxVolume();
+      const howlerGlobal = window?.Howler;
+      let howlerMaster = null;
+      try {
+        if (howlerGlobal && typeof howlerGlobal.volume === "function") {
+          const val = howlerGlobal.volume();
+          if (typeof val === "number" && Number.isFinite(val)) howlerMaster = val;
+        }
+      } catch {
+      }
+      const howlerCount = Array.isArray(howlerGlobal?._howls) ? howlerGlobal._howls.length : 0;
+      summarySounds.innerHTML = `<strong>${infoList.length}</strong> sounds detected`;
+      summaryGroups.innerHTML = `<strong>${groupEntries.length}</strong> auto groups`;
+      summarySources.innerHTML = `<strong>${sources.size}</strong> unique source tags`;
+      volumeLine.textContent = `Atom raw: ${formatNumber(vol.raw)} (clamped ${formatNumber(vol.clamped)})`;
+      let suffix = "";
+      if (howlerMaster != null) {
+        suffix = ` \xB7 Howler master ${formatNumber(howlerMaster)}`;
+        if (howlerCount) suffix += ` (${howlerCount} howl${howlerCount === 1 ? "" : "s"})`;
+      } else if (howlerCount) {
+        suffix = ` \xB7 ${howlerCount} howl${howlerCount === 1 ? "" : "s"} registered`;
+      }
+      finalLine.textContent = `Final output volume: ${formatNumber(vol.vol)}${suffix}`;
+    }
+    function renderGroups() {
+      const rx = safeRegex(groupFilter.value.trim() || ".*");
+      const infoByUrl = new Map(infoList.map((info) => [info.url, info]));
+      groupList.innerHTML = "";
+      let visible = 0;
+      const matches = (value) => !!value && rx.test(value);
+      for (const [name, urls] of groupEntries) {
+        const include = matches(name) || urls.some((url) => {
+          const info = infoByUrl.get(url);
+          return matches(url) || matches(info?.logicalName) || matches(info?.name);
+        });
+        if (!include) continue;
+        visible++;
+        const sampleUrl = urls[0] || "";
+        const sampleInfo = infoByUrl.get(sampleUrl);
+        const row = document.createElement("div");
+        row.className = "dd-audio-row";
+        const infoWrap = document.createElement("div");
+        infoWrap.className = "dd-audio-row__info";
+        const title = document.createElement("div");
+        title.className = "dd-audio-row__title";
+        title.textContent = name;
+        const meta = document.createElement("div");
+        meta.className = "dd-audio-meta";
+        const parts = [];
+        parts.push(`${urls.length} variation${urls.length === 1 ? "" : "s"}`);
+        if (sampleInfo?.name) parts.push(`Sample: ${sampleInfo.name}`);
+        if (sampleInfo?.sources) parts.push(`Sources: ${sampleInfo.sources}`);
+        meta.textContent = parts.join(" \u2022 ");
+        const urlEl = document.createElement("div");
+        urlEl.className = "dd-audio-url";
+        urlEl.textContent = sampleUrl || "(no sample)";
+        infoWrap.append(title, meta, urlEl);
+        row.appendChild(infoWrap);
+        const actions = ui.flexRow({ gap: 6, wrap: false, align: "center" });
+        actions.className = "dd-audio-actions";
+        const playBtn = ui.btn("Play", {
+          icon: "\u25B6\uFE0F",
+          size: "sm",
+          onClick: () => {
+            audioPlayer.playGroup(name, { random: true });
+          }
+        });
+        const copyBtn = ui.btn("Copy URLs", {
+          icon: "\u{1F4CB}",
+          size: "sm",
+          onClick: () => copy(urls.join("\n"))
+        });
+        const openBtn = sampleUrl ? ui.btn("Open", {
+          icon: "\u{1F517}",
+          size: "sm",
+          onClick: () => {
+            try {
+              window.open(sampleUrl, "_blank", "noopener,noreferrer");
+            } catch {
+            }
+          }
+        }) : null;
+        actions.append(playBtn, copyBtn);
+        if (openBtn) actions.append(openBtn);
+        row.appendChild(actions);
+        groupList.appendChild(row);
+      }
+      groupInfo.textContent = groupEntries.length ? `${visible} / ${groupEntries.length} groups shown.` : "No groups have been detected yet. Run a rescan to populate the cache.";
+      groupList.style.display = visible ? "" : "none";
+      groupEmpty.textContent = groupEntries.length ? "No groups match the current filter." : "No groups detected yet. Run a rescan to populate the cache.";
+      groupEmpty.style.display = visible ? "none" : "block";
+      setButtonEnabled(btnGroupClear, groupFilter.value.trim().length > 0);
+    }
+    function renderSounds() {
+      const rx = safeRegex(soundFilter.value.trim() || ".*");
+      visibleSounds = [];
+      soundList.innerHTML = "";
+      const matches = (value) => !!value && rx.test(value);
+      for (const info of infoList) {
+        if (!(matches(info.logicalName) || matches(info.name) || matches(info.sources) || matches(info.url))) continue;
+        visibleSounds.push(info);
+        const row = document.createElement("div");
+        row.className = "dd-audio-row";
+        const infoWrap = document.createElement("div");
+        infoWrap.className = "dd-audio-row__info";
+        const title = document.createElement("div");
+        title.className = "dd-audio-row__title";
+        title.textContent = labelForSound(info);
+        const meta = document.createElement("div");
+        meta.className = "dd-audio-meta";
+        const parts = [];
+        if (info.name && info.name !== info.logicalName) parts.push(`File: ${info.name}`);
+        if (info.logicalName) parts.push(`Logical: ${info.logicalName}`);
+        if (info.sources) parts.push(`Sources: ${info.sources}`);
+        meta.textContent = parts.join(" \u2022 ");
+        const urlEl = document.createElement("div");
+        urlEl.className = "dd-audio-url";
+        urlEl.textContent = info.url;
+        infoWrap.append(title, meta, urlEl);
+        row.appendChild(infoWrap);
+        const actions = ui.flexRow({ gap: 6, wrap: false, align: "center" });
+        actions.className = "dd-audio-actions";
+        const playBtn = ui.btn("Play", {
+          icon: "\u25B6\uFE0F",
+          size: "sm",
+          onClick: () => {
+            audioPlayer.playUrl(info.url);
+          }
+        });
+        const copyBtn = ui.btn("Copy", {
+          icon: "\u{1F4CB}",
+          size: "sm",
+          onClick: () => copy(info.url)
+        });
+        const openBtn = ui.btn("Open", {
+          icon: "\u{1F517}",
+          size: "sm",
+          onClick: () => {
+            try {
+              window.open(info.url, "_blank", "noopener,noreferrer");
+            } catch {
+            }
+          }
+        });
+        actions.append(playBtn, copyBtn, openBtn);
+        row.appendChild(actions);
+        soundList.appendChild(row);
+      }
+      soundInfo.textContent = infoList.length ? `${visibleSounds.length} / ${infoList.length} sounds shown.` : "No sounds have been detected yet. Run a rescan to populate the cache.";
+      soundList.style.display = visibleSounds.length ? "" : "none";
+      soundEmpty.textContent = infoList.length ? "No sounds match the current filter." : "No sounds detected yet. Run a rescan to populate the cache.";
+      soundEmpty.style.display = visibleSounds.length ? "none" : "block";
+      setButtonEnabled(btnCopyVisible, visibleSounds.length > 0);
+      setButtonEnabled(btnSoundClear, soundFilter.value.trim().length > 0);
+    }
+    async function refreshAll(opts = {}) {
+      if (busy) return;
+      busy = true;
+      const { rescan = false } = opts;
+      overviewError.clear();
+      if (rescan) setScanButtonLoading(true);
+      else setButtonEnabled(btnScan, false);
+      setButtonEnabled(btnRefresh, false);
+      let scanError = null;
+      try {
+        if (rescan) {
+          try {
+            await audioPlayer.scan();
+          } catch (err) {
+            scanError = err;
+          }
+        }
+        refreshData();
+        updateOverview();
+        renderGroups();
+        renderSounds();
+        if (scanError) {
+          const message = scanError instanceof Error ? scanError.message : String(scanError);
+          overviewError.show(`Scan failed: ${message}`);
+          console.error("[debug] audio scan failed", scanError);
+        }
+      } finally {
+        if (rescan) setScanButtonLoading(false);
+        else setButtonEnabled(btnScan, true);
+        setButtonEnabled(btnRefresh, true);
+        busy = false;
+      }
+    }
+    void refreshAll();
+  }
   function renderWSTab(view, ui) {
     if (typeof view.__ws_cleanup__ === "function") {
       try {
@@ -12114,7 +16940,7 @@ ${detail}` : base;
     view.classList.add("dd-debug-view");
     const frames = new FrameBuffer(2e3);
     const framesMap = /* @__PURE__ */ new Map();
-    let seq2 = 0;
+    let seq = 0;
     let paused = false;
     let autoScroll = true;
     let showIn = true;
@@ -12426,7 +17252,7 @@ ${detail}` : base;
     }
     installWSHookIfNeeded((f) => {
       if (paused) return;
-      const ex = { ...f, id: ++seq2 };
+      const ex = { ...f, id: ++seq };
       frames.push(ex);
       framesMap.set(ex.id, ex);
       updateStatus();
@@ -12497,8 +17323,1591 @@ ${detail}` : base;
     pre.style.boxShadow = "inset 0 1px 0 rgba(255,255,255,.04)";
   }
 
+  // src/ui/menus/locker.ts
+  var SEED_EMOJIS = [
+    "\u{1F955}",
+    "\u{1F353}",
+    "\u{1F343}",
+    "\u{1F535}",
+    "\u{1F34E}",
+    "\u{1F337}",
+    "\u{1F345}",
+    "\u{1F33C}",
+    "\u{1F33D}",
+    "\u{1F349}",
+    "\u{1F383}",
+    "\u{1F33F}",
+    "\u{1F965}",
+    "\u{1F34C}",
+    "\u{1F338}",
+    "\u{1F7E2}",
+    "\u{1F344}",
+    "\u{1F335}",
+    "\u{1F38D}",
+    "\u{1F347}",
+    "\u{1F336}\uFE0F",
+    "\u{1F34B}",
+    "\u{1F96D}",
+    "\u{1F409}",
+    "\u{1F352}",
+    "\u{1F33B}",
+    "\u2728",
+    "\u{1F506}",
+    "\u{1F52E}"
+  ];
+  var lockerSeedOptions = Object.entries(
+    plantCatalog
+  ).map(([key2, def]) => ({
+    key: key2,
+    seedName: def?.seed?.name ?? "",
+    cropName: def?.crop?.name ?? ""
+  }));
+  var lockerSeedEmojiByKey = /* @__PURE__ */ new Map();
+  var lockerSeedEmojiBySeedName = /* @__PURE__ */ new Map();
+  lockerSeedOptions.forEach((opt, index) => {
+    const emoji = SEED_EMOJIS[index % SEED_EMOJIS.length];
+    lockerSeedEmojiByKey.set(opt.key, emoji);
+    if (opt.seedName) {
+      lockerSeedEmojiBySeedName.set(opt.seedName, emoji);
+    }
+  });
+  var getLockerSeedOptions = () => lockerSeedOptions;
+  var getLockerSeedEmojiForKey = (key2) => {
+    if (!key2) return void 0;
+    return lockerSeedEmojiByKey.get(key2) ?? "\u2022";
+  };
+  var getLockerSeedEmojiForSeedName = (name) => {
+    if (!name) return void 0;
+    return lockerSeedEmojiBySeedName.get(name) ?? "\u2022";
+  };
+  function formatMutationLabel(key2) {
+    const spaced = key2.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/\s+/g, " ").trim();
+    if (!spaced) return key2;
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+  var WEATHER_MUTATIONS = Object.entries(
+    tileRefsMutations
+  ).filter((entry) => {
+    const [, value] = entry;
+    return typeof value === "number" && Number.isFinite(value);
+  }).map(([key2, value]) => ({
+    key: key2,
+    label: formatMutationLabel(key2),
+    tileRef: value
+  }));
+  var WEATHER_RECIPE_GROUPS = {
+    Wet: "condition",
+    Chilled: "condition",
+    Frozen: "condition",
+    Puddle: "condition",
+    Dawnlit: "lighting",
+    Amberlit: "lighting",
+    Dawncharged: "lighting",
+    Ambercharged: "lighting"
+  };
+  var WEATHER_RECIPE_GROUP_MEMBERS = {
+    condition: ["Wet", "Chilled", "Frozen", "Puddle"],
+    lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"]
+  };
+  function normalizeRecipeSelection(selection) {
+    const seen = /* @__PURE__ */ new Set();
+    WEATHER_MUTATIONS.forEach((info) => {
+      if (!selection.has(info.key)) return;
+      const group = WEATHER_RECIPE_GROUPS[info.key];
+      if (!group) return;
+      if (seen.has(group)) {
+        selection.delete(info.key);
+      } else {
+        seen.add(group);
+      }
+    });
+  }
+  var applyStyles = (el2, styles) => {
+    Object.entries(styles).forEach(([prop, value]) => {
+      el2.style[prop] = value;
+    });
+    return el2;
+  };
+  var plantSpriteCache = /* @__PURE__ */ new Map();
+  var plantSpritePromises = /* @__PURE__ */ new Map();
+  var plantSpriteSubscribers = /* @__PURE__ */ new Map();
+  var spriteConfig = /* @__PURE__ */ new WeakMap();
+  var plantSpriteListenerAttached = false;
+  var lockerSpritesPreloaded = false;
+  var lockerSpritePreloadTimer = null;
+  var weatherModeNameSeq = 0;
+  function hasLockerSpriteSources() {
+    try {
+      if (Sprites.listPlants().length || Sprites.listAllPlants().length) {
+        return true;
+      }
+    } catch {
+    }
+    try {
+      if (Sprites.listTilesByCategory(/mutations/i).length) {
+        return true;
+      }
+    } catch {
+    }
+    return false;
+  }
+  function scheduleLockerSpritePreload(delay2 = 0) {
+    if (lockerSpritesPreloaded || typeof window === "undefined") {
+      return;
+    }
+    if (lockerSpritePreloadTimer != null) {
+      window.clearTimeout(lockerSpritePreloadTimer);
+    }
+    lockerSpritePreloadTimer = window.setTimeout(() => {
+      lockerSpritePreloadTimer = null;
+      preloadLockerSprites();
+    }, Math.max(0, delay2));
+  }
+  function ensurePlantSpriteListener() {
+    if (plantSpriteListenerAttached) return;
+    plantSpriteListenerAttached = true;
+    window.addEventListener("mg:sprite-detected", () => {
+      plantSpriteCache.clear();
+      plantSpritePromises.clear();
+      const keys = Array.from(plantSpriteSubscribers.keys());
+      keys.forEach((key2) => {
+        loadPlantSprite(key2);
+      });
+    });
+  }
+  function subscribePlantSprite(seedKey, el2, config) {
+    let subs = plantSpriteSubscribers.get(seedKey);
+    if (!subs) {
+      subs = /* @__PURE__ */ new Set();
+      plantSpriteSubscribers.set(seedKey, subs);
+    }
+    subs.add(el2);
+    spriteConfig.set(el2, config);
+  }
+  function notifyPlantSpriteSubscribers(seedKey, src) {
+    const subs = plantSpriteSubscribers.get(seedKey);
+    if (!subs) return;
+    subs.forEach((el2) => {
+      if (!el2.isConnected) {
+        subs.delete(el2);
+        spriteConfig.delete(el2);
+        return;
+      }
+      applySprite(el2, src);
+    });
+    if (subs.size === 0) {
+      plantSpriteSubscribers.delete(seedKey);
+    }
+  }
+  var TALL_PLANT_SEEDS = /* @__PURE__ */ new Set(["Bamboo", "Cactus"]);
+  function plantSheetBases(seedKey) {
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      Sprites.listPlants().forEach((url) => urls.add(url));
+    } catch {
+    }
+    try {
+      Sprites.listAllPlants().forEach((url) => urls.add(url));
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => {
+      const clean = url.split(/[?#]/)[0] ?? url;
+      const file = clean.split("/").pop() ?? clean;
+      return file.replace(/\.[^.]+$/, "");
+    });
+    if (!seedKey) return bases;
+    const normalizedBases = bases.map((base) => base.toLowerCase());
+    const findPreferred = (predicate) => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
+    if (TALL_PLANT_SEEDS.has(seedKey)) {
+      const tallExact = findPreferred((_, norm4) => norm4 === "tallplants");
+      if (tallExact.length) return tallExact;
+      const tallAny = findPreferred((base, norm4) => /tall/.test(base) || /tall/.test(norm4));
+      if (tallAny.length) return tallAny;
+    } else {
+      const plantsExact = findPreferred((_, norm4) => norm4 === "plants");
+      if (plantsExact.length) return plantsExact;
+      const nonTall = findPreferred((base, norm4) => !/tall/.test(base) && !/tall/.test(norm4));
+      if (nonTall.length) return nonTall;
+    }
+    return bases;
+  }
+  function toTileIndex(tileRef, bases = []) {
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    const normalizedBases = bases.map((base) => base.toLowerCase());
+    if (normalizedBases.some((base) => base.includes("tall"))) {
+      return value - 1;
+    }
+    if (normalizedBases.some((base) => base.includes("plants"))) {
+      return value - 1;
+    }
+    return value - 1;
+  }
+  async function fetchPlantSprite(seedKey) {
+    const entry = plantCatalog[seedKey];
+    if (!entry) return null;
+    const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
+    const bases = plantSheetBases(seedKey);
+    const index = toTileIndex(tileRef, bases);
+    if (index == null) return null;
+    for (const base of bases) {
+      try {
+        const tile = await Sprites.getTile(base, index, "canvas");
+        const canvas = tile?.data;
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+          const copy2 = document.createElement("canvas");
+          copy2.width = canvas.width;
+          copy2.height = canvas.height;
+          const ctx = copy2.getContext("2d");
+          if (!ctx) continue;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(canvas, 0, 0);
+          return copy2.toDataURL();
+        }
+      } catch {
+      }
+    }
+    return null;
+  }
+  function applySprite(el2, src) {
+    const cfg = spriteConfig.get(el2);
+    if (!cfg) return;
+    const { size, fallback } = cfg;
+    el2.innerHTML = "";
+    el2.style.display = "inline-flex";
+    el2.style.alignItems = "center";
+    el2.style.justifyContent = "center";
+    el2.style.width = `${size}px`;
+    el2.style.height = `${size}px`;
+    el2.style.flexShrink = "0";
+    el2.style.position = "relative";
+    if (src) {
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "";
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.draggable = false;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      img.style.imageRendering = "pixelated";
+      el2.appendChild(img);
+    } else {
+      el2.textContent = fallback;
+      el2.style.fontSize = `${Math.max(10, Math.round(size * 0.8))}px`;
+    }
+  }
+  function loadPlantSprite(seedKey) {
+    const cached = plantSpriteCache.get(seedKey);
+    if (cached !== void 0) {
+      notifyPlantSpriteSubscribers(seedKey, cached);
+      return Promise.resolve(cached);
+    }
+    const inflight = plantSpritePromises.get(seedKey);
+    if (inflight) return inflight;
+    const promise = fetchPlantSprite(seedKey).then((src) => {
+      plantSpriteCache.set(seedKey, src);
+      plantSpritePromises.delete(seedKey);
+      notifyPlantSpriteSubscribers(seedKey, src);
+      return src;
+    }).catch(() => {
+      plantSpritePromises.delete(seedKey);
+      return null;
+    });
+    plantSpritePromises.set(seedKey, promise);
+    return promise;
+  }
+  function createPlantSprite(seedKey, options = {}) {
+    ensurePlantSpriteListener();
+    const size = Math.max(12, options.size ?? 24);
+    const fallback = options.fallback ?? "\u{1F331}";
+    const el2 = document.createElement("span");
+    subscribePlantSprite(seedKey, el2, { size, fallback });
+    const cached = plantSpriteCache.get(seedKey);
+    applySprite(el2, cached ?? null);
+    loadPlantSprite(seedKey);
+    return el2;
+  }
+  var mutationSpriteCache = /* @__PURE__ */ new Map();
+  var mutationSpritePromises = /* @__PURE__ */ new Map();
+  var mutationSpriteSubscribers = /* @__PURE__ */ new Map();
+  var mutationSpriteListenerAttached = false;
+  var mutationSpriteBases = null;
+  function ensureMutationSpriteListener() {
+    if (mutationSpriteListenerAttached) return;
+    mutationSpriteListenerAttached = true;
+    window.addEventListener("mg:sprite-detected", () => {
+      mutationSpriteCache.clear();
+      mutationSpritePromises.clear();
+      mutationSpriteBases = null;
+      const keys = Array.from(mutationSpriteSubscribers.keys());
+      keys.forEach((key2) => {
+        loadMutationSprite(key2);
+      });
+    });
+  }
+  function mutationSheetBases() {
+    if (mutationSpriteBases) return mutationSpriteBases;
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      Sprites.listTilesByCategory(/mutations/i).forEach((url) => urls.add(url));
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => {
+      const clean = url.split(/[?#]/)[0] ?? url;
+      const file = clean.split("/").pop() ?? clean;
+      return file.replace(/\.[^.]+$/, "");
+    });
+    if (!bases.length) {
+      bases.push("mutations");
+    }
+    mutationSpriteBases = bases;
+    return mutationSpriteBases;
+  }
+  function subscribeMutationSprite(tag, el2, config) {
+    let subs = mutationSpriteSubscribers.get(tag);
+    if (!subs) {
+      subs = /* @__PURE__ */ new Set();
+      mutationSpriteSubscribers.set(tag, subs);
+    }
+    subs.add(el2);
+    spriteConfig.set(el2, config);
+  }
+  function notifyMutationSpriteSubscribers(tag, src) {
+    const subs = mutationSpriteSubscribers.get(tag);
+    if (!subs) return;
+    subs.forEach((el2) => {
+      if (!el2.isConnected) {
+        subs.delete(el2);
+        spriteConfig.delete(el2);
+        return;
+      }
+      applySprite(el2, src);
+    });
+    if (subs.size === 0) {
+      mutationSpriteSubscribers.delete(tag);
+    }
+  }
+  async function fetchMutationSprite(tag) {
+    const entry = WEATHER_MUTATIONS.find((info) => info.key === tag);
+    if (!entry) return null;
+    const [base] = mutationSheetBases();
+    const index = toTileIndex(entry.tileRef, base ? [base] : []);
+    if (index == null || !base) return null;
+    try {
+      const tile = await Sprites.getTile(base, index, "canvas");
+      const canvas = tile?.data;
+      if (canvas && canvas.width > 0 && canvas.height > 0) {
+        const copy2 = document.createElement("canvas");
+        copy2.width = canvas.width;
+        copy2.height = canvas.height;
+        const ctx = copy2.getContext("2d");
+        if (!ctx) return null;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(canvas, 0, 0);
+        return copy2.toDataURL();
+      }
+    } catch {
+    }
+    return null;
+  }
+  function loadMutationSprite(tag) {
+    const cached = mutationSpriteCache.get(tag);
+    if (cached !== void 0) {
+      notifyMutationSpriteSubscribers(tag, cached);
+      return Promise.resolve(cached);
+    }
+    const inflight = mutationSpritePromises.get(tag);
+    if (inflight) return inflight;
+    const promise = fetchMutationSprite(tag).then((src) => {
+      mutationSpriteCache.set(tag, src);
+      mutationSpritePromises.delete(tag);
+      notifyMutationSpriteSubscribers(tag, src);
+      return src;
+    }).catch(() => {
+      mutationSpritePromises.delete(tag);
+      return null;
+    });
+    mutationSpritePromises.set(tag, promise);
+    return promise;
+  }
+  function createMutationSprite(tag, options = {}) {
+    ensureMutationSpriteListener();
+    const size = Math.max(12, options.size ?? 36);
+    const fallback = options.fallback ?? "?";
+    const el2 = document.createElement("span");
+    subscribeMutationSprite(tag, el2, { size, fallback });
+    const cached = mutationSpriteCache.get(tag);
+    applySprite(el2, cached ?? null);
+    loadMutationSprite(tag);
+    return el2;
+  }
+  function preloadLockerSprites() {
+    if (lockerSpritesPreloaded || typeof window === "undefined") {
+      return;
+    }
+    if (!hasLockerSpriteSources()) {
+      scheduleLockerSpritePreload(200);
+      return;
+    }
+    lockerSpritesPreloaded = true;
+    ensurePlantSpriteListener();
+    ensureMutationSpriteListener();
+    try {
+      const catalog = plantCatalog;
+      Object.keys(catalog).forEach((seedKey) => {
+        if (seedKey) {
+          loadPlantSprite(seedKey);
+        }
+      });
+    } catch {
+    }
+    WEATHER_MUTATIONS.forEach((info) => {
+      loadMutationSprite(info.key);
+    });
+  }
+  if (typeof window !== "undefined") {
+    scheduleLockerSpritePreload();
+    window.addEventListener("mg:sprite-detected", () => {
+      if (!lockerSpritesPreloaded) {
+        scheduleLockerSpritePreload(100);
+      }
+    });
+  }
+  function createDefaultSettings() {
+    return {
+      minScalePct: 50,
+      minInventory: 91,
+      avoidNormal: false,
+      visualMutations: /* @__PURE__ */ new Set(),
+      weatherMode: "ANY",
+      weatherSelected: /* @__PURE__ */ new Set(),
+      weatherRecipes: []
+    };
+  }
+  function copySettings(target, source) {
+    target.minScalePct = source.minScalePct;
+    target.minInventory = source.minInventory;
+    target.avoidNormal = source.avoidNormal;
+    target.visualMutations.clear();
+    source.visualMutations.forEach((v) => target.visualMutations.add(v));
+    target.weatherMode = source.weatherMode;
+    target.weatherSelected.clear();
+    source.weatherSelected.forEach((v) => target.weatherSelected.add(v));
+    target.weatherRecipes.length = 0;
+    source.weatherRecipes.forEach((set2) => target.weatherRecipes.push(new Set(set2)));
+  }
+  function hydrateSettingsFromPersisted(target, persisted) {
+    const src = persisted ?? {};
+    target.minScalePct = Math.max(50, Math.min(100, Math.round(src.minScalePct ?? 50)));
+    target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
+    target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
+    target.visualMutations.clear();
+    (src.visualMutations ?? []).forEach((mut) => {
+      if (mut === "Gold" || mut === "Rainbow") target.visualMutations.add(mut);
+    });
+    target.weatherMode = src.weatherMode === "ALL" || src.weatherMode === "RECIPES" ? src.weatherMode : "ANY";
+    target.weatherSelected.clear();
+    (src.weatherSelected ?? []).forEach((tag) => target.weatherSelected.add(tag));
+    target.weatherRecipes.length = 0;
+    (src.weatherRecipes ?? []).forEach((recipe) => {
+      const set2 = /* @__PURE__ */ new Set();
+      if (Array.isArray(recipe)) {
+        recipe.forEach((tag) => set2.add(tag));
+      }
+      target.weatherRecipes.push(set2);
+    });
+  }
+  function serializeSettingsState(state2) {
+    state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
+    return {
+      minScalePct: Math.max(50, Math.min(100, Math.round(state2.minScalePct || 50))),
+      minInventory: Math.max(0, Math.min(999, Math.round(state2.minInventory || 91))),
+      avoidNormal: !!state2.avoidNormal,
+      includeNormal: !state2.avoidNormal,
+      visualMutations: Array.from(state2.visualMutations),
+      weatherMode: state2.weatherMode,
+      weatherSelected: Array.from(state2.weatherSelected),
+      weatherRecipes: state2.weatherRecipes.map((set2) => Array.from(set2))
+    };
+  }
+  var LockerMenuStore = class {
+    constructor(initial) {
+      __publicField(this, "global");
+      __publicField(this, "overrides", /* @__PURE__ */ new Map());
+      __publicField(this, "listeners", /* @__PURE__ */ new Set());
+      __publicField(this, "syncing", false);
+      this.global = { enabled: false, settings: createDefaultSettings() };
+      this.syncFromService(initial);
+    }
+    applyPersisted(state2) {
+      this.global.enabled = !!state2.enabled;
+      hydrateSettingsFromPersisted(this.global.settings, state2.settings);
+      const seen = /* @__PURE__ */ new Set();
+      Object.entries(state2.overrides ?? {}).forEach(([key2, value]) => {
+        const entry = this.ensureOverride(key2, { silent: true });
+        entry.enabled = !!value?.enabled;
+        hydrateSettingsFromPersisted(entry.settings, value?.settings);
+        seen.add(key2);
+      });
+      for (const key2 of Array.from(this.overrides.keys())) {
+        if (!seen.has(key2)) {
+          this.overrides.delete(key2);
+        }
+      }
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    emit() {
+      for (const listener of this.listeners) {
+        try {
+          listener();
+        } catch {
+        }
+      }
+    }
+    syncFromService(state2) {
+      this.syncing = true;
+      this.applyPersisted(state2);
+      this.emit();
+      this.syncing = false;
+    }
+    setGlobalEnabled(enabled) {
+      this.global.enabled = !!enabled;
+      this.persistGlobal();
+      this.emit();
+    }
+    notifyGlobalSettingsChanged() {
+      this.persistGlobal();
+      this.emit();
+    }
+    ensureOverride(key2, opts = {}) {
+      let entry = this.overrides.get(key2);
+      if (!entry) {
+        entry = { enabled: false, settings: createDefaultSettings() };
+        this.overrides.set(key2, entry);
+        if (!opts.silent) {
+          this.emit();
+        }
+      }
+      return entry;
+    }
+    getOverride(key2) {
+      return this.overrides.get(key2);
+    }
+    setOverrideEnabled(key2, enabled) {
+      const entry = this.ensureOverride(key2, { silent: true });
+      entry.enabled = !!enabled;
+      this.persistOverride(key2);
+      this.emit();
+    }
+    notifyOverrideSettingsChanged(key2) {
+      if (!this.overrides.has(key2)) return;
+      this.persistOverride(key2);
+      this.emit();
+    }
+    removeOverride(key2) {
+      if (!this.overrides.has(key2)) return;
+      this.overrides.delete(key2);
+      if (!this.syncing) {
+        lockerService.removeOverride(key2);
+        lockerService.recomputeCurrentSlot();
+      }
+      this.emit();
+    }
+    persistGlobal() {
+      if (this.syncing) return;
+      lockerService.setGlobalState({
+        enabled: this.global.enabled,
+        settings: serializeSettingsState(this.global.settings)
+      });
+      lockerService.recomputeCurrentSlot();
+    }
+    persistOverride(key2) {
+      if (this.syncing) return;
+      const entry = this.overrides.get(key2);
+      if (!entry) {
+        lockerService.removeOverride(key2);
+      } else {
+        lockerService.setOverride(key2, {
+          enabled: entry.enabled,
+          settings: serializeSettingsState(entry.settings)
+        });
+      }
+      lockerService.recomputeCurrentSlot();
+    }
+  };
+  function setCheck(input, value) {
+    input.checked = !!value;
+  }
+  function createWeatherMutationToggle({
+    key: key2,
+    label: label2,
+    spriteSize,
+    dense,
+    kind = "main"
+  }) {
+    const isMain = kind === "main" && !dense;
+    const gap = dense ? "3px" : isMain ? "3px" : "6px";
+    const padding = dense ? "4px 6px" : isMain ? "6px 8px" : "10px 12px";
+    const minWidth = dense ? "80px" : isMain ? "88px" : "120px";
+    const wrapStyles = {
+      position: "relative",
+      display: "grid",
+      justifyItems: "center",
+      alignItems: "center",
+      gap,
+      padding,
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      background: "#0f1318",
+      cursor: "pointer",
+      minWidth,
+      transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease",
+      boxShadow: "0 0 0 1px #0002 inset"
+    };
+    if (isMain) {
+      wrapStyles.width = "100%";
+    }
+    const wrap = applyStyles(document.createElement("label"), wrapStyles);
+    wrap.title = "Active filters influence harvest conditions";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    applyStyles(input, {
+      position: "absolute",
+      inset: "0",
+      opacity: "0",
+      pointerEvents: "none",
+      margin: "0"
+    });
+    input.dataset.weatherToggle = kind;
+    wrap.appendChild(input);
+    wrap.dataset.weatherToggle = kind;
+    const sprite = createMutationSprite(key2, {
+      size: Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72)),
+      fallback: label2.charAt(0) || "?"
+    });
+    applyStyles(sprite, {
+      filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))"
+    });
+    wrap.appendChild(sprite);
+    const caption = applyStyles(document.createElement("div"), {
+      fontSize: dense ? "11px" : "11.5px",
+      fontWeight: dense ? "500" : "600",
+      opacity: "0.85",
+      textAlign: "center"
+    });
+    caption.textContent = label2;
+    wrap.appendChild(caption);
+    const applyDisabledState = () => {
+      if (input.disabled) {
+        wrap.style.cursor = "default";
+        wrap.style.opacity = "0.55";
+        wrap.style.pointerEvents = "none";
+      } else {
+        wrap.style.cursor = "pointer";
+        wrap.style.opacity = "";
+        wrap.style.pointerEvents = "";
+      }
+    };
+    const updateState = () => {
+      if (input.checked) {
+        applyStyles(wrap, {
+          borderColor: "#6aa6",
+          boxShadow: "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
+          background: "#182029"
+        });
+      } else {
+        applyStyles(wrap, {
+          borderColor: "#4445",
+          boxShadow: "0 0 0 1px #0002 inset",
+          background: "#0f1318"
+        });
+      }
+      applyDisabledState();
+    };
+    const setChecked = (value) => {
+      setCheck(input, value);
+      updateState();
+    };
+    const setDisabled = (value) => {
+      input.disabled = !!value;
+      updateState();
+    };
+    input.addEventListener("change", updateState);
+    input.addEventListener("mg-weather-toggle-refresh", updateState);
+    updateState();
+    return { key: key2, wrap, input, setChecked, setDisabled };
+  }
+  function styleBtnFullWidth(button, text) {
+    button.textContent = text;
+    button.style.flex = "1";
+    button.style.margin = "0";
+    button.style.padding = "6px 10px";
+    button.style.borderRadius = "8px";
+    button.style.border = "1px solid #4445";
+    button.style.background = "#1f2328";
+    button.style.color = "#e7eef7";
+    button.style.justifyContent = "center";
+    button.onmouseenter = () => button.style.borderColor = "#6aa1";
+    button.onmouseleave = () => button.style.borderColor = "#4445";
+  }
+  function styleBtnCompact(button, text) {
+    button.textContent = text;
+    button.style.margin = "0";
+    button.style.padding = "4px 8px";
+    button.style.borderRadius = "8px";
+    button.style.border = "1px solid #4445";
+    button.style.background = "#1f2328";
+    button.style.color = "#e7eef7";
+    button.style.display = "inline-flex";
+    button.style.alignItems = "center";
+    button.style.justifyContent = "center";
+    button.style.minWidth = "36px";
+    button.onmouseenter = () => button.style.borderColor = "#6aa1";
+    button.onmouseleave = () => button.style.borderColor = "#4445";
+  }
+  function createLockerSettingsCard(ui, state2, opts = {}) {
+    const card = document.createElement("div");
+    card.style.border = "1px solid #4445";
+    card.style.borderRadius = "10px";
+    card.style.padding = "12px";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.gap = "12px";
+    card.style.alignItems = "center";
+    card.style.overflow = "auto";
+    card.style.minHeight = "0";
+    card.style.width = "min(760px, 100%)";
+    const makeSection = (titleText, content) => {
+      const section = document.createElement("div");
+      section.style.display = "grid";
+      section.style.justifyItems = "center";
+      section.style.gap = "8px";
+      section.style.textAlign = "center";
+      section.style.border = "1px solid #4446";
+      section.style.borderRadius = "10px";
+      section.style.padding = "10px";
+      section.style.background = "#1f2328";
+      section.style.boxShadow = "0 0 0 1px #0002 inset";
+      section.style.width = "min(720px, 100%)";
+      const heading = document.createElement("div");
+      heading.textContent = titleText;
+      heading.style.fontWeight = "600";
+      heading.style.opacity = "0.95";
+      section.append(heading, content);
+      return section;
+    };
+    const centerRow = () => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.flexWrap = "wrap";
+      row.style.justifyContent = "center";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+      return row;
+    };
+    const scaleRow = centerRow();
+    const scaleSlider = ui.slider(50, 100, 1, state2.minScalePct);
+    scaleSlider.style.width = "240px";
+    const scaleValue = ui.label("50%");
+    scaleValue.style.margin = "0";
+    scaleRow.append(scaleSlider, scaleValue);
+    scaleSlider.addEventListener("input", () => {
+      scaleValue.textContent = `${scaleSlider.value}%`;
+    });
+    scaleSlider.addEventListener("change", () => {
+      state2.minScalePct = parseInt(scaleSlider.value, 10) || 50;
+      opts.onChange?.();
+    });
+    const colorsRow = centerRow();
+    colorsRow.style.flexWrap = "wrap";
+    colorsRow.style.gap = "8px";
+    const createColorButton = (label2, gradient) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.title = "Active filters influence harvest conditions";
+      applyStyles(button, {
+        padding: "6px 12px",
+        borderRadius: "8px",
+        border: "1px solid #4445",
+        background: "#1f2328",
+        color: "#e7eef7",
+        fontWeight: "600",
+        letterSpacing: "0.3px",
+        transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease",
+        boxShadow: "0 0 0 1px #0002 inset",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        minWidth: "92px",
+        cursor: "pointer"
+      });
+      const text = document.createElement("span");
+      text.textContent = label2;
+      if (gradient) {
+        applyStyles(text, {
+          backgroundImage: gradient,
+          backgroundClip: "text",
+          WebkitBackgroundClip: "text",
+          color: "transparent",
+          fontWeight: "700",
+          textShadow: "0 0 6px rgba(0, 0, 0, 0.35)"
+        });
+      }
+      button.appendChild(text);
+      button.addEventListener("mouseenter", () => {
+        if (button.disabled || button.dataset.active === "1") return;
+        button.style.borderColor = "#6aa1";
+      });
+      button.addEventListener("mouseleave", () => {
+        if (button.dataset.active === "1") return;
+        button.style.borderColor = "#4445";
+      });
+      return button;
+    };
+    const btnNormal = createColorButton("Normal");
+    const btnGold = createColorButton(
+      "Gold",
+      "linear-gradient(120deg, #f5d76e, #c9932b, #f9e9b6)"
+    );
+    const btnRainbow = createColorButton(
+      "Rainbow",
+      "linear-gradient(90deg, #ff6b6b, #f7d35c, #3fd3ff, #9b6bff, #ff6b6b)"
+    );
+    const updateColorButtonVisual = (button, active) => {
+      button.dataset.active = active ? "1" : "0";
+      button.style.borderColor = active ? "#6aa6" : "#4445";
+      button.style.boxShadow = active ? "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)" : "0 0 0 1px #0002 inset";
+      button.style.background = active ? "#182029" : "#1f2328";
+      button.style.opacity = button.disabled ? "0.55" : "";
+      button.style.cursor = button.disabled ? "default" : "pointer";
+    };
+    const updateColorButtons = () => {
+      updateColorButtonVisual(btnNormal, state2.avoidNormal);
+      updateColorButtonVisual(btnGold, state2.visualMutations.has("Gold"));
+      updateColorButtonVisual(btnRainbow, state2.visualMutations.has("Rainbow"));
+    };
+    btnNormal.addEventListener("click", () => {
+      state2.avoidNormal = !state2.avoidNormal;
+      updateColorButtons();
+      opts.onChange?.();
+    });
+    btnGold.addEventListener("click", () => {
+      if (state2.visualMutations.has("Gold")) state2.visualMutations.delete("Gold");
+      else state2.visualMutations.add("Gold");
+      updateColorButtons();
+      opts.onChange?.();
+    });
+    btnRainbow.addEventListener("click", () => {
+      if (state2.visualMutations.has("Rainbow")) state2.visualMutations.delete("Rainbow");
+      else state2.visualMutations.add("Rainbow");
+      updateColorButtons();
+      opts.onChange?.();
+    });
+    colorsRow.append(btnNormal, btnGold, btnRainbow);
+    const weatherGrid = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+      columnGap: "6px",
+      rowGap: "6px",
+      justifyItems: "stretch",
+      width: "min(640px, 100%)",
+      marginInline: "auto"
+    });
+    const applyWeatherSelection = (selection) => (tag, checked) => {
+      if (checked) {
+        selection.add(tag);
+      } else {
+        selection.delete(tag);
+      }
+      opts.onChange?.();
+    };
+    const updateMainWeatherSelection = applyWeatherSelection(state2.weatherSelected);
+    const weatherToggles = WEATHER_MUTATIONS.map((info) => {
+      const toggle = createWeatherMutationToggle({
+        key: info.key,
+        label: info.label,
+        kind: "main"
+      });
+      toggle.input.addEventListener(
+        "change",
+        () => updateMainWeatherSelection(info.key, toggle.input.checked)
+      );
+      weatherGrid.appendChild(toggle.wrap);
+      return toggle;
+    });
+    const updateWeatherMutationsDisabled = () => {
+      const disabled = card.dataset.disabled === "1" || state2.weatherMode === "RECIPES";
+      weatherGrid.style.opacity = disabled ? "0.55" : "";
+      weatherGrid.style.pointerEvents = disabled ? "none" : "";
+      weatherToggles.forEach((toggle) => toggle.setDisabled(disabled));
+    };
+    const weatherModeName = `locker-weather-mode-${++weatherModeNameSeq}`;
+    const weatherModeRow = centerRow();
+    const buildRadio = (value, label2) => {
+      const wrap = document.createElement("label");
+      wrap.style.display = "inline-flex";
+      wrap.style.alignItems = "center";
+      wrap.style.gap = "6px";
+      const input = ui.radio(weatherModeName, value);
+      const span = document.createElement("span");
+      span.textContent = label2;
+      wrap.append(input, span);
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        state2.weatherMode = value;
+        recipesWrap.style.display = value === "RECIPES" ? "" : "none";
+        updateWeatherMutationsDisabled();
+        opts.onChange?.();
+      });
+      return { wrap, input };
+    };
+    const radioAny = buildRadio("ANY", "Any match (OR)");
+    const radioAll = buildRadio("ALL", "All match (AND)");
+    const radioRecipes = buildRadio("RECIPES", "Recipes (match rows)");
+    weatherModeRow.append(radioAny.wrap, radioAll.wrap, radioRecipes.wrap);
+    const recipesWrap = document.createElement("div");
+    recipesWrap.style.display = "grid";
+    recipesWrap.style.gap = "8px";
+    recipesWrap.style.justifyItems = "center";
+    recipesWrap.style.width = "min(720px, 100%)";
+    const recipesHeader = centerRow();
+    recipesHeader.style.width = "100%";
+    recipesHeader.style.justifyContent = "space-between";
+    const recipesTitle = document.createElement("div");
+    recipesTitle.textContent = "Lock when any recipe row matches (OR between rows)";
+    recipesTitle.style.fontWeight = "600";
+    recipesTitle.style.opacity = "0.9";
+    const btnAddRecipe = document.createElement("button");
+    btnAddRecipe.style.maxWidth = "140px";
+    styleBtnFullWidth(btnAddRecipe, "+ Recipe");
+    recipesHeader.append(recipesTitle, btnAddRecipe);
+    const recipesList = document.createElement("div");
+    recipesList.style.display = "grid";
+    recipesList.style.gap = "8px";
+    recipesList.style.gridTemplateColumns = "repeat(auto-fit, minmax(320px, 1fr))";
+    recipesList.style.justifyItems = "stretch";
+    let editingRecipeIndex = null;
+    let editingRecipeDraft = /* @__PURE__ */ new Set();
+    const emptyRecipes = document.createElement("div");
+    emptyRecipes.textContent = "No recipe rows yet.";
+    emptyRecipes.style.fontSize = "12px";
+    emptyRecipes.style.opacity = "0.7";
+    emptyRecipes.style.textAlign = "center";
+    const updateAddRecipeDisabled = () => {
+      const editing = editingRecipeIndex !== null;
+      const cardDisabled = card.dataset.disabled === "1";
+      btnAddRecipe.disabled = editing || cardDisabled;
+      btnAddRecipe.style.opacity = editing ? "0.7" : "";
+      btnAddRecipe.style.pointerEvents = editing ? "none" : "";
+    };
+    const startEditingRecipe = (index, base) => {
+      editingRecipeIndex = index;
+      editingRecipeDraft = new Set(base ?? []);
+      normalizeRecipeSelection(editingRecipeDraft);
+      repaintRecipes();
+    };
+    const cancelEditingRecipe = () => {
+      editingRecipeIndex = null;
+      editingRecipeDraft = /* @__PURE__ */ new Set();
+      repaintRecipes();
+    };
+    const commitEditingRecipe = () => {
+      if (editingRecipeIndex === null) return;
+      const draft = new Set(editingRecipeDraft);
+      normalizeRecipeSelection(draft);
+      if (editingRecipeIndex === state2.weatherRecipes.length) {
+        state2.weatherRecipes.push(draft);
+      } else if (editingRecipeIndex >= 0 && editingRecipeIndex < state2.weatherRecipes.length) {
+        state2.weatherRecipes[editingRecipeIndex] = draft;
+      }
+      editingRecipeIndex = null;
+      editingRecipeDraft = /* @__PURE__ */ new Set();
+      repaintRecipes();
+      opts.onChange?.();
+    };
+    const deleteRecipeAt = (index) => {
+      if (index < 0) return;
+      if (index < state2.weatherRecipes.length) {
+        state2.weatherRecipes.splice(index, 1);
+      }
+      if (editingRecipeIndex !== null) {
+        if (index === editingRecipeIndex) {
+          editingRecipeIndex = null;
+          editingRecipeDraft = /* @__PURE__ */ new Set();
+        } else if (index < editingRecipeIndex) {
+          editingRecipeIndex -= 1;
+        }
+      }
+      repaintRecipes();
+      opts.onChange?.();
+    };
+    const buildRecipeBadge = (tag, label2) => {
+      const badge = document.createElement("div");
+      applyStyles(badge, {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "4px 10px",
+        borderRadius: "999px",
+        border: "1px solid #4445",
+        background: "#11161c",
+        color: "#e7eef7",
+        fontSize: "12px",
+        fontWeight: "600",
+        letterSpacing: "0.2px"
+      });
+      const sprite = createMutationSprite(tag, {
+        size: 20,
+        fallback: label2.charAt(0) || "?"
+      });
+      applyStyles(sprite, {
+        filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))"
+      });
+      const text = document.createElement("span");
+      text.textContent = label2;
+      badge.append(sprite, text);
+      return badge;
+    };
+    const renderRecipeSummary = (container, selection) => {
+      container.innerHTML = "";
+      const badges = document.createElement("div");
+      applyStyles(badges, {
+        display: "flex",
+        flexWrap: "wrap",
+        gap: "6px",
+        justifyContent: "flex-start"
+      });
+      let count = 0;
+      WEATHER_MUTATIONS.forEach((info) => {
+        if (!selection.has(info.key)) return;
+        count += 1;
+        badges.appendChild(buildRecipeBadge(info.key, info.label));
+      });
+      if (count === 0) {
+        const empty = document.createElement("div");
+        empty.textContent = "No weather mutation selected.";
+        empty.style.fontSize = "12px";
+        empty.style.opacity = "0.7";
+        empty.style.textAlign = "left";
+        badges.appendChild(empty);
+      }
+      container.appendChild(badges);
+    };
+    const applyDisabled = () => {
+      const cardDisabled = card.dataset.disabled === "1";
+      const inputs = card.querySelectorAll("input,button,select,textarea");
+      inputs.forEach((el2) => {
+        if (el2.dataset.weatherToggle === "main") {
+          return;
+        }
+        el2.disabled = cardDisabled;
+        el2.dispatchEvent(new Event("mg-weather-toggle-refresh"));
+      });
+      updateWeatherMutationsDisabled();
+      updateColorButtons();
+      card.style.opacity = cardDisabled ? "0.55" : "";
+      updateAddRecipeDisabled();
+    };
+    function buildRecipeToggleGrid(selection, onSelectionChange) {
+      const toggleGrid = applyStyles(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(80px, 1fr))",
+        columnGap: "6px",
+        rowGap: "6px",
+        justifyItems: "center"
+      });
+      const toggles = /* @__PURE__ */ new Map();
+      WEATHER_MUTATIONS.forEach((info) => {
+        const toggle = createWeatherMutationToggle({
+          key: info.key,
+          label: info.label,
+          spriteSize: 40,
+          dense: true,
+          kind: "recipe"
+        });
+        toggles.set(info.key, toggle);
+        toggle.setChecked(selection.has(toggle.key));
+        toggle.input.addEventListener("change", () => {
+          const checked = toggle.input.checked;
+          const group = WEATHER_RECIPE_GROUPS[toggle.key];
+          if (checked && group) {
+            WEATHER_RECIPE_GROUP_MEMBERS[group].forEach((other) => {
+              if (other === toggle.key) return;
+              if (!selection.has(other)) return;
+              selection.delete(other);
+              toggles.get(other)?.setChecked(false);
+            });
+          }
+          if (checked) {
+            selection.add(toggle.key);
+          } else {
+            selection.delete(toggle.key);
+          }
+          onSelectionChange();
+        });
+        toggleGrid.appendChild(toggle.wrap);
+      });
+      return toggleGrid;
+    }
+    function repaintRecipes() {
+      recipesList.innerHTML = "";
+      const hasDraftNew = editingRecipeIndex !== null && editingRecipeIndex === state2.weatherRecipes.length;
+      const totalRows = state2.weatherRecipes.length + (hasDraftNew ? 1 : 0);
+      if (totalRows === 0) {
+        recipesList.appendChild(emptyRecipes);
+        applyDisabled();
+        return;
+      }
+      state2.weatherRecipes.forEach((set2, index) => {
+        normalizeRecipeSelection(set2);
+        const isEditing = editingRecipeIndex === index;
+        const selection = isEditing ? editingRecipeDraft : set2;
+        const row = applyStyles(document.createElement("div"), {
+          display: "flex",
+          gap: isEditing ? "10px" : "12px",
+          border: "1px solid #4446",
+          borderRadius: "10px",
+          padding: isEditing ? "12px" : "10px 12px",
+          background: "#0f1318",
+          boxShadow: "0 0 0 1px #0002 inset",
+          width: "100%"
+        });
+        if (isEditing) {
+          row.style.flexDirection = "column";
+        } else {
+          row.style.flexDirection = "row";
+          row.style.alignItems = "center";
+          row.style.justifyContent = "space-between";
+          row.style.flexWrap = "wrap";
+        }
+        const summary = document.createElement("div");
+        renderRecipeSummary(summary, selection);
+        if (!isEditing) {
+          summary.style.flex = "1 1 auto";
+          summary.style.minWidth = "220px";
+        }
+        row.appendChild(summary);
+        if (isEditing) {
+          const toggleGrid = buildRecipeToggleGrid(selection, () => renderRecipeSummary(summary, selection));
+          row.appendChild(toggleGrid);
+          const actions = applyStyles(document.createElement("div"), {
+            display: "flex",
+            gap: "8px",
+            width: "100%"
+          });
+          const btnCancel = document.createElement("button");
+          styleBtnFullWidth(btnCancel, "\u274C");
+          btnCancel.onclick = cancelEditingRecipe;
+          const btnValidate = document.createElement("button");
+          styleBtnFullWidth(btnValidate, "\u2714\uFE0F");
+          btnValidate.onclick = commitEditingRecipe;
+          actions.append(btnCancel, btnValidate);
+          if (editingRecipeIndex !== null && editingRecipeIndex < state2.weatherRecipes.length) {
+            const btnDelete = document.createElement("button");
+            styleBtnFullWidth(btnDelete, "\u{1F5D1}\uFE0F");
+            btnDelete.title = "Delete";
+            btnDelete.setAttribute("aria-label", "Delete");
+            btnDelete.onclick = () => deleteRecipeAt(index);
+            actions.append(btnDelete);
+          }
+          row.appendChild(actions);
+        } else {
+          const actions = applyStyles(document.createElement("div"), {
+            display: "flex",
+            gap: "6px",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            flex: "0 0 auto"
+          });
+          actions.style.flexWrap = "nowrap";
+          const btnEdit = document.createElement("button");
+          styleBtnCompact(btnEdit, "\u270F\uFE0F");
+          btnEdit.title = "Edit";
+          btnEdit.setAttribute("aria-label", "Edit");
+          btnEdit.onclick = () => startEditingRecipe(index, set2);
+          const btnDelete = document.createElement("button");
+          styleBtnCompact(btnDelete, "\u{1F5D1}\uFE0F");
+          btnDelete.title = "Delete";
+          btnDelete.setAttribute("aria-label", "Delete");
+          btnDelete.onclick = () => deleteRecipeAt(index);
+          actions.append(btnEdit, btnDelete);
+          row.appendChild(actions);
+        }
+        recipesList.appendChild(row);
+      });
+      if (hasDraftNew && editingRecipeIndex !== null) {
+        const selection = editingRecipeDraft;
+        const row = applyStyles(document.createElement("div"), {
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+          border: "1px solid #4446",
+          borderRadius: "10px",
+          padding: "12px",
+          background: "#0f1318",
+          boxShadow: "0 0 0 1px #0002 inset",
+          width: "100%"
+        });
+        const summary = document.createElement("div");
+        renderRecipeSummary(summary, selection);
+        row.appendChild(summary);
+        const toggleGrid = buildRecipeToggleGrid(selection, () => renderRecipeSummary(summary, selection));
+        row.appendChild(toggleGrid);
+        const actions = applyStyles(document.createElement("div"), {
+          display: "flex",
+          gap: "8px",
+          width: "100%"
+        });
+        const btnCancel = document.createElement("button");
+        styleBtnFullWidth(btnCancel, "\u274C");
+        btnCancel.onclick = cancelEditingRecipe;
+        const btnValidate = document.createElement("button");
+        styleBtnFullWidth(btnValidate, "\u2714\uFE0F");
+        btnValidate.onclick = commitEditingRecipe;
+        actions.append(btnCancel, btnValidate);
+        row.appendChild(actions);
+        recipesList.appendChild(row);
+      }
+      applyDisabled();
+    }
+    btnAddRecipe.onclick = () => {
+      startEditingRecipe(state2.weatherRecipes.length);
+    };
+    recipesWrap.append(recipesHeader, recipesList);
+    card.append(
+      makeSection("Minimum size", scaleRow),
+      makeSection("Lock by color", colorsRow),
+      makeSection("Lock by weather", weatherGrid),
+      makeSection("Weather lock mode", weatherModeRow),
+      makeSection("Recipe lockers", recipesWrap)
+    );
+    const refresh = () => {
+      scaleSlider.value = String(state2.minScalePct);
+      scaleValue.textContent = `${scaleSlider.value}%`;
+      updateColorButtons();
+      weatherToggles.forEach((toggle) => toggle.setChecked(state2.weatherSelected.has(toggle.key)));
+      radioAny.input.checked = state2.weatherMode === "ANY";
+      radioAll.input.checked = state2.weatherMode === "ALL";
+      radioRecipes.input.checked = state2.weatherMode === "RECIPES";
+      recipesWrap.style.display = state2.weatherMode === "RECIPES" ? "" : "none";
+      updateWeatherMutationsDisabled();
+      repaintRecipes();
+    };
+    const setDisabled = (value) => {
+      card.dataset.disabled = value ? "1" : "0";
+      applyDisabled();
+    };
+    refresh();
+    return { root: card, refresh, setDisabled };
+  }
+  function createGeneralTabRenderer(ui, store) {
+    const viewRoot = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      alignItems: "center",
+      width: "100%"
+    });
+    const layout = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      alignItems: "center",
+      width: "100%"
+    });
+    const header = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      justifyContent: "space-between",
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      padding: "12px 16px",
+      background: "#1f2328",
+      boxShadow: "0 0 0 1px #0002 inset",
+      width: "min(760px, 100%)"
+    });
+    const textWrap = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      gap: "4px"
+    });
+    const title = document.createElement("div");
+    title.textContent = "Global locker";
+    title.style.fontWeight = "600";
+    title.style.fontSize = "15px";
+    const subtitle = document.createElement("div");
+    subtitle.textContent = "Set the rules for locking harvests using the filters below.";
+    subtitle.style.opacity = "0.8";
+    subtitle.style.fontSize = "12px";
+    textWrap.append(title, subtitle);
+    const toggleWrap = applyStyles(document.createElement("label"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px"
+    });
+    const toggleLabel = ui.label("Enabled");
+    toggleLabel.style.margin = "0";
+    const toggle = ui.switch(store.global.enabled);
+    toggleWrap.append(toggleLabel, toggle);
+    header.append(textWrap, toggleWrap);
+    const form = createLockerSettingsCard(ui, store.global.settings, {
+      onChange: () => store.notifyGlobalSettingsChanged()
+    });
+    layout.append(header, form.root);
+    viewRoot.append(layout);
+    const update = () => {
+      setCheck(toggle, store.global.enabled);
+      form.setDisabled(!store.global.enabled);
+      form.refresh();
+    };
+    toggle.addEventListener("change", () => {
+      store.setGlobalEnabled(!!toggle.checked);
+    });
+    const unsubscribe = store.subscribe(() => {
+      update();
+    });
+    update();
+    const render = (view) => {
+      view.innerHTML = "";
+      view.style.maxHeight = "54vh";
+      view.style.overflow = "auto";
+      view.append(viewRoot);
+      update();
+    };
+    return {
+      render,
+      destroy: () => unsubscribe()
+    };
+  }
+  function createOverridesTabRenderer(ui, store) {
+    const layout = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "minmax(220px, 280px) minmax(0, 1fr)",
+      gap: "10px",
+      alignItems: "stretch",
+      height: "54vh",
+      overflow: "hidden"
+    });
+    const left = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateRows: "1fr",
+      gap: "8px",
+      minHeight: "0"
+    });
+    layout.appendChild(left);
+    const list = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      rowGap: "6px",
+      overflow: "auto",
+      paddingRight: "2px",
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      padding: "6px"
+    });
+    left.appendChild(list);
+    const right = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      minHeight: "0"
+    });
+    layout.appendChild(right);
+    const detail = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "12px",
+      justifyItems: "center",
+      alignContent: "start",
+      height: "100%",
+      overflow: "auto"
+    });
+    right.appendChild(detail);
+    let selectedKey = null;
+    const renderList = () => {
+      list.innerHTML = "";
+      const seeds = getLockerSeedOptions();
+      if (!seeds.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No crops available.";
+        empty.style.opacity = "0.7";
+        empty.style.fontSize = "12px";
+        empty.style.textAlign = "center";
+        empty.style.padding = "16px";
+        list.appendChild(empty);
+        selectedKey = null;
+        return;
+      }
+      scheduleLockerSpritePreload();
+      if (selectedKey && !seeds.some((opt) => opt.key === selectedKey)) {
+        selectedKey = null;
+      }
+      const fragment = document.createDocumentFragment();
+      seeds.forEach((opt) => {
+        const button = document.createElement("button");
+        button.className = "qmm-vtab";
+        button.style.display = "grid";
+        button.style.gridTemplateColumns = "16px 1fr auto";
+        button.style.alignItems = "center";
+        button.style.gap = "8px";
+        button.style.textAlign = "left";
+        button.style.padding = "6px 8px";
+        button.style.borderRadius = "8px";
+        button.style.border = "1px solid #4445";
+        button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+        button.style.color = "#e7eef7";
+        const dot = document.createElement("span");
+        dot.className = "qmm-dot";
+        dot.style.background = store.getOverride(opt.key)?.enabled ? "#2ecc71" : "#e74c3c";
+        const label2 = document.createElement("span");
+        label2.className = "label";
+        label2.textContent = opt.cropName || opt.key;
+        const fallbackEmoji = getLockerSeedEmojiForKey(opt.key) || getLockerSeedEmojiForSeedName(opt.seedName) || "\u{1F331}";
+        const sprite = createPlantSprite(opt.key, {
+          size: 24,
+          fallback: fallbackEmoji
+        });
+        button.append(dot, label2, sprite);
+        button.onmouseenter = () => button.style.borderColor = "#6aa1";
+        button.onmouseleave = () => button.style.borderColor = "#4445";
+        button.onclick = () => {
+          if (selectedKey === opt.key) return;
+          selectedKey = opt.key;
+          renderList();
+          renderDetail();
+        };
+        fragment.appendChild(button);
+      });
+      list.appendChild(fragment);
+    };
+    const renderDetail = () => {
+      detail.innerHTML = "";
+      if (!selectedKey) {
+        const empty = document.createElement("div");
+        empty.textContent = "Select a crop on the left to customise its locker settings.";
+        empty.style.opacity = "0.7";
+        empty.style.fontSize = "13px";
+        empty.style.textAlign = "center";
+        empty.style.padding = "32px 24px";
+        empty.style.border = "1px dashed #4445";
+        empty.style.borderRadius = "10px";
+        empty.style.width = "min(760px, 100%)";
+        detail.appendChild(empty);
+        return;
+      }
+      const seeds = getLockerSeedOptions();
+      const seed = seeds.find((opt) => opt.key === selectedKey);
+      if (!seed) {
+        selectedKey = null;
+        renderDetail();
+        return;
+      }
+      const override = store.ensureOverride(selectedKey, { silent: true });
+      const header = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
+      header.style.border = "1px solid #4445";
+      header.style.borderRadius = "10px";
+      header.style.padding = "12px 16px";
+      header.style.background = "#1f2328";
+      header.style.boxShadow = "0 0 0 1px #0002 inset";
+      header.style.width = "min(760px, 100%)";
+      const titleWrap = ui.flexRow({ gap: 10, align: "center" });
+      titleWrap.style.flexWrap = "nowrap";
+      const fallbackEmoji = getLockerSeedEmojiForKey(seed.key) || getLockerSeedEmojiForSeedName(seed.seedName) || "\u{1F331}";
+      const sprite = createPlantSprite(seed.key, { size: 32, fallback: fallbackEmoji });
+      const title = document.createElement("div");
+      title.textContent = seed.cropName || seed.key;
+      title.style.fontWeight = "600";
+      title.style.fontSize = "15px";
+      titleWrap.append(sprite, title);
+      const toggleWrap = ui.flexRow({ gap: 8, align: "center" });
+      toggleWrap.style.flexWrap = "nowrap";
+      const toggleLabel = ui.label("Override");
+      toggleLabel.style.margin = "0";
+      const toggle = ui.switch(override.enabled);
+      toggleWrap.append(toggleLabel, toggle);
+      header.append(titleWrap, toggleWrap);
+      const status = document.createElement("div");
+      status.style.fontSize = "12px";
+      status.style.opacity = "0.75";
+      status.style.textAlign = "center";
+      status.style.width = "min(760px, 100%)";
+      const updateStatus = () => {
+        status.textContent = override.enabled ? "This crop uses its own locker filters." : "Uses the global locker settings.";
+      };
+      const form = createLockerSettingsCard(ui, override.settings, {
+        onChange: () => {
+          if (selectedKey) {
+            store.notifyOverrideSettingsChanged(selectedKey);
+          }
+        }
+      });
+      const applyEnabledState = () => {
+        form.setDisabled(!override.enabled);
+        form.refresh();
+        updateStatus();
+      };
+      toggle.addEventListener("change", () => {
+        if (!selectedKey) return;
+        const wasEnabled = override.enabled;
+        const nextEnabled = !!toggle.checked;
+        if (nextEnabled && !wasEnabled) {
+          copySettings(override.settings, store.global.settings);
+        }
+        store.setOverrideEnabled(selectedKey, nextEnabled);
+      });
+      applyEnabledState();
+      detail.append(header, status, form.root);
+    };
+    const refresh = () => {
+      renderList();
+      renderDetail();
+    };
+    const unsubscribe = store.subscribe(refresh);
+    const render = (view) => {
+      view.innerHTML = "";
+      view.append(layout);
+      refresh();
+    };
+    return {
+      render,
+      destroy: () => unsubscribe()
+    };
+  }
+  async function renderLockerMenu(container) {
+    const ui = new Menu({ id: "locker", compact: true });
+    ui.mount(container);
+    const store = new LockerMenuStore(lockerService.getState());
+    const generalTab = createGeneralTabRenderer(ui, store);
+    const overridesTab = createOverridesTabRenderer(ui, store);
+    ui.addTabs([
+      { id: "locker-general", title: "General", render: (view) => generalTab.render(view) },
+      { id: "locker-overrides", title: "Overrides by species", render: (view) => overridesTab.render(view) }
+    ]);
+    ui.switchTo("locker-general");
+    const disposables = [];
+    disposables.push(lockerService.subscribe((event) => store.syncFromService(event.state)));
+    disposables.push(() => generalTab.destroy());
+    disposables.push(() => overridesTab.destroy());
+    const cleanup2 = () => {
+      while (disposables.length) {
+        const dispose = disposables.pop();
+        try {
+          dispose?.();
+        } catch {
+        }
+      }
+    };
+    ui.on("unmounted", cleanup2);
+  }
+
   // src/services/players.ts
-  var log4 = createMenuLogger("players-service", "Players service");
   function findPlayersDeep(state2) {
     if (!state2 || typeof state2 !== "object") return [];
     const out = [];
@@ -12529,14 +18938,14 @@ ${detail}` : base;
     const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
     if (Array.isArray(raw)) return raw;
     if (raw && typeof raw === "object") {
-      const entries2 = Object.entries(raw);
-      entries2.sort((a, b) => {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
         const ai = Number(a[0]);
         const bi = Number(b[0]);
         if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
         return a[0].localeCompare(b[0]);
       });
-      return entries2.map(([, v]) => v);
+      return entries.map(([, v]) => v);
     }
     return [];
   }
@@ -12580,8 +18989,8 @@ ${detail}` : base;
     const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
     return { tileObjects, boardwalkTileObjects };
   }
-  function getSlotByPlayerId(st, playerId) {
-    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId)) return s;
+  function getSlotByPlayerId(st, playerId2) {
+    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
     return null;
   }
   function enrichPlayersWithSlots(players, st) {
@@ -12779,7 +19188,6 @@ ${detail}` : base;
       const ordered = orderPlayersBySlots(base, st);
       const spawns = await getSpawnTilesSorted();
       const players = assignGardenPositions(ordered, spawns);
-      log4.info("Computed player list", { count: players.length });
       return players;
     },
     async onChange(cb) {
@@ -12790,159 +19198,143 @@ ${detail}` : base;
         }
       });
     },
-    async getPosition(playerId) {
+    async getPosition(playerId2) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId);
+      const slot = getSlotByPlayerId(st, playerId2);
       const pos = extractPosFromSlot(slot);
-      log4.debug("Resolved player position", { playerId, position: pos });
       return pos;
     },
-    async getInventory(playerId) {
+    async getInventory(playerId2) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId);
+      const slot = getSlotByPlayerId(st, playerId2);
       const inv = extractInventoryFromSlot(slot);
-      log4.debug("Fetched player inventory", { playerId, hasItems: !!inv?.items?.length });
       return inv;
     },
-    async getJournal(playerId) {
+    async getJournal(playerId2) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId);
+      const slot = getSlotByPlayerId(st, playerId2);
       const j = extractJournalFromSlot(slot);
       const journal = j ? normJournal(j) : null;
-      log4.debug("Fetched player journal", { playerId, hasJournal: !!journal });
       return journal;
     },
-    async getGarden(playerId) {
+    async getGarden(playerId2) {
       const st = await Atoms.root.state.get();
       if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId);
+      const slot = getSlotByPlayerId(st, playerId2);
       return extractGardenFromSlot(slot);
     },
-    async getGardenPosition(playerId) {
+    async getGardenPosition(playerId2) {
       const list = await this.list();
-      const p = list.find((x) => String(x.id) === String(playerId));
+      const p = list.find((x) => String(x.id) === String(playerId2));
       return p?.gardenPosition ?? null;
     },
-    async getPlayerNameById(playerId) {
+    async getPlayerNameById(playerId2) {
       try {
         const st = await Atoms.root.state.get();
         if (st) {
           const arr = getPlayersArray(st);
-          const p = arr.find((x) => String(x?.id) === String(playerId));
+          const p = arr.find((x) => String(x?.id) === String(playerId2));
           if (p && typeof p.name === "string" && p.name) return p.name;
         }
       } catch {
       }
       try {
         const list = await this.list();
-        const p = list.find((x) => String(x.id) === String(playerId));
+        const p = list.find((x) => String(x.id) === String(playerId2));
         return p?.name ?? null;
       } catch {
         return null;
       }
     },
-    async teleportToPlayer(playerId) {
-      const pos = await this.getPosition(playerId);
+    async teleportToPlayer(playerId2) {
+      const pos = await this.getPosition(playerId2);
       if (!pos) throw new Error("Unknown position for this player");
-      log4.info("Teleporting to player", { playerId, position: pos });
       PlayerService.teleport(pos.x, pos.y);
-      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}`, "success");
+      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}`, "success");
     },
-    async teleportToGarden(playerId) {
-      const tileId = await this.getGardenPosition(playerId);
+    async teleportToGarden(playerId2) {
+      const tileId = await this.getGardenPosition(playerId2);
       if (tileId == null) {
         await toastSimple("Teleport", "No garden position for this player.", "error");
         return;
       }
       const cols = await getMapCols();
       const x = tileId % cols, y = Math.floor(tileId / cols);
-      log4.info("Teleporting to garden", { playerId, tileId, x, y });
       await PlayerService.teleport(x, y);
-      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId)}'s garden`, "success");
+      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}'s garden`, "success");
     },
-    async getInventoryValue(playerId, opts) {
+    async getInventoryValue(playerId2, opts) {
       try {
         const playersInRoom = await getPlayersInRoom();
-        const inv = await this.getInventory(playerId);
+        const inv = await this.getInventory(playerId2);
         const items = Array.isArray(inv?.items) ? inv.items : [];
         if (!items.length) return 0;
         const value = sumInventoryValue(items, opts, playersInRoom);
-        log4.info("Computed inventory value", { playerId, value });
         return value;
       } catch {
         return 0;
       }
     },
-    async getGardenValue(playerId, opts) {
+    async getGardenValue(playerId2, opts) {
       try {
         const playersInRoom = await getPlayersInRoom();
-        const garden2 = await this.getGarden(playerId);
+        const garden2 = await this.getGarden(playerId2);
         if (!garden2) return 0;
         const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
-        log4.info("Computed garden value", { playerId, value });
         return value;
       } catch {
         return 0;
       }
     },
     /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
-    async openInventoryPreview(playerId, playerName) {
+    async openInventoryPreview(playerId2, playerName) {
       try {
-        const inv = await this.getInventory(playerId);
+        const inv = await this.getInventory(playerId2);
         if (!inv) {
           await toastSimple("Inventory", "No inventory object found for this player.", "error");
-          log4.warn("Inventory preview unavailable", { playerId });
           return;
         }
         const items = Array.isArray(inv.items) ? inv.items : [];
         if (items.length === 0) {
           await toastSimple("Inventory", "Inventory is empty for this player.", "info");
-          log4.info("Inventory preview empty", { playerId });
           return;
         }
         try {
           await fakeInventoryShow({ ...inv, items }, { open: true });
-          log4.info("Opened inventory preview", { playerId, itemCount: items.length });
         } catch (err) {
           await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
-          log4.error("Failed to show inventory preview", err);
           return;
         }
         if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
       } catch (e) {
         await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
-        log4.error("Inventory preview failed", e);
       }
     },
     /** Ouvre le Journal (produce + pets) avec garde + toasts. */
-    async openJournalLog(playerId, playerName) {
+    async openJournalLog(playerId2, playerName) {
       try {
-        const journal = await this.getJournal(playerId);
+        const journal = await this.getJournal(playerId2);
         if (!hasJournalData(journal)) {
           await toastSimple("Journal", "No journal data for this player.", "error");
-          log4.warn("Journal preview unavailable", { playerId });
           return;
         }
         const safe = journal ?? {};
         try {
           await fakeJournalShow(safe, { open: true });
-          log4.info("Opened journal preview", { playerId });
         } catch (err) {
           await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
-          log4.error("Failed to show journal", err);
           return;
         }
         if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
-        log4.error("Journal preview failed", e);
       }
     },
     /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
-    async addProduceVariant(playerId, species, variant, createdAt = nowTs()) {
+    async addProduceVariant(playerId2, species, variant, createdAt = nowTs()) {
       if (!species || !variant) {
         await toastSimple("Journal", "Missing species or variant.", "error");
         return;
@@ -12955,13 +19347,13 @@ ${detail}` : base;
             }
           }
         }, { open: true });
-        const name = await this.getPlayerNameById(playerId);
-        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId}.`, "success");
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId2}.`, "success");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
       }
     },
-    async addPetVariant(playerId, petSpecies, variant, createdAt = nowTs()) {
+    async addPetVariant(playerId2, petSpecies, variant, createdAt = nowTs()) {
       if (!petSpecies || !variant) {
         await toastSimple("Journal", "Missing pet species or variant.", "error");
         return;
@@ -12974,13 +19366,13 @@ ${detail}` : base;
             }
           }
         }, { open: true });
-        const name = await this.getPlayerNameById(playerId);
-        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId}.`, "success");
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId2}.`, "success");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
       }
     },
-    async addPetAbility(playerId, petSpecies, ability, createdAt = nowTs()) {
+    async addPetAbility(playerId2, petSpecies, ability, createdAt = nowTs()) {
       if (!petSpecies || !ability) {
         await toastSimple("Journal", "Missing pet species or ability.", "error");
         return;
@@ -12993,8 +19385,8 @@ ${detail}` : base;
             }
           }
         }, { open: true });
-        const name = await this.getPlayerNameById(playerId);
-        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId}.`, "success");
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId2}.`, "success");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
       }
@@ -13013,10 +19405,10 @@ ${detail}` : base;
       followingState.prevPos = null;
       followingState.steps = 0;
     },
-    isFollowing(playerId) {
-      return followingState.currentTargetId === playerId;
+    isFollowing(playerId2) {
+      return followingState.currentTargetId === playerId2;
     },
-    async startFollowing(playerId) {
+    async startFollowing(playerId2) {
       if (followingState.unsub) {
         try {
           await followingState.unsub();
@@ -13024,11 +19416,11 @@ ${detail}` : base;
         }
         followingState.unsub = null;
       }
-      followingState.currentTargetId = playerId;
+      followingState.currentTargetId = playerId2;
       followingState.lastPos = null;
       followingState.prevPos = null;
       followingState.steps = 0;
-      const pos = await this.getPosition(playerId);
+      const pos = await this.getPosition(playerId2);
       if (!pos) {
         await toastSimple("Follow", "Unable to retrieve player position.", "error");
         followingState.currentTargetId = null;
@@ -13039,8 +19431,8 @@ ${detail}` : base;
       followingState.prevPos = null;
       followingState.steps = 0;
       followingState.unsub = await this.onChange(async (players) => {
-        if (followingState.currentTargetId !== playerId) return;
-        const target = players.find((p) => p.id === playerId);
+        if (followingState.currentTargetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
         if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
           await this.stopFollowing();
           await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
@@ -13072,10 +19464,10 @@ ${detail}` : base;
         await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
       }
     },
-    isPetFollowing(playerId) {
-      return petFollowState.targetId === playerId;
+    isPetFollowing(playerId2) {
+      return petFollowState.targetId === playerId2;
     },
-    async startPetFollowing(playerId) {
+    async startPetFollowing(playerId2) {
       await this.stopPetFollowing({ silent: true });
       const petsRaw = await Atoms.pets.myPetInfos.get();
       const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
@@ -13083,12 +19475,12 @@ ${detail}` : base;
         await toastSimple("Pet follow", "You don't have any active pets.", "error");
         return;
       }
-      const pos = await this.getPosition(playerId);
+      const pos = await this.getPosition(playerId2);
       if (!pos) {
         await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
         return;
       }
-      petFollowState.targetId = playerId;
+      petFollowState.targetId = playerId2;
       petFollowState.pets = petIds;
       petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
       petFollowState.history = [];
@@ -13096,7 +19488,7 @@ ${detail}` : base;
         recordPetHistory(pos, true);
       }
       const sendPositions = async () => {
-        if (petFollowState.targetId !== playerId) return;
+        if (petFollowState.targetId !== playerId2) return;
         if (!petFollowState.pets.length || !petFollowState.history.length) return;
         const payload = {};
         for (let i = 0; i < petFollowState.pets.length; i += 1) {
@@ -13114,7 +19506,6 @@ ${detail}` : base;
         try {
           await PlayerService.petPositions(payload);
         } catch (err) {
-          log4.error("Failed to send pet follow positions", err);
         }
       };
       petFollowState.timer = setInterval(() => {
@@ -13123,8 +19514,8 @@ ${detail}` : base;
       }, PET_FOLLOW_INTERVAL_MS);
       const initialSend = sendPositions();
       petFollowState.unsub = await this.onChange(async (players) => {
-        if (petFollowState.targetId !== playerId) return;
-        const target = players.find((p) => p.id === playerId);
+        if (petFollowState.targetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
         if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
           await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
           return;
@@ -13186,9 +19577,9 @@ ${detail}` : base;
         input.style.minWidth = "0";
       }
     }
-    async function renderRight(playerId) {
+    async function renderRight(playerId2) {
       right.innerHTML = "";
-      const p = playerId ? players.find((x) => x.id === playerId) || null : null;
+      const p = playerId2 ? players.find((x) => x.id === playerId2) || null : null;
       if (!p) {
         const empty = document.createElement("div");
         empty.style.opacity = "0.75";
@@ -13355,7 +19746,7 @@ ${detail}` : base;
       petFollowGroup.style.alignItems = "center";
       petFollowGroup.style.gap = "4px";
       const petsLabel = document.createElement("div");
-      petsLabel.textContent = "Follow pet";
+      petsLabel.textContent = "Pet follow";
       petsLabel.style.fontSize = "14px";
       petsLabel.style.opacity = "0.85";
       const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
@@ -14220,29 +20611,6 @@ ${detail}` : base;
         btnClear
       };
     })();
-    const secKeybinds = (() => {
-      const r = row();
-      const holder = document.createElement("span");
-      holder.style.display = "inline-block";
-      function setTeam(team) {
-        holder.innerHTML = "";
-        if (!team) return;
-        const btn = ui.hotkeyButton(
-          null,
-          () => refreshTeamFromLS(team.id),
-          {
-            storageKey: hkKeyForTeam(team.id),
-            emptyLabel: "None",
-            listeningLabel: "Press a key\u2026",
-            clearable: true
-          }
-        );
-        holder.appendChild(btn);
-      }
-      r.append(holder);
-      card.appendChild(framed("\u{1F579}\uFE0F Quick switch", r));
-      return { setTeam };
-    })();
     async function repaintSlots(sourceTeam) {
       const t = sourceTeam ?? getSelectedTeam();
       if (!t) return;
@@ -14279,7 +20647,6 @@ ${detail}` : base;
       secSlots.btnUseCurrent.disabled = !has;
       btnUseTeam.disabled = !has;
       btnSave.disabled = !has;
-      secKeybinds.setTeam(team);
       if (has) {
         const saved = PetsService.getTeamSearch(team.id) || "";
         const m = saved.match(/^(ab|sp):\s*(.*)$/i);
@@ -14419,7 +20786,7 @@ ${detail}` : base;
       };
     })();
   }
-  function renderLogsTab2(view, ui) {
+  function renderLogsTab(view, ui) {
     view.innerHTML = "";
     const wrap = document.createElement("div");
     wrap.style.display = "grid";
@@ -14527,14 +20894,14 @@ ${detail}` : base;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log6) {
-      const time = cell(log6.time12, "center");
-      const petLabel = log6.petName || log6.species || "Pet";
+    function row(log) {
+      const time = cell(log.time12, "center");
+      const petLabel = log.petName || log.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log6.abilityName || log6.abilityId, "center");
-      const detText = typeof log6.data === "string" ? log6.data : (() => {
+      const abName = cell(log.abilityName || log.abilityId, "center");
+      const detText = typeof log.data === "string" ? log.data : (() => {
         try {
-          return JSON.stringify(log6.data);
+          return JSON.stringify(log.data);
         } catch {
           return "";
         }
@@ -14654,7 +21021,7 @@ ${detail}` : base;
     const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     ui.addTab("manager", "\u{1F9F0} Manager", (view) => renderManagerTab(view, ui));
-    ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab2(view, ui));
+    ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 
   // src/services/misc.ts
@@ -14671,7 +21038,7 @@ ${detail}` : base;
   var writeGhostEnabled = (v) => {
     try {
       localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
-    } catch {
+    } catch (err) {
     }
   };
   var getGhostDelayMs = () => {
@@ -14686,7 +21053,7 @@ ${detail}` : base;
     const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
     try {
       localStorage.setItem(LS_DELAY_KEY, String(v));
-    } catch {
+    } catch (err) {
     }
   };
   function createGhostController() {
@@ -14731,12 +21098,12 @@ ${detail}` : base;
       let cur;
       try {
         cur = await PlayerService.getPosition();
-      } catch {
+      } catch (err) {
       }
       const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
       try {
         await PlayerService.move(cx + dx, cy + dy);
-      } catch {
+      } catch (err) {
       }
     }
     const CAPTURE = { capture: true };
@@ -14924,7 +21291,7 @@ ${detail}` : base;
           for (let i = 0; i < n; i++) {
             try {
               await PlayerService.wish(t.species);
-            } catch {
+            } catch (err) {
             }
           }
           done += n;
@@ -14960,7 +21327,7 @@ ${detail}` : base;
   function cancelSeedDeletion() {
     try {
       _seedDeleteAbort?.abort();
-    } catch {
+    } catch (err) {
     }
   }
   function isSeedDeletionRunning() {
@@ -15250,15 +21617,15 @@ ${detail}` : base;
     const list = document.getElementById(LIST_ID);
     if (!list) return;
     list.innerHTML = "";
-    const entries2 = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    if (entries2.length === 0) {
+    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
       const empty = document.createElement("div");
       empty.textContent = "No seeds selected.";
       empty.style.opacity = "0.8";
       list.appendChild(empty);
       return;
     }
-    for (const it of entries2) list.appendChild(renderListRow(it));
+    for (const it of entries) list.appendChild(renderListRow(it));
   }
   function totalSelected() {
     let species = 0, qty = 0;
@@ -17684,19 +24051,24 @@ ${detail}` : base;
   }
   var ToolsService = {
     list() {
-      return TOOL_LIST.map(cloneTool);
+      const list = TOOL_LIST.map(cloneTool);
+      return list;
     },
     tags() {
       return TOOL_TAGS.map((tag) => tag);
     },
     get(id) {
       const found = TOOL_LIST.find((tool) => tool.id === id);
-      return found ? cloneTool(found) : null;
+      const entry = found ? cloneTool(found) : null;
+      return entry;
     },
     open(tool) {
       const entry = resolve(tool);
-      if (!entry) return false;
-      return openUrl(entry.url);
+      if (!entry) {
+        return false;
+      }
+      const ok = openUrl(entry.url);
+      return ok;
     }
   };
 
@@ -17917,7 +24289,6 @@ ${detail}` : base;
   }
 
   // src/services/room.ts
-  var log5 = createMenuLogger("room-service", "Room service");
   var MAX_PLAYERS = 6;
   function deriveCategoryFromName(name) {
     const match = /^([a-zA-Z]+)/.exec(name);
@@ -17931,6 +24302,116 @@ ${detail}` : base;
     idRoom: room.idRoom,
     category: deriveCategoryFromName(room.name)
   }));
+  var CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
+  function getStorage() {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+  function sanitizeRoomDefinition(room) {
+    if (!room) return null;
+    const name = typeof room.name === "string" ? room.name.trim() : "";
+    const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
+    if (!name || !idRoom) return null;
+    return {
+      name,
+      idRoom,
+      category: deriveCategoryFromName(name)
+    };
+  }
+  function loadStoredCustomRooms() {
+    const storage = getStorage();
+    if (!storage) return [];
+    try {
+      const raw = storage.getItem(CUSTOM_ROOMS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const result = [];
+      for (const entry of parsed) {
+        const sanitized = sanitizeRoomDefinition(entry);
+        if (sanitized) {
+          result.push(sanitized);
+        }
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  }
+  function persistCustomRooms(rooms) {
+    const storage = getStorage();
+    if (!storage) return;
+    try {
+      const payload = rooms.map((room) => ({
+        name: room.name,
+        idRoom: room.idRoom
+      }));
+      storage.setItem(CUSTOM_ROOMS_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+    }
+  }
+  var customRoomsCache = null;
+  function getCustomRoomsCache() {
+    if (!customRoomsCache) {
+      customRoomsCache = loadStoredCustomRooms();
+    }
+    return customRoomsCache.map((room) => ({ ...room }));
+  }
+  function setCustomRoomsCache(rooms) {
+    customRoomsCache = rooms.map((room) => ({ ...room }));
+    persistCustomRooms(customRoomsCache);
+  }
+  function normalizeIdentifier(value) {
+    return value.trim().toLowerCase();
+  }
+  function fetchStatusesFor(definitions) {
+    const now2 = Date.now();
+    return Promise.all(
+      definitions.map(async (def) => {
+        try {
+          const response = await requestRoomEndpoint(def.idRoom, {
+            endpoint: "info",
+            timeoutMs: 1e4
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const payload = response.parsed ?? (() => {
+            try {
+              return JSON.parse(response.body);
+            } catch {
+              return void 0;
+            }
+          })();
+          const players = clampPlayerCount(typeof payload?.numPlayers === "number" ? payload.numPlayers : 0);
+          const capacity = MAX_PLAYERS;
+          const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
+          return {
+            ...def,
+            players,
+            capacity,
+            isFull: players >= capacity,
+            lastUpdatedAt: now2,
+            currentGame
+          };
+        } catch (error) {
+          const message = normalizeError(error);
+          return {
+            ...def,
+            players: 0,
+            capacity: MAX_PLAYERS,
+            isFull: false,
+            lastUpdatedAt: now2,
+            error: message
+          };
+        }
+      })
+    );
+  }
   function clampPlayerCount(value) {
     if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.min(MAX_PLAYERS, Math.floor(value)));
@@ -17949,55 +24430,54 @@ ${detail}` : base;
     getPublicRooms() {
       return PUBLIC_ROOMS.map((room) => ({ ...room }));
     },
+    getCustomRooms() {
+      return getCustomRoomsCache();
+    },
+    addCustomRoom(room) {
+      const name = typeof room.name === "string" ? room.name.trim() : "";
+      const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
+      if (!name) {
+        return { ok: false, error: "Room name is required." };
+      }
+      if (!idRoom) {
+        return { ok: false, error: "Room identifier is required." };
+      }
+      const normalizedName = normalizeIdentifier(name);
+      const normalizedId = normalizeIdentifier(idRoom);
+      const allRooms = [...PUBLIC_ROOMS, ...getCustomRoomsCache()];
+      if (allRooms.some((existing) => normalizeIdentifier(existing.idRoom) === normalizedId)) {
+        return { ok: false, error: "This room already exists." };
+      }
+      if (allRooms.some((existing) => normalizeIdentifier(existing.name) === normalizedName)) {
+        return { ok: false, error: "A room with this name already exists." };
+      }
+      const definition = {
+        name,
+        idRoom,
+        category: deriveCategoryFromName(name)
+      };
+      const next = [...getCustomRoomsCache(), definition];
+      setCustomRoomsCache(next);
+      return { ok: true, room: { ...definition } };
+    },
+    removeCustomRoom(idRoom) {
+      const normalizedId = normalizeIdentifier(idRoom);
+      const rooms = getCustomRoomsCache();
+      const filtered = rooms.filter((room) => normalizeIdentifier(room.idRoom) !== normalizedId);
+      if (filtered.length === rooms.length) {
+        return false;
+      }
+      setCustomRoomsCache(filtered);
+      return true;
+    },
     async fetchPublicRoomsStatus() {
       const definitions = this.getPublicRooms();
-      const now = Date.now();
-      const results = await Promise.all(
-        definitions.map(async (def) => {
-          try {
-            log5.debug("Fetching public room state", { room: def.idRoom, name: def.name });
-            const response = await requestRoomEndpoint(def.idRoom, {
-              endpoint: "info",
-              timeoutMs: 1e4
-            });
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
-            const payload = response.parsed ?? (() => {
-              try {
-                return JSON.parse(response.body);
-              } catch {
-                return void 0;
-              }
-            })();
-            const players = clampPlayerCount(
-              typeof payload?.numPlayers === "number" ? payload.numPlayers : 0
-            );
-            const capacity = MAX_PLAYERS;
-            const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
-            return {
-              ...def,
-              players,
-              capacity,
-              isFull: players >= capacity,
-              lastUpdatedAt: now,
-              currentGame
-            };
-          } catch (error) {
-            const message = normalizeError(error);
-            log5.warn("Failed to fetch room state", { room: def.idRoom, name: def.name, error: message });
-            return {
-              ...def,
-              players: 0,
-              capacity: MAX_PLAYERS,
-              isFull: false,
-              lastUpdatedAt: now,
-              error: message
-            };
-          }
-        })
-      );
-      return results;
+      return fetchStatusesFor(definitions);
+    },
+    async fetchCustomRoomsStatus() {
+      const definitions = this.getCustomRooms();
+      if (!definitions.length) return [];
+      return fetchStatusesFor(definitions);
     },
     canJoinPublicRoom(room) {
       if (room.error) return false;
@@ -18009,10 +24489,8 @@ ${detail}` : base;
       return isDiscordSurface();
     },
     joinPublicRoom(room) {
-      log5.info("Joining public room", { room: room.idRoom });
       const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
       if (!result.ok) {
-        log5.warn("Join room returned not ok", { room: room.idRoom, result });
       }
       return result;
     }
@@ -18021,20 +24499,25 @@ ${detail}` : base;
   // src/ui/menus/room.ts
   var REFRESH_INTERVAL_MS = 1e4;
   var TAB_ID = "public-rooms";
+  var CUSTOM_TAB_ID = "custom-rooms";
+  var CATEGORY_PREFERRED_ORDER = ["play", "magicgarden", "garlic"];
   async function renderRoomMenu(root) {
     const ui = new Menu({ id: "room", compact: true, windowSelector: ".qws-win" });
     ui.addTab(TAB_ID, "\u{1F310} Public Rooms", (view) => renderPublicRoomsTab(view, ui));
+    ui.addTab(CUSTOM_TAB_ID, "\u2B50 Custom Rooms", (view) => renderCustomRoomsTab(view, ui));
     ui.mount(root);
   }
   function renderPublicRoomsTab(view, ui) {
     view.innerHTML = "";
-    view.style.display = "flex";
-    view.style.flexDirection = "column";
-    view.style.alignItems = "center";
-    view.style.padding = "12px";
-    view.style.boxSizing = "border-box";
-    view.style.height = "100%";
-    view.style.minHeight = "0";
+    const root = document.createElement("div");
+    root.style.display = "flex";
+    root.style.flexDirection = "column";
+    root.style.alignItems = "center";
+    root.style.padding = "12px";
+    root.style.boxSizing = "border-box";
+    root.style.height = "100%";
+    root.style.minHeight = "0";
+    view.appendChild(root);
     const container = document.createElement("div");
     container.style.display = "grid";
     container.style.gap = "12px";
@@ -18042,7 +24525,7 @@ ${detail}` : base;
     container.style.maxWidth = "640px";
     container.style.height = "100%";
     container.style.gridTemplateRows = "max-content max-content 1fr max-content";
-    view.appendChild(container);
+    root.appendChild(container);
     const heading = document.createElement("div");
     heading.textContent = "Select a public room to quickly join a game.";
     heading.style.fontSize = "14px";
@@ -18101,6 +24584,12 @@ ${detail}` : base;
     let selectedPlayerFilter = "any";
     let currentRooms = [];
     const filterButtons = /* @__PURE__ */ new Map();
+    const categoryButtonContainer = document.createElement("div");
+    categoryButtonContainer.style.display = "flex";
+    categoryButtonContainer.style.flexWrap = "wrap";
+    categoryButtonContainer.style.alignItems = "center";
+    categoryButtonContainer.style.gap = "8px";
+    filterBar.appendChild(categoryButtonContainer);
     const updateFilterButtonStyles = () => {
       for (const [category, button] of filterButtons) {
         const isActive = category === selectedCategory;
@@ -18171,10 +24660,9 @@ ${detail}` : base;
         categories.push(room.category);
       }
     }
-    const preferredOrder = ["play", "magicgarden", "garlic"];
     categories.sort((a, b) => {
-      const indexA = preferredOrder.indexOf(a);
-      const indexB = preferredOrder.indexOf(b);
+      const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
+      const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
       if (indexA === -1 && indexB === -1) return a.localeCompare(b);
       if (indexA === -1) return 1;
       if (indexB === -1) return -1;
@@ -18192,7 +24680,7 @@ ${detail}` : base;
         }
       });
       filterButtons.set(category, button);
-      filterBar.appendChild(button);
+      categoryButtonContainer.appendChild(button);
     };
     createFilterButton("All", null);
     for (const category of categories) {
@@ -18254,7 +24742,11 @@ ${detail}` : base;
         const rooms = await RoomService.fetchPublicRoomsStatus();
         if (destroyed || currentRequest !== requestCounter) return;
         renderRooms(rooms);
-        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
         statusBar.textContent = `Last update: ${time}`;
       } catch (error) {
         if (destroyed || currentRequest !== requestCounter) return;
@@ -18276,6 +24768,383 @@ ${detail}` : base;
       }
     };
   }
+  function renderCustomRoomsTab(view, ui) {
+    view.innerHTML = "";
+    const root = document.createElement("div");
+    root.style.display = "flex";
+    root.style.flexDirection = "column";
+    root.style.alignItems = "center";
+    root.style.padding = "12px";
+    root.style.boxSizing = "border-box";
+    root.style.height = "100%";
+    root.style.minHeight = "0";
+    view.appendChild(root);
+    const container = document.createElement("div");
+    container.style.display = "grid";
+    container.style.gap = "12px";
+    container.style.width = "100%";
+    container.style.maxWidth = "640px";
+    container.style.height = "100%";
+    container.style.maxHeight = "100%";
+    container.style.minHeight = "0";
+    container.style.gridTemplateRows = "max-content max-content max-content 1fr max-content";
+    root.appendChild(container);
+    const heading = document.createElement("div");
+    heading.textContent = "Save your favourite rooms and access them quickly.";
+    heading.style.fontSize = "14px";
+    heading.style.opacity = "0.9";
+    container.appendChild(heading);
+    const manageCard = document.createElement("div");
+    manageCard.style.display = "grid";
+    manageCard.style.gap = "10px";
+    manageCard.style.padding = "16px";
+    manageCard.style.borderRadius = "12px";
+    manageCard.style.background = "rgba(20, 22, 32, 0.95)";
+    manageCard.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
+    container.appendChild(manageCard);
+    const manageTitle = document.createElement("div");
+    manageTitle.textContent = "Add a custom room";
+    manageTitle.style.fontWeight = "600";
+    manageTitle.style.fontSize = "14px";
+    manageCard.appendChild(manageTitle);
+    const manageForm = document.createElement("form");
+    manageForm.style.display = "grid";
+    manageForm.style.gap = "10px";
+    manageCard.appendChild(manageForm);
+    const fieldsRow = document.createElement("div");
+    fieldsRow.style.display = "grid";
+    fieldsRow.style.gap = "10px";
+    fieldsRow.style.gridTemplateColumns = "minmax(180px, 1fr) minmax(160px, 1fr) auto";
+    fieldsRow.style.alignItems = "center";
+    manageForm.appendChild(fieldsRow);
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.placeholder = "Room name";
+    nameInput.required = true;
+    nameInput.style.background = "rgba(15, 16, 24, 0.95)";
+    nameInput.style.border = "1px solid rgba(148, 163, 184, 0.25)";
+    nameInput.style.borderRadius = "10px";
+    nameInput.style.padding = "10px 12px";
+    nameInput.style.fontSize = "13px";
+    nameInput.style.color = "#f8fafc";
+    nameInput.style.width = "100%";
+    nameInput.autocomplete = "off";
+    fieldsRow.appendChild(nameInput);
+    const idInput = document.createElement("input");
+    idInput.type = "text";
+    idInput.placeholder = "Room code";
+    idInput.required = true;
+    idInput.style.background = "rgba(15, 16, 24, 0.95)";
+    idInput.style.border = "1px solid rgba(148, 163, 184, 0.25)";
+    idInput.style.borderRadius = "10px";
+    idInput.style.padding = "10px 12px";
+    idInput.style.fontSize = "13px";
+    idInput.style.color = "#f8fafc";
+    idInput.style.width = "100%";
+    idInput.autocomplete = "off";
+    fieldsRow.appendChild(idInput);
+    const addBtn = ui.btn("Add room", { size: "sm", variant: "primary" });
+    addBtn.type = "submit";
+    addBtn.style.whiteSpace = "nowrap";
+    fieldsRow.appendChild(addBtn);
+    const formFeedback = document.createElement("div");
+    formFeedback.style.fontSize = "12px";
+    formFeedback.style.opacity = "0.85";
+    formFeedback.style.minHeight = "16px";
+    manageForm.appendChild(formFeedback);
+    const hint = document.createElement("div");
+    hint.textContent = "Custom rooms are stored locally in your browser.";
+    hint.style.fontSize = "12px";
+    hint.style.opacity = "0.65";
+    manageCard.appendChild(hint);
+    if (RoomService.isDiscordActivity()) {
+      const discordWarning = document.createElement("div");
+      discordWarning.textContent = "You are using Discord: direct join is disabled. Open the official website to join a room.";
+      discordWarning.style.fontSize = "13px";
+      discordWarning.style.lineHeight = "1.4";
+      discordWarning.style.padding = "10px 12px";
+      discordWarning.style.borderRadius = "8px";
+      discordWarning.style.background = "#2e1f1f";
+      discordWarning.style.color = "#ffb4a2";
+      discordWarning.style.border = "1px solid rgba(255, 140, 105, 0.35)";
+      container.appendChild(discordWarning);
+    }
+    const filterBar = document.createElement("div");
+    filterBar.style.display = "flex";
+    filterBar.style.flexWrap = "wrap";
+    filterBar.style.alignItems = "center";
+    filterBar.style.gap = "8px";
+    filterBar.style.margin = "12px 0 6px";
+    filterBar.style.width = "100%";
+    container.appendChild(filterBar);
+    const listWrapper = document.createElement("div");
+    listWrapper.style.height = "36vh";
+    listWrapper.style.maxHeight = "36vh";
+    listWrapper.style.overflowY = "auto";
+    listWrapper.style.padding = "6px 2px";
+    listWrapper.style.borderRadius = "10px";
+    listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
+    listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
+    listWrapper.style.width = "100%";
+    listWrapper.style.boxSizing = "border-box";
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "10px";
+    list.style.padding = "4px";
+    listWrapper.appendChild(list);
+    container.appendChild(listWrapper);
+    const statusBar = document.createElement("div");
+    statusBar.style.fontSize = "12px";
+    statusBar.style.opacity = "0.75";
+    statusBar.textContent = "Add a custom room to get started.";
+    container.appendChild(statusBar);
+    let savedScrollTop = 0;
+    listWrapper.addEventListener("scroll", () => {
+      savedScrollTop = listWrapper.scrollTop;
+    });
+    let destroyed = false;
+    let refreshTimer = null;
+    let requestCounter = 0;
+    let firstLoad = true;
+    let selectedCategory = null;
+    let selectedPlayerFilter = "any";
+    let currentRooms = [];
+    const filterButtons = /* @__PURE__ */ new Map();
+    const categoryButtonContainer = document.createElement("div");
+    categoryButtonContainer.style.display = "flex";
+    categoryButtonContainer.style.flexWrap = "wrap";
+    categoryButtonContainer.style.alignItems = "center";
+    categoryButtonContainer.style.gap = "8px";
+    filterBar.appendChild(categoryButtonContainer);
+    const updateFilterButtonStyles = () => {
+      for (const [category, button] of filterButtons) {
+        const isActive = category === selectedCategory;
+        button.dataset.active = isActive ? "true" : "false";
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        button.style.opacity = isActive ? "1" : "0.7";
+      }
+    };
+    const createFilterButton = (label2, category) => {
+      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
+      button.addEventListener("click", () => {
+        if (category === null) {
+          setCategoryFilter(null);
+        } else if (selectedCategory === category) {
+          setCategoryFilter(null);
+        } else {
+          setCategoryFilter(category);
+        }
+      });
+      filterButtons.set(category, button);
+      categoryButtonContainer.appendChild(button);
+    };
+    const applyCategoryButtons = (definitions) => {
+      const seen = /* @__PURE__ */ new Set();
+      for (const room of definitions) {
+        if (room.category) {
+          seen.add(room.category);
+        }
+      }
+      const categories = Array.from(seen);
+      categories.sort((a, b) => {
+        const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
+        const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
+        if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+      });
+      filterButtons.clear();
+      categoryButtonContainer.innerHTML = "";
+      createFilterButton("All", null);
+      let selectedCategoryExists = selectedCategory === null;
+      for (const category of categories) {
+        createFilterButton(category, category);
+        if (category === selectedCategory) {
+          selectedCategoryExists = true;
+        }
+      }
+      if (!selectedCategoryExists) {
+        selectedCategory = null;
+      }
+      updateFilterButtonStyles();
+    };
+    const setCategoryFilter = (category) => {
+      if (selectedCategory === category) return;
+      selectedCategory = category;
+      savedScrollTop = 0;
+      updateFilterButtonStyles();
+      renderRooms(currentRooms);
+    };
+    const matchesPlayerFilter = (room) => {
+      switch (selectedPlayerFilter) {
+        case "any":
+          return true;
+        case "empty":
+          return room.players === 0;
+        case "few":
+          return room.players > 0 && room.players <= 3;
+        case "crowded":
+          return !room.isFull && room.players >= 4;
+        case "full":
+          return room.isFull;
+        default:
+          return true;
+      }
+    };
+    const renderRooms = (rooms) => {
+      currentRooms = rooms;
+      list.innerHTML = "";
+      const visibleRooms = rooms.filter((room) => {
+        if (selectedCategory !== null && room.category !== selectedCategory) {
+          return false;
+        }
+        if (!matchesPlayerFilter(room)) {
+          return false;
+        }
+        return true;
+      });
+      if (!visibleRooms.length) {
+        const empty = document.createElement("div");
+        const hasDefinitions = RoomService.getCustomRooms().length > 0;
+        empty.textContent = hasDefinitions ? "No rooms match the selected filter." : "No custom rooms yet. Add one above.";
+        empty.style.padding = "16px";
+        empty.style.textAlign = "center";
+        empty.style.opacity = "0.7";
+        list.appendChild(empty);
+      } else {
+        for (const room of visibleRooms) {
+          const entry = createRoomEntry(room, ui, {
+            onRemove: () => {
+              if (!RoomService.removeCustomRoom(room.idRoom)) return;
+              savedScrollTop = 0;
+              handleRoomsChanged();
+            }
+          });
+          list.appendChild(entry);
+        }
+      }
+      requestAnimationFrame(() => {
+        const maxScroll = Math.max(0, listWrapper.scrollHeight - listWrapper.clientHeight);
+        const nextScroll = Math.min(savedScrollTop, maxScroll);
+        listWrapper.scrollTop = nextScroll;
+        savedScrollTop = nextScroll;
+      });
+    };
+    const playerFilterContainer = document.createElement("div");
+    playerFilterContainer.style.display = "flex";
+    playerFilterContainer.style.alignItems = "center";
+    playerFilterContainer.style.gap = "6px";
+    playerFilterContainer.style.marginLeft = "auto";
+    playerFilterContainer.style.padding = "4px 6px";
+    playerFilterContainer.style.background = "rgba(24, 26, 36, 0.85)";
+    playerFilterContainer.style.borderRadius = "10px";
+    playerFilterContainer.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
+    const playerFilterLabel = document.createElement("span");
+    playerFilterLabel.textContent = "Players";
+    playerFilterLabel.style.fontSize = "12px";
+    playerFilterLabel.style.opacity = "0.75";
+    playerFilterLabel.style.paddingLeft = "2px";
+    playerFilterContainer.appendChild(playerFilterLabel);
+    const playerFilterSelect = document.createElement("select");
+    playerFilterSelect.style.background = "rgba(17, 18, 27, 0.95)";
+    playerFilterSelect.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    playerFilterSelect.style.color = "#f8fafc";
+    playerFilterSelect.style.borderRadius = "8px";
+    playerFilterSelect.style.padding = "4px 10px";
+    playerFilterSelect.style.fontSize = "12px";
+    playerFilterSelect.style.fontWeight = "500";
+    playerFilterSelect.style.outline = "none";
+    playerFilterSelect.style.cursor = "pointer";
+    playerFilterSelect.style.minWidth = "130px";
+    const playerFilters = [
+      { value: "any", label: "Any players" },
+      { value: "empty", label: "Empty rooms" },
+      { value: "few", label: "1 \u2013 3 players" },
+      { value: "crowded", label: "4 \u2013 5 players" },
+      { value: "full", label: "Full rooms" }
+    ];
+    for (const option of playerFilters) {
+      const opt = document.createElement("option");
+      opt.value = option.value;
+      opt.textContent = option.label;
+      playerFilterSelect.appendChild(opt);
+    }
+    playerFilterSelect.value = selectedPlayerFilter;
+    playerFilterSelect.addEventListener("change", () => {
+      selectedPlayerFilter = playerFilterSelect.value;
+      savedScrollTop = 0;
+      renderRooms(currentRooms);
+    });
+    playerFilterContainer.appendChild(playerFilterSelect);
+    filterBar.appendChild(playerFilterContainer);
+    const handleRoomsChanged = () => {
+      applyCategoryButtons(RoomService.getCustomRooms());
+      refreshRooms();
+    };
+    const refreshRooms = async () => {
+      if (destroyed) return;
+      const definitions = RoomService.getCustomRooms();
+      applyCategoryButtons(definitions);
+      if (!definitions.length) {
+        currentRooms = [];
+        renderRooms([]);
+        statusBar.textContent = "Add a custom room to get started.";
+        firstLoad = false;
+        if (!destroyed) {
+          if (refreshTimer) window.clearTimeout(refreshTimer);
+          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
+        }
+        return;
+      }
+      const currentRequest = ++requestCounter;
+      statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
+      try {
+        const rooms = await RoomService.fetchCustomRoomsStatus();
+        if (destroyed || currentRequest !== requestCounter) return;
+        renderRooms(rooms);
+        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true
+        });
+        statusBar.textContent = `Last update: ${time}`;
+      } catch (error) {
+        if (destroyed || currentRequest !== requestCounter) return;
+        statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
+      } finally {
+        firstLoad = false;
+        if (!destroyed) {
+          if (refreshTimer) window.clearTimeout(refreshTimer);
+          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
+        }
+      }
+    };
+    manageForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const result = RoomService.addCustomRoom({ name: nameInput.value, idRoom: idInput.value });
+      if (!result.ok) {
+        formFeedback.textContent = result.error;
+        formFeedback.style.color = "#fda4af";
+        return;
+      }
+      formFeedback.textContent = `Added room \u201C${result.room.name}\u201D.`;
+      formFeedback.style.color = "#86efac";
+      nameInput.value = "";
+      idInput.value = "";
+      nameInput.focus();
+      handleRoomsChanged();
+    });
+    applyCategoryButtons(RoomService.getCustomRooms());
+    refreshRooms();
+    view.__cleanup__ = () => {
+      destroyed = true;
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
+    };
+  }
   function getCurrentRoomCode() {
     const match = /^\/r\/([^/]+)/.exec(location.pathname);
     if (!match) return null;
@@ -18285,7 +25154,7 @@ ${detail}` : base;
       return match[1];
     }
   }
-  function createRoomEntry(room, ui) {
+  function createRoomEntry(room, ui, options) {
     const isDiscord = RoomService.isDiscordActivity();
     const currentRoomCode = getCurrentRoomCode();
     const isCurrentRoom = currentRoomCode === room.idRoom;
@@ -18389,6 +25258,16 @@ ${detail}` : base;
     joinBtn.style.minWidth = "86px";
     joinBtn.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
     actionBlock.appendChild(joinBtn);
+    if (options?.onRemove) {
+      const removeBtn = ui.btn("Remove", { size: "sm", variant: "danger" });
+      removeBtn.style.minWidth = "86px";
+      removeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        options.onRemove?.();
+      });
+      removeBtn.title = `Remove ${room.name} from custom rooms`;
+      actionBlock.appendChild(removeBtn);
+    }
     const reasons = [];
     if (room.error) reasons.push("Status unavailable");
     if (room.isFull) reasons.push("Room is full");
@@ -18438,33 +25317,193 @@ ${detail}` : base;
   }
 
   // src/ui/menus/keybinds.ts
-  function createKeybindRow(ui, action) {
+  function createKeybindRow(ui, action2) {
     const controls = document.createElement("div");
     controls.style.display = "flex";
     controls.style.alignItems = "center";
-    controls.style.flexWrap = "wrap";
+    controls.style.flexWrap = "nowrap";
     controls.style.gap = "8px";
     const button = ui.hotkeyButton(
-      getKeybind(action.id),
-      (hk) => setKeybind(action.id, hk),
+      getKeybind(action2.id),
+      (hk) => setKeybind(action2.id, hk),
       {
         emptyLabel: "Unassigned",
         listeningLabel: "Press a key\u2026",
         clearable: true,
-        allowModifierOnly: action.allowModifierOnly
+        allowModifierOnly: action2.allowModifierOnly
       }
     );
-    const stop = onKeybindChange(action.id, (hk) => {
+    button.style.flexShrink = "0";
+    controls.appendChild(button);
+    let detachHoldListener = null;
+    if (action2.holdDetection) {
+      if (action2.id === "game.action") {
+        const holdContainer = document.createElement("div");
+        holdContainer.style.display = "flex";
+        holdContainer.style.flexDirection = "column";
+        holdContainer.style.alignItems = "center";
+        holdContainer.style.gap = "4px";
+        holdContainer.style.flex = "0 1 160px";
+        holdContainer.style.alignSelf = "center";
+        const holdButton = ui.btn("Hold", { size: "sm", variant: "secondary" });
+        holdButton.style.display = "inline-flex";
+        holdButton.style.alignItems = "center";
+        holdButton.style.gap = "6px";
+        holdButton.setAttribute("aria-label", action2.holdDetection.label);
+        holdButton.title = action2.holdDetection.label;
+        const holdIndicator = document.createElement("span");
+        holdIndicator.textContent = "\u25CF";
+        holdIndicator.style.fontSize = "10px";
+        holdIndicator.style.lineHeight = "1";
+        holdIndicator.setAttribute("aria-hidden", "true");
+        const holdText = document.createElement("span");
+        holdText.textContent = "Hold";
+        holdButton.replaceChildren(holdIndicator, holdText);
+        let holdEnabled = getKeybindHoldDetection(action2.id);
+        const updateHoldButton = (enabled) => {
+          holdEnabled = enabled;
+          holdButton.setAttribute("aria-pressed", enabled ? "true" : "false");
+          holdIndicator.style.color = enabled ? "#34c759" : "#ff3b30";
+        };
+        updateHoldButton(holdEnabled);
+        holdButton.addEventListener("click", () => {
+          setKeybindHoldDetection(action2.id, !holdEnabled);
+        });
+        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
+          updateHoldButton(enabled);
+        });
+        holdContainer.appendChild(holdButton);
+        if (action2.holdDetection.description) {
+          const holdDesc = document.createElement("div");
+          holdDesc.textContent = action2.holdDetection.description;
+          holdDesc.style.fontSize = "11px";
+          holdDesc.style.opacity = "0.65";
+          holdDesc.style.maxWidth = "100%";
+          holdDesc.style.textAlign = "center";
+          holdContainer.appendChild(holdDesc);
+        }
+        controls.appendChild(holdContainer);
+      } else {
+        const holdContainer = document.createElement("div");
+        holdContainer.style.display = "flex";
+        holdContainer.style.flexDirection = "column";
+        holdContainer.style.alignItems = "flex-start";
+        holdContainer.style.gap = "2px";
+        holdContainer.style.padding = "2px 4px";
+        holdContainer.style.borderRadius = "8px";
+        holdContainer.style.background = "rgba(255, 255, 255, 0.04)";
+        holdContainer.style.flex = "0 1 180px";
+        holdContainer.style.maxWidth = "180px";
+        const holdLabel = document.createElement("label");
+        holdLabel.style.display = "inline-flex";
+        holdLabel.style.alignItems = "center";
+        holdLabel.style.gap = "6px";
+        holdLabel.style.fontSize = "12px";
+        holdLabel.style.cursor = "pointer";
+        const holdToggle = ui.switch(getKeybindHoldDetection(action2.id));
+        holdToggle.style.margin = "0";
+        holdToggle.setAttribute("aria-label", action2.holdDetection.label);
+        const holdText = document.createElement("span");
+        holdText.textContent = action2.holdDetection.label;
+        holdText.style.opacity = "0.85";
+        holdLabel.append(holdToggle, holdText);
+        holdContainer.appendChild(holdLabel);
+        if (action2.holdDetection.description) {
+          const holdDesc = document.createElement("div");
+          holdDesc.textContent = action2.holdDetection.description;
+          holdDesc.style.fontSize = "11px";
+          holdDesc.style.opacity = "0.65";
+          holdDesc.style.maxWidth = "100%";
+          holdContainer.appendChild(holdDesc);
+        }
+        holdToggle.addEventListener("change", () => {
+          setKeybindHoldDetection(action2.id, holdToggle.checked);
+        });
+        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
+          holdToggle.checked = enabled;
+        });
+        controls.appendChild(holdContainer);
+      }
+    }
+    const actionsWrap = document.createElement("div");
+    actionsWrap.style.display = "flex";
+    actionsWrap.style.alignItems = "center";
+    actionsWrap.style.gap = "4px";
+    actionsWrap.style.marginLeft = "auto";
+    const clearBtn = action2.sectionId === "game" ? null : ui.btn("", {
+      icon: "\u{1F5D1}\uFE0F",
+      variant: "danger",
+      size: "sm",
+      tooltip: "Remove this shortcut",
+      ariaLabel: "Remove keybind"
+    });
+    if (clearBtn) {
+      actionsWrap.appendChild(clearBtn);
+    }
+    const defaultHotkey = getDefaultKeybind(action2.id);
+    const defaultString = hotkeyToString(defaultHotkey);
+    let resetBtn = null;
+    if (defaultHotkey) {
+      resetBtn = ui.btn("", {
+        icon: "\u{1F504}",
+        variant: "primary",
+        size: "sm",
+        tooltip: "Restore default shortcut",
+        ariaLabel: "Reset keybind to default"
+      });
+      actionsWrap.appendChild(resetBtn);
+    }
+    const setButtonEnabled = (btn, enabled) => {
+      if (!btn) return;
+      const setter = btn.setEnabled;
+      if (setter) {
+        setter(enabled);
+      } else {
+        btn.disabled = !enabled;
+        btn.classList.toggle("is-disabled", !enabled);
+        btn.setAttribute("aria-disabled", (!enabled).toString());
+      }
+    };
+    const updateButtons = (current) => {
+      const hasHotkey = hotkeyToString(current).length > 0;
+      if (clearBtn) {
+        setButtonEnabled(clearBtn, hasHotkey);
+      }
+      if (resetBtn) {
+        const isDefault = hotkeyToString(current) === defaultString;
+        setButtonEnabled(resetBtn, !isDefault);
+      }
+    };
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        setKeybind(action2.id, null);
+        const refreshed = getKeybind(action2.id);
+        button.refreshHotkey(refreshed);
+        updateButtons(refreshed);
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        resetKeybind(action2.id);
+        const refreshed = getKeybind(action2.id);
+        button.refreshHotkey(refreshed);
+        updateButtons(refreshed);
+      });
+    }
+    controls.appendChild(actionsWrap);
+    updateButtons(getKeybind(action2.id));
+    const stop = onKeybindChange(action2.id, (hk) => {
       button.refreshHotkey(hk);
+      updateButtons(hk);
     });
     ui.on("unmounted", stop);
-    controls.appendChild(button);
-    const row = ui.formRow(action.label, controls, { labelWidth: "180px" });
+    if (detachHoldListener) ui.on("unmounted", detachHoldListener);
+    const row = ui.formRow(action2.label, controls, { labelWidth: "180px" });
     row.label.style.fontSize = "13px";
     row.label.style.opacity = "0.92";
-    if (action.hint) {
+    if (action2.hint) {
       const hintEl = document.createElement("div");
-      hintEl.textContent = action.hint;
+      hintEl.textContent = action2.hint;
       hintEl.style.fontSize = "11px";
       hintEl.style.opacity = "0.7";
       hintEl.style.marginTop = "2px";
@@ -18502,8 +25541,8 @@ ${detail}` : base;
       desc.style.fontSize = "12px";
       desc.style.opacity = "0.78";
       card.body.appendChild(desc);
-      for (const action of section.actions) {
-        const row = createKeybindRow(ui, action);
+      for (const action2 of section.actions) {
+        const row = createKeybindRow(ui, action2);
         card.body.appendChild(row);
       }
       wrapper.appendChild(card.root);
@@ -18514,7 +25553,7 @@ ${detail}` : base;
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
-    const listeners3 = [];
+    const listeners2 = [];
     function swallowAll() {
       const add = (target, t) => {
         const h = (e) => {
@@ -18522,7 +25561,7 @@ ${detail}` : base;
           e.preventDefault?.();
         };
         target.addEventListener(t, h, { capture: true });
-        listeners3.push({ t, h, target });
+        listeners2.push({ t, h, target });
       };
       STOP_EVENTS.forEach((t) => {
         add(document, t);
@@ -18530,11 +25569,11 @@ ${detail}` : base;
       });
     }
     function unswallowAll() {
-      for (const { t, h, target } of listeners3) try {
+      for (const { t, h, target } of listeners2) try {
         target.removeEventListener(t, h, { capture: true });
       } catch {
       }
-      listeners3.length = 0;
+      listeners2.length = 0;
     }
     const docProto = Object.getPrototypeOf(document);
     const saved = {
@@ -18672,12 +25711,23 @@ ${detail}` : base;
   // src/main.ts
   (async function() {
     "use strict";
+    initSprites({
+      config: {
+        blackBelow: 10,
+        skipAlphaBelow: 1,
+        tolerance: 5e-3
+      },
+      onAsset: (url, kind) => {
+        window.dispatchEvent(new CustomEvent("mg:sprite-detected", { detail: { url, kind } }));
+      }
+    });
     installPageWebSocketHook();
     mountHUD({
       onRegister(register) {
         register("players", "\u{1F465} Players", renderPlayersMenu);
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
         register("room", "\u{1F3E0} Room", renderRoomMenu);
+        register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
         register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
