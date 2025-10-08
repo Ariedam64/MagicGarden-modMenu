@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.9.6
+// @version      1.9.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15341,9 +15341,11 @@ try{importScripts("${abs}")}catch(e){}
   .dd-audio-actions{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
   .dd-audio-empty{padding:24px 12px;text-align:center;font-size:13px;opacity:.6;}
   .dd-sprite-controls{display:flex;flex-direction:column;gap:12px;}
-  .dd-sprite-mode{display:flex;flex-wrap:wrap;gap:8px;}
-  .dd-sprite-category{display:flex;flex-wrap:wrap;gap:6px;}
-  .dd-sprite-category.is-hidden{display:none;}
+  .dd-sprite-control-grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));}
+  .dd-sprite-control{display:flex;flex-direction:column;gap:4px;}
+  .dd-sprite-control__label{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em;}
+  .dd-sprite-control.is-hidden{display:none;}
+  .dd-sprite-control .qmm-select{width:100%;}
   .dd-sprite-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;}
   .dd-sprite-toolbar .qmm-input{flex:1 1 220px;min-width:180px;padding:6px 10px;border-radius:8px;font-size:13px;}
   .dd-sprite-btn{padding:6px 12px;font-size:12px;border-radius:8px;border:1px solid rgba(124,148,255,.38);background:linear-gradient(180deg,rgba(122,150,255,.26),rgba(82,108,214,.14));color:#f5f7ff;box-shadow:0 3px 10px rgba(78,104,214,.22);text-shadow:0 1px 0 rgba(0,0,0,.24);}
@@ -15372,7 +15374,9 @@ try{importScripts("${abs}")}catch(e){}
   .dd-sprite-variant-grid{display:grid;gap:8px;width:100%;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));}
   .dd-sprite-variant-grid.is-wide{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));max-width:100%;}
   .dd-sprite-variant{display:flex;flex-direction:column;gap:4px;align-items:center;}
-  .dd-sprite-variant__label{font-size:11px;opacity:.72;text-transform:uppercase;letter-spacing:.08em;text-align:center;}
+  .dd-sprite-variant__label{font-size:11px;opacity:.78;text-transform:uppercase;letter-spacing:.08em;text-align:center;}
+  .dd-sprite-variant__label[data-variant="gold"]{color:#f8d47c;background:linear-gradient(135deg,#fff1a1,#f3c76a 58%,#f6b84f);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 1px 4px rgba(0,0,0,.35);}
+  .dd-sprite-variant__label[data-variant="rainbow"]{color:#f7f2ff;background:linear-gradient(90deg,#ff6b6b,#ffd86f,#6bff8f,#6bc7ff,#b86bff);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 1px 4px rgba(0,0,0,.35);}
   .dd-sprite-variant__canvas{width:100%;height:auto;image-rendering:pixelated;background:#05080c;border-radius:8px;box-shadow:inset 0 1px 0 rgba(255,255,255,.08);}
   `;
     document.head.appendChild(style2);
@@ -16143,68 +16147,58 @@ next: ${next}`;
     });
     controlsCard.body.classList.add("dd-sprite-controls");
     leftCol.appendChild(controlsCard.root);
-    const modeRow = document.createElement("div");
-    modeRow.className = "dd-sprite-mode";
-    controlsCard.body.appendChild(modeRow);
-    const tileModeChip = ui.toggleChip("Tiles", {
-      type: "radio",
-      name: "sprite-mode",
-      value: "tiles",
-      checked: true,
-      icon: "\u{1F9F1}"
+    const controlsGrid = document.createElement("div");
+    controlsGrid.className = "dd-sprite-control-grid";
+    controlsCard.body.appendChild(controlsGrid);
+    function createSelectControl(labelText, select2) {
+      const wrap = document.createElement("label");
+      wrap.className = "dd-sprite-control";
+      const labelEl = document.createElement("span");
+      labelEl.className = "dd-sprite-control__label";
+      labelEl.textContent = labelText;
+      wrap.append(labelEl, select2);
+      return wrap;
+    }
+    const modeSelect = ui.select({ width: "100%" });
+    const modeOptions = [
+      { value: "tiles", label: "\u{1F9F1} Tiles" },
+      { value: "ui", label: "\u{1F5BC}\uFE0F UI" }
+    ];
+    modeOptions.forEach(({ value, label: label2 }) => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label2;
+      modeSelect.appendChild(opt);
     });
-    const uiModeChip = ui.toggleChip("UI", {
-      type: "radio",
-      name: "sprite-mode",
-      value: "ui",
-      icon: "\u{1F5BC}\uFE0F"
-    });
-    modeRow.append(tileModeChip.root, uiModeChip.root);
-    const { input: tileModeInput } = tileModeChip;
-    const { input: uiModeInput } = uiModeChip;
-    const categoryRow = document.createElement("div");
-    categoryRow.className = "dd-sprite-category";
-    controlsCard.body.appendChild(categoryRow);
+    modeSelect.value = mode;
+    const modeControl = createSelectControl("Asset type", modeSelect);
+    controlsGrid.appendChild(modeControl);
+    const categorySelect = ui.select({ width: "100%" });
     tileCategories.forEach((cat) => {
-      const chip = ui.toggleChip(`${cat.icon} ${cat.label}`, {
-        type: "radio",
-        name: "sprite-category",
-        value: cat.id,
-        checked: cat.id === category
-      });
-      const { input } = chip;
-      input.addEventListener("change", () => {
-        if (!input.checked) return;
-        category = cat.id;
-        updateListTitle();
-        refreshList2({ preserveSelection: false });
-      });
-      categoryRow.appendChild(chip.root);
+      const opt = document.createElement("option");
+      opt.value = cat.id;
+      opt.textContent = `${cat.icon} ${cat.label}`;
+      categorySelect.appendChild(opt);
     });
-    const variantRow = document.createElement("div");
-    variantRow.className = "dd-sprite-variant-filter";
-    controlsCard.body.appendChild(variantRow);
+    categorySelect.value = category;
+    const categoryControl = createSelectControl("Tiles category", categorySelect);
+    controlsGrid.appendChild(categoryControl);
+    const variantSelect = ui.select({ width: "100%" });
     const variantOptions = [
-      { id: "all", label: "All variants", icon: "\u2728" },
-      { id: "normal", label: "Normal", icon: "\u{1F3A8}" },
-      { id: "gold", label: "Gold", icon: "\u{1F947}" },
-      { id: "rainbow", label: "Rainbow", icon: "\u{1F308}" }
+      { id: "all", label: "\u2728 All variants" },
+      { id: "normal", label: "\u{1F3A8} Normal" },
+      { id: "gold", label: "\u{1F947} Gold" },
+      { id: "rainbow", label: "\u{1F308} Rainbow" }
     ];
     variantOptions.forEach((option) => {
-      const chip = ui.toggleChip(`${option.icon} ${option.label}`, {
-        type: "radio",
-        name: "sprite-variant-filter",
-        value: option.id,
-        checked: option.id === variantFilter
-      });
-      const { input } = chip;
-      input.addEventListener("change", () => {
-        if (!input.checked) return;
-        variantFilter = option.id;
-        void renderCurrentPreview();
-      });
-      variantRow.appendChild(chip.root);
+      const opt = document.createElement("option");
+      opt.value = option.id;
+      opt.textContent = option.label;
+      variantSelect.appendChild(opt);
     });
+    variantSelect.value = variantFilter;
+    const variantControl = createSelectControl("Variant preview", variantSelect);
+    controlsGrid.appendChild(variantControl);
     const controlsFooter = ui.flexRow({ gap: 8, wrap: true, fullWidth: true });
     controlsFooter.classList.add("dd-sprite-toolbar");
     const btnRefresh = ui.btn("Refresh lists", {
@@ -16263,12 +16257,15 @@ next: ${next}`;
     function setMode(next) {
       if (mode === next) return;
       mode = next;
+      modeSelect.value = mode;
       updateCategoryVisibility();
       updateListTitle();
       refreshList2({ preserveSelection: false });
     }
     function updateCategoryVisibility() {
-      categoryRow.classList.toggle("is-hidden", mode !== "tiles");
+      const showTiles = mode === "tiles";
+      categoryControl.classList.toggle("is-hidden", !showTiles);
+      categorySelect.disabled = !showTiles;
     }
     function refreshList2(opts = {}) {
       const preserve = !!opts.preserveSelection;
@@ -16403,12 +16400,14 @@ next: ${next}`;
       const grid = document.createElement("div");
       grid.className = "dd-sprite-variant-grid";
       if (opts?.wide) grid.classList.add("is-wide");
-      variants.forEach(({ icon, label: label2, canvas }) => {
+      variants.forEach((variant) => {
+        const { type, icon, label: label2, canvas } = variant;
         canvas.classList.add("dd-sprite-variant__canvas");
         const item = document.createElement("div");
         item.className = "dd-sprite-variant";
         const caption = document.createElement("div");
         caption.className = "dd-sprite-variant__label";
+        caption.dataset.variant = type;
         caption.textContent = `${icon} ${label2}`;
         item.append(canvas, caption);
         grid.appendChild(item);
@@ -16611,11 +16610,22 @@ next: ${next}`;
         applyFilter(true);
       }
     });
-    tileModeInput.addEventListener("change", () => {
-      if (tileModeInput.checked) setMode("tiles");
+    modeSelect.addEventListener("change", () => {
+      const next = modeSelect.value === "ui" ? "ui" : "tiles";
+      setMode(next);
     });
-    uiModeInput.addEventListener("change", () => {
-      if (uiModeInput.checked) setMode("ui");
+    categorySelect.addEventListener("change", () => {
+      const next = categorySelect.value || tileCategories[0]?.id || "all";
+      if (category === next) return;
+      category = next;
+      updateListTitle();
+      refreshList2({ preserveSelection: false });
+    });
+    variantSelect.addEventListener("change", () => {
+      const next = variantSelect.value || "all";
+      if (variantFilter === next) return;
+      variantFilter = next;
+      void renderCurrentPreview();
     });
     updateCategoryVisibility();
     updateListTitle();
