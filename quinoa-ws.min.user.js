@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      1.9.4
+// @version      1.9.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11,6 +11,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
 // @grant        GM_openInTab 
+// @grant        GM_registerMenuCommand
 // @connect      raw.githubusercontent.com
 // @connect      api.github.com
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -14357,15 +14358,32 @@
     init(opts) {
       if (opts?.config) Object.assign(this.cfg, opts.config);
       if (opts?.onAsset) this.onAssetCb = opts.onAsset;
-      if (this.initialized) return this;
+      if (this.initialized) {
+        console.debug("[Sprites] SpritesCore d\xE9j\xE0 initialis\xE9", {
+          totals: {
+            all: this.all.size,
+            ui: this.ui.size,
+            tiles: this.tiles.size
+          }
+        });
+        return this;
+      }
+      console.debug("[Sprites] Initialisation des sniffers de sprites", {
+        config: this.cfg
+      });
       this.installMainSniffers();
       this.installWorkerHooks();
       this.onMessageListener = (e) => {
         const d = e.data;
         if (d && d.__awc && d.url) this.add(d.url, "worker");
       };
-      window.addEventListener("message", this.onMessageListener, true);
+      pageWindow.addEventListener("message", this.onMessageListener, true);
       this.initialized = true;
+      console.debug("[Sprites] SpritesCore initialis\xE9", {
+        globals: {
+          hasWindowSprites: Boolean(pageWindow.Sprites)
+        }
+      });
       return this;
     }
     /** Désinstalle les hooks et nettoie. */
@@ -14387,19 +14405,23 @@
         this.patched.setAttr = void 0;
       }
       if (this.patched.Worker) {
-        window.Worker = this.patched.Worker;
+        pageWindow.Worker = this.patched.Worker;
+        if (pageWindow !== pageWindow) pageWindow.Worker = this.patched.Worker;
         this.patched.Worker = void 0;
       }
       if (this.patched.Blob) {
-        window.Blob = this.patched.Blob;
+        pageWindow.Blob = this.patched.Blob;
+        if (pageWindow !== pageWindow) pageWindow.Blob = this.patched.Blob;
         this.patched.Blob = void 0;
       }
       if (this.patched.createObjectURL) {
-        URL.createObjectURL = this.patched.createObjectURL;
+        const pageURL = pageWindow.URL ?? URL;
+        pageURL.createObjectURL = this.patched.createObjectURL;
+        if (pageWindow !== pageWindow) URL.createObjectURL = this.patched.createObjectURL;
         this.patched.createObjectURL = void 0;
       }
       if (this.onMessageListener) {
-        window.removeEventListener("message", this.onMessageListener, true);
+        pageWindow.removeEventListener("message", this.onMessageListener, true);
         this.onMessageListener = void 0;
       }
       this.initialized = false;
@@ -14766,10 +14788,12 @@
       if (isUiUrl(abs)) {
         this.ui.add(abs);
         this.all.add(abs);
+        console.debug("[Sprites] Asset UI d\xE9tect\xE9", { url: abs, totals: this.ui.size });
         this.onAssetCb?.(abs, "ui");
       } else if (isTilesUrl(abs)) {
         this.tiles.add(abs);
         this.all.add(abs);
+        console.debug("[Sprites] Tilesheet d\xE9tect\xE9", { url: abs, totals: this.tiles.size });
         this.onAssetCb?.(abs, "tiles");
       }
     }
@@ -14780,7 +14804,7 @@
           this.patched.imgDesc = desc;
           Object.defineProperty(HTMLImageElement.prototype, "src", {
             set: function(v) {
-              window.Sprites?.add?.(v, "img");
+              pageWindow.Sprites?.add?.(v, "img");
               return desc.set.call(this, v);
             },
             get: desc.get,
@@ -14804,7 +14828,7 @@
       } catch {
       }
       try {
-        if ("PerformanceObserver" in window) {
+        if ("PerformanceObserver" in pageWindow) {
           const po = new PerformanceObserver((list) => {
             list.getEntries().forEach((e) => this.add(e.name, "po"));
           });
@@ -14853,15 +14877,19 @@
     `;
     }
     installWorkerHooks() {
-      const NativeWorker2 = window.Worker;
-      const NativeCreate = URL.createObjectURL.bind(URL);
-      const NativeBlob = window.Blob;
-      if (!NativeBlob) return;
+      const pageGlobal = pageWindow;
+      const sandboxGlobal = pageWindow;
+      const isIsolated = pageWindow !== pageWindow;
+      const NativeWorker2 = pageGlobal.Worker;
+      const NativeBlob = pageGlobal.Blob;
+      const pageURL = pageGlobal.URL ?? URL;
+      const NativeCreate = pageURL.createObjectURL.bind(pageURL);
+      if (!NativeBlob || !NativeWorker2) return;
       if (!this.patched.Blob) {
         this.patched.Blob = NativeBlob;
         const OriginalBlob = this.patched.Blob;
         const self = this;
-        window.Blob = function(parts = [], opts = {}) {
+        const PatchedBlob = function(parts = [], opts = {}) {
           const b = new OriginalBlob(parts, opts);
           const type = opts && opts.type || "";
           if (/javascript|ecmascript/i.test(type)) {
@@ -14877,14 +14905,17 @@
           }
           return b;
         };
-        window.Blob.prototype = OriginalBlob.prototype;
+        pageGlobal.Blob = PatchedBlob;
+        if (isIsolated) sandboxGlobal.Blob = PatchedBlob;
+        pageGlobal.Blob.prototype = OriginalBlob.prototype;
+        if (isIsolated) sandboxGlobal.Blob.prototype = OriginalBlob.prototype;
       }
       if (!this.patched.createObjectURL) {
-        this.patched.createObjectURL = URL.createObjectURL;
+        this.patched.createObjectURL = pageURL.createObjectURL;
         const prelude = this.workerPreludeSource();
         const self = this;
-        URL.createObjectURL = function(obj) {
-          if (obj instanceof Blob) {
+        const patchedCreateObjectURL = function(obj) {
+          if (obj instanceof pageGlobal.Blob || obj instanceof Blob) {
             const type = (obj.type || "").toLowerCase();
             const txt = self.blobText.get(obj) || "";
             const looksWorkerJS = /javascript/.test(type) || /onmessage|fetch\(|importScripts/.test(txt);
@@ -14895,12 +14926,14 @@
           }
           return NativeCreate(obj);
         };
+        pageURL.createObjectURL = patchedCreateObjectURL;
+        if (isIsolated) URL.createObjectURL = patchedCreateObjectURL;
       }
       if (!this.patched.Worker) {
-        this.patched.Worker = window.Worker;
+        this.patched.Worker = pageGlobal.Worker;
         const prelude = this.workerPreludeSource();
         const self = this;
-        window.Worker = function(url, opts) {
+        const PatchedWorker = function(url, opts) {
           try {
             const abs = new URL(String(url), location.href).href;
             if (!abs.startsWith("blob:")) {
@@ -14911,7 +14944,7 @@ import "${abs}";
 try{importScripts("${abs}")}catch(e){}
 //# sourceURL=sprites-wrapper-classic.js`;
               const blob = new NativeBlob([src], { type: "text/javascript" });
-              const u = URL.createObjectURL(blob);
+              const u = NativeCreate(blob);
               const w2 = new self.patched.Worker(u, isModule ? { type: "module" } : {});
               self.attachWorkerListener(w2);
               return w2;
@@ -14922,7 +14955,10 @@ try{importScripts("${abs}")}catch(e){}
           self.attachWorkerListener(w);
           return w;
         };
-        window.Worker.toString = () => this.patched.Worker.toString();
+        pageGlobal.Worker = PatchedWorker;
+        if (isIsolated) sandboxGlobal.Worker = PatchedWorker;
+        pageGlobal.Worker.toString = () => this.patched.Worker.toString();
+        if (isIsolated) sandboxGlobal.Worker.toString = () => this.patched.Worker.toString();
       }
     }
     attachWorkerListener(w) {
@@ -14951,14 +14987,19 @@ try{importScripts("${abs}")}catch(e){}
       setTimeout(() => URL.revokeObjectURL(a.href), 1e4);
     }
   };
-  window.Sprites = new SpritesCore(false);
-  var Sprites = new SpritesCore(false);
+  var sharedSpritesInstance = new SpritesCore(false);
+  shareGlobal("Sprites", sharedSpritesInstance);
+  var Sprites = sharedSpritesInstance;
   function initSprites(options) {
-    Sprites.init(options);
-    window.Sprites = Sprites;
-    return Sprites;
+    const instance = Sprites.init(options);
+    shareGlobal("Sprites", instance);
+    console.debug("[Sprites] Instance globale disponible sur pageWindow.Sprites", {
+      hasWindowProperty: "Sprites" in pageWindow,
+      lists: instance.lists()
+    });
+    return instance;
   }
-  window.initSprites = initSprites;
+  shareGlobal("initSprites", initSprites);
 
   // src/data/sprites.ts
   var SOURCE_LABELS = {
