@@ -18176,6 +18176,7 @@ next: ${next}`;
   }
   function createLockerSettingsCard(ui, state2, opts = {}) {
     const card = document.createElement("div");
+    card.dataset.lockerSettingsCard = "1";
     card.style.border = "1px solid #4445";
     card.style.borderRadius = "10px";
     card.style.padding = "12px";
@@ -18837,7 +18838,35 @@ next: ${next}`;
     });
     right.appendChild(detail);
     let selectedKey = null;
+    let renderedDetailKey = null;
+    const detailScrollMemory = /* @__PURE__ */ new Map();
+    const getClampedScrollTop = (element) => {
+      const max = Math.max(0, element.scrollHeight - element.clientHeight);
+      return Math.max(0, Math.min(element.scrollTop, max));
+    };
+    const restoreScrollTop = (element, value) => {
+      const max = Math.max(0, element.scrollHeight - element.clientHeight);
+      const target = Math.max(0, Math.min(value, max));
+      element.scrollTop = target;
+      return target;
+    };
+    const updateDetailScrollMemory = (key2) => {
+      const current = detailScrollMemory.get(key2) ?? { detail: 0, card: 0 };
+      current.detail = getClampedScrollTop(detail);
+      const currentCard = detail.querySelector('[data-locker-settings-card="1"]');
+      if (currentCard) {
+        current.card = getClampedScrollTop(currentCard);
+      }
+      detailScrollMemory.set(key2, current);
+    };
+    detail.addEventListener("scroll", () => {
+      if (!renderedDetailKey) return;
+      const memory = detailScrollMemory.get(renderedDetailKey) ?? { detail: 0, card: 0 };
+      memory.detail = getClampedScrollTop(detail);
+      detailScrollMemory.set(renderedDetailKey, memory);
+    });
     const renderList = () => {
+      const previousScrollTop = getClampedScrollTop(list);
       list.innerHTML = "";
       const seeds = getLockerSeedOptions();
       if (!seeds.length) {
@@ -18848,6 +18877,7 @@ next: ${next}`;
         empty.style.textAlign = "center";
         empty.style.padding = "16px";
         list.appendChild(empty);
+        restoreScrollTop(list, previousScrollTop);
         selectedKey = null;
         return;
       }
@@ -18892,8 +18922,12 @@ next: ${next}`;
         fragment.appendChild(button);
       });
       list.appendChild(fragment);
+      restoreScrollTop(list, previousScrollTop);
     };
     const renderDetail = () => {
+      if (renderedDetailKey) {
+        updateDetailScrollMemory(renderedDetailKey);
+      }
       detail.innerHTML = "";
       if (!selectedKey) {
         const empty = document.createElement("div");
@@ -18906,12 +18940,14 @@ next: ${next}`;
         empty.style.borderRadius = "10px";
         empty.style.width = "min(760px, 100%)";
         detail.appendChild(empty);
+        renderedDetailKey = null;
         return;
       }
       const seeds = getLockerSeedOptions();
       const seed = seeds.find((opt) => opt.key === selectedKey);
       if (!seed) {
         selectedKey = null;
+        renderedDetailKey = null;
         renderDetail();
         return;
       }
@@ -18970,6 +19006,20 @@ next: ${next}`;
       });
       applyEnabledState();
       detail.append(header, status, form.root);
+      if (selectedKey) {
+        const memory = detailScrollMemory.get(selectedKey) ?? { detail: 0, card: 0 };
+        memory.detail = restoreScrollTop(detail, memory.detail);
+        memory.card = restoreScrollTop(form.root, memory.card);
+        detailScrollMemory.set(selectedKey, memory);
+        const activeKey = selectedKey;
+        form.root.addEventListener("scroll", () => {
+          if (renderedDetailKey !== activeKey) return;
+          const current = detailScrollMemory.get(activeKey) ?? { detail: getClampedScrollTop(detail), card: 0 };
+          current.card = getClampedScrollTop(form.root);
+          detailScrollMemory.set(activeKey, current);
+        });
+        renderedDetailKey = activeKey;
+      }
     };
     const refresh = () => {
       renderList();
