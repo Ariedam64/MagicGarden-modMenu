@@ -995,6 +995,7 @@ function createLockerSettingsCard(
   opts: SettingsCardOptions = {}
 ): SettingsCardHandle {
   const card = document.createElement("div");
+  card.dataset.lockerSettingsCard = "1";
   card.style.border = "1px solid #4445";
   card.style.borderRadius = "10px";
   card.style.padding = "12px";
@@ -1777,8 +1778,40 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
   right.appendChild(detail);
 
   let selectedKey: string | null = null;
+  let renderedDetailKey: string | null = null;
+  const detailScrollMemory = new Map<string, { detail: number; card: number }>();
+
+  const getClampedScrollTop = (element: HTMLElement): number => {
+    const max = Math.max(0, element.scrollHeight - element.clientHeight);
+    return Math.max(0, Math.min(element.scrollTop, max));
+  };
+
+  const restoreScrollTop = (element: HTMLElement, value: number): number => {
+    const max = Math.max(0, element.scrollHeight - element.clientHeight);
+    const target = Math.max(0, Math.min(value, max));
+    element.scrollTop = target;
+    return target;
+  };
+
+  const updateDetailScrollMemory = (key: string) => {
+    const current = detailScrollMemory.get(key) ?? { detail: 0, card: 0 };
+    current.detail = getClampedScrollTop(detail);
+    const currentCard = detail.querySelector('[data-locker-settings-card="1"]') as HTMLElement | null;
+    if (currentCard) {
+      current.card = getClampedScrollTop(currentCard);
+    }
+    detailScrollMemory.set(key, current);
+  };
+
+  detail.addEventListener("scroll", () => {
+    if (!renderedDetailKey) return;
+    const memory = detailScrollMemory.get(renderedDetailKey) ?? { detail: 0, card: 0 };
+    memory.detail = getClampedScrollTop(detail);
+    detailScrollMemory.set(renderedDetailKey, memory);
+  });
 
   const renderList = () => {
+    const previousScrollTop = getClampedScrollTop(list);
     list.innerHTML = "";
     const seeds = getLockerSeedOptions();
     if (!seeds.length) {
@@ -1789,6 +1822,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       empty.style.textAlign = "center";
       empty.style.padding = "16px";
       list.appendChild(empty);
+      restoreScrollTop(list, previousScrollTop);
       selectedKey = null;
       return;
     }
@@ -1846,9 +1880,14 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     });
 
     list.appendChild(fragment);
+    restoreScrollTop(list, previousScrollTop);
   };
 
   const renderDetail = () => {
+    if (renderedDetailKey) {
+      updateDetailScrollMemory(renderedDetailKey);
+    }
+
     detail.innerHTML = "";
     if (!selectedKey) {
       const empty = document.createElement("div");
@@ -1861,6 +1900,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       empty.style.borderRadius = "10px";
       empty.style.width = "min(760px, 100%)";
       detail.appendChild(empty);
+      renderedDetailKey = null;
       return;
     }
 
@@ -1868,6 +1908,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     const seed = seeds.find(opt => opt.key === selectedKey);
     if (!seed) {
       selectedKey = null;
+      renderedDetailKey = null;
       renderDetail();
       return;
     }
@@ -1946,6 +1987,22 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     applyEnabledState();
 
     detail.append(header, status, form.root);
+
+    if (selectedKey) {
+      const memory = detailScrollMemory.get(selectedKey) ?? { detail: 0, card: 0 };
+      memory.detail = restoreScrollTop(detail, memory.detail);
+      memory.card = restoreScrollTop(form.root, memory.card);
+      detailScrollMemory.set(selectedKey, memory);
+
+      const activeKey = selectedKey;
+      form.root.addEventListener("scroll", () => {
+        if (renderedDetailKey !== activeKey) return;
+        const current = detailScrollMemory.get(activeKey) ?? { detail: getClampedScrollTop(detail), card: 0 };
+        current.card = getClampedScrollTop(form.root);
+        detailScrollMemory.set(activeKey, current);
+      });
+      renderedDetailKey = activeKey;
+    }
   };
 
   const refresh = () => {
