@@ -1,10 +1,10 @@
-# MagicGarden Mod Menu — first rough cut
+# MagicGarden Mod Menu, first rough cut
 
 > "It works, I promise." This is the very first release of my Magic Garden mod menu. It is rough, it is messy, it is absolutely not optimised… but it does what I need for now.
 
 ## ⚠️ Heads-up
 
-- This codebase is still a giant spaghetti bowl. Expect duplicated logic, long files, and hacks everywhere. I will clean it up later—right now the goal was to ship something usable.
+- This codebase is still a giant spaghetti bowl. Expect duplicated logic, long files, and hacks everywhere. I will clean it up later, right now the goal was to ship something usable.
 - Performance tuning is basically non-existent. The mod works on both the official **magicgarden.gg** website and the Discord Activities version, yet you might notice jank on low-end machines.
 - Please report crashes or visual glitches, but also remember that the whole thing is held together with duct tape.
 
@@ -15,10 +15,8 @@ The userscript injects a floating HUD called **Arie's Mod** with draggable windo
 ## 🚀 Installation (players)
 
 1. Install a userscript manager (Tampermonkey is the one I target).
-2. Open the [meta installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/meta.userscript.js) and let your manager install it.
+2. Open the [script installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/dist/quinoa-ws.min.user.js) and let your manager install it.
 3. Reload the game on either **https://magicgarden.gg** or within the Discord activity. The HUD pops up in the bottom-right corner when the websocket connects.
-
-Updating happens automatically: the meta script points to `quinoa-ws.min.user.js` on the same branch, so every reload fetches the newest build.
 
 ## 🛠️ Installation (developers / tinkerers)
 
