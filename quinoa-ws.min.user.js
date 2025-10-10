@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.0
+// @version      2.0.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2492,9 +2492,19 @@
     Frozen: 3,
     Puddle: 5,
     Dawnlit: 11,
-    Amberlit: 12,
+    Ambershine: 12,
     Dawncharged: 13,
     Ambercharged: 14
+  };
+  var tileRefsMutationLabels = {
+    Wet: "Wet",
+    Chilled: "Chilled",
+    Frozen: "Frozen",
+    Puddle: "Puddle",
+    Dawnlit: "Dawnlit",
+    Ambershine: "Amberlit",
+    Dawncharged: "Dawnbound",
+    Ambercharged: "Amberbound"
   };
   var tileRefsDecor = {
     SmallRock: 11,
@@ -17927,6 +17937,7 @@ next: ${next}`;
     if (!spaced) return key2;
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
+  var WEATHER_MUTATION_LABELS = tileRefsMutationLabels ?? {};
   var WEATHER_MUTATIONS = Object.entries(
     tileRefsMutations
   ).filter((entry) => {
@@ -17934,7 +17945,7 @@ next: ${next}`;
     return typeof value === "number" && Number.isFinite(value);
   }).map(([key2, value]) => ({
     key: key2,
-    label: formatMutationLabel(key2),
+    label: WEATHER_MUTATION_LABELS[key2] ?? formatMutationLabel(key2),
     tileRef: value
   }));
   var createNoWeatherIcon = (options) => {
@@ -17968,13 +17979,13 @@ next: ${next}`;
     Frozen: "condition",
     Puddle: "condition",
     Dawnlit: "lighting",
-    Amberlit: "lighting",
+    Ambershine: "lighting",
     Dawncharged: "lighting",
     Ambercharged: "lighting"
   };
   var WEATHER_RECIPE_GROUP_MEMBERS = {
     condition: ["Wet", "Chilled", "Frozen", "Puddle"],
-    lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"]
+    lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"]
   };
   function normalizeRecipeSelection(selection) {
     const seen = /* @__PURE__ */ new Set();
