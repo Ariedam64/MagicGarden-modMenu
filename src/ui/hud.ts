@@ -12,13 +12,13 @@ import {
   type Hotkey,
   type KeybindId,
 } from "../services/keybinds";
-import { PlayerService } from "../services/player";
 import { renderOverlay } from "./menus/notificationOverlay";
 import { setupBuyAll, startReorderObserver } from "../utils/shopUtility";
 import { startCropValuesObserverFromGardenAtom } from "../utils/cropValues";
 import { startInjectSellAllPets } from "../utils/sellAllPets";
 import { fetchRemoteVersion, getLocalVersion } from "../utils/version";
 import { isDiscordSurface } from "../utils/api";
+import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
 
 // ========================
 // Types d’intégration
@@ -1016,5 +1016,6 @@ export function initWatchers(){
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
+      startPetPanelEnhancer();
   })();
 }
