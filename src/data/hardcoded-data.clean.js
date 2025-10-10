@@ -157,11 +157,22 @@ export const tileRefsMutations = {
   Wet: 1,
   Chilled: 2,
   Frozen: 3,
-  Puddle: 5,   
+  Puddle: 5,
   Dawnlit: 11,
-  Amberlit: 12,
+  Ambershine: 12,
   Dawncharged: 13,
   Ambercharged: 14,
+};
+
+export const tileRefsMutationLabels = {
+  Wet: "Wet",
+  Chilled: "Chilled",
+  Frozen: "Frozen",
+  Puddle: "Puddle",
+  Dawnlit: "Dawnlit",
+  Ambershine: "Amberlit",
+  Dawncharged: "Dawnbound",
+  Ambercharged: "Amberbound",
 };
 
 export const tileRefsDecor = {

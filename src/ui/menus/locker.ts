@@ -1,7 +1,11 @@
 // src/ui/menus/locker.ts
 import { Menu } from "../menu";
 import { Sprites } from "../../core/sprite";
-import { plantCatalog, tileRefsMutations } from "../../data/hardcoded-data.clean";
+import {
+  plantCatalog,
+  tileRefsMutations,
+  tileRefsMutationLabels,
+} from "../../data/hardcoded-data.clean";
 import {
   lockerService,
   type LockerSettingsPersisted,
@@ -124,6 +128,9 @@ function formatMutationLabel(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+const WEATHER_MUTATION_LABELS =
+  (tileRefsMutationLabels as Record<string, string> | undefined) ?? {};
+
 const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
   tileRefsMutations as Record<string, number>,
 )
@@ -133,7 +140,7 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
   })
   .map(([key, value]) => ({
     key,
-    label: formatMutationLabel(key),
+    label: WEATHER_MUTATION_LABELS[key] ?? formatMutationLabel(key),
     tileRef: value,
   }));
 
@@ -172,14 +179,14 @@ const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
   Frozen: "condition",
   Puddle: "condition",
   Dawnlit: "lighting",
-  Amberlit: "lighting",
+  Ambershine: "lighting",
   Dawncharged: "lighting",
   Ambercharged: "lighting",
 };
 
 const WEATHER_RECIPE_GROUP_MEMBERS: Record<WeatherRecipeGroup, WeatherTag[]> = {
   condition: ["Wet", "Chilled", "Frozen", "Puddle"],
-  lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"],
+  lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"],
 };
 
 function normalizeRecipeSelection(selection: Set<WeatherTag>): void {
