@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.2
+// @version      2.0.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13918,9 +13918,15 @@
   var buttonVisibilityObserver = null;
   function getActionButton() {
     if (typeof document === "undefined") return null;
-    return document.querySelector(
-      "button.chakra-button.css-1f6o5y1"
-    );
+    const selectors = [
+      "button.chakra-button.css-1f6o5y1",
+      "button.chakra-button.css-h3d7a8"
+    ];
+    for (const selector of selectors) {
+      const button = document.querySelector(selector);
+      if (button) return button;
+    }
+    return null;
   }
   function applyQuantityToButton(button, quantity) {
     const quantityContainer = button.querySelector(".css-telpzl");
@@ -14017,6 +14023,11 @@
     }
     const qty = extractQuantity(currentIndex);
     if (!force && qty === lastLoggedQuantity) return;
+    if (qty == null) {
+      console.log(`[InventorySelection] Quantit\xE9 inconnue pour l'index ${currentIndex}.`);
+    } else {
+      console.log(`[InventorySelection] Quantit\xE9 de l'item s\xE9lectionn\xE9 (${currentIndex}) : ${qty}`);
+    }
     updateButtonQuantity(qty);
     lastLoggedQuantity = qty;
   }
@@ -14024,6 +14035,7 @@
     try {
       return await Atoms.inventory.myInventory.get();
     } catch (error) {
+      console.warn("[InventorySelection] Impossible de r\xE9cup\xE9rer l'inventaire", error);
       return null;
     }
   }
@@ -14032,6 +14044,7 @@
       const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
       return typeof value === "number" ? value : null;
     } catch (error) {
+      console.warn("[InventorySelection] Impossible de r\xE9cup\xE9rer l'index s\xE9lectionn\xE9", error);
       return null;
     }
   }
@@ -14047,6 +14060,7 @@
         logQuantity();
       });
     } catch (error) {
+      console.warn("[InventorySelection] \xC9chec de l'abonnement \xE0 myInventory", error);
     }
     try {
       await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.onChange((next) => {
@@ -14059,6 +14073,7 @@
         logQuantity(true);
       });
     } catch (error) {
+      console.warn("[InventorySelection] \xC9chec de l'abonnement \xE0 myPossiblyNoLongerValidSelectedItemIndex", error);
     }
   }
 
