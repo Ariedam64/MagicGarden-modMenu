@@ -19,6 +19,7 @@ import { startInjectSellAllPets } from "../utils/sellAllPets";
 import { fetchRemoteVersion, getLocalVersion } from "../utils/version";
 import { isDiscordSurface } from "../utils/api";
 import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
+import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
 
 // ========================
 // Types d’intégration
@@ -1017,5 +1018,6 @@ export function initWatchers(){
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
       startPetPanelEnhancer();
+      startSelectedInventoryQuantityLogger();
   })();
 }

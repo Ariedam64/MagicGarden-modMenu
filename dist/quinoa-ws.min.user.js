@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.0
+// @version      2.0.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2492,9 +2492,19 @@
     Frozen: 3,
     Puddle: 5,
     Dawnlit: 11,
-    Amberlit: 12,
+    Ambershine: 12,
     Dawncharged: 13,
     Ambercharged: 14
+  };
+  var tileRefsMutationLabels = {
+    Wet: "Wet",
+    Chilled: "Chilled",
+    Frozen: "Frozen",
+    Puddle: "Puddle",
+    Dawnlit: "Dawnlit",
+    Ambershine: "Amberlit",
+    Dawncharged: "Dawnbound",
+    Ambercharged: "Amberbound"
   };
   var tileRefsDecor = {
     SmallRock: 11,
@@ -3898,35 +3908,35 @@
     { name: "play#24", idRoom: "i-1424941680062369792-gc-808935495543160852-1414650614415102163" },
     { name: "play#25", idRoom: "i-1422640525215006781-gc-808935495543160852-1414650635642732564" },
     { name: "play#26", idRoom: "i-1425313960638414931-gc-808935495543160852-1415547820177625139" },
-    { name: "play#27", idRoom: "i-1418737613749092462-gc-808935495543160852-1415547932303687690" },
-    { name: "play#28", idRoom: "i-1417311042018742343-gc-808935495543160852-1415547947315236864" },
-    { name: "play#29", idRoom: "i-1415554758164484177-gc-808935495543160852-1415550373145350183" },
-    { name: "play#30", idRoom: "i-1421231228996292680-gc-808935495543160852-1420055125409661008" },
-    { name: "play#31", idRoom: "i-1417599346446176327-gc-808935495543160852-1415737760005755021" },
-    { name: "play#32", idRoom: "i-1422666286835433582-gc-808935495543160852-1415737783116628101" },
-    { name: "play#33", idRoom: "i-1421214996943081572-gc-808935495543160852-1415737800992751696" },
-    { name: "play#34", idRoom: "i-1416632731353219133-gc-808935495543160852-1415737817056940203" },
-    { name: "play#35", idRoom: "i-1422405753016287242-gc-808935495543160852-1415737832332329112" },
-    { name: "play#36", idRoom: "i-1422636257129005290-gc-808935495543160852-1415737848279335024" },
-    { name: "play#37", idRoom: "i-1418378533910347806-gc-808935495543160852-1415737865761194066" },
-    { name: "play#38", idRoom: "i-1421263900875292783-gc-808935495543160852-1415737879208001689" },
-    { name: "play#39", idRoom: "i-1415758299952971837-gc-808935495543160852-1415737894144053428" },
-    { name: "play#40", idRoom: "i-1421247473728622632-gc-808935495543160852-1415737913324605450" },
-    { name: "play-1", idRoom: "i-1423541753683644458-gc-808935495543160852-1257800870863699998" },
-    { name: "play-2", idRoom: "i-1423843599216545833-gc-808935495543160852-1395445510235754649" },
-    { name: "play-3", idRoom: "i-1422379279353774090-gc-808935495543160852-1399450370350256198" },
-    { name: "play-4", idRoom: "i-1423542863677100083-gc-808935495543160852-1399845784324673576" },
+    { name: "play#27", idRoom: "i-1424953945838850061-gc-808935495543160852-1415547932303687690" },
+    { name: "play#28", idRoom: "i-1425073934185005190-gc-808935495543160852-1415547947315236864" },
+    { name: "play#29", idRoom: "i-1425044680734675017-gc-808935495543160852-1415550373145350183" },
+    { name: "play#30", idRoom: "i-1425336875211554827-gc-808935495543160852-1420055125409661008" },
+    { name: "play#31", idRoom: "i-1425328665897603112-gc-808935495543160852-1415737760005755021" },
+    { name: "play#32", idRoom: "i-1424643966329946142-gc-808935495543160852-1415737783116628101" },
+    { name: "play#33", idRoom: "i-1424670772022214717-gc-808935495543160852-1415737800992751696" },
+    { name: "play#34", idRoom: "i-1425312620143185920-gc-808935495543160852-1415737817056940203" },
+    { name: "play#35", idRoom: "i-1422405754534760579-gc-808935495543160852-1415737832332329112" },
+    { name: "play#36", idRoom: "i-1425350634600927374-gc-808935495543160852-1415737848279335024" },
+    { name: "play#37", idRoom: "i-1424641225574711346-gc-808935495543160852-1415737865761194066" },
+    { name: "play#38", idRoom: "i-1421263901726609549-gc-808935495543160852-1415737879208001689" },
+    { name: "play#39", idRoom: "i-1424998574575587430-gc-808935495543160852-1415737894144053428" },
+    { name: "play#40", idRoom: "i-1421247475108286596-gc-808935495543160852-1415737913324605450" },
+    { name: "play-1", idRoom: "i-1425232387037462538-gc-808935495543160852-1257800870863699998" },
+    { name: "play-2", idRoom: "i-1424578991133687818-gc-808935495543160852-1395445510235754649" },
+    { name: "play-3", idRoom: "i-1425065021410508891-gc-808935495543160852-1399450370350256198" },
+    { name: "play-4", idRoom: "i-1426081760696995840-gc-808935495543160852-1399845784324673576" },
     { name: "play-5", idRoom: "i-1423627201508544602-gc-808935495543160852-1407013589067370670" },
-    { name: "play-6", idRoom: "i-1423787194895564993-gc-808935495543160852-1407013620088443171" },
-    { name: "play-7", idRoom: "i-1423609323065708604-gc-808935495543160852-1407824061849141399" },
-    { name: "play-8", idRoom: "i-1422904768803766372-gc-808935495543160852-1407824119747055828" },
-    { name: "garlic-1", idRoom: "i-1420740716975493190-gc-1399110335469977781-1411124424676999308" },
-    { name: "garlic-2", idRoom: "i-1419137911063838720-gc-1399110335469977781-1411801827674030191" },
-    { name: "garlic-3", idRoom: "i-1423882809390399562-gc-1399110335469977781-1411801899489034471" },
-    { name: "garlic-4", idRoom: "i-1423581255622201486-gc-1399110335469977781-1411801931373875240" },
-    { name: "garlic-5", idRoom: "i-1423853424000106547-gc-1399110335469977781-1411801958616141864" },
-    { name: "garlic-6", idRoom: "i-1423853555164643488-gc-1399110335469977781-1411801990345916496" },
-    { name: "garlic-7", idRoom: "i-1423853749268512778-gc-1399110335469977781-1411802027255660644" },
+    { name: "play-6", idRoom: "i-1425332316812742676-gc-808935495543160852-1407013620088443171" },
+    { name: "play-7", idRoom: "i-1425575926686552196-gc-808935495543160852-1407824061849141399" },
+    { name: "play-8", idRoom: "i-1426008820152270899-gc-808935495543160852-1407824119747055828" },
+    { name: "garlic-1", idRoom: "i-1425232388086169642-gc-1399110335469977781-1411124424676999308" },
+    { name: "garlic-2", idRoom: "i-1426109571361149050-gc-1399110335469977781-1411801827674030191" },
+    { name: "garlic-3", idRoom: "i-1425694981951193108-gc-1399110335469977781-1411801899489034471" },
+    { name: "garlic-4", idRoom: "i-1425131189135736958-gc-1399110335469977781-1411801931373875240" },
+    { name: "garlic-5", idRoom: "i-1425329927896436756-gc-1399110335469977781-1411801958616141864" },
+    { name: "garlic-6", idRoom: "i-1426106035365744780-gc-1399110335469977781-1411801990345916496" },
+    { name: "garlic-7", idRoom: "i-1426063371202986035-gc-1399110335469977781-1411802027255660644" },
     { name: "garlic-8", idRoom: "i-1423853876494205122-gc-1399110335469977781-1411802063876128980" },
     { name: "garlic-9", idRoom: "i-1423853340923662356-gc-1399110335469977781-1411802098533666837" },
     { name: "garlic-10", idRoom: "i-1423854225879994499-gc-1399110335469977781-1411802136911548467" },
@@ -7206,8 +7216,8 @@
       return direction === 1 ? orderedTeamIds[0] ?? null : orderedTeamIds[orderedTeamIds.length - 1] ?? null;
     }
     if (orderedTeamIds.length === 1) return orderedTeamIds[0] ?? null;
-    const currentIndex = orderedTeamIds.indexOf(lastUsedTeamId);
-    let nextIndex = currentIndex + direction;
+    const currentIndex2 = orderedTeamIds.indexOf(lastUsedTeamId);
+    let nextIndex = currentIndex2 + direction;
     if (nextIndex < 0) nextIndex = orderedTeamIds.length - 1;
     if (nextIndex >= orderedTeamIds.length) nextIndex = 0;
     return orderedTeamIds[nextIndex] ?? null;
@@ -13898,6 +13908,160 @@
     return null;
   }
 
+  // src/utils/inventorySelectionLogger.ts
+  var started2 = false;
+  var cachedItems = [];
+  var currentIndex = null;
+  var lastLoggedQuantity = void 0;
+  var desiredButtonQuantity = null;
+  var buttonDiscoveryObserver = null;
+  var buttonVisibilityObserver = null;
+  function getActionButton() {
+    if (typeof document === "undefined") return null;
+    return document.querySelector(
+      "button.chakra-button.css-1f6o5y1"
+    );
+  }
+  function applyQuantityToButton(button, quantity) {
+    const quantityContainer = button.querySelector(".css-telpzl");
+    const ensureBaseLabel = () => {
+      const existing = button.dataset.baseLabel;
+      if (existing) return existing;
+      const clone = button.cloneNode(true);
+      clone.querySelectorAll(".css-telpzl").forEach((element) => element.remove());
+      const baseLabel2 = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (baseLabel2) {
+        button.dataset.baseLabel = baseLabel2;
+      }
+      return baseLabel2;
+    };
+    const setButtonLabel = (label2) => {
+      const contentNode = Array.from(button.childNodes).find((node) => {
+        if (quantityContainer && node === quantityContainer) return false;
+        const text = node.textContent ?? "";
+        return text.trim().length > 0;
+      });
+      if (contentNode) {
+        contentNode.textContent = label2;
+        return;
+      }
+      const referenceNode = quantityContainer ?? button.firstChild;
+      button.insertBefore(document.createTextNode(label2), referenceNode ?? null);
+    };
+    const baseLabel = ensureBaseLabel();
+    if (quantityContainer) {
+      quantityContainer.textContent = "";
+      quantityContainer.style.marginLeft = "";
+      quantityContainer.style.display = "none";
+    }
+    if (quantity == null) {
+      setButtonLabel(baseLabel);
+      return;
+    }
+    const labelWithQuantity = baseLabel ? `${baseLabel} \xD7${quantity}` : `\xD7${quantity}`;
+    setButtonLabel(labelWithQuantity);
+  }
+  function ensureButtonVisibilityObserver(button) {
+    if (typeof IntersectionObserver === "undefined") return;
+    if (!buttonVisibilityObserver) {
+      buttonVisibilityObserver = new IntersectionObserver((entries) => {
+        entries.filter((entry) => entry.isIntersecting).forEach((entry) => {
+          applyQuantityToButton(entry.target, desiredButtonQuantity);
+        });
+      });
+    } else {
+      buttonVisibilityObserver.disconnect();
+    }
+    buttonVisibilityObserver.observe(button);
+  }
+  function ensureButtonDiscoveryObserver() {
+    if (typeof document === "undefined") return;
+    if (buttonDiscoveryObserver || typeof MutationObserver === "undefined") return;
+    const target = document.body;
+    if (!target) return;
+    buttonDiscoveryObserver = new MutationObserver(() => {
+      const button = getActionButton();
+      if (!button) return;
+      ensureButtonVisibilityObserver(button);
+      applyQuantityToButton(button, desiredButtonQuantity);
+    });
+    buttonDiscoveryObserver.observe(target, { childList: true, subtree: true });
+  }
+  function updateButtonQuantity(quantity) {
+    if (typeof document === "undefined") return;
+    desiredButtonQuantity = quantity;
+    const button = getActionButton();
+    if (!button) {
+      ensureButtonDiscoveryObserver();
+      return;
+    }
+    ensureButtonVisibilityObserver(button);
+    applyQuantityToButton(button, quantity);
+  }
+  function normalizeItems(snapshot) {
+    if (!snapshot || !Array.isArray(snapshot.items)) return [];
+    return snapshot.items.slice();
+  }
+  function extractQuantity(index) {
+    if (index == null || index < 0 || index >= cachedItems.length) return null;
+    const raw = cachedItems[index];
+    if (!raw) return null;
+    const qty = Number(raw.quantity);
+    return Number.isFinite(qty) ? qty : null;
+  }
+  function logQuantity(force = false) {
+    if (currentIndex == null) {
+      updateButtonQuantity(null);
+      lastLoggedQuantity = null;
+      return;
+    }
+    const qty = extractQuantity(currentIndex);
+    if (!force && qty === lastLoggedQuantity) return;
+    updateButtonQuantity(qty);
+    lastLoggedQuantity = qty;
+  }
+  async function readInventory() {
+    try {
+      return await Atoms.inventory.myInventory.get();
+    } catch (error) {
+      return null;
+    }
+  }
+  async function readSelectedIndex() {
+    try {
+      const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
+      return typeof value === "number" ? value : null;
+    } catch (error) {
+      return null;
+    }
+  }
+  async function startSelectedInventoryQuantityLogger() {
+    if (started2) return;
+    started2 = true;
+    cachedItems = normalizeItems(await readInventory());
+    currentIndex = await readSelectedIndex();
+    logQuantity(true);
+    try {
+      await Atoms.inventory.myInventory.onChange((next) => {
+        cachedItems = normalizeItems(next);
+        logQuantity();
+      });
+    } catch (error) {
+    }
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.onChange((next) => {
+        if (typeof next === "number") {
+          currentIndex = next;
+        } else {
+          currentIndex = null;
+        }
+        lastLoggedQuantity = null;
+        logQuantity(true);
+      });
+    } catch (error) {
+    }
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -14788,6 +14952,7 @@
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
       startPetPanelEnhancer();
+      startSelectedInventoryQuantityLogger();
     })();
   }
 
@@ -17927,6 +18092,7 @@ next: ${next}`;
     if (!spaced) return key2;
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
   }
+  var WEATHER_MUTATION_LABELS = tileRefsMutationLabels ?? {};
   var WEATHER_MUTATIONS = Object.entries(
     tileRefsMutations
   ).filter((entry) => {
@@ -17934,7 +18100,7 @@ next: ${next}`;
     return typeof value === "number" && Number.isFinite(value);
   }).map(([key2, value]) => ({
     key: key2,
-    label: formatMutationLabel(key2),
+    label: WEATHER_MUTATION_LABELS[key2] ?? formatMutationLabel(key2),
     tileRef: value
   }));
   var createNoWeatherIcon = (options) => {
@@ -17968,13 +18134,13 @@ next: ${next}`;
     Frozen: "condition",
     Puddle: "condition",
     Dawnlit: "lighting",
-    Amberlit: "lighting",
+    Ambershine: "lighting",
     Dawncharged: "lighting",
     Ambercharged: "lighting"
   };
   var WEATHER_RECIPE_GROUP_MEMBERS = {
     condition: ["Wet", "Chilled", "Frozen", "Puddle"],
-    lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"]
+    lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"]
   };
   function normalizeRecipeSelection(selection) {
     const seen = /* @__PURE__ */ new Set();
