@@ -5,7 +5,8 @@ export function createAntiAfkController(deps: {
   getPosition: () => Promise<XY | undefined>,
   move: (x: number, y: number) => Promise<any>,
 }) {
-  const STOP_EVENTS = ["visibilitychange","blur","focus","focusout","pagehide","freeze","resume","mouseleave","mouseenter"];
+  /* ----- Swallow common visibility/focus events ----- */
+  const STOP_EVENTS = ["visibilitychange","blur","focus","focusout","pagehide","freeze","resume"];
   const listeners: Array<{t: string; h: (e: Event)=>void; target: Document|Window}> = [];
   function swallowAll() {
     const add = (target: Document|Window, t: string) => {
@@ -20,6 +21,7 @@ export function createAntiAfkController(deps: {
     listeners.length = 0;
   }
 
+  /* ----- Patch document.hidden / visibilityState / hasFocus ----- */
   const docProto = Object.getPrototypeOf(document);
   const saved = {
     hidden: Object.getOwnPropertyDescriptor(docProto, "hidden"),
@@ -37,6 +39,7 @@ export function createAntiAfkController(deps: {
     try { if (saved.hasFocus) (document as any).hasFocus = saved.hasFocus; } catch {}
   }
 
+  /* ----- Silent Audio keepalive (sub-audible, volume quasi 0) ----- */
   let audioCtx: AudioContext | null = null;
   let osc: OscillatorNode | null = null;
   let gain: GainNode | null = null;
@@ -64,6 +67,7 @@ export function createAntiAfkController(deps: {
     osc = null; gain = null; audioCtx = null;
   }
 
+  /* ----- Heartbeat (synthetic mousemove) ----- */
   let hb: number | null = null;
   function startHeartbeat() {
     const targetEl = (document.querySelector("canvas") as HTMLElement) || document.body || document.documentElement;
@@ -73,6 +77,7 @@ export function createAntiAfkController(deps: {
   }
   function stopHeartbeat() { if (hb !== null) { clearInterval(hb); hb = null; } }
 
+  /* ----- Position ping (no-op move to current cell) ----- */
   let pingTimer: number | null = null;
   async function pingPosition() {
     try {
