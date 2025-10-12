@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.5
+// @version      2.0.6
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13819,13 +13819,6 @@
     }
   }
   async function getAllowedCrops(petId, species) {
-    try {
-      const allowed = await PetsService.getPetAllowedCrops(petId);
-      if (allowed instanceof Set) return allowed;
-      if (Array.isArray(allowed)) return new Set(allowed);
-    } catch (err) {
-      console.warn("[Pet panel] Failed to read per-pet allowed crops", err);
-    }
     const defaults = PetsService.getCompatibleCropsForSpecies(species) ?? [];
     return new Set(defaults);
   }
