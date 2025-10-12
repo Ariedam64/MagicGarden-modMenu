@@ -17,9 +17,18 @@ let buttonVisibilityObserver: IntersectionObserver | null = null;
 
 function getActionButton(): HTMLButtonElement | null {
   if (typeof document === "undefined") return null;
-  return document.querySelector<HTMLButtonElement>(
+
+  const selectors = [
     "button.chakra-button.css-1f6o5y1",
-  );
+    "button.chakra-button.css-h3d7a8",
+  ];
+
+  for (const selector of selectors) {
+    const button = document.querySelector<HTMLButtonElement>(selector);
+    if (button) return button;
+  }
+
+  return null;
 }
 
 function applyQuantityToButton(
@@ -145,6 +154,11 @@ function logQuantity(force: boolean = false) {
   }
   const qty = extractQuantity(currentIndex);
   if (!force && qty === lastLoggedQuantity) return;
+  if (qty == null) {
+    console.log(`[InventorySelection] Quantité inconnue pour l'index ${currentIndex}.`);
+  } else {
+    console.log(`[InventorySelection] Quantité de l'item sélectionné (${currentIndex}) : ${qty}`);
+  }
   updateButtonQuantity(qty);
   lastLoggedQuantity = qty;
 }
@@ -153,6 +167,7 @@ async function readInventory(): Promise<InventorySnapshot | null> {
   try {
     return await Atoms.inventory.myInventory.get();
   } catch (error) {
+    console.warn("[InventorySelection] Impossible de récupérer l'inventaire", error);
     return null;
   }
 }
@@ -162,6 +177,7 @@ async function readSelectedIndex(): Promise<number | null> {
     const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
     return typeof value === "number" ? value : null;
   } catch (error) {
+    console.warn("[InventorySelection] Impossible de récupérer l'index sélectionné", error);
     return null;
   }
 }
@@ -180,6 +196,7 @@ export async function startSelectedInventoryQuantityLogger(): Promise<void> {
       logQuantity();
     });
   } catch (error) {
+    console.warn("[InventorySelection] Échec de l'abonnement à myInventory", error);
   }
 
   try {
@@ -193,5 +210,6 @@ export async function startSelectedInventoryQuantityLogger(): Promise<void> {
       logQuantity(true);
     });
   } catch (error) {
+    console.warn("[InventorySelection] Échec de l'abonnement à myPossiblyNoLongerValidSelectedItemIndex", error);
   }
 }
