@@ -7,8 +7,6 @@ import { RoomService, type PublicRoomDefinition, type PublicRoomStatus } from ".
 const REFRESH_INTERVAL_MS = 10_000;
 const TAB_ID = "public-rooms";
 const CUSTOM_TAB_ID = "custom-rooms";
-const CATEGORY_PREFERRED_ORDER = ["play", "magicgarden", "garlic"];
-
 type PlayerFilter = "any" | "empty" | "few" | "crowded" | "full";
 
 export async function renderRoomMenu(root: HTMLElement) {
@@ -102,13 +100,13 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   let refreshTimer: number | null = null;
   let requestCounter = 0;
   let firstLoad = true;
-  type PlayerFilter = "any" | "empty" | "few" | "crowded" | "full";
 
   let selectedCategory: string | null = null;
   let selectedPlayerFilter: PlayerFilter = "any";
   let currentRooms: PublicRoomStatus[] = [];
 
   const filterButtons = new Map<string | null, HTMLButtonElement>();
+  let lastRenderedCategories: string[] = [];
 
   const categoryButtonContainer = document.createElement("div");
   categoryButtonContainer.style.display = "flex";
@@ -143,8 +141,112 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     }
   };
 
+  const setCategoryFilter = (category: string | null) => {
+    if (selectedCategory === category) return;
+    selectedCategory = category;
+    savedScrollTop = 0;
+    updateFilterButtonStyles();
+    renderRooms(currentRooms);
+  };
+
+  function createFilterButton(label: string, category: string | null): HTMLButtonElement {
+    const button = ui.btn(label, { size: "sm", variant: "ghost" });
+    button.addEventListener("click", () => {
+      if (category === null) {
+        setCategoryFilter(null);
+      } else if (selectedCategory === category) {
+        setCategoryFilter(null);
+      } else {
+        setCategoryFilter(category);
+      }
+    });
+    return button;
+  }
+
+  function collectCategories(rooms?: Array<{ category: string }>): string[] {
+    if (!rooms) return [];
+    const seen = new Set<string>();
+    const categories: string[] = [];
+    for (const room of rooms) {
+      if (!room || typeof room.category !== "string") continue;
+      const category = room.category.trim();
+      if (!category || seen.has(category)) continue;
+      seen.add(category);
+      categories.push(category);
+    }
+    return categories;
+  }
+
+  function sortCategories(categories: string[]): string[] {
+    if (!categories.length) return [];
+    const preferred = RoomService.getPublicRoomsCategoryOrder();
+    if (!preferred.length) {
+      return [...categories];
+    }
+
+    const available = new Set(categories);
+    const ordered: string[] = [];
+    const used = new Set<string>();
+
+    for (const name of preferred) {
+      if (available.has(name) && !used.has(name)) {
+        ordered.push(name);
+        used.add(name);
+      }
+    }
+
+    for (const name of categories) {
+      if (!used.has(name)) {
+        ordered.push(name);
+        used.add(name);
+      }
+    }
+
+    return ordered;
+  }
+
+  function updateCategoryButtons(rooms?: PublicRoomStatus[]): void {
+    const categoriesFromRooms = collectCategories(rooms);
+    const sourceCategories = categoriesFromRooms.length
+      ? categoriesFromRooms
+      : collectCategories(RoomService.getPublicRooms());
+    const sortedCategories = sortCategories(sourceCategories);
+
+    const changed =
+      filterButtons.size === 0 ||
+      sortedCategories.length !== lastRenderedCategories.length ||
+      sortedCategories.some((category, index) => category !== lastRenderedCategories[index]);
+
+    if (changed) {
+      if (selectedCategory && !sortedCategories.includes(selectedCategory)) {
+        selectedCategory = null;
+        savedScrollTop = 0;
+      }
+
+      categoryButtonContainer.innerHTML = "";
+      filterButtons.clear();
+
+      const allButton = createFilterButton("All", null);
+      filterButtons.set(null, allButton);
+      categoryButtonContainer.appendChild(allButton);
+
+      for (const category of sortedCategories) {
+        const button = createFilterButton(category, category);
+        filterButtons.set(category, button);
+        categoryButtonContainer.appendChild(button);
+      }
+
+      lastRenderedCategories = [...sortedCategories];
+    }
+
+    updateFilterButtonStyles();
+  }
+
+  updateCategoryButtons();
+
   const renderRooms = (rooms: PublicRoomStatus[]) => {
     currentRooms = rooms;
+    updateCategoryButtons(rooms);
     list.innerHTML = "";
 
     const visibleRooms = rooms.filter((room) => {
@@ -179,53 +281,6 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
       savedScrollTop = nextScroll;
     });
   };
-
-  const setCategoryFilter = (category: string | null) => {
-    if (selectedCategory === category) return;
-    selectedCategory = category;
-    savedScrollTop = 0;
-    updateFilterButtonStyles();
-    renderRooms(currentRooms);
-  };
-
-  const seenCategories = new Set<string>();
-  const categories: string[] = [];
-  for (const room of RoomService.getPublicRooms()) {
-    if (!seenCategories.has(room.category)) {
-      seenCategories.add(room.category);
-      categories.push(room.category);
-    }
-  }
-
-  categories.sort((a, b) => {
-    const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
-    const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
-    if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-    if (indexA === -1) return 1;
-    if (indexB === -1) return -1;
-    return indexA - indexB;
-  });
-
-  const createFilterButton = (label: string, category: string | null) => {
-    const button = ui.btn(label, { size: "sm", variant: "ghost" });
-    button.addEventListener("click", () => {
-      if (category === null) {
-        setCategoryFilter(null);
-      } else if (selectedCategory === category) {
-        setCategoryFilter(null);
-      } else {
-        setCategoryFilter(category);
-      }
-    });
-    filterButtons.set(category, button);
-    categoryButtonContainer.appendChild(button);
-  };
-
-  createFilterButton("All", null);
-  for (const category of categories) {
-    createFilterButton(category, category);
-  }
-  updateFilterButtonStyles();
 
   const playerFilterContainer = document.createElement("div");
   playerFilterContainer.style.display = "flex";
@@ -523,14 +578,20 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
       }
     }
     const categories = Array.from(seen);
-    categories.sort((a, b) => {
-      const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
-      const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
+    const preferredOrder = RoomService.getPublicRoomsCategoryOrder();
+    if (preferredOrder.length) {
+      const indexMap = new Map(preferredOrder.map((name, index) => [name, index]));
+      categories.sort((a, b) => {
+        const indexA = indexMap.get(a);
+        const indexB = indexMap.get(b);
+        if (indexA === undefined && indexB === undefined) return a.localeCompare(b);
+        if (indexA === undefined) return 1;
+        if (indexB === undefined) return -1;
+        return indexA - indexB;
+      });
+    } else {
+      categories.sort((a, b) => a.localeCompare(b));
+    }
 
     filterButtons.clear();
     categoryButtonContainer.innerHTML = "";

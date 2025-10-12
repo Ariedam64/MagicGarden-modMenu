@@ -1,7 +1,6 @@
 // src/services/room.ts
 // Gestion des rooms publiques : lecture des états + join depuis l'UI.
 
-import { publicRooms } from "../data/hardcoded-data.clean.js";
 import {
   requestRoomEndpoint,
   joinRoom,
@@ -9,6 +8,7 @@ import {
   type JoinRoomResult,
   type RoomInfoPayload,
 } from "../utils/api";
+import { fetchRemoteRooms, type RemoteRoomsPayload } from "../utils/publicRooms";
 
 const MAX_PLAYERS = 6;
 
@@ -35,11 +35,156 @@ function deriveCategoryFromName(name: string): string {
   return "other";
 }
 
-const PUBLIC_ROOMS: PublicRoomDefinition[] = publicRooms.map((room) => ({
-  name: room.name,
-  idRoom: room.idRoom,
-  category: deriveCategoryFromName(room.name),
-}));
+interface PublicRoomsState {
+  definitions: PublicRoomDefinition[];
+  categoryOrder: string[];
+}
+
+function deriveCategoryOrder(
+  definitions: PublicRoomDefinition[],
+  preferredOrder: string[] = [],
+): string[] {
+  const available = new Set(definitions.map((room) => room.category));
+  const seen = new Set<string>();
+  const order: string[] = [];
+
+  for (const category of preferredOrder) {
+    if (!available.has(category)) continue;
+    if (seen.has(category)) continue;
+    seen.add(category);
+    order.push(category);
+  }
+
+  for (const room of definitions) {
+    if (seen.has(room.category)) continue;
+    seen.add(room.category);
+    order.push(room.category);
+  }
+
+  return order;
+}
+
+function createStateFromDefinitions(
+  definitions: PublicRoomDefinition[],
+  preferredOrder: string[] = [],
+): PublicRoomsState {
+  const cloned = definitions.map((room) => ({ ...room }));
+  return {
+    definitions: cloned,
+    categoryOrder: deriveCategoryOrder(cloned, preferredOrder),
+  } satisfies PublicRoomsState;
+}
+
+function cloneState(state: PublicRoomsState): PublicRoomsState {
+  return {
+    definitions: state.definitions.map((room) => ({ ...room })),
+    categoryOrder: [...state.categoryOrder],
+  } satisfies PublicRoomsState;
+}
+
+const INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
+
+let publicRoomsState: PublicRoomsState = cloneState(INITIAL_PUBLIC_ROOMS_STATE);
+
+let remoteRoomsStatus: "idle" | "pending" | "fulfilled" | "rejected" = "idle";
+let remoteRoomsPromise: Promise<void> | null = null;
+
+function parseRemoteRoomsPayload(payload: RemoteRoomsPayload): PublicRoomsState | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload.publicRooms;
+  if (!record || typeof record !== "object") {
+    return null;
+  }
+
+  const definitions: PublicRoomDefinition[] = [];
+  const categoryOrder: string[] = [];
+
+  for (const [rawCategory, entries] of Object.entries(record)) {
+    if (!Array.isArray(entries) || !entries.length) {
+      continue;
+    }
+
+    const categoryName = typeof rawCategory === "string" ? rawCategory.trim() : "";
+    if (!categoryName) {
+      continue;
+    }
+
+    if (!categoryOrder.includes(categoryName)) {
+      categoryOrder.push(categoryName);
+    }
+
+    for (const entry of entries) {
+      if (typeof entry !== "string") {
+        continue;
+      }
+
+      const separatorIndex = entry.indexOf(":");
+      if (separatorIndex <= 0) {
+        continue;
+      }
+
+      const name = entry.slice(0, separatorIndex).trim();
+      const idRoom = entry.slice(separatorIndex + 1).trim();
+
+      if (!name || !idRoom) {
+        continue;
+      }
+
+      definitions.push({
+        name,
+        idRoom,
+        category: categoryName,
+      });
+    }
+  }
+
+  if (!definitions.length) {
+    return null;
+  }
+
+  return createStateFromDefinitions(definitions, categoryOrder);
+}
+
+function setPublicRoomsState(next: PublicRoomsState): void {
+  publicRoomsState = cloneState(next);
+}
+
+function requestRemoteRoomsFetch(): Promise<void> | null {
+  if (remoteRoomsStatus === "pending" || remoteRoomsStatus === "fulfilled" || remoteRoomsStatus === "rejected") {
+    return remoteRoomsPromise;
+  }
+
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  remoteRoomsStatus = "pending";
+  remoteRoomsPromise = (async () => {
+    try {
+      const payload = await fetchRemoteRooms();
+      const parsed = parseRemoteRoomsPayload(payload);
+      if (parsed) {
+        setPublicRoomsState(parsed);
+      }
+      remoteRoomsStatus = "fulfilled";
+    } catch (error) {
+      remoteRoomsStatus = "rejected";
+      console.warn("[MagicGarden] Unable to load remote rooms list", error);
+    }
+  })();
+
+  return remoteRoomsPromise;
+}
+
+async function ensureRemoteRoomsLoaded(): Promise<void> {
+  const promise = requestRemoteRoomsFetch();
+  if (promise) {
+    await promise;
+  }
+}
 
 const CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
 
@@ -193,7 +338,13 @@ function normalizeError(error: unknown): string {
 
 export const RoomService = {
   getPublicRooms(): PublicRoomDefinition[] {
-    return PUBLIC_ROOMS.map((room) => ({ ...room }));
+    void requestRemoteRoomsFetch();
+    return publicRoomsState.definitions.map((room) => ({ ...room }));
+  },
+
+  getPublicRoomsCategoryOrder(): string[] {
+    void requestRemoteRoomsFetch();
+    return [...publicRoomsState.categoryOrder];
   },
 
   getCustomRooms(): PublicRoomDefinition[] {
@@ -217,7 +368,7 @@ export const RoomService = {
     const normalizedName = normalizeIdentifier(name);
     const normalizedId = normalizeIdentifier(idRoom);
 
-    const allRooms = [...PUBLIC_ROOMS, ...getCustomRoomsCache()];
+    const allRooms = [...this.getPublicRooms(), ...getCustomRoomsCache()];
     if (allRooms.some((existing) => normalizeIdentifier(existing.idRoom) === normalizedId)) {
       return { ok: false, error: "This room already exists." };
     }
@@ -249,7 +400,8 @@ export const RoomService = {
   },
 
   async fetchPublicRoomsStatus(): Promise<PublicRoomStatus[]> {
-    const definitions = this.getPublicRooms();
+    await ensureRemoteRoomsLoaded();
+    const definitions = publicRoomsState.definitions.map((room) => ({ ...room }));
     return fetchStatusesFor(definitions);
   },
 
