@@ -17,18 +17,22 @@ let buttonVisibilityObserver: IntersectionObserver | null = null;
 
 function getActionButton(): HTMLButtonElement | null {
   if (typeof document === "undefined") return null;
-
-  const selectors = [
+  const primaryButton = document.querySelector<HTMLButtonElement>(
     "button.chakra-button.css-1f6o5y1",
-    "button.chakra-button.css-h3d7a8",
-  ];
+  );
+  if (primaryButton) return primaryButton;
 
-  for (const selector of selectors) {
-    const button = document.querySelector<HTMLButtonElement>(selector);
-    if (button) return button;
-  }
+  const growButtons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>(
+      "button.chakra-button.css-h3d7a8",
+    ),
+  );
 
-  return null;
+  return (
+    growButtons.find((button) =>
+      (button.textContent ?? "").includes("Grow"),
+    ) ?? null
+  );
 }
 
 function applyQuantityToButton(
@@ -37,17 +41,43 @@ function applyQuantityToButton(
 ): void {
   const quantityContainer = button.querySelector<HTMLElement>(".css-telpzl");
 
-  const ensureBaseLabel = (): string => {
-    const existing = button.dataset.baseLabel;
-    if (existing) return existing;
-
+  const readButtonLabel = (): string => {
     const clone = button.cloneNode(true) as HTMLElement;
     clone.querySelectorAll(".css-telpzl").forEach((element) => element.remove());
-    const baseLabel = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
-    if (baseLabel) {
-      button.dataset.baseLabel = baseLabel;
+    return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+  };
+
+  const ensureBaseLabel = (): string => {
+    const existing = button.dataset.baseLabel ?? "";
+    const lastQuantity = button.dataset.lastQuantity;
+    const currentLabel = readButtonLabel();
+
+    const normalizedCurrentLabel = (() => {
+      if (!currentLabel) return "";
+      if (lastQuantity && lastQuantity.length > 0) {
+        const withSpace = ` ×${lastQuantity}`;
+        if (currentLabel.endsWith(withSpace)) {
+          return currentLabel.slice(0, -withSpace.length).replace(/\s+$/, "");
+        }
+        const withoutSpace = `×${lastQuantity}`;
+        if (currentLabel.endsWith(withoutSpace)) {
+          return currentLabel.slice(0, -withoutSpace.length).replace(/\s+$/, "");
+        }
+      }
+      return currentLabel;
+    })();
+
+    if (normalizedCurrentLabel && normalizedCurrentLabel !== existing) {
+      button.dataset.baseLabel = normalizedCurrentLabel;
+      return normalizedCurrentLabel;
     }
-    return baseLabel;
+
+    if (!existing && normalizedCurrentLabel) {
+      button.dataset.baseLabel = normalizedCurrentLabel;
+      return normalizedCurrentLabel;
+    }
+
+    return existing;
   };
 
   const setButtonLabel = (label: string) => {
@@ -75,11 +105,13 @@ function applyQuantityToButton(
   }
 
   if (quantity == null) {
+    button.dataset.lastQuantity = "";
     setButtonLabel(baseLabel);
     return;
   }
 
   const labelWithQuantity = baseLabel ? `${baseLabel} ×${quantity}` : `×${quantity}`;
+  button.dataset.lastQuantity = String(quantity);
   setButtonLabel(labelWithQuantity);
 }
 
