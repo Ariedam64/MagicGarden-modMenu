@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.3
+// @version      2.0.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13918,28 +13918,53 @@
   var buttonVisibilityObserver = null;
   function getActionButton() {
     if (typeof document === "undefined") return null;
-    const selectors = [
-      "button.chakra-button.css-1f6o5y1",
-      "button.chakra-button.css-h3d7a8"
-    ];
-    for (const selector of selectors) {
-      const button = document.querySelector(selector);
-      if (button) return button;
-    }
-    return null;
+    const primaryButton = document.querySelector(
+      "button.chakra-button.css-1f6o5y1"
+    );
+    if (primaryButton) return primaryButton;
+    const growButtons = Array.from(
+      document.querySelectorAll(
+        "button.chakra-button.css-h3d7a8"
+      )
+    );
+    return growButtons.find(
+      (button) => (button.textContent ?? "").includes("Grow")
+    ) ?? null;
   }
   function applyQuantityToButton(button, quantity) {
     const quantityContainer = button.querySelector(".css-telpzl");
-    const ensureBaseLabel = () => {
-      const existing = button.dataset.baseLabel;
-      if (existing) return existing;
+    const readButtonLabel = () => {
       const clone = button.cloneNode(true);
       clone.querySelectorAll(".css-telpzl").forEach((element) => element.remove());
-      const baseLabel2 = (clone.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (baseLabel2) {
-        button.dataset.baseLabel = baseLabel2;
+      return (clone.textContent ?? "").replace(/\s+/g, " ").trim();
+    };
+    const ensureBaseLabel = () => {
+      const existing = button.dataset.baseLabel ?? "";
+      const lastQuantity = button.dataset.lastQuantity;
+      const currentLabel = readButtonLabel();
+      const normalizedCurrentLabel = (() => {
+        if (!currentLabel) return "";
+        if (lastQuantity && lastQuantity.length > 0) {
+          const withSpace = ` \xD7${lastQuantity}`;
+          if (currentLabel.endsWith(withSpace)) {
+            return currentLabel.slice(0, -withSpace.length).replace(/\s+$/, "");
+          }
+          const withoutSpace = `\xD7${lastQuantity}`;
+          if (currentLabel.endsWith(withoutSpace)) {
+            return currentLabel.slice(0, -withoutSpace.length).replace(/\s+$/, "");
+          }
+        }
+        return currentLabel;
+      })();
+      if (normalizedCurrentLabel && normalizedCurrentLabel !== existing) {
+        button.dataset.baseLabel = normalizedCurrentLabel;
+        return normalizedCurrentLabel;
       }
-      return baseLabel2;
+      if (!existing && normalizedCurrentLabel) {
+        button.dataset.baseLabel = normalizedCurrentLabel;
+        return normalizedCurrentLabel;
+      }
+      return existing;
     };
     const setButtonLabel = (label2) => {
       const contentNode = Array.from(button.childNodes).find((node) => {
@@ -13961,10 +13986,12 @@
       quantityContainer.style.display = "none";
     }
     if (quantity == null) {
+      button.dataset.lastQuantity = "";
       setButtonLabel(baseLabel);
       return;
     }
     const labelWithQuantity = baseLabel ? `${baseLabel} \xD7${quantity}` : `\xD7${quantity}`;
+    button.dataset.lastQuantity = String(quantity);
     setButtonLabel(labelWithQuantity);
   }
   function ensureButtonVisibilityObserver(button) {

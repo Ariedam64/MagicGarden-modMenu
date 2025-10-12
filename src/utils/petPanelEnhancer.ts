@@ -182,8 +182,10 @@ async function handleFeedClick(btn: HTMLButtonElement): Promise<void> {
     }
 
     const species = String(pet?.slot?.petSpecies || "");
-    const allowed = await getAllowedCrops(petId, species);
-    if (!allowed.size) {
+    const compatibleList = PetsService.getCompatibleCropsForSpecies(species) ?? [];
+    const compatible = new Set(compatibleList.map((item) => String(item || "")));
+
+    if (!compatible.size) {
       await toastSimple("Feed from inventory", "No compatible crops for this pet.", "info");
       return;
     }
@@ -192,14 +194,12 @@ async function handleFeedClick(btn: HTMLButtonElement): Promise<void> {
     const items = Array.isArray(inventory) ? inventory : [];
     const favoriteSet = await PlayerService.getFavoriteIdSet().catch(() => new Set<string>());
 
-    const eligible = items.filter((item) => {
+    const chosen = items.find((item) => {
       const speciesId = String((item as any)?.species || "");
-      if (!speciesId || !allowed.has(speciesId)) return false;
+      if (!speciesId || !compatible.has(speciesId)) return false;
       const id = String((item as any)?.id || "");
       return id && !favoriteSet.has(id);
-    });
-
-    const chosen = eligible[0] as any;
+    }) as any;
 
     const chosenId = String(chosen?.id || "");
     if (!chosenId) {
