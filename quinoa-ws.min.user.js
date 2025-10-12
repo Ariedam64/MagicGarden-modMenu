@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.7
+// @version      2.0.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26532,7 +26532,7 @@ next: ${next}`;
 
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
-    const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume", "mouseleave", "mouseenter"];
+    const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume"];
     const listeners2 = [];
     function swallowAll() {
       const add = (target, t) => {
