@@ -51,6 +51,7 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Manage pet teams with drag & drop, custom icons, and quick duplication.
 - Apply teams instantly, edit abilities, and push the setup into hotkeys for swapping.
 - Live inventory fetcher keeps slot previews and ability badges accurate.
+- Pet Panel Enhancer injects **FEED INSTANT** and **FEED FROM INVENTORY** buttons
 
 ### 🏠 Room
 - Two tabs: 🌐 Public Rooms (auto-refresh every 10 s with category/player filters) and ⭐ Custom Rooms (your saved quick joins).
@@ -70,6 +71,7 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 ### 🛠️ Tools
 - Curated list of community calculators, planners, and helper spreadsheets with tag filtering.
 - Each card offers an "Open tool" button that tries to launch in a new tab (with graceful fallback toast on failure).
+- Global shop helpers add **Buy All** controls to each vendor panel and a **Sell All Pets** shortcut.
 
 ### 🧩 Misc
 - Player ghost movement toggle with adjustable delay to move silently.
