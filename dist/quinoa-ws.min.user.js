@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.4
+// @version      2.0.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13592,21 +13592,21 @@
         return;
       }
       const species = String(pet?.slot?.petSpecies || "");
-      const allowed = await getAllowedCrops(petId, species);
-      if (!allowed.size) {
+      const compatibleList = PetsService.getCompatibleCropsForSpecies(species) ?? [];
+      const compatible = new Set(compatibleList.map((item) => String(item || "")));
+      if (!compatible.size) {
         await toastSimple("Feed from inventory", "No compatible crops for this pet.", "info");
         return;
       }
       const inventory = await PlayerService.getCropInventoryState();
       const items = Array.isArray(inventory) ? inventory : [];
       const favoriteSet = await PlayerService.getFavoriteIdSet().catch(() => /* @__PURE__ */ new Set());
-      const eligible = items.filter((item) => {
+      const chosen = items.find((item) => {
         const speciesId = String(item?.species || "");
-        if (!speciesId || !allowed.has(speciesId)) return false;
+        if (!speciesId || !compatible.has(speciesId)) return false;
         const id = String(item?.id || "");
         return id && !favoriteSet.has(id);
       });
-      const chosen = eligible[0];
       const chosenId = String(chosen?.id || "");
       if (!chosenId) {
         await toastSimple(

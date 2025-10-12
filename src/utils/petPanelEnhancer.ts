@@ -432,13 +432,6 @@ async function findPetById(petId: string) {
 }
 
 async function getAllowedCrops(petId: string, species: string): Promise<Set<string>> {
-  try {
-    const allowed = await PetsService.getPetAllowedCrops(petId);
-    if (allowed instanceof Set) return allowed;
-    if (Array.isArray(allowed)) return new Set(allowed);
-  } catch (err) {
-    console.warn("[Pet panel] Failed to read per-pet allowed crops", err);
-  }
 
   const defaults = PetsService.getCompatibleCropsForSpecies(species) ?? [];
   return new Set(defaults);
