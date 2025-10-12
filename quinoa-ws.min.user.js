@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.0.6
+// @version      2.0.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3881,77 +3881,6 @@
       notes: ["1 fois / 4h", "Ne se cumule pas avec Amberglow"]
     }
   };
-  var publicRooms = [
-    { name: "play#1", idRoom: "i-1414738784745951293-gc-808935495543160852-1265022148045701220" },
-    { name: "play#2", idRoom: "i-1416705483108257912-gc-808935495543160852-1389438720427425894" },
-    { name: "play#3", idRoom: "i-1414738624276205699-gc-808935495543160852-1389979453957996705" },
-    { name: "play#4", idRoom: "i-1423842359220768778-gc-808935495543160852-1389979475336233000" },
-    { name: "play#5", idRoom: "i-1424918072380231760-gc-808935495543160852-1391350549944733768" },
-    { name: "play#6", idRoom: "i-1424940435679477782-gc-808935495543160852-1391629723687452802" },
-    { name: "play#7", idRoom: "i-1414738652449345536-gc-808935495543160852-1392897701087019028" },
-    { name: "play#8", idRoom: "i-1422396781895094332-gc-808935495543160852-1417928182505672877" },
-    { name: "play#9", idRoom: "i-1423089570534133770-gc-808935495543160852-1392928961679331541" },
-    { name: "play#10", idRoom: "i-1424650709747499109-gc-808935495543160852-1394338319411970198" },
-    { name: "play#11", idRoom: "i-1421249275131859125-gc-808935495543160852-1394338344753959032" },
-    { name: "play#12", idRoom: "i-1417583142918950943-gc-808935495543160852-1394338361631703181" },
-    { name: "play#13", idRoom: "i-1424934789517152339-gc-808935495543160852-1394714064575271032" },
-    { name: "play#14", idRoom: "i-1421215237289545901-gc-808935495543160852-1394714079448399962" },
-    { name: "play#15", idRoom: "i-1425038192419012670-gc-808935495543160852-1394714101065974021" },
-    { name: "play#16", idRoom: "i-1425314797603520553-gc-808935495543160852-1394714159857270936" },
-    { name: "play#17", idRoom: "i-1422642064910319697-gc-808935495543160852-1395445292664488088" },
-    { name: "play#18", idRoom: "i-1425331756999118868-gc-808935495543160852-1395445357495718081" },
-    { name: "play#19", idRoom: "i-1424927331423752222-gc-808935495543160852-1421303964225372294" },
-    { name: "play#20", idRoom: "i-1425338845511286794-gc-808935495543160852-1395445408737788064" },
-    { name: "play#21", idRoom: "i-1424935237057642566-gc-808935495543160852-1406700719272104188" },
-    { name: "play#22", idRoom: "i-1418751419091124374-gc-808935495543160852-1413559836976873672" },
-    { name: "play#23", idRoom: "i-1421249904214544596-gc-808935495543160852-1414650590323277904" },
-    { name: "play#24", idRoom: "i-1424941680062369792-gc-808935495543160852-1414650614415102163" },
-    { name: "play#25", idRoom: "i-1422640525215006781-gc-808935495543160852-1414650635642732564" },
-    { name: "play#26", idRoom: "i-1425313960638414931-gc-808935495543160852-1415547820177625139" },
-    { name: "play#27", idRoom: "i-1424953945838850061-gc-808935495543160852-1415547932303687690" },
-    { name: "play#28", idRoom: "i-1425073934185005190-gc-808935495543160852-1415547947315236864" },
-    { name: "play#29", idRoom: "i-1425044680734675017-gc-808935495543160852-1415550373145350183" },
-    { name: "play#30", idRoom: "i-1425336875211554827-gc-808935495543160852-1420055125409661008" },
-    { name: "play#31", idRoom: "i-1425328665897603112-gc-808935495543160852-1415737760005755021" },
-    { name: "play#32", idRoom: "i-1424643966329946142-gc-808935495543160852-1415737783116628101" },
-    { name: "play#33", idRoom: "i-1424670772022214717-gc-808935495543160852-1415737800992751696" },
-    { name: "play#34", idRoom: "i-1425312620143185920-gc-808935495543160852-1415737817056940203" },
-    { name: "play#35", idRoom: "i-1422405754534760579-gc-808935495543160852-1415737832332329112" },
-    { name: "play#36", idRoom: "i-1425350634600927374-gc-808935495543160852-1415737848279335024" },
-    { name: "play#37", idRoom: "i-1424641225574711346-gc-808935495543160852-1415737865761194066" },
-    { name: "play#38", idRoom: "i-1421263901726609549-gc-808935495543160852-1415737879208001689" },
-    { name: "play#39", idRoom: "i-1424998574575587430-gc-808935495543160852-1415737894144053428" },
-    { name: "play#40", idRoom: "i-1421247475108286596-gc-808935495543160852-1415737913324605450" },
-    { name: "play-1", idRoom: "i-1425232387037462538-gc-808935495543160852-1257800870863699998" },
-    { name: "play-2", idRoom: "i-1424578991133687818-gc-808935495543160852-1395445510235754649" },
-    { name: "play-3", idRoom: "i-1425065021410508891-gc-808935495543160852-1399450370350256198" },
-    { name: "play-4", idRoom: "i-1426081760696995840-gc-808935495543160852-1399845784324673576" },
-    { name: "play-5", idRoom: "i-1423627201508544602-gc-808935495543160852-1407013589067370670" },
-    { name: "play-6", idRoom: "i-1425332316812742676-gc-808935495543160852-1407013620088443171" },
-    { name: "play-7", idRoom: "i-1425575926686552196-gc-808935495543160852-1407824061849141399" },
-    { name: "play-8", idRoom: "i-1426008820152270899-gc-808935495543160852-1407824119747055828" },
-    { name: "garlic-1", idRoom: "i-1425232388086169642-gc-1399110335469977781-1411124424676999308" },
-    { name: "garlic-2", idRoom: "i-1426109571361149050-gc-1399110335469977781-1411801827674030191" },
-    { name: "garlic-3", idRoom: "i-1425694981951193108-gc-1399110335469977781-1411801899489034471" },
-    { name: "garlic-4", idRoom: "i-1425131189135736958-gc-1399110335469977781-1411801931373875240" },
-    { name: "garlic-5", idRoom: "i-1425329927896436756-gc-1399110335469977781-1411801958616141864" },
-    { name: "garlic-6", idRoom: "i-1426106035365744780-gc-1399110335469977781-1411801990345916496" },
-    { name: "garlic-7", idRoom: "i-1426063371202986035-gc-1399110335469977781-1411802027255660644" },
-    { name: "garlic-8", idRoom: "i-1423853876494205122-gc-1399110335469977781-1411802063876128980" },
-    { name: "garlic-9", idRoom: "i-1423853340923662356-gc-1399110335469977781-1411802098533666837" },
-    { name: "garlic-10", idRoom: "i-1423854225879994499-gc-1399110335469977781-1411802136911548467" },
-    { name: "magicgarden1", idRoom: "MG1" },
-    { name: "magicgarden2", idRoom: "MG2" },
-    { name: "magicgarden3", idRoom: "MG3" },
-    { name: "magicgarden4", idRoom: "MG4" },
-    { name: "magicgarden5", idRoom: "MG5" },
-    { name: "magicgarden6", idRoom: "MG6" },
-    { name: "magicgarden7", idRoom: "MG7" },
-    { name: "magicgarden8", idRoom: "MG8" },
-    { name: "magicgarden9", idRoom: "MG9" },
-    { name: "magicgarden10", idRoom: "MG10" },
-    { name: "slay", idRoom: "SLAY" }
-  ];
   var coin = {
     img64: "data:image/png;base64,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"
   };
@@ -25113,6 +25042,73 @@ next: ${next}`;
     view.appendChild(wrapper);
   }
 
+  // src/utils/publicRooms.ts
+  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
+  function resolveGmXhr() {
+    if (typeof GM_xmlhttpRequest === "function") {
+      return GM_xmlhttpRequest;
+    }
+    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+      return GM.xmlHttpRequest.bind(GM);
+    }
+    return void 0;
+  }
+  async function fetchTextWithFetch2(url, options) {
+    const response = await fetch(url, { cache: "no-store", ...options });
+    if (!response.ok) {
+      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  }
+  async function fetchTextWithGM2(url, options) {
+    const xhr = resolveGmXhr();
+    if (!xhr) {
+      throw new Error("GM_xmlhttpRequest not available");
+    }
+    return await new Promise((resolve2, reject) => {
+      xhr({
+        method: "GET",
+        url,
+        headers: options?.headers,
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            resolve2(res.responseText ?? "");
+          } else {
+            reject(new Error(`GM_xmlhttpRequest failed: ${res.status}`));
+          }
+        },
+        onerror: (res) => {
+          reject(new Error(res.error ?? "GM_xmlhttpRequest error"));
+        },
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout")),
+        onabort: () => reject(new Error("GM_xmlhttpRequest aborted"))
+      });
+    });
+  }
+  async function fetchText2(url, options) {
+    const preferGM = isDiscordSurface();
+    const hasGM = !!resolveGmXhr();
+    if (preferGM && hasGM) {
+      return await fetchTextWithGM2(url, options);
+    }
+    try {
+      return await fetchTextWithFetch2(url, options);
+    } catch (error) {
+      if (hasGM) {
+        return await fetchTextWithGM2(url, options);
+      }
+      throw error;
+    }
+  }
+  async function fetchRemoteRooms() {
+    const text = await fetchText2(ROOMS_JSON_URL);
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error("Failed to parse rooms JSON", { cause: error });
+    }
+  }
+
   // src/services/room.ts
   var MAX_PLAYERS = 6;
   function deriveCategoryFromName(name) {
@@ -25122,11 +25118,118 @@ next: ${next}`;
     }
     return "other";
   }
-  var PUBLIC_ROOMS = publicRooms.map((room) => ({
-    name: room.name,
-    idRoom: room.idRoom,
-    category: deriveCategoryFromName(room.name)
-  }));
+  function deriveCategoryOrder(definitions, preferredOrder = []) {
+    const available = new Set(definitions.map((room) => room.category));
+    const seen = /* @__PURE__ */ new Set();
+    const order = [];
+    for (const category of preferredOrder) {
+      if (!available.has(category)) continue;
+      if (seen.has(category)) continue;
+      seen.add(category);
+      order.push(category);
+    }
+    for (const room of definitions) {
+      if (seen.has(room.category)) continue;
+      seen.add(room.category);
+      order.push(room.category);
+    }
+    return order;
+  }
+  function createStateFromDefinitions(definitions, preferredOrder = []) {
+    const cloned = definitions.map((room) => ({ ...room }));
+    return {
+      definitions: cloned,
+      categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
+    };
+  }
+  function cloneState2(state2) {
+    return {
+      definitions: state2.definitions.map((room) => ({ ...room })),
+      categoryOrder: [...state2.categoryOrder]
+    };
+  }
+  var INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
+  var publicRoomsState = cloneState2(INITIAL_PUBLIC_ROOMS_STATE);
+  var remoteRoomsStatus = "idle";
+  var remoteRoomsPromise = null;
+  function parseRemoteRoomsPayload(payload) {
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    const record = payload.publicRooms;
+    if (!record || typeof record !== "object") {
+      return null;
+    }
+    const definitions = [];
+    const categoryOrder = [];
+    for (const [rawCategory, entries] of Object.entries(record)) {
+      if (!Array.isArray(entries) || !entries.length) {
+        continue;
+      }
+      const categoryName = typeof rawCategory === "string" ? rawCategory.trim() : "";
+      if (!categoryName) {
+        continue;
+      }
+      if (!categoryOrder.includes(categoryName)) {
+        categoryOrder.push(categoryName);
+      }
+      for (const entry of entries) {
+        if (typeof entry !== "string") {
+          continue;
+        }
+        const separatorIndex = entry.indexOf(":");
+        if (separatorIndex <= 0) {
+          continue;
+        }
+        const name = entry.slice(0, separatorIndex).trim();
+        const idRoom = entry.slice(separatorIndex + 1).trim();
+        if (!name || !idRoom) {
+          continue;
+        }
+        definitions.push({
+          name,
+          idRoom,
+          category: categoryName
+        });
+      }
+    }
+    if (!definitions.length) {
+      return null;
+    }
+    return createStateFromDefinitions(definitions, categoryOrder);
+  }
+  function setPublicRoomsState(next) {
+    publicRoomsState = cloneState2(next);
+  }
+  function requestRemoteRoomsFetch() {
+    if (remoteRoomsStatus === "pending" || remoteRoomsStatus === "fulfilled" || remoteRoomsStatus === "rejected") {
+      return remoteRoomsPromise;
+    }
+    if (typeof window === "undefined") {
+      return null;
+    }
+    remoteRoomsStatus = "pending";
+    remoteRoomsPromise = (async () => {
+      try {
+        const payload = await fetchRemoteRooms();
+        const parsed = parseRemoteRoomsPayload(payload);
+        if (parsed) {
+          setPublicRoomsState(parsed);
+        }
+        remoteRoomsStatus = "fulfilled";
+      } catch (error) {
+        remoteRoomsStatus = "rejected";
+        console.warn("[MagicGarden] Unable to load remote rooms list", error);
+      }
+    })();
+    return remoteRoomsPromise;
+  }
+  async function ensureRemoteRoomsLoaded() {
+    const promise = requestRemoteRoomsFetch();
+    if (promise) {
+      await promise;
+    }
+  }
   var CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
   function getStorage() {
     if (typeof window === "undefined") return null;
@@ -25253,7 +25356,12 @@ next: ${next}`;
   }
   var RoomService = {
     getPublicRooms() {
-      return PUBLIC_ROOMS.map((room) => ({ ...room }));
+      void requestRemoteRoomsFetch();
+      return publicRoomsState.definitions.map((room) => ({ ...room }));
+    },
+    getPublicRoomsCategoryOrder() {
+      void requestRemoteRoomsFetch();
+      return [...publicRoomsState.categoryOrder];
     },
     getCustomRooms() {
       return getCustomRoomsCache();
@@ -25269,7 +25377,7 @@ next: ${next}`;
       }
       const normalizedName = normalizeIdentifier(name);
       const normalizedId = normalizeIdentifier(idRoom);
-      const allRooms = [...PUBLIC_ROOMS, ...getCustomRoomsCache()];
+      const allRooms = [...this.getPublicRooms(), ...getCustomRoomsCache()];
       if (allRooms.some((existing) => normalizeIdentifier(existing.idRoom) === normalizedId)) {
         return { ok: false, error: "This room already exists." };
       }
@@ -25296,7 +25404,8 @@ next: ${next}`;
       return true;
     },
     async fetchPublicRoomsStatus() {
-      const definitions = this.getPublicRooms();
+      await ensureRemoteRoomsLoaded();
+      const definitions = publicRoomsState.definitions.map((room) => ({ ...room }));
       return fetchStatusesFor(definitions);
     },
     async fetchCustomRoomsStatus() {
@@ -25325,7 +25434,6 @@ next: ${next}`;
   var REFRESH_INTERVAL_MS = 1e4;
   var TAB_ID = "public-rooms";
   var CUSTOM_TAB_ID = "custom-rooms";
-  var CATEGORY_PREFERRED_ORDER = ["play", "magicgarden", "garlic"];
   async function renderRoomMenu(root) {
     const ui = new Menu({ id: "room", compact: true, windowSelector: ".qws-win" });
     ui.addTab(TAB_ID, "\u{1F310} Public Rooms", (view) => renderPublicRoomsTab(view, ui));
@@ -25409,6 +25517,7 @@ next: ${next}`;
     let selectedPlayerFilter = "any";
     let currentRooms = [];
     const filterButtons = /* @__PURE__ */ new Map();
+    let lastRenderedCategories = [];
     const categoryButtonContainer = document.createElement("div");
     categoryButtonContainer.style.display = "flex";
     categoryButtonContainer.style.flexWrap = "wrap";
@@ -25439,8 +25548,90 @@ next: ${next}`;
           return true;
       }
     };
+    const setCategoryFilter = (category) => {
+      if (selectedCategory === category) return;
+      selectedCategory = category;
+      savedScrollTop = 0;
+      updateFilterButtonStyles();
+      renderRooms(currentRooms);
+    };
+    function createFilterButton(label2, category) {
+      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
+      button.addEventListener("click", () => {
+        if (category === null) {
+          setCategoryFilter(null);
+        } else if (selectedCategory === category) {
+          setCategoryFilter(null);
+        } else {
+          setCategoryFilter(category);
+        }
+      });
+      return button;
+    }
+    function collectCategories(rooms) {
+      if (!rooms) return [];
+      const seen = /* @__PURE__ */ new Set();
+      const categories = [];
+      for (const room of rooms) {
+        if (!room || typeof room.category !== "string") continue;
+        const category = room.category.trim();
+        if (!category || seen.has(category)) continue;
+        seen.add(category);
+        categories.push(category);
+      }
+      return categories;
+    }
+    function sortCategories(categories) {
+      if (!categories.length) return [];
+      const preferred = RoomService.getPublicRoomsCategoryOrder();
+      if (!preferred.length) {
+        return [...categories];
+      }
+      const available = new Set(categories);
+      const ordered = [];
+      const used = /* @__PURE__ */ new Set();
+      for (const name of preferred) {
+        if (available.has(name) && !used.has(name)) {
+          ordered.push(name);
+          used.add(name);
+        }
+      }
+      for (const name of categories) {
+        if (!used.has(name)) {
+          ordered.push(name);
+          used.add(name);
+        }
+      }
+      return ordered;
+    }
+    function updateCategoryButtons(rooms) {
+      const categoriesFromRooms = collectCategories(rooms);
+      const sourceCategories = categoriesFromRooms.length ? categoriesFromRooms : collectCategories(RoomService.getPublicRooms());
+      const sortedCategories = sortCategories(sourceCategories);
+      const changed = filterButtons.size === 0 || sortedCategories.length !== lastRenderedCategories.length || sortedCategories.some((category, index) => category !== lastRenderedCategories[index]);
+      if (changed) {
+        if (selectedCategory && !sortedCategories.includes(selectedCategory)) {
+          selectedCategory = null;
+          savedScrollTop = 0;
+        }
+        categoryButtonContainer.innerHTML = "";
+        filterButtons.clear();
+        const allButton = createFilterButton("All", null);
+        filterButtons.set(null, allButton);
+        categoryButtonContainer.appendChild(allButton);
+        for (const category of sortedCategories) {
+          const button = createFilterButton(category, category);
+          filterButtons.set(category, button);
+          categoryButtonContainer.appendChild(button);
+        }
+        lastRenderedCategories = [...sortedCategories];
+      }
+      updateFilterButtonStyles();
+    }
+    updateCategoryButtons();
     const renderRooms = (rooms) => {
       currentRooms = rooms;
+      updateCategoryButtons(rooms);
       list.innerHTML = "";
       const visibleRooms = rooms.filter((room) => {
         if (selectedCategory !== null && room.category !== selectedCategory) {
@@ -25470,48 +25661,6 @@ next: ${next}`;
         savedScrollTop = nextScroll;
       });
     };
-    const setCategoryFilter = (category) => {
-      if (selectedCategory === category) return;
-      selectedCategory = category;
-      savedScrollTop = 0;
-      updateFilterButtonStyles();
-      renderRooms(currentRooms);
-    };
-    const seenCategories = /* @__PURE__ */ new Set();
-    const categories = [];
-    for (const room of RoomService.getPublicRooms()) {
-      if (!seenCategories.has(room.category)) {
-        seenCategories.add(room.category);
-        categories.push(room.category);
-      }
-    }
-    categories.sort((a, b) => {
-      const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
-      const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
-      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-    const createFilterButton = (label2, category) => {
-      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
-      button.addEventListener("click", () => {
-        if (category === null) {
-          setCategoryFilter(null);
-        } else if (selectedCategory === category) {
-          setCategoryFilter(null);
-        } else {
-          setCategoryFilter(category);
-        }
-      });
-      filterButtons.set(category, button);
-      categoryButtonContainer.appendChild(button);
-    };
-    createFilterButton("All", null);
-    for (const category of categories) {
-      createFilterButton(category, category);
-    }
-    updateFilterButtonStyles();
     const playerFilterContainer = document.createElement("div");
     playerFilterContainer.style.display = "flex";
     playerFilterContainer.style.alignItems = "center";
@@ -25771,14 +25920,20 @@ next: ${next}`;
         }
       }
       const categories = Array.from(seen);
-      categories.sort((a, b) => {
-        const indexA = CATEGORY_PREFERRED_ORDER.indexOf(a);
-        const indexB = CATEGORY_PREFERRED_ORDER.indexOf(b);
-        if (indexA === -1 && indexB === -1) return a.localeCompare(b);
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        return indexA - indexB;
-      });
+      const preferredOrder = RoomService.getPublicRoomsCategoryOrder();
+      if (preferredOrder.length) {
+        const indexMap = new Map(preferredOrder.map((name, index) => [name, index]));
+        categories.sort((a, b) => {
+          const indexA = indexMap.get(a);
+          const indexB = indexMap.get(b);
+          if (indexA === void 0 && indexB === void 0) return a.localeCompare(b);
+          if (indexA === void 0) return 1;
+          if (indexB === void 0) return -1;
+          return indexA - indexB;
+        });
+      } else {
+        categories.sort((a, b) => a.localeCompare(b));
+      }
       filterButtons.clear();
       categoryButtonContainer.innerHTML = "";
       createFilterButton("All", null);
