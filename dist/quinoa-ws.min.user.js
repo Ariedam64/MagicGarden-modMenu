@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.0
+// @version      2.1.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -29779,7 +29779,22 @@ next: ${next}`;
   };
 
   // src/ui/menus/room.ts
-  var REFRESH_INTERVAL_MS = 1e4;
+  var ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
+  function ensureRoomMenuStyles() {
+    if (document.getElementById(ROOM_MENU_STYLE_ID)) return;
+    const style2 = document.createElement("style");
+    style2.id = ROOM_MENU_STYLE_ID;
+    style2.textContent = `
+@keyframes room-menu-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}`;
+    document.head.appendChild(style2);
+  }
   var TAB_ID = "public-rooms";
   var CUSTOM_TAB_ID = "custom-rooms";
   async function renderRoomMenu(root) {
@@ -29790,6 +29805,7 @@ next: ${next}`;
   }
   function renderPublicRoomsTab(view, ui) {
     view.innerHTML = "";
+    ensureRoomMenuStyles();
     const root = document.createElement("div");
     root.style.display = "flex";
     root.style.flexDirection = "column";
@@ -29842,23 +29858,78 @@ next: ${next}`;
     listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
     listWrapper.style.width = "100%";
     listWrapper.style.boxSizing = "border-box";
+    listWrapper.style.position = "relative";
+    const loadingOverlay = document.createElement("div");
+    loadingOverlay.style.position = "absolute";
+    loadingOverlay.style.inset = "0";
+    loadingOverlay.style.display = "flex";
+    loadingOverlay.style.flexDirection = "column";
+    loadingOverlay.style.alignItems = "center";
+    loadingOverlay.style.justifyContent = "center";
+    loadingOverlay.style.background = "rgba(9, 10, 17, 0.6)";
+    loadingOverlay.style.backdropFilter = "blur(1px)";
+    loadingOverlay.style.transition = "opacity 150ms ease";
+    loadingOverlay.style.opacity = "0";
+    loadingOverlay.style.visibility = "hidden";
+    loadingOverlay.style.pointerEvents = "none";
+    const loadingSpinner = document.createElement("div");
+    loadingSpinner.style.width = "28px";
+    loadingSpinner.style.height = "28px";
+    loadingSpinner.style.borderRadius = "999px";
+    loadingSpinner.style.border = "3px solid rgba(248, 250, 252, 0.12)";
+    loadingSpinner.style.borderTopColor = "#f8fafc";
+    loadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
+    const loadingText = document.createElement("div");
+    loadingText.textContent = "Loading rooms\u2026";
+    loadingText.style.marginTop = "12px";
+    loadingText.style.fontSize = "12px";
+    loadingText.style.fontWeight = "500";
+    loadingText.style.letterSpacing = "0.01em";
+    loadingText.style.opacity = "0.85";
+    loadingText.style.color = "#f8fafc";
+    loadingText.style.textShadow = "0 2px 6px rgba(0, 0, 0, 0.4)";
+    const loadingContent = document.createElement("div");
+    loadingContent.style.display = "flex";
+    loadingContent.style.flexDirection = "column";
+    loadingContent.style.alignItems = "center";
+    loadingContent.appendChild(loadingSpinner);
+    loadingContent.appendChild(loadingText);
+    loadingOverlay.appendChild(loadingContent);
     const list = document.createElement("div");
     list.style.display = "grid";
     list.style.gap = "10px";
     list.style.padding = "4px";
     listWrapper.appendChild(list);
+    listWrapper.appendChild(loadingOverlay);
     container.appendChild(listWrapper);
-    const statusBar = document.createElement("div");
-    statusBar.style.fontSize = "12px";
-    statusBar.style.opacity = "0.75";
-    statusBar.textContent = "Loading rooms\u2026";
-    container.appendChild(statusBar);
+    const setLoadingState = (loading, message) => {
+      if (message) {
+        loadingText.textContent = message;
+      }
+      if (loading) {
+        loadingOverlay.style.visibility = "visible";
+        loadingOverlay.style.opacity = "1";
+      } else {
+        loadingOverlay.style.opacity = "0";
+        loadingOverlay.addEventListener(
+          "transitionend",
+          () => {
+            loadingOverlay.style.visibility = "hidden";
+          },
+          { once: true }
+        );
+        window.setTimeout(() => {
+          if (loadingOverlay.style.opacity === "0") {
+            loadingOverlay.style.visibility = "hidden";
+          }
+        }, 200);
+      }
+    };
     let savedScrollTop = 0;
     listWrapper.addEventListener("scroll", () => {
       savedScrollTop = listWrapper.scrollTop;
     });
     let destroyed = false;
-    let refreshTimer = null;
     let requestCounter = 0;
     let firstLoad = true;
     let selectedCategory = null;
@@ -29872,6 +29943,36 @@ next: ${next}`;
     categoryButtonContainer.style.alignItems = "center";
     categoryButtonContainer.style.gap = "8px";
     filterBar.appendChild(categoryButtonContainer);
+    const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
+    refreshButton.style.flexShrink = "0";
+    refreshButton.setAttribute("aria-label", "Refresh public rooms list");
+    const filterActions = document.createElement("div");
+    filterActions.style.display = "flex";
+    filterActions.style.alignItems = "center";
+    filterActions.style.gap = "8px";
+    filterActions.style.marginLeft = "auto";
+    filterBar.appendChild(filterActions);
+    const statusBar = document.createElement("div");
+    statusBar.style.fontSize = "12px";
+    statusBar.style.opacity = "0.75";
+    statusBar.style.marginLeft = "auto";
+    statusBar.style.textAlign = "right";
+    statusBar.textContent = "Loading rooms\u2026";
+    const footer = document.createElement("div");
+    footer.style.display = "flex";
+    footer.style.alignItems = "center";
+    footer.style.gap = "12px";
+    footer.style.marginTop = "8px";
+    footer.style.width = "100%";
+    footer.appendChild(refreshButton);
+    footer.appendChild(statusBar);
+    container.appendChild(footer);
+    let isRefreshing = false;
+    const updateRefreshButtonState = () => {
+      const enabled = !destroyed && !isRefreshing;
+      ui.setButtonEnabled(refreshButton, enabled);
+      refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
+    };
     const updateFilterButtonStyles = () => {
       for (const [category, button] of filterButtons) {
         const isActive = category === selectedCategory;
@@ -30013,7 +30114,6 @@ next: ${next}`;
     playerFilterContainer.style.display = "flex";
     playerFilterContainer.style.alignItems = "center";
     playerFilterContainer.style.gap = "6px";
-    playerFilterContainer.style.marginLeft = "auto";
     playerFilterContainer.style.padding = "4px 6px";
     playerFilterContainer.style.background = "rgba(24, 26, 36, 0.85)";
     playerFilterContainer.style.borderRadius = "10px";
@@ -30055,10 +30155,13 @@ next: ${next}`;
       renderRooms(currentRooms);
     });
     playerFilterContainer.appendChild(playerFilterSelect);
-    filterBar.appendChild(playerFilterContainer);
+    filterActions.appendChild(playerFilterContainer);
     const refreshRooms = async () => {
       if (destroyed) return;
       const currentRequest = ++requestCounter;
+      isRefreshing = true;
+      updateRefreshButtonState();
+      setLoadingState(true, firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026");
       statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
       try {
         const rooms = await RoomService.fetchPublicRoomsStatus();
@@ -30074,24 +30177,52 @@ next: ${next}`;
         if (destroyed || currentRequest !== requestCounter) return;
         statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
       } finally {
-        firstLoad = false;
-        if (!destroyed) {
-          if (refreshTimer) window.clearTimeout(refreshTimer);
-          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
+        if (!destroyed && currentRequest === requestCounter) {
+          setLoadingState(false);
         }
+        if (currentRequest === requestCounter) {
+          isRefreshing = false;
+        }
+        updateRefreshButtonState();
+        firstLoad = false;
       }
     };
+    refreshButton.addEventListener("click", () => {
+      void refreshRooms();
+    });
+    updateRefreshButtonState();
     refreshRooms();
+    const windowEl = view.closest(".qws-win");
+    const computeWindowVisible = (win) => !win.classList.contains("is-hidden") && getComputedStyle(win).display !== "none";
+    let visibilityObserver = null;
+    if (windowEl) {
+      let lastVisible = computeWindowVisible(windowEl);
+      visibilityObserver = new MutationObserver(() => {
+        if (destroyed) return;
+        const isVisible = computeWindowVisible(windowEl);
+        if (isVisible && !lastVisible) {
+          void refreshRooms();
+        }
+        lastVisible = isVisible;
+      });
+      visibilityObserver.observe(windowEl, { attributes: true, attributeFilter: ["class", "style"] });
+    }
+    const previousCleanup = view.__cleanup__;
     view.__cleanup__ = () => {
       destroyed = true;
-      if (refreshTimer) {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = null;
+      visibilityObserver?.disconnect();
+      updateRefreshButtonState();
+      if (typeof previousCleanup === "function") {
+        try {
+          previousCleanup.call(view);
+        } catch {
+        }
       }
     };
   }
   function renderCustomRoomsTab(view, ui) {
     view.innerHTML = "";
+    ensureRoomMenuStyles();
     const root = document.createElement("div");
     root.style.display = "flex";
     root.style.flexDirection = "column";
@@ -30209,12 +30340,73 @@ next: ${next}`;
     listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
     listWrapper.style.width = "100%";
     listWrapper.style.boxSizing = "border-box";
+    listWrapper.style.position = "relative";
+    const loadingOverlay = document.createElement("div");
+    loadingOverlay.style.position = "absolute";
+    loadingOverlay.style.inset = "0";
+    loadingOverlay.style.display = "flex";
+    loadingOverlay.style.flexDirection = "column";
+    loadingOverlay.style.alignItems = "center";
+    loadingOverlay.style.justifyContent = "center";
+    loadingOverlay.style.background = "rgba(9, 10, 17, 0.6)";
+    loadingOverlay.style.backdropFilter = "blur(1px)";
+    loadingOverlay.style.transition = "opacity 150ms ease";
+    loadingOverlay.style.opacity = "0";
+    loadingOverlay.style.visibility = "hidden";
+    loadingOverlay.style.pointerEvents = "none";
+    const loadingSpinner = document.createElement("div");
+    loadingSpinner.style.width = "28px";
+    loadingSpinner.style.height = "28px";
+    loadingSpinner.style.borderRadius = "999px";
+    loadingSpinner.style.border = "3px solid rgba(248, 250, 252, 0.12)";
+    loadingSpinner.style.borderTopColor = "#f8fafc";
+    loadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
+    const loadingText = document.createElement("div");
+    loadingText.textContent = "Loading rooms\u2026";
+    loadingText.style.marginTop = "12px";
+    loadingText.style.fontSize = "12px";
+    loadingText.style.fontWeight = "500";
+    loadingText.style.letterSpacing = "0.01em";
+    loadingText.style.opacity = "0.85";
+    loadingText.style.color = "#f8fafc";
+    loadingText.style.textShadow = "0 2px 6px rgba(0, 0, 0, 0.4)";
+    const loadingContent = document.createElement("div");
+    loadingContent.style.display = "flex";
+    loadingContent.style.flexDirection = "column";
+    loadingContent.style.alignItems = "center";
+    loadingContent.appendChild(loadingSpinner);
+    loadingContent.appendChild(loadingText);
+    loadingOverlay.appendChild(loadingContent);
     const list = document.createElement("div");
     list.style.display = "grid";
     list.style.gap = "10px";
     list.style.padding = "4px";
     listWrapper.appendChild(list);
+    listWrapper.appendChild(loadingOverlay);
     container.appendChild(listWrapper);
+    const setLoadingState = (loading, message) => {
+      if (message) {
+        loadingText.textContent = message;
+      }
+      if (loading) {
+        loadingOverlay.style.visibility = "visible";
+        loadingOverlay.style.opacity = "1";
+      } else {
+        loadingOverlay.style.opacity = "0";
+        loadingOverlay.addEventListener(
+          "transitionend",
+          () => {
+            loadingOverlay.style.visibility = "hidden";
+          },
+          { once: true }
+        );
+        window.setTimeout(() => {
+          if (loadingOverlay.style.opacity === "0") {
+            loadingOverlay.style.visibility = "hidden";
+          }
+        }, 200);
+      }
+    };
     const statusBar = document.createElement("div");
     statusBar.style.fontSize = "12px";
     statusBar.style.opacity = "0.75";
@@ -30225,7 +30417,6 @@ next: ${next}`;
       savedScrollTop = listWrapper.scrollTop;
     });
     let destroyed = false;
-    let refreshTimer = null;
     let requestCounter = 0;
     let firstLoad = true;
     let selectedCategory = null;
@@ -30415,17 +30606,15 @@ next: ${next}`;
       const definitions = RoomService.getCustomRooms();
       applyCategoryButtons(definitions);
       if (!definitions.length) {
+        setLoadingState(false);
         currentRooms = [];
         renderRooms([]);
         statusBar.textContent = "Add a custom room to get started.";
         firstLoad = false;
-        if (!destroyed) {
-          if (refreshTimer) window.clearTimeout(refreshTimer);
-          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
-        }
         return;
       }
       const currentRequest = ++requestCounter;
+      setLoadingState(true, firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026");
       statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
       try {
         const rooms = await RoomService.fetchCustomRoomsStatus();
@@ -30441,11 +30630,10 @@ next: ${next}`;
         if (destroyed || currentRequest !== requestCounter) return;
         statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
       } finally {
-        firstLoad = false;
-        if (!destroyed) {
-          if (refreshTimer) window.clearTimeout(refreshTimer);
-          refreshTimer = window.setTimeout(refreshRooms, REFRESH_INTERVAL_MS);
+        if (!destroyed && currentRequest === requestCounter) {
+          setLoadingState(false);
         }
+        firstLoad = false;
       }
     };
     manageForm.addEventListener("submit", (event) => {
@@ -30467,10 +30655,6 @@ next: ${next}`;
     refreshRooms();
     view.__cleanup__ = () => {
       destroyed = true;
-      if (refreshTimer) {
-        window.clearTimeout(refreshTimer);
-        refreshTimer = null;
-      }
     };
   }
   function getCurrentRoomCode() {
