@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.1
+// @version      2.1.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -29925,11 +29925,6 @@ next: ${next}`;
         }, 200);
       }
     };
-    const statusBar = document.createElement("div");
-    statusBar.style.fontSize = "12px";
-    statusBar.style.opacity = "0.75";
-    statusBar.textContent = "Loading rooms\u2026";
-    container.appendChild(statusBar);
     let savedScrollTop = 0;
     listWrapper.addEventListener("scroll", () => {
       savedScrollTop = listWrapper.scrollTop;
@@ -29948,16 +29943,30 @@ next: ${next}`;
     categoryButtonContainer.style.alignItems = "center";
     categoryButtonContainer.style.gap = "8px";
     filterBar.appendChild(categoryButtonContainer);
+    const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
+    refreshButton.style.flexShrink = "0";
+    refreshButton.setAttribute("aria-label", "Refresh public rooms list");
     const filterActions = document.createElement("div");
     filterActions.style.display = "flex";
     filterActions.style.alignItems = "center";
     filterActions.style.gap = "8px";
     filterActions.style.marginLeft = "auto";
     filterBar.appendChild(filterActions);
-    const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
-    refreshButton.style.flexShrink = "0";
-    refreshButton.setAttribute("aria-label", "Refresh public rooms list");
-    filterActions.appendChild(refreshButton);
+    const statusBar = document.createElement("div");
+    statusBar.style.fontSize = "12px";
+    statusBar.style.opacity = "0.75";
+    statusBar.style.marginLeft = "auto";
+    statusBar.style.textAlign = "right";
+    statusBar.textContent = "Loading rooms\u2026";
+    const footer = document.createElement("div");
+    footer.style.display = "flex";
+    footer.style.alignItems = "center";
+    footer.style.gap = "12px";
+    footer.style.marginTop = "8px";
+    footer.style.width = "100%";
+    footer.appendChild(refreshButton);
+    footer.appendChild(statusBar);
+    container.appendChild(footer);
     let isRefreshing = false;
     const updateRefreshButtonState = () => {
       const enabled = !destroyed && !isRefreshing;
