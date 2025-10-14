@@ -10,10 +10,40 @@ import {
   type CurrentGardenObject,
   type PlantSlotTiming,
 } from "../store/atoms";
+import { plantCatalog } from "../data/hardcoded-data.clean";
 
 /** Référence des mutations visuelles reconnues par le locker. */
 const VISUAL_MUTATIONS = new Set(["Gold", "Rainbow"] as const);
 const LOCKER_NO_WEATHER_TAG = "NoWeatherEffect" as const;
+
+const normalizeSpeciesKey = (value: string): string =>
+  value
+    .toLowerCase()
+    .replace(/['’`]/g, "")
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .replace(/(seed|plant|baby|fruit|crop)$/i, "");
+
+const MAX_SCALE_BY_SPECIES = (() => {
+  const map = new Map<string, number>();
+  const register = (key: unknown, value: number) => {
+    if (typeof key !== "string") return;
+    const normalized = normalizeSpeciesKey(key.trim());
+    if (!normalized || map.has(normalized)) return;
+    map.set(normalized, value);
+  };
+
+  for (const [species, entry] of Object.entries(plantCatalog as Record<string, any>)) {
+    const maxScale = Number(entry?.crop?.maxScale);
+    if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+    register(species, maxScale);
+    register(entry?.seed?.name, maxScale);
+    register(entry?.plant?.name, maxScale);
+    register(entry?.crop?.name, maxScale);
+  }
+
+  return map;
+})();
 
 type VisualTag = "Gold" | "Rainbow";
 type WeatherTag = string;
@@ -21,6 +51,7 @@ export type WeatherMode = "ANY" | "ALL" | "RECIPES";
 
 export type LockerSettingsPersisted = {
   minScalePct: number;
+  maxScalePct: number;
   minInventory: number;
   avoidNormal: boolean;
   includeNormal?: boolean;
@@ -186,6 +217,45 @@ const extractSeedKey = (obj: CGO | null | undefined): string | null => {
 const clampPercent = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
+const lookupMaxScale = (species: unknown): number | null => {
+  if (typeof species !== "string") return null;
+  const normalized = normalizeSpeciesKey(species.trim());
+  if (!normalized) return null;
+  const found = MAX_SCALE_BY_SPECIES.get(normalized);
+  if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+    return found;
+  }
+  return null;
+};
+
+const getMaxScaleForSlot = (slot: any): number | null => {
+  if (!slot || typeof slot !== "object") return null;
+  const candidates = new Set<string>();
+  const fromSeedKey = extractSeedKey(slot as any);
+  if (fromSeedKey) candidates.add(fromSeedKey);
+  const fields = [
+    "species",
+    "seedSpecies",
+    "plantSpecies",
+    "cropSpecies",
+    "baseSpecies",
+    "seedKey",
+  ];
+  for (const field of fields) {
+    const value = (slot as Record<string, unknown>)[field];
+    if (typeof value === "string" && value) {
+      candidates.add(value);
+    }
+  }
+  for (const cand of candidates) {
+    const max = lookupMaxScale(cand);
+    if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+      return max;
+    }
+  }
+  return null;
+};
+
 const extractSizePercent = (slot: any): number => {
   if (!slot || typeof slot !== "object") return 100;
   const direct = Number(slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent);
@@ -194,8 +264,13 @@ const extractSizePercent = (slot: any): number => {
   }
   const scale = Number(slot.targetScale ?? slot.scale);
   if (Number.isFinite(scale)) {
+    const maxScale = getMaxScaleForSlot(slot);
+    if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+      const clamped = Math.max(1, Math.min(maxScale, scale));
+      const pct = 50 + ((clamped - 1) / (maxScale - 1)) * 50;
+      return clampPercent(Math.round(pct), 50, 100);
+    }
     if (scale > 1 && scale <= 2) {
-      // approx: map [1,2] -> [50,100]
       const pct = 50 + ((scale - 1) / 1) * 50;
       return clampPercent(Math.round(pct), 50, 100);
     }
@@ -512,6 +587,7 @@ export function startLockerSlotWatcherViaGardenObject(): LockerSlotWatcher {
 function defaultSettings(): LockerSettingsPersisted {
   return {
     minScalePct: 50,
+    maxScalePct: 100,
     minInventory: 91,
     avoidNormal: false,
     includeNormal: true,
@@ -536,8 +612,23 @@ const clampNumber = (value: number, min: number, max: number) => Math.max(min, M
 
 function sanitizeSettings(raw: any): LockerSettingsPersisted {
   const base = defaultSettings();
-  const minScale = Number(raw?.minScalePct);
-  base.minScalePct = Number.isFinite(minScale) ? clampNumber(Math.round(minScale), 50, 100) : 50;
+  const minScaleRaw = Number(raw?.minScalePct);
+  let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, 99) : 50;
+
+  const maxScaleRaw = Number(raw?.maxScalePct);
+  let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 51, 100) : 100;
+
+  if (maxScale <= minScale) {
+    if (minScale >= 99) {
+      minScale = 99;
+      maxScale = 100;
+    } else {
+      maxScale = clampNumber(minScale + 1, 51, 100);
+    }
+  }
+
+  base.minScalePct = minScale;
+  base.maxScalePct = maxScale;
 
   const minInv = Number(raw?.minInventory);
   base.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
@@ -597,6 +688,7 @@ function sanitizeState(raw: any): LockerStatePersisted {
 function cloneSettings(settings: LockerSettingsPersisted): LockerSettingsPersisted {
   return {
     minScalePct: settings.minScalePct,
+    maxScalePct: settings.maxScalePct,
     minInventory: settings.minInventory,
     avoidNormal: settings.avoidNormal,
     includeNormal: settings.includeNormal,
@@ -837,6 +929,7 @@ export class LockerService {
 
     let computedSizePercent: number | null = null;
     let harvestAllowed: boolean | null = null;
+    let displaySizePercent: number | null = null;
 
     if (nextInfo.isPlant && nextInfo.slot) {
       if (typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent)) {
@@ -860,6 +953,10 @@ export class LockerService {
       harvestAllowed = null;
     }
 
+    if (typeof computedSizePercent === "number") {
+      displaySizePercent = Math.max(50, Math.min(100, computedSizePercent));
+    }
+
     this.currentSlotInfo = nextInfo;
     this.currentSlotHarvestAllowed = harvestAllowed;
 
@@ -871,6 +968,7 @@ export class LockerService {
             slotIndex: nextInfo.originalIndex,
             orderedIndex: nextInfo.orderedIndex,
             sizePercent: computedSizePercent,
+            displaySizePercent,
             harvestAllowed,
             mutations: normalizedMutations,
             slot: nextInfo.slot,
@@ -883,6 +981,7 @@ export class LockerService {
             totalSlots: nextInfo.totalSlots,
             availableSlotCount: nextInfo.availableSlotCount,
             seedKey: nextInfo.seedKey ?? null,
+            displaySizePercent,
             slot: nextInfo.slot,
           });
         }
@@ -934,8 +1033,10 @@ export class LockerService {
     settings: LockerSettingsPersisted,
     args: HarvestCheckArgs,
   ): boolean {
-    const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 100);
-    if (args.sizePercent < minScale) return true;
+    const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 99);
+    const maxScaleRaw = clampNumber(Math.round(settings.maxScalePct ?? 100), 51, 100);
+    const maxScale = maxScaleRaw <= minScale ? Math.min(100, minScale + 1) : maxScaleRaw;
+    if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
 
     const { hasGold, hasRainbow, weather } = mutationsToArrays(args.mutations);
     const isNormal = !hasGold && !hasRainbow;

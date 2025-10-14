@@ -91,6 +91,7 @@ const getLockerSeedEmojiForSeedName = (name: string | undefined): string | undef
 
 type LockerSettingsState = {
   minScalePct: number;
+  maxScalePct: number;
   minInventory: number;
   avoidNormal: boolean;
   visualMutations: Set<VisualTag>;
@@ -635,6 +636,7 @@ if (typeof window !== "undefined") {
 function createDefaultSettings(): LockerSettingsState {
   return {
     minScalePct: 50,
+    maxScalePct: 100,
     minInventory: 91,
     avoidNormal: false,
     visualMutations: new Set<VisualTag>(),
@@ -646,6 +648,7 @@ function createDefaultSettings(): LockerSettingsState {
 
 function copySettings(target: LockerSettingsState, source: LockerSettingsState): void {
   target.minScalePct = source.minScalePct;
+  target.maxScalePct = source.maxScalePct;
   target.minInventory = source.minInventory;
   target.avoidNormal = source.avoidNormal;
   target.visualMutations.clear();
@@ -662,7 +665,18 @@ function hydrateSettingsFromPersisted(
   persisted?: LockerSettingsPersisted | null,
 ): void {
   const src = persisted ?? ({} as LockerSettingsPersisted);
-  target.minScalePct = Math.max(50, Math.min(100, Math.round(src.minScalePct ?? 50)));
+  let minScale = Math.max(50, Math.min(99, Math.round(src.minScalePct ?? 50)));
+  let maxScale = Math.max(51, Math.min(100, Math.round(src.maxScalePct ?? 100)));
+  if (maxScale <= minScale) {
+    if (minScale >= 99) {
+      minScale = 99;
+      maxScale = 100;
+    } else {
+      maxScale = Math.min(100, Math.max(51, minScale + 1));
+    }
+  }
+  target.minScalePct = minScale;
+  target.maxScalePct = maxScale;
   target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
   target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
   target.visualMutations.clear();
@@ -684,8 +698,19 @@ function hydrateSettingsFromPersisted(
 
 function serializeSettingsState(state: LockerSettingsState): LockerSettingsPersisted {
   state.weatherRecipes.forEach(set => normalizeRecipeSelection(set));
+  let minScale = Math.max(50, Math.min(99, Math.round(state.minScalePct || 50)));
+  let maxScale = Math.max(51, Math.min(100, Math.round(state.maxScalePct || 100)));
+  if (maxScale <= minScale) {
+    if (minScale >= 99) {
+      minScale = 99;
+      maxScale = 100;
+    } else {
+      maxScale = Math.min(100, Math.max(51, minScale + 1));
+    }
+  }
   return {
-    minScalePct: Math.max(50, Math.min(100, Math.round(state.minScalePct || 50))),
+    minScalePct: minScale,
+    maxScalePct: maxScale,
     minInventory: Math.max(0, Math.min(999, Math.round(state.minInventory || 91))),
     avoidNormal: !!state.avoidNormal,
     includeNormal: !state.avoidNormal,
@@ -1047,20 +1072,82 @@ function createLockerSettingsCard(
   };
 
   const scaleRow = centerRow();
-  const scaleSlider = ui.slider(50, 100, 1, state.minScalePct) as HTMLInputElement;
-  scaleSlider.style.width = "240px";
-  const scaleValue = ui.label("50%");
-  scaleValue.style.margin = "0";
-  scaleRow.append(scaleSlider, scaleValue);
+  scaleRow.style.flexDirection = "column";
+  scaleRow.style.alignItems = "center";
+  scaleRow.style.width = "100%";
+  scaleRow.style.gap = "12px";
 
-  scaleSlider.addEventListener("input", () => {
-    scaleValue.textContent = `${(scaleSlider as HTMLInputElement).value}%`;
+  const scaleSlider = ui.rangeDual(50, 100, 1, state.minScalePct, state.maxScalePct);
+  applyStyles(scaleSlider.root, {
+    width: "min(420px, 100%)",
   });
 
-  scaleSlider.addEventListener("change", () => {
-    state.minScalePct = parseInt(scaleSlider.value, 10) || 50;
-    opts.onChange?.();
+  const scaleMinSlider = scaleSlider.min;
+  const scaleMaxSlider = scaleSlider.max;
+
+  const scaleMinValue = ui.label("50%");
+  const scaleMaxValue = ui.label("100%");
+  [scaleMinValue, scaleMaxValue].forEach(label => {
+    label.style.margin = "0";
+    label.style.fontWeight = "600";
   });
+
+  const makeScaleValue = (labelText: string, valueLabel: HTMLLabelElement) => {
+    const wrap = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+    });
+    const label = ui.label(labelText);
+    label.style.margin = "0";
+    label.style.opacity = "0.9";
+    wrap.append(label, valueLabel);
+    return wrap;
+  };
+
+  const scaleValues = applyStyles(document.createElement("div"), {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "min(420px, 100%)",
+    gap: "16px",
+  });
+
+  scaleValues.append(makeScaleValue("Min", scaleMinValue), makeScaleValue("Max", scaleMaxValue));
+
+  scaleRow.append(scaleSlider.root, scaleValues);
+
+  const applyScaleRange = (commit: boolean) => {
+    let minValue = parseInt(scaleMinSlider.value, 10);
+    let maxValue = parseInt(scaleMaxSlider.value, 10);
+    if (!Number.isFinite(minValue)) minValue = state.minScalePct;
+    if (!Number.isFinite(maxValue)) maxValue = state.maxScalePct;
+    minValue = Math.max(50, Math.min(99, minValue));
+    maxValue = Math.max(51, Math.min(100, maxValue));
+    if (maxValue <= minValue) {
+      if (minValue >= 99) {
+        minValue = 99;
+        maxValue = 100;
+      } else {
+        maxValue = Math.min(100, Math.max(51, minValue + 1));
+      }
+    }
+    scaleSlider.setValues(minValue, maxValue);
+    scaleMinValue.textContent = `${minValue}%`;
+    scaleMaxValue.textContent = `${maxValue}%`;
+    if (commit) {
+      state.minScalePct = minValue;
+      state.maxScalePct = maxValue;
+      opts.onChange?.();
+    }
+  };
+
+  scaleMinSlider.addEventListener("input", () => applyScaleRange(false));
+  scaleMaxSlider.addEventListener("input", () => applyScaleRange(false));
+  scaleMinSlider.addEventListener("change", () => applyScaleRange(true));
+  scaleMaxSlider.addEventListener("change", () => applyScaleRange(true));
+
+  applyScaleRange(false);
 
   const colorsRow = centerRow();
   colorsRow.style.flexWrap = "wrap";
@@ -1599,7 +1686,7 @@ function createLockerSettingsCard(
   recipesWrap.append(recipesHeader, recipesList);
 
   card.append(
-    makeSection("Minimum size", scaleRow),
+    makeSection("Lock by size", scaleRow),
     makeSection("Lock by color", colorsRow),
     makeSection("Lock by weather", weatherGrid),
     makeSection("Weather lock mode", weatherModeRow),
@@ -1607,8 +1694,8 @@ function createLockerSettingsCard(
   );
 
   const refresh = () => {
-    scaleSlider.value = String(state.minScalePct);
-    scaleValue.textContent = `${scaleSlider.value}%`;
+    scaleSlider.setValues(state.minScalePct, state.maxScalePct);
+    applyScaleRange(false);
 
     updateColorButtons();
 

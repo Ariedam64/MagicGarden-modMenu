@@ -77,6 +77,14 @@ type SelectOptions = {
   placeholder?: string;
 };
 
+type RangeDualHandle = {
+  root: HTMLDivElement;
+  min: HTMLInputElement;
+  max: HTMLInputElement;
+  setValues: (minValue: number, maxValue: number) => void;
+  refresh: () => void;
+};
+
 type ErrorBarHandle = {
   el: HTMLDivElement;
   show: (message: string) => void;
@@ -809,6 +817,58 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
     const i = el('input', 'qmm-range') as HTMLInputElement;
     i.type = 'range'; i.min = String(min); i.max = String(max); i.step = String(step); i.value = String(value);
     return i;
+  }
+
+  rangeDual(min = 0, max = 100, step = 1, valueMin = min, valueMax = max): RangeDualHandle {
+    const wrap = el('div', 'qmm-range-dual');
+    const track = el('div', 'qmm-range-dual-track');
+    const fill = el('div', 'qmm-range-dual-fill');
+    track.appendChild(fill);
+    wrap.appendChild(track);
+
+    const createHandle = (value: number, extraClass: string) => {
+      const input = this.slider(min, max, step, value);
+      input.classList.add('qmm-range-dual-input', extraClass);
+      wrap.appendChild(input);
+      return input;
+    };
+
+    const minInput = createHandle(valueMin, 'qmm-range-dual-input--min');
+    const maxInput = createHandle(valueMax, 'qmm-range-dual-input--max');
+
+    const updateFill = () => {
+      const minValue = Number(minInput.value);
+      const maxValue = Number(maxInput.value);
+      const total = max - min;
+      if (!Number.isFinite(total) || total <= 0) {
+        fill.style.left = '0%';
+        fill.style.right = '100%';
+        return;
+      }
+      const clampPercent = (value: number) => Math.max(0, Math.min(100, value));
+      const start = ((Math.min(minValue, maxValue) - min) / total) * 100;
+      const end = ((Math.max(minValue, maxValue) - min) / total) * 100;
+      fill.style.left = `${clampPercent(start)}%`;
+      fill.style.right = `${clampPercent(100 - end)}%`;
+    };
+
+    minInput.addEventListener('input', updateFill);
+    maxInput.addEventListener('input', updateFill);
+
+    const handle: RangeDualHandle = {
+      root: wrap,
+      min: minInput,
+      max: maxInput,
+      setValues(minValue: number, maxValue: number) {
+        minInput.value = String(minValue);
+        maxInput.value = String(maxValue);
+        updateFill();
+      },
+      refresh: updateFill,
+    };
+
+    handle.refresh();
+    return handle;
   }
 
   switch(checked = false) {
@@ -1783,6 +1843,114 @@ const moveIndicator = () => {
 .qmm-range::-moz-range-thumb{
   width:16px; height:16px; border-radius:50%; background:#fff; border:none;
   box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
+}
+
+.qmm-range-dual{
+  position:relative;
+  width:100%;
+  padding:18px 0 10px;
+}
+.qmm-range-dual-track{
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(8,19,33,.8), rgba(27,43,68,.9));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(118,156,255,.08);
+}
+.qmm-range-dual-fill{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff99);
+  box-shadow:0 4px 14px rgba(37,92,255,.3);
+  transition:left .12s ease, right .12s ease;
+}
+.qmm-range-dual-input{
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  width:100%;
+  height:28px;
+  margin:0;
+  background:transparent;
+  pointer-events:none;
+}
+.qmm-range-dual-input::-webkit-slider-runnable-track{ background:none; }
+.qmm-range-dual-input::-moz-range-track{ background:none; }
+.qmm-range-dual-input::-webkit-slider-thumb{
+  pointer-events:auto;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:linear-gradient(145deg, #fff, #dce6ff);
+  border:2px solid rgba(122,162,255,.8);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.qmm-range-dual-input:active::-webkit-slider-thumb,
+.qmm-range-dual-input:focus-visible::-webkit-slider-thumb{
+  transform:scale(1.05);
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
+}
+.qmm-range-dual-input::-moz-range-thumb{
+  pointer-events:auto;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:linear-gradient(145deg, #fff, #dce6ff);
+  border:2px solid rgba(122,162,255,.8);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.qmm-range-dual-input:active::-moz-range-thumb,
+.qmm-range-dual-input:focus-visible::-moz-range-thumb{
+  transform:scale(1.05);
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
+}
+.qmm-range-dual-input--min{ z-index:2; }
+.qmm-range-dual-input--max{ z-index:3; }
+.qmm-range-dual-bubble{
+  position:absolute;
+  top:14px;
+  transform:translate(-50%, -100%);
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:11px;
+  line-height:1;
+  font-weight:600;
+  color:#dbe6ff;
+  background:rgba(17,28,46,.9);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  pointer-events:none;
+  transition:opacity .12s ease, transform .12s ease;
+  opacity:.85;
+}
+.qmm-range-dual-bubble::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:-4px;
+  width:8px;
+  height:8px;
+  background:inherit;
+  transform:translateX(-50%) rotate(45deg);
+  border-radius:2px;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.qmm-range-dual-input--min:focus-visible + .qmm-range-dual-bubble--min,
+.qmm-range-dual-input--max:focus-visible + .qmm-range-dual-bubble--max,
+.qmm-range-dual-input--min:active + .qmm-range-dual-bubble--min,
+.qmm-range-dual-input--max:active + .qmm-range-dual-bubble--max{
+  opacity:1;
+  transform:translate(-50%, -110%) scale(1.02);
 }
 
 /* ---------- Minimal table ---------- */
