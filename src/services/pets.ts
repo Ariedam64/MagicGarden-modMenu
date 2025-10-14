@@ -20,6 +20,7 @@ import {
   PET_TEAM_PREV_ID,
 } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
+import { StatsService } from "./stats";
 
 /* ----------------------------- Types & constants ----------------------------- */
 
@@ -1041,6 +1042,81 @@ export const PetsService = {
   _logsCutoffMs: 0,
   _logsCutoffSkewMs: 1500,
 
+  _extractAbilityValue(abilityId: string, rawData: any): number {
+    const num = (value: unknown): number => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+    };
+
+    const data = (rawData ?? {}) as Record<string, unknown>;
+    const base = (petAbilities as Record<string, any>)[abilityId]?.baseParameters ?? {};
+
+    switch (abilityId as keyof typeof petAbilities) {
+      case "CoinFinderI":
+      case "CoinFinderII":
+      case "CoinFinderIII": {
+        const value = data["coinsFound"] ?? data["coins"] ?? 0;
+        return num(value);
+      }
+
+      case "SellBoostI":
+      case "SellBoostII":
+      case "SellBoostIII":
+      case "SellBoostIV": {
+        const value = data["bonusCoins"] ?? data["coinsEarned"] ?? 0;
+        return num(value);
+      }
+
+      case "ProduceEater":
+        return num(data["sellPrice"] ?? 0);
+
+      case "EggGrowthBoost":
+      case "EggGrowthBoostII":
+      case "EggGrowthBoostIII": {
+        const minutes =
+          data["eggGrowthTimeReductionMinutes"] ??
+          data["reductionMinutes"] ??
+          base["eggGrowthTimeReductionMinutes"] ??
+          0;
+        return num(minutes) * 60 * 1000;
+      }
+
+      case "PlantGrowthBoost":
+      case "PlantGrowthBoostII": {
+        const minutes =
+          data["reductionMinutes"] ??
+          data["plantGrowthReductionMinutes"] ??
+          base["plantGrowthReductionMinutes"] ??
+          0;
+        return num(minutes) * 60 * 1000;
+      }
+
+      case "PetXpBoost":
+      case "PetXpBoostII": {
+        const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
+        return num(xp);
+      }
+
+      case "PetHatchSizeBoost":
+      case "PetHatchSizeBoostII": {
+        const strength = data["strengthIncrease"] ?? 0;
+        return num(strength);
+      }
+
+      case "HungerRestore":
+      case "HungerRestoreII": {
+        const pct =
+          data["hungerRestoredPercentage"] ??
+          base["hungerRestorePercentage"] ??
+          0;
+        return num(pct);
+      }
+
+      default:
+        return 0;
+    }
+  },
+
   async startAbilityLogsWatcher(): Promise<() => void> {
     await _ensureInventoryWatchersStarted();
 
@@ -1321,6 +1397,15 @@ export const PetsService = {
       };
 
       this._seenPerfByPet.set(petId, performedAtNum);
+
+      try {
+        StatsService.incrementAbilityStat(abilityIdStr, "triggers");
+        const abilityValue = this._extractAbilityValue(abilityIdStr, (entry as any).data);
+        if (abilityValue > 0) {
+          StatsService.incrementAbilityStat(abilityIdStr, "totalValue", abilityValue);
+        }
+      } catch {}
+
       this._pushLog(logLine);
     }
   },

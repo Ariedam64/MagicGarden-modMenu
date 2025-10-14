@@ -3,6 +3,7 @@ import { ensureStore } from "../store/jotai";
 import { PlayerService } from "../services/player";
 import { toastSimple } from "../ui/toast";
 import { audioPlayer } from "../core/audioPlayer";
+import { StatsService } from "../services/stats";
 
 /* =============================================================================
  * Inject a styled "Sell all Pets" button next to a detected "Sell X" button
@@ -297,6 +298,19 @@ async function sellPetsFromInventory(
     try {
       await PlayerService.sellPet(pet.id);
       sold += 1;
+      StatsService.incrementShopStat("petsSoldCount");
+      
+      void (async () => {
+        try {
+          const total = await Atoms.pets.totalPetSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("petsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellPet] Unable to read pet sell price", error);
+        }
+      })();
       try { logger('sell-pet:success', { id: pet.id, pet }); } catch {}
     } catch (error) {
       failures.push({ pet, error });

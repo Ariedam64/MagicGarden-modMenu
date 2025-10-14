@@ -5,6 +5,7 @@
 // - Tracks per-item notification prefs (popup only) in localStorage
 // - Emits NotifierState to subscribers
 
+
 import { Atoms } from "../store/atoms";
 import {
   plantCatalog,
@@ -15,6 +16,7 @@ import {
   weatherCatalog,
 } from "../data/hardcoded-data.clean";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../utils/audio";
+import { StatsService } from "./stats";
 
 export type SectionType = "Seed" | "Egg" | "Tool" | "Decor";
 
@@ -738,10 +740,13 @@ function _handleWeatherUpdate(raw: any, opts: { force?: boolean } = {}) {
     pref.lastSeen = now;
     _weatherPrefs.set(def.id, pref);
   }
-
   _currentWeatherId = def?.id ?? null;
   _currentWeatherValue = nextValue;
 
+  if (_currentWeatherId) {
+    StatsService.incrementWeatherStat(_currentWeatherId.replace("Weather:",""));
+  }
+  
   if (prevId && prevId !== _currentWeatherId) {
     audio.stopLoop(prevId);
   }

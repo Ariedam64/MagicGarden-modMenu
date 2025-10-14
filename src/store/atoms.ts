@@ -58,6 +58,12 @@ export type ToolItem = {
     quantity: number
 }
 
+export type DecorItem = {
+  decorId: string;
+  itemType: "Decor";
+  quantity: number;
+};
+
 export type PetInfo = { slot: PetSlot; position?: XY | null };
 export type PetState = PetInfo[] | null;
 
@@ -77,6 +83,7 @@ export type SeedItem = {
 };
 export type SeedInventoryState = SeedItem[] | null;
 export type ToolInventoryState = ToolItem[] | null;
+export type DecorInventoryState = DecorItem[] | null;
 
 export type AvatarTriggerAnimation = {
   playerId: string;
@@ -98,10 +105,13 @@ export const myInventory = makeAtom<any>("myInventoryAtom");
 export const myCropInventory = makeAtom<CropInventoryState>("myCropInventoryAtom");
 export const mySeedInventory = makeAtom<SeedInventoryState>("mySeedInventoryAtom");
 export const myToolInventory = makeAtom<ToolInventoryState>("myToolInventoryAtom");
+export const myEggInventory = makeAtom<ToolInventoryState>("myEggInventoryAtom");
+export const myDecorInventory = makeAtom<DecorInventoryState>("myDecorInventoryAtom");
 export const myPetInfos = makeAtom<PetState>("myPetInfosAtom");
 export const myPetSlotInfos = makeAtom<any>("myPetSlotInfosAtom");
 export const totalPetSellPrice = makeAtom<number>("totalPetSellPriceAtom")
 export const expandedPetSlotId = makeAtom<string>("expandedPetSlotIdAtom")
+export const myCropItemsToSell = makeAtom<any>("myCropItemsToSellAtom")
 
 export const shops = makeAtom<any>("shopsAtom");
 export const seedShop = makeAtom<any>("seedShopAtom")
@@ -321,11 +331,14 @@ export const Atoms = {
     myCropInventory,
     mySeedInventory,
     myToolInventory,
+    myEggInventory,
+    myDecorInventory,
     favoriteIds,
     mySelectedItemName,
     myPossiblyNoLongerValidSelectedItemIndex,
     myValidatedSelectedItemIndex,
     setSelectedIndexToEnd,
+    myCropItemsToSell
   },
   pets: {
     myPetInfos,

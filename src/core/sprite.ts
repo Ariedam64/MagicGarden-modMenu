@@ -5,8 +5,7 @@
 */
 
 import { pageWindow, shareGlobal } from "../utils/page-context";
-
-declare const JSZip: any; // <-- Tampermonkey (@require jszip). En bundler: remplace par `import JSZip from "jszip";`
+import JSZip from "jszip";
 
 type SpriteMode = "bitmap" | "canvas" | "dataURL";
 
@@ -318,6 +317,79 @@ public destroy(): void {
   }
   public async zipTiles512(name = "tiles_512.zip"): Promise<void> {
     await this.zipTiles({ name, mode: "bitmap", forceSize: 512 });
+  }
+
+  /** Exporte toutes les tiles découpées + les assets UI dans un seul ZIP */
+  public async zipAllSprites(name = "sprites_all.zip"): Promise<void> {
+    const zip = new JSZip();
+    const tilesFolder = zip.folder("tiles");
+    const uiFolder = zip.folder("ui");
+
+    if (tilesFolder) {
+      for (const url of this.tiles) {
+        try {
+          const tiles = await this.sliceOne(url, {
+            mode: "canvas",
+            includeBlanks: false,
+          });
+          if (!tiles.length) continue;
+
+          const base = fileBase(url);
+          const sheetFolder = tilesFolder.folder(base) ?? tilesFolder;
+          let index = 0;
+
+          for (const tile of tiles) {
+            const canvas = tile.data as HTMLCanvasElement;
+            const tileIndex = ++index;
+            const baseName = `tile_${String(tileIndex).padStart(4, "0")}`;
+
+            const exportVariant = async (
+              suffix: string,
+              label: string,
+              factory: () => HTMLCanvasElement,
+            ): Promise<void> => {
+              try {
+                const variantCanvas = factory();
+                const blob = await new Promise<Blob>((resolve, reject) => {
+                  variantCanvas.toBlob((b) => {
+                    if (!b) {
+                      reject(new Error("toBlob returned null"));
+                      return;
+                    }
+                    resolve(b);
+                  }, "image/png");
+                });
+                sheetFolder.file(`${baseName}${suffix}.png`, blob);
+              } catch (error) {
+                console.warn("[Sprites] Failed to export tile", { url, label, error });
+              }
+            };
+
+            await exportVariant("", "base", () => canvas);
+            await exportVariant("_gold", "gold", () => this.effectGold(tile));
+            await exportVariant("_rainbow", "rainbow", () => this.effectRainbow(tile));
+          }
+        } catch (error) {
+          console.warn("[Sprites] Failed to export sheet", { url, error });
+        }
+      }
+    }
+
+    if (uiFolder) {
+      let fallbackIndex = 0;
+      for (const url of this.ui) {
+        try {
+          const blob = await this.fetchBlob(url);
+          const base = decodeURIComponent(url.split("/").pop() || "").replace(/\?.*$/, "");
+          const fileName = base || `asset_${String(++fallbackIndex).padStart(4, "0")}.png`;
+          uiFolder.file(fileName, blob);
+        } catch (error) {
+          console.warn("[Sprites] Failed to export UI asset", { url, error });
+        }
+      }
+    }
+
+    await this.saveZip(zip, name);
   }
 
   /** Vide les caches */

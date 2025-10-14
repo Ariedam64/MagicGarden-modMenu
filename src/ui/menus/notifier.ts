@@ -195,7 +195,7 @@ const mkHeadCell = (txt: string, align: "center" | "left" = "center") => {
   return el;
 };
 
-function rarityBadge(raw: string) {
+export function rarityBadge(raw: string) {
   const rarity = String(raw || "").trim();
   const key = (() => {
     const k = rarity.toLowerCase();
