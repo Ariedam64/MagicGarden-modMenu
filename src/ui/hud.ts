@@ -21,6 +21,7 @@ import { isDiscordSurface } from "../utils/api";
 import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
 import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
 import { startModalObserver } from "../utils/checkModal";
+import { startInventorySortingObserver } from "../utils/inventorySorting";
 
 // ========================
 // Types d’intégration
@@ -1020,6 +1021,7 @@ export function initWatchers(){
       startInjectSellAllPets();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
+      startInventorySortingObserver();
       startModalObserver({ intervalMs: 60_000, log: false });
   })();
 }
