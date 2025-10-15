@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.4
+// @version      2.1.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5075,6 +5075,7 @@
     return {
       minScalePct: 50,
       maxScalePct: 100,
+      scaleLockMode: "RANGE",
       minInventory: 91,
       avoidNormal: false,
       includeNormal: true,
@@ -5095,16 +5096,22 @@
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
     const base = defaultSettings();
+    const scaleMode = raw?.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    base.scaleLockMode = scaleMode;
+    const minClampHigh = scaleMode === "MINIMUM" ? 100 : 99;
     const minScaleRaw = Number(raw?.minScalePct);
-    let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, 99) : 50;
+    let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, minClampHigh) : 50;
     const maxScaleRaw = Number(raw?.maxScalePct);
-    let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 51, 100) : 100;
-    if (maxScale <= minScale) {
-      if (minScale >= 99) {
-        minScale = 99;
-        maxScale = 100;
-      } else {
-        maxScale = clampNumber(minScale + 1, 51, 100);
+    let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 50, 100) : 100;
+    if (scaleMode === "RANGE") {
+      maxScale = clampNumber(maxScale, 51, 100);
+      if (maxScale <= minScale) {
+        if (minScale >= 99) {
+          minScale = 99;
+          maxScale = 100;
+        } else {
+          maxScale = clampNumber(minScale + 1, 51, 100);
+        }
       }
     }
     base.minScalePct = minScale;
@@ -5147,6 +5154,7 @@
     return {
       minScalePct: settings.minScalePct,
       maxScalePct: settings.maxScalePct,
+      scaleLockMode: settings.scaleLockMode,
       minInventory: settings.minInventory,
       avoidNormal: settings.avoidNormal,
       includeNormal: settings.includeNormal,
@@ -5440,10 +5448,17 @@
       return { enabled: true, settings: this.state.settings };
     }
     slotShouldBeBlocked(settings, args) {
-      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 99);
-      const maxScaleRaw = clampNumber(Math.round(settings.maxScalePct ?? 100), 51, 100);
-      const maxScale = maxScaleRaw <= minScale ? Math.min(100, minScale + 1) : maxScaleRaw;
-      if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
+      const scaleMode = settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+      const minScaleClamp = scaleMode === "MINIMUM" ? 100 : 99;
+      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
+      const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
+      if (scaleMode === "MINIMUM") {
+        if (args.sizePercent >= minScale) return true;
+      } else {
+        const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
+        const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
+        if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
+      }
       const { hasGold, hasRainbow, weather: weather2 } = mutationsToArrays(args.mutations);
       const isNormal = !hasGold && !hasRainbow;
       if (isNormal) {
@@ -22093,6 +22108,7 @@ next: ${next}`;
     return {
       minScalePct: 50,
       maxScalePct: 100,
+      scaleLockMode: "RANGE",
       minInventory: 91,
       avoidNormal: false,
       visualMutations: /* @__PURE__ */ new Set(),
@@ -22104,6 +22120,7 @@ next: ${next}`;
   function copySettings(target, source) {
     target.minScalePct = source.minScalePct;
     target.maxScalePct = source.maxScalePct;
+    target.scaleLockMode = source.scaleLockMode;
     target.minInventory = source.minInventory;
     target.avoidNormal = source.avoidNormal;
     target.visualMutations.clear();
@@ -22116,18 +22133,24 @@ next: ${next}`;
   }
   function hydrateSettingsFromPersisted(target, persisted) {
     const src = persisted ?? {};
-    let minScale = Math.max(50, Math.min(99, Math.round(src.minScalePct ?? 50)));
-    let maxScale = Math.max(51, Math.min(100, Math.round(src.maxScalePct ?? 100)));
-    if (maxScale <= minScale) {
-      if (minScale >= 99) {
-        minScale = 99;
-        maxScale = 100;
-      } else {
-        maxScale = Math.min(100, Math.max(51, minScale + 1));
+    const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const minClampHigh = mode === "MINIMUM" ? 100 : 99;
+    let minScale = Math.max(50, Math.min(minClampHigh, Math.round(src.minScalePct ?? 50)));
+    let maxScale = Math.max(50, Math.min(100, Math.round(src.maxScalePct ?? 100)));
+    if (mode === "RANGE") {
+      maxScale = Math.max(51, Math.min(100, maxScale));
+      if (maxScale <= minScale) {
+        if (minScale >= 99) {
+          minScale = 99;
+          maxScale = 100;
+        } else {
+          maxScale = Math.min(100, Math.max(51, minScale + 1));
+        }
       }
     }
     target.minScalePct = minScale;
     target.maxScalePct = maxScale;
+    target.scaleLockMode = mode;
     target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
     target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
     target.visualMutations.clear();
@@ -22148,19 +22171,25 @@ next: ${next}`;
   }
   function serializeSettingsState(state2) {
     state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
-    let minScale = Math.max(50, Math.min(99, Math.round(state2.minScalePct || 50)));
-    let maxScale = Math.max(51, Math.min(100, Math.round(state2.maxScalePct || 100)));
-    if (maxScale <= minScale) {
-      if (minScale >= 99) {
-        minScale = 99;
-        maxScale = 100;
-      } else {
-        maxScale = Math.min(100, Math.max(51, minScale + 1));
+    const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const minClampHigh = mode === "MINIMUM" ? 100 : 99;
+    let minScale = Math.max(50, Math.min(minClampHigh, Math.round(state2.minScalePct || 50)));
+    let maxScale = Math.max(50, Math.min(100, Math.round(state2.maxScalePct || 100)));
+    if (mode === "RANGE") {
+      maxScale = Math.max(51, Math.min(100, maxScale));
+      if (maxScale <= minScale) {
+        if (minScale >= 99) {
+          minScale = 99;
+          maxScale = 100;
+        } else {
+          maxScale = Math.min(100, Math.max(51, minScale + 1));
+        }
       }
     }
     return {
       minScalePct: minScale,
       maxScalePct: maxScale,
+      scaleLockMode: mode,
       minInventory: Math.max(0, Math.min(999, Math.round(state2.minInventory || 91))),
       avoidNormal: !!state2.avoidNormal,
       includeNormal: !state2.avoidNormal,
@@ -22456,15 +22485,42 @@ next: ${next}`;
     scaleRow.style.alignItems = "center";
     scaleRow.style.width = "100%";
     scaleRow.style.gap = "12px";
+    const scaleModeRow = centerRow();
+    scaleModeRow.style.flexWrap = "wrap";
+    scaleModeRow.style.justifyContent = "center";
+    scaleModeRow.style.gap = "12px";
+    const toMode = (value) => value === "minimum" ? "MINIMUM" : "RANGE";
+    const fromMode = (mode) => mode === "MINIMUM" ? "minimum" : "ranged";
+    let isProgrammaticScaleMode = false;
+    const scaleModeSegmented = ui.segmented(
+      [
+        { value: "minimum", label: "Minimum size" },
+        { value: "ranged", label: "Range size" }
+      ],
+      "minimum",
+      (value) => {
+        if (isProgrammaticScaleMode) return;
+        applyScaleMode(toMode(value), true);
+      },
+      { ariaLabel: "Scale lock mode" }
+    );
+    scaleModeRow.append(scaleModeSegmented);
+    const minSlider = ui.slider(50, 100, 1, state2.minScalePct);
+    applyStyles(minSlider, {
+      width: "min(420px, 100%)"
+    });
     const scaleSlider = ui.rangeDual(50, 100, 1, state2.minScalePct, state2.maxScalePct);
     applyStyles(scaleSlider.root, {
-      width: "min(420px, 100%)"
+      width: "min(420px, 100%)",
+      marginLeft: "auto",
+      marginRight: "auto"
     });
     const scaleMinSlider = scaleSlider.min;
     const scaleMaxSlider = scaleSlider.max;
+    const scaleMinimumValue = ui.label("50%");
     const scaleMinValue = ui.label("50%");
     const scaleMaxValue = ui.label("100%");
-    [scaleMinValue, scaleMaxValue].forEach((label2) => {
+    [scaleMinimumValue, scaleMinValue, scaleMaxValue].forEach((label2) => {
       label2.style.margin = "0";
       label2.style.fontWeight = "600";
     });
@@ -22488,8 +22544,32 @@ next: ${next}`;
       gap: "16px"
     });
     scaleValues.append(makeScaleValue("Min", scaleMinValue), makeScaleValue("Max", scaleMaxValue));
-    scaleRow.append(scaleSlider.root, scaleValues);
-    const applyScaleRange = (commit) => {
+    const minimumValues = applyStyles(document.createElement("div"), {
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      width: "min(420px, 100%)",
+      gap: "16px"
+    });
+    minimumValues.append(makeScaleValue("Minimum", scaleMinimumValue));
+    const minimumControls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "12px",
+      width: "100%"
+    });
+    minimumControls.append(minSlider, minimumValues);
+    const rangeControls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "12px",
+      width: "100%"
+    });
+    rangeControls.append(scaleSlider.root, scaleValues);
+    scaleRow.append(scaleModeRow, minimumControls, rangeControls);
+    const applyScaleRange = (commit, notify = commit) => {
       let minValue = parseInt(scaleMinSlider.value, 10);
       let maxValue = parseInt(scaleMaxSlider.value, 10);
       if (!Number.isFinite(minValue)) minValue = state2.minScalePct;
@@ -22510,14 +22590,58 @@ next: ${next}`;
       if (commit) {
         state2.minScalePct = minValue;
         state2.maxScalePct = maxValue;
+        if (notify) opts.onChange?.();
+      }
+    };
+    const applyScaleMinimum = (commit, notify = commit) => {
+      let minValue = parseInt(minSlider.value, 10);
+      if (!Number.isFinite(minValue)) minValue = state2.minScalePct;
+      minValue = Math.max(50, Math.min(100, minValue));
+      minSlider.value = String(minValue);
+      scaleMinimumValue.textContent = `${minValue}%`;
+      if (commit) {
+        state2.minScalePct = minValue;
+        if (notify) opts.onChange?.();
+      }
+    };
+    const updateScaleModeUI = () => {
+      const isMinimum = state2.scaleLockMode === "MINIMUM";
+      minimumControls.style.display = isMinimum ? "" : "none";
+      rangeControls.style.display = isMinimum ? "none" : "";
+      const segValue = fromMode(state2.scaleLockMode);
+      if (scaleModeSegmented.get?.() !== segValue) {
+        isProgrammaticScaleMode = true;
+        try {
+          scaleModeSegmented.set?.(segValue);
+        } finally {
+          isProgrammaticScaleMode = false;
+        }
+      }
+    };
+    const applyScaleMode = (mode, notify) => {
+      const prevMode = state2.scaleLockMode;
+      state2.scaleLockMode = mode;
+      if (mode === "MINIMUM") {
+        minSlider.value = String(state2.minScalePct);
+        applyScaleMinimum(prevMode !== mode, false);
+      } else {
+        scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
+        applyScaleRange(prevMode !== mode, false);
+      }
+      updateScaleModeUI();
+      if (notify && prevMode !== mode) {
         opts.onChange?.();
       }
     };
+    minSlider.addEventListener("input", () => applyScaleMinimum(false));
+    minSlider.addEventListener("change", () => applyScaleMinimum(true));
     scaleMinSlider.addEventListener("input", () => applyScaleRange(false));
     scaleMaxSlider.addEventListener("input", () => applyScaleRange(false));
     scaleMinSlider.addEventListener("change", () => applyScaleRange(true));
     scaleMaxSlider.addEventListener("change", () => applyScaleRange(true));
     applyScaleRange(false);
+    applyScaleMinimum(false);
+    applyScaleMode(state2.scaleLockMode, false);
     const colorsRow = centerRow();
     colorsRow.style.flexWrap = "wrap";
     colorsRow.style.gap = "8px";
@@ -22987,7 +23111,10 @@ next: ${next}`;
     );
     const refresh = () => {
       scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
+      minSlider.value = String(state2.minScalePct);
       applyScaleRange(false);
+      applyScaleMinimum(false);
+      applyScaleMode(state2.scaleLockMode, false);
       updateColorButtons();
       weatherToggles.forEach((toggle) => toggle.setChecked(state2.weatherSelected.has(toggle.key)));
       radioAny.input.checked = state2.weatherMode === "ANY";
