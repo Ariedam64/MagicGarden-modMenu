@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.5
+// @version      2.1.6
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -14111,12 +14111,12 @@
     });
   }
   function _handleWeatherUpdate(raw, opts = {}) {
-    const normalize = (value) => {
+    const normalize2 = (value) => {
       if (value == null) return "";
       if (typeof value === "string") return value.trim();
       return String(value || "").trim();
     };
-    const nextValue = normalize(raw);
+    const nextValue = normalize2(raw);
     if (!opts.force && _currentWeatherValue === nextValue) return;
     const lookupKey = nextValue.toLowerCase();
     let def = WEATHER_BY_ATOM.get(lookupKey) || WEATHER_BY_NAME.get(lookupKey);
@@ -17593,6 +17593,132 @@
     }
   }
 
+  // src/utils/checkModal.ts
+  var DEFAULTS4 = {
+    intervalMs: 6e4,
+    log: false
+  };
+  var normalize = (s) => (s || "").replace(/\s+/g, " ").trim();
+  var reGameUpdate = /game\s*update\s+ava?ilab?le/i;
+  var reDailyBread = /your\s+daily\s+bread/i;
+  var log = (enabled, ...args) => {
+    if (enabled) console.log("[checkModal]", ...args);
+  };
+  var reloadScheduled = false;
+  var schedulePageReload = (doLog) => {
+    if (reloadScheduled) return;
+    reloadScheduled = true;
+    log(doLog, "Game Update: \u267B\uFE0F rechargement de la page dans un instant...");
+    pageWindow.setTimeout(() => {
+      log(doLog, "Game Update: \u{1F504} rechargement maintenant.");
+      pageWindow.location.reload();
+    }, 500);
+  };
+  var isVisible = (el2) => {
+    if (!el2 || !(el2 instanceof HTMLElement)) return false;
+    const rect = el2.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const cs = getComputedStyle(el2);
+    if (cs.display === "none" || cs.visibility === "hidden" || parseFloat(cs.opacity) === 0) return false;
+    let cur = el2;
+    while (cur) {
+      const cs2 = getComputedStyle(cur);
+      if (cs2.display === "none" || cs2.visibility === "hidden") return false;
+      cur = cur.parentElement;
+    }
+    return true;
+  };
+  function findGameUpdateModal() {
+    const sections = document.querySelectorAll(
+      'section.chakra-modal__content[role="dialog"], section.chakra-modal__content[role="alertdialog"]'
+    );
+    for (const sec of sections) {
+      const header = sec.querySelector("header.chakra-modal__header");
+      const txt = normalize(header?.textContent || sec.textContent || "");
+      if (reGameUpdate.test(txt)) return sec;
+    }
+    return null;
+  }
+  function findBreadModal() {
+    const sections = document.querySelectorAll(
+      'section.chakra-modal__content[role="dialog"], section.chakra-modal__content[role="alertdialog"]'
+    );
+    for (const sec of sections) {
+      const txt = normalize(sec.textContent || "");
+      if (!reDailyBread.test(txt)) continue;
+      let btn = sec.querySelector("button.chakra-button.css-1o32am8");
+      if (!btn) {
+        const candidates = sec.querySelectorAll("button");
+        btn = Array.from(candidates).find((b) => /claim/i.test(normalize(b.textContent))) ?? null;
+      }
+      if (btn) return { section: sec, button: btn };
+    }
+    return null;
+  }
+  var clickedBreadButtons = /* @__PURE__ */ new WeakSet();
+  function clickBreadIfVisible(btn, doLog) {
+    if (clickedBreadButtons.has(btn)) {
+      log(doLog, "Bread: bouton d\xE9j\xE0 cliqu\xE9 (guard).");
+      return false;
+    }
+    const ariaDisabled = btn.getAttribute("aria-disabled");
+    if (btn.disabled || ariaDisabled === "true") {
+      log(doLog, "Bread: bouton d\xE9sactiv\xE9.");
+      return false;
+    }
+    if (!isVisible(btn)) {
+      log(doLog, "Bread: bouton non visible.");
+      return false;
+    }
+    btn.click();
+    clickedBreadButtons.add(btn);
+    log(doLog, "Bread: \u2705 click() envoy\xE9.");
+    return true;
+  }
+  function checkOnce(opts) {
+    const { log: doLog } = { ...DEFAULTS4, ...opts };
+    const gameUpdateSec = findGameUpdateModal();
+    const gameUpdateFound = !!gameUpdateSec;
+    if (gameUpdateFound) {
+      log(doLog, "Game Update: \u2705 d\xE9tect\xE9.", gameUpdateSec);
+      schedulePageReload(doLog);
+    }
+    const found = findBreadModal();
+    const breadFound = !!found;
+    let breadClicked = false;
+    if (found) {
+      log(doLog, "Daily Bread: \u2705 d\xE9tect\xE9.", found.section);
+      breadClicked = clickBreadIfVisible(found.button, doLog);
+    }
+    if (!gameUpdateFound && !breadFound) log(doLog, "Rien d\xE9tect\xE9 pour l\u2019instant.");
+    return { gameUpdateFound, breadFound, breadClicked };
+  }
+  function startModalObserver(options) {
+    const { intervalMs, log: doLog } = { ...DEFAULTS4, ...options };
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return { gameUpdateFound: false, breadFound: false, breadClicked: false };
+      return checkOnce({ log: doLog });
+    };
+    tick();
+    const timer = pageWindow.setInterval(tick, intervalMs);
+    const stop = () => {
+      if (stopped) return;
+      stopped = true;
+      pageWindow.clearInterval(timer);
+      log(doLog, "\u23F9\uFE0F Observateur arr\xEAt\xE9.");
+    };
+    log(doLog, `\u25B6\uFE0F Observateur d\xE9marr\xE9 (intervalle: ${intervalMs} ms).`);
+    return { stop, tick };
+  }
+  var exposed = {
+    startModalObserver,
+    checkOnce,
+    findGameUpdateModal,
+    findBreadModal
+  };
+  shareGlobal("CheckModal", exposed);
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -18484,6 +18610,7 @@
       startInjectSellAllPets();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
+      startModalObserver({ intervalMs: 6e4, log: false });
     })();
   }
 
@@ -28558,14 +28685,14 @@ next: ${next}`;
       el2.style.borderBottom = "1px solid #ffffff12";
       return el2;
     }
-    function row(log) {
-      const time = cell(log.time12, "center");
-      const petLabel = log.petName || log.species || "Pet";
+    function row(log2) {
+      const time = cell(log2.time12, "center");
+      const petLabel = log2.petName || log2.species || "Pet";
       const pet = cell(petLabel, "center");
-      const abName = cell(log.abilityName || log.abilityId, "center");
-      const detText = typeof log.data === "string" ? log.data : (() => {
+      const abName = cell(log2.abilityName || log2.abilityId, "center");
+      const detText = typeof log2.data === "string" ? log2.data : (() => {
         try {
-          return JSON.stringify(log.data);
+          return JSON.stringify(log2.data);
         } catch {
           return "";
         }
@@ -30703,11 +30830,11 @@ next: ${next}`;
       let lastVisible = computeWindowVisible(windowEl);
       visibilityObserver = new MutationObserver(() => {
         if (destroyed) return;
-        const isVisible = computeWindowVisible(windowEl);
-        if (isVisible && !lastVisible) {
+        const isVisible2 = computeWindowVisible(windowEl);
+        if (isVisible2 && !lastVisible) {
           void refreshRooms();
         }
-        lastVisible = isVisible;
+        lastVisible = isVisible2;
       });
       visibilityObserver.observe(windowEl, { attributes: true, attributeFilter: ["class", "style"] });
     }
