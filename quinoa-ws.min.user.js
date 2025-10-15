@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.6
+// @version      2.1.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -14111,12 +14111,12 @@
     });
   }
   function _handleWeatherUpdate(raw, opts = {}) {
-    const normalize2 = (value) => {
+    const normalize3 = (value) => {
       if (value == null) return "";
       if (typeof value === "string") return value.trim();
       return String(value || "").trim();
     };
-    const nextValue = normalize2(raw);
+    const nextValue = normalize3(raw);
     if (!opts.force && _currentWeatherValue === nextValue) return;
     const lookupKey = nextValue.toLowerCase();
     let def = WEATHER_BY_ATOM.get(lookupKey) || WEATHER_BY_NAME.get(lookupKey);
@@ -17719,6 +17719,1303 @@
   };
   shareGlobal("CheckModal", exposed);
 
+  // src/utils/inventorySorting.ts
+  var DEFAULTS5 = {
+    gridSelector: "div.McGrid.css-tqc83y",
+    filtersBlockSelector: ".McGrid.css-o1vp12",
+    closeButtonSelector: "button.css-vuqwsg",
+    checkboxSelector: "label.chakra-checkbox.css-1v6h4z7",
+    checkboxLabelSelector: ".chakra-checkbox__label",
+    injectDarkStyles: true
+  };
+  var ALWAYS = ["none"];
+  var BASE_SORT = ["alpha", "qty", "rarity"];
+  var ORDER = [
+    "none",
+    "alpha",
+    "qty",
+    "rarity",
+    "size",
+    "mutations",
+    "strength"
+  ];
+  var SORT_STORAGE_KEY = "mg-mod.inventory.sortKey";
+  var SORT_KEY_SET = new Set(ORDER);
+  var SORT_DIRECTION_STORAGE_KEY = "mg-mod.inventory.sortDirection";
+  var SORT_DIRECTION_SET = /* @__PURE__ */ new Set(["asc", "desc"]);
+  var DEFAULT_DIRECTION_LABEL = "Order:";
+  var DIRECTION_LABELS_DEFAULT = {
+    asc: "Ascending",
+    desc: "Descending"
+  };
+  var DEFAULT_DIRECTION_BY_SORT_KEY = {
+    none: "asc",
+    alpha: "asc",
+    qty: "desc",
+    rarity: "asc",
+    size: "desc",
+    mutations: "desc",
+    strength: "desc"
+  };
+  var DIRECTION_ORDER = ["asc", "desc"];
+  var isPersistedSortKey = (value) => typeof value === "string" && SORT_KEY_SET.has(value);
+  var isPersistedSortDirection = (value) => typeof value === "string" && SORT_DIRECTION_SET.has(value);
+  var loadPersistedSortKey = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage?.getItem(SORT_STORAGE_KEY) ?? null;
+      return isPersistedSortKey(stored) ? stored : null;
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de lire la valeur de tri persist\xE9e", error);
+      return null;
+    }
+  };
+  var persistSortKey = (value) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(SORT_STORAGE_KEY, value);
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de sauvegarder la valeur de tri", error);
+    }
+  };
+  var loadPersistedSortDirection = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage?.getItem(SORT_DIRECTION_STORAGE_KEY) ?? null;
+      return isPersistedSortDirection(stored) ? stored : null;
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de lire l'ordre de tri persist\xE9", error);
+      return null;
+    }
+  };
+  var persistSortDirection = (value) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(SORT_DIRECTION_STORAGE_KEY, value);
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de sauvegarder l'ordre de tri", error);
+    }
+  };
+  var MAP_EXTRA_BY_FILTER_DEFAULT = {
+    // seed/tool/ decor = tri de base
+    seed: [],
+    tool: [],
+    decor: [],
+    // crop/plant = base + size/mutations
+    crop: ["size", "mutations"],
+    plant: [],
+    // pet = base + size/mutations/strength
+    pet: ["mutations", "strength"]
+  };
+  var LABEL_BY_VALUE_DEFAULT = {
+    none: "None",
+    alpha: "A\u2013Z",
+    qty: "Quantity",
+    rarity: "Rarity",
+    size: "Size",
+    mutations: "Mutations",
+    strength: "Strength"
+  };
+  var INVENTORY_BASE_INDEX_DATASET_KEY = "tmInventoryBaseIndex";
+  var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-ofw63c";
+  var debounce = (fn, wait = 120) => {
+    let t;
+    return (...args) => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => fn(...args), wait);
+    };
+  };
+  function isVisible2(el2) {
+    if (!el2 || !document.contains(el2)) return false;
+    const r = el2.getBoundingClientRect();
+    const cs = getComputedStyle(el2);
+    if (cs.display === "none" || cs.visibility === "hidden" || cs.opacity === "0") return false;
+    return r.width > 0 && r.height > 0;
+  }
+  var labelIsChecked = (el2) => el2.matches("[data-checked]") || !!el2.querySelector("[data-checked]");
+  var normalize2 = (s) => (s ?? "").trim().toLowerCase();
+  var RARITY_ORDER = [
+    rarity.Common,
+    rarity.Uncommon,
+    rarity.Rare,
+    rarity.Legendary,
+    rarity.Mythic,
+    rarity.Divine,
+    rarity.Celestial
+  ].filter(Boolean);
+  var RARITY_RANK = (() => {
+    const entries = /* @__PURE__ */ new Map();
+    RARITY_ORDER.forEach((label2, index) => {
+      const key2 = normalize2(label2);
+      if (key2) {
+        entries.set(key2, index);
+      }
+    });
+    const mythicIndex = entries.get(normalize2(rarity.Mythic));
+    if (typeof mythicIndex === "number") {
+      entries.set(normalize2("Mythic"), mythicIndex);
+    }
+    return entries;
+  })();
+  var getRarityRank = (value) => {
+    const key2 = normalize2(value);
+    if (!key2) return RARITY_ORDER.length;
+    return RARITY_RANK.get(key2) ?? RARITY_ORDER.length;
+  };
+  var SPECIES_FIELDS = [
+    "species",
+    "seedSpecies",
+    "plantSpecies",
+    "cropSpecies",
+    "baseSpecies",
+    "seedKey"
+  ];
+  var normalizeSpeciesKey3 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES3 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey3(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  var lookupMaxScale3 = (species) => {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey3(species.trim());
+    if (!normalized) return null;
+    const value = MAX_SCALE_BY_SPECIES3.get(normalized);
+    return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+  };
+  var clampNumber2 = (value, min, max) => Math.max(min, Math.min(max, value));
+  var scaleToPercent = (scale, maxScale) => {
+    if (!Number.isFinite(scale)) return 50;
+    const MIN_PERCENT = 50;
+    const MAX_PERCENT = 100;
+    const MIN_SCALE = 1;
+    const safeScale = Math.max(MIN_SCALE, scale);
+    if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > MIN_SCALE) {
+      const limited2 = Math.min(maxScale, safeScale);
+      const ratio2 = (limited2 - MIN_SCALE) / (maxScale - MIN_SCALE);
+      const pct2 = MIN_PERCENT + ratio2 * (MAX_PERCENT - MIN_PERCENT);
+      return clampNumber2(Math.round(pct2), MIN_PERCENT, MAX_PERCENT);
+    }
+    const FALLBACK_MAX_SCALE = 2;
+    const limited = Math.min(FALLBACK_MAX_SCALE, safeScale);
+    const ratio = (limited - MIN_SCALE) / (FALLBACK_MAX_SCALE - MIN_SCALE);
+    const pct = MIN_PERCENT + ratio * (MAX_PERCENT - MIN_PERCENT);
+    return clampNumber2(Math.round(pct), MIN_PERCENT, MAX_PERCENT);
+  };
+  var collectSpeciesCandidates = (source, out) => {
+    if (!source || typeof source !== "object") return;
+    for (const field of SPECIES_FIELDS) {
+      const raw = source[field];
+      if (typeof raw === "string") {
+        const value = raw.trim();
+        if (value) out.add(value);
+      }
+    }
+  };
+  var computeSizePercentFromScale = (speciesCandidates, scale) => {
+    if (!Number.isFinite(scale)) return null;
+    let maxScale = null;
+    for (const candidate of speciesCandidates) {
+      maxScale = lookupMaxScale3(candidate);
+      if (maxScale != null) break;
+    }
+    return scaleToPercent(scale, maxScale);
+  };
+  var getInventoryItemSizePercent = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    collectSpeciesCandidates(item, candidates);
+    collectSpeciesCandidates(item.item, candidates);
+    collectSpeciesCandidates(item.data, candidates);
+    const rawType = typeof item.itemType === "string" ? item.itemType : "";
+    const type = rawType.trim();
+    if (type === "Crop" || type === "Produce") {
+      const scale = Number(item.scale);
+      return computeSizePercentFromScale(candidates, scale);
+    }
+    return null;
+  };
+  var collectMutations = (source, out) => {
+    if (!source || typeof source !== "object") return;
+    const rawMutations = source.mutations;
+    if (Array.isArray(rawMutations)) {
+      for (const mutation of rawMutations) {
+        if (typeof mutation === "string" && mutation.trim()) {
+          out.push(mutation.trim());
+        }
+      }
+    }
+    const slots = source.slots;
+    if (Array.isArray(slots)) {
+      for (const slot of slots) {
+        collectMutations(slot, out);
+      }
+    }
+  };
+  var getInventoryItemMutations = (item) => {
+    if (!item || typeof item !== "object") return [];
+    const mutations = [];
+    collectMutations(item, mutations);
+    collectMutations(item.item, mutations);
+    collectMutations(item.data, mutations);
+    return mutations;
+  };
+  var FILTER_LABEL_TO_ITEM_TYPES = {
+    crop: ["Produce"],
+    crops: ["Produce"],
+    produce: ["Produce"],
+    seed: ["Seed"],
+    seeds: ["Seed"],
+    plant: ["Plant"],
+    plants: ["Plant"],
+    pet: ["Pet"],
+    pets: ["Pet"],
+    tool: ["Tool"],
+    tools: ["Tool"],
+    decor: ["Decor"],
+    decors: ["Decor"],
+    decoration: ["Decor"],
+    decorations: ["Decor"],
+    egg: ["Egg"],
+    eggs: ["Egg"]
+  };
+  function filterLabelToItemTypes(filter) {
+    const key2 = normalize2(filter);
+    if (!key2 || key2 === "all") return [];
+    const mapped = FILTER_LABEL_TO_ITEM_TYPES[key2];
+    if (mapped) return mapped;
+    const singular = key2.endsWith("s") ? key2.slice(0, -1) : key2;
+    if (!singular) return [];
+    const itemType = singular.charAt(0).toUpperCase() + singular.slice(1);
+    return itemType ? [itemType] : [];
+  }
+  function filterInventoryItems(items, filters) {
+    const normalizedFilters = filters.map((f) => normalize2(f)).filter(Boolean);
+    const itemTypes = /* @__PURE__ */ new Set();
+    let recognized = false;
+    for (const filter of normalizedFilters) {
+      const mappedTypes = filterLabelToItemTypes(filter);
+      if (mappedTypes.length) {
+        recognized = true;
+        for (const type of mappedTypes) {
+          if (type) itemTypes.add(type);
+        }
+      }
+    }
+    const keepAll = !recognized;
+    const filteredItems = keepAll ? items.slice() : items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type ? itemTypes.has(type) : false;
+    });
+    return { filteredItems, keepAll, itemTypes };
+  }
+  function getInventoryItemsContainer(grid) {
+    return grid.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR);
+  }
+  function getInventoryDomEntries(container) {
+    const entries = [];
+    const children = Array.from(container.children);
+    for (const child of children) {
+      if (!(child instanceof HTMLElement)) continue;
+      if (child.matches(".css-vmnhaw")) {
+        entries.push({ wrapper: child, card: child });
+        continue;
+      }
+      const card = child.querySelector(".css-vmnhaw");
+      if (card instanceof HTMLElement) {
+        entries.push({ wrapper: child, card });
+      }
+    }
+    return entries;
+  }
+  function assignBaseIndexesToEntries(entries) {
+    entries.forEach((entry, index) => {
+      entry.wrapper.dataset[INVENTORY_BASE_INDEX_DATASET_KEY] = String(index);
+      entry.card.dataset[INVENTORY_BASE_INDEX_DATASET_KEY] = String(index);
+    });
+  }
+  function readBaseIndex(entry) {
+    const raw = entry.wrapper.dataset[INVENTORY_BASE_INDEX_DATASET_KEY] ?? entry.card.dataset[INVENTORY_BASE_INDEX_DATASET_KEY];
+    if (raw == null) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : null;
+  }
+  var NAME_FIELDS_BY_ITEM_TYPE = {
+    Seed: "species",
+    Crop: "species",
+    Produce: "species",
+    Plant: "species",
+    Pet: "petSpecies",
+    Egg: "eggId",
+    Tool: "toolId",
+    Decor: "decorId"
+  };
+  var getInventoryItemName = (item) => {
+    if (!item || typeof item !== "object") return "";
+    const type = typeof item.itemType === "string" ? item.itemType : "";
+    const field = type ? NAME_FIELDS_BY_ITEM_TYPE[type] : void 0;
+    const raw = field ? item[field] : void 0;
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.trim();
+    }
+    const fallback = typeof item.name === "string" ? item.name : typeof item.id === "string" ? item.id : type;
+    return typeof fallback === "string" ? fallback.trim() : "";
+  };
+  var QUANTITY_ONE_TYPES = /* @__PURE__ */ new Set(["Produce", "Crop", "Plant", "Pet"]);
+  var getInventoryItemQuantity = (item) => {
+    if (!item || typeof item !== "object") return 0;
+    const rawType = typeof item.itemType === "string" ? item.itemType : "";
+    const type = rawType.trim();
+    if (QUANTITY_ONE_TYPES.has(type)) {
+      return 1;
+    }
+    const rawQuantity = item.quantity;
+    const quantity = Number(rawQuantity);
+    if (Number.isFinite(quantity) && quantity >= 0) {
+      return quantity;
+    }
+    return 0;
+  };
+  var readStringField = (item, field) => {
+    if (!item || typeof item !== "object" || !field) return "";
+    const raw = item[field];
+    return typeof raw === "string" ? raw.trim() : "";
+  };
+  var getInventoryItemRarity = (item) => {
+    if (!item || typeof item !== "object") return "";
+    const rawType = typeof item.itemType === "string" ? item.itemType : "";
+    const type = rawType.trim();
+    const field = NAME_FIELDS_BY_ITEM_TYPE[type];
+    const identifier = readStringField(item, field);
+    if (!identifier) return "";
+    switch (type) {
+      case "Seed": {
+        const entry = plantCatalog[identifier];
+        return String(entry?.seed?.rarity ?? entry?.crop?.rarity ?? entry?.plant?.rarity ?? "").trim();
+      }
+      case "Crop":
+      case "Produce": {
+        const entry = plantCatalog[identifier];
+        return String(entry?.crop?.rarity ?? entry?.plant?.rarity ?? entry?.seed?.rarity ?? "").trim();
+      }
+      case "Plant": {
+        const entry = plantCatalog[identifier];
+        return String(entry?.plant?.rarity ?? entry?.crop?.rarity ?? entry?.seed?.rarity ?? "").trim();
+      }
+      case "Pet": {
+        const entry = petCatalog[identifier];
+        return String(entry?.rarity ?? "").trim();
+      }
+      case "Egg": {
+        const entry = eggCatalog[identifier];
+        return String(entry?.rarity ?? "").trim();
+      }
+      case "Tool": {
+        const entry = toolCatalog[identifier];
+        return String(entry?.rarity ?? "").trim();
+      }
+      case "Decor": {
+        const entry = decorCatalog[identifier];
+        return String(entry?.rarity ?? "").trim();
+      }
+      default:
+        return "";
+    }
+  };
+  var readNestedValue = (item, field, parser) => {
+    if (!item || typeof item !== "object") return null;
+    const sources = [item, item.item, item.data];
+    for (const source of sources) {
+      if (!source || typeof source !== "object") continue;
+      const raw = source[field];
+      const parsed = parser(raw);
+      if (parsed != null) return parsed;
+    }
+    return null;
+  };
+  var readNestedStringField = (item, field) => readNestedValue(item, field, (value) => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  });
+  var readNestedNumberField = (item, field) => readNestedValue(item, field, (value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  });
+  var PET_STATS_BY_SPECIES = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, maxScale, hoursToMature) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey3(key2);
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, { maxScale, hoursToMature });
+    };
+    for (const [species, entry] of Object.entries(petCatalog)) {
+      const maxScale = Number(entry?.maxScale);
+      const hoursToMature = Number(entry?.hoursToMature);
+      if (!Number.isFinite(maxScale) || maxScale <= 1) continue;
+      if (!Number.isFinite(hoursToMature) || hoursToMature <= 0) continue;
+      register(species, maxScale, hoursToMature);
+      register(entry?.name, maxScale, hoursToMature);
+    }
+    return map2;
+  })();
+  var lookupPetStats = (species) => {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey3(species);
+    if (!normalized) return null;
+    return PET_STATS_BY_SPECIES.get(normalized) ?? null;
+  };
+  var getPetStrength = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const rawType = typeof item.itemType === "string" ? item.itemType : "";
+    const type = rawType.trim();
+    if (type !== "Pet") return null;
+    const rawXp = readNestedNumberField(item, "xp");
+    const xp = typeof rawXp === "number" && Number.isFinite(rawXp) ? rawXp : 0;
+    const rawTargetScale = readNestedNumberField(item, "targetScale");
+    const targetScale = typeof rawTargetScale === "number" && Number.isFinite(rawTargetScale) ? rawTargetScale : 1;
+    const speciesCandidates = /* @__PURE__ */ new Set();
+    const maybePetSpecies = readNestedStringField(item, "petSpecies");
+    if (maybePetSpecies) speciesCandidates.add(maybePetSpecies);
+    const maybeSpecies = readNestedStringField(item, "species");
+    if (maybeSpecies) speciesCandidates.add(maybeSpecies);
+    const maybeName = readNestedStringField(item, "name");
+    if (maybeName) speciesCandidates.add(maybeName);
+    let stats = null;
+    for (const candidate of speciesCandidates) {
+      stats = lookupPetStats(candidate);
+      if (stats) break;
+    }
+    if (!stats) return null;
+    const { maxScale, hoursToMature } = stats;
+    if (!Number.isFinite(maxScale) || maxScale <= 1) return null;
+    if (!Number.isFinite(hoursToMature) || hoursToMature <= 0) return null;
+    const safeXp = Math.max(0, xp);
+    const xpDenominator = hoursToMature * 3600;
+    const xpComponent = xpDenominator > 0 ? Math.min(Math.floor(safeXp / xpDenominator * 30), 30) : 0;
+    const minScale = 1;
+    const clampedScale = clampNumber2(targetScale, minScale, maxScale);
+    const scaleDenominator = maxScale - minScale;
+    const scaleComponent = scaleDenominator > 0 ? Math.floor((clampedScale - minScale) / scaleDenominator * 20 + 80) : 80;
+    const combined = xpComponent + scaleComponent - 30;
+    return clampNumber2(combined, 0, 100);
+  };
+  var compareByNameThenTypeThenId = (a, b) => {
+    const nameA = getInventoryItemName(a);
+    const nameB = getInventoryItemName(b);
+    if (nameA && nameB) {
+      const cmp = nameA.localeCompare(nameB, void 0, { sensitivity: "base" });
+      if (cmp !== 0) return cmp;
+    }
+    if (!nameA && nameB) return 1;
+    if (nameA && !nameB) return -1;
+    const typeA = typeof a?.itemType === "string" ? a.itemType : "";
+    const typeB = typeof b?.itemType === "string" ? b.itemType : "";
+    const typeCmp = typeA.localeCompare(typeB, void 0, { sensitivity: "base" });
+    if (typeCmp !== 0) return typeCmp;
+    const idA = typeof a.id === "string" ? a.id : "";
+    const idB = typeof b.id === "string" ? b.id : "";
+    return idA.localeCompare(idB, void 0, { sensitivity: "base" });
+  };
+  function sortInventoryItems(items, sortKey, direction) {
+    const sorted = items.slice();
+    const isDesc = direction === "desc";
+    switch (sortKey) {
+      case "alpha":
+        sorted.sort((a, b) => {
+          const cmp = compareByNameThenTypeThenId(a, b);
+          return isDesc ? -cmp : cmp;
+        });
+        break;
+      case "qty":
+        sorted.sort((a, b) => {
+          const qtyA = getInventoryItemQuantity(a);
+          const qtyB = getInventoryItemQuantity(b);
+          if (qtyA !== qtyB) {
+            const cmp = qtyA - qtyB;
+            return isDesc ? -cmp : cmp;
+          }
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
+      case "rarity":
+        sorted.sort((a, b) => {
+          const rarityA = getInventoryItemRarity(a);
+          const rarityB = getInventoryItemRarity(b);
+          const rankA = getRarityRank(rarityA);
+          const rankB = getRarityRank(rarityB);
+          if (rankA !== rankB) {
+            const cmp = rankA - rankB;
+            return isDesc ? -cmp : cmp;
+          }
+          const cmpRarity = rarityA.localeCompare(rarityB, void 0, { sensitivity: "base" });
+          if (cmpRarity !== 0) return cmpRarity;
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
+      case "size":
+        sorted.sort((a, b) => {
+          const sizeA = getInventoryItemSizePercent(a);
+          const sizeB = getInventoryItemSizePercent(b);
+          const hasA = typeof sizeA === "number" && Number.isFinite(sizeA);
+          const hasB = typeof sizeB === "number" && Number.isFinite(sizeB);
+          if (hasA && hasB && sizeA !== sizeB) {
+            const cmp = sizeA - sizeB;
+            return isDesc ? -cmp : cmp;
+          }
+          if (hasA && !hasB) return isDesc ? -1 : 1;
+          if (!hasA && hasB) return isDesc ? 1 : -1;
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
+      case "mutations":
+        sorted.sort((a, b) => {
+          const mutationsA = getInventoryItemMutations(a);
+          const mutationsB = getInventoryItemMutations(b);
+          const countA = mutationsA.length;
+          const countB = mutationsB.length;
+          if (countA !== countB) {
+            const cmp = countA - countB;
+            return isDesc ? -cmp : cmp;
+          }
+          if (countA > 0 && countB > 0) {
+            const labelA = mutationsA.slice().sort((x, y) => x.localeCompare(y, void 0, { sensitivity: "base" })).join("\0");
+            const labelB = mutationsB.slice().sort((x, y) => x.localeCompare(y, void 0, { sensitivity: "base" })).join("\0");
+            const cmp = labelA.localeCompare(labelB, void 0, { sensitivity: "base" });
+            if (cmp !== 0) return cmp;
+          }
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
+      case "strength":
+        sorted.sort((a, b) => {
+          const strengthA = getPetStrength(a);
+          const strengthB = getPetStrength(b);
+          const hasA = typeof strengthA === "number" && Number.isFinite(strengthA);
+          const hasB = typeof strengthB === "number" && Number.isFinite(strengthB);
+          if (hasA && hasB && strengthA !== strengthB) {
+            const cmp = strengthA - strengthB;
+            return isDesc ? -cmp : cmp;
+          }
+          if (hasA && !hasB) return isDesc ? -1 : 1;
+          if (!hasA && hasB) return isDesc ? 1 : -1;
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
+      default:
+        break;
+    }
+    return sorted;
+  }
+  async function logInventoryForFilters(filters, sortKey, direction) {
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      if (!inventory || typeof inventory !== "object") {
+        console.log("[InventorySorting] Inventaire introuvable pour le log des filtres.");
+        return;
+      }
+      const items = Array.isArray(inventory.items) ? inventory.items : [];
+      const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters);
+      const resolvedDirection = sortKey ? (direction && DIRECTION_ORDER.includes(direction) ? direction : DEFAULT_DIRECTION_BY_SORT_KEY[sortKey]) ?? "asc" : direction && DIRECTION_ORDER.includes(direction) ? direction : "asc";
+      const itemsForLog = sortKey ? sortInventoryItems(filteredItems, sortKey, resolvedDirection) : filteredItems.slice();
+      const filteredInventory = { ...inventory, items: itemsForLog };
+      const descriptor = keepAll ? "toutes cat\xE9gories" : `types: ${Array.from(itemTypes).join(", ") || "(aucun)"}`;
+      const sortDescriptor = sortKey ? `tri: ${sortKey} (${resolvedDirection})` : "tri: (non sp\xE9cifi\xE9)";
+      console.log(
+        `[InventorySorting] myInventory filtr\xE9 (${descriptor}, ${sortDescriptor}) :`,
+        filteredInventory
+      );
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de r\xE9cup\xE9rer myInventory pour le log", error);
+    }
+  }
+  function createDefaultApplySorting(cfg) {
+    const stateByGrid = /* @__PURE__ */ new WeakMap();
+    const ensureState = async (grid, filters, entries) => {
+      const filtersKey = JSON.stringify(filters);
+      let state2 = stateByGrid.get(grid);
+      const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
+      const needsRebuild = !state2 || state2.filtersKey !== filtersKey || state2.baseItems.length !== entries.length || !hasAllBaseIndexes;
+      if (state2 && !needsRebuild) {
+        state2.entryByBaseIndex.clear();
+        for (const entry of entries) {
+          const baseIndex = readBaseIndex(entry);
+          if (baseIndex != null) state2.entryByBaseIndex.set(baseIndex, entry);
+        }
+        return state2;
+      }
+      try {
+        const inventory = await Atoms.inventory.myInventory.get();
+        if (!inventory || typeof inventory !== "object") {
+          console.log("[InventorySorting] Inventaire introuvable pour le tri DOM.");
+          return null;
+        }
+        const items = Array.isArray(inventory.items) ? inventory.items : [];
+        const { filteredItems } = filterInventoryItems(items, filters);
+        if (filteredItems.length !== entries.length) {
+          console.warn(
+            `[InventorySorting] Nombre d'\xE9l\xE9ments filtr\xE9s (${filteredItems.length}) diff\xE9rent du DOM (${entries.length}). R\xE9organisation annul\xE9e.`
+          );
+          return null;
+        }
+        assignBaseIndexesToEntries(entries);
+        const newState = {
+          filtersKey,
+          baseItems: filteredItems.slice(),
+          entryByBaseIndex: /* @__PURE__ */ new Map()
+        };
+        entries.forEach((entry, index) => {
+          newState.entryByBaseIndex.set(index, entry);
+        });
+        stateByGrid.set(grid, newState);
+        return newState;
+      } catch (error) {
+        console.warn("[InventorySorting] Impossible de r\xE9cup\xE9rer myInventory pour le tri DOM", error);
+        return null;
+      }
+    };
+    return async (grid, sortKey, direction) => {
+      if (typeof document === "undefined") return;
+      const container = getInventoryItemsContainer(grid);
+      if (!container) return;
+      const entries = getInventoryDomEntries(container);
+      if (!entries.length) return;
+      const filters = getActiveFiltersFromGrid(
+        grid,
+        cfg.checkboxSelector,
+        cfg.checkboxLabelSelector
+      );
+      const state2 = await ensureState(grid, filters, entries);
+      if (!state2) return;
+      const baseIndexByItem = /* @__PURE__ */ new Map();
+      state2.baseItems.forEach((item, index) => {
+        baseIndexByItem.set(item, index);
+      });
+      const effectiveDirection = direction && DIRECTION_ORDER.includes(direction) ? direction : DEFAULT_DIRECTION_BY_SORT_KEY[sortKey] ?? "asc";
+      const desiredItems = !sortKey || sortKey === "none" ? state2.baseItems.slice() : sortInventoryItems(state2.baseItems, sortKey, effectiveDirection);
+      const desiredEntries = [];
+      const usedEntries = /* @__PURE__ */ new Set();
+      for (const item of desiredItems) {
+        const baseIndex = baseIndexByItem.get(item);
+        if (baseIndex == null) continue;
+        const entry = state2.entryByBaseIndex.get(baseIndex);
+        if (!entry || usedEntries.has(entry)) continue;
+        desiredEntries.push(entry);
+        usedEntries.add(entry);
+      }
+      if (desiredEntries.length !== entries.length) {
+        console.warn(
+          `[InventorySorting] Impossible de r\xE9ordonner l'inventaire : correspondances insuffisantes (${desiredEntries.length}/${entries.length}).`
+        );
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      desiredEntries.forEach((entry) => {
+        fragment.appendChild(entry.wrapper);
+      });
+      container.appendChild(fragment);
+      state2.entryByBaseIndex.clear();
+      desiredEntries.forEach((entry) => {
+        const baseIndex = readBaseIndex(entry);
+        if (baseIndex != null) {
+          state2.entryByBaseIndex.set(baseIndex, entry);
+        }
+      });
+    };
+  }
+  function getActiveFiltersFromGrid(grid, checkboxSelector, checkboxLabelSelector) {
+    return Array.from(grid.querySelectorAll(checkboxSelector)).filter(labelIsChecked).map(
+      (lbl) => (lbl.querySelector(checkboxLabelSelector)?.textContent ?? "").trim()
+    ).filter(Boolean);
+  }
+  function computeSortOptions(activeFilters, labelByValue = LABEL_BY_VALUE_DEFAULT, mapExtraByFilter = MAP_EXTRA_BY_FILTER_DEFAULT) {
+    if (!activeFilters.length) {
+      const values2 = [...ALWAYS, ...BASE_SORT];
+      return values2.map((v) => ({ value: v, label: labelByValue[v] || v }));
+    }
+    const act = activeFilters.map((s) => (s ?? "").trim().toLowerCase());
+    const getExtras = (k) => mapExtraByFilter[k] ?? [];
+    const first = act[0];
+    let allowed = /* @__PURE__ */ new Set([...BASE_SORT, ...getExtras(first)]);
+    for (let i = 1; i < act.length; i++) {
+      const key2 = act[i];
+      const current = /* @__PURE__ */ new Set([...BASE_SORT, ...getExtras(key2)]);
+      allowed = new Set([...allowed].filter((x) => current.has(x)));
+    }
+    const values = ORDER.filter((v) => v === "none" || allowed.has(v));
+    return values.map((v) => ({ value: v, label: labelByValue[v] || v }));
+  }
+  function injectDarkSelectStyles(id = "inv-sort-dark-styles") {
+    if (document.getElementById(id)) return;
+    const css = `
+    .tm-sort-select {
+      color: #e7eef7 !important;
+      background-color: rgba(17,17,17,0.98) !important;
+      border: 1px solid rgba(255,255,255,0.25) !important;
+      outline: none !important;
+      -webkit-appearance: none;
+      appearance: none;
+      color-scheme: dark;
+      padding-right: 28px !important;
+    }
+    .tm-sort-select:focus { box-shadow: 0 0 0 2px rgba(122,162,255,.35); }
+    .tm-sort-select option { color: #e7eef7; background-color: #111; }
+    .tm-sort-select option:checked { background-color: #222; }
+    .tm-sort-select option:hover   { background-color: #1a1a1a; }
+    .tm-select-wrap { position: relative; display: inline-flex; align-items: center; }
+    .tm-select-arrow {
+      position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .tm-select-arrow svg { display: block; }
+  `;
+    const style2 = document.createElement("style");
+    style2.id = id;
+    style2.textContent = css;
+    document.head.appendChild(style2);
+  }
+  function createSortingBar() {
+    const wrap = document.createElement("div");
+    wrap.className = "tm-sort-wrap";
+    Object.assign(wrap.style, {
+      display: "block",
+      width: "100%",
+      margin: "0",
+      padding: "0",
+      position: "relative",
+      flex: "0 0 auto",
+      minHeight: "0",
+      contain: "layout style"
+    });
+    const bar = document.createElement("div");
+    bar.className = "tm-sorting-bar";
+    Object.assign(bar.style, {
+      display: "flex",
+      alignItems: "center",
+      flexWrap: "wrap",
+      gap: "8px",
+      marginTop: "10px",
+      paddingTop: "8px",
+      borderTop: "1px solid rgba(255,255,255,0.12)",
+      width: "100%",
+      boxSizing: "border-box",
+      position: "relative",
+      flex: "0 0 auto",
+      height: "auto",
+      minHeight: "0",
+      maxHeight: "none",
+      alignSelf: "stretch"
+    });
+    const label2 = document.createElement("span");
+    label2.textContent = "Sort by:";
+    Object.assign(label2.style, { font: "inherit", opacity: "0.8", flex: "0 0 auto" });
+    const selectWrap = document.createElement("div");
+    selectWrap.className = "tm-select-wrap";
+    const select2 = document.createElement("select");
+    select2.className = "tm-sort-select tm-sort-select--key";
+    Object.assign(select2.style, {
+      padding: "6px 10px",
+      border: "1px solid rgba(255,255,255,0.25)",
+      borderRadius: "6px",
+      background: "rgba(17,17,17,0.98)",
+      color: "#e7eef7",
+      cursor: "pointer",
+      flex: "0 0 auto",
+      width: "auto",
+      outline: "none",
+      appearance: "none"
+    });
+    select2.style.setProperty("-webkit-appearance", "none");
+    const arrow = document.createElement("span");
+    arrow.className = "tm-select-arrow";
+    arrow.innerHTML = `
+    <svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true">
+      <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+    selectWrap.append(select2, arrow);
+    bar.append(label2, selectWrap);
+    const directionLabel = document.createElement("span");
+    directionLabel.className = "tm-direction-label";
+    directionLabel.textContent = DEFAULT_DIRECTION_LABEL;
+    Object.assign(directionLabel.style, {
+      font: "inherit",
+      opacity: "0.8",
+      flex: "0 0 auto"
+    });
+    const directionWrap = document.createElement("div");
+    directionWrap.className = "tm-select-wrap";
+    const directionSelect = document.createElement("select");
+    directionSelect.className = "tm-sort-select tm-direction-select";
+    Object.assign(directionSelect.style, {
+      padding: "6px 10px",
+      border: "1px solid rgba(255,255,255,0.25)",
+      borderRadius: "6px",
+      background: "rgba(17,17,17,0.98)",
+      color: "#e7eef7",
+      cursor: "pointer",
+      flex: "0 0 auto",
+      width: "auto",
+      outline: "none",
+      appearance: "none"
+    });
+    directionSelect.style.setProperty("-webkit-appearance", "none");
+    const directionArrow = document.createElement("span");
+    directionArrow.className = "tm-select-arrow";
+    directionArrow.innerHTML = `
+    <svg width="12" height="8" viewBox="0 0 12 8" aria-hidden="true">
+      <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  `;
+    directionWrap.append(directionSelect, directionArrow);
+    bar.append(directionLabel, directionWrap);
+    wrap.appendChild(bar);
+    return { wrap, bar, select: select2, directionSelect, directionLabel };
+  }
+  function ensureSortingBar(grid, cfg, labelByValue, directionLabelText, onChange) {
+    const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
+    if (!filtersBlock) return null;
+    const closeBtnInBlock = filtersBlock.querySelector(cfg.closeButtonSelector);
+    const closeBtn = closeBtnInBlock || grid.querySelector(cfg.closeButtonSelector);
+    let wrap = filtersBlock.querySelector(":scope > .tm-sort-wrap");
+    let select2;
+    let directionSelect;
+    let directionLabelEl = null;
+    if (!wrap) {
+      const ui = createSortingBar();
+      wrap = ui.wrap;
+      select2 = ui.select;
+      directionSelect = ui.directionSelect;
+      directionLabelEl = ui.directionLabel;
+      wrap.__grid = grid;
+      if (closeBtn && closeBtn.parentElement) {
+        closeBtn.insertAdjacentElement("afterend", wrap);
+      } else {
+        filtersBlock.appendChild(wrap);
+      }
+      if (directionLabelEl) {
+        directionLabelEl.textContent = directionLabelText;
+      }
+      select2.addEventListener("change", () => {
+        const value = select2.value;
+        wrap.__prevValue = value;
+        const direction = directionSelect?.value || "asc";
+        const currentGrid = wrap.__grid;
+        const activeFilters = currentGrid ? getActiveFiltersFromGrid(
+          currentGrid,
+          cfg.checkboxSelector,
+          cfg.checkboxLabelSelector
+        ) : [];
+        console.log("[InventorySorting] Tri s\xE9lectionn\xE9 :", value);
+        void logInventoryForFilters(activeFilters, value, direction);
+        onChange(value, direction);
+      });
+      directionSelect.addEventListener("change", () => {
+        const direction = directionSelect.value;
+        wrap.__prevDirection = direction;
+        const value = select2?.value || "none";
+        const currentGrid = wrap.__grid;
+        const activeFilters = currentGrid ? getActiveFiltersFromGrid(
+          currentGrid,
+          cfg.checkboxSelector,
+          cfg.checkboxLabelSelector
+        ) : [];
+        console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 :", direction);
+        void logInventoryForFilters(activeFilters, value, direction);
+        onChange(value, direction);
+      });
+    } else {
+      const maybeSelect = wrap.querySelector("select.tm-sort-select--key");
+      const maybeDirectionSelect = wrap.querySelector("select.tm-direction-select");
+      if (!maybeSelect || !maybeDirectionSelect) return null;
+      select2 = maybeSelect;
+      directionSelect = maybeDirectionSelect;
+      directionLabelEl = wrap.querySelector(".tm-direction-label");
+      if (directionLabelEl) {
+        directionLabelEl.textContent = directionLabelText;
+      }
+      if (closeBtn && closeBtn.parentElement && closeBtn.nextElementSibling !== wrap) {
+        closeBtn.insertAdjacentElement("afterend", wrap);
+      } else if (!closeBtn && wrap.parentElement !== filtersBlock) {
+        filtersBlock.appendChild(wrap);
+      }
+    }
+    wrap.__grid = grid;
+    return { wrap, select: select2, directionSelect };
+  }
+  function renderSelectOptions(select2, options, prevValue) {
+    const prev = prevValue ?? select2.value;
+    select2.innerHTML = "";
+    for (const opt of options) {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      select2.appendChild(o);
+    }
+    if (options.some((o) => o.value === "none")) {
+      select2.value = "none";
+    }
+    if (prev && options.some((o) => o.value === prev) && prev !== "none") {
+      select2.value = prev;
+    }
+  }
+  function renderDirectionOptions(select2, labels, prevValue) {
+    const prev = prevValue ?? select2.value ?? null;
+    select2.innerHTML = "";
+    for (const value of DIRECTION_ORDER) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = labels[value] ?? value;
+      select2.appendChild(option);
+    }
+    if (prev && DIRECTION_ORDER.includes(prev)) {
+      select2.value = prev;
+    } else {
+      select2.value = DIRECTION_ORDER[0];
+    }
+  }
+  function attachInventorySorting(userConfig = {}) {
+    const cfg = {
+      ...DEFAULTS5,
+      ...userConfig
+    };
+    const mapExtraByFilter = { ...MAP_EXTRA_BY_FILTER_DEFAULT, ...cfg.mapExtraByFilter || {} };
+    const labelByValue = { ...LABEL_BY_VALUE_DEFAULT, ...cfg.labelByValue || {} };
+    const directionLabelText = cfg.directionLabel ?? DEFAULT_DIRECTION_LABEL;
+    const directionLabelByValue = {
+      ...DIRECTION_LABELS_DEFAULT,
+      ...cfg.directionLabelByValue || {}
+    };
+    const defaultDirectionBySortKey = {
+      ...DEFAULT_DIRECTION_BY_SORT_KEY,
+      ...cfg.defaultDirectionBySortKey || {}
+    };
+    if (cfg.injectDarkStyles) injectDarkSelectStyles();
+    const applySorting = cfg.applySorting ?? createDefaultApplySorting(cfg);
+    let grid = null;
+    let currentWrap = null;
+    let currentSelect = null;
+    let currentDirectionSelect = null;
+    let lastLoggedFilters = null;
+    let lastAppliedSortKey = null;
+    let lastAppliedDirection = null;
+    const obs = new MutationObserver((muts) => {
+      const relevant = muts.some(
+        (m) => m.type === "attributes" ? ["data-checked", "style", "class", "hidden", "aria-hidden"].includes(m.attributeName || "") : m.type === "childList"
+      );
+      if (relevant) refresh();
+    });
+    const setGrid = (next) => {
+      if (grid === next) return;
+      obs.disconnect();
+      grid = next;
+      lastLoggedFilters = null;
+      lastAppliedSortKey = null;
+      if (grid) {
+        obs.observe(grid, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ["data-checked", "style", "class", "hidden", "aria-hidden"]
+        });
+      }
+    };
+    const bodyObserver = new MutationObserver(() => {
+      const hasCurrent = !!(grid && document.contains(grid));
+      if (!hasCurrent && grid) {
+        setGrid(null);
+      }
+      const current = hasCurrent ? grid : null;
+      const next = document.querySelector(cfg.gridSelector);
+      if (next !== current) {
+        setGrid(next);
+        if (next) {
+          update();
+        }
+      }
+    });
+    const resolveGrid = () => {
+      if (grid && document.contains(grid)) return grid;
+      const next = document.querySelector(cfg.gridSelector);
+      if (next !== grid) {
+        setGrid(next);
+      }
+      return grid && document.contains(grid) ? grid : null;
+    };
+    const update = () => {
+      const targetGrid = resolveGrid();
+      if (!targetGrid || !isVisible2(targetGrid)) return;
+      const mount = ensureSortingBar(
+        targetGrid,
+        cfg,
+        labelByValue,
+        directionLabelText,
+        (value, direction) => {
+          lastAppliedSortKey = value;
+          lastAppliedDirection = direction;
+          persistSortKey(value);
+          persistSortDirection(direction);
+          cfg.onSortChange?.(value, direction);
+          void applySorting(targetGrid, value, direction);
+        }
+      );
+      if (!mount) return;
+      currentWrap = mount.wrap;
+      currentSelect = mount.select;
+      currentDirectionSelect = mount.directionSelect;
+      const activeFilters = getActiveFiltersFromGrid(
+        targetGrid,
+        cfg.checkboxSelector,
+        cfg.checkboxLabelSelector
+      );
+      const serializedFilters = JSON.stringify(activeFilters);
+      if (serializedFilters !== lastLoggedFilters) {
+        lastLoggedFilters = serializedFilters;
+        console.log("[InventorySorting] Filtres actifs :", activeFilters);
+        const currentSortKey = currentSelect?.value ?? void 0;
+        const currentDirection = currentDirectionSelect?.value ?? void 0;
+        void logInventoryForFilters(activeFilters, currentSortKey, currentDirection);
+      }
+      const options = computeSortOptions(activeFilters, labelByValue, mapExtraByFilter);
+      const wrapPrevValue = typeof currentWrap.__prevValue === "string" ? currentWrap.__prevValue : null;
+      const persistedSortKey = loadPersistedSortKey();
+      const preferredValue = (wrapPrevValue && options.some((o) => o.value === wrapPrevValue) ? wrapPrevValue : null) || (persistedSortKey && options.some((o) => o.value === persistedSortKey) ? persistedSortKey : null);
+      renderSelectOptions(currentSelect, options, preferredValue);
+      currentWrap.__prevValue = currentSelect.value;
+      const appliedSortKey = currentSelect.value;
+      const wrapPrevDirection = typeof currentWrap.__prevDirection === "string" ? currentWrap.__prevDirection : null;
+      const persistedDirection = loadPersistedSortDirection();
+      const fallbackDirection = defaultDirectionBySortKey[appliedSortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[appliedSortKey] ?? "asc";
+      const preferredDirection = (wrapPrevDirection && DIRECTION_ORDER.includes(wrapPrevDirection) ? wrapPrevDirection : null) || (persistedDirection && DIRECTION_ORDER.includes(persistedDirection) ? persistedDirection : null) || fallbackDirection;
+      if (currentDirectionSelect) {
+        renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+        const appliedDirection = currentDirectionSelect.value;
+        currentWrap.__prevDirection = appliedDirection;
+        if (appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
+          lastAppliedSortKey = appliedSortKey;
+          lastAppliedDirection = appliedDirection;
+          persistSortKey(appliedSortKey);
+          persistSortDirection(appliedDirection);
+          cfg.onSortChange?.(appliedSortKey, appliedDirection);
+          void applySorting(targetGrid, appliedSortKey, appliedDirection);
+        }
+      } else {
+        if (appliedSortKey !== lastAppliedSortKey) {
+          lastAppliedSortKey = appliedSortKey;
+          lastAppliedDirection = fallbackDirection;
+          persistSortKey(appliedSortKey);
+          persistSortDirection(fallbackDirection);
+          cfg.onSortChange?.(appliedSortKey, fallbackDirection);
+          void applySorting(targetGrid, appliedSortKey, fallbackDirection);
+        }
+      }
+    };
+    const refresh = debounce(update, 120);
+    const changeHandler = (e) => {
+      const target = e.target;
+      if (!target) return;
+      const within = target.closest(cfg.gridSelector);
+      if (within && within === resolveGrid()) {
+        setTimeout(refresh, 0);
+      }
+    };
+    const startObservers = () => {
+      const root = document.body || document.documentElement;
+      if (root) {
+        bodyObserver.observe(root, { childList: true, subtree: true });
+      }
+      setGrid(document.querySelector(cfg.gridSelector));
+      document.addEventListener("change", changeHandler, true);
+      update();
+    };
+    startObservers();
+    return {
+      destroy() {
+        obs.disconnect();
+        bodyObserver.disconnect();
+        document.removeEventListener("change", changeHandler, true);
+        if (currentWrap && currentWrap.parentElement) {
+          currentWrap.parentElement.removeChild(currentWrap);
+        }
+        currentWrap = null;
+        currentSelect = null;
+        currentDirectionSelect = null;
+        grid = null;
+        lastLoggedFilters = null;
+        lastAppliedSortKey = null;
+        lastAppliedDirection = null;
+      },
+      update,
+      getActiveFilters() {
+        const targetGrid = resolveGrid();
+        if (!targetGrid) return [];
+        return getActiveFiltersFromGrid(targetGrid, cfg.checkboxSelector, cfg.checkboxLabelSelector);
+      },
+      getCurrentSortKey() {
+        return currentSelect?.value ?? null;
+      },
+      getCurrentSortDirection() {
+        return currentDirectionSelect?.value ?? null;
+      },
+      setSortKey(k) {
+        if (!currentSelect) return;
+        currentSelect.value = k;
+        currentWrap.__prevValue = k;
+        const targetGrid = resolveGrid();
+        if (targetGrid) {
+          const filtersForLog = getActiveFiltersFromGrid(
+            targetGrid,
+            cfg.checkboxSelector,
+            cfg.checkboxLabelSelector
+          );
+          console.log("[InventorySorting] Tri s\xE9lectionn\xE9 (programmatique) :", k);
+          const directionToApply = currentDirectionSelect?.value ?? defaultDirectionBySortKey[k] ?? DEFAULT_DIRECTION_BY_SORT_KEY[k] ?? "asc";
+          if (currentDirectionSelect) {
+            currentDirectionSelect.value = directionToApply;
+            currentWrap.__prevDirection = directionToApply;
+          }
+          void logInventoryForFilters(filtersForLog, k, directionToApply);
+          lastAppliedSortKey = k;
+          lastAppliedDirection = directionToApply;
+          persistSortKey(k);
+          persistSortDirection(directionToApply);
+          cfg.onSortChange?.(k, directionToApply);
+          void applySorting(targetGrid, k, directionToApply);
+        }
+      },
+      setSortDirection(direction) {
+        if (!currentDirectionSelect) return;
+        currentDirectionSelect.value = direction;
+        currentWrap.__prevDirection = direction;
+        const targetGrid = resolveGrid();
+        const sortKey = currentSelect?.value ?? "none";
+        if (targetGrid) {
+          const filtersForLog = getActiveFiltersFromGrid(
+            targetGrid,
+            cfg.checkboxSelector,
+            cfg.checkboxLabelSelector
+          );
+          console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 (programmatique) :", direction);
+          void logInventoryForFilters(filtersForLog, sortKey, direction);
+          lastAppliedSortKey = sortKey;
+          lastAppliedDirection = direction;
+          persistSortKey(sortKey);
+          persistSortDirection(direction);
+          cfg.onSortChange?.(sortKey, direction);
+          void applySorting(targetGrid, sortKey, direction);
+        }
+      },
+      getSortOptions() {
+        const targetGrid = resolveGrid();
+        const filters = targetGrid ? getActiveFiltersFromGrid(targetGrid, cfg.checkboxSelector, cfg.checkboxLabelSelector) : [];
+        return computeSortOptions(filters, labelByValue, mapExtraByFilter);
+      },
+      getGrid() {
+        return resolveGrid();
+      }
+    };
+  }
+  function startInventorySortingObserver(options = {}) {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return {
+        stop() {
+        },
+        refresh() {
+        },
+        getController() {
+          return null;
+        }
+      };
+    }
+    const { waitForGrid = true, log: log2, ...config } = options;
+    const cfg = config;
+    let controller = null;
+    let observer2 = null;
+    let readyListener = null;
+    const logger = typeof log2 === "function" ? log2 : log2 ? (...args) => console.debug("[InventorySorting]", ...args) : () => {
+    };
+    const attachIfPossible = () => {
+      if (controller) return controller;
+      if (waitForGrid) {
+        const selector = cfg.gridSelector ?? DEFAULTS5.gridSelector;
+        if (!document.querySelector(selector)) {
+          return null;
+        }
+      }
+      controller = attachInventorySorting(cfg);
+      logger("attached");
+      return controller;
+    };
+    const ensureObserver = () => {
+      if (controller || observer2 || !waitForGrid) return;
+      const target = document.body || document.documentElement;
+      if (!target) return;
+      observer2 = new MutationObserver(() => {
+        if (attachIfPossible()) {
+          observer2?.disconnect();
+          observer2 = null;
+          logger("attached via mutation");
+        }
+      });
+      observer2.observe(target, { childList: true, subtree: true });
+    };
+    const start = () => {
+      if (!attachIfPossible()) {
+        ensureObserver();
+      }
+    };
+    if (document.readyState === "loading") {
+      readyListener = () => {
+        readyListener = null;
+        start();
+      };
+      document.addEventListener("DOMContentLoaded", readyListener, { once: true });
+    } else {
+      start();
+    }
+    return {
+      stop() {
+        if (readyListener) {
+          document.removeEventListener("DOMContentLoaded", readyListener);
+          readyListener = null;
+        }
+        observer2?.disconnect();
+        observer2 = null;
+        controller?.destroy();
+        controller = null;
+      },
+      refresh() {
+        if (controller) {
+          controller.update();
+        } else {
+          start();
+        }
+      },
+      getController() {
+        return controller;
+      }
+    };
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -18610,6 +19907,7 @@
       startInjectSellAllPets();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
+      startInventorySortingObserver();
       startModalObserver({ intervalMs: 6e4, log: false });
     })();
   }
@@ -26895,7 +28193,7 @@ next: ${next}`;
   var RELATIVE_TIME_FORMATTER = new Intl.RelativeTimeFormat(void 0, {
     numeric: "auto"
   });
-  var RARITY_ORDER = [
+  var RARITY_ORDER2 = [
     rarity.Common,
     rarity.Uncommon,
     rarity.Rare,
@@ -27214,7 +28512,7 @@ next: ${next}`;
   }
   function createPetRarityGroups() {
     const map2 = /* @__PURE__ */ new Map();
-    for (const rarityKey of RARITY_ORDER) {
+    for (const rarityKey of RARITY_ORDER2) {
       map2.set(rarityKey, []);
     }
     for (const species of Object.keys(petCatalog)) {
@@ -27416,7 +28714,7 @@ next: ${next}`;
       storageId: "pets"
     });
     const groups = createPetRarityGroups();
-    for (const rarityKey of RARITY_ORDER) {
+    for (const rarityKey of RARITY_ORDER2) {
       const speciesList = groups.get(rarityKey) ?? [];
       if (!speciesList.length) continue;
       const group = document.createElement("div");
@@ -30830,11 +32128,11 @@ next: ${next}`;
       let lastVisible = computeWindowVisible(windowEl);
       visibilityObserver = new MutationObserver(() => {
         if (destroyed) return;
-        const isVisible2 = computeWindowVisible(windowEl);
-        if (isVisible2 && !lastVisible) {
+        const isVisible3 = computeWindowVisible(windowEl);
+        if (isVisible3 && !lastVisible) {
           void refreshRooms();
         }
-        lastVisible = isVisible2;
+        lastVisible = isVisible3;
       });
       visibilityObserver.observe(windowEl, { attributes: true, attributeFilter: ["class", "style"] });
     }
