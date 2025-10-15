@@ -1234,7 +1234,7 @@ function ensureSortingBar(
   cfg: Required<typeof DEFAULTS> & InventorySortingConfig,
   labelByValue: Record<SortKey, string>,
   directionLabelText: string,
-  onChange: (value: SortKey, direction: SortDirection) => void
+  onChange: (value: SortKey, direction: SortDirection, activeFilters: string[]) => void
 ) {
   void labelByValue;
   const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
@@ -1281,7 +1281,7 @@ function ensureSortingBar(
         : [];
       console.log('[InventorySorting] Tri sélectionné :', value);
       void logInventoryForFilters(activeFilters, value, direction);
-      onChange(value, direction);
+      onChange(value, direction, activeFilters);
     });
 
     directionSelect.addEventListener('change', () => {
@@ -1298,7 +1298,7 @@ function ensureSortingBar(
         : [];
       console.log('[InventorySorting] Ordre de tri sélectionné :', direction);
       void logInventoryForFilters(activeFilters, value, direction);
-      onChange(value, direction);
+      onChange(value, direction, activeFilters);
     });
   } else {
     const maybeSelect = wrap.querySelector('select.tm-sort-select--key');
@@ -1395,6 +1395,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let currentSelect: HTMLSelectElement | null = null;
   let currentDirectionSelect: HTMLSelectElement | null = null;
   let lastLoggedFilters: string | null = null;
+  let lastAppliedFiltersKey: string | null = null;
   let lastAppliedSortKey: SortKey | null = null;
   let lastAppliedDirection: SortDirection | null = null;
 
@@ -1412,6 +1413,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     obs.disconnect();
     grid = next;
     lastLoggedFilters = null;
+    lastAppliedFiltersKey = null;
     lastAppliedSortKey = null;
     if (grid) {
       obs.observe(grid, {
@@ -1457,9 +1459,11 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg,
       labelByValue,
       directionLabelText,
-      (value, direction) => {
+      (value, direction, filters) => {
         lastAppliedSortKey = value;
         lastAppliedDirection = direction;
+        const filtersKey = JSON.stringify(filters ?? []);
+        lastAppliedFiltersKey = filtersKey;
         persistSortKey(value);
         persistSortDirection(direction);
         cfg.onSortChange?.(value, direction);
@@ -1478,6 +1482,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg.checkboxLabelSelector
     );
     const serializedFilters = JSON.stringify(activeFilters);
+    const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
     if (serializedFilters !== lastLoggedFilters) {
       lastLoggedFilters = serializedFilters;
       console.log('[InventorySorting] Filtres actifs :', activeFilters);
@@ -1515,18 +1520,20 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
       const appliedDirection = currentDirectionSelect.value as SortDirection;
       (currentWrap as any).__prevDirection = appliedDirection;
-      if (appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
+      if (filtersChanged || appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
         lastAppliedSortKey = appliedSortKey;
         lastAppliedDirection = appliedDirection;
+        lastAppliedFiltersKey = serializedFilters;
         persistSortKey(appliedSortKey);
         persistSortDirection(appliedDirection);
         cfg.onSortChange?.(appliedSortKey, appliedDirection);
         void applySorting(targetGrid, appliedSortKey, appliedDirection);
       }
     } else {
-      if (appliedSortKey !== lastAppliedSortKey) {
+      if (filtersChanged || appliedSortKey !== lastAppliedSortKey) {
         lastAppliedSortKey = appliedSortKey;
         lastAppliedDirection = fallbackDirection;
+        lastAppliedFiltersKey = serializedFilters;
         persistSortKey(appliedSortKey);
         persistSortDirection(fallbackDirection);
         cfg.onSortChange?.(appliedSortKey, fallbackDirection);
@@ -1571,6 +1578,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       currentDirectionSelect = null;
       grid = null;
       lastLoggedFilters = null;
+      lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
       lastAppliedDirection = null;
     },
@@ -1597,6 +1605,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         );
+        const filtersKey = JSON.stringify(filtersForLog);
         console.log('[InventorySorting] Tri sélectionné (programmatique) :', k);
         const directionToApply = (currentDirectionSelect?.value as SortDirection) ??
           defaultDirectionBySortKey[k] ??
@@ -1607,6 +1616,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           (currentWrap as any).__prevDirection = directionToApply;
         }
         void logInventoryForFilters(filtersForLog, k, directionToApply);
+        lastAppliedFiltersKey = filtersKey;
         lastAppliedSortKey = k;
         lastAppliedDirection = directionToApply;
         persistSortKey(k);
@@ -1627,8 +1637,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         );
+        const filtersKey = JSON.stringify(filtersForLog);
         console.log('[InventorySorting] Ordre de tri sélectionné (programmatique) :', direction);
         void logInventoryForFilters(filtersForLog, sortKey, direction);
+        lastAppliedFiltersKey = filtersKey;
         lastAppliedSortKey = sortKey;
         lastAppliedDirection = direction;
         persistSortKey(sortKey);

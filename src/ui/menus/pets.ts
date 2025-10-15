@@ -1198,7 +1198,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     return el;
   }
   headerGrid.append(
-    mkHeadCell("Time"),
+    mkHeadCell("Date & Time"),
     mkHeadCell("Pet"),
     mkHeadCell("Ability"),
     mkHeadCell("Details","left")
@@ -1217,6 +1217,8 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
   card.appendChild(bodyGrid);
 
   // ===== State
+  const sessionStart = PetsService.getAbilityLogsSessionStart?.() ?? 0;
+
   type UILog = {
     petId: string;
     petName: string | null | undefined;
@@ -1225,7 +1227,9 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     abilityName: string;
     data: any;                 // déjà formatté string par le service
     performedAt: number;
+    date: string;
     time12: string;
+    isActiveSession: boolean;
   };
 
   let logs: UILog[] = [];
@@ -1246,10 +1250,25 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     selAbility.value = (opts.some(([v]) => v === current) ? current : "");
   }
 
+  function formatDateMMDDYY(timestamp: number): string {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value)) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const dd = String(date.getDate()).padStart(2, "0");
+    const yy = String(date.getFullYear() % 100).padStart(2, "0");
+    return `${mm}/${dd}/${yy}`;
+  }
+
   function cell(txt: string, align: "center"|"left" = "center") {
     const el = document.createElement("div");
     el.textContent = txt;
     el.style.padding = "6px 8px";
+    el.style.display = "flex";
+    el.style.flexDirection = "column";
+    el.style.justifyContent = "center";
+    el.style.alignItems = align === "left" ? "flex-start" : "center";
     el.style.textAlign = align;
     el.style.whiteSpace = align === "left" ? "pre-wrap" : "normal";
     el.style.wordBreak = align === "left" ? "break-word" : "normal";
@@ -1258,12 +1277,25 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
   }
 
   function row(log: UILog) {
-    const time = cell(log.time12, "center");
+    const time = cell("", "center");
+    time.style.gap = "2px";
+    const dateLine = document.createElement("div");
+    const timeLine = document.createElement("div");
+    const hasDate = typeof log.date === "string" && log.date.trim().length > 0;
+    if (hasDate) dateLine.textContent = log.date ?? "";
+    timeLine.textContent = log.time12;
+    if (hasDate) time.appendChild(dateLine);
+    time.appendChild(timeLine);
     const petLabel = (log.petName || log.species || "Pet");
     const pet  = cell(petLabel, "center");
     const abName = cell(log.abilityName || log.abilityId, "center");
     const detText = typeof log.data === "string" ? log.data : (() => { try { return JSON.stringify(log.data); } catch { return ""; } })();
     const det  = cell(detText, "left");
+    if (log.isActiveSession) {
+      [time, pet, abName, det].forEach((el) => {
+        el.style.background = "rgba(89, 162, 255, 0.14)";
+      });
+    }
     bodyGrid.append(time, pet, abName, det);
   }
 
@@ -1356,7 +1388,9 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
           abilityName: e.abilityName,
           data: e.data,
           performedAt: e.performedAt,
+          date: formatDateMMDDYY(e.performedAt),
           time12: e.time12,
+          isActiveSession: sessionStart > 0 && e.performedAt >= sessionStart,
         }));
         rebuildAbilityOptions();
         repaint();

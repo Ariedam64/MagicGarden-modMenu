@@ -1041,6 +1041,8 @@ export const PetsService = {
   _logSubs: new Set<(all: AbilityLogEntry[]) => void>(),
   _logsCutoffMs: 0,
   _logsCutoffSkewMs: 1500,
+  _logsStorageKey: "qws:pets:abilityLogs:v1",
+  _logsSessionStart: Date.now(),
 
   _extractAbilityValue(abilityId: string, rawData: any): number {
     const num = (value: unknown): number => {
@@ -1204,6 +1206,9 @@ export const PetsService = {
     arr = arr.sort((a, b) => b.performedAt - a.performedAt);
     return lim ? arr.slice(0, lim) : arr;
   },
+  getAbilityLogsSessionStart(): number {
+    return this._logsSessionStart;
+  },
   onAbilityLogs(cb: (all: AbilityLogEntry[]) => void): () => void {
     this._logSubs.add(cb);
     try { cb(this.getAbilityLogs()); } catch {}
@@ -1219,6 +1224,7 @@ export const PetsService = {
     this._seenPerfByPet.clear();
     this._logsCutoffMs = Date.now();
     this._notifyLogSubs();
+    this._persistAbilityLogs();
   },
   _notifyLogSubs() {
     const snap = this.getAbilityLogs();
@@ -1230,6 +1236,80 @@ export const PetsService = {
       this._logs.splice(0, this._logs.length - this._logsMax);
     }
     this._notifyLogSubs();
+    this._persistAbilityLogs();
+  },
+  _getLogsStorage(): Storage | null {
+    if (typeof window === "undefined") return null;
+    try {
+      if (typeof window.localStorage === "undefined") return null;
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  },
+  _persistAbilityLogs() {
+    const storage = this._getLogsStorage();
+    if (!storage) return;
+    try {
+      const payload = {
+        version: 1,
+        cutoff: this._logsCutoffMs,
+        logs: this._logs.map((entry) => ({
+          petId: entry.petId,
+          species: entry.species ?? null,
+          name: entry.name ?? null,
+          abilityId: entry.abilityId,
+          abilityName: entry.abilityName,
+          data: entry.data,
+          performedAt: entry.performedAt,
+          time12: entry.time12,
+        })),
+      };
+      storage.setItem(this._logsStorageKey, JSON.stringify(payload));
+    } catch {}
+  },
+  _restoreAbilityLogsFromStorage() {
+    const storage = this._getLogsStorage();
+    if (!storage) return;
+    try {
+      const raw = storage.getItem(this._logsStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return;
+      const logsRaw = Array.isArray((parsed as any).logs) ? (parsed as any).logs : [];
+      const restored: AbilityLogEntry[] = [];
+      for (const item of logsRaw) {
+        if (!item || typeof item !== "object") continue;
+        const abilityId = typeof (item as any).abilityId === "string" ? String((item as any).abilityId) : "";
+        const performedAt = Number((item as any).performedAt) || 0;
+        if (!abilityId || !performedAt) continue;
+        restored.push({
+          petId: typeof (item as any).petId === "string" ? String((item as any).petId) : "",
+          species: typeof (item as any).species === "string" && (item as any).species ? String((item as any).species) : undefined,
+          name: typeof (item as any).name === "string" && (item as any).name ? String((item as any).name) : undefined,
+          abilityId,
+          abilityName: typeof (item as any).abilityName === "string" && (item as any).abilityName
+            ? String((item as any).abilityName)
+            : abilityId,
+          data: typeof (item as any).data === "string" ? String((item as any).data) : (item as any).data,
+          performedAt,
+          time12: typeof (item as any).time12 === "string" && (item as any).time12
+            ? String((item as any).time12)
+            : new Date(performedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+        });
+      }
+
+      restored.sort((a, b) => a.performedAt - b.performedAt);
+      this._logs = restored.slice(-this._logsMax);
+      this._seenPerfByPet.clear();
+      for (const entry of this._logs) {
+        const prev = this._seenPerfByPet.get(entry.petId) || 0;
+        if (entry.performedAt > prev) this._seenPerfByPet.set(entry.petId, entry.performedAt);
+      }
+
+      const cutoff = Number((parsed as any).cutoff);
+      if (Number.isFinite(cutoff) && cutoff > 0) this._logsCutoffMs = cutoff;
+    } catch {}
   },
   _ingestAbilityMap(map: Record<string, FlatAbilityEntry | null | undefined>) {
     if (!map || typeof map !== "object") return;
@@ -1410,6 +1490,10 @@ export const PetsService = {
     }
   },
 };
+
+try {
+  PetsService._restoreAbilityLogsFromStorage();
+} catch {}
 
 /* -------------------------- Types for ability logs -------------------------- */
 export type AbilityLogEntry = {
