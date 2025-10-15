@@ -9,6 +9,7 @@ import {
 import {
   lockerService,
   type LockerSettingsPersisted,
+  type LockerScaleLockMode,
   type LockerStatePersisted,
 } from "../../services/locker";
 
@@ -92,6 +93,7 @@ const getLockerSeedEmojiForSeedName = (name: string | undefined): string | undef
 type LockerSettingsState = {
   minScalePct: number;
   maxScalePct: number;
+  scaleLockMode: LockerScaleLockMode;
   minInventory: number;
   avoidNormal: boolean;
   visualMutations: Set<VisualTag>;
@@ -637,6 +639,7 @@ function createDefaultSettings(): LockerSettingsState {
   return {
     minScalePct: 50,
     maxScalePct: 100,
+    scaleLockMode: "RANGE",
     minInventory: 91,
     avoidNormal: false,
     visualMutations: new Set<VisualTag>(),
@@ -649,6 +652,7 @@ function createDefaultSettings(): LockerSettingsState {
 function copySettings(target: LockerSettingsState, source: LockerSettingsState): void {
   target.minScalePct = source.minScalePct;
   target.maxScalePct = source.maxScalePct;
+  target.scaleLockMode = source.scaleLockMode;
   target.minInventory = source.minInventory;
   target.avoidNormal = source.avoidNormal;
   target.visualMutations.clear();
@@ -665,18 +669,24 @@ function hydrateSettingsFromPersisted(
   persisted?: LockerSettingsPersisted | null,
 ): void {
   const src = persisted ?? ({} as LockerSettingsPersisted);
-  let minScale = Math.max(50, Math.min(99, Math.round(src.minScalePct ?? 50)));
-  let maxScale = Math.max(51, Math.min(100, Math.round(src.maxScalePct ?? 100)));
-  if (maxScale <= minScale) {
-    if (minScale >= 99) {
-      minScale = 99;
-      maxScale = 100;
-    } else {
-      maxScale = Math.min(100, Math.max(51, minScale + 1));
+  const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+  const minClampHigh = mode === "MINIMUM" ? 100 : 99;
+  let minScale = Math.max(50, Math.min(minClampHigh, Math.round(src.minScalePct ?? 50)));
+  let maxScale = Math.max(50, Math.min(100, Math.round(src.maxScalePct ?? 100)));
+  if (mode === "RANGE") {
+    maxScale = Math.max(51, Math.min(100, maxScale));
+    if (maxScale <= minScale) {
+      if (minScale >= 99) {
+        minScale = 99;
+        maxScale = 100;
+      } else {
+        maxScale = Math.min(100, Math.max(51, minScale + 1));
+      }
     }
   }
   target.minScalePct = minScale;
   target.maxScalePct = maxScale;
+  target.scaleLockMode = mode;
   target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
   target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
   target.visualMutations.clear();
@@ -698,19 +708,25 @@ function hydrateSettingsFromPersisted(
 
 function serializeSettingsState(state: LockerSettingsState): LockerSettingsPersisted {
   state.weatherRecipes.forEach(set => normalizeRecipeSelection(set));
-  let minScale = Math.max(50, Math.min(99, Math.round(state.minScalePct || 50)));
-  let maxScale = Math.max(51, Math.min(100, Math.round(state.maxScalePct || 100)));
-  if (maxScale <= minScale) {
-    if (minScale >= 99) {
-      minScale = 99;
-      maxScale = 100;
-    } else {
-      maxScale = Math.min(100, Math.max(51, minScale + 1));
+  const mode = state.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+  const minClampHigh = mode === "MINIMUM" ? 100 : 99;
+  let minScale = Math.max(50, Math.min(minClampHigh, Math.round(state.minScalePct || 50)));
+  let maxScale = Math.max(50, Math.min(100, Math.round(state.maxScalePct || 100)));
+  if (mode === "RANGE") {
+    maxScale = Math.max(51, Math.min(100, maxScale));
+    if (maxScale <= minScale) {
+      if (minScale >= 99) {
+        minScale = 99;
+        maxScale = 100;
+      } else {
+        maxScale = Math.min(100, Math.max(51, minScale + 1));
+      }
     }
   }
   return {
     minScalePct: minScale,
     maxScalePct: maxScale,
+    scaleLockMode: mode,
     minInventory: Math.max(0, Math.min(999, Math.round(state.minInventory || 91))),
     avoidNormal: !!state.avoidNormal,
     includeNormal: !state.avoidNormal,
@@ -1077,17 +1093,51 @@ function createLockerSettingsCard(
   scaleRow.style.width = "100%";
   scaleRow.style.gap = "12px";
 
+  const scaleModeRow = centerRow();
+  scaleModeRow.style.flexWrap = "wrap";
+  scaleModeRow.style.justifyContent = "center";
+  scaleModeRow.style.gap = "12px";
+
+  type ScaleSegmentValue = "minimum" | "ranged";
+  const toMode = (value: ScaleSegmentValue): LockerScaleLockMode =>
+    value === "minimum" ? "MINIMUM" : "RANGE";
+  const fromMode = (mode: LockerScaleLockMode): ScaleSegmentValue =>
+    mode === "MINIMUM" ? "minimum" : "ranged";
+
+  let isProgrammaticScaleMode = false;
+  const scaleModeSegmented = ui.segmented<ScaleSegmentValue>(
+    [
+      { value: "minimum", label: "Minimum size" },
+      { value: "ranged", label: "Range size" },
+    ],
+    "minimum",
+    value => {
+      if (isProgrammaticScaleMode) return;
+      applyScaleMode(toMode(value), true);
+    },
+    { ariaLabel: "Scale lock mode" }
+  );
+  scaleModeRow.append(scaleModeSegmented);
+
+  const minSlider = ui.slider(50, 100, 1, state.minScalePct);
+  applyStyles(minSlider, {
+    width: "min(420px, 100%)",
+  });
+
   const scaleSlider = ui.rangeDual(50, 100, 1, state.minScalePct, state.maxScalePct);
   applyStyles(scaleSlider.root, {
     width: "min(420px, 100%)",
+    marginLeft: "auto",
+    marginRight: "auto",
   });
 
   const scaleMinSlider = scaleSlider.min;
   const scaleMaxSlider = scaleSlider.max;
 
+  const scaleMinimumValue = ui.label("50%");
   const scaleMinValue = ui.label("50%");
   const scaleMaxValue = ui.label("100%");
-  [scaleMinValue, scaleMaxValue].forEach(label => {
+  [scaleMinimumValue, scaleMinValue, scaleMaxValue].forEach(label => {
     label.style.margin = "0";
     label.style.fontWeight = "600";
   });
@@ -1115,9 +1165,37 @@ function createLockerSettingsCard(
 
   scaleValues.append(makeScaleValue("Min", scaleMinValue), makeScaleValue("Max", scaleMaxValue));
 
-  scaleRow.append(scaleSlider.root, scaleValues);
+  const minimumValues = applyStyles(document.createElement("div"), {
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    width: "min(420px, 100%)",
+    gap: "16px",
+  });
 
-  const applyScaleRange = (commit: boolean) => {
+  minimumValues.append(makeScaleValue("Minimum", scaleMinimumValue));
+
+  const minimumControls = applyStyles(document.createElement("div"), {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+    width: "100%",
+  });
+  minimumControls.append(minSlider, minimumValues);
+
+  const rangeControls = applyStyles(document.createElement("div"), {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+    width: "100%",
+  });
+  rangeControls.append(scaleSlider.root, scaleValues);
+
+  scaleRow.append(scaleModeRow, minimumControls, rangeControls);
+
+  const applyScaleRange = (commit: boolean, notify = commit) => {
     let minValue = parseInt(scaleMinSlider.value, 10);
     let maxValue = parseInt(scaleMaxSlider.value, 10);
     if (!Number.isFinite(minValue)) minValue = state.minScalePct;
@@ -1138,16 +1216,62 @@ function createLockerSettingsCard(
     if (commit) {
       state.minScalePct = minValue;
       state.maxScalePct = maxValue;
+      if (notify) opts.onChange?.();
+    }
+  };
+
+  const applyScaleMinimum = (commit: boolean, notify = commit) => {
+    let minValue = parseInt(minSlider.value, 10);
+    if (!Number.isFinite(minValue)) minValue = state.minScalePct;
+    minValue = Math.max(50, Math.min(100, minValue));
+    minSlider.value = String(minValue);
+    scaleMinimumValue.textContent = `${minValue}%`;
+    if (commit) {
+      state.minScalePct = minValue;
+      if (notify) opts.onChange?.();
+    }
+  };
+
+  const updateScaleModeUI = () => {
+    const isMinimum = state.scaleLockMode === "MINIMUM";
+    minimumControls.style.display = isMinimum ? "" : "none";
+    rangeControls.style.display = isMinimum ? "none" : "";
+    const segValue = fromMode(state.scaleLockMode);
+    if ((scaleModeSegmented as any).get?.() !== segValue) {
+      isProgrammaticScaleMode = true;
+      try {
+        (scaleModeSegmented as any).set?.(segValue);
+      } finally {
+        isProgrammaticScaleMode = false;
+      }
+    }
+  };
+
+  const applyScaleMode = (mode: LockerScaleLockMode, notify: boolean) => {
+    const prevMode = state.scaleLockMode;
+    state.scaleLockMode = mode;
+    if (mode === "MINIMUM") {
+      minSlider.value = String(state.minScalePct);
+      applyScaleMinimum(prevMode !== mode, false);
+    } else {
+      scaleSlider.setValues(state.minScalePct, state.maxScalePct);
+      applyScaleRange(prevMode !== mode, false);
+    }
+    updateScaleModeUI();
+    if (notify && prevMode !== mode) {
       opts.onChange?.();
     }
   };
 
+  minSlider.addEventListener("input", () => applyScaleMinimum(false));
+  minSlider.addEventListener("change", () => applyScaleMinimum(true));
   scaleMinSlider.addEventListener("input", () => applyScaleRange(false));
   scaleMaxSlider.addEventListener("input", () => applyScaleRange(false));
   scaleMinSlider.addEventListener("change", () => applyScaleRange(true));
   scaleMaxSlider.addEventListener("change", () => applyScaleRange(true));
-
   applyScaleRange(false);
+  applyScaleMinimum(false);
+  applyScaleMode(state.scaleLockMode, false);
 
   const colorsRow = centerRow();
   colorsRow.style.flexWrap = "wrap";
@@ -1695,7 +1819,10 @@ function createLockerSettingsCard(
 
   const refresh = () => {
     scaleSlider.setValues(state.minScalePct, state.maxScalePct);
+    minSlider.value = String(state.minScalePct);
     applyScaleRange(false);
+    applyScaleMinimum(false);
+    applyScaleMode(state.scaleLockMode, false);
 
     updateColorButtons();
 
