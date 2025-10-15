@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.3
+// @version      2.1.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6179,6 +6179,62 @@
     }
     return null;
   }
+  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES2 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey2(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  function lookupMaxScale2(species) {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey2(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  }
+  function getMaxScaleForSlot2(slot) {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey2(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale2(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  }
   function extractSizePercent2(slot) {
     if (!slot || typeof slot !== "object") return 100;
     const direct = Number(
@@ -6189,6 +6245,12 @@
     }
     const scale = Number(slot.targetScale ?? slot.scale);
     if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot2(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent2(Math.round(pct2), 50, 100);
+      }
       if (scale > 1 && scale <= 2) {
         const pct2 = 50 + (scale - 1) / 1 * 50;
         return clampPercent2(Math.round(pct2), 50, 100);
