@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.2
+// @version      2.1.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3088,796 +3088,6 @@
     return new Set(Array.isArray(arr) ? arr : []);
   }
 
-  // src/services/locker.ts
-  var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
-  var LOCKER_NO_WEATHER_TAG = "NoWeatherEffect";
-  var emptySlotInfo = () => ({
-    isPlant: false,
-    originalIndex: null,
-    orderedIndex: null,
-    totalSlots: 0,
-    availableSlotCount: 0,
-    slot: null,
-    seedKey: null,
-    sizePercent: null,
-    mutations: []
-  });
-  var now = () => typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-  var shallowEqualStrings = (a, b) => {
-    if (a === b) return true;
-    if (!a || !b) return (a?.length ?? 0) === (b?.length ?? 0);
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  };
-  var slotInfosEqual = (a, b) => a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && shallowEqualStrings(a.mutations, b.mutations);
-  var isPlantObject = (o) => !!o && o.objectType === "plant";
-  var slotSignature = (slot) => {
-    if (!slot) return "\u2205";
-    const species = slot.species ?? "";
-    const start = Number.isFinite(slot.startTime) ? slot.startTime : 0;
-    const end = Number.isFinite(slot.endTime) ? slot.endTime : 0;
-    const target = Number.isFinite(slot.targetScale) ? slot.targetScale : 0;
-    const muts = Array.isArray(slot.mutations) ? slot.mutations.join(",") : "";
-    return `${species}|${start}|${end}|${target}|${muts}`;
-  };
-  var gardenObjectSignature = (obj) => {
-    if (!obj) return "\u2205";
-    if (!isPlantObject(obj)) {
-      if (!obj || typeof obj !== "object") return String(obj);
-      const entries = Object.keys(obj).sort().map((key2) => `${key2}:${JSON.stringify(obj[key2])}`);
-      return `other|${entries.join(";")}`;
-    }
-    const base = `${obj.objectType}|${obj.species ?? ""}|${obj.plantedAt ?? 0}|${obj.maturedAt ?? 0}`;
-    const slots = Array.isArray(obj.slots) ? obj.slots.map((slot) => slotSignature(slot)).join("||") : "";
-    return `${base}|slots:${slots}`;
-  };
-  var arraySignature = (arr) => Array.isArray(arr) ? arr.join(",") : "\u2205";
-  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
-  var clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-  var extractSeedKey = (obj) => {
-    if (!obj || typeof obj !== "object") return null;
-    if (typeof obj.seedKey === "string") {
-      return obj.seedKey;
-    }
-    if (typeof obj.species === "string" && obj.species) {
-      return obj.species;
-    }
-    const asAny = obj;
-    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
-    for (const key2 of fallbacks) {
-      const value = asAny[key2];
-      if (typeof value === "string" && value) return value;
-    }
-    return null;
-  };
-  var clampPercent = (value, min, max) => Math.max(min, Math.min(max, value));
-  var extractSizePercent = (slot) => {
-    if (!slot || typeof slot !== "object") return 100;
-    const direct = Number(slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent);
-    if (Number.isFinite(direct)) {
-      return clampPercent(Math.round(direct), 0, 100);
-    }
-    const scale = Number(slot.targetScale ?? slot.scale);
-    if (Number.isFinite(scale)) {
-      if (scale > 1 && scale <= 2) {
-        const pct2 = 50 + (scale - 1) / 1 * 50;
-        return clampPercent(Math.round(pct2), 50, 100);
-      }
-      const pct = Math.round(scale * 100);
-      return clampPercent(pct, 0, 100);
-    }
-    return 100;
-  };
-  function startLockerSlotWatcherViaGardenObject() {
-    if (typeof window === "undefined") {
-      return {
-        get: () => emptySlotInfo(),
-        onChange: () => () => {
-        },
-        stop() {
-        },
-        recompute() {
-        }
-      };
-    }
-    let cur = null;
-    let sortedIdx = null;
-    let sortedIdxSig = arraySignature(sortedIdx);
-    let selectedIdx = null;
-    let lastInfo = emptySlotInfo();
-    let curSig = gardenObjectSignature(cur);
-    const listeners3 = /* @__PURE__ */ new Set();
-    const notify = () => {
-      for (const fn of listeners3) {
-        try {
-          fn(lastInfo);
-        } catch {
-        }
-      }
-    };
-    let scheduled = false;
-    const scheduleRecomputeAndNotify = () => {
-      recomputeAndNotify();
-      if (scheduled) return;
-      scheduled = true;
-      const run = () => {
-        scheduled = false;
-        recomputeAndNotify();
-      };
-      if (typeof globalThis !== "undefined" && typeof globalThis.queueMicrotask === "function") {
-        globalThis.queueMicrotask(run);
-      } else if (typeof Promise !== "undefined") {
-        Promise.resolve().then(run);
-      } else if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
-        window.setTimeout(run, 0);
-      } else {
-        run();
-      }
-    };
-    function getOrder(slotCount) {
-      if (!slotCount) return [];
-      if (Array.isArray(sortedIdx) && sortedIdx.length === slotCount) {
-        return sortedIdx.slice();
-      }
-      return defaultOrder(slotCount);
-    }
-    function selectedOrderedPosition(order, slotCount) {
-      if (!slotCount || !order.length) return 0;
-      const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
-      const clampedRaw = clamp(raw, 0, slotCount - 1);
-      const pos = order.indexOf(clampedRaw);
-      return pos >= 0 ? pos : 0;
-    }
-    function sanitizeMutations2(raw) {
-      if (!Array.isArray(raw)) return [];
-      const out = [];
-      for (let i = 0; i < raw.length; i++) {
-        const value = raw[i];
-        if (typeof value === "string") {
-          if (value) out.push(value);
-        } else if (value != null) {
-          const str = String(value);
-          if (str) out.push(str);
-        }
-      }
-      return out;
-    }
-    function computeSlotInfo() {
-      const seedKey = extractSeedKey(cur);
-      if (!isPlantObject(cur)) {
-        return {
-          isPlant: false,
-          originalIndex: null,
-          orderedIndex: null,
-          totalSlots: 0,
-          availableSlotCount: 0,
-          slot: null,
-          seedKey,
-          sizePercent: null,
-          mutations: []
-        };
-      }
-      const slots = Array.isArray(cur.slots) ? cur.slots : [];
-      const slotCount = slots.length;
-      if (!slotCount) {
-        return {
-          isPlant: true,
-          originalIndex: null,
-          orderedIndex: null,
-          totalSlots: 0,
-          availableSlotCount: 0,
-          slot: null,
-          seedKey,
-          sizePercent: null,
-          mutations: []
-        };
-      }
-      const order = getOrder(slotCount);
-      const availableIndices = [];
-      for (const idx of order) {
-        if (Number.isInteger(idx) && idx >= 0 && idx < slotCount) {
-          if (slots[idx] != null) availableIndices.push(idx);
-        }
-      }
-      const availableCount = availableIndices.length;
-      if (!availableCount) {
-        return {
-          isPlant: true,
-          originalIndex: null,
-          orderedIndex: null,
-          totalSlots: slotCount,
-          availableSlotCount: 0,
-          slot: null,
-          seedKey,
-          sizePercent: null,
-          mutations: []
-        };
-      }
-      const pos = selectedOrderedPosition(order, slotCount);
-      const clampedPos = clamp(pos, 0, availableCount - 1);
-      const originalIndex = availableIndices[clampedPos] ?? null;
-      const slot = typeof originalIndex === "number" ? slots[originalIndex] ?? null : null;
-      const sizePercent = slot ? extractSizePercent(slot) : null;
-      const mutations = slot ? sanitizeMutations2(slot.mutations) : [];
-      return {
-        isPlant: true,
-        originalIndex: typeof originalIndex === "number" ? originalIndex : null,
-        orderedIndex: clampedPos,
-        totalSlots: slotCount,
-        availableSlotCount: availableCount,
-        slot: slot ?? null,
-        seedKey,
-        sizePercent,
-        mutations
-      };
-    }
-    function mutationsEqual(a, b) {
-      if (a.length !== b.length) return false;
-      for (let i = 0; i < a.length; i++) {
-        if (a[i] !== b[i]) return false;
-      }
-      return true;
-    }
-    function infosEqual(a, b) {
-      return a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && mutationsEqual(a.mutations, b.mutations);
-    }
-    function recomputeAndNotify() {
-      const next = computeSlotInfo();
-      if (!infosEqual(next, lastInfo)) {
-        lastInfo = next;
-        notify();
-      }
-    }
-    (async () => {
-      try {
-        selectedIdx = await myCurrentGrowSlotIndex.get();
-      } catch {
-      }
-      try {
-        const v = await myCurrentSortedGrowSlotIndices.get();
-        sortedIdx = Array.isArray(v) ? v.slice() : null;
-        sortedIdxSig = arraySignature(sortedIdx);
-      } catch {
-      }
-      try {
-        cur = await myCurrentGardenObject.get();
-        curSig = gardenObjectSignature(cur);
-      } catch {
-      }
-      const refreshSorted = (v) => {
-        const next = Array.isArray(v) ? v.slice() : null;
-        const sig = arraySignature(next);
-        if (sig === sortedIdxSig) return false;
-        sortedIdx = next;
-        sortedIdxSig = sig;
-        return true;
-      };
-      const refreshGarden = (v) => {
-        const sig = gardenObjectSignature(v ?? null);
-        if (sig === curSig) return false;
-        cur = v;
-        curSig = sig;
-        return true;
-      };
-      let awaitIndexBeforeRecompute = false;
-      let awaitIndexTimer = null;
-      const clearAwaitIndexTimer = () => {
-        if (awaitIndexTimer == null) return;
-        if (typeof globalThis !== "undefined") {
-          const clearer = globalThis.clearTimeout;
-          if (typeof clearer === "function") {
-            clearer.call(globalThis, awaitIndexTimer);
-          }
-        }
-        awaitIndexTimer = null;
-      };
-      const deferUntilIndexChanges = () => {
-        awaitIndexBeforeRecompute = true;
-        if (awaitIndexTimer != null) return;
-        const run = () => {
-          awaitIndexTimer = null;
-          if (!awaitIndexBeforeRecompute) return;
-          awaitIndexBeforeRecompute = false;
-          scheduleRecomputeAndNotify();
-        };
-        if (typeof globalThis !== "undefined") {
-          const setter = globalThis.setTimeout;
-          if (typeof setter === "function") {
-            awaitIndexTimer = setter.call(globalThis, run, 0);
-            return;
-          }
-        }
-        run();
-      };
-      myCurrentSortedGrowSlotIndices.onChange((v) => {
-        const changed = refreshSorted(v);
-        if (!changed) return;
-        deferUntilIndexChanges();
-      });
-      myCurrentGardenObject.onChange((v) => {
-        const changed = refreshGarden(v);
-        if (!changed) return;
-        deferUntilIndexChanges();
-      });
-      myCurrentGrowSlotIndex.onChange((idx) => {
-        selectedIdx = Number.isFinite(idx) ? idx : 0;
-        void (async () => {
-          try {
-            refreshSorted(await myCurrentSortedGrowSlotIndices.get());
-          } catch {
-          }
-          try {
-            refreshGarden(await myCurrentGardenObject.get());
-          } catch {
-          }
-          if (awaitIndexBeforeRecompute) {
-            awaitIndexBeforeRecompute = false;
-            clearAwaitIndexTimer();
-          }
-          scheduleRecomputeAndNotify();
-        })();
-      });
-      recomputeAndNotify();
-    })();
-    return {
-      get() {
-        return lastInfo;
-      },
-      onChange(cb) {
-        listeners3.add(cb);
-        return () => listeners3.delete(cb);
-      },
-      stop() {
-        listeners3.clear();
-      },
-      recompute() {
-        recomputeAndNotify();
-      }
-    };
-  }
-  function defaultSettings() {
-    return {
-      minScalePct: 50,
-      minInventory: 91,
-      avoidNormal: false,
-      includeNormal: true,
-      visualMutations: [],
-      weatherMode: "ANY",
-      weatherSelected: [],
-      weatherRecipes: []
-    };
-  }
-  function defaultState() {
-    return {
-      enabled: false,
-      settings: defaultSettings(),
-      overrides: {}
-    };
-  }
-  var LS_KEY = "garden.locker.state.v2";
-  var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
-  function sanitizeSettings(raw) {
-    const base = defaultSettings();
-    const minScale = Number(raw?.minScalePct);
-    base.minScalePct = Number.isFinite(minScale) ? clampNumber(Math.round(minScale), 50, 100) : 50;
-    const minInv = Number(raw?.minInventory);
-    base.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
-    if (typeof raw?.avoidNormal === "boolean") {
-      base.avoidNormal = raw.avoidNormal;
-    } else {
-      base.avoidNormal = raw?.includeNormal === false;
-    }
-    base.includeNormal = !base.avoidNormal;
-    base.visualMutations = Array.isArray(raw?.visualMutations) ? Array.from(new Set(raw.visualMutations.filter((m) => VISUAL_MUTATIONS.has(m)))) : [];
-    const mode = raw?.weatherMode;
-    base.weatherMode = mode === "ALL" || mode === "RECIPES" ? mode : "ANY";
-    base.weatherSelected = Array.isArray(raw?.weatherSelected) ? Array.from(new Set(raw.weatherSelected.map((m) => String(m || "")).filter(Boolean))) : [];
-    base.weatherRecipes = Array.isArray(raw?.weatherRecipes) ? raw.weatherRecipes.map(
-      (recipe) => Array.isArray(recipe) ? Array.from(new Set(recipe.map((m) => String(m || "")).filter(Boolean))) : []
-    ).filter((arr) => arr.length > 0) : [];
-    return base;
-  }
-  function sanitizeState(raw) {
-    const state2 = defaultState();
-    if (!raw || typeof raw !== "object") return state2;
-    state2.enabled = raw.enabled === true;
-    state2.settings = sanitizeSettings(raw.settings);
-    state2.overrides = {};
-    if (raw.overrides && typeof raw.overrides === "object") {
-      for (const [key2, value] of Object.entries(raw.overrides)) {
-        if (!key2) continue;
-        state2.overrides[key2] = {
-          enabled: value?.enabled === true,
-          settings: sanitizeSettings(value?.settings)
-        };
-      }
-    }
-    return state2;
-  }
-  function cloneSettings(settings) {
-    return {
-      minScalePct: settings.minScalePct,
-      minInventory: settings.minInventory,
-      avoidNormal: settings.avoidNormal,
-      includeNormal: settings.includeNormal,
-      visualMutations: settings.visualMutations.slice(),
-      weatherMode: settings.weatherMode,
-      weatherSelected: settings.weatherSelected.slice(),
-      weatherRecipes: settings.weatherRecipes.map((recipe) => recipe.slice())
-    };
-  }
-  function cloneState(state2) {
-    const overrides = {};
-    for (const [key2, value] of Object.entries(state2.overrides)) {
-      overrides[key2] = { enabled: value.enabled, settings: cloneSettings(value.settings) };
-    }
-    return {
-      enabled: state2.enabled,
-      settings: cloneSettings(state2.settings),
-      overrides
-    };
-  }
-  function cloneSlotInfo(info) {
-    return {
-      isPlant: info.isPlant,
-      originalIndex: info.originalIndex,
-      orderedIndex: info.orderedIndex,
-      totalSlots: info.totalSlots,
-      availableSlotCount: info.availableSlotCount,
-      slot: info.slot,
-      seedKey: info.seedKey,
-      sizePercent: info.sizePercent,
-      mutations: info.mutations.slice()
-    };
-  }
-  function mutationsToArrays(raw) {
-    let hasGold = false;
-    let hasRainbow = false;
-    const weather2 = [];
-    if (!Array.isArray(raw)) {
-      return { hasGold, hasRainbow, weather: weather2 };
-    }
-    for (let i = 0; i < raw.length; i++) {
-      const tag = String(raw[i] || "");
-      if (!tag) continue;
-      if (tag === "Gold") {
-        hasGold = true;
-      } else if (tag === "Rainbow") {
-        hasRainbow = true;
-      } else {
-        weather2.push(tag);
-      }
-    }
-    return { hasGold, hasRainbow, weather: weather2 };
-  }
-  var LockerService = class {
-    constructor() {
-      __publicField(this, "state", defaultState());
-      __publicField(this, "listeners", /* @__PURE__ */ new Set());
-      __publicField(this, "slotInfoListeners", /* @__PURE__ */ new Set());
-      __publicField(this, "slotWatcher", null);
-      __publicField(this, "slotWatcherUnsub", null);
-      __publicField(this, "currentSlotInfo", emptySlotInfo());
-      __publicField(this, "currentSlotHarvestAllowed", null);
-      __publicField(this, "lastSlotChangeDetectedAt", null);
-      this.load();
-      this.updateSlotWatcher();
-    }
-    load() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") {
-        this.state = defaultState();
-        return;
-      }
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        if (!raw) {
-          this.state = defaultState();
-          return;
-        }
-        const parsed = JSON.parse(raw);
-        this.state = sanitizeState(parsed);
-      } catch {
-        this.state = defaultState();
-      }
-    }
-    save() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
-      try {
-        localStorage.setItem(LS_KEY, JSON.stringify(this.state));
-      } catch {
-      }
-    }
-    emit() {
-      if (!this.listeners.size) return;
-      const snapshot = this.getState();
-      const event = { type: "locker-state-changed", state: snapshot };
-      for (const listener of this.listeners) {
-        try {
-          listener(event);
-        } catch {
-        }
-      }
-    }
-    setState(next) {
-      this.state = next;
-      this.updateSlotWatcher();
-      this.save();
-      this.emit();
-      this.requestSlotWatcherRecompute();
-      this.reapplyCurrentSlotInfo();
-    }
-    updateSlotWatcher() {
-      const shouldWatch = this.state.enabled;
-      if (shouldWatch) {
-        if (!this.slotWatcher) {
-          this.slotWatcher = startLockerSlotWatcherViaGardenObject();
-        }
-        if (this.slotWatcher && !this.slotWatcherUnsub) {
-          try {
-            this.slotWatcherUnsub = this.slotWatcher.onChange((info) => this.handleSlotInfo(info));
-          } catch {
-            this.slotWatcherUnsub = null;
-          }
-        }
-        try {
-          const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
-          this.handleSlotInfo(info, { silent: true });
-        } catch {
-          this.handleSlotInfo(emptySlotInfo(), { silent: true });
-        }
-        return;
-      }
-      this.detachSlotWatcher();
-    }
-    getState() {
-      return cloneState(this.state);
-    }
-    setGlobalState(next) {
-      const current = this.state;
-      const sanitized = sanitizeSettings(next.settings);
-      const updated = {
-        enabled: !!next.enabled,
-        settings: sanitized,
-        overrides: { ...current.overrides }
-      };
-      this.setState(updated);
-    }
-    setOverride(seedKey, override) {
-      if (!seedKey) return;
-      const sanitized = {
-        enabled: !!override?.enabled,
-        settings: sanitizeSettings(override?.settings)
-      };
-      const overrides = { ...this.state.overrides, [seedKey]: sanitized };
-      this.setState({ ...this.state, overrides });
-    }
-    removeOverride(seedKey) {
-      if (!seedKey) return;
-      if (!(seedKey in this.state.overrides)) return;
-      const overrides = { ...this.state.overrides };
-      delete overrides[seedKey];
-      this.setState({ ...this.state, overrides });
-    }
-    subscribe(listener) {
-      this.listeners.add(listener);
-      return () => this.listeners.delete(listener);
-    }
-    onSlotInfoChange(listener) {
-      this.slotInfoListeners.add(listener);
-      return () => this.slotInfoListeners.delete(listener);
-    }
-    getCurrentSlotSnapshot() {
-      return {
-        info: cloneSlotInfo(this.currentSlotInfo),
-        harvestAllowed: this.currentSlotHarvestAllowed,
-        detectedAt: this.lastSlotChangeDetectedAt
-      };
-    }
-    requestSlotWatcherRecompute() {
-      if (!this.slotWatcher) return;
-      try {
-        this.slotWatcher.recompute();
-      } catch {
-      }
-    }
-    detachSlotWatcher() {
-      if (this.slotWatcherUnsub) {
-        try {
-          this.slotWatcherUnsub();
-        } catch {
-        }
-        this.slotWatcherUnsub = null;
-      }
-      if (this.slotWatcher) {
-        try {
-          this.slotWatcher.stop();
-        } catch {
-        }
-        this.slotWatcher = null;
-      }
-      this.handleSlotInfo(emptySlotInfo(), { silent: true });
-    }
-    handleSlotInfo(info, opts = {}) {
-      const { silent = false } = opts;
-      const prevInfo = this.currentSlotInfo;
-      const prevHarvestAllowed = this.currentSlotHarvestAllowed;
-      const normalizedMutations = Array.isArray(info.mutations) ? info.mutations.slice() : [];
-      const nextInfo = { ...info, mutations: normalizedMutations };
-      let computedSizePercent = null;
-      let harvestAllowed = null;
-      if (nextInfo.isPlant && nextInfo.slot) {
-        if (typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent)) {
-          computedSizePercent = nextInfo.sizePercent;
-        } else {
-          computedSizePercent = extractSizePercent(nextInfo.slot);
-        }
-        try {
-          harvestAllowed = this.allowsHarvest({
-            seedKey: nextInfo.seedKey ?? null,
-            sizePercent: computedSizePercent ?? 0,
-            mutations: normalizedMutations
-          });
-        } catch {
-          harvestAllowed = null;
-        }
-      } else {
-        computedSizePercent = typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent) ? nextInfo.sizePercent : null;
-        harvestAllowed = null;
-      }
-      this.currentSlotInfo = nextInfo;
-      this.currentSlotHarvestAllowed = harvestAllowed;
-      if (!silent) {
-        if (nextInfo.isPlant) {
-          if (nextInfo.slot) {
-            console.log("[Locker] Slot selection", {
-              seedKey: nextInfo.seedKey ?? null,
-              slotIndex: nextInfo.originalIndex,
-              orderedIndex: nextInfo.orderedIndex,
-              sizePercent: computedSizePercent,
-              harvestAllowed,
-              mutations: normalizedMutations,
-              slot: nextInfo.slot
-            });
-          } else {
-            console.log("[Locker] Slot selection", {
-              isPlant: true,
-              slotIndex: nextInfo.originalIndex,
-              orderedIndex: nextInfo.orderedIndex,
-              totalSlots: nextInfo.totalSlots,
-              availableSlotCount: nextInfo.availableSlotCount,
-              seedKey: nextInfo.seedKey ?? null,
-              slot: nextInfo.slot
-            });
-          }
-        } else {
-          console.log("[Locker] Slot selection", { isPlant: false, slot: nextInfo.slot });
-        }
-        const infoChanged = !slotInfosEqual(prevInfo, nextInfo) || (prevHarvestAllowed ?? null) !== (harvestAllowed ?? null);
-        if (infoChanged) {
-          this.lastSlotChangeDetectedAt = now();
-        }
-      }
-      this.emitSlotInfoChange();
-    }
-    reapplyCurrentSlotInfo() {
-      try {
-        const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
-        this.handleSlotInfo(info, { silent: true });
-      } catch {
-        this.handleSlotInfo(emptySlotInfo(), { silent: true });
-      }
-    }
-    recomputeCurrentSlot() {
-      this.requestSlotWatcherRecompute();
-      this.reapplyCurrentSlotInfo();
-    }
-    effectiveSettings(seedKey) {
-      if (!this.state.enabled) {
-        return { enabled: false, settings: this.state.settings };
-      }
-      if (seedKey) {
-        const override = this.state.overrides[seedKey];
-        if (override?.enabled) {
-          return { enabled: true, settings: override.settings };
-        }
-      }
-      return { enabled: true, settings: this.state.settings };
-    }
-    slotShouldBeBlocked(settings, args) {
-      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 100);
-      if (args.sizePercent < minScale) return true;
-      const { hasGold, hasRainbow, weather: weather2 } = mutationsToArrays(args.mutations);
-      const isNormal = !hasGold && !hasRainbow;
-      if (isNormal) {
-        if (settings.avoidNormal) return true;
-      } else {
-        const avoidGold = settings.visualMutations.includes("Gold");
-        const avoidRainbow = settings.visualMutations.includes("Rainbow");
-        if (avoidGold && hasGold || avoidRainbow && hasRainbow) return true;
-      }
-      const selected = settings.weatherSelected ?? [];
-      const mode = settings.weatherMode ?? "ANY";
-      if (mode === "RECIPES") {
-        const recipes = settings.weatherRecipes ?? [];
-        if (!recipes.length) return false;
-        for (let i = 0; i < recipes.length; i++) {
-          const recipe = recipes[i];
-          if (!Array.isArray(recipe) || recipe.length === 0) continue;
-          let matches = true;
-          for (let j = 0; j < recipe.length; j++) {
-            const required = recipe[j];
-            if (required === LOCKER_NO_WEATHER_TAG) {
-              if (weather2.length !== 0) {
-                matches = false;
-                break;
-              }
-              continue;
-            }
-            if (!weather2.includes(required)) {
-              matches = false;
-              break;
-            }
-          }
-          if (matches) return true;
-        }
-        return false;
-      }
-      if (!selected.length) return false;
-      if (mode === "ALL") {
-        let hasRequirement = false;
-        for (let i = 0; i < selected.length; i++) {
-          const required = selected[i];
-          if (required === LOCKER_NO_WEATHER_TAG) {
-            hasRequirement = true;
-            if (weather2.length !== 0) return false;
-            continue;
-          }
-          hasRequirement = true;
-          if (!weather2.includes(required)) return false;
-        }
-        return hasRequirement;
-      }
-      for (let i = 0; i < selected.length; i++) {
-        const required = selected[i];
-        if (required === LOCKER_NO_WEATHER_TAG) {
-          if (weather2.length === 0) return true;
-          continue;
-        }
-        if (weather2.includes(required)) return true;
-      }
-      return false;
-    }
-    emitSlotInfoChange() {
-      if (!this.slotInfoListeners.size) {
-        return;
-      }
-      const snapshot = {
-        type: "locker-slot-info-changed",
-        info: cloneSlotInfo(this.currentSlotInfo),
-        harvestAllowed: this.currentSlotHarvestAllowed,
-        detectedAt: this.lastSlotChangeDetectedAt
-      };
-      for (const listener of this.slotInfoListeners) {
-        try {
-          listener(snapshot);
-        } catch {
-        }
-      }
-    }
-    allowsHarvest(args) {
-      const effective = this.effectiveSettings(args.seedKey);
-      if (!effective.enabled) {
-        return true;
-      }
-      const blocked = this.slotShouldBeBlocked(effective.settings, args);
-      return !blocked;
-    }
-  };
-  var lockerService = new LockerService();
-
   // src/data/hardcoded-data.clean.js
   var rarity = {
     Common: "Common",
@@ -5449,6 +4659,880 @@
     img64: "data:image/png;base64,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"
   };
 
+  // src/services/locker.ts
+  var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
+  var LOCKER_NO_WEATHER_TAG = "NoWeatherEffect";
+  var normalizeSpeciesKey = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  var emptySlotInfo = () => ({
+    isPlant: false,
+    originalIndex: null,
+    orderedIndex: null,
+    totalSlots: 0,
+    availableSlotCount: 0,
+    slot: null,
+    seedKey: null,
+    sizePercent: null,
+    mutations: []
+  });
+  var now = () => typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+  var shallowEqualStrings = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b) return (a?.length ?? 0) === (b?.length ?? 0);
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  };
+  var slotInfosEqual = (a, b) => a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && shallowEqualStrings(a.mutations, b.mutations);
+  var isPlantObject = (o) => !!o && o.objectType === "plant";
+  var slotSignature = (slot) => {
+    if (!slot) return "\u2205";
+    const species = slot.species ?? "";
+    const start = Number.isFinite(slot.startTime) ? slot.startTime : 0;
+    const end = Number.isFinite(slot.endTime) ? slot.endTime : 0;
+    const target = Number.isFinite(slot.targetScale) ? slot.targetScale : 0;
+    const muts = Array.isArray(slot.mutations) ? slot.mutations.join(",") : "";
+    return `${species}|${start}|${end}|${target}|${muts}`;
+  };
+  var gardenObjectSignature = (obj) => {
+    if (!obj) return "\u2205";
+    if (!isPlantObject(obj)) {
+      if (!obj || typeof obj !== "object") return String(obj);
+      const entries = Object.keys(obj).sort().map((key2) => `${key2}:${JSON.stringify(obj[key2])}`);
+      return `other|${entries.join(";")}`;
+    }
+    const base = `${obj.objectType}|${obj.species ?? ""}|${obj.plantedAt ?? 0}|${obj.maturedAt ?? 0}`;
+    const slots = Array.isArray(obj.slots) ? obj.slots.map((slot) => slotSignature(slot)).join("||") : "";
+    return `${base}|slots:${slots}`;
+  };
+  var arraySignature = (arr) => Array.isArray(arr) ? arr.join(",") : "\u2205";
+  var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
+  var clamp = (n, min, max) => Math.max(min, Math.min(max, n));
+  var extractSeedKey = (obj) => {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.seedKey === "string") {
+      return obj.seedKey;
+    }
+    if (typeof obj.species === "string" && obj.species) {
+      return obj.species;
+    }
+    const asAny = obj;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = asAny[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  };
+  var clampPercent = (value, min, max) => Math.max(min, Math.min(max, value));
+  var lookupMaxScale = (species) => {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  };
+  var getMaxScaleForSlot = (slot) => {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  };
+  var extractSizePercent = (slot) => {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent);
+    if (Number.isFinite(direct)) {
+      return clampPercent(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent(Math.round(pct2), 50, 100);
+      }
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent(pct, 0, 100);
+    }
+    return 100;
+  };
+  function startLockerSlotWatcherViaGardenObject() {
+    if (typeof window === "undefined") {
+      return {
+        get: () => emptySlotInfo(),
+        onChange: () => () => {
+        },
+        stop() {
+        },
+        recompute() {
+        }
+      };
+    }
+    let cur = null;
+    let sortedIdx = null;
+    let sortedIdxSig = arraySignature(sortedIdx);
+    let selectedIdx = null;
+    let lastInfo = emptySlotInfo();
+    let curSig = gardenObjectSignature(cur);
+    const listeners3 = /* @__PURE__ */ new Set();
+    const notify = () => {
+      for (const fn of listeners3) {
+        try {
+          fn(lastInfo);
+        } catch {
+        }
+      }
+    };
+    let scheduled = false;
+    const scheduleRecomputeAndNotify = () => {
+      recomputeAndNotify();
+      if (scheduled) return;
+      scheduled = true;
+      const run = () => {
+        scheduled = false;
+        recomputeAndNotify();
+      };
+      if (typeof globalThis !== "undefined" && typeof globalThis.queueMicrotask === "function") {
+        globalThis.queueMicrotask(run);
+      } else if (typeof Promise !== "undefined") {
+        Promise.resolve().then(run);
+      } else if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+        window.setTimeout(run, 0);
+      } else {
+        run();
+      }
+    };
+    function getOrder(slotCount) {
+      if (!slotCount) return [];
+      if (Array.isArray(sortedIdx) && sortedIdx.length === slotCount) {
+        return sortedIdx.slice();
+      }
+      return defaultOrder(slotCount);
+    }
+    function selectedOrderedPosition(order, slotCount) {
+      if (!slotCount || !order.length) return 0;
+      const raw = Number.isFinite(selectedIdx) ? selectedIdx : 0;
+      const clampedRaw = clamp(raw, 0, slotCount - 1);
+      const pos = order.indexOf(clampedRaw);
+      return pos >= 0 ? pos : 0;
+    }
+    function sanitizeMutations2(raw) {
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      for (let i = 0; i < raw.length; i++) {
+        const value = raw[i];
+        if (typeof value === "string") {
+          if (value) out.push(value);
+        } else if (value != null) {
+          const str = String(value);
+          if (str) out.push(str);
+        }
+      }
+      return out;
+    }
+    function computeSlotInfo() {
+      const seedKey = extractSeedKey(cur);
+      if (!isPlantObject(cur)) {
+        return {
+          isPlant: false,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: 0,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const slots = Array.isArray(cur.slots) ? cur.slots : [];
+      const slotCount = slots.length;
+      if (!slotCount) {
+        return {
+          isPlant: true,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: 0,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const order = getOrder(slotCount);
+      const availableIndices = [];
+      for (const idx of order) {
+        if (Number.isInteger(idx) && idx >= 0 && idx < slotCount) {
+          if (slots[idx] != null) availableIndices.push(idx);
+        }
+      }
+      const availableCount = availableIndices.length;
+      if (!availableCount) {
+        return {
+          isPlant: true,
+          originalIndex: null,
+          orderedIndex: null,
+          totalSlots: slotCount,
+          availableSlotCount: 0,
+          slot: null,
+          seedKey,
+          sizePercent: null,
+          mutations: []
+        };
+      }
+      const pos = selectedOrderedPosition(order, slotCount);
+      const clampedPos = clamp(pos, 0, availableCount - 1);
+      const originalIndex = availableIndices[clampedPos] ?? null;
+      const slot = typeof originalIndex === "number" ? slots[originalIndex] ?? null : null;
+      const sizePercent = slot ? extractSizePercent(slot) : null;
+      const mutations = slot ? sanitizeMutations2(slot.mutations) : [];
+      return {
+        isPlant: true,
+        originalIndex: typeof originalIndex === "number" ? originalIndex : null,
+        orderedIndex: clampedPos,
+        totalSlots: slotCount,
+        availableSlotCount: availableCount,
+        slot: slot ?? null,
+        seedKey,
+        sizePercent,
+        mutations
+      };
+    }
+    function mutationsEqual(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+    function infosEqual(a, b) {
+      return a.isPlant === b.isPlant && a.originalIndex === b.originalIndex && a.orderedIndex === b.orderedIndex && a.totalSlots === b.totalSlots && a.availableSlotCount === b.availableSlotCount && a.slot === b.slot && a.seedKey === b.seedKey && a.sizePercent === b.sizePercent && mutationsEqual(a.mutations, b.mutations);
+    }
+    function recomputeAndNotify() {
+      const next = computeSlotInfo();
+      if (!infosEqual(next, lastInfo)) {
+        lastInfo = next;
+        notify();
+      }
+    }
+    (async () => {
+      try {
+        selectedIdx = await myCurrentGrowSlotIndex.get();
+      } catch {
+      }
+      try {
+        const v = await myCurrentSortedGrowSlotIndices.get();
+        sortedIdx = Array.isArray(v) ? v.slice() : null;
+        sortedIdxSig = arraySignature(sortedIdx);
+      } catch {
+      }
+      try {
+        cur = await myCurrentGardenObject.get();
+        curSig = gardenObjectSignature(cur);
+      } catch {
+      }
+      const refreshSorted = (v) => {
+        const next = Array.isArray(v) ? v.slice() : null;
+        const sig = arraySignature(next);
+        if (sig === sortedIdxSig) return false;
+        sortedIdx = next;
+        sortedIdxSig = sig;
+        return true;
+      };
+      const refreshGarden = (v) => {
+        const sig = gardenObjectSignature(v ?? null);
+        if (sig === curSig) return false;
+        cur = v;
+        curSig = sig;
+        return true;
+      };
+      let awaitIndexBeforeRecompute = false;
+      let awaitIndexTimer = null;
+      const clearAwaitIndexTimer = () => {
+        if (awaitIndexTimer == null) return;
+        if (typeof globalThis !== "undefined") {
+          const clearer = globalThis.clearTimeout;
+          if (typeof clearer === "function") {
+            clearer.call(globalThis, awaitIndexTimer);
+          }
+        }
+        awaitIndexTimer = null;
+      };
+      const deferUntilIndexChanges = () => {
+        awaitIndexBeforeRecompute = true;
+        if (awaitIndexTimer != null) return;
+        const run = () => {
+          awaitIndexTimer = null;
+          if (!awaitIndexBeforeRecompute) return;
+          awaitIndexBeforeRecompute = false;
+          scheduleRecomputeAndNotify();
+        };
+        if (typeof globalThis !== "undefined") {
+          const setter = globalThis.setTimeout;
+          if (typeof setter === "function") {
+            awaitIndexTimer = setter.call(globalThis, run, 0);
+            return;
+          }
+        }
+        run();
+      };
+      myCurrentSortedGrowSlotIndices.onChange((v) => {
+        const changed = refreshSorted(v);
+        if (!changed) return;
+        deferUntilIndexChanges();
+      });
+      myCurrentGardenObject.onChange((v) => {
+        const changed = refreshGarden(v);
+        if (!changed) return;
+        deferUntilIndexChanges();
+      });
+      myCurrentGrowSlotIndex.onChange((idx) => {
+        selectedIdx = Number.isFinite(idx) ? idx : 0;
+        void (async () => {
+          try {
+            refreshSorted(await myCurrentSortedGrowSlotIndices.get());
+          } catch {
+          }
+          try {
+            refreshGarden(await myCurrentGardenObject.get());
+          } catch {
+          }
+          if (awaitIndexBeforeRecompute) {
+            awaitIndexBeforeRecompute = false;
+            clearAwaitIndexTimer();
+          }
+          scheduleRecomputeAndNotify();
+        })();
+      });
+      recomputeAndNotify();
+    })();
+    return {
+      get() {
+        return lastInfo;
+      },
+      onChange(cb) {
+        listeners3.add(cb);
+        return () => listeners3.delete(cb);
+      },
+      stop() {
+        listeners3.clear();
+      },
+      recompute() {
+        recomputeAndNotify();
+      }
+    };
+  }
+  function defaultSettings() {
+    return {
+      minScalePct: 50,
+      maxScalePct: 100,
+      minInventory: 91,
+      avoidNormal: false,
+      includeNormal: true,
+      visualMutations: [],
+      weatherMode: "ANY",
+      weatherSelected: [],
+      weatherRecipes: []
+    };
+  }
+  function defaultState() {
+    return {
+      enabled: false,
+      settings: defaultSettings(),
+      overrides: {}
+    };
+  }
+  var LS_KEY = "garden.locker.state.v2";
+  var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+  function sanitizeSettings(raw) {
+    const base = defaultSettings();
+    const minScaleRaw = Number(raw?.minScalePct);
+    let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, 99) : 50;
+    const maxScaleRaw = Number(raw?.maxScalePct);
+    let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 51, 100) : 100;
+    if (maxScale <= minScale) {
+      if (minScale >= 99) {
+        minScale = 99;
+        maxScale = 100;
+      } else {
+        maxScale = clampNumber(minScale + 1, 51, 100);
+      }
+    }
+    base.minScalePct = minScale;
+    base.maxScalePct = maxScale;
+    const minInv = Number(raw?.minInventory);
+    base.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
+    if (typeof raw?.avoidNormal === "boolean") {
+      base.avoidNormal = raw.avoidNormal;
+    } else {
+      base.avoidNormal = raw?.includeNormal === false;
+    }
+    base.includeNormal = !base.avoidNormal;
+    base.visualMutations = Array.isArray(raw?.visualMutations) ? Array.from(new Set(raw.visualMutations.filter((m) => VISUAL_MUTATIONS.has(m)))) : [];
+    const mode = raw?.weatherMode;
+    base.weatherMode = mode === "ALL" || mode === "RECIPES" ? mode : "ANY";
+    base.weatherSelected = Array.isArray(raw?.weatherSelected) ? Array.from(new Set(raw.weatherSelected.map((m) => String(m || "")).filter(Boolean))) : [];
+    base.weatherRecipes = Array.isArray(raw?.weatherRecipes) ? raw.weatherRecipes.map(
+      (recipe) => Array.isArray(recipe) ? Array.from(new Set(recipe.map((m) => String(m || "")).filter(Boolean))) : []
+    ).filter((arr) => arr.length > 0) : [];
+    return base;
+  }
+  function sanitizeState(raw) {
+    const state2 = defaultState();
+    if (!raw || typeof raw !== "object") return state2;
+    state2.enabled = raw.enabled === true;
+    state2.settings = sanitizeSettings(raw.settings);
+    state2.overrides = {};
+    if (raw.overrides && typeof raw.overrides === "object") {
+      for (const [key2, value] of Object.entries(raw.overrides)) {
+        if (!key2) continue;
+        state2.overrides[key2] = {
+          enabled: value?.enabled === true,
+          settings: sanitizeSettings(value?.settings)
+        };
+      }
+    }
+    return state2;
+  }
+  function cloneSettings(settings) {
+    return {
+      minScalePct: settings.minScalePct,
+      maxScalePct: settings.maxScalePct,
+      minInventory: settings.minInventory,
+      avoidNormal: settings.avoidNormal,
+      includeNormal: settings.includeNormal,
+      visualMutations: settings.visualMutations.slice(),
+      weatherMode: settings.weatherMode,
+      weatherSelected: settings.weatherSelected.slice(),
+      weatherRecipes: settings.weatherRecipes.map((recipe) => recipe.slice())
+    };
+  }
+  function cloneState(state2) {
+    const overrides = {};
+    for (const [key2, value] of Object.entries(state2.overrides)) {
+      overrides[key2] = { enabled: value.enabled, settings: cloneSettings(value.settings) };
+    }
+    return {
+      enabled: state2.enabled,
+      settings: cloneSettings(state2.settings),
+      overrides
+    };
+  }
+  function cloneSlotInfo(info) {
+    return {
+      isPlant: info.isPlant,
+      originalIndex: info.originalIndex,
+      orderedIndex: info.orderedIndex,
+      totalSlots: info.totalSlots,
+      availableSlotCount: info.availableSlotCount,
+      slot: info.slot,
+      seedKey: info.seedKey,
+      sizePercent: info.sizePercent,
+      mutations: info.mutations.slice()
+    };
+  }
+  function mutationsToArrays(raw) {
+    let hasGold = false;
+    let hasRainbow = false;
+    const weather2 = [];
+    if (!Array.isArray(raw)) {
+      return { hasGold, hasRainbow, weather: weather2 };
+    }
+    for (let i = 0; i < raw.length; i++) {
+      const tag = String(raw[i] || "");
+      if (!tag) continue;
+      if (tag === "Gold") {
+        hasGold = true;
+      } else if (tag === "Rainbow") {
+        hasRainbow = true;
+      } else {
+        weather2.push(tag);
+      }
+    }
+    return { hasGold, hasRainbow, weather: weather2 };
+  }
+  var LockerService = class {
+    constructor() {
+      __publicField(this, "state", defaultState());
+      __publicField(this, "listeners", /* @__PURE__ */ new Set());
+      __publicField(this, "slotInfoListeners", /* @__PURE__ */ new Set());
+      __publicField(this, "slotWatcher", null);
+      __publicField(this, "slotWatcherUnsub", null);
+      __publicField(this, "currentSlotInfo", emptySlotInfo());
+      __publicField(this, "currentSlotHarvestAllowed", null);
+      __publicField(this, "lastSlotChangeDetectedAt", null);
+      this.load();
+      this.updateSlotWatcher();
+    }
+    load() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") {
+        this.state = defaultState();
+        return;
+      }
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) {
+          this.state = defaultState();
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        this.state = sanitizeState(parsed);
+      } catch {
+        this.state = defaultState();
+      }
+    }
+    save() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(this.state));
+      } catch {
+      }
+    }
+    emit() {
+      if (!this.listeners.size) return;
+      const snapshot = this.getState();
+      const event = { type: "locker-state-changed", state: snapshot };
+      for (const listener of this.listeners) {
+        try {
+          listener(event);
+        } catch {
+        }
+      }
+    }
+    setState(next) {
+      this.state = next;
+      this.updateSlotWatcher();
+      this.save();
+      this.emit();
+      this.requestSlotWatcherRecompute();
+      this.reapplyCurrentSlotInfo();
+    }
+    updateSlotWatcher() {
+      const shouldWatch = this.state.enabled;
+      if (shouldWatch) {
+        if (!this.slotWatcher) {
+          this.slotWatcher = startLockerSlotWatcherViaGardenObject();
+        }
+        if (this.slotWatcher && !this.slotWatcherUnsub) {
+          try {
+            this.slotWatcherUnsub = this.slotWatcher.onChange((info) => this.handleSlotInfo(info));
+          } catch {
+            this.slotWatcherUnsub = null;
+          }
+        }
+        try {
+          const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
+          this.handleSlotInfo(info, { silent: true });
+        } catch {
+          this.handleSlotInfo(emptySlotInfo(), { silent: true });
+        }
+        return;
+      }
+      this.detachSlotWatcher();
+    }
+    getState() {
+      return cloneState(this.state);
+    }
+    setGlobalState(next) {
+      const current = this.state;
+      const sanitized = sanitizeSettings(next.settings);
+      const updated = {
+        enabled: !!next.enabled,
+        settings: sanitized,
+        overrides: { ...current.overrides }
+      };
+      this.setState(updated);
+    }
+    setOverride(seedKey, override) {
+      if (!seedKey) return;
+      const sanitized = {
+        enabled: !!override?.enabled,
+        settings: sanitizeSettings(override?.settings)
+      };
+      const overrides = { ...this.state.overrides, [seedKey]: sanitized };
+      this.setState({ ...this.state, overrides });
+    }
+    removeOverride(seedKey) {
+      if (!seedKey) return;
+      if (!(seedKey in this.state.overrides)) return;
+      const overrides = { ...this.state.overrides };
+      delete overrides[seedKey];
+      this.setState({ ...this.state, overrides });
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+    onSlotInfoChange(listener) {
+      this.slotInfoListeners.add(listener);
+      return () => this.slotInfoListeners.delete(listener);
+    }
+    getCurrentSlotSnapshot() {
+      return {
+        info: cloneSlotInfo(this.currentSlotInfo),
+        harvestAllowed: this.currentSlotHarvestAllowed,
+        detectedAt: this.lastSlotChangeDetectedAt
+      };
+    }
+    requestSlotWatcherRecompute() {
+      if (!this.slotWatcher) return;
+      try {
+        this.slotWatcher.recompute();
+      } catch {
+      }
+    }
+    detachSlotWatcher() {
+      if (this.slotWatcherUnsub) {
+        try {
+          this.slotWatcherUnsub();
+        } catch {
+        }
+        this.slotWatcherUnsub = null;
+      }
+      if (this.slotWatcher) {
+        try {
+          this.slotWatcher.stop();
+        } catch {
+        }
+        this.slotWatcher = null;
+      }
+      this.handleSlotInfo(emptySlotInfo(), { silent: true });
+    }
+    handleSlotInfo(info, opts = {}) {
+      const { silent = false } = opts;
+      const prevInfo = this.currentSlotInfo;
+      const prevHarvestAllowed = this.currentSlotHarvestAllowed;
+      const normalizedMutations = Array.isArray(info.mutations) ? info.mutations.slice() : [];
+      const nextInfo = { ...info, mutations: normalizedMutations };
+      let computedSizePercent = null;
+      let harvestAllowed = null;
+      let displaySizePercent = null;
+      if (nextInfo.isPlant && nextInfo.slot) {
+        if (typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent)) {
+          computedSizePercent = nextInfo.sizePercent;
+        } else {
+          computedSizePercent = extractSizePercent(nextInfo.slot);
+        }
+        try {
+          harvestAllowed = this.allowsHarvest({
+            seedKey: nextInfo.seedKey ?? null,
+            sizePercent: computedSizePercent ?? 0,
+            mutations: normalizedMutations
+          });
+        } catch {
+          harvestAllowed = null;
+        }
+      } else {
+        computedSizePercent = typeof nextInfo.sizePercent === "number" && Number.isFinite(nextInfo.sizePercent) ? nextInfo.sizePercent : null;
+        harvestAllowed = null;
+      }
+      if (typeof computedSizePercent === "number") {
+        displaySizePercent = Math.max(50, Math.min(100, computedSizePercent));
+      }
+      this.currentSlotInfo = nextInfo;
+      this.currentSlotHarvestAllowed = harvestAllowed;
+      if (!silent) {
+        if (nextInfo.isPlant) {
+          if (nextInfo.slot) {
+            console.log("[Locker] Slot selection", {
+              seedKey: nextInfo.seedKey ?? null,
+              slotIndex: nextInfo.originalIndex,
+              orderedIndex: nextInfo.orderedIndex,
+              sizePercent: computedSizePercent,
+              displaySizePercent,
+              harvestAllowed,
+              mutations: normalizedMutations,
+              slot: nextInfo.slot
+            });
+          } else {
+            console.log("[Locker] Slot selection", {
+              isPlant: true,
+              slotIndex: nextInfo.originalIndex,
+              orderedIndex: nextInfo.orderedIndex,
+              totalSlots: nextInfo.totalSlots,
+              availableSlotCount: nextInfo.availableSlotCount,
+              seedKey: nextInfo.seedKey ?? null,
+              displaySizePercent,
+              slot: nextInfo.slot
+            });
+          }
+        } else {
+          console.log("[Locker] Slot selection", { isPlant: false, slot: nextInfo.slot });
+        }
+        const infoChanged = !slotInfosEqual(prevInfo, nextInfo) || (prevHarvestAllowed ?? null) !== (harvestAllowed ?? null);
+        if (infoChanged) {
+          this.lastSlotChangeDetectedAt = now();
+        }
+      }
+      this.emitSlotInfoChange();
+    }
+    reapplyCurrentSlotInfo() {
+      try {
+        const info = this.slotWatcher ? this.slotWatcher.get() : emptySlotInfo();
+        this.handleSlotInfo(info, { silent: true });
+      } catch {
+        this.handleSlotInfo(emptySlotInfo(), { silent: true });
+      }
+    }
+    recomputeCurrentSlot() {
+      this.requestSlotWatcherRecompute();
+      this.reapplyCurrentSlotInfo();
+    }
+    effectiveSettings(seedKey) {
+      if (!this.state.enabled) {
+        return { enabled: false, settings: this.state.settings };
+      }
+      if (seedKey) {
+        const override = this.state.overrides[seedKey];
+        if (override?.enabled) {
+          return { enabled: true, settings: override.settings };
+        }
+      }
+      return { enabled: true, settings: this.state.settings };
+    }
+    slotShouldBeBlocked(settings, args) {
+      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 99);
+      const maxScaleRaw = clampNumber(Math.round(settings.maxScalePct ?? 100), 51, 100);
+      const maxScale = maxScaleRaw <= minScale ? Math.min(100, minScale + 1) : maxScaleRaw;
+      if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
+      const { hasGold, hasRainbow, weather: weather2 } = mutationsToArrays(args.mutations);
+      const isNormal = !hasGold && !hasRainbow;
+      if (isNormal) {
+        if (settings.avoidNormal) return true;
+      } else {
+        const avoidGold = settings.visualMutations.includes("Gold");
+        const avoidRainbow = settings.visualMutations.includes("Rainbow");
+        if (avoidGold && hasGold || avoidRainbow && hasRainbow) return true;
+      }
+      const selected = settings.weatherSelected ?? [];
+      const mode = settings.weatherMode ?? "ANY";
+      if (mode === "RECIPES") {
+        const recipes = settings.weatherRecipes ?? [];
+        if (!recipes.length) return false;
+        for (let i = 0; i < recipes.length; i++) {
+          const recipe = recipes[i];
+          if (!Array.isArray(recipe) || recipe.length === 0) continue;
+          let matches = true;
+          for (let j = 0; j < recipe.length; j++) {
+            const required = recipe[j];
+            if (required === LOCKER_NO_WEATHER_TAG) {
+              if (weather2.length !== 0) {
+                matches = false;
+                break;
+              }
+              continue;
+            }
+            if (!weather2.includes(required)) {
+              matches = false;
+              break;
+            }
+          }
+          if (matches) return true;
+        }
+        return false;
+      }
+      if (!selected.length) return false;
+      if (mode === "ALL") {
+        let hasRequirement = false;
+        for (let i = 0; i < selected.length; i++) {
+          const required = selected[i];
+          if (required === LOCKER_NO_WEATHER_TAG) {
+            hasRequirement = true;
+            if (weather2.length !== 0) return false;
+            continue;
+          }
+          hasRequirement = true;
+          if (!weather2.includes(required)) return false;
+        }
+        return hasRequirement;
+      }
+      for (let i = 0; i < selected.length; i++) {
+        const required = selected[i];
+        if (required === LOCKER_NO_WEATHER_TAG) {
+          if (weather2.length === 0) return true;
+          continue;
+        }
+        if (weather2.includes(required)) return true;
+      }
+      return false;
+    }
+    emitSlotInfoChange() {
+      if (!this.slotInfoListeners.size) {
+        return;
+      }
+      const snapshot = {
+        type: "locker-slot-info-changed",
+        info: cloneSlotInfo(this.currentSlotInfo),
+        harvestAllowed: this.currentSlotHarvestAllowed,
+        detectedAt: this.lastSlotChangeDetectedAt
+      };
+      for (const listener of this.slotInfoListeners) {
+        try {
+          listener(snapshot);
+        } catch {
+        }
+      }
+    }
+    allowsHarvest(args) {
+      const effective = this.effectiveSettings(args.seedKey);
+      if (!effective.enabled) {
+        return true;
+      }
+      const blocked = this.slotShouldBeBlocked(effective.settings, args);
+      return !blocked;
+    }
+  };
+  var lockerService = new LockerService();
+
   // src/services/stats.ts
   var LS_STATS_KEY = "qws:stats:v1";
   var GARDEN_INT_KEYS = {
@@ -6095,6 +6179,62 @@
     }
     return null;
   }
+  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES2 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey2(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  function lookupMaxScale2(species) {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey2(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  }
+  function getMaxScaleForSlot2(slot) {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey2(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale2(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  }
   function extractSizePercent2(slot) {
     if (!slot || typeof slot !== "object") return 100;
     const direct = Number(
@@ -6105,6 +6245,12 @@
     }
     const scale = Number(slot.targetScale ?? slot.scale);
     if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot2(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent2(Math.round(pct2), 50, 100);
+      }
       if (scale > 1 && scale <= 2) {
         const pct2 = 50 + (scale - 1) / 1 * 50;
         return clampPercent2(Math.round(pct2), 50, 100);
@@ -7627,6 +7773,51 @@
       i.value = String(value);
       return i;
     }
+    rangeDual(min = 0, max = 100, step = 1, valueMin = min, valueMax = max) {
+      const wrap = el("div", "qmm-range-dual");
+      const track = el("div", "qmm-range-dual-track");
+      const fill = el("div", "qmm-range-dual-fill");
+      track.appendChild(fill);
+      wrap.appendChild(track);
+      const createHandle = (value, extraClass) => {
+        const input = this.slider(min, max, step, value);
+        input.classList.add("qmm-range-dual-input", extraClass);
+        wrap.appendChild(input);
+        return input;
+      };
+      const minInput = createHandle(valueMin, "qmm-range-dual-input--min");
+      const maxInput = createHandle(valueMax, "qmm-range-dual-input--max");
+      const updateFill = () => {
+        const minValue = Number(minInput.value);
+        const maxValue = Number(maxInput.value);
+        const total = max - min;
+        if (!Number.isFinite(total) || total <= 0) {
+          fill.style.left = "0%";
+          fill.style.right = "100%";
+          return;
+        }
+        const clampPercent3 = (value) => Math.max(0, Math.min(100, value));
+        const start = (Math.min(minValue, maxValue) - min) / total * 100;
+        const end = (Math.max(minValue, maxValue) - min) / total * 100;
+        fill.style.left = `${clampPercent3(start)}%`;
+        fill.style.right = `${clampPercent3(100 - end)}%`;
+      };
+      minInput.addEventListener("input", updateFill);
+      maxInput.addEventListener("input", updateFill);
+      const handle = {
+        root: wrap,
+        min: minInput,
+        max: maxInput,
+        setValues(minValue, maxValue) {
+          minInput.value = String(minValue);
+          maxInput.value = String(maxValue);
+          updateFill();
+        },
+        refresh: updateFill
+      };
+      handle.refresh();
+      return handle;
+    }
     switch(checked = false) {
       const i = this.checkbox(checked);
       i.classList.add("qmm-switch");
@@ -8527,6 +8718,114 @@
 .qmm-range::-moz-range-thumb{
   width:16px; height:16px; border-radius:50%; background:#fff; border:none;
   box-shadow:0 2px 10px rgba(0,0,0,.35), 0 0 0 2px #ffffff66 inset;
+}
+
+.qmm-range-dual{
+  position:relative;
+  width:100%;
+  padding:18px 0 10px;
+}
+.qmm-range-dual-track{
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(90deg, rgba(8,19,33,.8), rgba(27,43,68,.9));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(118,156,255,.08);
+}
+.qmm-range-dual-fill{
+  position:absolute;
+  top:50%;
+  transform:translateY(-50%);
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff99);
+  box-shadow:0 4px 14px rgba(37,92,255,.3);
+  transition:left .12s ease, right .12s ease;
+}
+.qmm-range-dual-input{
+  position:absolute;
+  left:0;
+  right:0;
+  top:50%;
+  transform:translateY(-50%);
+  width:100%;
+  height:28px;
+  margin:0;
+  background:transparent;
+  pointer-events:none;
+}
+.qmm-range-dual-input::-webkit-slider-runnable-track{ background:none; }
+.qmm-range-dual-input::-moz-range-track{ background:none; }
+.qmm-range-dual-input::-webkit-slider-thumb{
+  pointer-events:auto;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:linear-gradient(145deg, #fff, #dce6ff);
+  border:2px solid rgba(122,162,255,.8);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.qmm-range-dual-input:active::-webkit-slider-thumb,
+.qmm-range-dual-input:focus-visible::-webkit-slider-thumb{
+  transform:scale(1.05);
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
+}
+.qmm-range-dual-input::-moz-range-thumb{
+  pointer-events:auto;
+  width:18px;
+  height:18px;
+  border-radius:50%;
+  background:linear-gradient(145deg, #fff, #dce6ff);
+  border:2px solid rgba(122,162,255,.8);
+  box-shadow:0 4px 12px rgba(0,0,0,.35);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.qmm-range-dual-input:active::-moz-range-thumb,
+.qmm-range-dual-input:focus-visible::-moz-range-thumb{
+  transform:scale(1.05);
+  box-shadow:0 6px 16px rgba(0,0,0,.4);
+}
+.qmm-range-dual-input--min{ z-index:2; }
+.qmm-range-dual-input--max{ z-index:3; }
+.qmm-range-dual-bubble{
+  position:absolute;
+  top:14px;
+  transform:translate(-50%, -100%);
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:11px;
+  line-height:1;
+  font-weight:600;
+  color:#dbe6ff;
+  background:rgba(17,28,46,.9);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  pointer-events:none;
+  transition:opacity .12s ease, transform .12s ease;
+  opacity:.85;
+}
+.qmm-range-dual-bubble::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:-4px;
+  width:8px;
+  height:8px;
+  background:inherit;
+  transform:translateX(-50%) rotate(45deg);
+  border-radius:2px;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.qmm-range-dual-input--min:focus-visible + .qmm-range-dual-bubble--min,
+.qmm-range-dual-input--max:focus-visible + .qmm-range-dual-bubble--max,
+.qmm-range-dual-input--min:active + .qmm-range-dual-bubble--min,
+.qmm-range-dual-input--max:active + .qmm-range-dual-bubble--max{
+  opacity:1;
+  transform:translate(-50%, -110%) scale(1.02);
 }
 
 /* ---------- Minimal table ---------- */
@@ -21793,6 +22092,7 @@ next: ${next}`;
   function createDefaultSettings() {
     return {
       minScalePct: 50,
+      maxScalePct: 100,
       minInventory: 91,
       avoidNormal: false,
       visualMutations: /* @__PURE__ */ new Set(),
@@ -21803,6 +22103,7 @@ next: ${next}`;
   }
   function copySettings(target, source) {
     target.minScalePct = source.minScalePct;
+    target.maxScalePct = source.maxScalePct;
     target.minInventory = source.minInventory;
     target.avoidNormal = source.avoidNormal;
     target.visualMutations.clear();
@@ -21815,7 +22116,18 @@ next: ${next}`;
   }
   function hydrateSettingsFromPersisted(target, persisted) {
     const src = persisted ?? {};
-    target.minScalePct = Math.max(50, Math.min(100, Math.round(src.minScalePct ?? 50)));
+    let minScale = Math.max(50, Math.min(99, Math.round(src.minScalePct ?? 50)));
+    let maxScale = Math.max(51, Math.min(100, Math.round(src.maxScalePct ?? 100)));
+    if (maxScale <= minScale) {
+      if (minScale >= 99) {
+        minScale = 99;
+        maxScale = 100;
+      } else {
+        maxScale = Math.min(100, Math.max(51, minScale + 1));
+      }
+    }
+    target.minScalePct = minScale;
+    target.maxScalePct = maxScale;
     target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
     target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
     target.visualMutations.clear();
@@ -21836,8 +22148,19 @@ next: ${next}`;
   }
   function serializeSettingsState(state2) {
     state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
+    let minScale = Math.max(50, Math.min(99, Math.round(state2.minScalePct || 50)));
+    let maxScale = Math.max(51, Math.min(100, Math.round(state2.maxScalePct || 100)));
+    if (maxScale <= minScale) {
+      if (minScale >= 99) {
+        minScale = 99;
+        maxScale = 100;
+      } else {
+        maxScale = Math.min(100, Math.max(51, minScale + 1));
+      }
+    }
     return {
-      minScalePct: Math.max(50, Math.min(100, Math.round(state2.minScalePct || 50))),
+      minScalePct: minScale,
+      maxScalePct: maxScale,
       minInventory: Math.max(0, Math.min(999, Math.round(state2.minInventory || 91))),
       avoidNormal: !!state2.avoidNormal,
       includeNormal: !state2.avoidNormal,
@@ -22129,18 +22452,72 @@ next: ${next}`;
       return row;
     };
     const scaleRow = centerRow();
-    const scaleSlider = ui.slider(50, 100, 1, state2.minScalePct);
-    scaleSlider.style.width = "240px";
-    const scaleValue = ui.label("50%");
-    scaleValue.style.margin = "0";
-    scaleRow.append(scaleSlider, scaleValue);
-    scaleSlider.addEventListener("input", () => {
-      scaleValue.textContent = `${scaleSlider.value}%`;
+    scaleRow.style.flexDirection = "column";
+    scaleRow.style.alignItems = "center";
+    scaleRow.style.width = "100%";
+    scaleRow.style.gap = "12px";
+    const scaleSlider = ui.rangeDual(50, 100, 1, state2.minScalePct, state2.maxScalePct);
+    applyStyles(scaleSlider.root, {
+      width: "min(420px, 100%)"
     });
-    scaleSlider.addEventListener("change", () => {
-      state2.minScalePct = parseInt(scaleSlider.value, 10) || 50;
-      opts.onChange?.();
+    const scaleMinSlider = scaleSlider.min;
+    const scaleMaxSlider = scaleSlider.max;
+    const scaleMinValue = ui.label("50%");
+    const scaleMaxValue = ui.label("100%");
+    [scaleMinValue, scaleMaxValue].forEach((label2) => {
+      label2.style.margin = "0";
+      label2.style.fontWeight = "600";
     });
+    const makeScaleValue = (labelText, valueLabel) => {
+      const wrap = applyStyles(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        gap: "6px"
+      });
+      const label2 = ui.label(labelText);
+      label2.style.margin = "0";
+      label2.style.opacity = "0.9";
+      wrap.append(label2, valueLabel);
+      return wrap;
+    };
+    const scaleValues = applyStyles(document.createElement("div"), {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      width: "min(420px, 100%)",
+      gap: "16px"
+    });
+    scaleValues.append(makeScaleValue("Min", scaleMinValue), makeScaleValue("Max", scaleMaxValue));
+    scaleRow.append(scaleSlider.root, scaleValues);
+    const applyScaleRange = (commit) => {
+      let minValue = parseInt(scaleMinSlider.value, 10);
+      let maxValue = parseInt(scaleMaxSlider.value, 10);
+      if (!Number.isFinite(minValue)) minValue = state2.minScalePct;
+      if (!Number.isFinite(maxValue)) maxValue = state2.maxScalePct;
+      minValue = Math.max(50, Math.min(99, minValue));
+      maxValue = Math.max(51, Math.min(100, maxValue));
+      if (maxValue <= minValue) {
+        if (minValue >= 99) {
+          minValue = 99;
+          maxValue = 100;
+        } else {
+          maxValue = Math.min(100, Math.max(51, minValue + 1));
+        }
+      }
+      scaleSlider.setValues(minValue, maxValue);
+      scaleMinValue.textContent = `${minValue}%`;
+      scaleMaxValue.textContent = `${maxValue}%`;
+      if (commit) {
+        state2.minScalePct = minValue;
+        state2.maxScalePct = maxValue;
+        opts.onChange?.();
+      }
+    };
+    scaleMinSlider.addEventListener("input", () => applyScaleRange(false));
+    scaleMaxSlider.addEventListener("input", () => applyScaleRange(false));
+    scaleMinSlider.addEventListener("change", () => applyScaleRange(true));
+    scaleMaxSlider.addEventListener("change", () => applyScaleRange(true));
+    applyScaleRange(false);
     const colorsRow = centerRow();
     colorsRow.style.flexWrap = "wrap";
     colorsRow.style.gap = "8px";
@@ -22602,15 +22979,15 @@ next: ${next}`;
     };
     recipesWrap.append(recipesHeader, recipesList);
     card.append(
-      makeSection("Minimum size", scaleRow),
+      makeSection("Lock by size", scaleRow),
       makeSection("Lock by color", colorsRow),
       makeSection("Lock by weather", weatherGrid),
       makeSection("Weather lock mode", weatherModeRow),
       makeSection("Recipe lockers", recipesWrap)
     );
     const refresh = () => {
-      scaleSlider.value = String(state2.minScalePct);
-      scaleValue.textContent = `${scaleSlider.value}%`;
+      scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
+      applyScaleRange(false);
       updateColorButtons();
       weatherToggles.forEach((toggle) => toggle.setChecked(state2.weatherSelected.has(toggle.key)));
       radioAny.input.checked = state2.weatherMode === "ANY";
