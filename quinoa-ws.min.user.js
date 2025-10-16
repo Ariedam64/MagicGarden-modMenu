@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.7
+// @version      2.1.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11501,6 +11501,8 @@
     _logSubs: /* @__PURE__ */ new Set(),
     _logsCutoffMs: 0,
     _logsCutoffSkewMs: 1500,
+    _logsStorageKey: "qws:pets:abilityLogs:v1",
+    _logsSessionStart: Date.now(),
     _extractAbilityValue(abilityId, rawData) {
       const num = (value) => {
         const parsed = Number(value);
@@ -11636,6 +11638,9 @@
       arr = arr.sort((a, b) => b.performedAt - a.performedAt);
       return lim ? arr.slice(0, lim) : arr;
     },
+    getAbilityLogsSessionStart() {
+      return this._logsSessionStart;
+    },
     onAbilityLogs(cb) {
       this._logSubs.add(cb);
       try {
@@ -11656,6 +11661,7 @@
       this._seenPerfByPet.clear();
       this._logsCutoffMs = Date.now();
       this._notifyLogSubs();
+      this._persistAbilityLogs();
     },
     _notifyLogSubs() {
       const snap = this.getAbilityLogs();
@@ -11672,6 +11678,76 @@
         this._logs.splice(0, this._logs.length - this._logsMax);
       }
       this._notifyLogSubs();
+      this._persistAbilityLogs();
+    },
+    _getLogsStorage() {
+      if (typeof window === "undefined") return null;
+      try {
+        if (typeof window.localStorage === "undefined") return null;
+        return window.localStorage;
+      } catch {
+        return null;
+      }
+    },
+    _persistAbilityLogs() {
+      const storage = this._getLogsStorage();
+      if (!storage) return;
+      try {
+        const payload = {
+          version: 1,
+          cutoff: this._logsCutoffMs,
+          logs: this._logs.map((entry) => ({
+            petId: entry.petId,
+            species: entry.species ?? null,
+            name: entry.name ?? null,
+            abilityId: entry.abilityId,
+            abilityName: entry.abilityName,
+            data: entry.data,
+            performedAt: entry.performedAt,
+            time12: entry.time12
+          }))
+        };
+        storage.setItem(this._logsStorageKey, JSON.stringify(payload));
+      } catch {
+      }
+    },
+    _restoreAbilityLogsFromStorage() {
+      const storage = this._getLogsStorage();
+      if (!storage) return;
+      try {
+        const raw = storage.getItem(this._logsStorageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return;
+        const logsRaw = Array.isArray(parsed.logs) ? parsed.logs : [];
+        const restored = [];
+        for (const item of logsRaw) {
+          if (!item || typeof item !== "object") continue;
+          const abilityId = typeof item.abilityId === "string" ? String(item.abilityId) : "";
+          const performedAt = Number(item.performedAt) || 0;
+          if (!abilityId || !performedAt) continue;
+          restored.push({
+            petId: typeof item.petId === "string" ? String(item.petId) : "",
+            species: typeof item.species === "string" && item.species ? String(item.species) : void 0,
+            name: typeof item.name === "string" && item.name ? String(item.name) : void 0,
+            abilityId,
+            abilityName: typeof item.abilityName === "string" && item.abilityName ? String(item.abilityName) : abilityId,
+            data: typeof item.data === "string" ? String(item.data) : item.data,
+            performedAt,
+            time12: typeof item.time12 === "string" && item.time12 ? String(item.time12) : new Date(performedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+          });
+        }
+        restored.sort((a, b) => a.performedAt - b.performedAt);
+        this._logs = restored.slice(-this._logsMax);
+        this._seenPerfByPet.clear();
+        for (const entry of this._logs) {
+          const prev = this._seenPerfByPet.get(entry.petId) || 0;
+          if (entry.performedAt > prev) this._seenPerfByPet.set(entry.petId, entry.performedAt);
+        }
+        const cutoff = Number(parsed.cutoff);
+        if (Number.isFinite(cutoff) && cutoff > 0) this._logsCutoffMs = cutoff;
+      } catch {
+      }
     },
     _ingestAbilityMap(map2) {
       if (!map2 || typeof map2 !== "object") return;
@@ -11829,6 +11905,10 @@
       }
     }
   };
+  try {
+    PetsService._restoreAbilityLogsFromStorage();
+  } catch {
+  }
   async function _getActivePetSlotIds() {
     try {
       const arr = await PlayerService.getPets();
@@ -18627,7 +18707,7 @@
         ) : [];
         console.log("[InventorySorting] Tri s\xE9lectionn\xE9 :", value);
         void logInventoryForFilters(activeFilters, value, direction);
-        onChange(value, direction);
+        onChange(value, direction, activeFilters);
       });
       directionSelect.addEventListener("change", () => {
         const direction = directionSelect.value;
@@ -18641,7 +18721,7 @@
         ) : [];
         console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 :", direction);
         void logInventoryForFilters(activeFilters, value, direction);
-        onChange(value, direction);
+        onChange(value, direction, activeFilters);
       });
     } else {
       const maybeSelect = wrap.querySelector("select.tm-sort-select--key");
@@ -18716,6 +18796,7 @@
     let currentSelect = null;
     let currentDirectionSelect = null;
     let lastLoggedFilters = null;
+    let lastAppliedFiltersKey = null;
     let lastAppliedSortKey = null;
     let lastAppliedDirection = null;
     const obs = new MutationObserver((muts) => {
@@ -18729,6 +18810,7 @@
       obs.disconnect();
       grid = next;
       lastLoggedFilters = null;
+      lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
       if (grid) {
         obs.observe(grid, {
@@ -18769,9 +18851,11 @@
         cfg,
         labelByValue,
         directionLabelText,
-        (value, direction) => {
+        (value, direction, filters) => {
           lastAppliedSortKey = value;
           lastAppliedDirection = direction;
+          const filtersKey = JSON.stringify(filters ?? []);
+          lastAppliedFiltersKey = filtersKey;
           persistSortKey(value);
           persistSortDirection(direction);
           cfg.onSortChange?.(value, direction);
@@ -18788,6 +18872,7 @@
         cfg.checkboxLabelSelector
       );
       const serializedFilters = JSON.stringify(activeFilters);
+      const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
       if (serializedFilters !== lastLoggedFilters) {
         lastLoggedFilters = serializedFilters;
         console.log("[InventorySorting] Filtres actifs :", activeFilters);
@@ -18810,18 +18895,20 @@
         renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
         const appliedDirection = currentDirectionSelect.value;
         currentWrap.__prevDirection = appliedDirection;
-        if (appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
+        if (filtersChanged || appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
           lastAppliedSortKey = appliedSortKey;
           lastAppliedDirection = appliedDirection;
+          lastAppliedFiltersKey = serializedFilters;
           persistSortKey(appliedSortKey);
           persistSortDirection(appliedDirection);
           cfg.onSortChange?.(appliedSortKey, appliedDirection);
           void applySorting(targetGrid, appliedSortKey, appliedDirection);
         }
       } else {
-        if (appliedSortKey !== lastAppliedSortKey) {
+        if (filtersChanged || appliedSortKey !== lastAppliedSortKey) {
           lastAppliedSortKey = appliedSortKey;
           lastAppliedDirection = fallbackDirection;
+          lastAppliedFiltersKey = serializedFilters;
           persistSortKey(appliedSortKey);
           persistSortDirection(fallbackDirection);
           cfg.onSortChange?.(appliedSortKey, fallbackDirection);
@@ -18861,6 +18948,7 @@
         currentDirectionSelect = null;
         grid = null;
         lastLoggedFilters = null;
+        lastAppliedFiltersKey = null;
         lastAppliedSortKey = null;
         lastAppliedDirection = null;
       },
@@ -18887,6 +18975,7 @@
             cfg.checkboxSelector,
             cfg.checkboxLabelSelector
           );
+          const filtersKey = JSON.stringify(filtersForLog);
           console.log("[InventorySorting] Tri s\xE9lectionn\xE9 (programmatique) :", k);
           const directionToApply = currentDirectionSelect?.value ?? defaultDirectionBySortKey[k] ?? DEFAULT_DIRECTION_BY_SORT_KEY[k] ?? "asc";
           if (currentDirectionSelect) {
@@ -18894,6 +18983,7 @@
             currentWrap.__prevDirection = directionToApply;
           }
           void logInventoryForFilters(filtersForLog, k, directionToApply);
+          lastAppliedFiltersKey = filtersKey;
           lastAppliedSortKey = k;
           lastAppliedDirection = directionToApply;
           persistSortKey(k);
@@ -18914,8 +19004,10 @@
             cfg.checkboxSelector,
             cfg.checkboxLabelSelector
           );
+          const filtersKey = JSON.stringify(filtersForLog);
           console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 (programmatique) :", direction);
           void logInventoryForFilters(filtersForLog, sortKey, direction);
+          lastAppliedFiltersKey = filtersKey;
           lastAppliedSortKey = sortKey;
           lastAppliedDirection = direction;
           persistSortKey(sortKey);
@@ -29942,7 +30034,7 @@ next: ${next}`;
       return el2;
     }
     headerGrid.append(
-      mkHeadCell2("Time"),
+      mkHeadCell2("Date & Time"),
       mkHeadCell2("Pet"),
       mkHeadCell2("Ability"),
       mkHeadCell2("Details", "left")
@@ -29957,6 +30049,7 @@ next: ${next}`;
     bodyGrid.style.width = "100%";
     bodyGrid.style.minHeight = "0";
     card.appendChild(bodyGrid);
+    const sessionStart = PetsService.getAbilityLogsSessionStart?.() ?? 0;
     let logs = [];
     let abilityFilter = "";
     let sortDir = "desc";
@@ -29973,10 +30066,24 @@ next: ${next}`;
       }
       selAbility.value = opts.some(([v]) => v === current) ? current : "";
     }
+    function formatDateMMDDYY(timestamp) {
+      const value = Number(timestamp);
+      if (!Number.isFinite(value)) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      const yy = String(date.getFullYear() % 100).padStart(2, "0");
+      return `${mm}/${dd}/${yy}`;
+    }
     function cell(txt, align = "center") {
       const el2 = document.createElement("div");
       el2.textContent = txt;
       el2.style.padding = "6px 8px";
+      el2.style.display = "flex";
+      el2.style.flexDirection = "column";
+      el2.style.justifyContent = "center";
+      el2.style.alignItems = align === "left" ? "flex-start" : "center";
       el2.style.textAlign = align;
       el2.style.whiteSpace = align === "left" ? "pre-wrap" : "normal";
       el2.style.wordBreak = align === "left" ? "break-word" : "normal";
@@ -29984,7 +30091,15 @@ next: ${next}`;
       return el2;
     }
     function row(log2) {
-      const time = cell(log2.time12, "center");
+      const time = cell("", "center");
+      time.style.gap = "2px";
+      const dateLine = document.createElement("div");
+      const timeLine = document.createElement("div");
+      const hasDate = typeof log2.date === "string" && log2.date.trim().length > 0;
+      if (hasDate) dateLine.textContent = log2.date ?? "";
+      timeLine.textContent = log2.time12;
+      if (hasDate) time.appendChild(dateLine);
+      time.appendChild(timeLine);
       const petLabel = log2.petName || log2.species || "Pet";
       const pet = cell(petLabel, "center");
       const abName = cell(log2.abilityName || log2.abilityId, "center");
@@ -29996,6 +30111,11 @@ next: ${next}`;
         }
       })();
       const det = cell(detText, "left");
+      if (log2.isActiveSession) {
+        [time, pet, abName, det].forEach((el2) => {
+          el2.style.background = "rgba(89, 162, 255, 0.14)";
+        });
+      }
       bodyGrid.append(time, pet, abName, det);
     }
     const normAbilityKey = (s) => String(s ?? "").toLowerCase().replace(/\s+/g, "").replace(/([ivx]+)$/i, "");
@@ -30079,7 +30199,9 @@ next: ${next}`;
             abilityName: e.abilityName,
             data: e.data,
             performedAt: e.performedAt,
-            time12: e.time12
+            date: formatDateMMDDYY(e.performedAt),
+            time12: e.time12,
+            isActiveSession: sessionStart > 0 && e.performedAt >= sessionStart
           }));
           rebuildAbilityOptions();
           repaint();
