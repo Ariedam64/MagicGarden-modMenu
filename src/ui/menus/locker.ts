@@ -105,6 +105,7 @@ type LockerSettingsState = {
 type LockerOverrideState = {
   enabled: boolean;
   settings: LockerSettingsState;
+  hasPersistedSettings: boolean;
 };
 
 type SpriteOptions = {
@@ -669,11 +670,15 @@ function hydrateSettingsFromPersisted(
   persisted?: LockerSettingsPersisted | null,
 ): void {
   const src = persisted ?? ({} as LockerSettingsPersisted);
-  const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+  const mode = src.scaleLockMode === "MINIMUM"
+    ? "MINIMUM"
+    : src.scaleLockMode === "NONE"
+      ? "NONE"
+      : "RANGE";
   const minClampHigh = mode === "MINIMUM" ? 100 : 99;
   let minScale = Math.max(50, Math.min(minClampHigh, Math.round(src.minScalePct ?? 50)));
   let maxScale = Math.max(50, Math.min(100, Math.round(src.maxScalePct ?? 100)));
-  if (mode === "RANGE") {
+  if (mode === "RANGE" || mode === "NONE") {
     maxScale = Math.max(51, Math.min(100, maxScale));
     if (maxScale <= minScale) {
       if (minScale >= 99) {
@@ -708,11 +713,15 @@ function hydrateSettingsFromPersisted(
 
 function serializeSettingsState(state: LockerSettingsState): LockerSettingsPersisted {
   state.weatherRecipes.forEach(set => normalizeRecipeSelection(set));
-  const mode = state.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+  const mode = state.scaleLockMode === "MINIMUM"
+    ? "MINIMUM"
+    : state.scaleLockMode === "NONE"
+      ? "NONE"
+      : "RANGE";
   const minClampHigh = mode === "MINIMUM" ? 100 : 99;
   let minScale = Math.max(50, Math.min(minClampHigh, Math.round(state.minScalePct || 50)));
   let maxScale = Math.max(50, Math.min(100, Math.round(state.maxScalePct || 100)));
-  if (mode === "RANGE") {
+  if (mode === "RANGE" || mode === "NONE") {
     maxScale = Math.max(51, Math.min(100, maxScale));
     if (maxScale <= minScale) {
       if (minScale >= 99) {
@@ -744,19 +753,21 @@ class LockerMenuStore {
   private syncing = false;
 
   constructor(initial: LockerStatePersisted) {
-    this.global = { enabled: false, settings: createDefaultSettings() };
+    this.global = { enabled: false, settings: createDefaultSettings(), hasPersistedSettings: true };
     this.syncFromService(initial);
   }
 
   private applyPersisted(state: LockerStatePersisted): void {
     this.global.enabled = !!state.enabled;
     hydrateSettingsFromPersisted(this.global.settings, state.settings);
+    this.global.hasPersistedSettings = true;
 
     const seen = new Set<string>();
     Object.entries(state.overrides ?? {}).forEach(([key, value]) => {
       const entry = this.ensureOverride(key, { silent: true });
       entry.enabled = !!value?.enabled;
       hydrateSettingsFromPersisted(entry.settings, value?.settings);
+      entry.hasPersistedSettings = true;
       seen.add(key);
     });
 
@@ -803,7 +814,7 @@ class LockerMenuStore {
   ensureOverride(key: string, opts: { silent?: boolean } = {}): LockerOverrideState {
     let entry = this.overrides.get(key);
     if (!entry) {
-      entry = { enabled: false, settings: createDefaultSettings() };
+      entry = { enabled: false, settings: createDefaultSettings(), hasPersistedSettings: false };
       this.overrides.set(key, entry);
       if (!opts.silent) {
         this.emit();
@@ -824,7 +835,9 @@ class LockerMenuStore {
   }
 
   notifyOverrideSettingsChanged(key: string): void {
-    if (!this.overrides.has(key)) return;
+    const entry = this.overrides.get(key);
+    if (!entry) return;
+    entry.hasPersistedSettings = true;
     this.persistOverride(key);
     this.emit();
   }
@@ -858,6 +871,7 @@ class LockerMenuStore {
         enabled: entry.enabled,
         settings: serializeSettingsState(entry.settings),
       });
+      entry.hasPersistedSettings = true;
     }
     lockerService.recomputeCurrentSlot();
   }
@@ -1098,19 +1112,37 @@ function createLockerSettingsCard(
   scaleModeRow.style.justifyContent = "center";
   scaleModeRow.style.gap = "12px";
 
-  type ScaleSegmentValue = "minimum" | "ranged";
-  const toMode = (value: ScaleSegmentValue): LockerScaleLockMode =>
-    value === "minimum" ? "MINIMUM" : "RANGE";
-  const fromMode = (mode: LockerScaleLockMode): ScaleSegmentValue =>
-    mode === "MINIMUM" ? "minimum" : "ranged";
+  type ScaleSegmentValue = "none" | "minimum" | "ranged";
+  const toMode = (value: ScaleSegmentValue): LockerScaleLockMode => {
+    switch (value) {
+      case "minimum":
+        return "MINIMUM";
+      case "ranged":
+        return "RANGE";
+      default:
+        return "NONE";
+    }
+  };
+  const fromMode = (mode: LockerScaleLockMode): ScaleSegmentValue => {
+    switch (mode) {
+      case "MINIMUM":
+        return "minimum";
+      case "RANGE":
+        return "ranged";
+      default:
+        return "none";
+    }
+  };
 
   let isProgrammaticScaleMode = false;
+  const initialScaleMode = fromMode(state.scaleLockMode);
   const scaleModeSegmented = ui.segmented<ScaleSegmentValue>(
     [
+      { value: "none", label: "None" },
       { value: "minimum", label: "Minimum size" },
       { value: "ranged", label: "Range size" },
     ],
-    "minimum",
+    initialScaleMode,
     value => {
       if (isProgrammaticScaleMode) return;
       applyScaleMode(toMode(value), true);
@@ -1234,8 +1266,9 @@ function createLockerSettingsCard(
 
   const updateScaleModeUI = () => {
     const isMinimum = state.scaleLockMode === "MINIMUM";
+    const isRange = state.scaleLockMode === "RANGE";
     minimumControls.style.display = isMinimum ? "" : "none";
-    rangeControls.style.display = isMinimum ? "none" : "";
+    rangeControls.style.display = isRange ? "" : "none";
     const segValue = fromMode(state.scaleLockMode);
     if ((scaleModeSegmented as any).get?.() !== segValue) {
       isProgrammaticScaleMode = true;
@@ -1253,9 +1286,12 @@ function createLockerSettingsCard(
     if (mode === "MINIMUM") {
       minSlider.value = String(state.minScalePct);
       applyScaleMinimum(prevMode !== mode, false);
-    } else {
+    } else if (mode === "RANGE") {
       scaleSlider.setValues(state.minScalePct, state.maxScalePct);
       applyScaleRange(prevMode !== mode, false);
+    } else {
+      minSlider.value = String(state.minScalePct);
+      scaleSlider.setValues(state.minScalePct, state.maxScalePct);
     }
     updateScaleModeUI();
     if (notify && prevMode !== mode) {
@@ -2199,8 +2235,11 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       if (!selectedKey) return;
       const wasEnabled = override.enabled;
       const nextEnabled = !!toggle.checked;
-      if (nextEnabled && !wasEnabled) {
+      if (nextEnabled && !wasEnabled && !override.hasPersistedSettings) {
         copySettings(override.settings, store.global.settings);
+      }
+      if (nextEnabled) {
+        override.hasPersistedSettings = true;
       }
       store.setOverrideEnabled(selectedKey, nextEnabled);
     });

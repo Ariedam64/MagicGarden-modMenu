@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.1.8
+// @version      2.2.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5096,14 +5096,14 @@
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
     const base = defaultSettings();
-    const scaleMode = raw?.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const scaleMode = raw?.scaleLockMode === "MINIMUM" ? "MINIMUM" : raw?.scaleLockMode === "NONE" ? "NONE" : "RANGE";
     base.scaleLockMode = scaleMode;
     const minClampHigh = scaleMode === "MINIMUM" ? 100 : 99;
     const minScaleRaw = Number(raw?.minScalePct);
     let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, minClampHigh) : 50;
     const maxScaleRaw = Number(raw?.maxScalePct);
     let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 50, 100) : 100;
-    if (scaleMode === "RANGE") {
+    if (scaleMode === "RANGE" || scaleMode === "NONE") {
       maxScale = clampNumber(maxScale, 51, 100);
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -5448,13 +5448,13 @@
       return { enabled: true, settings: this.state.settings };
     }
     slotShouldBeBlocked(settings, args) {
-      const scaleMode = settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+      const scaleMode = settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : settings.scaleLockMode === "NONE" ? "NONE" : "RANGE";
       const minScaleClamp = scaleMode === "MINIMUM" ? 100 : 99;
       const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
       const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
       if (scaleMode === "MINIMUM") {
         if (args.sizePercent >= minScale) return true;
-      } else {
+      } else if (scaleMode === "RANGE") {
         const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
         const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
         if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
@@ -23650,11 +23650,11 @@ next: ${next}`;
   }
   function hydrateSettingsFromPersisted(target, persisted) {
     const src = persisted ?? {};
-    const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : src.scaleLockMode === "NONE" ? "NONE" : "RANGE";
     const minClampHigh = mode === "MINIMUM" ? 100 : 99;
     let minScale = Math.max(50, Math.min(minClampHigh, Math.round(src.minScalePct ?? 50)));
     let maxScale = Math.max(50, Math.min(100, Math.round(src.maxScalePct ?? 100)));
-    if (mode === "RANGE") {
+    if (mode === "RANGE" || mode === "NONE") {
       maxScale = Math.max(51, Math.min(100, maxScale));
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -23688,11 +23688,11 @@ next: ${next}`;
   }
   function serializeSettingsState(state2) {
     state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
-    const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : state2.scaleLockMode === "NONE" ? "NONE" : "RANGE";
     const minClampHigh = mode === "MINIMUM" ? 100 : 99;
     let minScale = Math.max(50, Math.min(minClampHigh, Math.round(state2.minScalePct || 50)));
     let maxScale = Math.max(50, Math.min(100, Math.round(state2.maxScalePct || 100)));
-    if (mode === "RANGE") {
+    if (mode === "RANGE" || mode === "NONE") {
       maxScale = Math.max(51, Math.min(100, maxScale));
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -23722,17 +23722,19 @@ next: ${next}`;
       __publicField(this, "overrides", /* @__PURE__ */ new Map());
       __publicField(this, "listeners", /* @__PURE__ */ new Set());
       __publicField(this, "syncing", false);
-      this.global = { enabled: false, settings: createDefaultSettings() };
+      this.global = { enabled: false, settings: createDefaultSettings(), hasPersistedSettings: true };
       this.syncFromService(initial);
     }
     applyPersisted(state2) {
       this.global.enabled = !!state2.enabled;
       hydrateSettingsFromPersisted(this.global.settings, state2.settings);
+      this.global.hasPersistedSettings = true;
       const seen = /* @__PURE__ */ new Set();
       Object.entries(state2.overrides ?? {}).forEach(([key2, value]) => {
         const entry = this.ensureOverride(key2, { silent: true });
         entry.enabled = !!value?.enabled;
         hydrateSettingsFromPersisted(entry.settings, value?.settings);
+        entry.hasPersistedSettings = true;
         seen.add(key2);
       });
       for (const key2 of Array.from(this.overrides.keys())) {
@@ -23771,7 +23773,7 @@ next: ${next}`;
     ensureOverride(key2, opts = {}) {
       let entry = this.overrides.get(key2);
       if (!entry) {
-        entry = { enabled: false, settings: createDefaultSettings() };
+        entry = { enabled: false, settings: createDefaultSettings(), hasPersistedSettings: false };
         this.overrides.set(key2, entry);
         if (!opts.silent) {
           this.emit();
@@ -23789,7 +23791,9 @@ next: ${next}`;
       this.emit();
     }
     notifyOverrideSettingsChanged(key2) {
-      if (!this.overrides.has(key2)) return;
+      const entry = this.overrides.get(key2);
+      if (!entry) return;
+      entry.hasPersistedSettings = true;
       this.persistOverride(key2);
       this.emit();
     }
@@ -23820,6 +23824,7 @@ next: ${next}`;
           enabled: entry.enabled,
           settings: serializeSettingsState(entry.settings)
         });
+        entry.hasPersistedSettings = true;
       }
       lockerService.recomputeCurrentSlot();
     }
@@ -24006,15 +24011,35 @@ next: ${next}`;
     scaleModeRow.style.flexWrap = "wrap";
     scaleModeRow.style.justifyContent = "center";
     scaleModeRow.style.gap = "12px";
-    const toMode = (value) => value === "minimum" ? "MINIMUM" : "RANGE";
-    const fromMode = (mode) => mode === "MINIMUM" ? "minimum" : "ranged";
+    const toMode = (value) => {
+      switch (value) {
+        case "minimum":
+          return "MINIMUM";
+        case "ranged":
+          return "RANGE";
+        default:
+          return "NONE";
+      }
+    };
+    const fromMode = (mode) => {
+      switch (mode) {
+        case "MINIMUM":
+          return "minimum";
+        case "RANGE":
+          return "ranged";
+        default:
+          return "none";
+      }
+    };
     let isProgrammaticScaleMode = false;
+    const initialScaleMode = fromMode(state2.scaleLockMode);
     const scaleModeSegmented = ui.segmented(
       [
+        { value: "none", label: "None" },
         { value: "minimum", label: "Minimum size" },
         { value: "ranged", label: "Range size" }
       ],
-      "minimum",
+      initialScaleMode,
       (value) => {
         if (isProgrammaticScaleMode) return;
         applyScaleMode(toMode(value), true);
@@ -24123,8 +24148,9 @@ next: ${next}`;
     };
     const updateScaleModeUI = () => {
       const isMinimum = state2.scaleLockMode === "MINIMUM";
+      const isRange = state2.scaleLockMode === "RANGE";
       minimumControls.style.display = isMinimum ? "" : "none";
-      rangeControls.style.display = isMinimum ? "none" : "";
+      rangeControls.style.display = isRange ? "" : "none";
       const segValue = fromMode(state2.scaleLockMode);
       if (scaleModeSegmented.get?.() !== segValue) {
         isProgrammaticScaleMode = true;
@@ -24141,9 +24167,12 @@ next: ${next}`;
       if (mode === "MINIMUM") {
         minSlider.value = String(state2.minScalePct);
         applyScaleMinimum(prevMode !== mode, false);
-      } else {
+      } else if (mode === "RANGE") {
         scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
         applyScaleRange(prevMode !== mode, false);
+      } else {
+        minSlider.value = String(state2.minScalePct);
+        scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
       }
       updateScaleModeUI();
       if (notify && prevMode !== mode) {
@@ -24933,8 +24962,11 @@ next: ${next}`;
         if (!selectedKey) return;
         const wasEnabled = override.enabled;
         const nextEnabled = !!toggle.checked;
-        if (nextEnabled && !wasEnabled) {
+        if (nextEnabled && !wasEnabled && !override.hasPersistedSettings) {
           copySettings(override.settings, store.global.settings);
+        }
+        if (nextEnabled) {
+          override.hasPersistedSettings = true;
         }
         store.setOverrideEnabled(selectedKey, nextEnabled);
       });

@@ -48,7 +48,7 @@ const MAX_SCALE_BY_SPECIES = (() => {
 type VisualTag = "Gold" | "Rainbow";
 type WeatherTag = string;
 export type WeatherMode = "ANY" | "ALL" | "RECIPES";
-export type LockerScaleLockMode = "MINIMUM" | "RANGE";
+export type LockerScaleLockMode = "MINIMUM" | "RANGE" | "NONE";
 
 export type LockerSettingsPersisted = {
   minScalePct: number;
@@ -615,7 +615,11 @@ const clampNumber = (value: number, min: number, max: number) => Math.max(min, M
 
 function sanitizeSettings(raw: any): LockerSettingsPersisted {
   const base = defaultSettings();
-  const scaleMode = raw?.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+  const scaleMode = raw?.scaleLockMode === "MINIMUM"
+    ? "MINIMUM"
+    : raw?.scaleLockMode === "NONE"
+      ? "NONE"
+      : "RANGE";
   base.scaleLockMode = scaleMode;
 
   const minClampHigh = scaleMode === "MINIMUM" ? 100 : 99;
@@ -629,7 +633,7 @@ function sanitizeSettings(raw: any): LockerSettingsPersisted {
     ? clampNumber(Math.round(maxScaleRaw), 50, 100)
     : 100;
 
-  if (scaleMode === "RANGE") {
+  if (scaleMode === "RANGE" || scaleMode === "NONE") {
     maxScale = clampNumber(maxScale, 51, 100);
     if (maxScale <= minScale) {
       if (minScale >= 99) {
@@ -1048,14 +1052,18 @@ export class LockerService {
     settings: LockerSettingsPersisted,
     args: HarvestCheckArgs,
   ): boolean {
-    const scaleMode = settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : "RANGE";
+    const scaleMode = settings.scaleLockMode === "MINIMUM"
+      ? "MINIMUM"
+      : settings.scaleLockMode === "NONE"
+        ? "NONE"
+        : "RANGE";
     const minScaleClamp = scaleMode === "MINIMUM" ? 100 : 99;
     const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
     const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
 
     if (scaleMode === "MINIMUM") {
       if (args.sizePercent >= minScale) return true;
-    } else {
+    } else if (scaleMode === "RANGE") {
       const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
       const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
       if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
