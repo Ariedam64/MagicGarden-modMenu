@@ -25,14 +25,19 @@ const OMA_SEL = ".McFlex.css-1omaybc";
 const ICON_CLASS = "tm-crop-price-icon";
 const LABEL_CLASS = "tm-crop-price-label";
 const LOCK_TEXT_SELECTOR = ":scope > .chakra-text.css-1uvlb8k";
+const TOOLTIP_ROOT_CLASS = "css-115gc9o";
 const LOCK_EMOJI = "🔒";
-const LOCKED_TEXT_DISPLAY = "inline-flex";
-const LOCKED_TEXT_ALIGN = "center";
+const LOCK_BORDER_STYLE = "2px solid rgb(188, 53, 215)";
+const LOCK_BORDER_RADIUS = "15px";
+const LOCK_ICON_CLASS = "tm-locker-tooltip-lock-icon";
 const DATASET_KEY_COLOR = "tmLockerOriginalColor";
 const DATASET_KEY_DISPLAY = "tmLockerOriginalDisplay";
 const DATASET_KEY_ALIGN = "tmLockerOriginalAlign";
 const DATASET_KEY_TEXT = "tmLockerOriginalHtml";
-const LOCK_CONTENT_PREFIX = `${LOCK_EMOJI}\u00A0`;
+const DATASET_KEY_BORDER = "tmLockerOriginalBorder";
+const DATASET_KEY_BORDER_RADIUS = "tmLockerOriginalBorderRadius";
+const DATASET_KEY_POSITION = "tmLockerOriginalPosition";
+const DATASET_KEY_OVERFLOW = "tmLockerOriginalOverflow";
 const LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
 
 export function startCropValuesObserverFromGardenAtom(options: AppendOptions = {}): AppendController {
@@ -190,92 +195,35 @@ function updateLockEmoji(inner: Element, locked: boolean): void {
   inner.querySelectorAll(":scope > span.tm-locker-lock-emoji").forEach((node) => node.remove());
   const textTarget = inner.querySelector<HTMLElement>(LOCK_TEXT_SELECTOR)
     ?? inner.querySelector<HTMLElement>(":scope > .chakra-text");
+  const tooltipRoot = inner.closest<HTMLElement>(`.${TOOLTIP_ROOT_CLASS}`);
 
   if (!locked) {
     if (textTarget) {
       restoreTextContent(textTarget);
       restoreTextStyles(textTarget);
     }
+    if (tooltipRoot) {
+      restoreTooltipStyles(tooltipRoot);
+      removeLockIcon(tooltipRoot);
+    }
     return;
   }
 
-  if (!textTarget) {
-    return;
+  if (textTarget) {
+    restoreTextContent(textTarget);
   }
 
-  const originalHtml = storeOriginalTextContent(textTarget);
-  storeOriginalTextStyles(textTarget);
-  applyLockedTextStyles(textTarget);
-  applyLockedTextContent(textTarget, originalHtml);
-}
-
-function storeOriginalTextStyles(textTarget: HTMLElement): void {
-  if (textTarget.dataset[DATASET_KEY_COLOR] === undefined) {
-    textTarget.dataset[DATASET_KEY_COLOR] = textTarget.style.color ?? "";
+  if (tooltipRoot) {
+    storeOriginalTooltipStyles(tooltipRoot);
+    applyLockedTooltipStyles(tooltipRoot);
+    ensureLockIcon(tooltipRoot);
   }
-  if (textTarget.dataset[DATASET_KEY_DISPLAY] === undefined) {
-    textTarget.dataset[DATASET_KEY_DISPLAY] = textTarget.style.display ?? "";
-  }
-  if (textTarget.dataset[DATASET_KEY_ALIGN] === undefined) {
-    textTarget.dataset[DATASET_KEY_ALIGN] = textTarget.style.alignItems ?? "";
-  }
-}
-
-function applyLockedTextStyles(textTarget: HTMLElement): void {
-  textTarget.style.display = LOCKED_TEXT_DISPLAY;
-  textTarget.style.alignItems = LOCKED_TEXT_ALIGN;
 }
 
 function restoreTextStyles(textTarget: HTMLElement): void {
-  const originalColor = textTarget.dataset[DATASET_KEY_COLOR];
-  if (originalColor !== undefined) {
-    if (originalColor) {
-      textTarget.style.color = originalColor;
-    } else {
-      textTarget.style.removeProperty("color");
-    }
-    delete textTarget.dataset[DATASET_KEY_COLOR];
-  } else {
-    textTarget.style.removeProperty("color");
-  }
-
-  const originalDisplay = textTarget.dataset[DATASET_KEY_DISPLAY];
-  if (originalDisplay !== undefined) {
-    if (originalDisplay) {
-      textTarget.style.display = originalDisplay;
-    } else {
-      textTarget.style.removeProperty("display");
-    }
-    delete textTarget.dataset[DATASET_KEY_DISPLAY];
-  } else {
-    textTarget.style.removeProperty("display");
-  }
-
-  const originalAlign = textTarget.dataset[DATASET_KEY_ALIGN];
-  if (originalAlign !== undefined) {
-    if (originalAlign) {
-      textTarget.style.alignItems = originalAlign;
-    } else {
-      textTarget.style.removeProperty("align-items");
-    }
-    delete textTarget.dataset[DATASET_KEY_ALIGN];
-  } else {
-    textTarget.style.removeProperty("align-items");
-  }
-}
-
-function storeOriginalTextContent(textTarget: HTMLElement): string {
-  const sanitizedHtml = stripLockPrefix(textTarget.innerHTML);
-  textTarget.dataset[DATASET_KEY_TEXT] = sanitizedHtml;
-  return sanitizedHtml;
-}
-
-function applyLockedTextContent(textTarget: HTMLElement, originalHtml?: string): void {
-  const baseHtml = originalHtml ?? textTarget.dataset[DATASET_KEY_TEXT] ?? stripLockPrefix(textTarget.innerHTML);
-  const desiredHtml = `${LOCK_CONTENT_PREFIX}${baseHtml}`;
-  if (textTarget.innerHTML !== desiredHtml) {
-    textTarget.innerHTML = desiredHtml;
-  }
+  restoreStyleFromDataset(textTarget, DATASET_KEY_COLOR, "color");
+  restoreStyleFromDataset(textTarget, DATASET_KEY_DISPLAY, "display");
+  restoreStyleFromDataset(textTarget, DATASET_KEY_ALIGN, "align-items");
 }
 
 function restoreTextContent(textTarget: HTMLElement): void {
@@ -291,6 +239,127 @@ function restoreTextContent(textTarget: HTMLElement): void {
   if (sanitizedHtml !== currentHtml) {
     textTarget.innerHTML = sanitizedHtml;
   }
+}
+
+function restoreStyleFromDataset(el: HTMLElement, datasetKey: string, cssProperty: string): void {
+  const datasetMap = el.dataset as Record<string, string | undefined>;
+  const originalValue = datasetMap[datasetKey];
+  if (originalValue === undefined) return;
+
+  if (originalValue) {
+    el.style.setProperty(cssProperty, originalValue);
+  } else {
+    el.style.removeProperty(cssProperty);
+  }
+
+  delete datasetMap[datasetKey];
+}
+
+function storeOriginalTooltipStyles(tooltip: HTMLElement): void {
+  if (tooltip.dataset[DATASET_KEY_BORDER] === undefined) {
+    tooltip.dataset[DATASET_KEY_BORDER] = tooltip.style.border ?? "";
+  }
+  if (tooltip.dataset[DATASET_KEY_BORDER_RADIUS] === undefined) {
+    tooltip.dataset[DATASET_KEY_BORDER_RADIUS] = tooltip.style.borderRadius ?? "";
+  }
+  if (tooltip.dataset[DATASET_KEY_OVERFLOW] === undefined) {
+    tooltip.dataset[DATASET_KEY_OVERFLOW] = tooltip.style.overflow ?? "";
+  }
+}
+
+function applyLockedTooltipStyles(tooltip: HTMLElement): void {
+  tooltip.style.border = LOCK_BORDER_STYLE;
+  tooltip.style.borderRadius = LOCK_BORDER_RADIUS;
+  tooltip.style.overflow = "visible";
+
+  const computedPosition = typeof window !== "undefined"
+    ? window.getComputedStyle(tooltip).position
+    : tooltip.style.position || "static";
+  if (computedPosition === "static") {
+    if (tooltip.dataset[DATASET_KEY_POSITION] === undefined) {
+      tooltip.dataset[DATASET_KEY_POSITION] = tooltip.style.position ?? "";
+    }
+    tooltip.style.position = "relative";
+  }
+}
+
+function restoreTooltipStyles(tooltip: HTMLElement): void {
+  const originalBorder = tooltip.dataset[DATASET_KEY_BORDER];
+  if (originalBorder !== undefined) {
+    if (originalBorder) {
+      tooltip.style.border = originalBorder;
+    } else {
+      tooltip.style.removeProperty("border");
+    }
+    delete tooltip.dataset[DATASET_KEY_BORDER];
+  } else {
+    tooltip.style.removeProperty("border");
+  }
+
+  const originalBorderRadius = tooltip.dataset[DATASET_KEY_BORDER_RADIUS];
+  if (originalBorderRadius !== undefined) {
+    if (originalBorderRadius) {
+      tooltip.style.borderRadius = originalBorderRadius;
+    } else {
+      tooltip.style.removeProperty("border-radius");
+    }
+    delete tooltip.dataset[DATASET_KEY_BORDER_RADIUS];
+  } else {
+    tooltip.style.removeProperty("border-radius");
+  }
+
+  const originalOverflow = tooltip.dataset[DATASET_KEY_OVERFLOW];
+  if (originalOverflow !== undefined) {
+    if (originalOverflow) {
+      tooltip.style.overflow = originalOverflow;
+    } else {
+      tooltip.style.removeProperty("overflow");
+    }
+    delete tooltip.dataset[DATASET_KEY_OVERFLOW];
+  } else {
+    tooltip.style.removeProperty("overflow");
+  }
+
+  const originalPosition = tooltip.dataset[DATASET_KEY_POSITION];
+  if (originalPosition !== undefined) {
+    if (originalPosition) {
+      tooltip.style.position = originalPosition;
+    } else {
+      tooltip.style.removeProperty("position");
+    }
+    delete tooltip.dataset[DATASET_KEY_POSITION];
+  } else if (tooltip.style.position === "relative") {
+    tooltip.style.removeProperty("position");
+  }
+}
+
+function ensureLockIcon(tooltip: HTMLElement): void {
+  let icon = tooltip.querySelector<HTMLElement>(`:scope > span.${LOCK_ICON_CLASS}`);
+  if (!icon) {
+    icon = document.createElement("span");
+    icon.className = LOCK_ICON_CLASS;
+    tooltip.append(icon);
+  }
+
+  icon.textContent = LOCK_EMOJI;
+  icon.style.position = "absolute";
+  icon.style.top = "0";
+  icon.style.right = "0";
+  icon.style.left = "";
+  icon.style.transform = "translate(50%, -50%)";
+  icon.style.fontSize = "18px";
+  icon.style.padding = "2px 8px";
+  icon.style.borderRadius = "999px";
+  icon.style.border = "none";
+  icon.style.background = "transparent";
+  icon.style.color = "white";
+  icon.style.pointerEvents = "none";
+  icon.style.userSelect = "none";
+  icon.style.zIndex = "1";
+}
+
+function removeLockIcon(tooltip: HTMLElement): void {
+  tooltip.querySelectorAll(`:scope > span.${LOCK_ICON_CLASS}`).forEach((node) => node.remove());
 }
 
 function stripLockPrefix(content: string): string {
