@@ -91,6 +91,8 @@ const DEFAULTS: Required<Pick<
   injectDarkStyles: true,
 };
 
+const INVENTORY_SEARCH_INPUT_SELECTOR = 'input.chakra-input.css-8e1l1i';
+
 const ALWAYS: SortKey[] = ['none'];
 const BASE_SORT: SortKey[] = ['alpha', 'qty', 'rarity', 'value']; // Rarity par défaut
 const ORDER: SortKey[] = [
@@ -288,6 +290,20 @@ const labelIsChecked = (el: Element): boolean =>
   el.matches('[data-checked]') || !!el.querySelector('[data-checked]');
 
 const normalize = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+
+const getInventorySearchInput = (grid: Element | null): HTMLInputElement | null => {
+  if (!grid) return null;
+  const input = grid.querySelector<HTMLInputElement>(INVENTORY_SEARCH_INPUT_SELECTOR);
+  return input ?? null;
+};
+
+const getInventorySearchQuery = (grid: Element | null): string => {
+  const input = getInventorySearchInput(grid);
+  return typeof input?.value === 'string' ? input.value : '';
+};
+
+const getNormalizedInventorySearchQuery = (grid: Element | null): string =>
+  normalize(getInventorySearchQuery(grid));
 
 const RARITY_ORDER = [
   rarityMap.Common,
@@ -502,6 +518,31 @@ interface FilterInventoryResult {
   itemTypes: Set<string>;
 }
 
+function inventoryItemMatchesSearchQuery(item: any, normalizedQuery: string): boolean {
+  if (!normalizedQuery) return true;
+
+  const candidates: Array<string | null | undefined> = [
+    getInventoryItemName(item),
+    typeof item?.itemType === 'string' ? item.itemType : null,
+    typeof item?.species === 'string' ? item.species : null,
+    typeof item?.seedSpecies === 'string' ? item.seedSpecies : null,
+    typeof item?.plantSpecies === 'string' ? item.plantSpecies : null,
+    typeof item?.petSpecies === 'string' ? item.petSpecies : null,
+    typeof item?.eggId === 'string' ? item.eggId : null,
+    typeof item?.decorId === 'string' ? item.decorId : null,
+    typeof item?.toolId === 'string' ? item.toolId : null,
+    typeof item?.id === 'string' ? item.id : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && normalize(candidate).includes(normalizedQuery)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function attachItemValues(items: any[]): void {
   const snapshot = getInventoryValueSnapshot();
   const playersInRoom = snapshot?.plants?.playersInRoom ?? null;
@@ -514,7 +555,11 @@ function attachItemValues(items: any[]): void {
   }
 }
 
-function filterInventoryItems(items: any[], filters: string[]): FilterInventoryResult {
+function filterInventoryItems(
+  items: any[],
+  filters: string[],
+  searchQuery?: string
+): FilterInventoryResult {
   const normalizedFilters = filters.map((f) => normalize(f)).filter(Boolean);
   const itemTypes = new Set<string>();
   let recognized = false;
@@ -530,12 +575,17 @@ function filterInventoryItems(items: any[], filters: string[]): FilterInventoryR
   }
 
   const keepAll = !recognized;
-  const filteredItems = keepAll
+  const filteredByType = keepAll
     ? items.slice()
     : items.filter((item: any) => {
         const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
         return type ? itemTypes.has(type) : false;
       });
+
+  const normalizedSearch = normalize(searchQuery);
+  const filteredItems = normalizedSearch
+    ? filteredByType.filter((item: any) => inventoryItemMatchesSearchQuery(item, normalizedSearch))
+    : filteredByType;
 
   attachItemValues(filteredItems);
 
@@ -663,7 +713,8 @@ const setValueSummaryText = (summary: HTMLSpanElement | null, text: string, titl
 
 async function updateFilteredInventoryValueSummary(
   wrap: HTMLElement | null,
-  filters: string[]
+  filters: string[],
+  searchQuery: string
 ): Promise<void> {
   if (!wrap) return;
   const summary = getValueSummaryElement(wrap);
@@ -685,7 +736,7 @@ async function updateFilteredInventoryValueSummary(
     }
 
     const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
-    const { filteredItems } = filterInventoryItems(items, filters);
+    const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
 
     if (!filteredItems.length) {
       setValueSummaryText(summary, '0', '0');
@@ -1190,7 +1241,8 @@ function sortInventoryItems(items: any[], sortKey: SortKey, direction: SortDirec
 async function logInventoryForFilters(
   filters: string[],
   sortKey?: SortKey,
-  direction?: SortDirection
+  direction?: SortDirection,
+  searchQuery?: string
 ): Promise<void> {
   try {
     const inventory = await Atoms.inventory.myInventory.get();
@@ -1200,7 +1252,7 @@ async function logInventoryForFilters(
     }
 
     const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
-    const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters);
+    const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters, searchQuery);
     const resolvedDirection: SortDirection = sortKey
       ? (direction && DIRECTION_ORDER.includes(direction) ? direction : DEFAULT_DIRECTION_BY_SORT_KEY[sortKey]) ?? 'asc'
       : direction && DIRECTION_ORDER.includes(direction)
@@ -1216,7 +1268,10 @@ async function logInventoryForFilters(
     const sortDescriptor = sortKey
       ? `tri: ${sortKey} (${resolvedDirection})`
       : "tri: (non spécifié)";
-    console.log(`[InventorySorting] myInventory filtré (${descriptor}, ${sortDescriptor}).`);
+    const searchDescriptor = searchQuery ? `recherche: "${searchQuery}"` : "recherche: (vide)";
+    console.log(
+      `[InventorySorting] myInventory filtré (${descriptor}, ${sortDescriptor}, ${searchDescriptor}).`
+    );
   } catch (error) {
     console.warn("[InventorySorting] Impossible de récupérer myInventory pour le log", error);
   }
@@ -1227,70 +1282,71 @@ function createDefaultApplySorting(
 ): (grid: Element, sortKey: SortKey, direction: SortDirection) => Promise<void> {
   const stateByGrid = new WeakMap<Element, InventoryDomSortState>();
 
-const ensureState = async (
-  grid: Element,
-  filters: string[],
-  entries: InventoryDomEntry[]
-): Promise<InventoryDomSortState | null> => {
-  const filtersKey = JSON.stringify(filters);
-  let state = stateByGrid.get(grid);
+  const ensureState = async (
+    grid: Element,
+    filters: string[],
+    entries: InventoryDomEntry[],
+    searchQuery: string
+  ): Promise<InventoryDomSortState | null> => {
+    const filtersKey = JSON.stringify({ filters, search: searchQuery });
+    let state = stateByGrid.get(grid);
 
-  // on calcule séparément pour éviter d'utiliser state quand il est undefined
-  const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
+    // on calcule séparément pour éviter d'utiliser state quand il est undefined
+    const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
 
-  const needsRebuild =
-    !state ||
-    state.filtersKey !== filtersKey ||
-    state.baseItems.length !== entries.length ||
-    !hasAllBaseIndexes;
+    const needsRebuild =
+      !state ||
+      state.filtersKey !== filtersKey ||
+      state.baseItems.length !== entries.length ||
+      !hasAllBaseIndexes;
 
-  // 🔒 Ici on ne touche à state que s'il existe ET qu'on ne reconstruit pas
-  if (state && !needsRebuild) {
-    state.entryByBaseIndex.clear();
-    for (const entry of entries) {
-      const baseIndex = readBaseIndex(entry);
-      if (baseIndex != null) state.entryByBaseIndex.set(baseIndex, entry);
+    // 🔒 Ici on ne touche à state que s'il existe ET qu'on ne reconstruit pas
+    if (state && !needsRebuild) {
+      state.entryByBaseIndex.clear();
+      for (const entry of entries) {
+        const baseIndex = readBaseIndex(entry);
+        if (baseIndex != null) state.entryByBaseIndex.set(baseIndex, entry);
+      }
+      return state;
     }
-    return state;
-  }
 
-  // sinon, on reconstruit
-  try {
-    const inventory = await Atoms.inventory.myInventory.get();
-    if (!inventory || typeof inventory !== "object") {
-      console.log("[InventorySorting] Inventaire introuvable pour le tri DOM.");
+    // sinon, on reconstruit
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      if (!inventory || typeof inventory !== "object") {
+        console.log("[InventorySorting] Inventaire introuvable pour le tri DOM.");
+        return null;
+      }
+
+      const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
+      const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
+
+      if (filteredItems.length !== entries.length) {
+        console.warn(
+          `[InventorySorting] Nombre d'éléments filtrés (${filteredItems.length}) différent du DOM (${entries.length}). Réorganisation annulée.`
+        );
+        return null;
+      }
+
+      assignBaseIndexesToEntries(entries);
+
+      const newState: InventoryDomSortState = {
+        filtersKey,
+        baseItems: filteredItems.slice(),
+        entryByBaseIndex: new Map<number, InventoryDomEntry>(),
+      };
+
+      entries.forEach((entry, index) => {
+        newState.entryByBaseIndex.set(index, entry);
+      });
+
+      stateByGrid.set(grid, newState);
+      return newState;
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de récupérer myInventory pour le tri DOM", error);
       return null;
     }
-
-    const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
-    const { filteredItems } = filterInventoryItems(items, filters);
-
-    if (filteredItems.length !== entries.length) {
-      console.warn(
-        `[InventorySorting] Nombre d'éléments filtrés (${filteredItems.length}) différent du DOM (${entries.length}). Réorganisation annulée.`
-      );
-      return null;
-    }
-
-    assignBaseIndexesToEntries(entries);
-
-    const newState: InventoryDomSortState = {
-      filtersKey,
-      baseItems: filteredItems.slice(),
-      entryByBaseIndex: new Map<number, InventoryDomEntry>(),
-    };
-
-    entries.forEach((entry, index) => {
-      newState.entryByBaseIndex.set(index, entry);
-    });
-
-    stateByGrid.set(grid, newState);
-    return newState;
-  } catch (error) {
-    console.warn("[InventorySorting] Impossible de récupérer myInventory pour le tri DOM", error);
-    return null;
-  }
-};
+  };
 
 
   return async (grid: Element, sortKey: SortKey, direction: SortDirection) => {
@@ -1307,8 +1363,9 @@ const ensureState = async (
       cfg.checkboxSelector,
       cfg.checkboxLabelSelector
     );
+    const searchQuery = getNormalizedInventorySearchQuery(grid);
 
-    const state = await ensureState(grid, filters, entries);
+    const state = await ensureState(grid, filters, entries, searchQuery);
     if (!state) return;
 
     const baseIndexByItem = new Map<any, number>();
@@ -1698,7 +1755,12 @@ function ensureSortingBar(
   cfg: Required<typeof DEFAULTS> & InventorySortingConfig,
   labelByValue: Record<SortKey, string>,
   directionLabelText: string,
-  onChange: (value: SortKey, direction: SortDirection, activeFilters: string[]) => void,
+  onChange: (
+    value: SortKey,
+    direction: SortDirection,
+    activeFilters: string[],
+    searchQuery: string
+  ) => void,
   showValues: boolean,
   onToggleValues: (visible: boolean) => void
 ) {
@@ -1759,9 +1821,10 @@ function ensureSortingBar(
             cfg.checkboxLabelSelector
           )
         : [];
+      const searchQuery = getNormalizedInventorySearchQuery(currentGrid);
       console.log('[InventorySorting] Tri sélectionné :', value);
-      void logInventoryForFilters(activeFilters, value, direction);
-      onChange(value, direction, activeFilters);
+      void logInventoryForFilters(activeFilters, value, direction, searchQuery);
+      onChange(value, direction, activeFilters, searchQuery);
     });
 
     directionSelect.addEventListener('change', () => {
@@ -1776,9 +1839,10 @@ function ensureSortingBar(
             cfg.checkboxLabelSelector
           )
         : [];
+      const searchQuery = getNormalizedInventorySearchQuery(currentGrid);
       console.log('[InventorySorting] Ordre de tri sélectionné :', direction);
-      void logInventoryForFilters(activeFilters, value, direction);
-      onChange(value, direction, activeFilters);
+      void logInventoryForFilters(activeFilters, value, direction, searchQuery);
+      onChange(value, direction, activeFilters, searchQuery);
     });
   } else {
     const maybeSelect = wrap.querySelector('select.tm-sort-select--key');
@@ -1996,10 +2060,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg,
       labelByValue,
       directionLabelText,
-      (value, direction, filters) => {
+      (value, direction, filters, searchQuery) => {
         lastAppliedSortKey = value;
         lastAppliedDirection = direction;
-        const filtersKey = JSON.stringify(filters ?? []);
+        const filtersKey = JSON.stringify({ filters: filters ?? [], search: searchQuery ?? '' });
         lastAppliedFiltersKey = filtersKey;
         persistSortKey(value);
         persistSortDirection(direction);
@@ -2033,7 +2097,12 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         );
-        void updateFilteredInventoryValueSummary(currentWrap, filtersForSummary);
+        const searchForSummary = getNormalizedInventorySearchQuery(sourceGrid);
+        void updateFilteredInventoryValueSummary(
+          currentWrap,
+          filtersForSummary,
+          searchForSummary
+        );
       });
     }
 
@@ -2042,15 +2111,24 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg.checkboxSelector,
       cfg.checkboxLabelSelector
     );
-    void updateFilteredInventoryValueSummary(currentWrap, activeFilters);
-    const serializedFilters = JSON.stringify(activeFilters);
+    const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
+    void updateFilteredInventoryValueSummary(currentWrap, activeFilters, searchQueryForGrid);
+    const serializedFilters = JSON.stringify({
+      filters: activeFilters,
+      search: searchQueryForGrid,
+    });
     const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
     if (serializedFilters !== lastLoggedFilters) {
       lastLoggedFilters = serializedFilters;
       console.log('[InventorySorting] Filtres actifs :', activeFilters);
       const currentSortKey = (currentSelect?.value as SortKey) ?? undefined;
       const currentDirection = (currentDirectionSelect?.value as SortDirection) ?? undefined;
-      void logInventoryForFilters(activeFilters, currentSortKey, currentDirection);
+      void logInventoryForFilters(
+        activeFilters,
+        currentSortKey,
+        currentDirection,
+        searchQueryForGrid
+      );
     }
     const options = computeSortOptions(activeFilters, labelByValue, mapExtraByFilter);
     const wrapPrevValue =
@@ -2082,7 +2160,11 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
       const appliedDirection = currentDirectionSelect.value as SortDirection;
       (currentWrap as any).__prevDirection = appliedDirection;
-      if (filtersChanged || appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
+      if (
+        filtersChanged ||
+        appliedSortKey !== lastAppliedSortKey ||
+        appliedDirection !== lastAppliedDirection
+      ) {
         lastAppliedSortKey = appliedSortKey;
         lastAppliedDirection = appliedDirection;
         lastAppliedFiltersKey = serializedFilters;
@@ -2110,7 +2192,19 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     const target = e.target as Element | null;
     if (!target) return;
     const within = target.closest(cfg.gridSelector);
-    if (within && within === resolveGrid()) {
+    const currentGrid = resolveGrid();
+
+    if (
+      e.type === 'input' &&
+      target instanceof HTMLInputElement &&
+      target.matches(INVENTORY_SEARCH_INPUT_SELECTOR) &&
+      within &&
+      within === currentGrid
+    ) {
+      console.log('[InventorySorting] Texte de recherche modifié :', target.value);
+    }
+
+    if (within && within === currentGrid) {
       setTimeout(refresh, 0);
     }
   };
@@ -2122,6 +2216,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     }
     setGrid(document.querySelector(cfg.gridSelector));
     document.addEventListener('change', changeHandler, true);
+    document.addEventListener('input', changeHandler, true);
     update();
   };
 
@@ -2132,6 +2227,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       obs.disconnect();
       bodyObserver.disconnect();
       document.removeEventListener('change', changeHandler, true);
+      document.removeEventListener('input', changeHandler, true);
       if (stopValueSummaryListener) {
         stopValueSummaryListener();
         stopValueSummaryListener = null;
@@ -2173,7 +2269,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         );
-        const filtersKey = JSON.stringify(filtersForLog);
+        const searchQuery = getNormalizedInventorySearchQuery(targetGrid);
+        const filtersKey = JSON.stringify({ filters: filtersForLog, search: searchQuery });
         console.log('[InventorySorting] Tri sélectionné (programmatique) :', k);
         const directionToApply = (currentDirectionSelect?.value as SortDirection) ??
           defaultDirectionBySortKey[k] ??
@@ -2183,7 +2280,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           currentDirectionSelect.value = directionToApply;
           (currentWrap as any).__prevDirection = directionToApply;
         }
-        void logInventoryForFilters(filtersForLog, k, directionToApply);
+        void logInventoryForFilters(filtersForLog, k, directionToApply, searchQuery);
         lastAppliedFiltersKey = filtersKey;
         lastAppliedSortKey = k;
         lastAppliedDirection = directionToApply;
@@ -2206,9 +2303,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         );
-        const filtersKey = JSON.stringify(filtersForLog);
+        const searchQuery = getNormalizedInventorySearchQuery(targetGrid);
+        const filtersKey = JSON.stringify({ filters: filtersForLog, search: searchQuery });
         console.log('[InventorySorting] Ordre de tri sélectionné (programmatique) :', direction);
-        void logInventoryForFilters(filtersForLog, sortKey, direction);
+        void logInventoryForFilters(filtersForLog, sortKey, direction, searchQuery);
         lastAppliedFiltersKey = filtersKey;
         lastAppliedSortKey = sortKey;
         lastAppliedDirection = direction;
