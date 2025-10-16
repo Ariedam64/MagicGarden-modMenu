@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.1
+// @version      2.2.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18231,6 +18231,12 @@
   function getInventoryValueSnapshot() {
     return currentSnapshot;
   }
+  function onInventoryValueChange(listener) {
+    listeners3.add(listener);
+    return () => {
+      listeners3.delete(listener);
+    };
+  }
 
   // src/utils/inventorySorting.ts
   var DEFAULTS5 = {
@@ -18371,6 +18377,17 @@
   var INVENTORY_VALUE_ELEMENT_CLASS = "tm-inventory-item-value";
   var INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
   var INVENTORY_VALUE_DATASET_KEY = "tmInventoryValue";
+  var FILTERED_VALUE_LOADING = "\u2026";
+  var FILTERED_VALUE_UNKNOWN = "\u2014";
+  var VALUE_SUMMARY_ICON_CLASS = "tm-value-toggle__summary-icon";
+  var VALUE_SUMMARY_TEXT_CLASS = "tm-value-toggle__summary-text";
+  var VALUE_SUMMARY_ICON_SRC = (() => {
+    const src = coin?.img64 ?? "";
+    if (typeof src !== "string" || !src) {
+      return "";
+    }
+    return src.startsWith("data:") ? src : `data:image/png;base64,${src}`;
+  })();
   var debounce = (fn, wait = 120) => {
     let t;
     return (...args) => {
@@ -18620,8 +18637,7 @@
         return `${formatted}${suffix}`;
       }
     }
-    const rounded = Math.round(value);
-    return INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(rounded) : String(rounded);
+    return INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(value) : String(value);
   };
   var formatInventoryItemFullValue = (value) => INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(value) : String(value);
   var getInventoryItemValue = (item) => {
@@ -18634,6 +18650,100 @@
     }
     return null;
   };
+  var getValueSummaryElement = (wrap) => {
+    if (!wrap) return null;
+    const summary = wrap.__valueSummary ?? null;
+    return summary ?? wrap.querySelector(".tm-value-toggle__summary");
+  };
+  var ensureValueSummaryContent = (summary) => {
+    if (!summary.style.gap) {
+      summary.style.gap = "0.25rem";
+    }
+    if (VALUE_SUMMARY_ICON_SRC) {
+      let iconEl = summary.querySelector(`.${VALUE_SUMMARY_ICON_CLASS}`);
+      if (!iconEl) {
+        iconEl = document.createElement("img");
+        iconEl.className = VALUE_SUMMARY_ICON_CLASS;
+        iconEl.alt = "";
+        iconEl.decoding = "async";
+        iconEl.src = VALUE_SUMMARY_ICON_SRC;
+        Object.assign(iconEl.style, {
+          width: "1.2rem",
+          height: "1.2rem",
+          flexShrink: "0",
+          objectFit: "contain"
+        });
+        summary.insertBefore(iconEl, summary.firstChild);
+      } else if (iconEl.src !== VALUE_SUMMARY_ICON_SRC) {
+        iconEl.src = VALUE_SUMMARY_ICON_SRC;
+      }
+    }
+    let textEl = summary.querySelector(`.${VALUE_SUMMARY_TEXT_CLASS}`);
+    if (!textEl) {
+      textEl = document.createElement("span");
+      textEl.className = VALUE_SUMMARY_TEXT_CLASS;
+      textEl.style.fontWeight = "700";
+      textEl.style.color = "inherit";
+      summary.appendChild(textEl);
+    }
+    return textEl;
+  };
+  var setValueSummaryText = (summary, text, title) => {
+    if (!summary) return;
+    const textEl = ensureValueSummaryContent(summary);
+    textEl.textContent = text;
+    if (title) {
+      summary.title = title;
+    } else {
+      summary.removeAttribute("title");
+    }
+  };
+  async function updateFilteredInventoryValueSummary(wrap, filters) {
+    if (!wrap) return;
+    const summary = getValueSummaryElement(wrap);
+    if (!summary) return;
+    const token = Symbol("value-summary");
+    wrap.__valueSummaryToken = token;
+    setValueSummaryText(summary, FILTERED_VALUE_LOADING);
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      if (wrap.__valueSummaryToken !== token) {
+        return;
+      }
+      if (!inventory || typeof inventory !== "object") {
+        setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+        return;
+      }
+      const items = Array.isArray(inventory.items) ? inventory.items : [];
+      const { filteredItems } = filterInventoryItems(items, filters);
+      if (!filteredItems.length) {
+        setValueSummaryText(summary, "0", "0");
+        return;
+      }
+      let totalValue = 0;
+      let hasValue = false;
+      for (const item of filteredItems) {
+        const value = getInventoryItemValue(item);
+        if (typeof value === "number" && Number.isFinite(value)) {
+          totalValue += value;
+          hasValue = true;
+        }
+      }
+      if (!hasValue) {
+        setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+        return;
+      }
+      const compact = formatInventoryItemCompactValue(totalValue);
+      const full = formatInventoryItemFullValue(totalValue);
+      setValueSummaryText(summary, compact, full);
+    } catch (error) {
+      console.warn("[InventorySorting] Impossible de calculer la valeur filtr\xE9e", error);
+      if (wrap.__valueSummaryToken !== token) {
+        return;
+      }
+      setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+    }
+  }
   function updateInventoryCardValue(card, rawValue) {
     const container = card.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
     const existing = card.dataset[INVENTORY_VALUE_DATASET_KEY];
@@ -19344,7 +19454,22 @@
       color: "inherit"
     });
     valueToggleLabel.append(valueToggleControl, valueToggleText);
-    bar.append(divider, valueToggleLabel);
+    const valueSummaryText = document.createElement("span");
+    valueSummaryText.className = "tm-value-toggle__summary";
+    Object.assign(valueSummaryText.style, {
+      font: "inherit",
+      color: "var(--chakra-colors-Yellow-Magic, #F3D32B)",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      flex: "1 1 auto",
+      whiteSpace: "nowrap",
+      marginLeft: "auto",
+      textAlign: "right",
+      gap: "0.25rem"
+    });
+    setValueSummaryText(valueSummaryText, FILTERED_VALUE_LOADING);
+    bar.append(divider, valueToggleLabel, valueSummaryText);
     const syncValueToggleVisual = (checked) => {
       switchTrack.style.background = checked ? "var(--chakra-colors-Yellow-Magic, #F3D32B)" : "rgba(255,255,255,0.25)";
       switchThumb.style.transform = checked ? "translateX(16px)" : "translateX(0)";
@@ -19365,7 +19490,8 @@
       directionSelect,
       directionLabel,
       valueToggleInput,
-      valueToggleLabel
+      valueToggleLabel,
+      valueSummary: valueSummaryText
     };
   }
   function ensureSortingBar(grid, cfg, labelByValue, directionLabelText, onChange, showValues, onToggleValues) {
@@ -19378,6 +19504,7 @@
     let directionSelect;
     let directionLabelEl = null;
     let valueToggleInput = null;
+    let valueSummaryEl = null;
     if (!wrap) {
       const ui = createSortingBar();
       wrap = ui.wrap;
@@ -19385,7 +19512,9 @@
       directionSelect = ui.directionSelect;
       directionLabelEl = ui.directionLabel;
       valueToggleInput = ui.valueToggleInput;
+      valueSummaryEl = ui.valueSummary;
       wrap.__grid = grid;
+      wrap.__valueSummary = valueSummaryEl ?? null;
       if (closeBtn && closeBtn.parentElement) {
         closeBtn.insertAdjacentElement("afterend", wrap);
       } else {
@@ -19438,6 +19567,8 @@
       directionSelect = maybeDirectionSelect;
       directionLabelEl = wrap.querySelector(".tm-direction-label");
       valueToggleInput = wrap.querySelector('label.tm-value-toggle input[type="checkbox"]');
+      valueSummaryEl = wrap.querySelector(".tm-value-toggle__summary");
+      wrap.__valueSummary = valueSummaryEl ?? null;
       if (directionLabelEl) {
         directionLabelEl.textContent = directionLabelText;
       }
@@ -19456,7 +19587,7 @@
     }
     wrap.__grid = grid;
     wrap.__showValues = valueToggleInput?.checked ?? showValues;
-    return { wrap, select: select2, directionSelect, valueToggleInput };
+    return { wrap, select: select2, directionSelect, valueToggleInput, valueSummary: valueSummaryEl };
   }
   function renderSelectOptions(select2, options, prevValue) {
     const prev = prevValue ?? select2.value;
@@ -19514,6 +19645,7 @@
     let currentSelect = null;
     let currentDirectionSelect = null;
     let currentValueToggle = null;
+    let stopValueSummaryListener = null;
     let lastLoggedFilters = null;
     let lastAppliedFiltersKey = null;
     let lastAppliedSortKey = null;
@@ -19533,6 +19665,10 @@
       lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
       shouldEnsureInventoryValueWatcherOnNextVisible = true;
+      if (!grid && stopValueSummaryListener) {
+        stopValueSummaryListener();
+        stopValueSummaryListener = null;
+      }
       if (grid) {
         obs.observe(grid, {
           subtree: true,
@@ -19619,11 +19755,24 @@
       currentSelect = mount.select;
       currentDirectionSelect = mount.directionSelect;
       currentValueToggle = mount.valueToggleInput ?? null;
+      if (!stopValueSummaryListener) {
+        stopValueSummaryListener = onInventoryValueChange(() => {
+          const sourceGrid = resolveGrid();
+          if (!sourceGrid || !currentWrap) return;
+          const filtersForSummary = getActiveFiltersFromGrid(
+            sourceGrid,
+            cfg.checkboxSelector,
+            cfg.checkboxLabelSelector
+          );
+          void updateFilteredInventoryValueSummary(currentWrap, filtersForSummary);
+        });
+      }
       const activeFilters = getActiveFiltersFromGrid(
         targetGrid,
         cfg.checkboxSelector,
         cfg.checkboxLabelSelector
       );
+      void updateFilteredInventoryValueSummary(currentWrap, activeFilters);
       const serializedFilters = JSON.stringify(activeFilters);
       const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
       if (serializedFilters !== lastLoggedFilters) {
@@ -19693,6 +19842,10 @@
         obs.disconnect();
         bodyObserver.disconnect();
         document.removeEventListener("change", changeHandler, true);
+        if (stopValueSummaryListener) {
+          stopValueSummaryListener();
+          stopValueSummaryListener = null;
+        }
         if (currentWrap && currentWrap.parentElement) {
           currentWrap.parentElement.removeChild(currentWrap);
         }
