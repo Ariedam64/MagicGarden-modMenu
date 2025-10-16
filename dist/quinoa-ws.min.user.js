@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.0
+// @version      2.2.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -4822,9 +4822,9 @@
     let selectedIdx = null;
     let lastInfo = emptySlotInfo();
     let curSig = gardenObjectSignature(cur);
-    const listeners3 = /* @__PURE__ */ new Set();
+    const listeners4 = /* @__PURE__ */ new Set();
     const notify = () => {
-      for (const fn of listeners3) {
+      for (const fn of listeners4) {
         try {
           fn(lastInfo);
         } catch {
@@ -5060,11 +5060,11 @@
         return lastInfo;
       },
       onChange(cb) {
-        listeners3.add(cb);
-        return () => listeners3.delete(cb);
+        listeners4.add(cb);
+        return () => listeners4.delete(cb);
       },
       stop() {
-        listeners3.clear();
+        listeners4.clear();
       },
       recompute() {
         recomputeAndNotify();
@@ -16382,9 +16382,9 @@
     let sortedIdx = null;
     let selectedIdx = null;
     let lastPrice = null;
-    const listeners3 = /* @__PURE__ */ new Set();
+    const listeners4 = /* @__PURE__ */ new Set();
     const notify = () => {
-      for (const fn of listeners3) try {
+      for (const fn of listeners4) try {
         fn();
       } catch {
       }
@@ -16483,11 +16483,11 @@
         return lastPrice;
       },
       onChange(cb) {
-        listeners3.add(cb);
-        return () => listeners3.delete(cb);
+        listeners4.add(cb);
+        return () => listeners4.delete(cb);
       },
       stop() {
-        listeners3.clear();
+        listeners4.clear();
       }
     };
   }
@@ -17799,6 +17799,439 @@
   };
   shareGlobal("CheckModal", exposed);
 
+  // src/utils/petCalcul.ts
+  var SEC_PER_HOUR = 3600;
+  var XP_STRENGTH_MAX = 30;
+  var BASE_STRENGTH_FLOOR = 30;
+  var getCatalogEntry = (species) => {
+    if (!species) return null;
+    const entry = petCatalog[species];
+    return entry ?? null;
+  };
+  var getMutationEntry = (mutation) => {
+    if (!mutation) return null;
+    const entry = mutationCatalog[mutation];
+    return entry ?? null;
+  };
+  var getTargetScale = (pet) => {
+    const raw = pet?.targetScale;
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
+  };
+  var getXp = (pet) => {
+    const raw = pet?.xp;
+    return typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  };
+  var getPetMaxStrength = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const maxScale = typeof entry.maxScale === "number" && entry.maxScale > 1 ? entry.maxScale : 1;
+    const targetScale = getTargetScale(pet);
+    const ratio = maxScale > 1 ? (targetScale - 1) / (maxScale - 1) : 0;
+    const raw = ratio * 20 + 80;
+    const strength = Math.floor(Number.isFinite(raw) ? raw : 0);
+    return Math.max(strength, 0);
+  };
+  var getBaseStrength = (maxStrength) => {
+    const base = maxStrength - BASE_STRENGTH_FLOOR;
+    return Math.max(base, 0);
+  };
+  var getPetStrength = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const hoursToMature = typeof entry.hoursToMature === "number" && entry.hoursToMature > 0 ? entry.hoursToMature : 1;
+    const maxStrength = getPetMaxStrength(pet);
+    if (maxStrength <= 0) return 0;
+    const xpRate = getXp(pet) / (hoursToMature * SEC_PER_HOUR);
+    const xpComponent = Math.min(Math.floor(xpRate * XP_STRENGTH_MAX), XP_STRENGTH_MAX);
+    const baseStrength = getBaseStrength(maxStrength);
+    const strength = Math.min(baseStrength + xpComponent, maxStrength);
+    return Math.max(strength, 0);
+  };
+  var getPetCoinMultiplier = (pet) => {
+    const mutations = Array.isArray(pet?.mutations) ? pet.mutations : [];
+    return mutations.reduce((acc, mutation) => {
+      const entry = getMutationEntry(mutation);
+      const multiplier = entry?.coinMultiplier;
+      if (typeof multiplier === "number" && Number.isFinite(multiplier) && multiplier > 0) {
+        return acc * multiplier;
+      }
+      return acc;
+    }, 1);
+  };
+  var getPetValue = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const maturitySellPrice = typeof entry.maturitySellPrice === "number" ? entry.maturitySellPrice : 0;
+    const maxStrength = getPetMaxStrength(pet);
+    if (maxStrength <= 0) return 0;
+    const strength = getPetStrength(pet);
+    const targetScale = getTargetScale(pet);
+    const coinMultiplier = getPetCoinMultiplier(pet);
+    const raw = maturitySellPrice * (strength / maxStrength) * targetScale * coinMultiplier;
+    if (!Number.isFinite(raw)) return 0;
+    return Math.round(Math.max(raw, 0));
+  };
+  var getPetInfo = (pet) => ({
+    value: getPetValue(pet),
+    strength: getPetStrength(pet),
+    maxStrength: getPetMaxStrength(pet),
+    coinMultiplier: getPetCoinMultiplier(pet)
+  });
+
+  // src/utils/inventoryValue.ts
+  var INVENTORY_VALUE_CATEGORIES = [
+    {
+      itemType: "Seed",
+      identifierKey: "species",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = plantCatalog[identifier];
+        const price = entry?.seed?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "seeds",
+      emptyLogMessage: "[InventorySorting] Aucune seed trouv\xE9e dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        species: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Tool",
+      identifierKey: "toolId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = toolCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "tools",
+      emptyLogMessage: "[InventorySorting] Aucun tool trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        toolId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Egg",
+      identifierKey: "eggId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = eggCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "eggs",
+      emptyLogMessage: "[InventorySorting] Aucun egg trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        eggId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Decor",
+      identifierKey: "decorId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = decorCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "decors",
+      emptyLogMessage: "[InventorySorting] Aucun decor trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        decorId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    }
+  ];
+  var currentSnapshot = null;
+  var watcherPromise = null;
+  var unsubscribe = null;
+  var computeCounter = 0;
+  var listeners3 = /* @__PURE__ */ new Set();
+  function getFiniteNumber(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+  function extractItems(inventory) {
+    if (!inventory || typeof inventory !== "object") return null;
+    const items = inventory.items;
+    if (!Array.isArray(items)) return [];
+    return items;
+  }
+  function toNormalizedIdentifier(raw) {
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      return trimmed ? trimmed : null;
+    }
+    if (typeof raw === "number") {
+      return Number.isFinite(raw) ? String(raw) : null;
+    }
+    return null;
+  }
+  function getInventoryValueCategoryByItemType(itemType) {
+    return INVENTORY_VALUE_CATEGORIES.find((config) => config.itemType === itemType);
+  }
+  function computeInventoryItemValue(item, context = {}) {
+    if (!item || typeof item !== "object") return null;
+    const rawType = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+    if (!rawType) return null;
+    switch (rawType) {
+      case "Pet": {
+        const info = getPetInfo(item);
+        const value = info.value;
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+      }
+      case "Plant": {
+        const slots = Array.isArray(item?.slots) ? item.slots : [];
+        const playersInRoom = context.playersInRoom ?? void 0;
+        let total = 0;
+        for (const slot of slots) {
+          const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
+          const rawTarget = slot?.targetScale;
+          const target = Number.isFinite(rawTarget) ? rawTarget : Number(rawTarget);
+          const targetScale = Number.isFinite(target) ? target : null;
+          const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
+          if (!slotSpecies || targetScale == null) continue;
+          const value = estimateProduceValue(slotSpecies, targetScale, mutations, {
+            friendPlayers: playersInRoom
+          });
+          if (typeof value === "number" && Number.isFinite(value)) {
+            total += value;
+          }
+        }
+        return total;
+      }
+      case "Produce": {
+        const playersInRoom = context.playersInRoom ?? void 0;
+        const value = valueFromInventoryProduce(item, void 0, playersInRoom);
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+      }
+      default: {
+        const category = getInventoryValueCategoryByItemType(rawType);
+        if (!category) return null;
+        const identifier = toNormalizedIdentifier(item?.[category.identifierKey]);
+        const quantity = getFiniteNumber(item?.quantity);
+        const coinPrice = category.resolveCoinPrice(identifier);
+        if (quantity == null || coinPrice == null) return null;
+        const value = coinPrice * quantity;
+        return Number.isFinite(value) ? value : null;
+      }
+    }
+  }
+  function computePetValues(items) {
+    const pets = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Pet";
+    });
+    const entries = pets.map((pet) => {
+      const info = getPetInfo(pet);
+      const id = typeof pet?.id === "string" ? pet.id : null;
+      const name = typeof pet?.name === "string" && pet.name.trim() ? pet.name : null;
+      const species = typeof pet?.petSpecies === "string" ? pet.petSpecies : null;
+      return {
+        id,
+        name,
+        petSpecies: species,
+        value: info.value,
+        strength: info.strength,
+        maxStrength: info.maxStrength,
+        coinMultiplier: info.coinMultiplier
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return { totalValue, pets: entries };
+  }
+  function computePlantValues(items, playersInRoom) {
+    const plants = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Plant";
+    });
+    const entries = plants.map((plant) => {
+      const id = typeof plant?.id === "string" ? plant.id : null;
+      const species = typeof plant?.species === "string" ? plant.species : null;
+      const plantedAt = Number.isFinite(plant?.plantedAt) ? plant.plantedAt : null;
+      const maturedAt = Number.isFinite(plant?.maturedAt) ? plant.maturedAt : null;
+      const slots = Array.isArray(plant?.slots) ? plant.slots : [];
+      const slotEntries = slots.map((slot) => {
+        const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
+        const targetScaleRaw = slot?.targetScale;
+        const targetScale = Number.isFinite(targetScaleRaw) ? targetScaleRaw : Number(targetScaleRaw);
+        const scaleValue = Number.isFinite(targetScale) ? targetScale : null;
+        const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
+        const value2 = slotSpecies && scaleValue != null ? estimateProduceValue(slotSpecies, scaleValue, mutations, {
+          friendPlayers: playersInRoom
+        }) : 0;
+        return {
+          species: slotSpecies,
+          targetScale: scaleValue,
+          mutations,
+          value: value2
+        };
+      });
+      const value = slotEntries.reduce(
+        (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+        0
+      );
+      return {
+        id,
+        species,
+        plantedAt,
+        maturedAt,
+        value,
+        slots: slotEntries
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return {
+      totalValue,
+      playersInRoom: Number.isFinite(playersInRoom) ? playersInRoom : null,
+      plants: entries
+    };
+  }
+  function computeCropValues(items, playersInRoom) {
+    const crops = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Produce";
+    });
+    const entries = crops.map((crop) => {
+      const id = typeof crop?.id === "string" ? crop.id : null;
+      const species = typeof crop?.species === "string" ? crop.species : null;
+      const rawScale = crop?.scale;
+      const scale = Number.isFinite(rawScale) ? rawScale : Number(rawScale);
+      const scaleValue = Number.isFinite(scale) ? scale : null;
+      const mutations = Array.isArray(crop?.mutations) ? crop.mutations.filter((m) => typeof m === "string") : [];
+      const value = valueFromInventoryProduce(crop, void 0, playersInRoom);
+      return {
+        id,
+        species,
+        scale: scaleValue,
+        mutations,
+        value
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return { totalValue, crops: entries };
+  }
+  function computeMiscValues(items) {
+    const aggregated = {
+      seeds: { totalValue: 0, items: [] },
+      tools: { totalValue: 0, items: [] },
+      eggs: { totalValue: 0, items: [] },
+      decors: { totalValue: 0, items: [] }
+    };
+    for (const config of INVENTORY_VALUE_CATEGORIES) {
+      const filteredItems = items.filter((item) => {
+        const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+        return type === config.itemType;
+      });
+      const entries = filteredItems.map((item) => {
+        const rawIdentifier = item?.[config.identifierKey];
+        const identifier = toNormalizedIdentifier(rawIdentifier);
+        const rawQuantity = item?.quantity;
+        const quantity = getFiniteNumber(rawQuantity);
+        const coinPrice = config.resolveCoinPrice(identifier);
+        const value = quantity != null && coinPrice != null ? coinPrice * quantity : null;
+        return config.createEntry(identifier, quantity, coinPrice, value);
+      });
+      const totalValue = entries.reduce((acc, entry) => {
+        const entryValue = entry.value;
+        return typeof entryValue === "number" && Number.isFinite(entryValue) ? acc + entryValue : acc;
+      }, 0);
+      aggregated[config.logKey] = { totalValue, items: entries };
+    }
+    return aggregated;
+  }
+  async function resolvePlayersInRoom() {
+    try {
+      const rawPlayers = await Atoms.server.numPlayers.get();
+      return Number.isFinite(rawPlayers) ? rawPlayers : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async function computeSnapshotFromInventory(inventory) {
+    const items = extractItems(inventory);
+    if (items === null) return null;
+    const safeItems = items ?? [];
+    const playersInRoom = await resolvePlayersInRoom();
+    return {
+      pets: computePetValues(safeItems),
+      plants: computePlantValues(safeItems, playersInRoom),
+      crops: computeCropValues(safeItems, playersInRoom),
+      misc: computeMiscValues(safeItems)
+    };
+  }
+  function notifyListeners(snapshot) {
+    for (const listener of listeners3) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.warn("[InventoryValue] Listener error", error);
+      }
+    }
+  }
+  async function refreshSnapshot(nextInventory) {
+    const computeId = ++computeCounter;
+    try {
+      const snapshot = await computeSnapshotFromInventory(nextInventory);
+      if (computeId !== computeCounter) return;
+      currentSnapshot = snapshot;
+      notifyListeners(currentSnapshot);
+    } catch (error) {
+      if (computeId !== computeCounter) return;
+      currentSnapshot = null;
+      console.warn("[InventoryValue] Impossible de calculer la valeur de l'inventaire", error);
+    }
+  }
+  async function ensureInventoryValueWatcher() {
+    if (watcherPromise) return watcherPromise;
+    watcherPromise = (async () => {
+      try {
+        const inventory = await Atoms.inventory.myInventory.get();
+        await refreshSnapshot(inventory);
+      } catch (error) {
+        currentSnapshot = null;
+        console.warn("[InventoryValue] Impossible de r\xE9cup\xE9rer l'inventaire initial", error);
+      }
+      try {
+        unsubscribe = await Atoms.inventory.myInventory.onChange((next) => {
+          void refreshSnapshot(next);
+        });
+      } catch (error) {
+        console.warn("[InventoryValue] Impossible de s'abonner \xE0 myInventory", error);
+      }
+    })();
+    return watcherPromise;
+  }
+  function getInventoryValueSnapshot() {
+    return currentSnapshot;
+  }
+
   // src/utils/inventorySorting.ts
   var DEFAULTS5 = {
     gridSelector: "div.McGrid.css-tqc83y",
@@ -17809,12 +18242,13 @@
     injectDarkStyles: true
   };
   var ALWAYS = ["none"];
-  var BASE_SORT = ["alpha", "qty", "rarity"];
+  var BASE_SORT = ["alpha", "qty", "rarity", "value"];
   var ORDER = [
     "none",
     "alpha",
     "qty",
     "rarity",
+    "value",
     "size",
     "mutations",
     "strength"
@@ -17828,11 +18262,44 @@
     asc: "Ascending",
     desc: "Descending"
   };
+  var INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = "mg-mod.inventory.showValues";
+  var loadPersistedInventoryValueVisibility = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage?.getItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY) ?? null;
+      if (stored === "1") return true;
+      if (stored === "0") return false;
+      return null;
+    } catch (error) {
+      console.warn(
+        "[InventorySorting] Impossible de lire la pr\xE9f\xE9rence d'affichage des valeurs d'inventaire",
+        error
+      );
+      return null;
+    }
+  };
+  var persistInventoryValueVisibility = (visible) => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY, visible ? "1" : "0");
+    } catch (error) {
+      console.warn(
+        "[InventorySorting] Impossible de sauvegarder la pr\xE9f\xE9rence d'affichage des valeurs d'inventaire",
+        error
+      );
+    }
+  };
+  var shouldDisplayInventoryValues = true;
+  var setShouldDisplayInventoryValues = (visible) => {
+    shouldDisplayInventoryValues = visible;
+  };
+  var getShouldDisplayInventoryValues = () => shouldDisplayInventoryValues;
   var DEFAULT_DIRECTION_BY_SORT_KEY = {
     none: "asc",
     alpha: "asc",
     qty: "desc",
     rarity: "asc",
+    value: "desc",
     size: "desc",
     mutations: "desc",
     strength: "desc"
@@ -17892,12 +18359,18 @@
     alpha: "A\u2013Z",
     qty: "Quantity",
     rarity: "Rarity",
+    value: "Values",
     size: "Size",
     mutations: "Mutations",
     strength: "Strength"
   };
   var INVENTORY_BASE_INDEX_DATASET_KEY = "tmInventoryBaseIndex";
   var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-ofw63c";
+  var INVENTORY_VALUE_CONTAINER_SELECTOR = ".McFlex.css-1p00rng";
+  var INVENTORY_VALUE_REFERENCE_SELECTOR = ":scope > .McFlex.css-1gd1uup";
+  var INVENTORY_VALUE_ELEMENT_CLASS = "tm-inventory-item-value";
+  var INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
+  var INVENTORY_VALUE_DATASET_KEY = "tmInventoryValue";
   var debounce = (fn, wait = 120) => {
     let t;
     return (...args) => {
@@ -18082,6 +18555,15 @@
     const itemType = singular.charAt(0).toUpperCase() + singular.slice(1);
     return itemType ? [itemType] : [];
   }
+  function attachItemValues(items) {
+    const snapshot = getInventoryValueSnapshot();
+    const playersInRoom = snapshot?.plants?.playersInRoom ?? null;
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue;
+      const value = computeInventoryItemValue(item, { playersInRoom });
+      item.value = value ?? null;
+    }
+  }
   function filterInventoryItems(items, filters) {
     const normalizedFilters = filters.map((f) => normalize2(f)).filter(Boolean);
     const itemTypes = /* @__PURE__ */ new Set();
@@ -18100,6 +18582,7 @@
       const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
       return type ? itemTypes.has(type) : false;
     });
+    attachItemValues(filteredItems);
     return { filteredItems, keepAll, itemTypes };
   }
   function getInventoryItemsContainer(grid) {
@@ -18120,6 +18603,108 @@
       }
     }
     return entries;
+  }
+  var INVENTORY_COMPACT_VALUE_UNITS = [
+    { threshold: 1e12, suffix: "T" },
+    { threshold: 1e9, suffix: "B" },
+    { threshold: 1e6, suffix: "M" },
+    { threshold: 1e3, suffix: "K" }
+  ];
+  var INVENTORY_FULL_VALUE_FORMATTER = typeof Intl !== "undefined" && typeof Intl.NumberFormat === "function" ? new Intl.NumberFormat(void 0, { maximumFractionDigits: 2, minimumFractionDigits: 0 }) : null;
+  var formatInventoryItemCompactValue = (value) => {
+    const abs = Math.abs(value);
+    for (const { threshold, suffix } of INVENTORY_COMPACT_VALUE_UNITS) {
+      if (abs >= threshold) {
+        const scaled = value / threshold;
+        const formatted = scaled.toFixed(1).replace(/\.0$/, "");
+        return `${formatted}${suffix}`;
+      }
+    }
+    const rounded = Math.round(value);
+    return INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(rounded) : String(rounded);
+  };
+  var formatInventoryItemFullValue = (value) => INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(value) : String(value);
+  var getInventoryItemValue = (item) => {
+    if (!item || typeof item !== "object") return null;
+    const raw = item.value;
+    if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    if (typeof raw === "string" && raw.trim()) {
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+  function updateInventoryCardValue(card, rawValue) {
+    const container = card.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
+    const existing = card.dataset[INVENTORY_VALUE_DATASET_KEY];
+    if (!container) {
+      if (existing != null) {
+        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+      }
+      return;
+    }
+    const currentEl = container.querySelector(`.${INVENTORY_VALUE_ELEMENT_CLASS}`);
+    if (!getShouldDisplayInventoryValues()) {
+      if (currentEl?.parentElement) {
+        currentEl.parentElement.removeChild(currentEl);
+      }
+      if (existing != null) {
+        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+      }
+      return;
+    }
+    if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+      if (currentEl?.parentElement) {
+        currentEl.parentElement.removeChild(currentEl);
+      }
+      if (existing != null) {
+        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+      }
+      return;
+    }
+    const compactValue = formatInventoryItemCompactValue(rawValue);
+    const fullValue = formatInventoryItemFullValue(rawValue);
+    let target = currentEl;
+    if (!target) {
+      target = document.createElement("div");
+      target.className = INVENTORY_VALUE_ELEMENT_CLASS;
+    }
+    Object.assign(target.style, {
+      fontSynthesis: "none",
+      WebkitFontSmoothing: "antialiased",
+      WebkitTextSizeAdjust: "100%",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      gap: "0.15rem",
+      fontFamily: 'var(--chakra-fonts-body, "GreyCliff CF", sans-serif)',
+      fontWeight: "700",
+      fontSize: "0.65rem",
+      lineHeight: "1",
+      textTransform: "none",
+      color: "var(--chakra-colors-Yellow-Magic, #F3D32B)"
+    });
+    let textEl = target.querySelector(`.${INVENTORY_VALUE_TEXT_CLASS}`);
+    if (!textEl) {
+      target.textContent = "";
+      textEl = document.createElement("span");
+      textEl.className = INVENTORY_VALUE_TEXT_CLASS;
+      textEl.style.display = "inline-flex";
+      textEl.style.alignItems = "center";
+      textEl.style.color = "inherit";
+      target.appendChild(textEl);
+    }
+    textEl.textContent = compactValue;
+    target.title = fullValue;
+    card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
+    if (target.parentElement !== container) {
+      const reference = container.querySelector(INVENTORY_VALUE_REFERENCE_SELECTOR);
+      if (reference && reference.parentElement === container) {
+        reference.insertAdjacentElement("afterend", target);
+      } else {
+        container.appendChild(target);
+      }
+    }
   }
   function assignBaseIndexesToEntries(entries) {
     entries.forEach((entry, index) => {
@@ -18263,7 +18848,7 @@
     if (!normalized) return null;
     return PET_STATS_BY_SPECIES.get(normalized) ?? null;
   };
-  var getPetStrength = (item) => {
+  var getPetStrength2 = (item) => {
     if (!item || typeof item !== "object") return null;
     const rawType = typeof item.itemType === "string" ? item.itemType : "";
     const type = rawType.trim();
@@ -18351,6 +18936,21 @@
           return compareByNameThenTypeThenId(a, b);
         });
         break;
+      case "value":
+        sorted.sort((a, b) => {
+          const rawValueA = a?.value;
+          const rawValueB = b?.value;
+          const hasA = typeof rawValueA === "number" && Number.isFinite(rawValueA);
+          const hasB = typeof rawValueB === "number" && Number.isFinite(rawValueB);
+          if (hasA && hasB && rawValueA !== rawValueB) {
+            const cmp = rawValueA - rawValueB;
+            return isDesc ? -cmp : cmp;
+          }
+          if (hasA && !hasB) return isDesc ? -1 : 1;
+          if (!hasA && hasB) return isDesc ? 1 : -1;
+          return compareByNameThenTypeThenId(a, b);
+        });
+        break;
       case "size":
         sorted.sort((a, b) => {
           const sizeA = getInventoryItemSizePercent(a);
@@ -18387,8 +18987,8 @@
         break;
       case "strength":
         sorted.sort((a, b) => {
-          const strengthA = getPetStrength(a);
-          const strengthB = getPetStrength(b);
+          const strengthA = getPetStrength2(a);
+          const strengthB = getPetStrength2(b);
           const hasA = typeof strengthA === "number" && Number.isFinite(strengthA);
           const hasB = typeof strengthB === "number" && Number.isFinite(strengthB);
           if (hasA && hasB && strengthA !== strengthB) {
@@ -18416,13 +19016,9 @@
       const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters);
       const resolvedDirection = sortKey ? (direction && DIRECTION_ORDER.includes(direction) ? direction : DEFAULT_DIRECTION_BY_SORT_KEY[sortKey]) ?? "asc" : direction && DIRECTION_ORDER.includes(direction) ? direction : "asc";
       const itemsForLog = sortKey ? sortInventoryItems(filteredItems, sortKey, resolvedDirection) : filteredItems.slice();
-      const filteredInventory = { ...inventory, items: itemsForLog };
       const descriptor = keepAll ? "toutes cat\xE9gories" : `types: ${Array.from(itemTypes).join(", ") || "(aucun)"}`;
       const sortDescriptor = sortKey ? `tri: ${sortKey} (${resolvedDirection})` : "tri: (non sp\xE9cifi\xE9)";
-      console.log(
-        `[InventorySorting] myInventory filtr\xE9 (${descriptor}, ${sortDescriptor}) :`,
-        filteredInventory
-      );
+      console.log(`[InventorySorting] myInventory filtr\xE9 (${descriptor}, ${sortDescriptor}).`);
     } catch (error) {
       console.warn("[InventorySorting] Impossible de r\xE9cup\xE9rer myInventory pour le log", error);
     }
@@ -18498,6 +19094,8 @@
         if (baseIndex == null) continue;
         const entry = state2.entryByBaseIndex.get(baseIndex);
         if (!entry || usedEntries.has(entry)) continue;
+        const value = getInventoryItemValue(item);
+        updateInventoryCardValue(entry.card, value);
         desiredEntries.push(entry);
         usedEntries.add(entry);
       }
@@ -18668,10 +19266,109 @@
   `;
     directionWrap.append(directionSelect, directionArrow);
     bar.append(directionLabel, directionWrap);
+    const divider = document.createElement("span");
+    divider.className = "tm-value-toggle__divider";
+    Object.assign(divider.style, {
+      alignSelf: "stretch",
+      width: "1px",
+      minHeight: "24px",
+      background: "rgba(255,255,255,0.15)",
+      flex: "0 0 auto",
+      opacity: "0.5"
+    });
+    const valueToggleLabel = document.createElement("label");
+    valueToggleLabel.className = "tm-value-toggle";
+    Object.assign(valueToggleLabel.style, {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "8px",
+      font: "inherit",
+      opacity: "0.9",
+      cursor: "pointer",
+      flex: "0 0 auto"
+    });
+    const valueToggleControl = document.createElement("span");
+    valueToggleControl.className = "tm-value-toggle__control";
+    Object.assign(valueToggleControl.style, {
+      position: "relative",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: "36px",
+      height: "20px",
+      flex: "0 0 auto"
+    });
+    const valueToggleInput = document.createElement("input");
+    valueToggleInput.type = "checkbox";
+    valueToggleInput.className = "tm-value-toggle__checkbox";
+    Object.assign(valueToggleInput.style, {
+      position: "absolute",
+      inset: "0",
+      margin: "0",
+      opacity: "0",
+      cursor: "pointer"
+    });
+    const switchTrack = document.createElement("span");
+    switchTrack.className = "tm-value-toggle__switch";
+    Object.assign(switchTrack.style, {
+      position: "relative",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "flex-start",
+      width: "100%",
+      height: "100%",
+      borderRadius: "999px",
+      background: "rgba(255,255,255,0.25)",
+      transition: "background 120ms ease",
+      padding: "2px",
+      boxSizing: "border-box"
+    });
+    const switchThumb = document.createElement("span");
+    switchThumb.className = "tm-value-toggle__thumb";
+    Object.assign(switchThumb.style, {
+      width: "16px",
+      height: "16px",
+      borderRadius: "50%",
+      background: "#111",
+      boxShadow: "0 1px 3px rgba(0,0,0,0.35)",
+      transform: "translateX(0)",
+      transition: "transform 120ms ease, background 120ms ease"
+    });
+    switchTrack.appendChild(switchThumb);
+    valueToggleControl.append(valueToggleInput, switchTrack);
+    const valueToggleText = document.createElement("span");
+    valueToggleText.className = "tm-value-toggle__label";
+    valueToggleText.textContent = "Show values";
+    Object.assign(valueToggleText.style, {
+      font: "inherit",
+      color: "inherit"
+    });
+    valueToggleLabel.append(valueToggleControl, valueToggleText);
+    bar.append(divider, valueToggleLabel);
+    const syncValueToggleVisual = (checked) => {
+      switchTrack.style.background = checked ? "var(--chakra-colors-Yellow-Magic, #F3D32B)" : "rgba(255,255,255,0.25)";
+      switchThumb.style.transform = checked ? "translateX(16px)" : "translateX(0)";
+      valueToggleLabel.setAttribute("data-checked", checked ? "true" : "false");
+      valueToggleLabel.setAttribute("role", "switch");
+      valueToggleLabel.setAttribute("aria-checked", checked ? "true" : "false");
+    };
+    valueToggleInput.addEventListener("change", () => {
+      syncValueToggleVisual(valueToggleInput.checked);
+    });
+    wrap.__syncValueToggle = syncValueToggleVisual;
+    syncValueToggleVisual(valueToggleInput.checked);
     wrap.appendChild(bar);
-    return { wrap, bar, select: select2, directionSelect, directionLabel };
+    return {
+      wrap,
+      bar,
+      select: select2,
+      directionSelect,
+      directionLabel,
+      valueToggleInput,
+      valueToggleLabel
+    };
   }
-  function ensureSortingBar(grid, cfg, labelByValue, directionLabelText, onChange) {
+  function ensureSortingBar(grid, cfg, labelByValue, directionLabelText, onChange, showValues, onToggleValues) {
     const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
     if (!filtersBlock) return null;
     const closeBtnInBlock = filtersBlock.querySelector(cfg.closeButtonSelector);
@@ -18680,12 +19377,14 @@
     let select2;
     let directionSelect;
     let directionLabelEl = null;
+    let valueToggleInput = null;
     if (!wrap) {
       const ui = createSortingBar();
       wrap = ui.wrap;
       select2 = ui.select;
       directionSelect = ui.directionSelect;
       directionLabelEl = ui.directionLabel;
+      valueToggleInput = ui.valueToggleInput;
       wrap.__grid = grid;
       if (closeBtn && closeBtn.parentElement) {
         closeBtn.insertAdjacentElement("afterend", wrap);
@@ -18694,6 +19393,14 @@
       }
       if (directionLabelEl) {
         directionLabelEl.textContent = directionLabelText;
+      }
+      if (valueToggleInput) {
+        valueToggleInput.checked = showValues;
+        valueToggleInput.addEventListener("change", () => {
+          const nextVisible = valueToggleInput ? valueToggleInput.checked : false;
+          wrap.__showValues = nextVisible;
+          onToggleValues(nextVisible);
+        });
       }
       select2.addEventListener("change", () => {
         const value = select2.value;
@@ -18730,6 +19437,7 @@
       select2 = maybeSelect;
       directionSelect = maybeDirectionSelect;
       directionLabelEl = wrap.querySelector(".tm-direction-label");
+      valueToggleInput = wrap.querySelector('label.tm-value-toggle input[type="checkbox"]');
       if (directionLabelEl) {
         directionLabelEl.textContent = directionLabelText;
       }
@@ -18739,8 +19447,16 @@
         filtersBlock.appendChild(wrap);
       }
     }
+    if (valueToggleInput) {
+      valueToggleInput.checked = showValues;
+    }
+    const syncValueToggle = wrap.__syncValueToggle;
+    if (syncValueToggle) {
+      syncValueToggle(valueToggleInput?.checked ?? showValues);
+    }
     wrap.__grid = grid;
-    return { wrap, select: select2, directionSelect };
+    wrap.__showValues = valueToggleInput?.checked ?? showValues;
+    return { wrap, select: select2, directionSelect, valueToggleInput };
   }
   function renderSelectOptions(select2, options, prevValue) {
     const prev = prevValue ?? select2.value;
@@ -18791,14 +19507,18 @@
     };
     if (cfg.injectDarkStyles) injectDarkSelectStyles();
     const applySorting = cfg.applySorting ?? createDefaultApplySorting(cfg);
+    let showInventoryValues = loadPersistedInventoryValueVisibility() ?? true;
+    setShouldDisplayInventoryValues(showInventoryValues);
     let grid = null;
     let currentWrap = null;
     let currentSelect = null;
     let currentDirectionSelect = null;
+    let currentValueToggle = null;
     let lastLoggedFilters = null;
     let lastAppliedFiltersKey = null;
     let lastAppliedSortKey = null;
     let lastAppliedDirection = null;
+    let shouldEnsureInventoryValueWatcherOnNextVisible = true;
     const obs = new MutationObserver((muts) => {
       const relevant = muts.some(
         (m) => m.type === "attributes" ? ["data-checked", "style", "class", "hidden", "aria-hidden"].includes(m.attributeName || "") : m.type === "childList"
@@ -18812,6 +19532,7 @@
       lastLoggedFilters = null;
       lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
+      shouldEnsureInventoryValueWatcherOnNextVisible = true;
       if (grid) {
         obs.observe(grid, {
           subtree: true,
@@ -18843,9 +19564,30 @@
       }
       return grid && document.contains(grid) ? grid : null;
     };
+    const applyCurrentSorting = () => {
+      const targetGrid = resolveGrid();
+      if (!targetGrid) return;
+      const sortKey = currentSelect?.value ?? "none";
+      const fallbackDirection = defaultDirectionBySortKey[sortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[sortKey] ?? "asc";
+      const direction = currentDirectionSelect?.value ?? fallbackDirection;
+      void applySorting(targetGrid, sortKey, direction);
+    };
     const update = () => {
       const targetGrid = resolveGrid();
-      if (!targetGrid || !isVisible2(targetGrid)) return;
+      if (!targetGrid || !isVisible2(targetGrid)) {
+        shouldEnsureInventoryValueWatcherOnNextVisible = true;
+        return;
+      }
+      setShouldDisplayInventoryValues(showInventoryValues);
+      if (shouldEnsureInventoryValueWatcherOnNextVisible) {
+        shouldEnsureInventoryValueWatcherOnNextVisible = false;
+        void ensureInventoryValueWatcher().catch((error) => {
+          console.warn(
+            "[InventorySorting] Impossible d'initialiser la surveillance de la valeur de l'inventaire",
+            error
+          );
+        });
+      }
       const mount = ensureSortingBar(
         targetGrid,
         cfg,
@@ -18860,12 +19602,23 @@
           persistSortDirection(direction);
           cfg.onSortChange?.(value, direction);
           void applySorting(targetGrid, value, direction);
+        },
+        showInventoryValues,
+        (visible) => {
+          showInventoryValues = visible;
+          setShouldDisplayInventoryValues(visible);
+          persistInventoryValueVisibility(visible);
+          if (currentValueToggle) {
+            currentValueToggle.checked = visible;
+          }
+          applyCurrentSorting();
         }
       );
       if (!mount) return;
       currentWrap = mount.wrap;
       currentSelect = mount.select;
       currentDirectionSelect = mount.directionSelect;
+      currentValueToggle = mount.valueToggleInput ?? null;
       const activeFilters = getActiveFiltersFromGrid(
         targetGrid,
         cfg.checkboxSelector,
@@ -18946,11 +19699,13 @@
         currentWrap = null;
         currentSelect = null;
         currentDirectionSelect = null;
+        currentValueToggle = null;
         grid = null;
         lastLoggedFilters = null;
         lastAppliedFiltersKey = null;
         lastAppliedSortKey = null;
         lastAppliedDirection = null;
+        shouldEnsureInventoryValueWatcherOnNextVisible = true;
       },
       update,
       getActiveFilters() {
@@ -18989,6 +19744,7 @@
           persistSortKey(k);
           persistSortDirection(directionToApply);
           cfg.onSortChange?.(k, directionToApply);
+          setShouldDisplayInventoryValues(showInventoryValues);
           void applySorting(targetGrid, k, directionToApply);
         }
       },
@@ -19013,6 +19769,7 @@
           persistSortKey(sortKey);
           persistSortDirection(direction);
           cfg.onSortChange?.(sortKey, direction);
+          setShouldDisplayInventoryValues(showInventoryValues);
           void applySorting(targetGrid, sortKey, direction);
         }
       },
@@ -24741,7 +25498,7 @@ next: ${next}`;
     toggle.addEventListener("change", () => {
       store.setGlobalEnabled(!!toggle.checked);
     });
-    const unsubscribe = store.subscribe(() => {
+    const unsubscribe2 = store.subscribe(() => {
       update();
     });
     update();
@@ -24754,7 +25511,7 @@ next: ${next}`;
     };
     return {
       render,
-      destroy: () => unsubscribe()
+      destroy: () => unsubscribe2()
     };
   }
   function createOverridesTabRenderer(ui, store) {
@@ -24991,7 +25748,7 @@ next: ${next}`;
       renderList();
       renderDetail();
     };
-    const unsubscribe = store.subscribe(refresh);
+    const unsubscribe2 = store.subscribe(refresh);
     const render = (view) => {
       view.innerHTML = "";
       view.append(layout);
@@ -24999,7 +25756,7 @@ next: ${next}`;
     };
     return {
       render,
-      destroy: () => unsubscribe()
+      destroy: () => unsubscribe2()
     };
   }
   async function renderLockerMenu(container) {
@@ -28955,13 +29712,13 @@ next: ${next}`;
     const previousScrollTop = prevView ? prevView.scrollTop : null;
     let rafId = null;
     let unsubscribed = false;
-    let unsubscribe = () => {
+    let unsubscribe2 = () => {
     };
     const cleanup2 = () => {
       if (unsubscribed) return;
       unsubscribed = true;
       try {
-        unsubscribe();
+        unsubscribe2();
       } catch (error) {
         console.error("[StatsMenu] Unsubscribe error", error);
       }
@@ -28973,7 +29730,7 @@ next: ${next}`;
         root.__statsCleanup = void 0;
       }
     };
-    unsubscribe = StatsService.subscribe(() => {
+    unsubscribe2 = StatsService.subscribe(() => {
       if (!root.isConnected) {
         cleanup2();
         return;
@@ -33148,7 +33905,7 @@ next: ${next}`;
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume"];
-    const listeners3 = [];
+    const listeners4 = [];
     function swallowAll() {
       const add = (target, t) => {
         const h = (e) => {
@@ -33156,7 +33913,7 @@ next: ${next}`;
           e.preventDefault?.();
         };
         target.addEventListener(t, h, { capture: true });
-        listeners3.push({ t, h, target });
+        listeners4.push({ t, h, target });
       };
       STOP_EVENTS.forEach((t) => {
         add(document, t);
@@ -33164,11 +33921,11 @@ next: ${next}`;
       });
     }
     function unswallowAll() {
-      for (const { t, h, target } of listeners3) try {
+      for (const { t, h, target } of listeners4) try {
         target.removeEventListener(t, h, { capture: true });
       } catch {
       }
-      listeners3.length = 0;
+      listeners4.length = 0;
     }
     const docProto = Object.getPrototypeOf(document);
     const saved = {

@@ -10,6 +10,11 @@ import {
   rarity as rarityMap,
   toolCatalog,
 } from "../data/hardcoded-data.clean.js";
+import {
+  computeInventoryItemValue,
+  ensureInventoryValueWatcher,
+  getInventoryValueSnapshot,
+} from "./inventoryValue";
 
 export type SortKey =
   | 'none'
@@ -18,7 +23,8 @@ export type SortKey =
   | 'rarity'
   | 'size'
   | 'mutations'
-  | 'strength';
+  | 'strength'
+  | 'value';
 
 export type SortDirection = 'asc' | 'desc';
 
@@ -84,12 +90,13 @@ const DEFAULTS: Required<Pick<
 };
 
 const ALWAYS: SortKey[] = ['none'];
-const BASE_SORT: SortKey[] = ['alpha', 'qty', 'rarity']; // Rarity par défaut
+const BASE_SORT: SortKey[] = ['alpha', 'qty', 'rarity', 'value']; // Rarity par défaut
 const ORDER: SortKey[] = [
   'none',
   'alpha',
   'qty',
   'rarity',
+  'value',
   'size',
   'mutations',
   'strength',
@@ -107,11 +114,50 @@ const DIRECTION_LABELS_DEFAULT: Record<SortDirection, string> = {
   desc: 'Descending',
 };
 
+const INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = 'mg-mod.inventory.showValues';
+
+const loadPersistedInventoryValueVisibility = (): boolean | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = window.localStorage?.getItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY) ?? null;
+    if (stored === '1') return true;
+    if (stored === '0') return false;
+    return null;
+  } catch (error) {
+    console.warn(
+      "[InventorySorting] Impossible de lire la préférence d'affichage des valeurs d'inventaire",
+      error
+    );
+    return null;
+  }
+};
+
+const persistInventoryValueVisibility = (visible: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage?.setItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY, visible ? '1' : '0');
+  } catch (error) {
+    console.warn(
+      "[InventorySorting] Impossible de sauvegarder la préférence d'affichage des valeurs d'inventaire",
+      error
+    );
+  }
+};
+
+let shouldDisplayInventoryValues = true;
+
+const setShouldDisplayInventoryValues = (visible: boolean) => {
+  shouldDisplayInventoryValues = visible;
+};
+
+const getShouldDisplayInventoryValues = (): boolean => shouldDisplayInventoryValues;
+
 const DEFAULT_DIRECTION_BY_SORT_KEY: Record<SortKey, SortDirection> = {
   none: 'asc',
   alpha: 'asc',
   qty: 'desc',
   rarity: 'asc',
+  value: 'desc',
   size: 'desc',
   mutations: 'desc',
   strength: 'desc',
@@ -182,6 +228,7 @@ const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
   alpha: 'A–Z',
   qty: 'Quantity',
   rarity: 'Rarity',
+  value: 'Values',
   size: 'Size',
   mutations: 'Mutations',
   strength: 'Strength',
@@ -189,6 +236,11 @@ const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
 
 const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
 const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-ofw63c';
+const INVENTORY_VALUE_CONTAINER_SELECTOR = '.McFlex.css-1p00rng';
+const INVENTORY_VALUE_REFERENCE_SELECTOR = ':scope > .McFlex.css-1gd1uup';
+const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
+const INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
+const INVENTORY_VALUE_DATASET_KEY = 'tmInventoryValue';
 
 interface InventoryDomEntry {
   wrapper: HTMLElement;
@@ -437,6 +489,18 @@ interface FilterInventoryResult {
   itemTypes: Set<string>;
 }
 
+function attachItemValues(items: any[]): void {
+  const snapshot = getInventoryValueSnapshot();
+  const playersInRoom = snapshot?.plants?.playersInRoom ?? null;
+
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+
+    const value = computeInventoryItemValue(item, { playersInRoom });
+    (item as Record<string, any>).value = value ?? null;
+  }
+}
+
 function filterInventoryItems(items: any[], filters: string[]): FilterInventoryResult {
   const normalizedFilters = filters.map((f) => normalize(f)).filter(Boolean);
   const itemTypes = new Set<string>();
@@ -459,6 +523,8 @@ function filterInventoryItems(items: any[], filters: string[]): FilterInventoryR
         const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
         return type ? itemTypes.has(type) : false;
       });
+
+  attachItemValues(filteredItems);
 
   return { filteredItems, keepAll, itemTypes };
 }
@@ -486,6 +552,132 @@ function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
   }
 
   return entries;
+}
+
+const INVENTORY_COMPACT_VALUE_UNITS: Array<{ threshold: number; suffix: string }> = [
+  { threshold: 1e12, suffix: 'T' },
+  { threshold: 1e9, suffix: 'B' },
+  { threshold: 1e6, suffix: 'M' },
+  { threshold: 1e3, suffix: 'K' },
+];
+
+const INVENTORY_FULL_VALUE_FORMATTER =
+  typeof Intl !== 'undefined' && typeof Intl.NumberFormat === 'function'
+    ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 0 })
+    : null;
+
+const formatInventoryItemCompactValue = (value: number): string => {
+  const abs = Math.abs(value);
+  for (const { threshold, suffix } of INVENTORY_COMPACT_VALUE_UNITS) {
+    if (abs >= threshold) {
+      const scaled = value / threshold;
+      const formatted = scaled.toFixed(1).replace(/\.0$/, '');
+      return `${formatted}${suffix}`;
+    }
+  }
+  const rounded = Math.round(value);
+  return INVENTORY_FULL_VALUE_FORMATTER
+    ? INVENTORY_FULL_VALUE_FORMATTER.format(rounded)
+    : String(rounded);
+};
+
+const formatInventoryItemFullValue = (value: number): string =>
+  INVENTORY_FULL_VALUE_FORMATTER ? INVENTORY_FULL_VALUE_FORMATTER.format(value) : String(value);
+
+const getInventoryItemValue = (item: any): number | null => {
+  if (!item || typeof item !== 'object') return null;
+  const raw = (item as Record<string, unknown>).value;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+function updateInventoryCardValue(card: HTMLElement, rawValue: number | null): void {
+  const container = card.querySelector<HTMLElement>(INVENTORY_VALUE_CONTAINER_SELECTOR);
+  const existing = card.dataset[INVENTORY_VALUE_DATASET_KEY];
+
+  if (!container) {
+    if (existing != null) {
+      delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+    }
+    return;
+  }
+
+  const currentEl = container.querySelector<HTMLElement>(`.${INVENTORY_VALUE_ELEMENT_CLASS}`);
+
+  if (!getShouldDisplayInventoryValues()) {
+    if (currentEl?.parentElement) {
+      currentEl.parentElement.removeChild(currentEl);
+    }
+    if (existing != null) {
+      delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+    }
+    return;
+  }
+
+  if (typeof rawValue !== 'number' || !Number.isFinite(rawValue)) {
+    if (currentEl?.parentElement) {
+      currentEl.parentElement.removeChild(currentEl);
+    }
+    if (existing != null) {
+      delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+    }
+    return;
+  }
+
+  const compactValue = formatInventoryItemCompactValue(rawValue);
+  const fullValue = formatInventoryItemFullValue(rawValue);
+
+  let target = currentEl;
+  if (!target) {
+    target = document.createElement('div');
+    target.className = INVENTORY_VALUE_ELEMENT_CLASS;
+  }
+
+  Object.assign(target.style, {
+    fontSynthesis: 'none',
+    WebkitFontSmoothing: 'antialiased',
+    WebkitTextSizeAdjust: '100%',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: '0.15rem',
+    fontFamily: 'var(--chakra-fonts-body, "GreyCliff CF", sans-serif)',
+    fontWeight: '700',
+    fontSize: '0.65rem',
+    lineHeight: '1',
+    textTransform: 'none',
+    color: 'var(--chakra-colors-Yellow-Magic, #F3D32B)',
+  });
+
+  let textEl = target.querySelector<HTMLElement>(`.${INVENTORY_VALUE_TEXT_CLASS}`);
+
+  if (!textEl) {
+    target.textContent = '';
+    textEl = document.createElement('span');
+    textEl.className = INVENTORY_VALUE_TEXT_CLASS;
+    textEl.style.display = 'inline-flex';
+    textEl.style.alignItems = 'center';
+    textEl.style.color = 'inherit';
+    target.appendChild(textEl);
+  }
+
+  textEl.textContent = compactValue;
+  target.title = fullValue;
+
+  card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
+
+  if (target.parentElement !== container) {
+    const reference = container.querySelector<HTMLElement>(INVENTORY_VALUE_REFERENCE_SELECTOR);
+    if (reference && reference.parentElement === container) {
+      reference.insertAdjacentElement('afterend', target);
+    } else {
+      container.appendChild(target);
+    }
+  }
 }
 
 function assignBaseIndexesToEntries(entries: InventoryDomEntry[]): void {
@@ -781,6 +973,24 @@ function sortInventoryItems(items: any[], sortKey: SortKey, direction: SortDirec
         return compareByNameThenTypeThenId(a, b);
       });
       break;
+    case "value":
+      sorted.sort((a: any, b: any) => {
+        const rawValueA = (a as Record<string, unknown>)?.value;
+        const rawValueB = (b as Record<string, unknown>)?.value;
+
+        const hasA = typeof rawValueA === "number" && Number.isFinite(rawValueA);
+        const hasB = typeof rawValueB === "number" && Number.isFinite(rawValueB);
+
+        if (hasA && hasB && rawValueA !== rawValueB) {
+          const cmp = (rawValueA as number) - (rawValueB as number);
+          return isDesc ? -cmp : cmp;
+        }
+        if (hasA && !hasB) return isDesc ? -1 : 1;
+        if (!hasA && hasB) return isDesc ? 1 : -1;
+
+        return compareByNameThenTypeThenId(a, b);
+      });
+      break;
     case "size":
       sorted.sort((a: any, b: any) => {
         const sizeA = getInventoryItemSizePercent(a);
@@ -876,17 +1086,13 @@ async function logInventoryForFilters(
       ? sortInventoryItems(filteredItems, sortKey, resolvedDirection)
       : filteredItems.slice();
 
-    const filteredInventory = { ...(inventory as any), items: itemsForLog };
     const descriptor = keepAll
       ? "toutes catégories"
       : `types: ${Array.from(itemTypes).join(", ") || "(aucun)"}`;
     const sortDescriptor = sortKey
       ? `tri: ${sortKey} (${resolvedDirection})`
       : "tri: (non spécifié)";
-    console.log(
-      `[InventorySorting] myInventory filtré (${descriptor}, ${sortDescriptor}) :`,
-      filteredInventory
-    );
+    console.log(`[InventorySorting] myInventory filtré (${descriptor}, ${sortDescriptor}).`);
   } catch (error) {
     console.warn("[InventorySorting] Impossible de récupérer myInventory pour le log", error);
   }
@@ -1003,6 +1209,8 @@ const ensureState = async (
       if (baseIndex == null) continue;
       const entry = state.entryByBaseIndex.get(baseIndex);
       if (!entry || usedEntries.has(entry)) continue;
+      const value = getInventoryItemValue(item);
+      updateInventoryCardValue(entry.card, value);
       desiredEntries.push(entry);
       usedEntries.add(entry);
     }
@@ -1222,9 +1430,123 @@ select.style.setProperty('-webkit-appearance', 'none');
 
   directionWrap.append(directionSelect, directionArrow);
   bar.append(directionLabel, directionWrap);
+
+  const divider = document.createElement('span');
+  divider.className = 'tm-value-toggle__divider';
+  Object.assign(divider.style, {
+    alignSelf: 'stretch',
+    width: '1px',
+    minHeight: '24px',
+    background: 'rgba(255,255,255,0.15)',
+    flex: '0 0 auto',
+    opacity: '0.5',
+  } as CSSStyleDeclaration);
+
+  const valueToggleLabel = document.createElement('label');
+  valueToggleLabel.className = 'tm-value-toggle';
+  Object.assign(valueToggleLabel.style, {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    font: 'inherit',
+    opacity: '0.9',
+    cursor: 'pointer',
+    flex: '0 0 auto',
+  } as CSSStyleDeclaration);
+
+  const valueToggleControl = document.createElement('span');
+  valueToggleControl.className = 'tm-value-toggle__control';
+  Object.assign(valueToggleControl.style, {
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '20px',
+    flex: '0 0 auto',
+  } as CSSStyleDeclaration);
+
+  const valueToggleInput = document.createElement('input');
+  valueToggleInput.type = 'checkbox';
+  valueToggleInput.className = 'tm-value-toggle__checkbox';
+  Object.assign(valueToggleInput.style, {
+    position: 'absolute',
+    inset: '0',
+    margin: '0',
+    opacity: '0',
+    cursor: 'pointer',
+  } as CSSStyleDeclaration);
+
+  const switchTrack = document.createElement('span');
+  switchTrack.className = 'tm-value-toggle__switch';
+  Object.assign(switchTrack.style, {
+    position: 'relative',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: '100%',
+    height: '100%',
+    borderRadius: '999px',
+    background: 'rgba(255,255,255,0.25)',
+    transition: 'background 120ms ease',
+    padding: '2px',
+    boxSizing: 'border-box',
+  } as CSSStyleDeclaration);
+
+  const switchThumb = document.createElement('span');
+  switchThumb.className = 'tm-value-toggle__thumb';
+  Object.assign(switchThumb.style, {
+    width: '16px',
+    height: '16px',
+    borderRadius: '50%',
+    background: '#111',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+    transform: 'translateX(0)',
+    transition: 'transform 120ms ease, background 120ms ease',
+  } as CSSStyleDeclaration);
+
+  switchTrack.appendChild(switchThumb);
+  valueToggleControl.append(valueToggleInput, switchTrack);
+
+  const valueToggleText = document.createElement('span');
+  valueToggleText.className = 'tm-value-toggle__label';
+  valueToggleText.textContent = 'Show values';
+  Object.assign(valueToggleText.style, {
+    font: 'inherit',
+    color: 'inherit',
+  } as CSSStyleDeclaration);
+
+  valueToggleLabel.append(valueToggleControl, valueToggleText);
+
+  bar.append(divider, valueToggleLabel);
+
+  const syncValueToggleVisual = (checked: boolean) => {
+    switchTrack.style.background = checked
+      ? 'var(--chakra-colors-Yellow-Magic, #F3D32B)'
+      : 'rgba(255,255,255,0.25)';
+    switchThumb.style.transform = checked ? 'translateX(16px)' : 'translateX(0)';
+    valueToggleLabel.setAttribute('data-checked', checked ? 'true' : 'false');
+    valueToggleLabel.setAttribute('role', 'switch');
+    valueToggleLabel.setAttribute('aria-checked', checked ? 'true' : 'false');
+  };
+
+  valueToggleInput.addEventListener('change', () => {
+    syncValueToggleVisual(valueToggleInput.checked);
+  });
+
+  (wrap as any).__syncValueToggle = syncValueToggleVisual;
+  syncValueToggleVisual(valueToggleInput.checked);
   wrap.appendChild(bar);
 
-  return { wrap, bar, select, directionSelect, directionLabel };
+  return {
+    wrap,
+    bar,
+    select,
+    directionSelect,
+    directionLabel,
+    valueToggleInput,
+    valueToggleLabel,
+  };
 }
 
 // -------------------- DOM wiring --------------------
@@ -1234,7 +1556,9 @@ function ensureSortingBar(
   cfg: Required<typeof DEFAULTS> & InventorySortingConfig,
   labelByValue: Record<SortKey, string>,
   directionLabelText: string,
-  onChange: (value: SortKey, direction: SortDirection, activeFilters: string[]) => void
+  onChange: (value: SortKey, direction: SortDirection, activeFilters: string[]) => void,
+  showValues: boolean,
+  onToggleValues: (visible: boolean) => void
 ) {
   void labelByValue;
   const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
@@ -1247,6 +1571,7 @@ function ensureSortingBar(
   let select: HTMLSelectElement;
   let directionSelect: HTMLSelectElement;
   let directionLabelEl: HTMLSpanElement | null = null;
+  let valueToggleInput: HTMLInputElement | null = null;
 
   if (!wrap) {
     const ui = createSortingBar();
@@ -1254,6 +1579,7 @@ function ensureSortingBar(
     select = ui.select;
     directionSelect = ui.directionSelect;
     directionLabelEl = ui.directionLabel;
+    valueToggleInput = ui.valueToggleInput;
 
     (wrap as any).__grid = grid;
 
@@ -1265,6 +1591,15 @@ function ensureSortingBar(
 
     if (directionLabelEl) {
       directionLabelEl.textContent = directionLabelText;
+    }
+
+    if (valueToggleInput) {
+      valueToggleInput.checked = showValues;
+      valueToggleInput.addEventListener('change', () => {
+        const nextVisible = valueToggleInput ? valueToggleInput.checked : false;
+        (wrap as any).__showValues = nextVisible;
+        onToggleValues(nextVisible);
+      });
     }
 
     select.addEventListener('change', () => {
@@ -1307,22 +1642,40 @@ function ensureSortingBar(
     select = maybeSelect as HTMLSelectElement;
     directionSelect = maybeDirectionSelect as HTMLSelectElement;
     directionLabelEl = wrap.querySelector('.tm-direction-label');
+    valueToggleInput = wrap.querySelector('label.tm-value-toggle input[type="checkbox"]');
 
     if (directionLabelEl) {
       directionLabelEl.textContent = directionLabelText;
     }
 
-    if (closeBtn && (closeBtn as HTMLElement).parentElement && (closeBtn as Element).nextElementSibling !== wrap) {
+    if (
+      closeBtn &&
+      (closeBtn as HTMLElement).parentElement &&
+      (closeBtn as Element).nextElementSibling !== wrap
+    ) {
       (closeBtn as HTMLElement).insertAdjacentElement('afterend', wrap);
     } else if (!closeBtn && wrap.parentElement !== filtersBlock) {
       filtersBlock.appendChild(wrap);
     }
   }
 
-  (wrap as any).__grid = grid;
+  if (valueToggleInput) {
+    valueToggleInput.checked = showValues;
+  }
 
-  return { wrap, select, directionSelect };
+  const syncValueToggle = (wrap as any).__syncValueToggle as
+    | ((checked: boolean) => void)
+    | undefined;
+  if (syncValueToggle) {
+    syncValueToggle(valueToggleInput?.checked ?? showValues);
+  }
+
+  (wrap as any).__grid = grid;
+  (wrap as any).__showValues = valueToggleInput?.checked ?? showValues;
+
+  return { wrap, select, directionSelect, valueToggleInput };
 }
+
 
 function renderSelectOptions(
   select: HTMLSelectElement,
@@ -1390,14 +1743,19 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
 
   const applySorting = cfg.applySorting ?? createDefaultApplySorting(cfg);
 
+  let showInventoryValues = loadPersistedInventoryValueVisibility() ?? true;
+  setShouldDisplayInventoryValues(showInventoryValues);
+
   let grid: Element | null = null;
   let currentWrap: HTMLElement | null = null;
   let currentSelect: HTMLSelectElement | null = null;
   let currentDirectionSelect: HTMLSelectElement | null = null;
+  let currentValueToggle: HTMLInputElement | null = null;
   let lastLoggedFilters: string | null = null;
   let lastAppliedFiltersKey: string | null = null;
   let lastAppliedSortKey: SortKey | null = null;
   let lastAppliedDirection: SortDirection | null = null;
+  let shouldEnsureInventoryValueWatcherOnNextVisible = true;
 
   const obs = new MutationObserver((muts) => {
     const relevant = muts.some((m) =>
@@ -1415,6 +1773,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     lastLoggedFilters = null;
     lastAppliedFiltersKey = null;
     lastAppliedSortKey = null;
+    shouldEnsureInventoryValueWatcherOnNextVisible = true;
     if (grid) {
       obs.observe(grid, {
         subtree: true,
@@ -1450,9 +1809,34 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     return grid && document.contains(grid) ? grid : null;
   };
 
+  const applyCurrentSorting = () => {
+    const targetGrid = resolveGrid();
+    if (!targetGrid) return;
+    const sortKey = (currentSelect?.value as SortKey) ?? 'none';
+    const fallbackDirection =
+      defaultDirectionBySortKey[sortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[sortKey] ?? 'asc';
+    const direction = (currentDirectionSelect?.value as SortDirection) ?? fallbackDirection;
+    void applySorting(targetGrid, sortKey, direction);
+  };
+
   const update = () => {
     const targetGrid = resolveGrid();
-    if (!targetGrid || !isVisible(targetGrid)) return;
+    if (!targetGrid || !isVisible(targetGrid)) {
+      shouldEnsureInventoryValueWatcherOnNextVisible = true;
+      return;
+    }
+
+    setShouldDisplayInventoryValues(showInventoryValues);
+
+    if (shouldEnsureInventoryValueWatcherOnNextVisible) {
+      shouldEnsureInventoryValueWatcherOnNextVisible = false;
+      void ensureInventoryValueWatcher().catch((error) => {
+        console.warn(
+          "[InventorySorting] Impossible d'initialiser la surveillance de la valeur de l'inventaire",
+          error
+        );
+      });
+    }
 
     const mount = ensureSortingBar(
       targetGrid,
@@ -1468,6 +1852,16 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortDirection(direction);
         cfg.onSortChange?.(value, direction);
         void applySorting(targetGrid, value, direction);
+      },
+      showInventoryValues,
+      (visible) => {
+        showInventoryValues = visible;
+        setShouldDisplayInventoryValues(visible);
+        persistInventoryValueVisibility(visible);
+        if (currentValueToggle) {
+          currentValueToggle.checked = visible;
+        }
+        applyCurrentSorting();
       }
     );
     if (!mount) return;
@@ -1475,6 +1869,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     currentWrap = mount.wrap;
     currentSelect = mount.select;
     currentDirectionSelect = mount.directionSelect;
+    currentValueToggle = mount.valueToggleInput ?? null;
 
     const activeFilters = getActiveFiltersFromGrid(
       targetGrid,
@@ -1576,11 +1971,13 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       currentWrap = null;
       currentSelect = null;
       currentDirectionSelect = null;
+      currentValueToggle = null;
       grid = null;
       lastLoggedFilters = null;
       lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
       lastAppliedDirection = null;
+      shouldEnsureInventoryValueWatcherOnNextVisible = true;
     },
     update,
     getActiveFilters() {
@@ -1622,6 +2019,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortKey(k);
         persistSortDirection(directionToApply);
         cfg.onSortChange?.(k, directionToApply);
+        setShouldDisplayInventoryValues(showInventoryValues);
         void applySorting(targetGrid, k, directionToApply);
       }
     },
@@ -1646,6 +2044,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortKey(sortKey);
         persistSortDirection(direction);
         cfg.onSortChange?.(sortKey, direction);
+        setShouldDisplayInventoryValues(showInventoryValues);
         void applySorting(targetGrid, sortKey, direction);
       }
     },
