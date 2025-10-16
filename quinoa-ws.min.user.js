@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.2
+// @version      2.2.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18247,6 +18247,7 @@
     checkboxLabelSelector: ".chakra-checkbox__label",
     injectDarkStyles: true
   };
+  var INVENTORY_SEARCH_INPUT_SELECTOR = "input.chakra-input.css-8e1l1i";
   var ALWAYS = ["none"];
   var BASE_SORT = ["alpha", "qty", "rarity", "value"];
   var ORDER = [
@@ -18404,6 +18405,16 @@
   }
   var labelIsChecked = (el2) => el2.matches("[data-checked]") || !!el2.querySelector("[data-checked]");
   var normalize2 = (s) => (s ?? "").trim().toLowerCase();
+  var getInventorySearchInput = (grid) => {
+    if (!grid) return null;
+    const input = grid.querySelector(INVENTORY_SEARCH_INPUT_SELECTOR);
+    return input ?? null;
+  };
+  var getInventorySearchQuery = (grid) => {
+    const input = getInventorySearchInput(grid);
+    return typeof input?.value === "string" ? input.value : "";
+  };
+  var getNormalizedInventorySearchQuery = (grid) => normalize2(getInventorySearchQuery(grid));
   var RARITY_ORDER = [
     rarity.Common,
     rarity.Uncommon,
@@ -18572,6 +18583,27 @@
     const itemType = singular.charAt(0).toUpperCase() + singular.slice(1);
     return itemType ? [itemType] : [];
   }
+  function inventoryItemMatchesSearchQuery(item, normalizedQuery) {
+    if (!normalizedQuery) return true;
+    const candidates = [
+      getInventoryItemName(item),
+      typeof item?.itemType === "string" ? item.itemType : null,
+      typeof item?.species === "string" ? item.species : null,
+      typeof item?.seedSpecies === "string" ? item.seedSpecies : null,
+      typeof item?.plantSpecies === "string" ? item.plantSpecies : null,
+      typeof item?.petSpecies === "string" ? item.petSpecies : null,
+      typeof item?.eggId === "string" ? item.eggId : null,
+      typeof item?.decorId === "string" ? item.decorId : null,
+      typeof item?.toolId === "string" ? item.toolId : null,
+      typeof item?.id === "string" ? item.id : null
+    ];
+    for (const candidate of candidates) {
+      if (candidate && normalize2(candidate).includes(normalizedQuery)) {
+        return true;
+      }
+    }
+    return false;
+  }
   function attachItemValues(items) {
     const snapshot = getInventoryValueSnapshot();
     const playersInRoom = snapshot?.plants?.playersInRoom ?? null;
@@ -18581,7 +18613,7 @@
       item.value = value ?? null;
     }
   }
-  function filterInventoryItems(items, filters) {
+  function filterInventoryItems(items, filters, searchQuery) {
     const normalizedFilters = filters.map((f) => normalize2(f)).filter(Boolean);
     const itemTypes = /* @__PURE__ */ new Set();
     let recognized = false;
@@ -18595,10 +18627,12 @@
       }
     }
     const keepAll = !recognized;
-    const filteredItems = keepAll ? items.slice() : items.filter((item) => {
+    const filteredByType = keepAll ? items.slice() : items.filter((item) => {
       const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
       return type ? itemTypes.has(type) : false;
     });
+    const normalizedSearch = normalize2(searchQuery);
+    const filteredItems = normalizedSearch ? filteredByType.filter((item) => inventoryItemMatchesSearchQuery(item, normalizedSearch)) : filteredByType;
     attachItemValues(filteredItems);
     return { filteredItems, keepAll, itemTypes };
   }
@@ -18698,7 +18732,7 @@
       summary.removeAttribute("title");
     }
   };
-  async function updateFilteredInventoryValueSummary(wrap, filters) {
+  async function updateFilteredInventoryValueSummary(wrap, filters, searchQuery) {
     if (!wrap) return;
     const summary = getValueSummaryElement(wrap);
     if (!summary) return;
@@ -18715,7 +18749,7 @@
         return;
       }
       const items = Array.isArray(inventory.items) ? inventory.items : [];
-      const { filteredItems } = filterInventoryItems(items, filters);
+      const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
       if (!filteredItems.length) {
         setValueSummaryText(summary, "0", "0");
         return;
@@ -19115,7 +19149,7 @@
     }
     return sorted;
   }
-  async function logInventoryForFilters(filters, sortKey, direction) {
+  async function logInventoryForFilters(filters, sortKey, direction, searchQuery) {
     try {
       const inventory = await Atoms.inventory.myInventory.get();
       if (!inventory || typeof inventory !== "object") {
@@ -19123,20 +19157,23 @@
         return;
       }
       const items = Array.isArray(inventory.items) ? inventory.items : [];
-      const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters);
+      const { filteredItems, keepAll, itemTypes } = filterInventoryItems(items, filters, searchQuery);
       const resolvedDirection = sortKey ? (direction && DIRECTION_ORDER.includes(direction) ? direction : DEFAULT_DIRECTION_BY_SORT_KEY[sortKey]) ?? "asc" : direction && DIRECTION_ORDER.includes(direction) ? direction : "asc";
       const itemsForLog = sortKey ? sortInventoryItems(filteredItems, sortKey, resolvedDirection) : filteredItems.slice();
       const descriptor = keepAll ? "toutes cat\xE9gories" : `types: ${Array.from(itemTypes).join(", ") || "(aucun)"}`;
       const sortDescriptor = sortKey ? `tri: ${sortKey} (${resolvedDirection})` : "tri: (non sp\xE9cifi\xE9)";
-      console.log(`[InventorySorting] myInventory filtr\xE9 (${descriptor}, ${sortDescriptor}).`);
+      const searchDescriptor = searchQuery ? `recherche: "${searchQuery}"` : "recherche: (vide)";
+      console.log(
+        `[InventorySorting] myInventory filtr\xE9 (${descriptor}, ${sortDescriptor}, ${searchDescriptor}).`
+      );
     } catch (error) {
       console.warn("[InventorySorting] Impossible de r\xE9cup\xE9rer myInventory pour le log", error);
     }
   }
   function createDefaultApplySorting(cfg) {
     const stateByGrid = /* @__PURE__ */ new WeakMap();
-    const ensureState = async (grid, filters, entries) => {
-      const filtersKey = JSON.stringify(filters);
+    const ensureState = async (grid, filters, entries, searchQuery) => {
+      const filtersKey = JSON.stringify({ filters, search: searchQuery });
       let state2 = stateByGrid.get(grid);
       const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
       const needsRebuild = !state2 || state2.filtersKey !== filtersKey || state2.baseItems.length !== entries.length || !hasAllBaseIndexes;
@@ -19155,7 +19192,7 @@
           return null;
         }
         const items = Array.isArray(inventory.items) ? inventory.items : [];
-        const { filteredItems } = filterInventoryItems(items, filters);
+        const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
         if (filteredItems.length !== entries.length) {
           console.warn(
             `[InventorySorting] Nombre d'\xE9l\xE9ments filtr\xE9s (${filteredItems.length}) diff\xE9rent du DOM (${entries.length}). R\xE9organisation annul\xE9e.`
@@ -19189,7 +19226,8 @@
         cfg.checkboxSelector,
         cfg.checkboxLabelSelector
       );
-      const state2 = await ensureState(grid, filters, entries);
+      const searchQuery = getNormalizedInventorySearchQuery(grid);
+      const state2 = await ensureState(grid, filters, entries, searchQuery);
       if (!state2) return;
       const baseIndexByItem = /* @__PURE__ */ new Map();
       state2.baseItems.forEach((item, index) => {
@@ -19541,9 +19579,10 @@
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         ) : [];
+        const searchQuery = getNormalizedInventorySearchQuery(currentGrid);
         console.log("[InventorySorting] Tri s\xE9lectionn\xE9 :", value);
-        void logInventoryForFilters(activeFilters, value, direction);
-        onChange(value, direction, activeFilters);
+        void logInventoryForFilters(activeFilters, value, direction, searchQuery);
+        onChange(value, direction, activeFilters, searchQuery);
       });
       directionSelect.addEventListener("change", () => {
         const direction = directionSelect.value;
@@ -19555,9 +19594,10 @@
           cfg.checkboxSelector,
           cfg.checkboxLabelSelector
         ) : [];
+        const searchQuery = getNormalizedInventorySearchQuery(currentGrid);
         console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 :", direction);
-        void logInventoryForFilters(activeFilters, value, direction);
-        onChange(value, direction, activeFilters);
+        void logInventoryForFilters(activeFilters, value, direction, searchQuery);
+        onChange(value, direction, activeFilters, searchQuery);
       });
     } else {
       const maybeSelect = wrap.querySelector("select.tm-sort-select--key");
@@ -19729,10 +19769,10 @@
         cfg,
         labelByValue,
         directionLabelText,
-        (value, direction, filters) => {
+        (value, direction, filters, searchQuery) => {
           lastAppliedSortKey = value;
           lastAppliedDirection = direction;
-          const filtersKey = JSON.stringify(filters ?? []);
+          const filtersKey = JSON.stringify({ filters: filters ?? [], search: searchQuery ?? "" });
           lastAppliedFiltersKey = filtersKey;
           persistSortKey(value);
           persistSortDirection(direction);
@@ -19764,7 +19804,12 @@
             cfg.checkboxSelector,
             cfg.checkboxLabelSelector
           );
-          void updateFilteredInventoryValueSummary(currentWrap, filtersForSummary);
+          const searchForSummary = getNormalizedInventorySearchQuery(sourceGrid);
+          void updateFilteredInventoryValueSummary(
+            currentWrap,
+            filtersForSummary,
+            searchForSummary
+          );
         });
       }
       const activeFilters = getActiveFiltersFromGrid(
@@ -19772,15 +19817,24 @@
         cfg.checkboxSelector,
         cfg.checkboxLabelSelector
       );
-      void updateFilteredInventoryValueSummary(currentWrap, activeFilters);
-      const serializedFilters = JSON.stringify(activeFilters);
+      const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
+      void updateFilteredInventoryValueSummary(currentWrap, activeFilters, searchQueryForGrid);
+      const serializedFilters = JSON.stringify({
+        filters: activeFilters,
+        search: searchQueryForGrid
+      });
       const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
       if (serializedFilters !== lastLoggedFilters) {
         lastLoggedFilters = serializedFilters;
         console.log("[InventorySorting] Filtres actifs :", activeFilters);
         const currentSortKey = currentSelect?.value ?? void 0;
         const currentDirection = currentDirectionSelect?.value ?? void 0;
-        void logInventoryForFilters(activeFilters, currentSortKey, currentDirection);
+        void logInventoryForFilters(
+          activeFilters,
+          currentSortKey,
+          currentDirection,
+          searchQueryForGrid
+        );
       }
       const options = computeSortOptions(activeFilters, labelByValue, mapExtraByFilter);
       const wrapPrevValue = typeof currentWrap.__prevValue === "string" ? currentWrap.__prevValue : null;
@@ -19823,7 +19877,11 @@
       const target = e.target;
       if (!target) return;
       const within = target.closest(cfg.gridSelector);
-      if (within && within === resolveGrid()) {
+      const currentGrid = resolveGrid();
+      if (e.type === "input" && target instanceof HTMLInputElement && target.matches(INVENTORY_SEARCH_INPUT_SELECTOR) && within && within === currentGrid) {
+        console.log("[InventorySorting] Texte de recherche modifi\xE9 :", target.value);
+      }
+      if (within && within === currentGrid) {
         setTimeout(refresh, 0);
       }
     };
@@ -19834,6 +19892,7 @@
       }
       setGrid(document.querySelector(cfg.gridSelector));
       document.addEventListener("change", changeHandler, true);
+      document.addEventListener("input", changeHandler, true);
       update();
     };
     startObservers();
@@ -19842,6 +19901,7 @@
         obs.disconnect();
         bodyObserver.disconnect();
         document.removeEventListener("change", changeHandler, true);
+        document.removeEventListener("input", changeHandler, true);
         if (stopValueSummaryListener) {
           stopValueSummaryListener();
           stopValueSummaryListener = null;
@@ -19883,14 +19943,15 @@
             cfg.checkboxSelector,
             cfg.checkboxLabelSelector
           );
-          const filtersKey = JSON.stringify(filtersForLog);
+          const searchQuery = getNormalizedInventorySearchQuery(targetGrid);
+          const filtersKey = JSON.stringify({ filters: filtersForLog, search: searchQuery });
           console.log("[InventorySorting] Tri s\xE9lectionn\xE9 (programmatique) :", k);
           const directionToApply = currentDirectionSelect?.value ?? defaultDirectionBySortKey[k] ?? DEFAULT_DIRECTION_BY_SORT_KEY[k] ?? "asc";
           if (currentDirectionSelect) {
             currentDirectionSelect.value = directionToApply;
             currentWrap.__prevDirection = directionToApply;
           }
-          void logInventoryForFilters(filtersForLog, k, directionToApply);
+          void logInventoryForFilters(filtersForLog, k, directionToApply, searchQuery);
           lastAppliedFiltersKey = filtersKey;
           lastAppliedSortKey = k;
           lastAppliedDirection = directionToApply;
@@ -19913,9 +19974,10 @@
             cfg.checkboxSelector,
             cfg.checkboxLabelSelector
           );
-          const filtersKey = JSON.stringify(filtersForLog);
+          const searchQuery = getNormalizedInventorySearchQuery(targetGrid);
+          const filtersKey = JSON.stringify({ filters: filtersForLog, search: searchQuery });
           console.log("[InventorySorting] Ordre de tri s\xE9lectionn\xE9 (programmatique) :", direction);
-          void logInventoryForFilters(filtersForLog, sortKey, direction);
+          void logInventoryForFilters(filtersForLog, sortKey, direction, searchQuery);
           lastAppliedFiltersKey = filtersKey;
           lastAppliedSortKey = sortKey;
           lastAppliedDirection = direction;
