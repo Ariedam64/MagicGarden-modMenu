@@ -3,6 +3,7 @@
 
 import { Atoms } from "../store/atoms";
 import {
+  coin,
   decorCatalog,
   eggCatalog,
   petCatalog,
@@ -14,6 +15,7 @@ import {
   computeInventoryItemValue,
   ensureInventoryValueWatcher,
   getInventoryValueSnapshot,
+  onInventoryValueChange,
 } from "./inventoryValue";
 
 export type SortKey =
@@ -241,6 +243,17 @@ const INVENTORY_VALUE_REFERENCE_SELECTOR = ':scope > .McFlex.css-1gd1uup';
 const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
 const INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
 const INVENTORY_VALUE_DATASET_KEY = 'tmInventoryValue';
+const FILTERED_VALUE_LOADING = '…';
+const FILTERED_VALUE_UNKNOWN = '—';
+const VALUE_SUMMARY_ICON_CLASS = 'tm-value-toggle__summary-icon';
+const VALUE_SUMMARY_TEXT_CLASS = 'tm-value-toggle__summary-text';
+const VALUE_SUMMARY_ICON_SRC = (() => {
+  const src = (coin as { img64?: string } | undefined)?.img64 ?? '';
+  if (typeof src !== 'string' || !src) {
+    return '';
+  }
+  return src.startsWith('data:') ? src : `data:image/png;base64,${src}`;
+})();
 
 interface InventoryDomEntry {
   wrapper: HTMLElement;
@@ -575,10 +588,9 @@ const formatInventoryItemCompactValue = (value: number): string => {
       return `${formatted}${suffix}`;
     }
   }
-  const rounded = Math.round(value);
   return INVENTORY_FULL_VALUE_FORMATTER
-    ? INVENTORY_FULL_VALUE_FORMATTER.format(rounded)
-    : String(rounded);
+    ? INVENTORY_FULL_VALUE_FORMATTER.format(value)
+    : String(value);
 };
 
 const formatInventoryItemFullValue = (value: number): string =>
@@ -594,6 +606,118 @@ const getInventoryItemValue = (item: any): number | null => {
   }
   return null;
 };
+
+const getValueSummaryElement = (wrap: HTMLElement | null): HTMLSpanElement | null => {
+  if (!wrap) return null;
+  const summary = ((wrap as any).__valueSummary ?? null) as HTMLSpanElement | null;
+  return summary ?? wrap.querySelector('.tm-value-toggle__summary');
+};
+
+const ensureValueSummaryContent = (summary: HTMLSpanElement): HTMLSpanElement => {
+  if (!summary.style.gap) {
+    summary.style.gap = '0.25rem';
+  }
+
+  if (VALUE_SUMMARY_ICON_SRC) {
+    let iconEl = summary.querySelector<HTMLImageElement>(`.${VALUE_SUMMARY_ICON_CLASS}`);
+    if (!iconEl) {
+      iconEl = document.createElement('img');
+      iconEl.className = VALUE_SUMMARY_ICON_CLASS;
+      iconEl.alt = '';
+      iconEl.decoding = 'async';
+      iconEl.src = VALUE_SUMMARY_ICON_SRC;
+      Object.assign(iconEl.style, {
+        width: '1.2rem',
+        height: '1.2rem',
+        flexShrink: '0',
+        objectFit: 'contain',
+      } as CSSStyleDeclaration);
+      summary.insertBefore(iconEl, summary.firstChild);
+    } else if (iconEl.src !== VALUE_SUMMARY_ICON_SRC) {
+      iconEl.src = VALUE_SUMMARY_ICON_SRC;
+    }
+  }
+
+  let textEl = summary.querySelector<HTMLSpanElement>(`.${VALUE_SUMMARY_TEXT_CLASS}`);
+  if (!textEl) {
+    textEl = document.createElement('span');
+    textEl.className = VALUE_SUMMARY_TEXT_CLASS;
+    textEl.style.fontWeight = '700';
+    textEl.style.color = 'inherit';
+    summary.appendChild(textEl);
+  }
+
+  return textEl;
+};
+
+const setValueSummaryText = (summary: HTMLSpanElement | null, text: string, title?: string) => {
+  if (!summary) return;
+  const textEl = ensureValueSummaryContent(summary);
+  textEl.textContent = text;
+  if (title) {
+    summary.title = title;
+  } else {
+    summary.removeAttribute('title');
+  }
+};
+
+async function updateFilteredInventoryValueSummary(
+  wrap: HTMLElement | null,
+  filters: string[]
+): Promise<void> {
+  if (!wrap) return;
+  const summary = getValueSummaryElement(wrap);
+  if (!summary) return;
+
+  const token = Symbol('value-summary');
+  (wrap as any).__valueSummaryToken = token;
+  setValueSummaryText(summary, FILTERED_VALUE_LOADING);
+
+  try {
+    const inventory = await Atoms.inventory.myInventory.get();
+    if ((wrap as any).__valueSummaryToken !== token) {
+      return;
+    }
+
+    if (!inventory || typeof inventory !== 'object') {
+      setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+      return;
+    }
+
+    const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
+    const { filteredItems } = filterInventoryItems(items, filters);
+
+    if (!filteredItems.length) {
+      setValueSummaryText(summary, '0', '0');
+      return;
+    }
+
+    let totalValue = 0;
+    let hasValue = false;
+    for (const item of filteredItems) {
+      const value = getInventoryItemValue(item);
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        totalValue += value;
+        hasValue = true;
+      }
+    }
+
+    if (!hasValue) {
+      setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+      return;
+    }
+
+    const compact = formatInventoryItemCompactValue(totalValue);
+    const full = formatInventoryItemFullValue(totalValue);
+    setValueSummaryText(summary, compact, full);
+  } catch (error) {
+    console.warn('[InventorySorting] Impossible de calculer la valeur filtrée', error);
+    if ((wrap as any).__valueSummaryToken !== token) {
+      return;
+    }
+    setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
+  }
+}
 
 function updateInventoryCardValue(card: HTMLElement, rawValue: number | null): void {
   const container = card.querySelector<HTMLElement>(INVENTORY_VALUE_CONTAINER_SELECTOR);
@@ -1518,7 +1642,24 @@ select.style.setProperty('-webkit-appearance', 'none');
 
   valueToggleLabel.append(valueToggleControl, valueToggleText);
 
-  bar.append(divider, valueToggleLabel);
+  const valueSummaryText = document.createElement('span');
+  valueSummaryText.className = 'tm-value-toggle__summary';
+  Object.assign(valueSummaryText.style, {
+    font: 'inherit',
+    color: 'var(--chakra-colors-Yellow-Magic, #F3D32B)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flex: '1 1 auto',
+    whiteSpace: 'nowrap',
+    marginLeft: 'auto',
+    textAlign: 'right',
+    gap: '0.25rem',
+  } as CSSStyleDeclaration);
+
+  setValueSummaryText(valueSummaryText, FILTERED_VALUE_LOADING);
+
+  bar.append(divider, valueToggleLabel, valueSummaryText);
 
   const syncValueToggleVisual = (checked: boolean) => {
     switchTrack.style.background = checked
@@ -1546,6 +1687,7 @@ select.style.setProperty('-webkit-appearance', 'none');
     directionLabel,
     valueToggleInput,
     valueToggleLabel,
+    valueSummary: valueSummaryText,
   };
 }
 
@@ -1572,6 +1714,7 @@ function ensureSortingBar(
   let directionSelect: HTMLSelectElement;
   let directionLabelEl: HTMLSpanElement | null = null;
   let valueToggleInput: HTMLInputElement | null = null;
+  let valueSummaryEl: HTMLSpanElement | null = null;
 
   if (!wrap) {
     const ui = createSortingBar();
@@ -1580,8 +1723,10 @@ function ensureSortingBar(
     directionSelect = ui.directionSelect;
     directionLabelEl = ui.directionLabel;
     valueToggleInput = ui.valueToggleInput;
+    valueSummaryEl = ui.valueSummary;
 
     (wrap as any).__grid = grid;
+    (wrap as any).__valueSummary = valueSummaryEl ?? null;
 
     if (closeBtn && (closeBtn as HTMLElement).parentElement) {
       (closeBtn as HTMLElement).insertAdjacentElement('afterend', wrap);
@@ -1643,6 +1788,9 @@ function ensureSortingBar(
     directionSelect = maybeDirectionSelect as HTMLSelectElement;
     directionLabelEl = wrap.querySelector('.tm-direction-label');
     valueToggleInput = wrap.querySelector('label.tm-value-toggle input[type="checkbox"]');
+    valueSummaryEl = wrap.querySelector('.tm-value-toggle__summary');
+
+    (wrap as any).__valueSummary = valueSummaryEl ?? null;
 
     if (directionLabelEl) {
       directionLabelEl.textContent = directionLabelText;
@@ -1673,7 +1821,7 @@ function ensureSortingBar(
   (wrap as any).__grid = grid;
   (wrap as any).__showValues = valueToggleInput?.checked ?? showValues;
 
-  return { wrap, select, directionSelect, valueToggleInput };
+  return { wrap, select, directionSelect, valueToggleInput, valueSummary: valueSummaryEl };
 }
 
 
@@ -1751,6 +1899,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let currentSelect: HTMLSelectElement | null = null;
   let currentDirectionSelect: HTMLSelectElement | null = null;
   let currentValueToggle: HTMLInputElement | null = null;
+  let stopValueSummaryListener: (() => void) | null = null;
   let lastLoggedFilters: string | null = null;
   let lastAppliedFiltersKey: string | null = null;
   let lastAppliedSortKey: SortKey | null = null;
@@ -1774,6 +1923,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     lastAppliedFiltersKey = null;
     lastAppliedSortKey = null;
     shouldEnsureInventoryValueWatcherOnNextVisible = true;
+    if (!grid && stopValueSummaryListener) {
+      stopValueSummaryListener();
+      stopValueSummaryListener = null;
+    }
     if (grid) {
       obs.observe(grid, {
         subtree: true,
@@ -1871,11 +2024,25 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     currentDirectionSelect = mount.directionSelect;
     currentValueToggle = mount.valueToggleInput ?? null;
 
+    if (!stopValueSummaryListener) {
+      stopValueSummaryListener = onInventoryValueChange(() => {
+        const sourceGrid = resolveGrid();
+        if (!sourceGrid || !currentWrap) return;
+        const filtersForSummary = getActiveFiltersFromGrid(
+          sourceGrid,
+          cfg.checkboxSelector,
+          cfg.checkboxLabelSelector
+        );
+        void updateFilteredInventoryValueSummary(currentWrap, filtersForSummary);
+      });
+    }
+
     const activeFilters = getActiveFiltersFromGrid(
       targetGrid,
       cfg.checkboxSelector,
       cfg.checkboxLabelSelector
     );
+    void updateFilteredInventoryValueSummary(currentWrap, activeFilters);
     const serializedFilters = JSON.stringify(activeFilters);
     const filtersChanged = serializedFilters !== lastAppliedFiltersKey;
     if (serializedFilters !== lastLoggedFilters) {
@@ -1965,6 +2132,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       obs.disconnect();
       bodyObserver.disconnect();
       document.removeEventListener('change', changeHandler, true);
+      if (stopValueSummaryListener) {
+        stopValueSummaryListener();
+        stopValueSummaryListener = null;
+      }
       if (currentWrap && currentWrap.parentElement) {
         currentWrap.parentElement.removeChild(currentWrap);
       }
