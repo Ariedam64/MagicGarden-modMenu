@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.6
+// @version      2.2.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18461,7 +18461,6 @@
   var INVENTORY_BASE_INDEX_DATASET_KEY = "tmInventoryBaseIndex";
   var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-ofw63c";
   var INVENTORY_VALUE_CONTAINER_SELECTOR = ".McFlex.css-1p00rng";
-  var INVENTORY_VALUE_REFERENCE_SELECTOR = ":scope > .McFlex.css-1gd1uup";
   var INVENTORY_VALUE_ELEMENT_CLASS = "tm-inventory-item-value";
   var INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
   var INVENTORY_VALUE_DATASET_KEY = "tmInventoryValue";
@@ -19086,6 +19085,7 @@
       alignItems: "center",
       justifyContent: "flex-start",
       gap: "0.15rem",
+      marginTop: "3px",
       fontFamily: 'var(--chakra-fonts-body, "GreyCliff CF", sans-serif)',
       fontWeight: "700",
       fontSize: "0.65rem",
@@ -19106,13 +19106,8 @@
     textEl.textContent = compactValue;
     target.title = fullValue;
     card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
-    if (target.parentElement !== container) {
-      const reference = container.querySelector(INVENTORY_VALUE_REFERENCE_SELECTOR);
-      if (reference && reference.parentElement === container) {
-        reference.insertAdjacentElement("afterend", target);
-      } else {
-        container.appendChild(target);
-      }
+    if (target.parentElement !== container || target !== container.lastElementChild) {
+      container.appendChild(target);
     }
   }
   function assignBaseIndexesToEntries(entries) {
