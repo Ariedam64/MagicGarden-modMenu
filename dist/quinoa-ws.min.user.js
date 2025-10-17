@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.6
+// @version      2.2.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19638,6 +19638,19 @@
     const values = ORDER.filter((value) => value === "none" || allowed.has(value));
     return values.map((value) => ({ value, label: labelByValue[value] || value }));
   }
+  function isMacOsPlatform() {
+    if (typeof navigator === "undefined") return false;
+    const nav = navigator;
+    const platform = nav.userAgentData?.platform || nav.platform || "";
+    if (platform && /mac/i.test(platform)) {
+      return true;
+    }
+    const userAgent = typeof nav.userAgent === "string" ? nav.userAgent : "";
+    return /mac os x/i.test(userAgent);
+  }
+  function shouldUseCustomSelectStyles() {
+    return !isMacOsPlatform();
+  }
   function injectDarkSelectStyles(id = "inv-sort-dark-styles") {
     if (document.getElementById(id)) return;
     const css = `
@@ -19668,7 +19681,7 @@
     style2.textContent = css;
     document.head.appendChild(style2);
   }
-  function createSortingBar() {
+  function createSortingBar(useCustomSelectStyles) {
     const wrap = document.createElement("div");
     wrap.className = "tm-sort-wrap";
     Object.assign(wrap.style, {
@@ -19707,19 +19720,21 @@
     selectWrap.className = "tm-select-wrap";
     const select2 = document.createElement("select");
     select2.className = "tm-sort-select tm-sort-select--key";
-    Object.assign(select2.style, {
-      padding: "6px 10px",
-      border: "1px solid rgba(255,255,255,0.25)",
-      borderRadius: "6px",
-      background: "rgba(17,17,17,0.98)",
-      color: "#e7eef7",
-      cursor: "pointer",
-      flex: "0 0 auto",
-      width: "auto",
-      outline: "none",
-      appearance: "none"
-    });
-    select2.style.setProperty("-webkit-appearance", "none");
+    if (useCustomSelectStyles) {
+      Object.assign(select2.style, {
+        padding: "6px 10px",
+        border: "1px solid rgba(255,255,255,0.25)",
+        borderRadius: "6px",
+        background: "rgba(17,17,17,0.98)",
+        color: "#e7eef7",
+        cursor: "pointer",
+        flex: "0 0 auto",
+        width: "auto",
+        outline: "none",
+        appearance: "none"
+      });
+      select2.style.setProperty("-webkit-appearance", "none");
+    }
     const arrow = document.createElement("span");
     arrow.className = "tm-select-arrow";
     arrow.innerHTML = `
@@ -19727,7 +19742,11 @@
       <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
-    selectWrap.append(select2, arrow);
+    if (useCustomSelectStyles) {
+      selectWrap.append(select2, arrow);
+    } else {
+      selectWrap.append(select2);
+    }
     bar.append(label2, selectWrap);
     const directionLabel = document.createElement("span");
     directionLabel.className = "tm-direction-label";
@@ -19741,19 +19760,21 @@
     directionWrap.className = "tm-select-wrap";
     const directionSelect = document.createElement("select");
     directionSelect.className = "tm-sort-select tm-direction-select";
-    Object.assign(directionSelect.style, {
-      padding: "6px 10px",
-      border: "1px solid rgba(255,255,255,0.25)",
-      borderRadius: "6px",
-      background: "rgba(17,17,17,0.98)",
-      color: "#e7eef7",
-      cursor: "pointer",
-      flex: "0 0 auto",
-      width: "auto",
-      outline: "none",
-      appearance: "none"
-    });
-    directionSelect.style.setProperty("-webkit-appearance", "none");
+    if (useCustomSelectStyles) {
+      Object.assign(directionSelect.style, {
+        padding: "6px 10px",
+        border: "1px solid rgba(255,255,255,0.25)",
+        borderRadius: "6px",
+        background: "rgba(17,17,17,0.98)",
+        color: "#e7eef7",
+        cursor: "pointer",
+        flex: "0 0 auto",
+        width: "auto",
+        outline: "none",
+        appearance: "none"
+      });
+      directionSelect.style.setProperty("-webkit-appearance", "none");
+    }
     const directionArrow = document.createElement("span");
     directionArrow.className = "tm-select-arrow";
     directionArrow.innerHTML = `
@@ -19761,7 +19782,11 @@
       <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
-    directionWrap.append(directionSelect, directionArrow);
+    if (useCustomSelectStyles) {
+      directionWrap.append(directionSelect, directionArrow);
+    } else {
+      directionWrap.append(directionSelect);
+    }
     bar.append(directionLabel, directionWrap);
     const divider = document.createElement("span");
     divider.className = "tm-value-toggle__divider";
@@ -19881,7 +19906,7 @@
       valueSummary: valueSummaryText
     };
   }
-  function ensureSortingBar(grid, cfg, labelByValue, directionLabelText, onChange, showValues, onToggleValues) {
+  function ensureSortingBar(grid, cfg, useCustomSelectStyles, labelByValue, directionLabelText, onChange, showValues, onToggleValues) {
     const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
     if (!filtersBlock) return null;
     const closeBtnInBlock = filtersBlock.querySelector(cfg.closeButtonSelector);
@@ -19893,7 +19918,7 @@
     let valueToggleInput = null;
     let valueSummaryEl = null;
     if (!wrap) {
-      const ui = createSortingBar();
+      const ui = createSortingBar(useCustomSelectStyles);
       wrap = ui.wrap;
       select2 = ui.select;
       directionSelect = ui.directionSelect;
@@ -20025,7 +20050,8 @@
       ...DEFAULT_DIRECTION_BY_SORT_KEY,
       ...cfg.defaultDirectionBySortKey || {}
     };
-    if (cfg.injectDarkStyles) injectDarkSelectStyles();
+    const useCustomSelectStyles = shouldUseCustomSelectStyles();
+    if (cfg.injectDarkStyles && useCustomSelectStyles) injectDarkSelectStyles();
     const applySorting = cfg.applySorting ?? createDefaultApplySorting(cfg);
     let showInventoryValues = loadPersistedInventoryValueVisibility() ?? true;
     setShouldDisplayInventoryValues(showInventoryValues);
@@ -20043,6 +20069,7 @@
     let lastSortedDomSnapshot = null;
     let lastComputedFilterContextKey = null;
     let stopFilterContextListener = null;
+    let lastRenderedInventoryEntryCount = null;
     const updateDomSnapshotForGrid = (target) => {
       if (!target) {
         lastSortedDomSnapshot = null;
@@ -20074,6 +20101,7 @@
       lastAppliedSortKey = null;
       lastSortedDomSnapshot = null;
       lastComputedFilterContextKey = null;
+      lastRenderedInventoryEntryCount = null;
       shouldEnsureInventoryValueWatcherOnNextVisible = true;
       if (!grid && stopValueSummaryListener) {
         stopValueSummaryListener();
@@ -20141,6 +20169,7 @@
       const mount = ensureSortingBar(
         targetGrid,
         cfg,
+        useCustomSelectStyles,
         labelByValue,
         directionLabelText,
         (value, direction, filters, searchQuery) => {
@@ -20193,6 +20222,8 @@
       );
       const container = getInventoryItemsContainer(targetGrid);
       const currentEntries = container ? getInventoryDomEntries(container) : [];
+      const inventoryEntryCountChanged = lastRenderedInventoryEntryCount === null || lastRenderedInventoryEntryCount !== currentEntries.length;
+      const shouldRenderSelectOptions = inventoryEntryCountChanged || !currentSelect?.options?.length;
       const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
       const currentDomSnapshot = createDomSnapshot(currentEntries);
       const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
@@ -20231,7 +20262,10 @@
       const wrapPrevValue = typeof currentWrap.__prevValue === "string" ? currentWrap.__prevValue : null;
       const persistedSortKey = loadPersistedSortKey();
       const preferredValue = (wrapPrevValue && options.some((o) => o.value === wrapPrevValue) ? wrapPrevValue : null) || (persistedSortKey && options.some((o) => o.value === persistedSortKey) ? persistedSortKey : null);
-      renderSelectOptions(currentSelect, options, preferredValue);
+      if (shouldRenderSelectOptions) {
+        renderSelectOptions(currentSelect, options, preferredValue);
+        lastRenderedInventoryEntryCount = currentEntries.length;
+      }
       currentWrap.__prevValue = currentSelect.value;
       const appliedSortKey = currentSelect.value;
       const wrapPrevDirection = typeof currentWrap.__prevDirection === "string" ? currentWrap.__prevDirection : null;

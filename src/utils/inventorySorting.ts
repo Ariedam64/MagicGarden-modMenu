@@ -1875,6 +1875,23 @@ export function computeSortOptions(
 
 // -------------------- Styles (optionnels) --------------------
 
+function isMacOsPlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & {
+    userAgentData?: { platform?: string };
+  };
+  const platform = nav.userAgentData?.platform || nav.platform || '';
+  if (platform && /mac/i.test(platform)) {
+    return true;
+  }
+  const userAgent = typeof nav.userAgent === 'string' ? nav.userAgent : '';
+  return /mac os x/i.test(userAgent);
+}
+
+function shouldUseCustomSelectStyles(): boolean {
+  return !isMacOsPlatform();
+}
+
 function injectDarkSelectStyles(id = 'inv-sort-dark-styles') {
   if (document.getElementById(id)) return;
   const css = `
@@ -1908,7 +1925,7 @@ function injectDarkSelectStyles(id = 'inv-sort-dark-styles') {
 
 // -------------------- UI factory --------------------
 
-function createSortingBar() {
+function createSortingBar(useCustomSelectStyles: boolean) {
   const wrap = document.createElement('div');
   wrap.className = 'tm-sort-wrap';
   Object.assign(wrap.style, {
@@ -1951,22 +1968,21 @@ function createSortingBar() {
 
   const select = document.createElement('select');
   select.className = 'tm-sort-select tm-sort-select--key';
+  if (useCustomSelectStyles) {
     Object.assign(select.style, {
-    padding: '6px 10px',
-    border: '1px solid rgba(255,255,255,0.25)',
-    borderRadius: '6px',
-    background: 'rgba(17,17,17,0.98)',
-    color: '#e7eef7',
-    cursor: 'pointer',
-    flex: '0 0 auto',
-    width: 'auto',
-    outline: 'none',
-    appearance: 'none',
-    });
-
-// clé vendor en kebab-case via setProperty
-select.style.setProperty('-webkit-appearance', 'none');
-
+      padding: '6px 10px',
+      border: '1px solid rgba(255,255,255,0.25)',
+      borderRadius: '6px',
+      background: 'rgba(17,17,17,0.98)',
+      color: '#e7eef7',
+      cursor: 'pointer',
+      flex: '0 0 auto',
+      width: 'auto',
+      outline: 'none',
+      appearance: 'none',
+    } as CSSStyleDeclaration);
+    select.style.setProperty('-webkit-appearance', 'none');
+  }
 
   const arrow = document.createElement('span');
   arrow.className = 'tm-select-arrow';
@@ -1976,7 +1992,11 @@ select.style.setProperty('-webkit-appearance', 'none');
     </svg>
   `;
 
-  selectWrap.append(select, arrow);
+  if (useCustomSelectStyles) {
+    selectWrap.append(select, arrow);
+  } else {
+    selectWrap.append(select);
+  }
   bar.append(label, selectWrap);
 
   const directionLabel = document.createElement('span');
@@ -1993,19 +2013,21 @@ select.style.setProperty('-webkit-appearance', 'none');
 
   const directionSelect = document.createElement('select');
   directionSelect.className = 'tm-sort-select tm-direction-select';
-  Object.assign(directionSelect.style, {
-    padding: '6px 10px',
-    border: '1px solid rgba(255,255,255,0.25)',
-    borderRadius: '6px',
-    background: 'rgba(17,17,17,0.98)',
-    color: '#e7eef7',
-    cursor: 'pointer',
-    flex: '0 0 auto',
-    width: 'auto',
-    outline: 'none',
-    appearance: 'none',
-  } as CSSStyleDeclaration);
-  directionSelect.style.setProperty('-webkit-appearance', 'none');
+  if (useCustomSelectStyles) {
+    Object.assign(directionSelect.style, {
+      padding: '6px 10px',
+      border: '1px solid rgba(255,255,255,0.25)',
+      borderRadius: '6px',
+      background: 'rgba(17,17,17,0.98)',
+      color: '#e7eef7',
+      cursor: 'pointer',
+      flex: '0 0 auto',
+      width: 'auto',
+      outline: 'none',
+      appearance: 'none',
+    } as CSSStyleDeclaration);
+    directionSelect.style.setProperty('-webkit-appearance', 'none');
+  }
 
   const directionArrow = document.createElement('span');
   directionArrow.className = 'tm-select-arrow';
@@ -2015,7 +2037,11 @@ select.style.setProperty('-webkit-appearance', 'none');
     </svg>
   `;
 
-  directionWrap.append(directionSelect, directionArrow);
+  if (useCustomSelectStyles) {
+    directionWrap.append(directionSelect, directionArrow);
+  } else {
+    directionWrap.append(directionSelect);
+  }
   bar.append(directionLabel, directionWrap);
 
   const divider = document.createElement('span');
@@ -2159,6 +2185,7 @@ select.style.setProperty('-webkit-appearance', 'none');
 function ensureSortingBar(
   grid: Element,
   cfg: Required<typeof DEFAULTS> & InventorySortingConfig,
+  useCustomSelectStyles: boolean,
   labelByValue: Record<SortKey, string>,
   directionLabelText: string,
   onChange: (
@@ -2185,7 +2212,7 @@ function ensureSortingBar(
   let valueSummaryEl: HTMLSpanElement | null = null;
 
   if (!wrap) {
-    const ui = createSortingBar();
+    const ui = createSortingBar(useCustomSelectStyles);
     wrap = ui.wrap;
     select = ui.select;
     directionSelect = ui.directionSelect;
@@ -2357,7 +2384,9 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     ...(cfg.defaultDirectionBySortKey || {}),
   };
 
-  if (cfg.injectDarkStyles) injectDarkSelectStyles();
+  const useCustomSelectStyles = shouldUseCustomSelectStyles();
+
+  if (cfg.injectDarkStyles && useCustomSelectStyles) injectDarkSelectStyles();
 
   const applySorting = cfg.applySorting ?? createDefaultApplySorting(cfg);
 
@@ -2378,6 +2407,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let lastSortedDomSnapshot: InventoryDomSnapshot | null = null;
   let lastComputedFilterContextKey: string | null = null;
   let stopFilterContextListener: (() => void) | null = null;
+  let lastRenderedInventoryEntryCount: number | null = null;
 
   const updateDomSnapshotForGrid = (target: Element | null) => {
     if (!target) {
@@ -2420,6 +2450,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     lastAppliedSortKey = null;
     lastSortedDomSnapshot = null;
     lastComputedFilterContextKey = null;
+    lastRenderedInventoryEntryCount = null;
     shouldEnsureInventoryValueWatcherOnNextVisible = true;
     if (!grid && stopValueSummaryListener) {
       stopValueSummaryListener();
@@ -2496,6 +2527,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     const mount = ensureSortingBar(
       targetGrid,
       cfg,
+      useCustomSelectStyles,
       labelByValue,
       directionLabelText,
       (value, direction, filters, searchQuery) => {
@@ -2551,6 +2583,11 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     );
     const container = getInventoryItemsContainer(targetGrid);
     const currentEntries = container ? getInventoryDomEntries(container) : [];
+    const inventoryEntryCountChanged =
+      lastRenderedInventoryEntryCount === null ||
+      lastRenderedInventoryEntryCount !== currentEntries.length;
+    const shouldRenderSelectOptions =
+      inventoryEntryCountChanged || !currentSelect?.options?.length;
     const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
     const currentDomSnapshot = createDomSnapshot(currentEntries);
     const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
@@ -2595,7 +2632,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       (wrapPrevValue && options.some((o) => o.value === wrapPrevValue) ? wrapPrevValue : null) ||
       (persistedSortKey && options.some((o) => o.value === persistedSortKey) ? persistedSortKey : null);
 
-    renderSelectOptions(currentSelect, options, preferredValue);
+    if (shouldRenderSelectOptions) {
+      renderSelectOptions(currentSelect, options, preferredValue);
+      lastRenderedInventoryEntryCount = currentEntries.length;
+    }
     (currentWrap as any).__prevValue = currentSelect.value;
 
     const appliedSortKey = currentSelect.value as SortKey;
