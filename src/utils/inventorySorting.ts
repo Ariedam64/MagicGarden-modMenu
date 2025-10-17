@@ -280,7 +280,6 @@ const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
 const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
 const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-ofw63c';
 const INVENTORY_VALUE_CONTAINER_SELECTOR = '.McFlex.css-1p00rng';
-const INVENTORY_VALUE_REFERENCE_SELECTOR = ':scope > .McFlex.css-1gd1uup';
 const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
 const INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
 const INVENTORY_VALUE_DATASET_KEY = 'tmInventoryValue';
@@ -1093,6 +1092,7 @@ function updateInventoryCardValue(card: HTMLElement, rawValue: number | null): v
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: '0.15rem',
+    marginTop: '3px',
     fontFamily: 'var(--chakra-fonts-body, "GreyCliff CF", sans-serif)',
     fontWeight: '700',
     fontSize: '0.65rem',
@@ -1118,13 +1118,8 @@ function updateInventoryCardValue(card: HTMLElement, rawValue: number | null): v
 
   card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
 
-  if (target.parentElement !== container) {
-    const reference = container.querySelector<HTMLElement>(INVENTORY_VALUE_REFERENCE_SELECTOR);
-    if (reference && reference.parentElement === container) {
-      reference.insertAdjacentElement('afterend', target);
-    } else {
-      container.appendChild(target);
-    }
+  if (target.parentElement !== container || target !== container.lastElementChild) {
+    container.appendChild(target);
   }
 }
 
