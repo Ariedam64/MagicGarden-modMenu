@@ -238,9 +238,32 @@ const MAP_EXTRA_BY_FILTER_DEFAULT: Record<FilterKey, SortKey[]> = {
   decor: [],
   // crop/plant = base + size/mutations
   crop: ['size', 'mutations'],
+  produce: ['size', 'mutations'],
   plant: [],
   // pet = base + size/mutations/strength
   pet: ['mutations', 'strength'],
+};
+
+type FilterContextListener = (contextKey: string) => void;
+
+const FILTER_CONTEXT_ITEM_TYPES_CACHE = new Map<string, ReadonlySet<string>>();
+const FILTER_CONTEXT_LISTENERS = new Set<FilterContextListener>();
+
+const addFilterContextListener = (listener: FilterContextListener): (() => void) => {
+  FILTER_CONTEXT_LISTENERS.add(listener);
+  return () => {
+    FILTER_CONTEXT_LISTENERS.delete(listener);
+  };
+};
+
+const notifyFilterContextListeners = (contextKey: string) => {
+  FILTER_CONTEXT_LISTENERS.forEach((listener) => {
+    try {
+      listener(contextKey);
+    } catch (error) {
+      console.warn('[InventorySorting] Listener de contexte de filtre en erreur', error);
+    }
+  });
 };
 
 const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
@@ -328,6 +351,54 @@ const labelIsChecked = (el: Element): boolean =>
   el.matches('[data-checked]') || !!el.querySelector('[data-checked]');
 
 const normalize = (s: string | null | undefined) => (s ?? '').trim().toLowerCase();
+
+const createFilterContextKey = (filters: readonly string[], search: string): string => {
+  const normalizedFilters = filters
+    .map((value) => normalize(value))
+    .filter((value) => value && value !== 'all');
+  normalizedFilters.sort();
+  const normalizedSearch = normalize(search);
+  return `${normalizedFilters.join('|')}::${normalizedSearch}`;
+};
+
+const areSetsEqual = (a?: ReadonlySet<string> | null, b?: ReadonlySet<string> | null): boolean => {
+  if (a === b) return true;
+  if (!a || !b || a.size !== b.size) return false;
+  for (const value of a) {
+    if (!b.has(value)) return false;
+  }
+  return true;
+};
+
+const getCachedItemTypesForKey = (contextKey: string): ReadonlySet<string> | null => {
+  return FILTER_CONTEXT_ITEM_TYPES_CACHE.get(contextKey) ?? null;
+};
+
+const getCachedItemTypesForContext = (
+  filters: readonly string[],
+  search: string
+): ReadonlySet<string> | null => {
+  const key = createFilterContextKey(filters, search);
+  return getCachedItemTypesForKey(key);
+};
+
+const setCachedItemTypesForKey = (contextKey: string, types: Set<string>): void => {
+  const normalizedTypes = new Set<string>();
+  types.forEach((type) => {
+    const normalizedType = normalize(type);
+    if (normalizedType) {
+      normalizedTypes.add(normalizedType);
+    }
+  });
+
+  const previous = FILTER_CONTEXT_ITEM_TYPES_CACHE.get(contextKey) ?? null;
+  if (previous && areSetsEqual(previous, normalizedTypes)) {
+    return;
+  }
+
+  FILTER_CONTEXT_ITEM_TYPES_CACHE.set(contextKey, normalizedTypes);
+  notifyFilterContextListeners(contextKey);
+};
 
 const getInventorySearchInput = (grid: Element | null): HTMLInputElement | null => {
   if (!grid) return null;
@@ -571,6 +642,69 @@ const FILTER_LABEL_TO_ITEM_TYPES: Record<string, string[]> = {
   eggs: ["Egg"],
 };
 
+const ITEM_TYPE_TO_FILTER_KEYS: Record<string, string[]> = (() => {
+  const mapping = new Map<string, Set<string>>();
+  for (const [filterKey, itemTypes] of Object.entries(FILTER_LABEL_TO_ITEM_TYPES)) {
+    for (const itemType of itemTypes) {
+      const normalizedType = normalize(itemType);
+      if (!normalizedType) continue;
+      const set = mapping.get(normalizedType) ?? new Set<string>();
+      set.add(filterKey);
+      mapping.set(normalizedType, set);
+    }
+  }
+  const result: Record<string, string[]> = {};
+  mapping.forEach((value, key) => {
+    result[key] = Array.from(value);
+  });
+  return result;
+})();
+
+const getExtrasForFilterKey = (
+  filterKey: string,
+  mapExtraByFilter: Readonly<Partial<Record<string, SortKey[]>>>
+): SortKey[] => {
+  if (!filterKey) return [];
+  const direct = mapExtraByFilter[filterKey];
+  if (Array.isArray(direct) && direct.length) {
+    return direct;
+  }
+  if (filterKey.endsWith('s')) {
+    const singular = filterKey.slice(0, -1);
+    if (singular) {
+      const singularMatch = mapExtraByFilter[singular];
+      if (Array.isArray(singularMatch) && singularMatch.length) {
+        return singularMatch;
+      }
+    }
+  }
+  return [];
+};
+
+const getExtrasForItemType = (
+  itemType: string,
+  mapExtraByFilter: Readonly<Partial<Record<string, SortKey[]>>>
+): SortKey[] => {
+  const normalizedType = normalize(itemType);
+  if (!normalizedType) return [];
+  const extras = new Set<SortKey>();
+
+  const direct = mapExtraByFilter[normalizedType];
+  if (Array.isArray(direct)) {
+    direct.forEach((value) => extras.add(value));
+  }
+
+  const relatedFilterKeys = ITEM_TYPE_TO_FILTER_KEYS[normalizedType] ?? [];
+  for (const filterKey of relatedFilterKeys) {
+    const values = mapExtraByFilter[filterKey];
+    if (Array.isArray(values)) {
+      values.forEach((value) => extras.add(value));
+    }
+  }
+
+  return Array.from(extras);
+};
+
 function filterLabelToItemTypes(filter: string): string[] {
   const key = normalize(filter);
   if (!key || key === "all") return [];
@@ -586,6 +720,7 @@ interface FilterInventoryResult {
   filteredItems: any[];
   keepAll: boolean;
   itemTypes: Set<string>;
+  detectedItemTypes: Set<string>;
 }
 
 function inventoryItemMatchesSearchQuery(item: any, normalizedQuery: string): boolean {
@@ -716,7 +851,18 @@ function filterInventoryItems(
 
   attachItemValues(filteredItems);
 
-  return { filteredItems, keepAll, itemTypes };
+  const detectedItemTypes = new Set<string>();
+  for (const item of filteredItems) {
+    const type = typeof item?.itemType === 'string' ? item.itemType.trim() : '';
+    if (type) {
+      detectedItemTypes.add(type);
+    }
+  }
+
+  const contextKey = createFilterContextKey(filters, normalizedSearch);
+  setCachedItemTypesForKey(contextKey, detectedItemTypes);
+
+  return { filteredItems, keepAll, itemTypes, detectedItemTypes };
 }
 
 function getInventoryItemsContainer(grid: Element): HTMLElement | null {
@@ -998,80 +1144,159 @@ function readBaseIndex(entry: InventoryDomEntry): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
-const NAME_FIELDS_BY_ITEM_TYPE: Record<string, string> = {
-  Seed: "species",
-  Crop: "species",
-  Produce: "species",
-  Plant: "species",
-  Pet: "petSpecies",
-  Egg: "eggId",
-  Tool: "toolId",
-  Decor: "decorId",
-};
+const stringOrEmpty = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
 
-const readCatalogNameForInventoryItem = (type: string, identifier: string): string => {
-  if (!type || !identifier) return "";
+type NestedKeys = readonly string[];
 
-  const trimValue = (value: unknown): string =>
-    typeof value === "string" ? value.trim() : "";
-
-  switch (type) {
-    case "Tool": {
-      const entry = (toolCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.name);
-    }
-    case "Plant": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.plant?.name);
-    }
-    case "Seed": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.seed?.name);
-    }
-    case "Produce":
-    case "Crop": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.crop?.name);
-    }
-    case "Pet": {
-      const entry = (petCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.name);
-    }
-    case "Egg": {
-      const entry = (eggCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.name);
-    }
-    case "Decor": {
-      const entry = (decorCatalog as Record<string, any>)[identifier];
-      return trimValue(entry?.name);
-    }
-    default:
+const pickNestedString = (source: any, path: NestedKeys): string => {
+  let current: any = source;
+  for (const key of path) {
+    if (!current || typeof current !== "object") {
       return "";
+    }
+    current = current[key as keyof typeof current];
   }
+  return stringOrEmpty(current);
 };
+
+const pickFirstNestedString = (source: any, paths: readonly NestedKeys[]): string => {
+  for (const path of paths) {
+    const value = pickNestedString(source, path);
+    if (value) return value;
+  }
+  return "";
+};
+
+interface CatalogLookup {
+  identifierField: string;
+  getEntry(identifier: string): any;
+  getNamePaths?: readonly NestedKeys[];
+  getRarityPaths?: readonly NestedKeys[];
+}
+
+const plantCatalogEntry = (identifier: string) =>
+  (plantCatalog as Record<string, any>)[identifier];
+const petCatalogEntry = (identifier: string) =>
+  (petCatalog as Record<string, any>)[identifier];
+const eggCatalogEntry = (identifier: string) =>
+  (eggCatalog as Record<string, any>)[identifier];
+const toolCatalogEntry = (identifier: string) =>
+  (toolCatalog as Record<string, any>)[identifier];
+const decorCatalogEntry = (identifier: string) =>
+  (decorCatalog as Record<string, any>)[identifier];
+
+const SEED_NAME_PATHS: readonly NestedKeys[] = [
+  ["seed", "name"],
+  ["plant", "name"],
+  ["crop", "name"],
+];
+
+const SEED_RARITY_PATHS: readonly NestedKeys[] = [
+  ["seed", "rarity"],
+  ["crop", "rarity"],
+  ["plant", "rarity"],
+];
+
+const CROP_NAME_PATHS: readonly NestedKeys[] = [
+  ["crop", "name"],
+  ["plant", "name"],
+  ["seed", "name"],
+];
+
+const CROP_RARITY_PATHS: readonly NestedKeys[] = [
+  ["crop", "rarity"],
+  ["plant", "rarity"],
+  ["seed", "rarity"],
+];
+
+const PLANT_NAME_PATHS: readonly NestedKeys[] = [
+  ["plant", "name"],
+  ["crop", "name"],
+  ["seed", "name"],
+];
+
+const PLANT_RARITY_PATHS: readonly NestedKeys[] = [
+  ["plant", "rarity"],
+  ["crop", "rarity"],
+  ["seed", "rarity"],
+];
+
+const createPlantLookup = (
+  identifierField: string,
+  namePaths: readonly NestedKeys[],
+  rarityPaths: readonly NestedKeys[]
+): CatalogLookup => ({
+  identifierField,
+  getEntry: plantCatalogEntry,
+  getNamePaths: namePaths,
+  getRarityPaths: rarityPaths,
+});
+
+const CATALOG_LOOKUPS: Record<string, CatalogLookup> = {
+  Seed: createPlantLookup("species", SEED_NAME_PATHS, SEED_RARITY_PATHS),
+  Crop: createPlantLookup("species", CROP_NAME_PATHS, CROP_RARITY_PATHS),
+  Produce: createPlantLookup("species", CROP_NAME_PATHS, CROP_RARITY_PATHS),
+  Plant: createPlantLookup("species", PLANT_NAME_PATHS, PLANT_RARITY_PATHS),
+  Pet: {
+    identifierField: "petSpecies",
+    getEntry: petCatalogEntry,
+    getNamePaths: [["name"]],
+    getRarityPaths: [["rarity"]],
+  },
+  Egg: {
+    identifierField: "eggId",
+    getEntry: eggCatalogEntry,
+    getNamePaths: [["name"]],
+    getRarityPaths: [["rarity"]],
+  },
+  Tool: {
+    identifierField: "toolId",
+    getEntry: toolCatalogEntry,
+    getNamePaths: [["name"]],
+    getRarityPaths: [["rarity"]],
+  },
+  Decor: {
+    identifierField: "decorId",
+    getEntry: decorCatalogEntry,
+    getNamePaths: [["name"]],
+    getRarityPaths: [["rarity"]],
+  },
+};
+
+const getCatalogLookup = (type: string): CatalogLookup | null =>
+  CATALOG_LOOKUPS[type] ?? null;
 
 const getInventoryItemName = (item: any): string => {
   if (!item || typeof item !== "object") return "";
 
-  const type = typeof item.itemType === "string" ? item.itemType.trim() : "";
-  const field = type ? NAME_FIELDS_BY_ITEM_TYPE[type] : undefined;
-  const raw = field ? (item as Record<string, unknown>)[field] : undefined;
-  const identifier = typeof raw === "string" ? raw.trim() : "";
+  const type = stringOrEmpty((item as Record<string, unknown>).itemType);
+  const lookup = getCatalogLookup(type);
 
-  if (identifier) {
-    const catalogName = readCatalogNameForInventoryItem(type, identifier);
-    if (catalogName) {
-      return catalogName;
+  if (lookup) {
+    const identifier = readNestedStringField(item, lookup.identifierField) ?? "";
+
+    if (identifier) {
+      const entry = lookup.getEntry(identifier);
+      const catalogName = lookup.getNamePaths
+        ? pickFirstNestedString(entry, lookup.getNamePaths)
+        : "";
+
+      if (catalogName) {
+        return catalogName;
+      }
+
+      return identifier;
     }
-    return identifier;
   }
 
-  const fallback = typeof (item as Record<string, unknown>).name === "string"
-    ? (item as Record<string, string>).name
-    : typeof (item as Record<string, unknown>).id === "string"
-    ? (item as Record<string, string>).id
-    : type;
-  return typeof fallback === "string" ? fallback.trim() : "";
+  const fallbackName = stringOrEmpty((item as Record<string, unknown>).name);
+  if (fallbackName) return fallbackName;
+
+  const fallbackId = stringOrEmpty((item as Record<string, unknown>).id);
+  if (fallbackId) return fallbackId;
+
+  return type;
 };
 
 const QUANTITY_ONE_TYPES = new Set(["Produce", "Crop", "Plant", "Pet"]);
@@ -1095,54 +1320,20 @@ const getInventoryItemQuantity = (item: any): number => {
   return 0;
 };
 
-const readStringField = (item: any, field: string | undefined): string => {
-  if (!item || typeof item !== "object" || !field) return "";
-  const raw = (item as Record<string, unknown>)[field];
-  return typeof raw === "string" ? raw.trim() : "";
-};
-
 const getInventoryItemRarity = (item: any): string => {
   if (!item || typeof item !== "object") return "";
 
-  const rawType = typeof item.itemType === "string" ? item.itemType : "";
-  const type = rawType.trim();
-  const field = NAME_FIELDS_BY_ITEM_TYPE[type];
-  const identifier = readStringField(item, field);
+  const type = stringOrEmpty((item as Record<string, unknown>).itemType);
+  const lookup = getCatalogLookup(type);
+  if (!lookup || !lookup.getRarityPaths?.length) {
+    return "";
+  }
+
+  const identifier = readNestedStringField(item, lookup.identifierField) ?? "";
   if (!identifier) return "";
 
-  switch (type) {
-    case "Seed": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return String(entry?.seed?.rarity ?? entry?.crop?.rarity ?? entry?.plant?.rarity ?? "").trim();
-    }
-    case "Crop":
-    case "Produce": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return String(entry?.crop?.rarity ?? entry?.plant?.rarity ?? entry?.seed?.rarity ?? "").trim();
-    }
-    case "Plant": {
-      const entry = (plantCatalog as Record<string, any>)[identifier];
-      return String(entry?.plant?.rarity ?? entry?.crop?.rarity ?? entry?.seed?.rarity ?? "").trim();
-    }
-    case "Pet": {
-      const entry = (petCatalog as Record<string, any>)[identifier];
-      return String(entry?.rarity ?? "").trim();
-    }
-    case "Egg": {
-      const entry = (eggCatalog as Record<string, any>)[identifier];
-      return String(entry?.rarity ?? "").trim();
-    }
-    case "Tool": {
-      const entry = (toolCatalog as Record<string, any>)[identifier];
-      return String(entry?.rarity ?? "").trim();
-    }
-    case "Decor": {
-      const entry = (decorCatalog as Record<string, any>)[identifier];
-      return String(entry?.rarity ?? "").trim();
-    }
-    default:
-      return "";
-  }
+  const entry = lookup.getEntry(identifier);
+  return pickFirstNestedString(entry, lookup.getRarityPaths);
 };
 
 const readNestedValue = <T>(
@@ -1637,27 +1828,56 @@ export function getActiveFiltersFromGrid(
 export function computeSortOptions(
   activeFilters: string[],
   labelByValue: Record<SortKey, string> = LABEL_BY_VALUE_DEFAULT,
-  mapExtraByFilter: Readonly<Partial<Record<string, SortKey[]>>> = MAP_EXTRA_BY_FILTER_DEFAULT
+  mapExtraByFilter: Readonly<Partial<Record<string, SortKey[]>>> = MAP_EXTRA_BY_FILTER_DEFAULT,
+  searchQuery = ''
 ): SortOption[] {
-  if (!activeFilters.length) {
-    const values = [...ALWAYS, ...BASE_SORT];
-    return values.map(v => ({ value: v, label: labelByValue[v] || v }));
+  const normalizedFilters = activeFilters
+    .map((value) => (value ?? '').trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedSearch = normalize(searchQuery);
+
+  const intersectSets = (sets: Array<Set<SortKey>>): Set<SortKey> | null => {
+    if (!sets.length) return null;
+    let intersection = new Set<SortKey>(sets[0]);
+    for (let i = 1; i < sets.length; i++) {
+      const current = sets[i];
+      intersection = new Set([...intersection].filter((value) => current.has(value)));
+    }
+    return intersection;
+  };
+
+  const filterSets = normalizedFilters.map(
+    (filterKey) => new Set<SortKey>([...BASE_SORT, ...getExtrasForFilterKey(filterKey, mapExtraByFilter)])
+  );
+
+  const detectedItemTypes = getCachedItemTypesForContext(activeFilters, normalizedSearch);
+  const typeSets: Array<Set<SortKey>> = [];
+  if (detectedItemTypes && detectedItemTypes.size) {
+    detectedItemTypes.forEach((itemType) => {
+      const extras = getExtrasForItemType(itemType, mapExtraByFilter);
+      typeSets.push(new Set<SortKey>([...BASE_SORT, ...extras]));
+    });
   }
 
-  const act = activeFilters.map(s => (s ?? '').trim().toLowerCase());
-  const getExtras = (k: string): SortKey[] => mapExtraByFilter[k] ?? [];
+  const allowedFromFilters = intersectSets(filterSets);
+  const allowedFromTypes = intersectSets(typeSets);
 
-  const first = act[0];
-  let allowed = new Set<SortKey>([...BASE_SORT, ...getExtras(first)]);
+  let allowed: Set<SortKey> | null = null;
 
-  for (let i = 1; i < act.length; i++) {
-    const key = act[i];
-    const current = new Set<SortKey>([...BASE_SORT, ...getExtras(key)]);
-    allowed = new Set([...allowed].filter(x => current.has(x)));
+  if (allowedFromFilters && allowedFromTypes) {
+    allowed = new Set<SortKey>([...allowedFromFilters].filter((value) => allowedFromTypes.has(value)));
+  } else if (allowedFromFilters) {
+    allowed = new Set<SortKey>(allowedFromFilters);
+  } else if (allowedFromTypes) {
+    allowed = new Set<SortKey>(allowedFromTypes);
   }
 
-  const values = ORDER.filter(v => v === 'none' || allowed.has(v));
-  return values.map(v => ({ value: v, label: labelByValue[v] || v }));
+  if (!allowed || !allowed.size) {
+    allowed = new Set<SortKey>(BASE_SORT);
+  }
+
+  const values = ORDER.filter((value) => value === 'none' || allowed!.has(value));
+  return values.map((value) => ({ value, label: labelByValue[value] || value }));
 }
 
 
@@ -2164,6 +2384,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let lastAppliedDirection: SortDirection | null = null;
   let shouldEnsureInventoryValueWatcherOnNextVisible = true;
   let lastSortedDomSnapshot: InventoryDomSnapshot | null = null;
+  let lastComputedFilterContextKey: string | null = null;
+  let stopFilterContextListener: (() => void) | null = null;
 
   const updateDomSnapshotForGrid = (target: Element | null) => {
     if (!target) {
@@ -2205,10 +2427,15 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     lastAppliedFiltersKey = null;
     lastAppliedSortKey = null;
     lastSortedDomSnapshot = null;
+    lastComputedFilterContextKey = null;
     shouldEnsureInventoryValueWatcherOnNextVisible = true;
     if (!grid && stopValueSummaryListener) {
       stopValueSummaryListener();
       stopValueSummaryListener = null;
+    }
+    if (!grid && stopFilterContextListener) {
+      stopFilterContextListener();
+      stopFilterContextListener = null;
     }
     if (grid) {
       obs.observe(grid, {
@@ -2335,6 +2562,14 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
     const currentDomSnapshot = createDomSnapshot(currentEntries);
     const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
+    lastComputedFilterContextKey = createFilterContextKey(activeFilters, searchQueryForGrid);
+    if (!stopFilterContextListener) {
+      stopFilterContextListener = addFilterContextListener((contextKey) => {
+        if (contextKey === lastComputedFilterContextKey) {
+          setTimeout(refresh, 0);
+        }
+      });
+    }
     void updateFilteredInventoryValueSummary(currentWrap, activeFilters, searchQueryForGrid);
     const serializedFilters = JSON.stringify({
       filters: activeFilters,
@@ -2353,7 +2588,12 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         searchQueryForGrid
       );
     }
-    const options = computeSortOptions(activeFilters, labelByValue, mapExtraByFilter);
+    const options = computeSortOptions(
+      activeFilters,
+      labelByValue,
+      mapExtraByFilter,
+      searchQueryForGrid
+    );
     const wrapPrevValue =
       typeof (currentWrap as any).__prevValue === 'string'
         ? ((currentWrap as any).__prevValue as string)
@@ -2464,6 +2704,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         stopValueSummaryListener();
         stopValueSummaryListener = null;
       }
+      if (stopFilterContextListener) {
+        stopFilterContextListener();
+        stopFilterContextListener = null;
+      }
       if (currentWrap && currentWrap.parentElement) {
         currentWrap.parentElement.removeChild(currentWrap);
       }
@@ -2555,7 +2799,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       const filters = targetGrid
         ? getActiveFiltersFromGrid(targetGrid, cfg.checkboxSelector, cfg.checkboxLabelSelector)
         : [];
-      return computeSortOptions(filters, labelByValue, mapExtraByFilter);
+      const search = getNormalizedInventorySearchQuery(targetGrid);
+      return computeSortOptions(filters, labelByValue, mapExtraByFilter, search);
     },
     getGrid() {
       return resolveGrid();
