@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.7
+// @version      2.2.9
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -24619,7 +24619,10 @@ next: ${next}`;
   var WEATHER_MUTATIONS = Object.entries(
     tileRefsMutations
   ).filter((entry) => {
-    const [, value] = entry;
+    const [key2, value] = entry;
+    if (key2 === "Puddle") {
+      return false;
+    }
     return typeof value === "number" && Number.isFinite(value);
   }).map(([key2, value]) => ({
     key: key2,
@@ -24651,21 +24654,29 @@ next: ${next}`;
     tileRef: null,
     iconFactory: createNoWeatherIcon
   });
+  var isWeatherMutationAvailable = (tag) => WEATHER_MUTATIONS.some((info) => info.key === tag);
   var WEATHER_RECIPE_GROUPS = {
     Wet: "condition",
     Chilled: "condition",
     Frozen: "condition",
-    Puddle: "condition",
     Dawnlit: "lighting",
     Ambershine: "lighting",
     Dawncharged: "lighting",
     Ambercharged: "lighting"
   };
   var WEATHER_RECIPE_GROUP_MEMBERS = {
-    condition: ["Wet", "Chilled", "Frozen", "Puddle"],
+    condition: ["Wet", "Chilled", "Frozen"],
     lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"]
   };
+  function normalizeWeatherSelection(selection) {
+    selection.forEach((tag) => {
+      if (!isWeatherMutationAvailable(tag)) {
+        selection.delete(tag);
+      }
+    });
+  }
   function normalizeRecipeSelection(selection) {
+    normalizeWeatherSelection(selection);
     const seen = /* @__PURE__ */ new Set();
     WEATHER_MUTATIONS.forEach((info) => {
       if (!selection.has(info.key)) return;
@@ -25089,17 +25100,28 @@ next: ${next}`;
     });
     target.weatherMode = src.weatherMode === "ALL" || src.weatherMode === "RECIPES" ? src.weatherMode : "ANY";
     target.weatherSelected.clear();
-    (src.weatherSelected ?? []).forEach((tag) => target.weatherSelected.add(tag));
+    (src.weatherSelected ?? []).forEach((tag) => {
+      const weatherTag = tag;
+      if (isWeatherMutationAvailable(weatherTag)) {
+        target.weatherSelected.add(weatherTag);
+      }
+    });
     target.weatherRecipes.length = 0;
     (src.weatherRecipes ?? []).forEach((recipe) => {
       const set2 = /* @__PURE__ */ new Set();
       if (Array.isArray(recipe)) {
-        recipe.forEach((tag) => set2.add(tag));
+        recipe.forEach((tag) => {
+          const weatherTag = tag;
+          if (isWeatherMutationAvailable(weatherTag)) {
+            set2.add(weatherTag);
+          }
+        });
       }
       target.weatherRecipes.push(set2);
     });
   }
   function serializeSettingsState(state2) {
+    normalizeWeatherSelection(state2.weatherSelected);
     state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
     const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : state2.scaleLockMode === "NONE" ? "NONE" : "RANGE";
     const minClampHigh = mode === "MINIMUM" ? 100 : 99;

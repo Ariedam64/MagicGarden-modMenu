@@ -139,7 +139,10 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
   tileRefsMutations as Record<string, number>,
 )
   .filter((entry): entry is [WeatherTag, number] => {
-    const [, value] = entry;
+    const [key, value] = entry;
+    if (key === "Puddle") {
+      return false;
+    }
     return typeof value === "number" && Number.isFinite(value);
   })
   .map(([key, value]) => ({
@@ -177,11 +180,13 @@ WEATHER_MUTATIONS.unshift({
   iconFactory: createNoWeatherIcon,
 });
 
+const isWeatherMutationAvailable = (tag: WeatherTag): boolean =>
+  WEATHER_MUTATIONS.some(info => info.key === tag);
+
 const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
   Wet: "condition",
   Chilled: "condition",
   Frozen: "condition",
-  Puddle: "condition",
   Dawnlit: "lighting",
   Ambershine: "lighting",
   Dawncharged: "lighting",
@@ -189,11 +194,20 @@ const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
 };
 
 const WEATHER_RECIPE_GROUP_MEMBERS: Record<WeatherRecipeGroup, WeatherTag[]> = {
-  condition: ["Wet", "Chilled", "Frozen", "Puddle"],
+  condition: ["Wet", "Chilled", "Frozen"],
   lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"],
 };
 
+function normalizeWeatherSelection(selection: Set<WeatherTag>): void {
+  selection.forEach(tag => {
+    if (!isWeatherMutationAvailable(tag)) {
+      selection.delete(tag);
+    }
+  });
+}
+
 function normalizeRecipeSelection(selection: Set<WeatherTag>): void {
+  normalizeWeatherSelection(selection);
   const seen = new Set<WeatherRecipeGroup>();
   WEATHER_MUTATIONS.forEach(info => {
     if (!selection.has(info.key)) return;
@@ -700,18 +714,29 @@ function hydrateSettingsFromPersisted(
   });
   target.weatherMode = src.weatherMode === "ALL" || src.weatherMode === "RECIPES" ? src.weatherMode : "ANY";
   target.weatherSelected.clear();
-  (src.weatherSelected ?? []).forEach(tag => target.weatherSelected.add(tag as WeatherTag));
+  (src.weatherSelected ?? []).forEach(tag => {
+    const weatherTag = tag as WeatherTag;
+    if (isWeatherMutationAvailable(weatherTag)) {
+      target.weatherSelected.add(weatherTag);
+    }
+  });
   target.weatherRecipes.length = 0;
   (src.weatherRecipes ?? []).forEach(recipe => {
     const set = new Set<WeatherTag>();
     if (Array.isArray(recipe)) {
-      recipe.forEach(tag => set.add(tag as WeatherTag));
+      recipe.forEach(tag => {
+        const weatherTag = tag as WeatherTag;
+        if (isWeatherMutationAvailable(weatherTag)) {
+          set.add(weatherTag);
+        }
+      });
     }
     target.weatherRecipes.push(set);
   });
 }
 
 function serializeSettingsState(state: LockerSettingsState): LockerSettingsPersisted {
+  normalizeWeatherSelection(state.weatherSelected);
   state.weatherRecipes.forEach(set => normalizeRecipeSelection(set));
   const mode = state.scaleLockMode === "MINIMUM"
     ? "MINIMUM"
