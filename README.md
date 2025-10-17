@@ -76,6 +76,13 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 ### 🧩 Misc
 - Player ghost movement toggle with adjustable delay to move silently.
 - Seed deleter workflow to bulk-select species, review totals, and delete/clear in one place.
+- Inventory sorter upgrade with direction selector, toggle to reveal item values with filtered totals, and persistence so your last sort/search combo is reapplied automatically.
+
+### 📊 Stats
+- Dedicated dashboard that snapshots your session: when tracking started, and collapsible cards per domain.
+- Garden metrics counting planted, harvested, destroyed crops and watering efficiency (including time saved).
+- Shop ledger highlighting seeds/tools/eggs/decors bought plus revenue from crop and pet sales.
+- Pet hatching breakdown per rarity with sprites, plus ability trigger/value totals and weather event counters.
 
 ### ⌨️ Keybinds
 - Rebind every supported action through hotkey capture buttons, including modifier-only shortcuts.
