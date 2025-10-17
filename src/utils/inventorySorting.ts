@@ -1670,7 +1670,8 @@ function createDefaultApplySorting(
       filtersChanged ||
       entryCountChanged ||
       baseLengthChanged ||
-      !hasAllBaseIndexes;
+      !hasAllBaseIndexes ||
+      searchChanged;
 
     // 🔒 Ici on ne touche à state que s'il existe ET qu'on ne reconstruit pas
     if (state && !needsRebuild) {
@@ -1685,10 +1686,6 @@ function createDefaultApplySorting(
       state.filtersKey = filtersKey;
       state.searchQuery = searchQuery;
       state.entryCount = entries.length;
-
-      if (searchChanged && !entryCountChanged) {
-        return null;
-      }
 
       return state;
     }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.3
+// @version      2.2.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18308,7 +18308,6 @@
     injectDarkStyles: true
   };
   var INVENTORY_SEARCH_INPUT_SELECTOR = "input.chakra-input.css-8e1l1i";
-  var ALWAYS = ["none"];
   var BASE_SORT = ["alpha", "qty", "rarity", "value"];
   var ORDER = [
     "none",
@@ -18328,6 +18327,16 @@
   var DIRECTION_LABELS_DEFAULT = {
     asc: "Ascending",
     desc: "Descending"
+  };
+  var getPetAbilityDisplayName = (abilityId) => {
+    if (typeof abilityId !== "string") return null;
+    const trimmedId = abilityId.trim();
+    if (!trimmedId) return null;
+    const ability = petAbilities[trimmedId] ?? null;
+    const name = ability?.name;
+    if (typeof name !== "string") return null;
+    const trimmedName = name.trim();
+    return trimmedName ? trimmedName : null;
   };
   var INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = "mg-mod.inventory.showValues";
   var loadPersistedInventoryValueVisibility = () => {
@@ -18417,9 +18426,27 @@
     decor: [],
     // crop/plant = base + size/mutations
     crop: ["size", "mutations"],
+    produce: ["size", "mutations"],
     plant: [],
     // pet = base + size/mutations/strength
     pet: ["mutations", "strength"]
+  };
+  var FILTER_CONTEXT_ITEM_TYPES_CACHE = /* @__PURE__ */ new Map();
+  var FILTER_CONTEXT_LISTENERS = /* @__PURE__ */ new Set();
+  var addFilterContextListener = (listener) => {
+    FILTER_CONTEXT_LISTENERS.add(listener);
+    return () => {
+      FILTER_CONTEXT_LISTENERS.delete(listener);
+    };
+  };
+  var notifyFilterContextListeners = (contextKey) => {
+    FILTER_CONTEXT_LISTENERS.forEach((listener) => {
+      try {
+        listener(contextKey);
+      } catch (error) {
+        console.warn("[InventorySorting] Listener de contexte de filtre en erreur", error);
+      }
+    });
   };
   var LABEL_BY_VALUE_DEFAULT = {
     none: "None",
@@ -18449,6 +18476,19 @@
     }
     return src.startsWith("data:") ? src : `data:image/png;base64,${src}`;
   })();
+  function createDomSnapshot(entries) {
+    return entries.map((entry) => entry.wrapper);
+  }
+  function haveDomEntriesChanged(previous, nextEntries) {
+    if (!previous) return true;
+    if (previous.length !== nextEntries.length) return true;
+    for (let i = 0; i < nextEntries.length; i++) {
+      if (previous[i] !== nextEntries[i].wrapper) {
+        return true;
+      }
+    }
+    return false;
+  }
   var debounce = (fn, wait = 120) => {
     let t;
     return (...args) => {
@@ -18465,6 +18505,42 @@
   }
   var labelIsChecked = (el2) => el2.matches("[data-checked]") || !!el2.querySelector("[data-checked]");
   var normalize2 = (s) => (s ?? "").trim().toLowerCase();
+  var createFilterContextKey = (filters, search) => {
+    const normalizedFilters = filters.map((value) => normalize2(value)).filter((value) => value && value !== "all");
+    normalizedFilters.sort();
+    const normalizedSearch = normalize2(search);
+    return `${normalizedFilters.join("|")}::${normalizedSearch}`;
+  };
+  var areSetsEqual = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b || a.size !== b.size) return false;
+    for (const value of a) {
+      if (!b.has(value)) return false;
+    }
+    return true;
+  };
+  var getCachedItemTypesForKey = (contextKey) => {
+    return FILTER_CONTEXT_ITEM_TYPES_CACHE.get(contextKey) ?? null;
+  };
+  var getCachedItemTypesForContext = (filters, search) => {
+    const key2 = createFilterContextKey(filters, search);
+    return getCachedItemTypesForKey(key2);
+  };
+  var setCachedItemTypesForKey = (contextKey, types) => {
+    const normalizedTypes = /* @__PURE__ */ new Set();
+    types.forEach((type) => {
+      const normalizedType = normalize2(type);
+      if (normalizedType) {
+        normalizedTypes.add(normalizedType);
+      }
+    });
+    const previous = FILTER_CONTEXT_ITEM_TYPES_CACHE.get(contextKey) ?? null;
+    if (previous && areSetsEqual(previous, normalizedTypes)) {
+      return;
+    }
+    FILTER_CONTEXT_ITEM_TYPES_CACHE.set(contextKey, normalizedTypes);
+    notifyFilterContextListeners(contextKey);
+  };
   var getInventorySearchInput = (grid) => {
     if (!grid) return null;
     const input = grid.querySelector(INVENTORY_SEARCH_INPUT_SELECTOR);
@@ -18475,6 +18551,30 @@
     return typeof input?.value === "string" ? input.value : "";
   };
   var getNormalizedInventorySearchQuery = (grid) => normalize2(getInventorySearchQuery(grid));
+  var logFilteredInventorySearchResults = async (grid, filters, searchQuery) => {
+    if (!grid) return;
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      if (!inventory || typeof inventory !== "object") {
+        console.log("[InventorySorting] Inventaire introuvable pour le log de recherche.");
+        return;
+      }
+      const items = Array.isArray(inventory.items) ? inventory.items : [];
+      const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
+      const container = getInventoryItemsContainer(grid);
+      const entries = container ? getInventoryDomEntries(container) : [];
+      console.log("[InventorySorting] R\xE9sultats filtr\xE9s (recherche) :", filteredItems);
+      console.log(
+        "[InventorySorting] Nombre d'\xE9l\xE9ments DOM pour la recherche :",
+        entries.length
+      );
+    } catch (error) {
+      console.warn(
+        "[InventorySorting] Impossible de journaliser les r\xE9sultats filtr\xE9s de la recherche",
+        error
+      );
+    }
+  };
   var RARITY_ORDER = [
     rarity.Common,
     rarity.Uncommon,
@@ -18633,6 +18733,57 @@
     egg: ["Egg"],
     eggs: ["Egg"]
   };
+  var ITEM_TYPE_TO_FILTER_KEYS = (() => {
+    const mapping = /* @__PURE__ */ new Map();
+    for (const [filterKey, itemTypes] of Object.entries(FILTER_LABEL_TO_ITEM_TYPES)) {
+      for (const itemType of itemTypes) {
+        const normalizedType = normalize2(itemType);
+        if (!normalizedType) continue;
+        const set2 = mapping.get(normalizedType) ?? /* @__PURE__ */ new Set();
+        set2.add(filterKey);
+        mapping.set(normalizedType, set2);
+      }
+    }
+    const result = {};
+    mapping.forEach((value, key2) => {
+      result[key2] = Array.from(value);
+    });
+    return result;
+  })();
+  var getExtrasForFilterKey = (filterKey, mapExtraByFilter) => {
+    if (!filterKey) return [];
+    const direct = mapExtraByFilter[filterKey];
+    if (Array.isArray(direct) && direct.length) {
+      return direct;
+    }
+    if (filterKey.endsWith("s")) {
+      const singular = filterKey.slice(0, -1);
+      if (singular) {
+        const singularMatch = mapExtraByFilter[singular];
+        if (Array.isArray(singularMatch) && singularMatch.length) {
+          return singularMatch;
+        }
+      }
+    }
+    return [];
+  };
+  var getExtrasForItemType = (itemType, mapExtraByFilter) => {
+    const normalizedType = normalize2(itemType);
+    if (!normalizedType) return [];
+    const extras = /* @__PURE__ */ new Set();
+    const direct = mapExtraByFilter[normalizedType];
+    if (Array.isArray(direct)) {
+      direct.forEach((value) => extras.add(value));
+    }
+    const relatedFilterKeys = ITEM_TYPE_TO_FILTER_KEYS[normalizedType] ?? [];
+    for (const filterKey of relatedFilterKeys) {
+      const values = mapExtraByFilter[filterKey];
+      if (Array.isArray(values)) {
+        values.forEach((value) => extras.add(value));
+      }
+    }
+    return Array.from(extras);
+  };
   function filterLabelToItemTypes(filter) {
     const key2 = normalize2(filter);
     if (!key2 || key2 === "all") return [];
@@ -18645,9 +18796,53 @@
   }
   function inventoryItemMatchesSearchQuery(item, normalizedQuery) {
     if (!normalizedQuery) return true;
+    const visited = /* @__PURE__ */ new Set();
+    const matchesValue = (value) => {
+      if (value == null) return false;
+      if (typeof value === "string") {
+        return normalize2(value).includes(normalizedQuery);
+      }
+      if (typeof value === "number" || typeof value === "boolean") {
+        return normalize2(String(value)).includes(normalizedQuery);
+      }
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          if (matchesValue(entry)) {
+            return true;
+          }
+        }
+        return false;
+      }
+      if (typeof value === "object") {
+        if (visited.has(value)) {
+          return false;
+        }
+        visited.add(value);
+        for (const [key2, entry] of Object.entries(value)) {
+          if (key2 === "itemType") {
+            continue;
+          }
+          if (key2 === "abilities") {
+            if (Array.isArray(entry)) {
+              for (const abilityId of entry) {
+                const abilityName = getPetAbilityDisplayName(abilityId);
+                if (abilityName && matchesValue(abilityName)) {
+                  return true;
+                }
+              }
+            }
+            continue;
+          }
+          if (matchesValue(entry)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const abilityNames = Array.isArray(item?.abilities) ? item.abilities.map((abilityId) => getPetAbilityDisplayName(abilityId)).filter((name) => typeof name === "string" && !!name) : [];
     const candidates = [
       getInventoryItemName(item),
-      typeof item?.itemType === "string" ? item.itemType : null,
       typeof item?.species === "string" ? item.species : null,
       typeof item?.seedSpecies === "string" ? item.seedSpecies : null,
       typeof item?.plantSpecies === "string" ? item.plantSpecies : null,
@@ -18655,14 +18850,15 @@
       typeof item?.eggId === "string" ? item.eggId : null,
       typeof item?.decorId === "string" ? item.decorId : null,
       typeof item?.toolId === "string" ? item.toolId : null,
-      typeof item?.id === "string" ? item.id : null
+      typeof item?.id === "string" ? item.id : null,
+      ...abilityNames
     ];
     for (const candidate of candidates) {
-      if (candidate && normalize2(candidate).includes(normalizedQuery)) {
+      if (matchesValue(candidate)) {
         return true;
       }
     }
-    return false;
+    return matchesValue(item);
   }
   function attachItemValues(items) {
     const snapshot = getInventoryValueSnapshot();
@@ -18694,7 +18890,16 @@
     const normalizedSearch = normalize2(searchQuery);
     const filteredItems = normalizedSearch ? filteredByType.filter((item) => inventoryItemMatchesSearchQuery(item, normalizedSearch)) : filteredByType;
     attachItemValues(filteredItems);
-    return { filteredItems, keepAll, itemTypes };
+    const detectedItemTypes = /* @__PURE__ */ new Set();
+    for (const item of filteredItems) {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      if (type) {
+        detectedItemTypes.add(type);
+      }
+    }
+    const contextKey = createFilterContextKey(filters, normalizedSearch);
+    setCachedItemTypesForKey(contextKey, detectedItemTypes);
+    return { filteredItems, keepAll, itemTypes, detectedItemTypes };
   }
   function getInventoryItemsContainer(grid) {
     return grid.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR);
@@ -18922,26 +19127,116 @@
     const value = Number(raw);
     return Number.isFinite(value) ? value : null;
   }
-  var NAME_FIELDS_BY_ITEM_TYPE = {
-    Seed: "species",
-    Crop: "species",
-    Produce: "species",
-    Plant: "species",
-    Pet: "petSpecies",
-    Egg: "eggId",
-    Tool: "toolId",
-    Decor: "decorId"
+  var stringOrEmpty = (value) => typeof value === "string" ? value.trim() : "";
+  var pickNestedString = (source, path) => {
+    let current = source;
+    for (const key2 of path) {
+      if (!current || typeof current !== "object") {
+        return "";
+      }
+      current = current[key2];
+    }
+    return stringOrEmpty(current);
   };
+  var pickFirstNestedString = (source, paths) => {
+    for (const path of paths) {
+      const value = pickNestedString(source, path);
+      if (value) return value;
+    }
+    return "";
+  };
+  var plantCatalogEntry = (identifier) => plantCatalog[identifier];
+  var petCatalogEntry = (identifier) => petCatalog[identifier];
+  var eggCatalogEntry = (identifier) => eggCatalog[identifier];
+  var toolCatalogEntry = (identifier) => toolCatalog[identifier];
+  var decorCatalogEntry = (identifier) => decorCatalog[identifier];
+  var SEED_NAME_PATHS = [
+    ["seed", "name"],
+    ["plant", "name"],
+    ["crop", "name"]
+  ];
+  var SEED_RARITY_PATHS = [
+    ["seed", "rarity"],
+    ["crop", "rarity"],
+    ["plant", "rarity"]
+  ];
+  var CROP_NAME_PATHS = [
+    ["crop", "name"],
+    ["plant", "name"],
+    ["seed", "name"]
+  ];
+  var CROP_RARITY_PATHS = [
+    ["crop", "rarity"],
+    ["plant", "rarity"],
+    ["seed", "rarity"]
+  ];
+  var PLANT_NAME_PATHS = [
+    ["plant", "name"],
+    ["crop", "name"],
+    ["seed", "name"]
+  ];
+  var PLANT_RARITY_PATHS = [
+    ["plant", "rarity"],
+    ["crop", "rarity"],
+    ["seed", "rarity"]
+  ];
+  var createPlantLookup = (identifierField, namePaths, rarityPaths) => ({
+    identifierField,
+    getEntry: plantCatalogEntry,
+    getNamePaths: namePaths,
+    getRarityPaths: rarityPaths
+  });
+  var CATALOG_LOOKUPS = {
+    Seed: createPlantLookup("species", SEED_NAME_PATHS, SEED_RARITY_PATHS),
+    Crop: createPlantLookup("species", CROP_NAME_PATHS, CROP_RARITY_PATHS),
+    Produce: createPlantLookup("species", CROP_NAME_PATHS, CROP_RARITY_PATHS),
+    Plant: createPlantLookup("species", PLANT_NAME_PATHS, PLANT_RARITY_PATHS),
+    Pet: {
+      identifierField: "petSpecies",
+      getEntry: petCatalogEntry,
+      getNamePaths: [["name"]],
+      getRarityPaths: [["rarity"]]
+    },
+    Egg: {
+      identifierField: "eggId",
+      getEntry: eggCatalogEntry,
+      getNamePaths: [["name"]],
+      getRarityPaths: [["rarity"]]
+    },
+    Tool: {
+      identifierField: "toolId",
+      getEntry: toolCatalogEntry,
+      getNamePaths: [["name"]],
+      getRarityPaths: [["rarity"]]
+    },
+    Decor: {
+      identifierField: "decorId",
+      getEntry: decorCatalogEntry,
+      getNamePaths: [["name"]],
+      getRarityPaths: [["rarity"]]
+    }
+  };
+  var getCatalogLookup = (type) => CATALOG_LOOKUPS[type] ?? null;
   var getInventoryItemName = (item) => {
     if (!item || typeof item !== "object") return "";
-    const type = typeof item.itemType === "string" ? item.itemType : "";
-    const field = type ? NAME_FIELDS_BY_ITEM_TYPE[type] : void 0;
-    const raw = field ? item[field] : void 0;
-    if (typeof raw === "string" && raw.trim()) {
-      return raw.trim();
+    const type = stringOrEmpty(item.itemType);
+    const lookup = getCatalogLookup(type);
+    if (lookup) {
+      const identifier = readNestedStringField(item, lookup.identifierField) ?? "";
+      if (identifier) {
+        const entry = lookup.getEntry(identifier);
+        const catalogName = lookup.getNamePaths ? pickFirstNestedString(entry, lookup.getNamePaths) : "";
+        if (catalogName) {
+          return catalogName;
+        }
+        return identifier;
+      }
     }
-    const fallback = typeof item.name === "string" ? item.name : typeof item.id === "string" ? item.id : type;
-    return typeof fallback === "string" ? fallback.trim() : "";
+    const fallbackName = stringOrEmpty(item.name);
+    if (fallbackName) return fallbackName;
+    const fallbackId = stringOrEmpty(item.id);
+    if (fallbackId) return fallbackId;
+    return type;
   };
   var QUANTITY_ONE_TYPES = /* @__PURE__ */ new Set(["Produce", "Crop", "Plant", "Pet"]);
   var getInventoryItemQuantity = (item) => {
@@ -18958,51 +19253,17 @@
     }
     return 0;
   };
-  var readStringField = (item, field) => {
-    if (!item || typeof item !== "object" || !field) return "";
-    const raw = item[field];
-    return typeof raw === "string" ? raw.trim() : "";
-  };
   var getInventoryItemRarity = (item) => {
     if (!item || typeof item !== "object") return "";
-    const rawType = typeof item.itemType === "string" ? item.itemType : "";
-    const type = rawType.trim();
-    const field = NAME_FIELDS_BY_ITEM_TYPE[type];
-    const identifier = readStringField(item, field);
-    if (!identifier) return "";
-    switch (type) {
-      case "Seed": {
-        const entry = plantCatalog[identifier];
-        return String(entry?.seed?.rarity ?? entry?.crop?.rarity ?? entry?.plant?.rarity ?? "").trim();
-      }
-      case "Crop":
-      case "Produce": {
-        const entry = plantCatalog[identifier];
-        return String(entry?.crop?.rarity ?? entry?.plant?.rarity ?? entry?.seed?.rarity ?? "").trim();
-      }
-      case "Plant": {
-        const entry = plantCatalog[identifier];
-        return String(entry?.plant?.rarity ?? entry?.crop?.rarity ?? entry?.seed?.rarity ?? "").trim();
-      }
-      case "Pet": {
-        const entry = petCatalog[identifier];
-        return String(entry?.rarity ?? "").trim();
-      }
-      case "Egg": {
-        const entry = eggCatalog[identifier];
-        return String(entry?.rarity ?? "").trim();
-      }
-      case "Tool": {
-        const entry = toolCatalog[identifier];
-        return String(entry?.rarity ?? "").trim();
-      }
-      case "Decor": {
-        const entry = decorCatalog[identifier];
-        return String(entry?.rarity ?? "").trim();
-      }
-      default:
-        return "";
+    const type = stringOrEmpty(item.itemType);
+    const lookup = getCatalogLookup(type);
+    if (!lookup || !lookup.getRarityPaths?.length) {
+      return "";
     }
+    const identifier = readNestedStringField(item, lookup.identifierField) ?? "";
+    if (!identifier) return "";
+    const entry = lookup.getEntry(identifier);
+    return pickFirstNestedString(entry, lookup.getRarityPaths);
   };
   var readNestedValue = (item, field, parser) => {
     if (!item || typeof item !== "object") return null;
@@ -19233,15 +19494,27 @@
   function createDefaultApplySorting(cfg) {
     const stateByGrid = /* @__PURE__ */ new WeakMap();
     const ensureState = async (grid, filters, entries, searchQuery) => {
-      const filtersKey = JSON.stringify({ filters, search: searchQuery });
-      let state2 = stateByGrid.get(grid);
+      const filtersKey = JSON.stringify({ filters });
+      const state2 = stateByGrid.get(grid);
       const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
-      const needsRebuild = !state2 || state2.filtersKey !== filtersKey || state2.baseItems.length !== entries.length || !hasAllBaseIndexes;
+      const searchChanged = state2 ? state2.searchQuery !== searchQuery : false;
+      const entryCountChanged = state2 ? state2.entryCount !== entries.length : false;
+      const filtersChanged = state2 ? state2.filtersKey !== filtersKey : false;
+      const baseLengthChanged = state2 ? state2.baseItems.length !== entries.length : false;
+      const needsRebuild = !state2 || filtersChanged || entryCountChanged || baseLengthChanged || !hasAllBaseIndexes;
       if (state2 && !needsRebuild) {
         state2.entryByBaseIndex.clear();
         for (const entry of entries) {
           const baseIndex = readBaseIndex(entry);
-          if (baseIndex != null) state2.entryByBaseIndex.set(baseIndex, entry);
+          if (baseIndex != null) {
+            state2.entryByBaseIndex.set(baseIndex, entry);
+          }
+        }
+        state2.filtersKey = filtersKey;
+        state2.searchQuery = searchQuery;
+        state2.entryCount = entries.length;
+        if (searchChanged && !entryCountChanged) {
+          return null;
         }
         return state2;
       }
@@ -19262,6 +19535,8 @@
         assignBaseIndexesToEntries(entries);
         const newState = {
           filtersKey,
+          searchQuery,
+          entryCount: entries.length,
           baseItems: filteredItems.slice(),
           entryByBaseIndex: /* @__PURE__ */ new Map()
         };
@@ -19332,22 +19607,44 @@
       (lbl) => (lbl.querySelector(checkboxLabelSelector)?.textContent ?? "").trim()
     ).filter(Boolean);
   }
-  function computeSortOptions(activeFilters, labelByValue = LABEL_BY_VALUE_DEFAULT, mapExtraByFilter = MAP_EXTRA_BY_FILTER_DEFAULT) {
-    if (!activeFilters.length) {
-      const values2 = [...ALWAYS, ...BASE_SORT];
-      return values2.map((v) => ({ value: v, label: labelByValue[v] || v }));
+  function computeSortOptions(activeFilters, labelByValue = LABEL_BY_VALUE_DEFAULT, mapExtraByFilter = MAP_EXTRA_BY_FILTER_DEFAULT, searchQuery = "") {
+    const normalizedFilters = activeFilters.map((value) => (value ?? "").trim().toLowerCase()).filter(Boolean);
+    const normalizedSearch = normalize2(searchQuery);
+    const intersectSets = (sets) => {
+      if (!sets.length) return null;
+      let intersection = new Set(sets[0]);
+      for (let i = 1; i < sets.length; i++) {
+        const current = sets[i];
+        intersection = new Set([...intersection].filter((value) => current.has(value)));
+      }
+      return intersection;
+    };
+    const filterSets = normalizedFilters.map(
+      (filterKey) => /* @__PURE__ */ new Set([...BASE_SORT, ...getExtrasForFilterKey(filterKey, mapExtraByFilter)])
+    );
+    const detectedItemTypes = getCachedItemTypesForContext(activeFilters, normalizedSearch);
+    const typeSets = [];
+    if (detectedItemTypes && detectedItemTypes.size) {
+      detectedItemTypes.forEach((itemType) => {
+        const extras = getExtrasForItemType(itemType, mapExtraByFilter);
+        typeSets.push(/* @__PURE__ */ new Set([...BASE_SORT, ...extras]));
+      });
     }
-    const act = activeFilters.map((s) => (s ?? "").trim().toLowerCase());
-    const getExtras = (k) => mapExtraByFilter[k] ?? [];
-    const first = act[0];
-    let allowed = /* @__PURE__ */ new Set([...BASE_SORT, ...getExtras(first)]);
-    for (let i = 1; i < act.length; i++) {
-      const key2 = act[i];
-      const current = /* @__PURE__ */ new Set([...BASE_SORT, ...getExtras(key2)]);
-      allowed = new Set([...allowed].filter((x) => current.has(x)));
+    const allowedFromFilters = intersectSets(filterSets);
+    const allowedFromTypes = intersectSets(typeSets);
+    let allowed = null;
+    if (allowedFromFilters && allowedFromTypes) {
+      allowed = new Set([...allowedFromFilters].filter((value) => allowedFromTypes.has(value)));
+    } else if (allowedFromFilters) {
+      allowed = new Set(allowedFromFilters);
+    } else if (allowedFromTypes) {
+      allowed = new Set(allowedFromTypes);
     }
-    const values = ORDER.filter((v) => v === "none" || allowed.has(v));
-    return values.map((v) => ({ value: v, label: labelByValue[v] || v }));
+    if (!allowed || !allowed.size) {
+      allowed = new Set(BASE_SORT);
+    }
+    const values = ORDER.filter((value) => value === "none" || allowed.has(value));
+    return values.map((value) => ({ value, label: labelByValue[value] || value }));
   }
   function injectDarkSelectStyles(id = "inv-sort-dark-styles") {
     if (document.getElementById(id)) return;
@@ -19751,6 +20048,25 @@
     let lastAppliedSortKey = null;
     let lastAppliedDirection = null;
     let shouldEnsureInventoryValueWatcherOnNextVisible = true;
+    let lastSortedDomSnapshot = null;
+    let lastComputedFilterContextKey = null;
+    let stopFilterContextListener = null;
+    const updateDomSnapshotForGrid = (target) => {
+      if (!target) {
+        lastSortedDomSnapshot = null;
+        return;
+      }
+      const container = getInventoryItemsContainer(target);
+      if (!container) {
+        lastSortedDomSnapshot = null;
+        return;
+      }
+      const entries = getInventoryDomEntries(container);
+      lastSortedDomSnapshot = createDomSnapshot(entries);
+    };
+    const applySortingWithSnapshot = (target, sortKey, direction) => Promise.resolve(applySorting(target, sortKey, direction)).then(() => {
+      updateDomSnapshotForGrid(target);
+    });
     const obs = new MutationObserver((muts) => {
       const relevant = muts.some(
         (m) => m.type === "attributes" ? ["data-checked", "style", "class", "hidden", "aria-hidden"].includes(m.attributeName || "") : m.type === "childList"
@@ -19764,10 +20080,16 @@
       lastLoggedFilters = null;
       lastAppliedFiltersKey = null;
       lastAppliedSortKey = null;
+      lastSortedDomSnapshot = null;
+      lastComputedFilterContextKey = null;
       shouldEnsureInventoryValueWatcherOnNextVisible = true;
       if (!grid && stopValueSummaryListener) {
         stopValueSummaryListener();
         stopValueSummaryListener = null;
+      }
+      if (!grid && stopFilterContextListener) {
+        stopFilterContextListener();
+        stopFilterContextListener = null;
       }
       if (grid) {
         obs.observe(grid, {
@@ -19806,7 +20128,7 @@
       const sortKey = currentSelect?.value ?? "none";
       const fallbackDirection = defaultDirectionBySortKey[sortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[sortKey] ?? "asc";
       const direction = currentDirectionSelect?.value ?? fallbackDirection;
-      void applySorting(targetGrid, sortKey, direction);
+      void applySortingWithSnapshot(targetGrid, sortKey, direction);
     };
     const update = () => {
       const targetGrid = resolveGrid();
@@ -19837,7 +20159,7 @@
           persistSortKey(value);
           persistSortDirection(direction);
           cfg.onSortChange?.(value, direction);
-          void applySorting(targetGrid, value, direction);
+          void applySortingWithSnapshot(targetGrid, value, direction);
         },
         showInventoryValues,
         (visible) => {
@@ -19877,7 +20199,19 @@
         cfg.checkboxSelector,
         cfg.checkboxLabelSelector
       );
+      const container = getInventoryItemsContainer(targetGrid);
+      const currentEntries = container ? getInventoryDomEntries(container) : [];
+      const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
+      const currentDomSnapshot = createDomSnapshot(currentEntries);
       const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
+      lastComputedFilterContextKey = createFilterContextKey(activeFilters, searchQueryForGrid);
+      if (!stopFilterContextListener) {
+        stopFilterContextListener = addFilterContextListener((contextKey) => {
+          if (contextKey === lastComputedFilterContextKey) {
+            setTimeout(refresh, 0);
+          }
+        });
+      }
       void updateFilteredInventoryValueSummary(currentWrap, activeFilters, searchQueryForGrid);
       const serializedFilters = JSON.stringify({
         filters: activeFilters,
@@ -19896,7 +20230,12 @@
           searchQueryForGrid
         );
       }
-      const options = computeSortOptions(activeFilters, labelByValue, mapExtraByFilter);
+      const options = computeSortOptions(
+        activeFilters,
+        labelByValue,
+        mapExtraByFilter,
+        searchQueryForGrid
+      );
       const wrapPrevValue = typeof currentWrap.__prevValue === "string" ? currentWrap.__prevValue : null;
       const persistedSortKey = loadPersistedSortKey();
       const preferredValue = (wrapPrevValue && options.some((o) => o.value === wrapPrevValue) ? wrapPrevValue : null) || (persistedSortKey && options.some((o) => o.value === persistedSortKey) ? persistedSortKey : null);
@@ -19907,29 +20246,32 @@
       const persistedDirection = loadPersistedSortDirection();
       const fallbackDirection = defaultDirectionBySortKey[appliedSortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[appliedSortKey] ?? "asc";
       const preferredDirection = (wrapPrevDirection && DIRECTION_ORDER.includes(wrapPrevDirection) ? wrapPrevDirection : null) || (persistedDirection && DIRECTION_ORDER.includes(persistedDirection) ? persistedDirection : null) || fallbackDirection;
+      let appliedDirection;
       if (currentDirectionSelect) {
         renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
-        const appliedDirection = currentDirectionSelect.value;
+        appliedDirection = currentDirectionSelect.value;
         currentWrap.__prevDirection = appliedDirection;
-        if (filtersChanged || appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection) {
-          lastAppliedSortKey = appliedSortKey;
-          lastAppliedDirection = appliedDirection;
-          lastAppliedFiltersKey = serializedFilters;
-          persistSortKey(appliedSortKey);
-          persistSortDirection(appliedDirection);
-          cfg.onSortChange?.(appliedSortKey, appliedDirection);
-          void applySorting(targetGrid, appliedSortKey, appliedDirection);
-        }
       } else {
-        if (filtersChanged || appliedSortKey !== lastAppliedSortKey) {
-          lastAppliedSortKey = appliedSortKey;
-          lastAppliedDirection = fallbackDirection;
+        appliedDirection = fallbackDirection;
+      }
+      const sortChanged = appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection;
+      const shouldApplySorting = sortChanged || filtersChanged && domChangedSinceLastSort;
+      if (shouldApplySorting) {
+        lastAppliedSortKey = appliedSortKey;
+        lastAppliedDirection = appliedDirection;
+        lastAppliedFiltersKey = serializedFilters;
+        persistSortKey(appliedSortKey);
+        persistSortDirection(appliedDirection);
+        cfg.onSortChange?.(appliedSortKey, appliedDirection);
+        void applySortingWithSnapshot(targetGrid, appliedSortKey, appliedDirection);
+      } else {
+        if (filtersChanged) {
           lastAppliedFiltersKey = serializedFilters;
-          persistSortKey(appliedSortKey);
-          persistSortDirection(fallbackDirection);
-          cfg.onSortChange?.(appliedSortKey, fallbackDirection);
-          void applySorting(targetGrid, appliedSortKey, fallbackDirection);
+          console.log(
+            "[InventorySorting] Filtres modifi\xE9s mais la liste DOM est inchang\xE9e, tri non r\xE9appliqu\xE9."
+          );
         }
+        lastSortedDomSnapshot = currentDomSnapshot;
       }
     };
     const refresh = debounce(update, 120);
@@ -19940,6 +20282,13 @@
       const currentGrid = resolveGrid();
       if (e.type === "input" && target instanceof HTMLInputElement && target.matches(INVENTORY_SEARCH_INPUT_SELECTOR) && within && within === currentGrid) {
         console.log("[InventorySorting] Texte de recherche modifi\xE9 :", target.value);
+        const activeFilters = getActiveFiltersFromGrid(
+          currentGrid,
+          cfg.checkboxSelector,
+          cfg.checkboxLabelSelector
+        );
+        const normalizedSearch = getNormalizedInventorySearchQuery(currentGrid);
+        void logFilteredInventorySearchResults(currentGrid, activeFilters, normalizedSearch);
       }
       if (within && within === currentGrid) {
         setTimeout(refresh, 0);
@@ -19966,6 +20315,10 @@
           stopValueSummaryListener();
           stopValueSummaryListener = null;
         }
+        if (stopFilterContextListener) {
+          stopFilterContextListener();
+          stopFilterContextListener = null;
+        }
         if (currentWrap && currentWrap.parentElement) {
           currentWrap.parentElement.removeChild(currentWrap);
         }
@@ -19979,6 +20332,7 @@
         lastAppliedSortKey = null;
         lastAppliedDirection = null;
         shouldEnsureInventoryValueWatcherOnNextVisible = true;
+        lastSortedDomSnapshot = null;
       },
       update,
       getActiveFilters() {
@@ -20019,7 +20373,7 @@
           persistSortDirection(directionToApply);
           cfg.onSortChange?.(k, directionToApply);
           setShouldDisplayInventoryValues(showInventoryValues);
-          void applySorting(targetGrid, k, directionToApply);
+          void applySortingWithSnapshot(targetGrid, k, directionToApply);
         }
       },
       setSortDirection(direction) {
@@ -20045,13 +20399,14 @@
           persistSortDirection(direction);
           cfg.onSortChange?.(sortKey, direction);
           setShouldDisplayInventoryValues(showInventoryValues);
-          void applySorting(targetGrid, sortKey, direction);
+          void applySortingWithSnapshot(targetGrid, sortKey, direction);
         }
       },
       getSortOptions() {
         const targetGrid = resolveGrid();
         const filters = targetGrid ? getActiveFiltersFromGrid(targetGrid, cfg.checkboxSelector, cfg.checkboxLabelSelector) : [];
-        return computeSortOptions(filters, labelByValue, mapExtraByFilter);
+        const search = getNormalizedInventorySearchQuery(targetGrid);
+        return computeSortOptions(filters, labelByValue, mapExtraByFilter, search);
       },
       getGrid() {
         return resolveGrid();
