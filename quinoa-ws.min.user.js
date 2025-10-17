@@ -19501,7 +19501,7 @@
       const entryCountChanged = state2 ? state2.entryCount !== entries.length : false;
       const filtersChanged = state2 ? state2.filtersKey !== filtersKey : false;
       const baseLengthChanged = state2 ? state2.baseItems.length !== entries.length : false;
-      const needsRebuild = !state2 || filtersChanged || entryCountChanged || baseLengthChanged || !hasAllBaseIndexes;
+      const needsRebuild = !state2 || filtersChanged || entryCountChanged || baseLengthChanged || !hasAllBaseIndexes || searchChanged;
       if (state2 && !needsRebuild) {
         state2.entryByBaseIndex.clear();
         for (const entry of entries) {
@@ -19513,9 +19513,6 @@
         state2.filtersKey = filtersKey;
         state2.searchQuery = searchQuery;
         state2.entryCount = entries.length;
-        if (searchChanged && !entryCountChanged) {
-          return null;
-        }
         return state2;
       }
       try {
