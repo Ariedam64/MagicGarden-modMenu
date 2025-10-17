@@ -6,6 +6,7 @@ import {
   coin,
   decorCatalog,
   eggCatalog,
+  petAbilities,
   petCatalog,
   plantCatalog,
   rarity as rarityMap,
@@ -116,6 +117,21 @@ const DEFAULT_DIRECTION_LABEL = 'Order:';
 const DIRECTION_LABELS_DEFAULT: Record<SortDirection, string> = {
   asc: 'Ascending',
   desc: 'Descending',
+};
+
+const getPetAbilityDisplayName = (abilityId: unknown): string | null => {
+  if (typeof abilityId !== 'string') return null;
+
+  const trimmedId = abilityId.trim();
+  if (!trimmedId) return null;
+
+  const ability = (petAbilities as Record<string, { name?: string }>)[trimmedId] ?? null;
+  const name = ability?.name;
+
+  if (typeof name !== 'string') return null;
+
+  const trimmedName = name.trim();
+  return trimmedName ? trimmedName : null;
 };
 
 const INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = 'mg-mod.inventory.showValues';
@@ -262,8 +278,30 @@ interface InventoryDomEntry {
   card: HTMLElement;
 }
 
+type InventoryDomSnapshot = HTMLElement[];
+
+function createDomSnapshot(entries: InventoryDomEntry[]): InventoryDomSnapshot {
+  return entries.map((entry) => entry.wrapper);
+}
+
+function haveDomEntriesChanged(
+  previous: InventoryDomSnapshot | null,
+  nextEntries: InventoryDomEntry[]
+): boolean {
+  if (!previous) return true;
+  if (previous.length !== nextEntries.length) return true;
+  for (let i = 0; i < nextEntries.length; i++) {
+    if (previous[i] !== nextEntries[i].wrapper) {
+      return true;
+    }
+  }
+  return false;
+}
+
 interface InventoryDomSortState {
   filtersKey: string;
+  searchQuery: string;
+  entryCount: number;
   baseItems: any[];
   entryByBaseIndex: Map<number, InventoryDomEntry>;
 }
@@ -304,6 +342,38 @@ const getInventorySearchQuery = (grid: Element | null): string => {
 
 const getNormalizedInventorySearchQuery = (grid: Element | null): string =>
   normalize(getInventorySearchQuery(grid));
+
+const logFilteredInventorySearchResults = async (
+  grid: Element | null,
+  filters: string[],
+  searchQuery: string
+): Promise<void> => {
+  if (!grid) return;
+
+  try {
+    const inventory = await Atoms.inventory.myInventory.get();
+    if (!inventory || typeof inventory !== "object") {
+      console.log("[InventorySorting] Inventaire introuvable pour le log de recherche.");
+      return;
+    }
+
+    const items = Array.isArray((inventory as any).items) ? (inventory as any).items : [];
+    const { filteredItems } = filterInventoryItems(items, filters, searchQuery);
+    const container = getInventoryItemsContainer(grid);
+    const entries = container ? getInventoryDomEntries(container) : [];
+
+    console.log("[InventorySorting] Résultats filtrés (recherche) :", filteredItems);
+    console.log(
+      "[InventorySorting] Nombre d'éléments DOM pour la recherche :",
+      entries.length
+    );
+  } catch (error) {
+    console.warn(
+      "[InventorySorting] Impossible de journaliser les résultats filtrés de la recherche",
+      error
+    );
+  }
+};
 
 const RARITY_ORDER = [
   rarityMap.Common,
@@ -521,9 +591,65 @@ interface FilterInventoryResult {
 function inventoryItemMatchesSearchQuery(item: any, normalizedQuery: string): boolean {
   if (!normalizedQuery) return true;
 
-  const candidates: Array<string | null | undefined> = [
+  const visited = new Set<any>();
+
+  const matchesValue = (value: any): boolean => {
+    if (value == null) return false;
+
+    if (typeof value === 'string') {
+      return normalize(value).includes(normalizedQuery);
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return normalize(String(value)).includes(normalizedQuery);
+    }
+
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (matchesValue(entry)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    if (typeof value === 'object') {
+      if (visited.has(value)) {
+        return false;
+      }
+      visited.add(value);
+      for (const [key, entry] of Object.entries(value)) {
+        if (key === 'itemType') {
+          continue;
+        }
+        if (key === 'abilities') {
+          if (Array.isArray(entry)) {
+            for (const abilityId of entry) {
+              const abilityName = getPetAbilityDisplayName(abilityId);
+              if (abilityName && matchesValue(abilityName)) {
+                return true;
+              }
+            }
+          }
+          continue;
+        }
+        if (matchesValue(entry)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  };
+
+  const abilityNames = Array.isArray(item?.abilities)
+    ? item.abilities
+        .map((abilityId: unknown) => getPetAbilityDisplayName(abilityId))
+        .filter((name: string | null): name is string => typeof name === 'string' && !!name)
+    : [];
+
+  const candidates: Array<any> = [
     getInventoryItemName(item),
-    typeof item?.itemType === 'string' ? item.itemType : null,
     typeof item?.species === 'string' ? item.species : null,
     typeof item?.seedSpecies === 'string' ? item.seedSpecies : null,
     typeof item?.plantSpecies === 'string' ? item.plantSpecies : null,
@@ -532,15 +658,16 @@ function inventoryItemMatchesSearchQuery(item: any, normalizedQuery: string): bo
     typeof item?.decorId === 'string' ? item.decorId : null,
     typeof item?.toolId === 'string' ? item.toolId : null,
     typeof item?.id === 'string' ? item.id : null,
+    ...abilityNames,
   ];
 
   for (const candidate of candidates) {
-    if (candidate && normalize(candidate).includes(normalizedQuery)) {
+    if (matchesValue(candidate)) {
       return true;
     }
   }
 
-  return false;
+  return matchesValue(item);
 }
 
 function attachItemValues(items: any[]): void {
@@ -882,14 +1009,63 @@ const NAME_FIELDS_BY_ITEM_TYPE: Record<string, string> = {
   Decor: "decorId",
 };
 
+const readCatalogNameForInventoryItem = (type: string, identifier: string): string => {
+  if (!type || !identifier) return "";
+
+  const trimValue = (value: unknown): string =>
+    typeof value === "string" ? value.trim() : "";
+
+  switch (type) {
+    case "Tool": {
+      const entry = (toolCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.name);
+    }
+    case "Plant": {
+      const entry = (plantCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.plant?.name);
+    }
+    case "Seed": {
+      const entry = (plantCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.seed?.name);
+    }
+    case "Produce":
+    case "Crop": {
+      const entry = (plantCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.crop?.name);
+    }
+    case "Pet": {
+      const entry = (petCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.name);
+    }
+    case "Egg": {
+      const entry = (eggCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.name);
+    }
+    case "Decor": {
+      const entry = (decorCatalog as Record<string, any>)[identifier];
+      return trimValue(entry?.name);
+    }
+    default:
+      return "";
+  }
+};
+
 const getInventoryItemName = (item: any): string => {
   if (!item || typeof item !== "object") return "";
-  const type = typeof item.itemType === "string" ? item.itemType : "";
+
+  const type = typeof item.itemType === "string" ? item.itemType.trim() : "";
   const field = type ? NAME_FIELDS_BY_ITEM_TYPE[type] : undefined;
   const raw = field ? (item as Record<string, unknown>)[field] : undefined;
-  if (typeof raw === "string" && raw.trim()) {
-    return raw.trim();
+  const identifier = typeof raw === "string" ? raw.trim() : "";
+
+  if (identifier) {
+    const catalogName = readCatalogNameForInventoryItem(type, identifier);
+    if (catalogName) {
+      return catalogName;
+    }
+    return identifier;
   }
+
   const fallback = typeof (item as Record<string, unknown>).name === "string"
     ? (item as Record<string, string>).name
     : typeof (item as Record<string, unknown>).id === "string"
@@ -1288,16 +1464,21 @@ function createDefaultApplySorting(
     entries: InventoryDomEntry[],
     searchQuery: string
   ): Promise<InventoryDomSortState | null> => {
-    const filtersKey = JSON.stringify({ filters, search: searchQuery });
-    let state = stateByGrid.get(grid);
+    const filtersKey = JSON.stringify({ filters });
+    const state = stateByGrid.get(grid);
 
     // on calcule séparément pour éviter d'utiliser state quand il est undefined
     const hasAllBaseIndexes = entries.every((e) => readBaseIndex(e) != null);
+    const searchChanged = state ? state.searchQuery !== searchQuery : false;
+    const entryCountChanged = state ? state.entryCount !== entries.length : false;
+    const filtersChanged = state ? state.filtersKey !== filtersKey : false;
+    const baseLengthChanged = state ? state.baseItems.length !== entries.length : false;
 
     const needsRebuild =
       !state ||
-      state.filtersKey !== filtersKey ||
-      state.baseItems.length !== entries.length ||
+      filtersChanged ||
+      entryCountChanged ||
+      baseLengthChanged ||
       !hasAllBaseIndexes;
 
     // 🔒 Ici on ne touche à state que s'il existe ET qu'on ne reconstruit pas
@@ -1305,8 +1486,19 @@ function createDefaultApplySorting(
       state.entryByBaseIndex.clear();
       for (const entry of entries) {
         const baseIndex = readBaseIndex(entry);
-        if (baseIndex != null) state.entryByBaseIndex.set(baseIndex, entry);
+        if (baseIndex != null) {
+          state.entryByBaseIndex.set(baseIndex, entry);
+        }
       }
+
+      state.filtersKey = filtersKey;
+      state.searchQuery = searchQuery;
+      state.entryCount = entries.length;
+
+      if (searchChanged && !entryCountChanged) {
+        return null;
+      }
+
       return state;
     }
 
@@ -1332,6 +1524,8 @@ function createDefaultApplySorting(
 
       const newState: InventoryDomSortState = {
         filtersKey,
+        searchQuery,
+        entryCount: entries.length,
         baseItems: filteredItems.slice(),
         entryByBaseIndex: new Map<number, InventoryDomEntry>(),
       };
@@ -1969,6 +2163,30 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let lastAppliedSortKey: SortKey | null = null;
   let lastAppliedDirection: SortDirection | null = null;
   let shouldEnsureInventoryValueWatcherOnNextVisible = true;
+  let lastSortedDomSnapshot: InventoryDomSnapshot | null = null;
+
+  const updateDomSnapshotForGrid = (target: Element | null) => {
+    if (!target) {
+      lastSortedDomSnapshot = null;
+      return;
+    }
+    const container = getInventoryItemsContainer(target);
+    if (!container) {
+      lastSortedDomSnapshot = null;
+      return;
+    }
+    const entries = getInventoryDomEntries(container);
+    lastSortedDomSnapshot = createDomSnapshot(entries);
+  };
+
+  const applySortingWithSnapshot = (
+    target: Element,
+    sortKey: SortKey,
+    direction: SortDirection
+  ) =>
+    Promise.resolve(applySorting(target, sortKey, direction)).then(() => {
+      updateDomSnapshotForGrid(target);
+    });
 
   const obs = new MutationObserver((muts) => {
     const relevant = muts.some((m) =>
@@ -1986,6 +2204,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     lastLoggedFilters = null;
     lastAppliedFiltersKey = null;
     lastAppliedSortKey = null;
+    lastSortedDomSnapshot = null;
     shouldEnsureInventoryValueWatcherOnNextVisible = true;
     if (!grid && stopValueSummaryListener) {
       stopValueSummaryListener();
@@ -2033,7 +2252,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     const fallbackDirection =
       defaultDirectionBySortKey[sortKey] ?? DEFAULT_DIRECTION_BY_SORT_KEY[sortKey] ?? 'asc';
     const direction = (currentDirectionSelect?.value as SortDirection) ?? fallbackDirection;
-    void applySorting(targetGrid, sortKey, direction);
+    void applySortingWithSnapshot(targetGrid, sortKey, direction);
   };
 
   const update = () => {
@@ -2068,7 +2287,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortKey(value);
         persistSortDirection(direction);
         cfg.onSortChange?.(value, direction);
-        void applySorting(targetGrid, value, direction);
+        void applySortingWithSnapshot(targetGrid, value, direction);
       },
       showInventoryValues,
       (visible) => {
@@ -2111,6 +2330,10 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg.checkboxSelector,
       cfg.checkboxLabelSelector
     );
+    const container = getInventoryItemsContainer(targetGrid);
+    const currentEntries = container ? getInventoryDomEntries(container) : [];
+    const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
+    const currentDomSnapshot = createDomSnapshot(currentEntries);
     const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
     void updateFilteredInventoryValueSummary(currentWrap, activeFilters, searchQueryForGrid);
     const serializedFilters = JSON.stringify({
@@ -2156,33 +2379,35 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       (persistedDirection && DIRECTION_ORDER.includes(persistedDirection) ? persistedDirection : null) ||
       fallbackDirection;
 
+    let appliedDirection: SortDirection;
     if (currentDirectionSelect) {
       renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
-      const appliedDirection = currentDirectionSelect.value as SortDirection;
+      appliedDirection = currentDirectionSelect.value as SortDirection;
       (currentWrap as any).__prevDirection = appliedDirection;
-      if (
-        filtersChanged ||
-        appliedSortKey !== lastAppliedSortKey ||
-        appliedDirection !== lastAppliedDirection
-      ) {
-        lastAppliedSortKey = appliedSortKey;
-        lastAppliedDirection = appliedDirection;
-        lastAppliedFiltersKey = serializedFilters;
-        persistSortKey(appliedSortKey);
-        persistSortDirection(appliedDirection);
-        cfg.onSortChange?.(appliedSortKey, appliedDirection);
-        void applySorting(targetGrid, appliedSortKey, appliedDirection);
-      }
     } else {
-      if (filtersChanged || appliedSortKey !== lastAppliedSortKey) {
-        lastAppliedSortKey = appliedSortKey;
-        lastAppliedDirection = fallbackDirection;
+      appliedDirection = fallbackDirection;
+    }
+
+    const sortChanged =
+      appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection;
+    const shouldApplySorting = sortChanged || (filtersChanged && domChangedSinceLastSort);
+
+    if (shouldApplySorting) {
+      lastAppliedSortKey = appliedSortKey;
+      lastAppliedDirection = appliedDirection;
+      lastAppliedFiltersKey = serializedFilters;
+      persistSortKey(appliedSortKey);
+      persistSortDirection(appliedDirection);
+      cfg.onSortChange?.(appliedSortKey, appliedDirection);
+      void applySortingWithSnapshot(targetGrid, appliedSortKey, appliedDirection);
+    } else {
+      if (filtersChanged) {
         lastAppliedFiltersKey = serializedFilters;
-        persistSortKey(appliedSortKey);
-        persistSortDirection(fallbackDirection);
-        cfg.onSortChange?.(appliedSortKey, fallbackDirection);
-        void applySorting(targetGrid, appliedSortKey, fallbackDirection);
+        console.log(
+          '[InventorySorting] Filtres modifiés mais la liste DOM est inchangée, tri non réappliqué.'
+        );
       }
+      lastSortedDomSnapshot = currentDomSnapshot;
     }
   };
 
@@ -2202,6 +2427,13 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       within === currentGrid
     ) {
       console.log('[InventorySorting] Texte de recherche modifié :', target.value);
+      const activeFilters = getActiveFiltersFromGrid(
+        currentGrid,
+        cfg.checkboxSelector,
+        cfg.checkboxLabelSelector
+      );
+      const normalizedSearch = getNormalizedInventorySearchQuery(currentGrid);
+      void logFilteredInventorySearchResults(currentGrid, activeFilters, normalizedSearch);
     }
 
     if (within && within === currentGrid) {
@@ -2245,6 +2477,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       lastAppliedSortKey = null;
       lastAppliedDirection = null;
       shouldEnsureInventoryValueWatcherOnNextVisible = true;
+      lastSortedDomSnapshot = null;
     },
     update,
     getActiveFilters() {
@@ -2288,7 +2521,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortDirection(directionToApply);
         cfg.onSortChange?.(k, directionToApply);
         setShouldDisplayInventoryValues(showInventoryValues);
-        void applySorting(targetGrid, k, directionToApply);
+        void applySortingWithSnapshot(targetGrid, k, directionToApply);
       }
     },
     setSortDirection(direction: SortDirection) {
@@ -2314,7 +2547,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         persistSortDirection(direction);
         cfg.onSortChange?.(sortKey, direction);
         setShouldDisplayInventoryValues(showInventoryValues);
-        void applySorting(targetGrid, sortKey, direction);
+        void applySortingWithSnapshot(targetGrid, sortKey, direction);
       }
     },
     getSortOptions() {

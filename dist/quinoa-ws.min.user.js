@@ -16502,14 +16502,19 @@
   var ICON_CLASS = "tm-crop-price-icon";
   var LABEL_CLASS = "tm-crop-price-label";
   var LOCK_TEXT_SELECTOR = ":scope > .chakra-text.css-1uvlb8k";
+  var TOOLTIP_ROOT_CLASS = "css-115gc9o";
   var LOCK_EMOJI = "\u{1F512}";
-  var LOCKED_TEXT_DISPLAY = "inline-flex";
-  var LOCKED_TEXT_ALIGN = "center";
+  var LOCK_BORDER_STYLE = "2px solid rgb(188, 53, 215)";
+  var LOCK_BORDER_RADIUS = "15px";
+  var LOCK_ICON_CLASS = "tm-locker-tooltip-lock-icon";
   var DATASET_KEY_COLOR = "tmLockerOriginalColor";
   var DATASET_KEY_DISPLAY = "tmLockerOriginalDisplay";
   var DATASET_KEY_ALIGN = "tmLockerOriginalAlign";
   var DATASET_KEY_TEXT = "tmLockerOriginalHtml";
-  var LOCK_CONTENT_PREFIX = `${LOCK_EMOJI}\xA0`;
+  var DATASET_KEY_BORDER = "tmLockerOriginalBorder";
+  var DATASET_KEY_BORDER_RADIUS = "tmLockerOriginalBorderRadius";
+  var DATASET_KEY_POSITION = "tmLockerOriginalPosition";
+  var DATASET_KEY_OVERFLOW = "tmLockerOriginalOverflow";
   var LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
   function startCropValuesObserverFromGardenAtom(options = {}) {
     if (typeof window === "undefined" || typeof document === "undefined") {
@@ -16610,82 +16615,31 @@
     if (!(inner instanceof HTMLElement)) return;
     inner.querySelectorAll(":scope > span.tm-locker-lock-emoji").forEach((node) => node.remove());
     const textTarget = inner.querySelector(LOCK_TEXT_SELECTOR) ?? inner.querySelector(":scope > .chakra-text");
+    const tooltipRoot = inner.closest(`.${TOOLTIP_ROOT_CLASS}`);
     if (!locked) {
       if (textTarget) {
         restoreTextContent(textTarget);
         restoreTextStyles(textTarget);
       }
+      if (tooltipRoot) {
+        restoreTooltipStyles(tooltipRoot);
+        removeLockIcon(tooltipRoot);
+      }
       return;
     }
-    if (!textTarget) {
-      return;
+    if (textTarget) {
+      restoreTextContent(textTarget);
     }
-    const originalHtml = storeOriginalTextContent(textTarget);
-    storeOriginalTextStyles(textTarget);
-    applyLockedTextStyles(textTarget);
-    applyLockedTextContent(textTarget, originalHtml);
-  }
-  function storeOriginalTextStyles(textTarget) {
-    if (textTarget.dataset[DATASET_KEY_COLOR] === void 0) {
-      textTarget.dataset[DATASET_KEY_COLOR] = textTarget.style.color ?? "";
+    if (tooltipRoot) {
+      storeOriginalTooltipStyles(tooltipRoot);
+      applyLockedTooltipStyles(tooltipRoot);
+      ensureLockIcon(tooltipRoot);
     }
-    if (textTarget.dataset[DATASET_KEY_DISPLAY] === void 0) {
-      textTarget.dataset[DATASET_KEY_DISPLAY] = textTarget.style.display ?? "";
-    }
-    if (textTarget.dataset[DATASET_KEY_ALIGN] === void 0) {
-      textTarget.dataset[DATASET_KEY_ALIGN] = textTarget.style.alignItems ?? "";
-    }
-  }
-  function applyLockedTextStyles(textTarget) {
-    textTarget.style.display = LOCKED_TEXT_DISPLAY;
-    textTarget.style.alignItems = LOCKED_TEXT_ALIGN;
   }
   function restoreTextStyles(textTarget) {
-    const originalColor = textTarget.dataset[DATASET_KEY_COLOR];
-    if (originalColor !== void 0) {
-      if (originalColor) {
-        textTarget.style.color = originalColor;
-      } else {
-        textTarget.style.removeProperty("color");
-      }
-      delete textTarget.dataset[DATASET_KEY_COLOR];
-    } else {
-      textTarget.style.removeProperty("color");
-    }
-    const originalDisplay = textTarget.dataset[DATASET_KEY_DISPLAY];
-    if (originalDisplay !== void 0) {
-      if (originalDisplay) {
-        textTarget.style.display = originalDisplay;
-      } else {
-        textTarget.style.removeProperty("display");
-      }
-      delete textTarget.dataset[DATASET_KEY_DISPLAY];
-    } else {
-      textTarget.style.removeProperty("display");
-    }
-    const originalAlign = textTarget.dataset[DATASET_KEY_ALIGN];
-    if (originalAlign !== void 0) {
-      if (originalAlign) {
-        textTarget.style.alignItems = originalAlign;
-      } else {
-        textTarget.style.removeProperty("align-items");
-      }
-      delete textTarget.dataset[DATASET_KEY_ALIGN];
-    } else {
-      textTarget.style.removeProperty("align-items");
-    }
-  }
-  function storeOriginalTextContent(textTarget) {
-    const sanitizedHtml = stripLockPrefix(textTarget.innerHTML);
-    textTarget.dataset[DATASET_KEY_TEXT] = sanitizedHtml;
-    return sanitizedHtml;
-  }
-  function applyLockedTextContent(textTarget, originalHtml) {
-    const baseHtml = originalHtml ?? textTarget.dataset[DATASET_KEY_TEXT] ?? stripLockPrefix(textTarget.innerHTML);
-    const desiredHtml = `${LOCK_CONTENT_PREFIX}${baseHtml}`;
-    if (textTarget.innerHTML !== desiredHtml) {
-      textTarget.innerHTML = desiredHtml;
-    }
+    restoreStyleFromDataset(textTarget, DATASET_KEY_COLOR, "color");
+    restoreStyleFromDataset(textTarget, DATASET_KEY_DISPLAY, "display");
+    restoreStyleFromDataset(textTarget, DATASET_KEY_ALIGN, "align-items");
   }
   function restoreTextContent(textTarget) {
     const originalHtml = textTarget.dataset[DATASET_KEY_TEXT];
@@ -16699,6 +16653,112 @@
     if (sanitizedHtml !== currentHtml) {
       textTarget.innerHTML = sanitizedHtml;
     }
+  }
+  function restoreStyleFromDataset(el2, datasetKey, cssProperty) {
+    const datasetMap = el2.dataset;
+    const originalValue = datasetMap[datasetKey];
+    if (originalValue === void 0) return;
+    if (originalValue) {
+      el2.style.setProperty(cssProperty, originalValue);
+    } else {
+      el2.style.removeProperty(cssProperty);
+    }
+    delete datasetMap[datasetKey];
+  }
+  function storeOriginalTooltipStyles(tooltip) {
+    if (tooltip.dataset[DATASET_KEY_BORDER] === void 0) {
+      tooltip.dataset[DATASET_KEY_BORDER] = tooltip.style.border ?? "";
+    }
+    if (tooltip.dataset[DATASET_KEY_BORDER_RADIUS] === void 0) {
+      tooltip.dataset[DATASET_KEY_BORDER_RADIUS] = tooltip.style.borderRadius ?? "";
+    }
+    if (tooltip.dataset[DATASET_KEY_OVERFLOW] === void 0) {
+      tooltip.dataset[DATASET_KEY_OVERFLOW] = tooltip.style.overflow ?? "";
+    }
+  }
+  function applyLockedTooltipStyles(tooltip) {
+    tooltip.style.border = LOCK_BORDER_STYLE;
+    tooltip.style.borderRadius = LOCK_BORDER_RADIUS;
+    tooltip.style.overflow = "visible";
+    const computedPosition = typeof window !== "undefined" ? window.getComputedStyle(tooltip).position : tooltip.style.position || "static";
+    if (computedPosition === "static") {
+      if (tooltip.dataset[DATASET_KEY_POSITION] === void 0) {
+        tooltip.dataset[DATASET_KEY_POSITION] = tooltip.style.position ?? "";
+      }
+      tooltip.style.position = "relative";
+    }
+  }
+  function restoreTooltipStyles(tooltip) {
+    const originalBorder = tooltip.dataset[DATASET_KEY_BORDER];
+    if (originalBorder !== void 0) {
+      if (originalBorder) {
+        tooltip.style.border = originalBorder;
+      } else {
+        tooltip.style.removeProperty("border");
+      }
+      delete tooltip.dataset[DATASET_KEY_BORDER];
+    } else {
+      tooltip.style.removeProperty("border");
+    }
+    const originalBorderRadius = tooltip.dataset[DATASET_KEY_BORDER_RADIUS];
+    if (originalBorderRadius !== void 0) {
+      if (originalBorderRadius) {
+        tooltip.style.borderRadius = originalBorderRadius;
+      } else {
+        tooltip.style.removeProperty("border-radius");
+      }
+      delete tooltip.dataset[DATASET_KEY_BORDER_RADIUS];
+    } else {
+      tooltip.style.removeProperty("border-radius");
+    }
+    const originalOverflow = tooltip.dataset[DATASET_KEY_OVERFLOW];
+    if (originalOverflow !== void 0) {
+      if (originalOverflow) {
+        tooltip.style.overflow = originalOverflow;
+      } else {
+        tooltip.style.removeProperty("overflow");
+      }
+      delete tooltip.dataset[DATASET_KEY_OVERFLOW];
+    } else {
+      tooltip.style.removeProperty("overflow");
+    }
+    const originalPosition = tooltip.dataset[DATASET_KEY_POSITION];
+    if (originalPosition !== void 0) {
+      if (originalPosition) {
+        tooltip.style.position = originalPosition;
+      } else {
+        tooltip.style.removeProperty("position");
+      }
+      delete tooltip.dataset[DATASET_KEY_POSITION];
+    } else if (tooltip.style.position === "relative") {
+      tooltip.style.removeProperty("position");
+    }
+  }
+  function ensureLockIcon(tooltip) {
+    let icon = tooltip.querySelector(`:scope > span.${LOCK_ICON_CLASS}`);
+    if (!icon) {
+      icon = document.createElement("span");
+      icon.className = LOCK_ICON_CLASS;
+      tooltip.append(icon);
+    }
+    icon.textContent = LOCK_EMOJI;
+    icon.style.position = "absolute";
+    icon.style.top = "0";
+    icon.style.right = "0";
+    icon.style.left = "";
+    icon.style.transform = "translate(50%, -50%)";
+    icon.style.fontSize = "18px";
+    icon.style.padding = "2px 8px";
+    icon.style.borderRadius = "999px";
+    icon.style.border = "none";
+    icon.style.background = "transparent";
+    icon.style.color = "white";
+    icon.style.pointerEvents = "none";
+    icon.style.userSelect = "none";
+    icon.style.zIndex = "1";
+  }
+  function removeLockIcon(tooltip) {
+    tooltip.querySelectorAll(`:scope > span.${LOCK_ICON_CLASS}`).forEach((node) => node.remove());
   }
   function stripLockPrefix(content) {
     return content.replace(LOCK_PREFIX_REGEX, "");
