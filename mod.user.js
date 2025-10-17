@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Mod Install Check
+// @name         MG Mod loader
 // @namespace    Romann.mods
 // @version      1.0.0
 // @description  Shows a big popup to confirm the mod is installed
@@ -85,3 +85,4 @@
     ready();
   }
 })();
+
