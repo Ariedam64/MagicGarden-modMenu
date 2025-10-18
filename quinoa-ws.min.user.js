@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.92
+// @version      2.2.93
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19760,7 +19760,8 @@
     directionWrap.className = "tm-select-wrap";
     const directionSelect = document.createElement("select");
     directionSelect.className = "tm-sort-select tm-direction-select";
-    if (useCustomSelectStyles) {
+    const canStyleDirectionSelect = useCustomSelectStyles && !isMacOsPlatform();
+    if (canStyleDirectionSelect) {
       Object.assign(directionSelect.style, {
         padding: "6px 10px",
         border: "1px solid rgba(255,255,255,0.25)",
@@ -19782,7 +19783,7 @@
       <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
-    if (useCustomSelectStyles) {
+    if (canStyleDirectionSelect) {
       directionWrap.append(directionSelect, directionArrow);
     } else {
       directionWrap.append(directionSelect);
@@ -20224,6 +20225,7 @@
       const currentEntries = container ? getInventoryDomEntries(container) : [];
       const inventoryEntryCountChanged = lastRenderedInventoryEntryCount === null || lastRenderedInventoryEntryCount !== currentEntries.length;
       const shouldRenderSelectOptions = inventoryEntryCountChanged || !currentSelect?.options?.length;
+      const shouldRenderDirectionOptions = inventoryEntryCountChanged || !currentDirectionSelect?.options?.length;
       const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
       const currentDomSnapshot = createDomSnapshot(currentEntries);
       const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
@@ -20274,8 +20276,17 @@
       const preferredDirection = (wrapPrevDirection && DIRECTION_ORDER.includes(wrapPrevDirection) ? wrapPrevDirection : null) || (persistedDirection && DIRECTION_ORDER.includes(persistedDirection) ? persistedDirection : null) || fallbackDirection;
       let appliedDirection;
       if (currentDirectionSelect) {
-        renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+        if (shouldRenderDirectionOptions) {
+          renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+        }
+        if (preferredDirection && DIRECTION_ORDER.includes(preferredDirection) && currentDirectionSelect.value !== preferredDirection) {
+          currentDirectionSelect.value = preferredDirection;
+        }
         appliedDirection = currentDirectionSelect.value;
+        if (!DIRECTION_ORDER.includes(appliedDirection)) {
+          appliedDirection = fallbackDirection;
+          currentDirectionSelect.value = fallbackDirection;
+        }
         currentWrap.__prevDirection = appliedDirection;
       } else {
         appliedDirection = fallbackDirection;
