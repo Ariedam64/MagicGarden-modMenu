@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.91
+// @version      2.2.92
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -30023,6 +30023,15 @@ next: ${next}`;
     value.className = "stats-meta__value";
     value.textContent = hasCreatedAt ? formatDateTime(createdAt) : "Unavailable";
     row.appendChild(value);
+    const resetButton = ui.btn("RESET", { variant: "danger" });
+    resetButton.style.marginLeft = "auto";
+    resetButton.addEventListener("click", () => {
+      const freshStats = StatsService.reset();
+      void initGarden(freshStats);
+      void initShops(freshStats);
+      void initPets(freshStats);
+    });
+    row.appendChild(resetButton);
     card.body.appendChild(row);
     root.appendChild(card.root);
   }
@@ -30440,17 +30449,6 @@ next: ${next}`;
     view.style.minHeight = "0";
     view.style.alignContent = "start";
     view.style.maxHeight = "54vh";
-    const actionsRow = ui.flexRow({ justify: "end", gap: 8 });
-    actionsRow.style.padding = "0 4px";
-    const resetButton = ui.btn("R\xE9initialiser les stats", { icon: "\u267B\uFE0F", variant: "danger" });
-    resetButton.addEventListener("click", () => {
-      const freshStats = StatsService.reset();
-      void initGarden(freshStats);
-      void initShops(freshStats);
-      void initPets(freshStats);
-    });
-    actionsRow.appendChild(resetButton);
-    view.appendChild(actionsRow);
     const stats = StatsService.getSnapshot();
     initGarden(stats).catch((error) => {
       console.error("[StatsMenu] Failed to initialize garden stats", error);
