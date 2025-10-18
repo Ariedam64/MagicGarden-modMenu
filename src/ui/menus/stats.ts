@@ -809,6 +809,16 @@ function renderMetaSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot) {
   value.textContent = hasCreatedAt ? formatDateTime(createdAt) : "Unavailable";
   row.appendChild(value);
 
+  const resetButton = ui.btn("RESET", { variant: "danger" });
+  resetButton.style.marginLeft = "auto";
+  resetButton.addEventListener("click", () => {
+    const freshStats = StatsService.reset();
+    void initGarden(freshStats);
+    void initShops(freshStats);
+    void initPets(freshStats);
+  });
+  row.appendChild(resetButton);
+
   card.body.appendChild(row);
   root.appendChild(card.root);
 }

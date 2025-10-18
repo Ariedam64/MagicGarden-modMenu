@@ -2013,7 +2013,8 @@ function createSortingBar(useCustomSelectStyles: boolean) {
 
   const directionSelect = document.createElement('select');
   directionSelect.className = 'tm-sort-select tm-direction-select';
-  if (useCustomSelectStyles) {
+  const canStyleDirectionSelect = useCustomSelectStyles && !isMacOsPlatform();
+  if (canStyleDirectionSelect) {
     Object.assign(directionSelect.style, {
       padding: '6px 10px',
       border: '1px solid rgba(255,255,255,0.25)',
@@ -2037,7 +2038,7 @@ function createSortingBar(useCustomSelectStyles: boolean) {
     </svg>
   `;
 
-  if (useCustomSelectStyles) {
+  if (canStyleDirectionSelect) {
     directionWrap.append(directionSelect, directionArrow);
   } else {
     directionWrap.append(directionSelect);
@@ -2588,6 +2589,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       lastRenderedInventoryEntryCount !== currentEntries.length;
     const shouldRenderSelectOptions =
       inventoryEntryCountChanged || !currentSelect?.options?.length;
+    const shouldRenderDirectionOptions =
+      inventoryEntryCountChanged || !currentDirectionSelect?.options?.length;
     const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
     const currentDomSnapshot = createDomSnapshot(currentEntries);
     const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
@@ -2653,8 +2656,21 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
 
     let appliedDirection: SortDirection;
     if (currentDirectionSelect) {
-      renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+      if (shouldRenderDirectionOptions) {
+        renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+      }
+      if (
+        preferredDirection &&
+        DIRECTION_ORDER.includes(preferredDirection) &&
+        currentDirectionSelect.value !== preferredDirection
+      ) {
+        currentDirectionSelect.value = preferredDirection;
+      }
       appliedDirection = currentDirectionSelect.value as SortDirection;
+      if (!DIRECTION_ORDER.includes(appliedDirection)) {
+        appliedDirection = fallbackDirection;
+        currentDirectionSelect.value = fallbackDirection;
+      }
       (currentWrap as any).__prevDirection = appliedDirection;
     } else {
       appliedDirection = fallbackDirection;

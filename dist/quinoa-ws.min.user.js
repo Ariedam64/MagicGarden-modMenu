@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.9
+// @version      2.2.94
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15644,6 +15644,24 @@
     tool: (id) => PlayerService.purchaseTool(id),
     decor: (id) => PlayerService.purchaseDecor(id)
   };
+  function incrementShopPurchaseStat(shop) {
+    switch (shop) {
+      case "plant":
+        StatsService.incrementShopStat("seedsBought");
+        break;
+      case "decor":
+        StatsService.incrementShopStat("decorBought");
+        break;
+      case "egg":
+        StatsService.incrementShopStat("eggsBought");
+        break;
+      case "tool":
+        StatsService.incrementShopStat("toolsBought");
+        break;
+      default:
+        break;
+    }
+  }
   async function purchaseRemainingItems(shop, itemId, remaining) {
     if (!shop || !itemId) return;
     const purchase = PURCHASE_FNS[shop];
@@ -15653,6 +15671,7 @@
     for (let bought = 0; bought < totalToBuy; bought += 1) {
       try {
         await purchase(itemId);
+        incrementShopPurchaseStat(shop);
       } catch (error) {
         console.warn("[TM] buyAll purchase failed", { shop, itemId, attempt: bought + 1, error });
         break;
@@ -19760,7 +19779,8 @@
     directionWrap.className = "tm-select-wrap";
     const directionSelect = document.createElement("select");
     directionSelect.className = "tm-sort-select tm-direction-select";
-    if (useCustomSelectStyles) {
+    const canStyleDirectionSelect = useCustomSelectStyles && !isMacOsPlatform();
+    if (canStyleDirectionSelect) {
       Object.assign(directionSelect.style, {
         padding: "6px 10px",
         border: "1px solid rgba(255,255,255,0.25)",
@@ -19782,7 +19802,7 @@
       <path d="M1 1l5 5 5-5" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `;
-    if (useCustomSelectStyles) {
+    if (canStyleDirectionSelect) {
       directionWrap.append(directionSelect, directionArrow);
     } else {
       directionWrap.append(directionSelect);
@@ -20224,6 +20244,7 @@
       const currentEntries = container ? getInventoryDomEntries(container) : [];
       const inventoryEntryCountChanged = lastRenderedInventoryEntryCount === null || lastRenderedInventoryEntryCount !== currentEntries.length;
       const shouldRenderSelectOptions = inventoryEntryCountChanged || !currentSelect?.options?.length;
+      const shouldRenderDirectionOptions = inventoryEntryCountChanged || !currentDirectionSelect?.options?.length;
       const domChangedSinceLastSort = haveDomEntriesChanged(lastSortedDomSnapshot, currentEntries);
       const currentDomSnapshot = createDomSnapshot(currentEntries);
       const searchQueryForGrid = getNormalizedInventorySearchQuery(targetGrid);
@@ -20274,8 +20295,17 @@
       const preferredDirection = (wrapPrevDirection && DIRECTION_ORDER.includes(wrapPrevDirection) ? wrapPrevDirection : null) || (persistedDirection && DIRECTION_ORDER.includes(persistedDirection) ? persistedDirection : null) || fallbackDirection;
       let appliedDirection;
       if (currentDirectionSelect) {
-        renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+        if (shouldRenderDirectionOptions) {
+          renderDirectionOptions(currentDirectionSelect, directionLabelByValue, preferredDirection);
+        }
+        if (preferredDirection && DIRECTION_ORDER.includes(preferredDirection) && currentDirectionSelect.value !== preferredDirection) {
+          currentDirectionSelect.value = preferredDirection;
+        }
         appliedDirection = currentDirectionSelect.value;
+        if (!DIRECTION_ORDER.includes(appliedDirection)) {
+          appliedDirection = fallbackDirection;
+          currentDirectionSelect.value = fallbackDirection;
+        }
         currentWrap.__prevDirection = appliedDirection;
       } else {
         appliedDirection = fallbackDirection;
@@ -30023,6 +30053,15 @@ next: ${next}`;
     value.className = "stats-meta__value";
     value.textContent = hasCreatedAt ? formatDateTime(createdAt) : "Unavailable";
     row.appendChild(value);
+    const resetButton = ui.btn("RESET", { variant: "danger" });
+    resetButton.style.marginLeft = "auto";
+    resetButton.addEventListener("click", () => {
+      const freshStats = StatsService.reset();
+      void initGarden(freshStats);
+      void initShops(freshStats);
+      void initPets(freshStats);
+    });
+    row.appendChild(resetButton);
     card.body.appendChild(row);
     root.appendChild(card.root);
   }

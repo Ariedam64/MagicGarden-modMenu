@@ -7,6 +7,7 @@ import {
   type PurchasesSnapshot,
 } from "../services/notifier";
 import { PlayerService } from "../services/player";
+import { StatsService } from "../services/stats";
 import { Atoms } from "../store/atoms";
 
 export type ShopType = "plant" | "egg" | "tool" | "decor";
@@ -168,6 +169,25 @@ const PURCHASE_FNS: Record<ShopType, (id: string) => Promise<void>> = {
   decor: (id: string) => PlayerService.purchaseDecor(id),
 };
 
+function incrementShopPurchaseStat(shop: ShopType): void {
+  switch (shop) {
+    case "plant":
+      StatsService.incrementShopStat("seedsBought");
+      break;
+    case "decor":
+      StatsService.incrementShopStat("decorBought");
+      break;
+    case "egg":
+      StatsService.incrementShopStat("eggsBought");
+      break;
+    case "tool":
+      StatsService.incrementShopStat("toolsBought");
+      break;
+    default:
+      break;
+  }
+}
+
 async function purchaseRemainingItems(
   shop: ShopType | null,
   itemId: string | null,
@@ -178,12 +198,13 @@ async function purchaseRemainingItems(
   const purchase = PURCHASE_FNS[shop];
   if (!purchase) return;
 
-   const totalToBuy = typeof remaining === "number" ? Math.max(0, Math.floor(remaining)) : 0;
+  const totalToBuy = typeof remaining === "number" ? Math.max(0, Math.floor(remaining)) : 0;
   if (totalToBuy <= 0) return;
 
   for (let bought = 0; bought < totalToBuy; bought += 1) {
     try {
       await purchase(itemId);
+      incrementShopPurchaseStat(shop);
     } catch (error) {
       console.warn("[TM] buyAll purchase failed", { shop, itemId, attempt: bought + 1, error });
       break;
