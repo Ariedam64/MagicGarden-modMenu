@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.2.93
+// @version      2.2.94
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15644,6 +15644,24 @@
     tool: (id) => PlayerService.purchaseTool(id),
     decor: (id) => PlayerService.purchaseDecor(id)
   };
+  function incrementShopPurchaseStat(shop) {
+    switch (shop) {
+      case "plant":
+        StatsService.incrementShopStat("seedsBought");
+        break;
+      case "decor":
+        StatsService.incrementShopStat("decorBought");
+        break;
+      case "egg":
+        StatsService.incrementShopStat("eggsBought");
+        break;
+      case "tool":
+        StatsService.incrementShopStat("toolsBought");
+        break;
+      default:
+        break;
+    }
+  }
   async function purchaseRemainingItems(shop, itemId, remaining) {
     if (!shop || !itemId) return;
     const purchase = PURCHASE_FNS[shop];
@@ -15653,6 +15671,7 @@
     for (let bought = 0; bought < totalToBuy; bought += 1) {
       try {
         await purchase(itemId);
+        incrementShopPurchaseStat(shop);
       } catch (error) {
         console.warn("[TM] buyAll purchase failed", { shop, itemId, attempt: bought + 1, error });
         break;
