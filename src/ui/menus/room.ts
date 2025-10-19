@@ -2,7 +2,12 @@
 // Affichage des rooms publiques avec rafraîchissement lors de l'ouverture du menu.
 
 import { Menu } from "../menu";
-import { RoomService, type PublicRoomDefinition, type PublicRoomStatus } from "../../services/room";
+import {
+  RoomService,
+  type PublicRoomDefinition,
+  type PublicRoomStatus,
+  type PublicRoomPlayer,
+} from "../../services/room";
 
 const ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
 
@@ -18,18 +23,32 @@ function ensureRoomMenuStyles(): void {
   to {
     transform: rotate(360deg);
   }
-}`;
+}
+
+.qmm.qmm-room-menu .qmm-tab[data-id="public-rooms"],
+.qmm.qmm-room-menu .qmm-tab[data-id="search-player"] {
+  flex: 0 1 auto;
+  min-width: 160px;
+}
+`;
   document.head.appendChild(style);
 }
 
 const TAB_ID = "public-rooms";
 const CUSTOM_TAB_ID = "custom-rooms";
+const SEARCH_TAB_ID = "search-player";
 type PlayerFilter = "any" | "empty" | "few" | "crowded" | "full";
 
 export async function renderRoomMenu(root: HTMLElement) {
-  const ui = new Menu({ id: "room", compact: true, windowSelector: ".qws-win" });
+  const ui = new Menu({
+    id: "room",
+    compact: true,
+    windowSelector: ".qws-win",
+    classes: "qmm-room-menu",
+  });
   ui.addTab(TAB_ID, "🌐 Public Rooms", (view) => renderPublicRoomsTab(view, ui));
   ui.addTab(CUSTOM_TAB_ID, "⭐ Custom Rooms", (view) => renderCustomRoomsTab(view, ui));
+  ui.addTab(SEARCH_TAB_ID, "🔍 Search Player", (view) => renderSearchPlayerTab(view, ui));
   ui.mount(root);
 }
 
@@ -97,81 +116,80 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   listWrapper.style.boxSizing = "border-box";
   listWrapper.style.position = "relative";
 
-  const loadingOverlay = document.createElement("div");
-  loadingOverlay.style.position = "absolute";
-  loadingOverlay.style.inset = "0";
-  loadingOverlay.style.display = "flex";
-  loadingOverlay.style.flexDirection = "column";
-  loadingOverlay.style.alignItems = "center";
-  loadingOverlay.style.justifyContent = "center";
-  loadingOverlay.style.background = "rgba(9, 10, 17, 0.6)";
-  loadingOverlay.style.backdropFilter = "blur(1px)";
-  loadingOverlay.style.transition = "opacity 150ms ease";
-  loadingOverlay.style.opacity = "0";
-  loadingOverlay.style.visibility = "hidden";
-  loadingOverlay.style.pointerEvents = "none";
+  const floatingLoadingIndicator = document.createElement("div");
+  floatingLoadingIndicator.style.position = "absolute";
+  floatingLoadingIndicator.style.top = "14px";
+  floatingLoadingIndicator.style.right = "14px";
+  floatingLoadingIndicator.style.width = "28px";
+  floatingLoadingIndicator.style.height = "28px";
+  floatingLoadingIndicator.style.borderRadius = "999px";
+  floatingLoadingIndicator.style.display = "flex";
+  floatingLoadingIndicator.style.alignItems = "center";
+  floatingLoadingIndicator.style.justifyContent = "center";
+  floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
+  floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+  floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
+  floatingLoadingIndicator.style.opacity = "0";
+  floatingLoadingIndicator.style.visibility = "hidden";
+  floatingLoadingIndicator.style.pointerEvents = "none";
+  floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
+  floatingLoadingIndicator.style.zIndex = "3";
 
-  const loadingSpinner = document.createElement("div");
-  loadingSpinner.style.width = "28px";
-  loadingSpinner.style.height = "28px";
-  loadingSpinner.style.borderRadius = "999px";
-  loadingSpinner.style.border = "3px solid rgba(248, 250, 252, 0.12)";
-  loadingSpinner.style.borderTopColor = "#f8fafc";
-  loadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
-
-  const loadingText = document.createElement("div");
-  loadingText.textContent = "Loading rooms…";
-  loadingText.style.marginTop = "12px";
-  loadingText.style.fontSize = "12px";
-  loadingText.style.fontWeight = "500";
-  loadingText.style.letterSpacing = "0.01em";
-  loadingText.style.opacity = "0.85";
-  loadingText.style.color = "#f8fafc";
-  loadingText.style.textShadow = "0 2px 6px rgba(0, 0, 0, 0.4)";
-
-  const loadingContent = document.createElement("div");
-  loadingContent.style.display = "flex";
-  loadingContent.style.flexDirection = "column";
-  loadingContent.style.alignItems = "center";
-  loadingContent.appendChild(loadingSpinner);
-  loadingContent.appendChild(loadingText);
-  loadingOverlay.appendChild(loadingContent);
+  const floatingLoadingSpinner = document.createElement("div");
+  floatingLoadingSpinner.style.width = "16px";
+  floatingLoadingSpinner.style.height = "16px";
+  floatingLoadingSpinner.style.borderRadius = "999px";
+  floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
+  floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
+  floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
+  floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
 
   const list = document.createElement("div");
   list.style.display = "grid";
   list.style.gap = "10px";
   list.style.padding = "4px";
   listWrapper.appendChild(list);
-  listWrapper.appendChild(loadingOverlay);
+  listWrapper.appendChild(floatingLoadingIndicator);
   container.appendChild(listWrapper);
 
-  const setLoadingState = (loading: boolean, message?: string) => {
-    if (message) {
-      loadingText.textContent = message;
-    }
+  const updateFloatingLoadingIndicator = () => {
+    floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
+  };
+
+  let isFloatingIndicatorVisible = false;
+
+  const setLoadingState = (loading: boolean) => {
     if (loading) {
-      loadingOverlay.style.visibility = "visible";
-      loadingOverlay.style.opacity = "1";
+      isFloatingIndicatorVisible = true;
+      updateFloatingLoadingIndicator();
+      floatingLoadingIndicator.style.visibility = "visible";
+      floatingLoadingIndicator.style.opacity = "1";
     } else {
-      loadingOverlay.style.opacity = "0";
-      loadingOverlay.addEventListener(
+      isFloatingIndicatorVisible = false;
+      floatingLoadingIndicator.style.opacity = "0";
+      floatingLoadingIndicator.addEventListener(
         "transitionend",
         () => {
-          loadingOverlay.style.visibility = "hidden";
+          if (!isFloatingIndicatorVisible) {
+            floatingLoadingIndicator.style.visibility = "hidden";
+          }
         },
         { once: true },
       );
       window.setTimeout(() => {
-        if (loadingOverlay.style.opacity === "0") {
-          loadingOverlay.style.visibility = "hidden";
+        if (!isFloatingIndicatorVisible) {
+          floatingLoadingIndicator.style.visibility = "hidden";
         }
-      }, 200);
+      }, 220);
     }
   };
 
   let savedScrollTop = 0;
   listWrapper.addEventListener("scroll", () => {
     savedScrollTop = listWrapper.scrollTop;
+    if (isFloatingIndicatorVisible) {
+      updateFloatingLoadingIndicator();
+    }
   });
 
   let destroyed = false;
@@ -452,7 +470,7 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     const currentRequest = ++requestCounter;
     isRefreshing = true;
     updateRefreshButtonState();
-    setLoadingState(true, firstLoad ? "Loading rooms…" : "Refreshing rooms…");
+    setLoadingState(true);
     statusBar.textContent = firstLoad ? "Loading rooms…" : "Refreshing rooms…";
 
     try {
@@ -656,87 +674,99 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
   listWrapper.style.boxSizing = "border-box";
   listWrapper.style.position = "relative";
 
-  const loadingOverlay = document.createElement("div");
-  loadingOverlay.style.position = "absolute";
-  loadingOverlay.style.inset = "0";
-  loadingOverlay.style.display = "flex";
-  loadingOverlay.style.flexDirection = "column";
-  loadingOverlay.style.alignItems = "center";
-  loadingOverlay.style.justifyContent = "center";
-  loadingOverlay.style.background = "rgba(9, 10, 17, 0.6)";
-  loadingOverlay.style.backdropFilter = "blur(1px)";
-  loadingOverlay.style.transition = "opacity 150ms ease";
-  loadingOverlay.style.opacity = "0";
-  loadingOverlay.style.visibility = "hidden";
-  loadingOverlay.style.pointerEvents = "none";
+  const floatingLoadingIndicator = document.createElement("div");
+  floatingLoadingIndicator.style.position = "absolute";
+  floatingLoadingIndicator.style.top = "14px";
+  floatingLoadingIndicator.style.right = "14px";
+  floatingLoadingIndicator.style.width = "28px";
+  floatingLoadingIndicator.style.height = "28px";
+  floatingLoadingIndicator.style.borderRadius = "999px";
+  floatingLoadingIndicator.style.display = "flex";
+  floatingLoadingIndicator.style.alignItems = "center";
+  floatingLoadingIndicator.style.justifyContent = "center";
+  floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
+  floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+  floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
+  floatingLoadingIndicator.style.opacity = "0";
+  floatingLoadingIndicator.style.visibility = "hidden";
+  floatingLoadingIndicator.style.pointerEvents = "none";
+  floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
+  floatingLoadingIndicator.style.zIndex = "3";
 
-  const loadingSpinner = document.createElement("div");
-  loadingSpinner.style.width = "28px";
-  loadingSpinner.style.height = "28px";
-  loadingSpinner.style.borderRadius = "999px";
-  loadingSpinner.style.border = "3px solid rgba(248, 250, 252, 0.12)";
-  loadingSpinner.style.borderTopColor = "#f8fafc";
-  loadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
-
-  const loadingText = document.createElement("div");
-  loadingText.textContent = "Loading rooms…";
-  loadingText.style.marginTop = "12px";
-  loadingText.style.fontSize = "12px";
-  loadingText.style.fontWeight = "500";
-  loadingText.style.letterSpacing = "0.01em";
-  loadingText.style.opacity = "0.85";
-  loadingText.style.color = "#f8fafc";
-  loadingText.style.textShadow = "0 2px 6px rgba(0, 0, 0, 0.4)";
-
-  const loadingContent = document.createElement("div");
-  loadingContent.style.display = "flex";
-  loadingContent.style.flexDirection = "column";
-  loadingContent.style.alignItems = "center";
-  loadingContent.appendChild(loadingSpinner);
-  loadingContent.appendChild(loadingText);
-  loadingOverlay.appendChild(loadingContent);
+  const floatingLoadingSpinner = document.createElement("div");
+  floatingLoadingSpinner.style.width = "16px";
+  floatingLoadingSpinner.style.height = "16px";
+  floatingLoadingSpinner.style.borderRadius = "999px";
+  floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
+  floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
+  floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
+  floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
 
   const list = document.createElement("div");
   list.style.display = "grid";
   list.style.gap = "10px";
   list.style.padding = "4px";
   listWrapper.appendChild(list);
-  listWrapper.appendChild(loadingOverlay);
+  listWrapper.appendChild(floatingLoadingIndicator);
   container.appendChild(listWrapper);
 
-  const setLoadingState = (loading: boolean, message?: string) => {
-    if (message) {
-      loadingText.textContent = message;
-    }
+  const updateFloatingLoadingIndicator = () => {
+    floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
+  };
+
+  let isFloatingIndicatorVisible = false;
+
+  const setLoadingState = (loading: boolean) => {
     if (loading) {
-      loadingOverlay.style.visibility = "visible";
-      loadingOverlay.style.opacity = "1";
+      isFloatingIndicatorVisible = true;
+      updateFloatingLoadingIndicator();
+      floatingLoadingIndicator.style.visibility = "visible";
+      floatingLoadingIndicator.style.opacity = "1";
     } else {
-      loadingOverlay.style.opacity = "0";
-      loadingOverlay.addEventListener(
+      isFloatingIndicatorVisible = false;
+      floatingLoadingIndicator.style.opacity = "0";
+      floatingLoadingIndicator.addEventListener(
         "transitionend",
         () => {
-          loadingOverlay.style.visibility = "hidden";
+          if (!isFloatingIndicatorVisible) {
+            floatingLoadingIndicator.style.visibility = "hidden";
+          }
         },
         { once: true },
       );
       window.setTimeout(() => {
-        if (loadingOverlay.style.opacity === "0") {
-          loadingOverlay.style.visibility = "hidden";
+        if (!isFloatingIndicatorVisible) {
+          floatingLoadingIndicator.style.visibility = "hidden";
         }
-      }, 200);
+      }, 220);
     }
   };
+
+  const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "🔄" });
+  refreshButton.style.flexShrink = "0";
+  refreshButton.setAttribute("aria-label", "Refresh custom rooms list");
 
   const statusBar = document.createElement("div");
   statusBar.style.fontSize = "12px";
   statusBar.style.opacity = "0.75";
   statusBar.textContent = "Add a custom room to get started.";
-  container.appendChild(statusBar);
+
+  const footer = document.createElement("div");
+  footer.style.display = "flex";
+  footer.style.alignItems = "center";
+  footer.style.gap = "12px";
+  footer.style.marginTop = "8px";
+  footer.style.width = "100%";
+  footer.appendChild(refreshButton);
+  footer.appendChild(statusBar);
+  container.appendChild(footer);
 
   let savedScrollTop = 0;
   listWrapper.addEventListener("scroll", () => {
     savedScrollTop = listWrapper.scrollTop;
+    if (isFloatingIndicatorVisible) {
+      updateFloatingLoadingIndicator();
+    }
   });
 
   let destroyed = false;
@@ -943,6 +973,14 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
   playerFilterContainer.appendChild(playerFilterSelect);
   filterBar.appendChild(playerFilterContainer);
 
+  let isRefreshing = false;
+  const updateRefreshButtonState = () => {
+    const enabled = !destroyed && !isRefreshing;
+    ui.setButtonEnabled(refreshButton, enabled);
+    refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
+  };
+  updateRefreshButtonState();
+
   const handleRoomsChanged = () => {
     applyCategoryButtons(RoomService.getCustomRooms());
     refreshRooms();
@@ -958,12 +996,16 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
       currentRooms = [];
       renderRooms([]);
       statusBar.textContent = "Add a custom room to get started.";
+      isRefreshing = false;
+      updateRefreshButtonState();
       firstLoad = false;
       return;
     }
 
     const currentRequest = ++requestCounter;
-    setLoadingState(true, firstLoad ? "Loading rooms…" : "Refreshing rooms…");
+    isRefreshing = true;
+    updateRefreshButtonState();
+    setLoadingState(true);
     statusBar.textContent = firstLoad ? "Loading rooms…" : "Refreshing rooms…";
 
     try {
@@ -983,9 +1025,17 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
       if (!destroyed && currentRequest === requestCounter) {
         setLoadingState(false);
       }
+      if (currentRequest === requestCounter) {
+        isRefreshing = false;
+      }
+      updateRefreshButtonState();
       firstLoad = false;
     }
   };
+
+  refreshButton.addEventListener("click", () => {
+    void refreshRooms();
+  });
 
   manageForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1009,6 +1059,364 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
 
   (view as any).__cleanup__ = () => {
     destroyed = true;
+    updateRefreshButtonState();
+  };
+}
+
+function renderSearchPlayerTab(view: HTMLElement, ui: Menu) {
+  view.innerHTML = "";
+  ensureRoomMenuStyles();
+
+  const root = document.createElement("div");
+  root.style.display = "flex";
+  root.style.flexDirection = "column";
+  root.style.alignItems = "center";
+  root.style.padding = "12px";
+  root.style.boxSizing = "border-box";
+  root.style.height = "100%";
+  view.appendChild(root);
+
+  const container = document.createElement("div");
+  container.style.display = "grid";
+  container.style.gap = "12px";
+  container.style.width = "100%";
+  container.style.maxWidth = "640px";
+  container.style.gridTemplateRows = "max-content max-content max-content 1fr";
+  container.style.height = "100%";
+  root.appendChild(container);
+
+  const heading = document.createElement("div");
+  heading.textContent = "Search for a player across all available rooms.";
+  heading.style.fontSize = "14px";
+  heading.style.opacity = "0.9";
+  container.appendChild(heading);
+
+  const description = document.createElement("div");
+  description.textContent = "Enter at least three characters to look for matching player names.";
+  description.style.fontSize = "12px";
+  description.style.opacity = "0.72";
+  description.style.lineHeight = "1.45";
+  container.appendChild(description);
+
+  const form = document.createElement("form");
+  form.style.display = "flex";
+  form.style.flexWrap = "wrap";
+  form.style.alignItems = "center";
+  form.style.gap = "8px";
+  container.appendChild(form);
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.placeholder = "Player name…";
+  searchInput.autocomplete = "off";
+  searchInput.spellcheck = false;
+  searchInput.style.flex = "1";
+  searchInput.style.minWidth = "200px";
+  searchInput.style.padding = "10px 12px";
+  searchInput.style.borderRadius = "10px";
+  searchInput.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+  searchInput.style.background = "rgba(17, 18, 27, 0.95)";
+  searchInput.style.color = "#f8fafc";
+  searchInput.style.fontSize = "13px";
+  searchInput.style.fontWeight = "500";
+  searchInput.style.outline = "none";
+  searchInput.style.boxShadow = "0 6px 16px rgba(15, 23, 42, 0.45)";
+  form.appendChild(searchInput);
+
+  const searchButton = ui.btn("Search", { size: "sm", icon: "🔍", variant: "primary" });
+  searchButton.type = "submit";
+  searchButton.style.flexShrink = "0";
+  searchButton.title = "Search for a player across rooms";
+  form.appendChild(searchButton);
+
+  const statusMessage = document.createElement("div");
+  statusMessage.style.fontSize = "12px";
+  statusMessage.style.opacity = "0.75";
+  statusMessage.style.minHeight = "18px";
+  statusMessage.textContent = "Enter a player name to search across rooms.";
+  container.appendChild(statusMessage);
+
+  const listWrapper = document.createElement("div");
+  listWrapper.style.height = "54vh";
+  listWrapper.style.maxHeight = "54vh";
+  listWrapper.style.overflowY = "auto";
+  listWrapper.style.padding = "6px 2px";
+  listWrapper.style.borderRadius = "10px";
+  listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
+  listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
+  listWrapper.style.width = "100%";
+  listWrapper.style.boxSizing = "border-box";
+  listWrapper.style.position = "relative";
+
+  const floatingLoadingIndicator = document.createElement("div");
+  floatingLoadingIndicator.style.position = "absolute";
+  floatingLoadingIndicator.style.top = "14px";
+  floatingLoadingIndicator.style.right = "14px";
+  floatingLoadingIndicator.style.width = "28px";
+  floatingLoadingIndicator.style.height = "28px";
+  floatingLoadingIndicator.style.borderRadius = "999px";
+  floatingLoadingIndicator.style.display = "flex";
+  floatingLoadingIndicator.style.alignItems = "center";
+  floatingLoadingIndicator.style.justifyContent = "center";
+  floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
+  floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+  floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
+  floatingLoadingIndicator.style.opacity = "0";
+  floatingLoadingIndicator.style.visibility = "hidden";
+  floatingLoadingIndicator.style.pointerEvents = "none";
+  floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
+  floatingLoadingIndicator.style.zIndex = "3";
+
+  const floatingLoadingSpinner = document.createElement("div");
+  floatingLoadingSpinner.style.width = "16px";
+  floatingLoadingSpinner.style.height = "16px";
+  floatingLoadingSpinner.style.borderRadius = "999px";
+  floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
+  floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
+  floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
+  floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
+
+  const list = document.createElement("div");
+  list.style.display = "grid";
+  list.style.gap = "10px";
+  list.style.padding = "4px";
+  listWrapper.appendChild(list);
+  listWrapper.appendChild(floatingLoadingIndicator);
+  container.appendChild(listWrapper);
+
+  const renderEmptyState = (message: string) => {
+    list.innerHTML = "";
+    const empty = document.createElement("div");
+    empty.textContent = message;
+    empty.style.padding = "16px";
+    empty.style.textAlign = "center";
+    empty.style.opacity = "0.7";
+    empty.style.fontSize = "13px";
+    list.appendChild(empty);
+  };
+
+  renderEmptyState("Search results will appear here.");
+
+  const updateFloatingLoadingIndicator = () => {
+    floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
+  };
+
+  let isFloatingIndicatorVisible = false;
+  const setLoadingState = (loading: boolean) => {
+    if (loading) {
+      isFloatingIndicatorVisible = true;
+      updateFloatingLoadingIndicator();
+      floatingLoadingIndicator.style.visibility = "visible";
+      floatingLoadingIndicator.style.opacity = "1";
+    } else {
+      isFloatingIndicatorVisible = false;
+      floatingLoadingIndicator.style.opacity = "0";
+      floatingLoadingIndicator.addEventListener(
+        "transitionend",
+        () => {
+          if (!isFloatingIndicatorVisible) {
+            floatingLoadingIndicator.style.visibility = "hidden";
+          }
+        },
+        { once: true },
+      );
+      window.setTimeout(() => {
+        if (!isFloatingIndicatorVisible) {
+          floatingLoadingIndicator.style.visibility = "hidden";
+        }
+      }, 220);
+    }
+  };
+
+  listWrapper.addEventListener("scroll", () => {
+    if (isFloatingIndicatorVisible) {
+      updateFloatingLoadingIndicator();
+    }
+  });
+
+  let isLoading = false;
+  let destroyed = false;
+  let requestCounter = 0;
+  let lastQueryLabel = "";
+
+  const updateSearchButtonState = () => {
+    const hasQuery = searchInput.value.trim().length >= 3;
+    ui.setButtonEnabled(searchButton, hasQuery && !isLoading);
+    searchButton.setAttribute("aria-busy", isLoading ? "true" : "false");
+  };
+
+  const normalizeSearchText = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    try {
+      return trimmed
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    } catch {
+      return trimmed.toLowerCase();
+    }
+  };
+
+  const createHighlightMatcher = (players: PublicRoomPlayer[]) => {
+    const ids = new Set<string>();
+    const databaseIds = new Set<string>();
+    const names = new Set<string>();
+
+    for (const player of players) {
+      if (player.id) ids.add(player.id);
+      if (player.databaseUserId) databaseIds.add(player.databaseUserId);
+      names.add(normalizeSearchText(player.name));
+    }
+
+    return (player: PublicRoomPlayer) => {
+      if (player.id && ids.has(player.id)) return true;
+      if (player.databaseUserId && databaseIds.has(player.databaseUserId)) return true;
+      return names.has(normalizeSearchText(player.name));
+    };
+  };
+
+  type SearchMatch = { room: PublicRoomStatus; players: PublicRoomPlayer[] };
+
+  const performSearch = async (rawQuery: string) => {
+    const trimmedQuery = rawQuery.trim();
+    const normalizedQuery = normalizeSearchText(trimmedQuery);
+
+    if (!normalizedQuery) {
+      statusMessage.textContent = "Enter a player name to search across rooms.";
+      renderEmptyState("Search results will appear here.");
+      lastQueryLabel = "";
+      return;
+    }
+
+    if (trimmedQuery.length < 3) {
+      statusMessage.textContent = "Please enter at least three characters.";
+      renderEmptyState("Type a longer name to search for players.");
+      lastQueryLabel = "";
+      return;
+    }
+
+    const currentRequest = ++requestCounter;
+    isLoading = true;
+    updateSearchButtonState();
+    setLoadingState(true);
+    statusMessage.textContent = "Searching players…";
+
+    try {
+      const [publicRooms, customRooms] = await Promise.all([
+        RoomService.fetchPublicRoomsStatus(),
+        RoomService.fetchCustomRoomsStatus().catch(() => []),
+      ]);
+
+      if (destroyed || currentRequest !== requestCounter) return;
+
+      const allRooms = [...publicRooms, ...customRooms];
+      const matchMap = new Map<string, SearchMatch>();
+
+      for (const room of allRooms) {
+        const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
+        if (!playerDetails.length) continue;
+
+        const matchedPlayers = playerDetails.filter((player) =>
+          normalizeSearchText(player.name).includes(normalizedQuery),
+        );
+
+        if (matchedPlayers.length) {
+          const existing = matchMap.get(room.idRoom);
+          if (existing) {
+            for (const player of matchedPlayers) {
+              const alreadyPresent = existing.players.some((candidate) => {
+                if (player.id && candidate.id && player.id === candidate.id) return true;
+                if (
+                  player.databaseUserId &&
+                  candidate.databaseUserId &&
+                  player.databaseUserId === candidate.databaseUserId
+                ) {
+                  return true;
+                }
+                return normalizeSearchText(candidate.name) === normalizeSearchText(player.name);
+              });
+              if (!alreadyPresent) {
+                existing.players.push(player);
+              }
+            }
+          } else {
+            matchMap.set(room.idRoom, { room, players: [...matchedPlayers] });
+          }
+        }
+      }
+
+      const matches = Array.from(matchMap.values());
+
+      if (!matches.length) {
+        statusMessage.textContent = `No player found matching “${trimmedQuery}”.`;
+        renderEmptyState("No rooms contain a player with this name.");
+        lastQueryLabel = trimmedQuery;
+        return;
+      }
+
+      matches.sort((a, b) => {
+        const onlineInA = a.players.filter((player) => player.isConnected).length;
+        const onlineInB = b.players.filter((player) => player.isConnected).length;
+        if (onlineInA !== onlineInB) return onlineInB - onlineInA;
+        if (a.players.length !== b.players.length) return b.players.length - a.players.length;
+        return a.room.name.localeCompare(b.room.name);
+      });
+
+      const totalPlayers = matches.reduce((sum, match) => sum + match.players.length, 0);
+      const roomsLabel = matches.length === 1 ? "room" : "rooms";
+      const playersLabel = totalPlayers === 1 ? "player" : "players";
+      statusMessage.textContent = `Found ${totalPlayers} ${playersLabel} in ${matches.length} ${roomsLabel}.`;
+
+      list.innerHTML = "";
+      let isFirstMatch = true;
+      for (const match of matches) {
+        const highlightMatcher = createHighlightMatcher(match.players);
+        const entry = createRoomEntry(match.room, ui, {
+          highlightPlayers: highlightMatcher,
+          defaultDetailsOpen: true,
+          scrollHighlightedPlayersIntoView: isFirstMatch,
+        });
+        list.appendChild(entry);
+        isFirstMatch = false;
+      }
+
+      lastQueryLabel = trimmedQuery;
+    } catch (error) {
+      if (destroyed || currentRequest !== requestCounter) return;
+      const message = (error as Error)?.message || String(error);
+      statusMessage.textContent = `Search failed: ${message}`;
+      renderEmptyState("Unable to complete the search. Please try again.");
+    } finally {
+      if (!destroyed && currentRequest === requestCounter) {
+        isLoading = false;
+        setLoadingState(false);
+        updateSearchButtonState();
+      }
+    }
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    void performSearch(searchInput.value);
+  });
+
+  searchInput.addEventListener("input", () => {
+    updateSearchButtonState();
+    const trimmed = searchInput.value.trim();
+    if (!trimmed && lastQueryLabel) {
+      statusMessage.textContent = "Enter a player name to search across rooms.";
+      renderEmptyState("Search results will appear here.");
+      lastQueryLabel = "";
+    } else if (!isLoading && trimmed.length > 0 && trimmed.length < 3) {
+      statusMessage.textContent = "Type at least three characters to start a search.";
+    }
+  });
+
+  updateSearchButtonState();
+
+  (view as any).__cleanup__ = () => {
+    destroyed = true;
   };
 }
 
@@ -1027,11 +1435,15 @@ function createRoomEntry(
   ui: Menu,
   options?: {
     onRemove?: () => void;
+    highlightPlayers?: (player: PublicRoomPlayer) => boolean;
+    defaultDetailsOpen?: boolean;
+    scrollHighlightedPlayersIntoView?: boolean;
   },
 ): HTMLElement {
   const isDiscord = RoomService.isDiscordActivity();
   const currentRoomCode = getCurrentRoomCode();
   const isCurrentRoom = currentRoomCode === room.idRoom;
+  const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -1041,6 +1453,163 @@ function createRoomEntry(
   wrapper.style.background = "linear-gradient(135deg, rgba(30, 33, 46, 0.95), rgba(18, 19, 28, 0.95))";
   wrapper.style.boxShadow = "0 10px 20px rgba(0, 0, 0, 0.35)";
   wrapper.style.position = "relative";
+
+  const detailsContainer = document.createElement("div");
+  detailsContainer.style.overflow = "hidden";
+  detailsContainer.style.maxHeight = "0";
+  detailsContainer.style.opacity = "0";
+  detailsContainer.style.transition = "max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease";
+  detailsContainer.style.marginTop = "0";
+
+  const detailsContent = document.createElement("div");
+  detailsContent.style.display = "grid";
+  detailsContent.style.gap = "10px";
+  detailsContent.style.paddingTop = "12px";
+  detailsContent.style.paddingLeft = "6px";
+  detailsContent.style.paddingRight = "6px";
+  detailsContent.style.paddingBottom = "4px";
+  detailsContent.style.borderTop = "1px solid rgba(148, 163, 184, 0.16)";
+  detailsContainer.appendChild(detailsContent);
+
+  const detailsTitle = document.createElement("div");
+  detailsTitle.textContent = "Players";
+  detailsTitle.style.fontSize = "13px";
+  detailsTitle.style.fontWeight = "600";
+  detailsTitle.style.letterSpacing = "0.02em";
+  detailsTitle.style.color = "#e2e8f0";
+  detailsContent.appendChild(detailsTitle);
+
+  const highlightedPlayerElements: HTMLElement[] = [];
+
+  if (playerDetails.length) {
+    const list = document.createElement("ul");
+    list.style.listStyle = "none";
+    list.style.margin = "0";
+    list.style.padding = "0";
+    list.style.display = "grid";
+    list.style.gap = "10px";
+    list.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
+
+    for (const player of playerDetails) {
+      const item = document.createElement("li");
+      item.style.display = "flex";
+      item.style.alignItems = "center";
+      item.style.gap = "12px";
+      item.style.padding = "6px 0";
+
+      const avatarWrapper = document.createElement("div");
+      avatarWrapper.style.width = "36px";
+      avatarWrapper.style.height = "36px";
+      avatarWrapper.style.borderRadius = "999px";
+      avatarWrapper.style.overflow = "hidden";
+      avatarWrapper.style.flexShrink = "0";
+      avatarWrapper.style.display = "grid";
+      avatarWrapper.style.placeItems = "center";
+      avatarWrapper.style.border = "1px solid rgba(148, 163, 184, 0.25)";
+      avatarWrapper.style.background =
+        "linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(14, 165, 233, 0.2))";
+
+      if (player.discordAvatarUrl) {
+        const img = document.createElement("img");
+        img.src = player.discordAvatarUrl;
+        img.alt = `${player.name}'s avatar`;
+        img.loading = "lazy";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "cover";
+        avatarWrapper.appendChild(img);
+      } else {
+        const initials = document.createElement("span");
+        initials.textContent = player.name.charAt(0)?.toUpperCase() || "?";
+        initials.style.fontWeight = "600";
+        initials.style.fontSize = "14px";
+        initials.style.color = "#e2e8f0";
+        avatarWrapper.appendChild(initials);
+      }
+
+      const playerInfo = document.createElement("div");
+      playerInfo.style.display = "grid";
+      playerInfo.style.gap = "4px";
+
+      const nameRow = document.createElement("div");
+      nameRow.style.display = "flex";
+      nameRow.style.alignItems = "center";
+      nameRow.style.gap = "8px";
+
+      const playerName = document.createElement("div");
+      playerName.textContent = player.name;
+      playerName.style.fontWeight = "600";
+      playerName.style.fontSize = "14px";
+      playerName.style.color = "#f8fafc";
+      nameRow.appendChild(playerName);
+
+      if (player.isHost) {
+        const hostBadge = document.createElement("span");
+        hostBadge.textContent = "Host";
+        hostBadge.style.fontSize = "10px";
+        hostBadge.style.letterSpacing = "0.06em";
+        hostBadge.style.textTransform = "uppercase";
+        hostBadge.style.padding = "2px 6px";
+        hostBadge.style.borderRadius = "999px";
+        hostBadge.style.fontWeight = "600";
+        hostBadge.style.color = "#facc15";
+        hostBadge.style.background = "rgba(250, 204, 21, 0.18)";
+        hostBadge.style.border = "1px solid rgba(250, 204, 21, 0.32)";
+        nameRow.appendChild(hostBadge);
+      }
+
+      const statusRow = document.createElement("div");
+      statusRow.style.display = "flex";
+      statusRow.style.alignItems = "center";
+      statusRow.style.gap = "10px";
+      statusRow.style.fontSize = "11px";
+      statusRow.style.color = "rgba(226, 232, 240, 0.75)";
+
+      const presence = document.createElement("span");
+      presence.style.display = "inline-flex";
+      presence.style.alignItems = "center";
+      presence.style.gap = "6px";
+
+      const presenceDot = document.createElement("span");
+      presenceDot.style.width = "8px";
+      presenceDot.style.height = "8px";
+      presenceDot.style.borderRadius = "999px";
+      presenceDot.style.background = player.isConnected ? "#34d399" : "#f97316";
+      presence.appendChild(presenceDot);
+      presence.append(player.isConnected ? "Online" : "Offline");
+
+      statusRow.appendChild(presence);
+
+      playerInfo.append(nameRow, statusRow);
+      item.append(avatarWrapper, playerInfo);
+
+      if (options?.highlightPlayers?.(player)) {
+        item.style.background = "rgba(34, 197, 94, 0.12)";
+        item.style.borderRadius = "12px";
+        item.style.padding = "10px";
+        item.style.margin = "-2px";
+        item.style.boxShadow = "inset 0 0 0 1px rgba(34, 197, 94, 0.35)";
+        avatarWrapper.style.border = "1px solid rgba(74, 222, 128, 0.65)";
+        playerName.style.color = "#bbf7d0";
+        statusRow.style.color = "rgba(190, 242, 100, 0.85)";
+        presenceDot.style.background = "#4ade80";
+        item.dataset.highlightedPlayer = "true";
+        highlightedPlayerElements.push(item);
+      }
+
+      list.appendChild(item);
+    }
+
+    detailsContent.appendChild(list);
+  } else {
+    const emptyState = document.createElement("div");
+    emptyState.textContent = room.error
+      ? "Player details unavailable."
+      : "No player details available.";
+    emptyState.style.fontSize = "12px";
+    emptyState.style.color = "rgba(226, 232, 240, 0.7)";
+    detailsContent.appendChild(emptyState);
+  }
 
   const accentColor = (() => {
     if (room.error) return "rgba(248, 180, 127, 0.9)";
@@ -1147,6 +1716,22 @@ function createRoomEntry(
   actionBlock.style.justifyItems = "end";
   actionBlock.style.gap = "6px";
 
+  const chevron = document.createElement("span");
+  chevron.textContent = "▾";
+  chevron.style.display = "inline-block";
+  chevron.style.transition = "transform 0.2s ease";
+  chevron.style.transform = "rotate(-90deg)";
+
+  const detailsBtn = ui.btn("Details", { size: "sm", variant: "ghost", icon: chevron });
+  detailsBtn.style.minWidth = "86px";
+  detailsBtn.style.justifyContent = "center";
+  detailsBtn.title = playerDetails.length
+    ? "Show the players currently in this room."
+    : room.error
+    ? "Player details unavailable."
+    : "No player details available.";
+  actionBlock.appendChild(detailsBtn);
+
   const joinBtn = ui.btn("Join", { size: "sm", variant: "primary" });
   joinBtn.style.minWidth = "86px";
   joinBtn.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
@@ -1177,6 +1762,32 @@ function createRoomEntry(
     if (isCurrentRoom) return;
     if (!RoomService.canJoinPublicRoom(room)) return;
     RoomService.joinPublicRoom(room);
+  });
+
+  const labelSpan = detailsBtn.querySelector<HTMLSpanElement>(".label");
+  let detailsExpanded = options?.defaultDetailsOpen ?? false;
+  const applyDetailsState = () => {
+    if (detailsExpanded) {
+      const targetHeight = `${detailsContent.scrollHeight}px`;
+      detailsContainer.style.maxHeight = targetHeight;
+      detailsContainer.style.opacity = "1";
+      detailsContainer.style.marginTop = "8px";
+      detailsBtn.setAttribute("aria-expanded", "true");
+      if (labelSpan) labelSpan.textContent = "Hide details";
+      chevron.style.transform = "rotate(0deg)";
+    } else {
+      detailsContainer.style.maxHeight = "0";
+      detailsContainer.style.opacity = "0";
+      detailsContainer.style.marginTop = "0";
+      detailsBtn.setAttribute("aria-expanded", "false");
+      if (labelSpan) labelSpan.textContent = "Details";
+      chevron.style.transform = "rotate(-90deg)";
+    }
+  };
+
+  detailsBtn.addEventListener("click", () => {
+    detailsExpanded = !detailsExpanded;
+    applyDetailsState();
   });
 
   header.append(nameBlock, occupancyBlock, actionBlock);
@@ -1216,6 +1827,23 @@ function createRoomEntry(
 
   if (badgeRow.childElementCount > 0) {
     wrapper.appendChild(badgeRow);
+  }
+
+  wrapper.appendChild(detailsContainer);
+  applyDetailsState();
+
+  if (detailsExpanded || options?.scrollHighlightedPlayersIntoView) {
+    window.requestAnimationFrame(() => {
+      if (!detailsExpanded) return;
+      applyDetailsState();
+
+      if (options?.scrollHighlightedPlayersIntoView && highlightedPlayerElements.length) {
+        const target = highlightedPlayerElements[0];
+        window.requestAnimationFrame(() => {
+          target.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      }
+    });
   }
 
   return wrapper;

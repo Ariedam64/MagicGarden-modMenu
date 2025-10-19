@@ -12,6 +12,15 @@ import { fetchRemoteRooms, type RemoteRoomsPayload } from "../utils/publicRooms"
 
 const MAX_PLAYERS = 6;
 
+export interface PublicRoomPlayer {
+  id?: string;
+  databaseUserId?: string;
+  name: string;
+  isConnected: boolean;
+  discordAvatarUrl?: string;
+  isHost: boolean;
+}
+
 export interface PublicRoomDefinition {
   name: string;
   idRoom: string;
@@ -24,6 +33,8 @@ export interface PublicRoomStatus extends PublicRoomDefinition {
   isFull: boolean;
   lastUpdatedAt: number;
   currentGame?: string;
+  hostPlayerId?: string;
+  playerDetails: PublicRoomPlayer[];
   error?: string;
 }
 
@@ -297,6 +308,11 @@ function fetchStatusesFor(definitions: PublicRoomDefinition[]): Promise<PublicRo
           typeof payload?.currentGame === "string" && payload.currentGame.trim().length
             ? payload.currentGame.trim()
             : undefined;
+        const hostPlayerId =
+          typeof payload?.hostPlayerId === "string" && payload.hostPlayerId.trim().length
+            ? payload.hostPlayerId.trim()
+            : undefined;
+        const playerDetails = normalizeRoomPlayers(payload?.players, hostPlayerId);
         return {
           ...def,
           players,
@@ -304,6 +320,8 @@ function fetchStatusesFor(definitions: PublicRoomDefinition[]): Promise<PublicRo
           isFull: players >= capacity,
           lastUpdatedAt: now,
           currentGame,
+          hostPlayerId,
+          playerDetails,
         } satisfies PublicRoomStatus;
       } catch (error) {
         const message = normalizeError(error);
@@ -313,6 +331,8 @@ function fetchStatusesFor(definitions: PublicRoomDefinition[]): Promise<PublicRo
           capacity: MAX_PLAYERS,
           isFull: false,
           lastUpdatedAt: now,
+          hostPlayerId: undefined,
+          playerDetails: [],
           error: message,
         } satisfies PublicRoomStatus;
       }
@@ -323,6 +343,43 @@ function fetchStatusesFor(definitions: PublicRoomDefinition[]): Promise<PublicRo
 function clampPlayerCount(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(MAX_PLAYERS, Math.floor(value)));
+}
+
+function normalizeRoomPlayers(
+  value: RoomInfoPayload["players"],
+  hostPlayerId?: string,
+): PublicRoomPlayer[] {
+  if (!Array.isArray(value)) return [];
+
+  const normalized: PublicRoomPlayer[] = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+
+    const id = typeof entry.id === "string" && entry.id.trim().length ? entry.id.trim() : undefined;
+    const databaseUserId =
+      typeof entry.databaseUserId === "string" && entry.databaseUserId.trim().length
+        ? entry.databaseUserId.trim()
+        : undefined;
+    const rawName = typeof entry.name === "string" ? entry.name.trim() : "";
+    const name = rawName || "Unknown player";
+    const isConnected = typeof entry.isConnected === "boolean" ? entry.isConnected : false;
+    const discordAvatarUrl =
+      typeof entry.discordAvatarUrl === "string" && entry.discordAvatarUrl.trim().length
+        ? entry.discordAvatarUrl.trim()
+        : undefined;
+
+    normalized.push({
+      id,
+      databaseUserId,
+      name,
+      isConnected,
+      discordAvatarUrl,
+      isHost: Boolean(hostPlayerId && (id === hostPlayerId || databaseUserId === hostPlayerId)),
+    });
+  }
+
+  return normalized;
 }
 
 function normalizeError(error: unknown): string {
