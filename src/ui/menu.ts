@@ -1099,7 +1099,11 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
     b.setAttribute("aria-checked", v === selected ? "true" : "false");
     b.tabIndex = v === selected ? 0 : -1;
     b.disabled = !!disabled;
-    b.textContent = label;            // support emoji direct dans label
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "qmm-seg__btn-label";
+    labelSpan.textContent = label;            // support emoji direct dans label
+    b.appendChild(labelSpan);
 
     b.addEventListener("click", () => {
       if (!b.disabled) setSelected(v, false);
@@ -2252,6 +2256,12 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   color: var(--qmm-text-dim);
   font: inherit; line-height: 1; white-space: nowrap;
   transition: color .15s ease, transform .06s ease;
+}
+.qmm-seg__btn-label{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: inherit;
 }
 .qmm-compact .qmm-seg__btn{ padding: 6px 10px }
 .qmm-seg__btn:hover{ color: var(--qmm-text); }

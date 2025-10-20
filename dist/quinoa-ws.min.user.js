@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.3.0
+// @version      2.3.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -7999,7 +7999,10 @@
         b.setAttribute("aria-checked", v === selected ? "true" : "false");
         b.tabIndex = v === selected ? 0 : -1;
         b.disabled = !!disabled;
-        b.textContent = label2;
+        const labelSpan = document.createElement("span");
+        labelSpan.className = "qmm-seg__btn-label";
+        labelSpan.textContent = label2;
+        b.appendChild(labelSpan);
         b.addEventListener("click", () => {
           if (!b.disabled) setSelected(v, false);
         });
@@ -9119,6 +9122,12 @@
   color: var(--qmm-text-dim);
   font: inherit; line-height: 1; white-space: nowrap;
   transition: color .15s ease, transform .06s ease;
+}
+.qmm-seg__btn-label{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: inherit;
 }
 .qmm-compact .qmm-seg__btn{ padding: 6px 10px }
 .qmm-seg__btn:hover{ color: var(--qmm-text); }
@@ -27915,19 +27924,33 @@ next: ${next}`;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"].active {
+  color: #facc15;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"] .qmm-seg__btn-label,
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"].active .qmm-seg__btn-label {
   color: transparent;
   background-image: linear-gradient(90deg, #fef08a, #facc15, #fef08a);
   background-clip: text;
   -webkit-background-clip: text;
-  font-weight: 700;
+  -webkit-text-fill-color: transparent;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active {
+  color: #fbbf24;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"] .qmm-seg__btn-label,
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active .qmm-seg__btn-label {
   color: transparent;
   background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc);
   background-clip: text;
   -webkit-background-clip: text;
-  font-weight: 700;
+  -webkit-text-fill-color: transparent;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="none"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="none"].active,
@@ -27937,37 +27960,37 @@ next: ${next}`;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="wet"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="wet"].active {
-  color: #60a5fa;
+  color: #5AF6F5;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="chilled"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="chilled"].active {
-  color: #a5b4fc;
+  color: #AFE0F6;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"].active {
-  color: #38bdf8;
+  color: #AABEFF;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"].active {
-  color: #a78bfa;
+  color: #7864B4;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnbound"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnbound"].active {
-  color: #8b5cf6;
+  color: #9785CB;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberlit"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberlit"].active {
-  color: #fbbf24;
+  color: #A04632;
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberbound"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberbound"].active {
-  color: #f97316;
+  color: #F06E50;
   font-weight: 700;
 }
 .${ROOT_CLASS} .mg-crop-simulation__mutations-section {
@@ -36975,7 +36998,7 @@ next: ${next}`;
         register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
-        register("calculator", "\u{1F9EE} Calculator", renderCalculatorMenu);
+        register("calculator", "\u{1F913} Calculator", renderCalculatorMenu);
         register("stats", "\u{1F4CA} Stats", renderStatsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
         register("keybinds", "\u2328\uFE0F Keybinds", renderKeybindsMenu);
