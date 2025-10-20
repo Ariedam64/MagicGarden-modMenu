@@ -7698,7 +7698,7 @@
       const up = el("button", "qmm-step qmm-step--up", "\u25B2");
       const down = el("button", "qmm-step qmm-step--down", "\u25BC");
       up.type = down.type = "button";
-      const clamp3 = () => {
+      const clamp4 = () => {
         const n = Number(i.value);
         if (Number.isFinite(n)) {
           const lo = Number(i.min), hi = Number(i.max);
@@ -7709,7 +7709,7 @@
       const bump = (dir) => {
         if (dir < 0) i.stepDown();
         else i.stepUp();
-        clamp3();
+        clamp4();
         i.dispatchEvent(new Event("input", { bubbles: true }));
         i.dispatchEvent(new Event("change", { bubbles: true }));
       };
@@ -7752,7 +7752,7 @@
       };
       addSpin(up, 1);
       addSpin(down, -1);
-      i.addEventListener("change", clamp3);
+      i.addEventListener("change", clamp4);
       spin.append(up, down);
       wrap.append(i, spin);
       i.wrap = wrap;
@@ -7881,9 +7881,33 @@
       const rail = document.createElement("div");
       rail.className = "qmm-seg__indicator";
       root.appendChild(rail);
+      const reduceMotionQuery = typeof window !== "undefined" && "matchMedia" in window ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+      const canAnimateIndicator = typeof rail.animate === "function";
+      if (canAnimateIndicator) {
+        rail.style.transition = "none";
+      }
+      let indicatorMetrics = null;
+      let indicatorAnimation = null;
+      const applyIndicatorStyles = (left, width) => {
+        rail.style.transform = `translate3d(${left}px,0,0)`;
+        rail.style.width = `${width}px`;
+      };
+      const cancelIndicatorAnimation = () => {
+        if (!indicatorAnimation) return;
+        indicatorAnimation.cancel();
+        indicatorAnimation = null;
+      };
       let value = selected;
       const btns = [];
       const setSelected = (v, focus = false) => {
+        if (v === value) {
+          if (focus) {
+            const alreadyActive = btns.find((b) => b.dataset.value === v);
+            alreadyActive?.focus();
+          }
+          onChange?.(value);
+          return;
+        }
         value = v;
         for (const b of btns) {
           const active = b.dataset.value === v;
@@ -7892,10 +7916,10 @@
           b.classList.toggle("active", active);
           if (active && focus) b.focus();
         }
-        moveIndicator();
+        moveIndicator(true);
         onChange?.(value);
       };
-      const moveIndicator = () => {
+      const moveIndicator = (animate = false) => {
         const active = btns.find((b) => b.dataset.value === value);
         if (!active) return;
         const i = btns.indexOf(active);
@@ -7925,8 +7949,46 @@
         }
         const dpr = window.devicePixelRatio || 1;
         const snap = (x) => Math.round(x * dpr) / dpr;
-        rail.style.transform = `translate3d(${snap(left)}px,0,0)`;
-        rail.style.width = `${snap(width)}px`;
+        const targetLeft = snap(left);
+        const targetWidth = snap(width);
+        const previous = indicatorMetrics;
+        indicatorMetrics = { left: targetLeft, width: targetWidth };
+        const applyFinal = () => applyIndicatorStyles(targetLeft, targetWidth);
+        const shouldAnimate = animate && canAnimateIndicator && !reduceMotionQuery?.matches && previous != null && previous.width > 0 && Number.isFinite(previous.width) && targetWidth > 0 && Number.isFinite(targetWidth);
+        if (!shouldAnimate) {
+          cancelIndicatorAnimation();
+          applyFinal();
+          return;
+        }
+        cancelIndicatorAnimation();
+        applyIndicatorStyles(previous.left, previous.width);
+        indicatorAnimation = rail.animate(
+          [
+            {
+              transform: `translate3d(${previous.left}px,0,0)`,
+              width: `${previous.width}px`,
+              opacity: 0.92,
+              offset: 0
+            },
+            {
+              transform: `translate3d(${targetLeft}px,0,0)`,
+              width: `${targetWidth}px`,
+              opacity: 1,
+              offset: 1
+            }
+          ],
+          {
+            duration: 260,
+            easing: "cubic-bezier(.22,.7,.28,1)",
+            fill: "forwards"
+          }
+        );
+        const finalize = () => {
+          applyFinal();
+          indicatorAnimation = null;
+        };
+        indicatorAnimation.addEventListener("finish", finalize, { once: true });
+        indicatorAnimation.addEventListener("cancel", finalize, { once: true });
       };
       items.forEach(({ value: v, label: label2, disabled }) => {
         const b = document.createElement("button");
@@ -7966,10 +8028,10 @@
         btns.push(b);
         root.appendChild(b);
       });
-      const ro = window.ResizeObserver ? new ResizeObserver(moveIndicator) : null;
+      const ro = window.ResizeObserver ? new ResizeObserver(() => moveIndicator(false)) : null;
       if (ro) ro.observe(root);
-      window.addEventListener("resize", moveIndicator);
-      queueMicrotask(moveIndicator);
+      window.addEventListener("resize", () => moveIndicator(false));
+      queueMicrotask(() => moveIndicator(false));
       root.get = () => value;
       root.set = (v) => setSelected(v, false);
       return root;
@@ -9075,8 +9137,11 @@
   outline-offset: calc(-1 * var(--seg-stroke));
 
   box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  transform-origin: left center;
+  will-change: transform, width, opacity;
   transition: transform .18s cubic-bezier(.2,.8,.2,1),
-              width .18s cubic-bezier(.2,.8,.2,1);
+              width .18s cubic-bezier(.2,.8,.2,1),
+              opacity .18s ease-out;
   pointer-events: none;
 }
 
@@ -17103,6 +17168,12 @@
     if (document.readyState !== "loading") res();
     else addEventListener("DOMContentLoaded", () => res(), { once: true });
   });
+  function addStyle(css) {
+    const s = document.createElement("style");
+    s.textContent = css;
+    document.head.appendChild(s);
+    return s;
+  }
   function toPredicate(selOrFn) {
     if (typeof selOrFn === "function") return selOrFn;
     if (typeof selOrFn === "string") return (el2) => el2.matches?.(selOrFn) ?? false;
@@ -27400,6 +27471,1555 @@ next: ${next}`;
     await refreshAll(true);
   }
 
+  // src/ui/menus/calculator.ts
+  var ROOT_CLASS = "mg-crop-simulation";
+  var SIZE_MIN = 50;
+  var SIZE_MAX = 100;
+  var SCALE_MIN = 1;
+  var SCALE_MAX = 3;
+  var COLOR_MUTATION_LABELS = ["None", "Gold", "Rainbow"];
+  var WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen"];
+  var WEATHER_LIGHTING_LABELS = ["None", "Dawnlit", "Dawnbound", "Amberlit", "Amberbound"];
+  var FRIEND_BONUS_LABELS = ["+0%", "+10%", "+20%", "+30%", "+40%", "+50%"];
+  var FRIEND_BONUS_MIN_PLAYERS = 1;
+  var FRIEND_BONUS_MAX_PLAYERS = FRIEND_BONUS_LABELS.length;
+  var COLOR_SEGMENT_METADATA = {
+    None: { mgColor: "none" },
+    Gold: { mgColor: "gold" },
+    Rainbow: { mgColor: "rainbow" }
+  };
+  var WEATHER_CONDITION_SEGMENT_METADATA = {
+    None: { mgWeather: "none" },
+    Wet: { mgWeather: "wet" },
+    Chilled: { mgWeather: "chilled" },
+    Frozen: { mgWeather: "frozen" }
+  };
+  var WEATHER_LIGHTING_SEGMENT_METADATA = {
+    None: { mgLighting: "none" },
+    Dawnlit: { mgLighting: "dawnlit" },
+    Dawnbound: { mgLighting: "dawnbound" },
+    Amberlit: { mgLighting: "amberlit" },
+    Amberbound: { mgLighting: "amberbound" }
+  };
+  var segmentedUi = new Menu({ compact: true });
+  var ensureMenuStyles = segmentedUi.ensureStyles;
+  ensureMenuStyles?.call(segmentedUi);
+  var priceFormatter = new Intl.NumberFormat("en-US");
+  var weightFormatter = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 3
+  });
+  var DEFAULT_STATE = {
+    sizePercent: SIZE_MIN,
+    color: "None",
+    weatherCondition: "None",
+    weatherLighting: "None",
+    friendPlayers: FRIEND_BONUS_MIN_PLAYERS
+  };
+  var BASE_SPRITE_SIZE_PX = 96;
+  var WEATHER_EFFECT_PRIORITY = ["wet", "chilled", "frozen"];
+  var LIGHTING_EFFECT_PRIORITY_GROUPS = [
+    ["dawnlit"],
+    ["dawnbound", "dawncharged", "dawn radiant", "dawnradiant", "dawn-radiant"],
+    ["ambershine", "amberlit"],
+    ["amberbound", "ambercharged", "amber radiant", "amberradiant", "amber-radiant"]
+  ];
+  var EFFECTS_CONFIG = {
+    Wet: {
+      blendMode: "source-atop",
+      colors: ["rgb(128, 128, 255)"],
+      alpha: 0.2
+    },
+    Chilled: {
+      blendMode: "source-atop",
+      colors: ["rgb(183, 183, 236)"],
+      alpha: 0.5
+    },
+    Frozen: {
+      blendMode: "source-atop",
+      colors: ["rgb(128, 128, 255)"],
+      alpha: 0.6
+    },
+    Dawnlit: {
+      blendMode: "source-atop",
+      colors: ["rgb(120, 100, 180)"],
+      alpha: 0.4
+    },
+    Ambershine: {
+      blendMode: "source-atop",
+      colors: ["rgb(255, 140, 26)", "rgb(230, 92, 26)", "rgb(178, 58, 26)"],
+      alpha: 0.5
+    },
+    Dawncharged: {
+      blendMode: "source-atop",
+      colors: ["rgb(100, 80, 160)", "rgb(110, 90, 170)", "rgb(120, 100, 180)"],
+      alpha: 0.5
+    },
+    Ambercharged: {
+      blendMode: "source-atop",
+      colors: ["rgb(167, 50, 30)", "rgb(177, 60, 40)", "rgb(187, 70, 50)"],
+      alpha: 0.5
+    }
+  };
+  var EFFECT_PRIORITY_BY_LOWER_NAME = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    WEATHER_EFFECT_PRIORITY.forEach((name, index) => {
+      map2.set(name.toLowerCase(), index);
+    });
+    let offset = WEATHER_EFFECT_PRIORITY.length;
+    LIGHTING_EFFECT_PRIORITY_GROUPS.forEach((group) => {
+      group.forEach((name) => {
+        map2.set(name.toLowerCase(), offset);
+      });
+      offset += 1;
+    });
+    return map2;
+  })();
+  var LIGHTING_EFFECT_NAMES_LOWER = /* @__PURE__ */ new Set([
+    "dawnlit",
+    "dawncharged",
+    "ambershine",
+    "ambercharged"
+  ]);
+  var EFFECT_TOKEN_ALIASES = /* @__PURE__ */ new Map([
+    ["wet", "Wet"],
+    ["damp", "Wet"],
+    ["moist", "Wet"],
+    ["chilled", "Chilled"],
+    ["cold", "Chilled"],
+    ["frozen", "Frozen"],
+    ["ice", "Frozen"],
+    ["icy", "Frozen"],
+    ["dawnlit", "Dawnlit"],
+    ["dawn-lit", "Dawnlit"],
+    ["dawnbound", "Dawnlit"],
+    ["dawn-bound", "Dawnlit"],
+    ["dawncharged", "Dawncharged"],
+    ["dawn-charged", "Dawncharged"],
+    ["dawn radiant", "Dawncharged"],
+    ["dawnradiant", "Dawncharged"],
+    ["dawn-radiant", "Dawncharged"],
+    ["ambershine", "Ambershine"],
+    ["amber-shine", "Ambershine"],
+    ["amberlit", "Ambershine"],
+    ["amber-lit", "Ambershine"],
+    ["amberbound", "Ambercharged"],
+    ["amber-bound", "Ambercharged"],
+    ["ambercharged", "Ambercharged"],
+    ["amber-charged", "Ambercharged"],
+    ["amber radiant", "Ambercharged"],
+    ["amberradiant", "Ambercharged"],
+    ["amber-radiant", "Ambercharged"]
+  ]);
+  var EFFECT_NAME_BY_TOKEN = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    Object.keys(EFFECTS_CONFIG).forEach((key2) => {
+      map2.set(key2.toLowerCase(), key2);
+    });
+    EFFECT_TOKEN_ALIASES.forEach((value, key2) => {
+      map2.set(key2, value);
+    });
+    return map2;
+  })();
+  var WEATHER_LABEL_NORMALIZATION = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const entries = tileRefsMutationLabels;
+    for (const [key2, value] of Object.entries(entries)) {
+      if (typeof key2 !== "string" || typeof value !== "string") continue;
+      map2.set(key2.toLowerCase(), value);
+      map2.set(value.toLowerCase(), value);
+    }
+    return map2;
+  })();
+  var TALL_PLANT_SEEDS2 = /* @__PURE__ */ new Set(["Bamboo", "Cactus"]);
+  var mutationMetadataByNormalizedName = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const catalog = mutationCatalog;
+    for (const [key2, value] of Object.entries(catalog)) {
+      if (typeof key2 !== "string" || !key2.trim()) continue;
+      const label2 = typeof value?.name === "string" && value.name.trim().length > 0 ? value.name : key2;
+      const tileRef = typeof value?.tileRef === "number" ? value.tileRef : null;
+      const category = tileRef != null ? "weather" : "color";
+      const info = {
+        id: key2,
+        label: label2,
+        tileRef,
+        category
+      };
+      map2.set(key2.toLowerCase(), info);
+      map2.set(label2.toLowerCase(), info);
+    }
+    const tileRefLabels = tileRefsMutationLabels;
+    for (const [key2, value] of Object.entries(tileRefLabels)) {
+      if (typeof key2 !== "string" || typeof value !== "string") continue;
+      const info = map2.get(key2.toLowerCase());
+      if (!info) continue;
+      const normalizedLabel = value.toLowerCase();
+      if (!map2.has(normalizedLabel)) {
+        map2.set(normalizedLabel, info);
+      }
+    }
+    const goldInfo = map2.get("gold");
+    if (goldInfo) {
+      map2.set("golden", goldInfo);
+    }
+    const normalInfo = {
+      id: "Normal",
+      label: "Normal",
+      tileRef: null,
+      category: "color"
+    };
+    map2.set("normal", normalInfo);
+    return map2;
+  })();
+  var plantSpriteCache2 = /* @__PURE__ */ new Map();
+  var plantSpritePromises2 = /* @__PURE__ */ new Map();
+  var plantSpriteCanvasCache = /* @__PURE__ */ new Map();
+  var plantSpriteCanvasPromises = /* @__PURE__ */ new Map();
+  var plantSpriteVariantCache = /* @__PURE__ */ new Map();
+  var plantSpriteVariantPromises = /* @__PURE__ */ new Map();
+  var plantSpriteEffectVariantCache = /* @__PURE__ */ new Map();
+  var plantSpriteEffectVariantPromises = /* @__PURE__ */ new Map();
+  var mutationSpriteCache2 = /* @__PURE__ */ new Map();
+  var mutationSpritePromises2 = /* @__PURE__ */ new Map();
+  var spriteUpdateSeq = 0;
+  var CROP_SIMULATION_CSS = `
+.${ROOT_CLASS} {
+  display: none;
+  width: min(100%, 500px);
+  padding: 12px 14px;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  position: relative;
+  z-index: 2000;
+  pointer-events: auto;
+}
+.${ROOT_CLASS} .mg-crop-simulation__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+.${ROOT_CLASS} .mg-crop-simulation__crop-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #38bdf8;
+  text-transform: capitalize;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-section {
+  display: flex;
+  flex-direction: column;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: ${BASE_SPRITE_SIZE_PX}px;
+  height: ${BASE_SPRITE_SIZE_PX}px;
+  position: relative;
+  flex-shrink: 0;
+  --mg-crop-simulation-scale: 1;
+  transform-origin: center;
+  transform: scale(var(--mg-crop-simulation-scale));
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-layer,
+.${ROOT_CLASS} .mg-crop-simulation__sprite-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-layer img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-layer--base {
+  z-index: 1;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-layer--overlay {
+  z-index: 2;
+  transform: translateY(-4px);
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-layer--overlay-lighting {
+  transform: translateY(-30px);
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite-fallback {
+  z-index: 0;
+  font-size: 42px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider-container {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.82);
+  flex: 0 0 auto;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider-value {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #f8fafc;
+  text-align: right;
+  width: 4ch;
+  min-width: 4ch;
+  flex: 0 0 4ch;
+  white-space: nowrap;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider-weight {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.82);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+.${ROOT_CLASS} .mg-crop-simulation__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: #38bdf8;
+}
+.${ROOT_CLASS} .mg-crop-simulation__price {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #ffd84d;
+  align-self: flex-start;
+  margin-top: auto;
+}
+.${ROOT_CLASS} .mg-crop-simulation__price-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: inline-block;
+  user-select: none;
+  pointer-events: none;
+}
+.${ROOT_CLASS} .mg-crop-simulation__price-value {
+  line-height: 1;
+}
+.${ROOT_CLASS} .mg-crop-simulation__section-title {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator {
+  align-items: center;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__layout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: min(440px, 100%);
+  margin: 0 auto;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #4446;
+  background: #1f2328;
+  box-shadow: 0 0 0 1px #0002 inset;
+  justify-items: stretch;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section-heading {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.82);
+  font-weight: 600;
+  text-align: center;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section--preview {
+  justify-items: center;
+  text-align: center;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section--preview .mg-crop-simulation__slider-row {
+  width: 100%;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__mutations-weather {
+  display: grid;
+  gap: 8px;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__mutations-heading {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.82);
+  text-align: center;
+}
+.${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-simulation__price {
+  margin-top: 0;
+}
+.${ROOT_CLASS} .mg-crop-simulation__segmented {
+  display: flex;
+  width: 100%;
+}
+.${ROOT_CLASS} .mg-crop-simulation__segmented-control {
+  --qmm-bg-soft: rgba(11, 15, 19, 0.8);
+  --qmm-border-2: rgba(148, 163, 184, 0.28);
+  --qmm-text: #e2e8f0;
+  --qmm-text-dim: rgba(148, 163, 184, 0.82);
+  --seg-pad: 6px;
+  --seg-fill: rgba(56, 191, 248, 0.02);
+  --seg-stroke-color: rgba(255, 255, 255, 0.49);
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.${ROOT_CLASS} .mg-crop-simulation__segmented-control .qmm-seg__btn {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  font-weight: 600;
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 0;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="none"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="none"].active {
+  color: rgba(148, 163, 184, 0.92);
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="gold"].active {
+  color: transparent;
+  background-image: linear-gradient(90deg, #fef08a, #facc15, #fef08a);
+  background-clip: text;
+  -webkit-background-clip: text;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active {
+  color: transparent;
+  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc);
+  background-clip: text;
+  -webkit-background-clip: text;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="none"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="none"].active,
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="none"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="none"].active {
+  color: rgba(148, 163, 184, 0.92);
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="wet"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="wet"].active {
+  color: #60a5fa;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="chilled"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="chilled"].active {
+  color: #a5b4fc;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"].active {
+  color: #38bdf8;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"].active {
+  color: #a78bfa;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnbound"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnbound"].active {
+  color: #8b5cf6;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberlit"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberlit"].active {
+  color: #fbbf24;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberbound"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="amberbound"].active {
+  color: #f97316;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .mg-crop-simulation__mutations-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+`;
+  var cropSimulationStyleEl = null;
+  function ensureCropSimulationStyles() {
+    if (cropSimulationStyleEl) return;
+    cropSimulationStyleEl = addStyle(CROP_SIMULATION_CSS);
+  }
+  function resolveEffectNameToken(value) {
+    if (typeof value !== "string") return null;
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return null;
+    return EFFECT_NAME_BY_TOKEN.get(normalized) ?? null;
+  }
+  function getMutationEffectName(mutation) {
+    return resolveEffectNameToken(mutation.id) ?? resolveEffectNameToken(mutation.label);
+  }
+  function getEffectPriority(effectName) {
+    const lower = effectName.toLowerCase();
+    return EFFECT_PRIORITY_BY_LOWER_NAME.get(lower) ?? Number.MAX_SAFE_INTEGER;
+  }
+  function isLightingEffect(effectName) {
+    return LIGHTING_EFFECT_NAMES_LOWER.has(effectName.toLowerCase());
+  }
+  function normalizeEffectNames(effectNames) {
+    const seen = /* @__PURE__ */ new Set();
+    const order = /* @__PURE__ */ new Map();
+    const normalized = [];
+    effectNames.forEach((name, index) => {
+      if (seen.has(name)) return;
+      seen.add(name);
+      normalized.push(name);
+      order.set(name, index);
+    });
+    normalized.sort((a, b) => {
+      const priorityDiff = getEffectPriority(a) - getEffectPriority(b);
+      if (priorityDiff !== 0) return priorityDiff;
+      return (order.get(a) ?? 0) - (order.get(b) ?? 0);
+    });
+    return normalized;
+  }
+  function getApplicableEffectNames(weatherMutations) {
+    const effectNames = weatherMutations.map((mutation) => getMutationEffectName(mutation)).filter((value) => value != null);
+    return normalizeEffectNames(effectNames);
+  }
+  function makeEffectCacheKey(seedKey, variant, effectNames) {
+    return `${seedKey}::variant::${variant}::effects::${effectNames.join("+")}`;
+  }
+  function getMutationSheetBases() {
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      Sprites.listTilesByCategory(/mutations/i).forEach((url) => urls.add(url));
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => {
+      const clean = url.split(/[?#]/)[0] ?? url;
+      const file = clean.split("/").pop() ?? clean;
+      return file.replace(/\.[^.]+$/, "");
+    });
+    return bases.length ? bases : ["mutations"];
+  }
+  async function fetchPlantSpriteCanvas(seedKey) {
+    if (typeof window === "undefined") return null;
+    const entry = plantCatalog[seedKey];
+    if (!entry) return null;
+    const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
+    const bases = plantSheetBases2(seedKey);
+    const index = toTileIndex2(tileRef, bases);
+    if (index == null) return null;
+    for (const base of bases) {
+      try {
+        const tile = await Sprites.getTile(base, index, "canvas");
+        const canvas = tile?.data;
+        if (canvas && canvas.width > 0 && canvas.height > 0) {
+          const copy2 = document.createElement("canvas");
+          copy2.width = canvas.width;
+          copy2.height = canvas.height;
+          const ctx = copy2.getContext("2d");
+          if (!ctx) continue;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(canvas, 0, 0);
+          return copy2;
+        }
+      } catch {
+      }
+    }
+    return null;
+  }
+  function loadPlantSpriteCanvas(seedKey) {
+    const cached = plantSpriteCanvasCache.get(seedKey);
+    if (cached !== void 0) return Promise.resolve(cached);
+    const inFlight = plantSpriteCanvasPromises.get(seedKey);
+    if (inFlight) return inFlight;
+    const promise = fetchPlantSpriteCanvas(seedKey).then((canvas) => {
+      plantSpriteCanvasCache.set(seedKey, canvas);
+      plantSpriteCanvasPromises.delete(seedKey);
+      return canvas;
+    }).catch(() => {
+      plantSpriteCanvasCache.set(seedKey, null);
+      plantSpriteCanvasPromises.delete(seedKey);
+      return null;
+    });
+    plantSpriteCanvasPromises.set(seedKey, promise);
+    return promise;
+  }
+  async function loadPlantSpriteCanvasForVariant(seedKey, variant) {
+    const canvas = await loadPlantSpriteCanvas(seedKey);
+    if (!canvas) return null;
+    if (variant === "normal") return canvas;
+    const tileInfo = {
+      sheet: "",
+      url: "",
+      index: 0,
+      col: 0,
+      row: 0,
+      size: canvas.width,
+      data: canvas
+    };
+    return variant === "gold" ? Sprites.effectGold(tileInfo) : Sprites.effectRainbow(tileInfo);
+  }
+  function loadPlantSpriteVariant(seedKey, variant) {
+    if (variant === "normal") {
+      return loadPlantSprite2(seedKey);
+    }
+    const cacheKey = `${seedKey}::${variant}`;
+    const cached = plantSpriteVariantCache.get(cacheKey);
+    if (cached !== void 0) return Promise.resolve(cached);
+    const inFlight = plantSpriteVariantPromises.get(cacheKey);
+    if (inFlight) return inFlight;
+    const promise = loadPlantSpriteCanvasForVariant(seedKey, variant).then((canvas) => {
+      if (!canvas) return null;
+      return canvas.toDataURL();
+    }).then((src) => {
+      plantSpriteVariantCache.set(cacheKey, src ?? null);
+      plantSpriteVariantPromises.delete(cacheKey);
+      return src ?? null;
+    }).catch(() => {
+      plantSpriteVariantCache.set(cacheKey, null);
+      plantSpriteVariantPromises.delete(cacheKey);
+      return null;
+    });
+    plantSpriteVariantPromises.set(cacheKey, promise);
+    return promise;
+  }
+  function loadMutationSprite2(mutation) {
+    const tileRef = mutation.tileRef;
+    if (tileRef == null) return Promise.resolve(null);
+    const cacheKey = mutation.id.toLowerCase();
+    const cached = mutationSpriteCache2.get(cacheKey);
+    if (cached !== void 0) return Promise.resolve(cached);
+    const inFlight = mutationSpritePromises2.get(cacheKey);
+    if (inFlight) return inFlight;
+    const promise = (async () => {
+      const bases = getMutationSheetBases();
+      const index = tileRef > 0 ? tileRef - 1 : tileRef;
+      for (const base of bases) {
+        try {
+          const tile = await Sprites.getTile(base, index, "canvas");
+          const canvas = tile?.data;
+          if (canvas && canvas.width > 0 && canvas.height > 0) {
+            const copy2 = document.createElement("canvas");
+            copy2.width = canvas.width;
+            copy2.height = canvas.height;
+            const ctx = copy2.getContext("2d");
+            if (!ctx) continue;
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(canvas, 0, 0);
+            return copy2.toDataURL();
+          }
+        } catch {
+        }
+      }
+      return null;
+    })().then((src) => {
+      mutationSpriteCache2.set(cacheKey, src);
+      mutationSpritePromises2.delete(cacheKey);
+      return src;
+    }).catch(() => {
+      mutationSpriteCache2.set(cacheKey, null);
+      mutationSpritePromises2.delete(cacheKey);
+      return null;
+    });
+    mutationSpritePromises2.set(cacheKey, promise);
+    return promise;
+  }
+  function plantSheetBases2(seedKey) {
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      Sprites.listPlants().forEach((url) => urls.add(url));
+    } catch {
+    }
+    try {
+      Sprites.listAllPlants().forEach((url) => urls.add(url));
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => {
+      const clean = url.split(/[?#]/)[0] ?? url;
+      const file = clean.split("/").pop() ?? clean;
+      return file.replace(/\.[^.]+$/, "");
+    });
+    if (!seedKey) return bases.length ? bases : ["plants"];
+    const normalizedBases = bases.map((base) => base.toLowerCase());
+    const findPreferred = (predicate) => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
+    if (TALL_PLANT_SEEDS2.has(seedKey)) {
+      const tallExact = findPreferred((_, norm4) => norm4 === "tallplants");
+      if (tallExact.length) return tallExact;
+      const tallAny = findPreferred((base, norm4) => /tall/.test(base) || /tall/.test(norm4));
+      if (tallAny.length) return tallAny;
+    } else {
+      const plantsExact = findPreferred((_, norm4) => norm4 === "plants");
+      if (plantsExact.length) return plantsExact;
+      const nonTall = findPreferred((base, norm4) => !/tall/.test(base) && !/tall/.test(norm4));
+      if (nonTall.length) return nonTall;
+    }
+    return bases.length ? bases : ["plants"];
+  }
+  function toTileIndex2(tileRef, bases = []) {
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    const normalizedBases = bases.map((base) => base.toLowerCase());
+    if (normalizedBases.some((base) => base.includes("tall"))) {
+      return value - 1;
+    }
+    if (normalizedBases.some((base) => base.includes("plants"))) {
+      return value - 1;
+    }
+    return value - 1;
+  }
+  function loadPlantSprite2(seedKey) {
+    const cached = plantSpriteCache2.get(seedKey);
+    if (cached !== void 0) return Promise.resolve(cached);
+    const inFlight = plantSpritePromises2.get(seedKey);
+    if (inFlight) return inFlight;
+    const promise = loadPlantSpriteCanvas(seedKey).then((canvas) => {
+      const src = canvas ? canvas.toDataURL() : null;
+      plantSpriteCache2.set(seedKey, src);
+      plantSpritePromises2.delete(seedKey);
+      return src;
+    }).catch(() => {
+      plantSpriteCache2.set(seedKey, null);
+      plantSpritePromises2.delete(seedKey);
+      return null;
+    });
+    plantSpritePromises2.set(seedKey, promise);
+    return promise;
+  }
+  function sortMutationsForRendering(mutations) {
+    const entries = mutations.map((mutation, index) => ({ mutation, index }));
+    entries.sort((a, b) => {
+      const effectA = getMutationEffectName(a.mutation);
+      const effectB = getMutationEffectName(b.mutation);
+      const priorityA = effectA ? getEffectPriority(effectA) : Number.MAX_SAFE_INTEGER;
+      const priorityB = effectB ? getEffectPriority(effectB) : Number.MAX_SAFE_INTEGER;
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
+      }
+      return a.index - b.index;
+    });
+    return entries.map((entry) => entry.mutation);
+  }
+  function applyEffectToCanvas(canvas, effect) {
+    if (!effect.colors.length) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalCompositeOperation = effect.blendMode;
+    ctx.globalAlpha = effect.alpha;
+    if (effect.colors.length === 1) {
+      ctx.fillStyle = effect.colors[0] ?? "transparent";
+    } else {
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      const stops = effect.colors.length - 1;
+      effect.colors.forEach((color, index) => {
+        const stop = stops === 0 ? 0 : index / stops;
+        gradient.addColorStop(stop, color);
+      });
+      ctx.fillStyle = gradient;
+    }
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+  function loadPlantSpriteWithEffects(seedKey, variant, effectNames) {
+    const normalizedEffects = normalizeEffectNames(effectNames);
+    if (!normalizedEffects.length) {
+      return loadPlantSpriteVariant(seedKey, variant);
+    }
+    const cacheKey = makeEffectCacheKey(seedKey, variant, normalizedEffects);
+    const cached = plantSpriteEffectVariantCache.get(cacheKey);
+    if (cached !== void 0) return Promise.resolve(cached);
+    const inFlight = plantSpriteEffectVariantPromises.get(cacheKey);
+    if (inFlight) return inFlight;
+    const promise = loadPlantSpriteCanvasForVariant(seedKey, variant).then((canvas) => {
+      if (!canvas) return null;
+      const copy2 = document.createElement("canvas");
+      copy2.width = canvas.width;
+      copy2.height = canvas.height;
+      const ctx = copy2.getContext("2d");
+      if (!ctx) return null;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(canvas, 0, 0);
+      normalizedEffects.forEach((effectName) => {
+        const effect = EFFECTS_CONFIG[effectName];
+        if (effect) {
+          applyEffectToCanvas(copy2, effect);
+        }
+      });
+      return copy2.toDataURL();
+    }).then((src) => {
+      plantSpriteEffectVariantCache.set(cacheKey, src ?? null);
+      plantSpriteEffectVariantPromises.delete(cacheKey);
+      return src ?? null;
+    }).catch(() => {
+      plantSpriteEffectVariantCache.set(cacheKey, null);
+      plantSpriteEffectVariantPromises.delete(cacheKey);
+      return null;
+    });
+    plantSpriteEffectVariantPromises.set(cacheKey, promise);
+    return promise;
+  }
+  function getCachedPlantSpriteSource(seedKey, variant, effectNames) {
+    const normalizedEffects = normalizeEffectNames(effectNames);
+    if (normalizedEffects.length === 0) {
+      if (variant === "normal") {
+        return plantSpriteCache2.get(seedKey);
+      }
+      const variantCacheKey = `${seedKey}::${variant}`;
+      return plantSpriteVariantCache.get(variantCacheKey);
+    }
+    const cacheKey = makeEffectCacheKey(seedKey, variant, normalizedEffects);
+    return plantSpriteEffectVariantCache.get(cacheKey);
+  }
+  function isLightingOverlay(mutation) {
+    const effectName = getMutationEffectName(mutation);
+    if (!effectName) return false;
+    return isLightingEffect(effectName);
+  }
+  function applySpriteElement(el2, baseSrc, overlayLayers, fallbackText) {
+    el2.innerHTML = "";
+    if (baseSrc) {
+      const baseLayer = document.createElement("span");
+      baseLayer.className = "mg-crop-simulation__sprite-layer mg-crop-simulation__sprite-layer--base";
+      const img = document.createElement("img");
+      img.src = baseSrc;
+      img.alt = "";
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.draggable = false;
+      baseLayer.appendChild(img);
+      el2.appendChild(baseLayer);
+    }
+    overlayLayers.forEach(({ src, mutation }, index) => {
+      const layer = document.createElement("span");
+      layer.className = "mg-crop-simulation__sprite-layer mg-crop-simulation__sprite-layer--overlay";
+      layer.style.setProperty("--mg-crop-simulation-layer", String(index + 1));
+      if (isLightingOverlay(mutation)) {
+        layer.classList.add("mg-crop-simulation__sprite-layer--overlay-lighting");
+      }
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = "";
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.draggable = false;
+      layer.appendChild(img);
+      el2.appendChild(layer);
+    });
+    if (!baseSrc && overlayLayers.length === 0) {
+      const fallback = document.createElement("span");
+      fallback.className = "mg-crop-simulation__sprite-fallback";
+      const content = typeof fallbackText === "string" && fallbackText.trim().length > 0 ? fallbackText : "\u{1F331}";
+      fallback.textContent = content;
+      el2.appendChild(fallback);
+    }
+  }
+  function setSpriteElement(el2, speciesKey, options) {
+    spriteUpdateSeq += 1;
+    const seq = spriteUpdateSeq;
+    el2.dataset.spriteSeq = String(seq);
+    if (!speciesKey) {
+      applySpriteElement(el2, null, [], options.fallback ?? null);
+      return;
+    }
+    const { colorVariant, weatherMutations } = options;
+    const sortedMutations = sortMutationsForRendering(weatherMutations);
+    const effectNames = colorVariant === "normal" ? getApplicableEffectNames(sortedMutations) : [];
+    const cachedBase = getCachedPlantSpriteSource(speciesKey, colorVariant, effectNames);
+    const cachedOverlays = sortedMutations.map((mutation) => {
+      const src = mutationSpriteCache2.get(mutation.id.toLowerCase());
+      return typeof src === "string" && src.length > 0 ? { mutation, src } : null;
+    }).filter((value) => value != null);
+    const baseSrcCached = typeof cachedBase === "string" ? cachedBase : null;
+    applySpriteElement(el2, baseSrcCached, cachedOverlays, options.fallback ?? null);
+    const basePromise = loadPlantSpriteWithEffects(speciesKey, colorVariant, effectNames);
+    const overlayPromises = sortedMutations.map(async (mutation) => ({
+      mutation,
+      src: await loadMutationSprite2(mutation)
+    }));
+    Promise.all([basePromise, Promise.all(overlayPromises)]).then(([baseSrc, overlays]) => {
+      if (el2.dataset.spriteSeq !== String(seq)) return;
+      const overlaySources = overlays.filter(
+        (entry) => typeof entry.src === "string" && entry.src.length > 0
+      );
+      applySpriteElement(el2, baseSrc ?? null, overlaySources, options.fallback ?? null);
+    }).catch(() => {
+      if (el2.dataset.spriteSeq !== String(seq)) return;
+      applySpriteElement(el2, null, [], options.fallback ?? null);
+    });
+  }
+  function labelToVariant(label2) {
+    const normalized = typeof label2 === "string" ? label2.trim().toLowerCase() : "";
+    if (normalized === "gold") return "gold";
+    if (normalized === "rainbow") return "rainbow";
+    return "normal";
+  }
+  function normalizeMutationName2(name) {
+    if (typeof name !== "string") return null;
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const normalized = trimmed.toLowerCase();
+    const info = mutationMetadataByNormalizedName.get(normalized);
+    if (info) {
+      return info;
+    }
+    const normalizedLabel = WEATHER_LABEL_NORMALIZATION.get(normalized);
+    if (normalizedLabel) {
+      const fallback = mutationMetadataByNormalizedName.get(normalizedLabel.toLowerCase());
+      if (fallback) {
+        return fallback;
+      }
+    }
+    return {
+      id: trimmed,
+      label: trimmed,
+      tileRef: null,
+      category: "weather"
+    };
+  }
+  function applyCropSimulationSprite(el2, speciesKey, options = {}) {
+    const colorLabel = options.colorLabel ?? "None";
+    const colorVariant = labelToVariant(colorLabel);
+    const weatherLabels = Array.isArray(options.weatherLabels) ? options.weatherLabels : [];
+    const seen = /* @__PURE__ */ new Set();
+    const weatherMutations = [];
+    for (const label2 of weatherLabels) {
+      if (!label2 || typeof label2 !== "string") continue;
+      const info = normalizeMutationName2(label2);
+      if (!info || info.category !== "weather") continue;
+      const key2 = info.id.toLowerCase();
+      if (seen.has(key2)) continue;
+      seen.add(key2);
+      weatherMutations.push(info);
+    }
+    setSpriteElement(el2, speciesKey, {
+      colorVariant,
+      weatherMutations,
+      fallback: options.fallback ?? null
+    });
+  }
+  var applyStyles2 = (el2, styles) => {
+    const toKebab = (s) => s.startsWith("--") ? s : s.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
+    for (const [key2, value] of Object.entries(styles)) {
+      el2.style.setProperty(toKebab(key2), value);
+    }
+    return el2;
+  };
+  var calculatorStyleEl = null;
+  function ensureCalculatorStyles() {
+    ensureCropSimulationStyles();
+    if (calculatorStyleEl) return;
+    calculatorStyleEl = addStyle(`
+    .${ROOT_CLASS}.mg-crop-simulation--calculator {
+      width: 100%;
+      max-width: none;
+      min-width: 0;
+      position: relative;
+    }
+    .${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-simulation__price {
+      justify-content: center;
+      margin: 0 0 12px;
+      font-size: 20px;
+      gap: 10px;
+    }
+    .${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-simulation__price-value {
+      font-size: 20px;
+    }
+    .mg-crop-calculator__placeholder {
+      font-size: 13px;
+      text-align: center;
+      opacity: 0.7;
+      padding: 24px 12px;
+    }
+  `);
+  }
+  function clamp3(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+  }
+  function coerceLabel(label2, allowed) {
+    const normalized = typeof label2 === "string" ? label2.trim().toLowerCase() : "";
+    for (const candidate of allowed) {
+      if (candidate.toLowerCase() === normalized) {
+        return candidate;
+      }
+    }
+    return allowed[0];
+  }
+  function clampFriendPlayers(players) {
+    if (typeof players !== "number" || !Number.isFinite(players)) {
+      return FRIEND_BONUS_MIN_PLAYERS;
+    }
+    const rounded = Math.round(players);
+    return clamp3(rounded, FRIEND_BONUS_MIN_PLAYERS, FRIEND_BONUS_MAX_PLAYERS);
+  }
+  function friendPlayersToLabel(players) {
+    const clamped = clampFriendPlayers(players);
+    return FRIEND_BONUS_LABELS[clamped - 1] ?? FRIEND_BONUS_LABELS[0];
+  }
+  function labelToFriendPlayers(label2) {
+    const coerced = coerceLabel(label2, FRIEND_BONUS_LABELS);
+    const index = FRIEND_BONUS_LABELS.indexOf(coerced);
+    const players = index >= 0 ? index + 1 : FRIEND_BONUS_MIN_PLAYERS;
+    return clamp3(players, FRIEND_BONUS_MIN_PLAYERS, FRIEND_BONUS_MAX_PLAYERS);
+  }
+  function setSpriteScale(el2, sizePercent) {
+    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN, SIZE_MAX);
+    const scale = clamped / 100;
+    el2.style.setProperty("--mg-crop-simulation-scale", scale.toString());
+  }
+  function applySizePercent(refs, sizePercent, maxScale, baseWeight) {
+    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN, SIZE_MAX);
+    refs.sizeSlider.value = String(clamped);
+    refs.sizeValue.textContent = `${clamped}%`;
+    setSpriteScale(refs.sprite, clamped);
+    if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN) {
+      refs.sizeSlider.dataset.maxScale = String(maxScale);
+    } else {
+      delete refs.sizeSlider.dataset.maxScale;
+    }
+    const [minWeight, maxWeight] = computeWeightRange(baseWeight, clamped, maxScale);
+    refs.sizeWeight.textContent = formatWeightRange(minWeight, maxWeight);
+  }
+  function formatCoinValue(value) {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "\u2014";
+    const safe = Math.max(0, Math.round(value));
+    return priceFormatter.format(safe);
+  }
+  function formatCoinRange(min, max) {
+    const minValue = typeof min === "number" && Number.isFinite(min) ? Math.max(0, min) : null;
+    const maxValue = typeof max === "number" && Number.isFinite(max) ? Math.max(0, max) : null;
+    if (minValue == null && maxValue == null) return "\u2014";
+    if (minValue == null) return formatCoinValue(maxValue);
+    if (maxValue == null) return formatCoinValue(minValue);
+    if (Math.round(minValue) === Math.round(maxValue)) {
+      return formatCoinValue(minValue);
+    }
+    return `${formatCoinValue(minValue)} \u2013 ${formatCoinValue(maxValue)}`;
+  }
+  function computeWeightRange(baseWeight, sizePercent, maxScale) {
+    const numericWeight = typeof baseWeight === "number" ? baseWeight : Number(baseWeight);
+    if (!Number.isFinite(numericWeight) || numericWeight == null || numericWeight <= 0) {
+      return [null, null];
+    }
+    const scale = sizePercentToScale(sizePercent, maxScale);
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return [null, null];
+    }
+    const minWeight = numericWeight * scale;
+    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN ? maxScale : SCALE_MIN;
+    const variation = 1 + Math.max(0, (safeMax - scale) * 0.02);
+    const maxWeight = minWeight * variation;
+    return [minWeight, maxWeight];
+  }
+  function formatWeight(value) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+    const formatted = weightFormatter.format(value);
+    return formatted.replace(/(\.\d*?[1-9])0+$/u, "$1").replace(/\.0+$/u, "");
+  }
+  function formatWeightRange(min, max) {
+    const minFormatted = formatWeight(min);
+    const maxFormatted = formatWeight(max);
+    if (!minFormatted && !maxFormatted) return "\u2014";
+    if (!maxFormatted || minFormatted === maxFormatted) {
+      return `${minFormatted ?? maxFormatted} kg`;
+    }
+    return `${minFormatted ?? "\u2014"} \u2013 ${maxFormatted} kg`;
+  }
+  function sizePercentToScale(sizePercent, maxScale) {
+    const numeric = Number(sizePercent);
+    if (!Number.isFinite(numeric)) return SCALE_MIN;
+    const clampedPercent = clamp3(numeric, SIZE_MIN, SIZE_MAX);
+    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN ? maxScale : SCALE_MAX;
+    if (safeMax <= SCALE_MIN) return SCALE_MIN;
+    const normalized = (clampedPercent - SIZE_MIN) / (SIZE_MAX - SIZE_MIN);
+    const scale = SCALE_MIN + normalized * (safeMax - SCALE_MIN);
+    return Number.isFinite(scale) ? scale : SCALE_MIN;
+  }
+  function createSegmentedControl(labels, selectedLabel, interactive, onSelect, ariaLabel) {
+    const coerced = coerceLabel(selectedLabel, labels);
+    const items = labels.map((label2) => ({ value: label2, label: label2, disabled: !interactive }));
+    const segmented = segmentedUi.segmented(
+      items,
+      coerced,
+      interactive && onSelect ? (value) => onSelect(value) : void 0,
+      { ariaLabel, fullWidth: true }
+    );
+    segmented.classList.add("mg-crop-simulation__segmented-control");
+    return segmented;
+  }
+  function applySegmentedButtonMetadata(segmented, metadata) {
+    const buttons = segmented.querySelectorAll(".qmm-seg__btn");
+    buttons.forEach((button) => {
+      const label2 = button.textContent?.trim();
+      if (!label2) return;
+      const meta = metadata[label2];
+      if (!meta) return;
+      Object.entries(meta).forEach(([key2, value]) => {
+        if (!value) return;
+        button.dataset[key2] = value;
+      });
+    });
+  }
+  function getMutationsForState(state2) {
+    const mutations = [];
+    if (state2.color !== "None") mutations.push(state2.color);
+    if (state2.weatherCondition !== "None") mutations.push(state2.weatherCondition);
+    if (state2.weatherLighting !== "None") mutations.push(state2.weatherLighting);
+    return mutations;
+  }
+  function getWeatherLabelsForState(state2) {
+    const labels = [];
+    if (state2.weatherCondition !== "None") labels.push(state2.weatherCondition);
+    if (state2.weatherLighting !== "None") labels.push(state2.weatherLighting);
+    return labels;
+  }
+  function computePrice(speciesKey, state2, percent, maxScale) {
+    const scale = sizePercentToScale(percent, maxScale);
+    if (!Number.isFinite(scale) || scale <= 0) return null;
+    const mutations = getMutationsForState(state2);
+    const friendPlayers = clampFriendPlayers(state2.friendPlayers);
+    const pricingOptions = { ...DefaultPricing, friendPlayers };
+    const value = estimateProduceValue(speciesKey, scale, mutations, pricingOptions);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  function getMaxScaleForSpecies(key2) {
+    const entry = plantCatalog[key2];
+    const candidates = [entry?.crop?.maxScale, entry?.plant?.maxScale, entry?.seed?.maxScale];
+    for (const candidate of candidates) {
+      const numeric = typeof candidate === "number" ? candidate : Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+    return null;
+  }
+  function getBaseWeightForSpecies(key2) {
+    const entry = plantCatalog[key2];
+    const candidates = [
+      entry?.produce?.baseWeight,
+      entry?.crop?.baseWeight,
+      entry?.item?.baseWeight,
+      entry?.seed?.baseWeight
+    ];
+    for (const candidate of candidates) {
+      const numeric = typeof candidate === "number" ? candidate : Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+    return null;
+  }
+  async function renderCalculatorMenu(container) {
+    ensureCalculatorStyles();
+    scheduleLockerSpritePreload();
+    const ui = new Menu({ id: "calculator", compact: true });
+    ui.addTab("crops", "Crops", (root) => {
+      root.innerHTML = "";
+      root.style.padding = "8px";
+      root.style.boxSizing = "border-box";
+      root.style.height = "61vh";
+      root.style.overflow = "auto";
+      root.style.display = "grid";
+      const layout = applyStyles2(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "minmax(220px, 280px) minmax(0, 1fr)",
+        gap: "10px",
+        alignItems: "stretch",
+        height: "100%",
+        overflow: "hidden"
+      });
+      root.appendChild(layout);
+      const left = applyStyles2(document.createElement("div"), {
+        display: "grid",
+        gridTemplateRows: "minmax(0, 1fr)",
+        minHeight: "0",
+        flex: "0 0 260px",
+        minWidth: "220px",
+        maxWidth: "280px"
+      });
+      layout.appendChild(left);
+      const list = applyStyles2(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "1fr",
+        overflow: "auto",
+        paddingRight: "2px",
+        border: "1px solid #4445",
+        borderRadius: "10px",
+        minHeight: "0",
+        // important
+        height: "100%"
+        // pour que overflow: auto prenne effet
+      });
+      left.appendChild(list);
+      const right = applyStyles2(document.createElement("div"), {
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "0",
+        flex: "1 1 auto"
+      });
+      layout.appendChild(right);
+      const detailScroll = applyStyles2(document.createElement("div"), {
+        flex: "1 1 auto",
+        overflow: "auto",
+        display: "flex",
+        justifyContent: "center"
+      });
+      right.appendChild(detailScroll);
+      const simulationRoot = document.createElement("div");
+      simulationRoot.className = `${ROOT_CLASS} mg-crop-simulation--visible mg-crop-simulation--calculator`;
+      const detailLayout = document.createElement("div");
+      detailLayout.className = "mg-crop-calculator__layout";
+      const createSection = (title, extraClass) => {
+        const section = document.createElement("div");
+        section.className = "mg-crop-calculator__section";
+        if (extraClass) {
+          section.classList.add(extraClass);
+        }
+        if (title) {
+          const heading = document.createElement("div");
+          heading.className = "mg-crop-calculator__section-heading";
+          heading.textContent = title;
+          section.appendChild(heading);
+        }
+        return section;
+      };
+      const previewSection = createSection(null, "mg-crop-calculator__section--preview");
+      const priceRow = document.createElement("div");
+      priceRow.className = "mg-crop-simulation__price";
+      const priceIcon = document.createElement("img");
+      priceIcon.className = "mg-crop-simulation__price-icon";
+      priceIcon.src = coin.img64;
+      priceIcon.alt = "";
+      priceIcon.decoding = "async";
+      priceIcon.loading = "lazy";
+      priceIcon.setAttribute("aria-hidden", "true");
+      priceIcon.draggable = false;
+      const priceValue = document.createElement("span");
+      priceValue.className = "mg-crop-simulation__price-value";
+      priceValue.textContent = "\u2014";
+      priceRow.append(priceIcon, priceValue);
+      const spriteSection = document.createElement("div");
+      spriteSection.className = "mg-crop-simulation__sprite-section";
+      const spriteBox = document.createElement("div");
+      spriteBox.className = "mg-crop-simulation__sprite-box";
+      const sprite = document.createElement("span");
+      sprite.className = "mg-crop-simulation__sprite";
+      spriteBox.appendChild(sprite);
+      const sliderContainer = document.createElement("div");
+      sliderContainer.className = "mg-crop-simulation__slider-container";
+      const sliderRow = document.createElement("div");
+      sliderRow.className = "mg-crop-simulation__slider-row";
+      const sliderLabel = document.createElement("span");
+      sliderLabel.className = "mg-crop-simulation__slider-label";
+      sliderLabel.textContent = "Size";
+      const slider = ui.slider(SIZE_MIN, SIZE_MAX, 1, SIZE_MIN);
+      slider.classList.add("mg-crop-simulation__slider");
+      slider.disabled = true;
+      const sliderValue = document.createElement("span");
+      sliderValue.className = "mg-crop-simulation__slider-value";
+      sliderValue.textContent = `${SIZE_MIN}%`;
+      const sliderWeight = document.createElement("span");
+      sliderWeight.className = "mg-crop-simulation__slider-weight";
+      sliderWeight.textContent = "\u2014";
+      sliderRow.append(sliderLabel, slider, sliderValue);
+      sliderContainer.append(sliderRow, sliderWeight);
+      spriteSection.append(spriteBox, sliderContainer);
+      previewSection.appendChild(spriteSection);
+      const mutationsSection = createSection("Mutations");
+      const colorList = document.createElement("div");
+      colorList.className = "mg-crop-simulation__segmented";
+      mutationsSection.appendChild(colorList);
+      const weatherContainer = document.createElement("div");
+      weatherContainer.className = "mg-crop-calculator__mutations-weather";
+      const weatherConditions = document.createElement("div");
+      weatherConditions.className = "mg-crop-simulation__segmented";
+      const weatherLighting = document.createElement("div");
+      weatherLighting.className = "mg-crop-simulation__segmented";
+      weatherContainer.append(weatherConditions, weatherLighting);
+      mutationsSection.appendChild(weatherContainer);
+      const friendBonusSection = createSection("Friend bonus", "mg-crop-calculator__section--friend-bonus");
+      const friendBonus = document.createElement("div");
+      friendBonus.className = "mg-crop-simulation__segmented";
+      friendBonusSection.appendChild(friendBonus);
+      detailLayout.append(
+        priceRow,
+        previewSection,
+        mutationsSection,
+        friendBonusSection
+      );
+      simulationRoot.appendChild(detailLayout);
+      detailScroll.appendChild(simulationRoot);
+      const refs = {
+        root: simulationRoot,
+        sprite,
+        sizeSlider: slider,
+        sizeValue: sliderValue,
+        sizeWeight: sliderWeight,
+        colorMutations: colorList,
+        weatherConditions,
+        weatherLighting,
+        friendBonus,
+        priceValue
+      };
+      const states = /* @__PURE__ */ new Map();
+      const optionByKey = /* @__PURE__ */ new Map();
+      const options = getLockerSeedOptions();
+      options.forEach((opt) => optionByKey.set(opt.key, opt));
+      const getStateForKey = (key2) => {
+        const existing = states.get(key2);
+        if (existing) return existing;
+        const state2 = { ...DEFAULT_STATE };
+        states.set(key2, state2);
+        return state2;
+      };
+      let selectedKey = null;
+      let currentMaxScale = null;
+      let currentBaseWeight = null;
+      function renderColorSegment(state2, interactive) {
+        const active = state2?.color ?? COLOR_MUTATION_LABELS[0];
+        const segmented = createSegmentedControl(
+          COLOR_MUTATION_LABELS,
+          active,
+          interactive,
+          interactive ? (label2) => {
+            if (!selectedKey) return;
+            const target = getStateForKey(selectedKey);
+            target.color = coerceLabel(label2, COLOR_MUTATION_LABELS);
+            renderColorSegment(target, true);
+            renderWeatherConditions(target, true);
+            renderWeatherLighting(target, true);
+            updateSprite();
+            updateOutputs();
+          } : void 0,
+          "Mutations"
+        );
+        applySegmentedButtonMetadata(segmented, COLOR_SEGMENT_METADATA);
+        refs.colorMutations.innerHTML = "";
+        refs.colorMutations.appendChild(segmented);
+      }
+      function renderWeatherConditions(state2, interactive) {
+        const active = state2?.weatherCondition ?? WEATHER_CONDITION_LABELS[0];
+        const segmented = createSegmentedControl(
+          WEATHER_CONDITION_LABELS,
+          active,
+          interactive,
+          interactive ? (label2) => {
+            if (!selectedKey) return;
+            const target = getStateForKey(selectedKey);
+            target.weatherCondition = coerceLabel(label2, WEATHER_CONDITION_LABELS);
+            renderWeatherConditions(target, true);
+            updateSprite();
+            updateOutputs();
+          } : void 0,
+          "Weather condition"
+        );
+        applySegmentedButtonMetadata(segmented, WEATHER_CONDITION_SEGMENT_METADATA);
+        refs.weatherConditions.innerHTML = "";
+        refs.weatherConditions.appendChild(segmented);
+      }
+      function renderWeatherLighting(state2, interactive) {
+        const active = state2?.weatherLighting ?? WEATHER_LIGHTING_LABELS[0];
+        const segmented = createSegmentedControl(
+          WEATHER_LIGHTING_LABELS,
+          active,
+          interactive,
+          interactive ? (label2) => {
+            if (!selectedKey) return;
+            const target = getStateForKey(selectedKey);
+            target.weatherLighting = coerceLabel(label2, WEATHER_LIGHTING_LABELS);
+            renderWeatherLighting(target, true);
+            updateSprite();
+            updateOutputs();
+          } : void 0,
+          "Weather lighting"
+        );
+        applySegmentedButtonMetadata(segmented, WEATHER_LIGHTING_SEGMENT_METADATA);
+        refs.weatherLighting.innerHTML = "";
+        refs.weatherLighting.appendChild(segmented);
+      }
+      function renderFriendBonus(state2, interactive) {
+        const active = friendPlayersToLabel(state2?.friendPlayers ?? FRIEND_BONUS_MIN_PLAYERS);
+        const segmented = createSegmentedControl(
+          FRIEND_BONUS_LABELS,
+          active,
+          interactive,
+          interactive ? (label2) => {
+            if (!selectedKey) return;
+            const target = getStateForKey(selectedKey);
+            target.friendPlayers = labelToFriendPlayers(label2);
+            renderFriendBonus(target, true);
+            updateOutputs();
+          } : void 0,
+          "Friend bonus"
+        );
+        refs.friendBonus.innerHTML = "";
+        refs.friendBonus.appendChild(segmented);
+      }
+      function updateOutputs() {
+        const key2 = selectedKey;
+        if (!key2) {
+          refs.priceValue.textContent = "\u2014";
+          return;
+        }
+        const state2 = getStateForKey(key2);
+        const min = computePrice(key2, state2, state2.sizePercent, currentMaxScale);
+        const maxPercent = Math.min(SIZE_MAX, state2.sizePercent + 1);
+        const max = computePrice(key2, state2, maxPercent, currentMaxScale);
+        refs.priceValue.textContent = formatCoinRange(min, max);
+      }
+      function updateSprite() {
+        const key2 = selectedKey;
+        if (!key2) {
+          refs.sprite.innerHTML = "";
+          return;
+        }
+        const state2 = getStateForKey(key2);
+        const option = optionByKey.get(key2);
+        const fallbackEmoji = getLockerSeedEmojiForKey(key2) || (option?.seedName ? getLockerSeedEmojiForSeedName(option.seedName) : void 0) || "\u{1F331}";
+        applyCropSimulationSprite(refs.sprite, key2, {
+          colorLabel: state2.color,
+          weatherLabels: getWeatherLabelsForState(state2),
+          fallback: fallbackEmoji
+        });
+      }
+      function renderDetail() {
+        const key2 = selectedKey;
+        if (!key2) {
+          refs.sprite.innerHTML = "";
+          refs.sizeSlider.disabled = true;
+          currentBaseWeight = null;
+          applySizePercent(refs, SIZE_MIN, null, currentBaseWeight);
+          renderColorSegment(null, false);
+          renderWeatherConditions(null, false);
+          renderWeatherLighting(null, false);
+          renderFriendBonus(null, false);
+          refs.priceValue.textContent = "\u2014";
+          return;
+        }
+        currentMaxScale = getMaxScaleForSpecies(key2);
+        currentBaseWeight = getBaseWeightForSpecies(key2);
+        const state2 = getStateForKey(key2);
+        refs.sizeSlider.disabled = false;
+        applySizePercent(refs, state2.sizePercent, currentMaxScale, currentBaseWeight);
+        renderColorSegment(state2, true);
+        renderWeatherConditions(state2, true);
+        renderWeatherLighting(state2, true);
+        renderFriendBonus(state2, true);
+        updateSprite();
+        updateOutputs();
+      }
+      slider.addEventListener("input", () => {
+        if (!selectedKey) return;
+        const state2 = getStateForKey(selectedKey);
+        const raw = Number(slider.value);
+        const value = clamp3(Math.round(raw), SIZE_MIN, SIZE_MAX);
+        state2.sizePercent = value;
+        applySizePercent(refs, value, currentMaxScale, currentBaseWeight);
+        updateOutputs();
+      });
+      function renderList() {
+        const previous = list.scrollTop;
+        list.innerHTML = "";
+        if (!options.length) {
+          const empty = document.createElement("div");
+          empty.className = "mg-crop-calculator__placeholder";
+          empty.textContent = "No crops available.";
+          list.appendChild(empty);
+          selectedKey = null;
+          currentMaxScale = null;
+          renderDetail();
+          return;
+        }
+        if (selectedKey && !options.some((opt) => opt.key === selectedKey)) {
+          selectedKey = options[0].key;
+          currentMaxScale = getMaxScaleForSpecies(selectedKey);
+        }
+        if (!selectedKey) {
+          selectedKey = options[0].key;
+          currentMaxScale = getMaxScaleForSpecies(selectedKey);
+        }
+        const fragment = document.createDocumentFragment();
+        scheduleLockerSpritePreload();
+        options.forEach((opt) => {
+          const button = document.createElement("button");
+          button.className = "qmm-vtab";
+          button.style.display = "grid";
+          button.style.gridTemplateColumns = "16px 1fr auto";
+          button.style.alignItems = "center";
+          button.style.gap = "8px";
+          button.style.textAlign = "left";
+          button.style.padding = "6px 8px";
+          button.style.marginBottom = "6px";
+          button.style.borderRadius = "8px";
+          button.style.border = "1px solid #4445";
+          button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+          button.style.color = "#e7eef7";
+          const dot = document.createElement("span");
+          dot.className = "qmm-dot";
+          dot.style.background = selectedKey === opt.key ? "#2ecc71" : "#4c566a";
+          const label2 = document.createElement("span");
+          label2.className = "label";
+          label2.textContent = opt.cropName || opt.key;
+          const fallbackEmoji = getLockerSeedEmojiForKey(opt.key) || getLockerSeedEmojiForSeedName(opt.seedName) || "\u{1F331}";
+          const sprite2 = createPlantSprite(opt.key, {
+            size: 24,
+            fallback: fallbackEmoji
+          });
+          button.append(dot, label2, sprite2);
+          button.onmouseenter = () => button.style.borderColor = "#6aa1";
+          button.onmouseleave = () => button.style.borderColor = "#4445";
+          button.onclick = () => {
+            if (selectedKey === opt.key) return;
+            selectedKey = opt.key;
+            currentMaxScale = getMaxScaleForSpecies(opt.key);
+            renderList();
+          };
+          fragment.appendChild(button);
+        });
+        list.appendChild(fragment);
+        list.scrollTop = previous;
+        renderDetail();
+      }
+      renderList();
+    });
+    ui.mount(container);
+  }
+
   // src/ui/menus/notifier.ts
   var rulePopover = null;
   var detachRuleDocHandler = null;
@@ -35355,10 +36975,11 @@ next: ${next}`;
         register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
-        register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
+        register("calculator", "\u{1F9EE} Calculator", renderCalculatorMenu);
         register("stats", "\u{1F4CA} Stats", renderStatsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
         register("keybinds", "\u2328\uFE0F Keybinds", renderKeybindsMenu);
+        register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
         register("debug-data", "\u{1F527} Debug", renderDebugDataMenu);
       }
     });

@@ -5,6 +5,7 @@ import { mountHUD, initWatchers } from "./ui/hud";
 import { renderDebugDataMenu } from "./ui/menus/debug-data";
 import { renderLockerMenu } from "./ui/menus/locker";
 import { renderPlayersMenu } from "./ui/menus/players";
+import { renderCalculatorMenu } from "./ui/menus/calculator";
 import { renderStatsMenu } from "./ui/menus/stats";
 import { renderPetsMenu } from "./ui/menus/pets";
 import { renderMiscMenu } from "./ui/menus/misc";
@@ -42,10 +43,11 @@ import { initSprites, Sprites  } from "./core/sprite";
       register('room', '🏠 Room', renderRoomMenu);
       register('locker', '🔒 Locker', renderLockerMenu);
       register('alerts',  '🔔 Alerts', renderNotifierMenu)
-      register('tools', '🛠️ Tools', renderToolsMenu);
+      register('calculator', '🤓 Calculator', renderCalculatorMenu);
       register('stats', '📊 Stats', renderStatsMenu);
       register('misc', '🧩 Misc', renderMiscMenu);
       register('keybinds', '⌨️ Keybinds', renderKeybindsMenu);
+      register('tools', '🛠️ Tools', renderToolsMenu);
       register('debug-data', '🔧 Debug', renderDebugDataMenu);
     }
   });

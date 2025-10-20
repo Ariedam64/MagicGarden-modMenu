@@ -21,7 +21,7 @@ type WeatherTag = (keyof typeof tileRefsMutations | typeof NO_WEATHER_TAG) & str
 type WeatherMode = "ANY" | "ALL" | "RECIPES";
 type WeatherRecipeGroup = "condition" | "lighting";
 
-type LockerSeedOption = {
+export type LockerSeedOption = {
   key: string;
   seedName: string;
   cropName: string;
@@ -78,14 +78,14 @@ lockerSeedOptions.forEach((opt, index) => {
   }
 });
 
-const getLockerSeedOptions = (): LockerSeedOption[] => lockerSeedOptions;
+export const getLockerSeedOptions = (): LockerSeedOption[] => lockerSeedOptions;
 
-const getLockerSeedEmojiForKey = (key: string | undefined): string | undefined => {
+export const getLockerSeedEmojiForKey = (key: string | undefined): string | undefined => {
   if (!key) return undefined;
   return lockerSeedEmojiByKey.get(key) ?? "•";
 };
 
-const getLockerSeedEmojiForSeedName = (name: string | undefined): string | undefined => {
+export const getLockerSeedEmojiForSeedName = (name: string | undefined): string | undefined => {
   if (!name) return undefined;
   return lockerSeedEmojiBySeedName.get(name) ?? "•";
 };
@@ -257,7 +257,7 @@ function hasLockerSpriteSources(): boolean {
   return false;
 }
 
-function scheduleLockerSpritePreload(delay = 0): void {
+export function scheduleLockerSpritePreload(delay = 0): void {
   if (lockerSpritesPreloaded || typeof window === "undefined") {
     return;
   }
@@ -460,7 +460,7 @@ function loadPlantSprite(seedKey: string): Promise<string | null> {
   return promise;
 }
 
-function createPlantSprite(seedKey: string, options: SpriteOptions = {}): HTMLSpanElement {
+export function createPlantSprite(seedKey: string, options: SpriteOptions = {}): HTMLSpanElement {
   ensurePlantSpriteListener();
   const size = Math.max(12, options.size ?? 24);
   const fallback = options.fallback ?? "🌱";

@@ -939,10 +939,41 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   rail.className = "qmm-seg__indicator";
   root.appendChild(rail);
 
+  const reduceMotionQuery =
+    typeof window !== "undefined" && "matchMedia" in window
+      ? window.matchMedia("(prefers-reduced-motion: reduce)")
+      : null;
+  const canAnimateIndicator = typeof rail.animate === "function";
+  if (canAnimateIndicator) {
+    rail.style.transition = "none";
+  }
+
+  let indicatorMetrics: { left: number; width: number } | null = null;
+  let indicatorAnimation: Animation | null = null;
+
+  const applyIndicatorStyles = (left: number, width: number) => {
+    rail.style.transform = `translate3d(${left}px,0,0)`;
+    rail.style.width = `${width}px`;
+  };
+
+  const cancelIndicatorAnimation = () => {
+    if (!indicatorAnimation) return;
+    indicatorAnimation.cancel();
+    indicatorAnimation = null;
+  };
+
   let value: T = selected;
   const btns: HTMLButtonElement[] = [];
 
   const setSelected = (v: T, focus = false) => {
+    if (v === value) {
+      if (focus) {
+        const alreadyActive = btns.find(b => b.dataset.value === v);
+        alreadyActive?.focus();
+      }
+      onChange?.(value);
+      return;
+    }
     value = v;
     for (const b of btns) {
       const active = b.dataset.value === v;
@@ -951,57 +982,111 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
       b.classList.toggle("active", active);
       if (active && focus) b.focus();
     }
-    moveIndicator();
+    moveIndicator(true);
     onChange?.(value);
   };
 
-const moveIndicator = () => {
-  const active = btns.find(b => b.dataset.value === value);
-  if (!active) return;
+  const moveIndicator = (animate = false) => {
+    const active = btns.find(b => b.dataset.value === value);
+    if (!active) return;
 
-  const i = btns.indexOf(active);
-  const n = btns.length;
+    const i = btns.indexOf(active);
+    const n = btns.length;
 
-  const cs    = getComputedStyle(root);
-  const gap   = parseFloat(cs.gap || cs.columnGap || "0") || 0;
-  const bL    = parseFloat(cs.borderLeftWidth  || "0") || 0;
-  const bR    = parseFloat(cs.borderRightWidth || "0") || 0;
+    const cs    = getComputedStyle(root);
+    const gap   = parseFloat(cs.gap || cs.columnGap || "0") || 0;
+    const bL    = parseFloat(cs.borderLeftWidth  || "0") || 0;
+    const bR    = parseFloat(cs.borderRightWidth || "0") || 0;
 
-  // Mesures en sub-pixels
-  const rRoot = root.getBoundingClientRect();
-  const rBtn  = active.getBoundingClientRect();
+    // Mesures en sub-pixels
+    const rRoot = root.getBoundingClientRect();
+    const rBtn  = active.getBoundingClientRect();
 
-  // left/width relatifs à la *padding box* du conteneur
-  let left   = (rBtn.left  - rRoot.left) - bL;
-  let width  =  rBtn.width;
-  const padW =  rRoot.width - bL - bR; // largeur interne (sans bordures)
+    // left/width relatifs à la *padding box* du conteneur
+    let left   = (rBtn.left  - rRoot.left) - bL;
+    let width  =  rBtn.width;
+    const padW =  rRoot.width - bL - bR; // largeur interne (sans bordures)
 
-  if (n === 1) {
-    // un seul segment → couvrir toute la padding box
-    left = 0;
-    width = padW;
-  } else if (i === 0) {
-    // premier → inclure demi gap à droite + padding gauche
-    const rightEdge = left + width + gap / 2;
-    left = 0;
-    width = rightEdge - left;
-  } else if (i === n - 1) {
-    // dernier → demi gap à gauche + padding droit
-    left  = left - gap / 2;
-    width = padW - left;
-  } else {
-    // milieu → demi gap de chaque côté
-    left  = left  - gap / 2;
-    width = width + gap;
-  }
+    if (n === 1) {
+      // un seul segment → couvrir toute la padding box
+      left = 0;
+      width = padW;
+    } else if (i === 0) {
+      // premier → inclure demi gap à droite + padding gauche
+      const rightEdge = left + width + gap / 2;
+      left = 0;
+      width = rightEdge - left;
+    } else if (i === n - 1) {
+      // dernier → demi gap à gauche + padding droit
+      left  = left - gap / 2;
+      width = padW - left;
+    } else {
+      // milieu → demi gap de chaque côté
+      left  = left  - gap / 2;
+      width = width + gap;
+    }
 
-  // Snap au device pixel pour tuer le 1px ghosting
-  const dpr  = window.devicePixelRatio || 1;
-  const snap = (x: number) => Math.round(x * dpr) / dpr;
+    // Snap au device pixel pour tuer le 1px ghosting
+    const dpr  = window.devicePixelRatio || 1;
+    const snap = (x: number) => Math.round(x * dpr) / dpr;
 
-  rail.style.transform = `translate3d(${snap(left)}px,0,0)`;
-  rail.style.width     = `${snap(width)}px`;
-};
+    const targetLeft = snap(left);
+    const targetWidth = snap(width);
+
+    const previous = indicatorMetrics;
+    indicatorMetrics = { left: targetLeft, width: targetWidth };
+
+    const applyFinal = () => applyIndicatorStyles(targetLeft, targetWidth);
+
+    const shouldAnimate =
+      animate &&
+      canAnimateIndicator &&
+      !reduceMotionQuery?.matches &&
+      previous != null &&
+      previous.width > 0 &&
+      Number.isFinite(previous.width) &&
+      targetWidth > 0 &&
+      Number.isFinite(targetWidth);
+
+    if (!shouldAnimate) {
+      cancelIndicatorAnimation();
+      applyFinal();
+      return;
+    }
+
+    cancelIndicatorAnimation();
+    applyIndicatorStyles(previous.left, previous.width);
+
+    indicatorAnimation = rail.animate(
+      [
+        {
+          transform: `translate3d(${previous.left}px,0,0)`,
+          width: `${previous.width}px`,
+          opacity: 0.92,
+          offset: 0,
+        },
+        {
+          transform: `translate3d(${targetLeft}px,0,0)`,
+          width: `${targetWidth}px`,
+          opacity: 1,
+          offset: 1,
+        },
+      ],
+      {
+        duration: 260,
+        easing: "cubic-bezier(.22,.7,.28,1)",
+        fill: "forwards",
+      }
+    );
+
+    const finalize = () => {
+      applyFinal();
+      indicatorAnimation = null;
+    };
+
+    indicatorAnimation.addEventListener("finish", finalize, { once: true });
+    indicatorAnimation.addEventListener("cancel", finalize, { once: true });
+  };
 
 
 
@@ -1043,11 +1128,11 @@ const moveIndicator = () => {
   });
 
   // Layout & resize
-  const ro = (window as any).ResizeObserver ? new ResizeObserver(moveIndicator) : null;
+  const ro = (window as any).ResizeObserver ? new ResizeObserver(() => moveIndicator(false)) : null;
   if (ro) ro.observe(root);
-  window.addEventListener("resize", moveIndicator);
+  window.addEventListener("resize", () => moveIndicator(false));
   // première position après insertion dans le DOM
-  queueMicrotask(moveIndicator);
+  queueMicrotask(() => moveIndicator(false));
 
   // expose petite API
   (root as any).get = () => value;
@@ -2185,8 +2270,11 @@ const moveIndicator = () => {
   outline-offset: calc(-1 * var(--seg-stroke));
 
   box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  transform-origin: left center;
+  will-change: transform, width, opacity;
   transition: transform .18s cubic-bezier(.2,.8,.2,1),
-              width .18s cubic-bezier(.2,.8,.2,1);
+              width .18s cubic-bezier(.2,.8,.2,1),
+              opacity .18s ease-out;
   pointer-events: none;
 }
 
