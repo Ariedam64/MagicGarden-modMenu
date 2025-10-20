@@ -1062,7 +1062,7 @@ export class LockerService {
     const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
 
     if (scaleMode === "MINIMUM") {
-      if (args.sizePercent >= minScale) return true;
+      if (args.sizePercent < minScale) return true;
     } else if (scaleMode === "RANGE") {
       const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
       const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
