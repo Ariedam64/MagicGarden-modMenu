@@ -17,6 +17,7 @@ import {
 } from "../../services/notifier";
 
 import { createShopSprite } from "../../utils/shopSprites";
+import { createWeatherSprite } from "../../utils/weatherSprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
 
@@ -2032,26 +2033,12 @@ function renderWeatherTab(view: HTMLElement, ui: Menu) {
       background: "#101820",
     });
 
-    const spriteSrc = (row.sprite || "").trim();
-    if (spriteSrc) {
-      const img = new Image();
-      img.src = spriteSrc.startsWith("data:") ? spriteSrc : `data:image/png;base64,${spriteSrc}`;
-      img.alt = row.name;
-      img.decoding = "async";
-      img.loading = "lazy";
-      Object.assign(img.style, {
-        width: "50px",
-        height: "50px",
-        objectFit: "contain",
-      });
-      iconWrap.appendChild(img);
-    } else {
-      const fallback = document.createElement("span");
-      fallback.textContent = "🌦";
-      fallback.style.fontSize = "24px";
-      fallback.setAttribute("aria-hidden", "true");
-      iconWrap.appendChild(fallback);
-    }
+    const weatherSprite = createWeatherSprite(row.spriteKey ?? row.id, {
+      size: ICON - 4,
+      fallback: "🌦",
+      alt: row.name,
+    });
+    iconWrap.appendChild(weatherSprite);
 
     const col = document.createElement("div");
     Object.assign(col.style, {

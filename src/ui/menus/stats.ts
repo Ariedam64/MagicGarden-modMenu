@@ -8,6 +8,7 @@ import {
   weatherCatalog,
 } from "../../data/hardcoded-data.clean";
 import { Sprites } from "../../core/sprite";
+import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/weatherSprites";
 import { formatPrice } from "../../utils/format";
 import { StatsService } from "../../services/stats";
 import type { StatsSnapshot } from "../../services/stats";
@@ -646,29 +647,19 @@ type StatListCell = {
   content?: Node;
 };
 
-function createWeatherNameCell(entry: { label: string; sprite?: string | null }): StatListCell {
+function createWeatherNameCell(entry: { label: string; spriteKey?: string | null }): StatListCell {
   const wrapper = document.createElement("span");
   wrapper.className = "stats-weather__name";
 
   const iconWrap = document.createElement("span");
   iconWrap.className = "stats-weather__icon";
 
-  const spriteSrc = (entry.sprite || "").trim();
-  if (spriteSrc) {
-    const img = new Image();
-    img.src = spriteSrc.startsWith("data:") ? spriteSrc : `data:image/png;base64,${spriteSrc}`;
-    img.alt = entry.label;
-    img.decoding = "async";
-    (img as any).loading = "lazy";
-    img.draggable = false;
-    iconWrap.appendChild(img);
-  } else {
-    const fallback = document.createElement("span");
-    fallback.textContent = "🌦";
-    fallback.style.fontSize = "18px";
-    fallback.setAttribute("aria-hidden", "true");
-    iconWrap.appendChild(fallback);
-  }
+  const sprite = createWeatherSprite(entry.spriteKey ?? entry.label, {
+    size: 32,
+    fallback: "🌦",
+    alt: entry.label,
+  });
+  iconWrap.appendChild(sprite);
 
   const label = document.createElement("span");
   label.className = "stats-weather__label";
@@ -1231,14 +1222,18 @@ function renderWeatherSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot)
       const label = info?.atomValue ?? key;
       const lower = key.toLowerCase();
       const entry = stats.weather[lower] ?? { triggers: 0 };
-      const sprite = typeof info?.img64 === "string" ? info.img64 : null;
-      return { key: lower, label, triggers: entry.triggers, sprite };
+      const spriteKey =
+        getWeatherSpriteKey(key)
+        ?? getWeatherSpriteKey(info?.atomValue)
+        ?? getWeatherSpriteKey((info as any)?.displayName)
+        ?? null;
+      return { key: lower, label, triggers: entry.triggers, spriteKey };
     })
     .sort((a, b) => a.label.localeCompare(b.label));
 
   for (const entry of weatherEntries) {
     rows.push([
-      createWeatherNameCell({ label: entry.label, sprite: entry.sprite }),
+      createWeatherNameCell({ label: entry.label, spriteKey: entry.spriteKey }),
       { text: formatInt(entry.triggers) },
     ]);
   }
