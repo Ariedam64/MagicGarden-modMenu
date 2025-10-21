@@ -16,12 +16,7 @@ import {
   type ContextStopDefaults,
 } from "../../services/notifier";
 
-import {
-  seedImageFromSpecies,
-  eggImageFromEggId,
-  toolImageFromId,
-  decorImageFromId,
-} from "../../utils/catalogIndex";
+import { createShopSprite } from "../../utils/shopSprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
 
@@ -1708,48 +1703,18 @@ style.textContent = `
       return i >= 0 ? s.slice(i + 1) : s;
     };
 
-    const useEmojiFallback = () => {
-      iconWrap.replaceChildren();
-      const span = document.createElement("span");
-      span.textContent =
-        row.type === "Seed" ? "🌱" :
-        row.type === "Egg"  ? "🥚" :
-        row.type === "Tool" ? "🧰" : "🏠";
-      span.style.fontSize = `${Math.max(ICON - 3, 12)}px`;
-      span.setAttribute("aria-hidden", "true");
-      iconWrap.appendChild(span);
-    };
+    const spriteFallback =
+      row.type === "Seed" ? "🌱" :
+      row.type === "Egg"  ? "🥚" :
+      row.type === "Tool" ? "🧰" : "🏠";
 
-    const makeImg = (src: string) => {
-      const img = new Image();
-      img.src = src;
-      img.width = ICON;
-      img.height = ICON;
-      img.alt = row.name;
-      img.decoding = "async";
-      img.loading = "lazy";
-      img.draggable = false;
-      Object.assign(img.style, {
-        width: "100%",
-        height: "100%",
-        objectFit: "contain",
-      });
-      img.onerror = useEmojiFallback;
-      return img;
-    };
-
-    // Résolution source image selon le type
-    const src: string | undefined = (() => {
-      switch (row.type) {
-        case "Seed":  return seedImageFromSpecies(afterColon(row.id));
-        case "Egg":   return eggImageFromEggId(afterColon(row.id));
-        case "Tool":  return toolImageFromId(afterColon(row.id));
-        case "Decor": return decorImageFromId(afterColon(row.id));
-      }
-    })();
-
-    if (src) iconWrap.appendChild(makeImg(src));
-    else useEmojiFallback();
+    const spriteKey = afterColon(row.id);
+    const sprite = createShopSprite(row.type, spriteKey, {
+      size: ICON - 6,
+      fallback: spriteFallback,
+      alt: row.name,
+    });
+    iconWrap.appendChild(sprite);
 
     // ---- Texte
     const col = document.createElement("div");
