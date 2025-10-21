@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.3.2
+// @version      2.3.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5453,7 +5453,7 @@
       const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
       const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
       if (scaleMode === "MINIMUM") {
-        if (args.sizePercent >= minScale) return true;
+        if (args.sizePercent < minScale) return true;
       } else if (scaleMode === "RANGE") {
         const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
         const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
@@ -17214,7 +17214,7 @@
   }
 
   // src/utils/petPanelEnhancer.ts
-  var PANEL_SELECTOR = ".css-1rszi55";
+  var PANEL_SELECTOR = ".css-css-ycloo9";
   var FEED_BUTTON_CLASS = "tm-feed-from-inventory-btn";
   var FEED_ROW_CLASS = "tm-feed-from-inventory-row";
   var started = false;

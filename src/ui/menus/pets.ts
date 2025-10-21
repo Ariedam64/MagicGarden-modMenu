@@ -6,10 +6,10 @@ import { PetsService,
   InventoryPet,
   installPetTeamHotkeysOnce,
   setTeamsForHotkeys,
-  petImg64From } from "../../services/pets";
-import type { PetInfo } from "../../services/player";
+  } from "../../services/pets";
 import type { PetTeam } from "../../services/pets";
 import { onActivePetsStructuralChangeNow } from "../../store/atoms";
+import { loadPetSpriteFromMutations } from "../../utils/petSprites";
 
 /* ================== petits helpers UI (mêmes vibes que garden) ================== */
 
@@ -753,22 +753,44 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
         iconWrap.appendChild(span);
       };
 
+      let iconRequestId = 0;
+
       const setIcon = (species?: string, mutation?: string | string[]) => {
-        const src = petImg64From(species, mutation);
-        iconWrap.replaceChildren();
-        if (!src) { useEmojiFallback(); return; }
-        const img = new Image();
-        img.src = src;
-        img.alt = species || "pet";
-        img.decoding = "async";
-        img.loading = "lazy";
-        img.draggable = false;
-        Object.assign(img.style, {
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        });
-        iconWrap.appendChild(img);
+        iconRequestId += 1;
+        const requestId = iconRequestId;
+        const speciesLabel = String(species ?? "").trim();
+        if (!speciesLabel) {
+          useEmojiFallback();
+          return;
+        }
+
+        useEmojiFallback();
+
+        loadPetSpriteFromMutations(speciesLabel, mutation)
+          .then((src) => {
+            if (requestId !== iconRequestId) return;
+            if (!src) {
+              useEmojiFallback();
+              return;
+            }
+            const img = new Image();
+            img.src = src;
+            img.alt = speciesLabel || "pet";
+            img.decoding = "async";
+            img.loading = "lazy";
+            img.draggable = false;
+            Object.assign(img.style, {
+              width: "100%",
+              height: "100%",
+              imageRendering: "auto",
+              objectFit: "contain",
+            });
+            iconWrap.replaceChildren(img);
+          })
+          .catch(() => {
+            if (requestId !== iconRequestId) return;
+            useEmojiFallback();
+          });
       };
 
       // text column
