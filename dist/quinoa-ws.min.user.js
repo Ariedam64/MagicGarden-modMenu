@@ -17434,8 +17434,12 @@ try{importScripts("${abs}")}catch(e){}
   var WEATHER_TIME_COMBO = {
     "Wet+Dawnlit": 3,
     "Chilled+Dawnlit": 3,
+    "Wet+Dawnbound": 4,
+    "Chilled+Dawnbound": 4,
     "Wet+Amberlit": 6,
     "Chilled+Amberlit": 6,
+    "Wet+Amberbound": 7,
+    "Chilled+Amberbound": 7,
     "Frozen+Dawnlit": 11,
     "Frozen+Dawnbound": 12,
     "Frozen+Amberlit": 14,
@@ -17462,7 +17466,8 @@ try{importScripts("${abs}")}catch(e){}
     if (s === "frozen") return "Frozen";
     if (s === "dawnlit") return "Dawnlit";
     if (s === "dawnbound") return "Dawnbound";
-    if (s === "amberlit" || s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
+    if (s === "amberlit") return "Amberlit";
+    if (s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
     if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
     return m;
   }
