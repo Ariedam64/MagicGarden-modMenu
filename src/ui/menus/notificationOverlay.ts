@@ -1,14 +1,11 @@
 // src/ui/notificationOverlay.ts
 import { NotifierService, type NotifierRule } from "../../services/notifier";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../../utils/audio"; // ← utilise le singleton unifié
+import { createShopSprite, type ShopSpriteType } from "../../utils/shopSprites";
 import {
-  seedImageFromSpecies,
-  eggImageFromEggId,
-  toolImageFromId,
-  decorImageFromId,
   eggNameFromId,          // NEW
   toolNameFromId,         // NEW
-  decorNameFromId, 
+  decorNameFromId,
   seedNameFromSpecies
 } from "../../utils/catalogIndex";
 
@@ -41,7 +38,6 @@ const setProps = (el: HTMLElement, props: Record<string, string>) => {
 };
 
 function iconOf(id: string, size = 24): HTMLElement {
-  const [type, raw] = id.split(":");
   const wrap = document.createElement("div");
   Object.assign(wrap.style, {
     width: `${size}px`,
@@ -52,35 +48,36 @@ function iconOf(id: string, size = 24): HTMLElement {
     flex: `0 0 ${size}px`,
   });
 
-  const addImg = (src?: string | null) => {
-    if (!src) return false;
-    const img = new Image();
-    Object.assign(img, {
-      src, width: size, height: size,
-      decoding: "async", loading: "lazy", draggable: false
-    });
-    Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain" });
-    wrap.appendChild(img);
-    return true;
-  };
+  const [rawType, rawId] = id.split(":") as [string | undefined, string | undefined];
+  const type: ShopSpriteType | null =
+    rawType === "Seed" || rawType === "Egg" || rawType === "Tool" || rawType === "Decor"
+      ? rawType
+      : null;
 
-  const emoji = (s: string) => {
+  const fallback =
+    type === "Seed" ? "🌱" :
+    type === "Egg"  ? "🥚" :
+    type === "Tool" ? "🧰" :
+    type === "Decor" ? "🏠" : "🔔";
+
+  if (type && rawId) {
+    const sprite = createShopSprite(type, rawId, {
+      size,
+      fallback,
+      alt: labelOf(id),
+    });
+    wrap.appendChild(sprite);
+  } else {
     const span = document.createElement("span");
-    span.textContent = s;
-    span.style.fontSize = `${size - 2}px`;
+    span.textContent = fallback;
+    span.style.fontSize = `${Math.max(10, size - 2)}px`;
     span.setAttribute("aria-hidden", "true");
     wrap.appendChild(span);
-  };
-
-  switch (type) {
-    case "Seed":  if (!addImg(seedImageFromSpecies(raw))) emoji("🌱"); break;
-    case "Egg":   if (!addImg(eggImageFromEggId(raw)))    emoji("🥚"); break;
-    case "Tool":  if (!addImg(toolImageFromId(raw)))      emoji("🧰"); break;
-    case "Decor": if (!addImg(decorImageFromId(raw)))     emoji("🏠"); break;
-    default: emoji("🔔");
   }
+
   return wrap;
 }
+
 
 function labelOf(id: string): string {
   const [type, raw] = id.split(":") as ["Seed"|"Egg"|"Tool"|"Decor", string];

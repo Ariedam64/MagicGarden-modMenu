@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.3.5
+// @version      2.3.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15197,8 +15197,8 @@ try{importScripts("${abs}")}catch(e){}
       const obj = raw ? JSON.parse(raw) : null;
       if (obj && typeof obj === "object") {
         for (const [id, value] of Object.entries(obj)) {
-          const norm4 = _normalizeRule(value);
-          if (norm4) _rules.set(String(id), norm4);
+          const norm3 = _normalizeRule(value);
+          if (norm3) _rules.set(String(id), norm3);
         }
       }
     } catch {
@@ -16017,14 +16017,294 @@ try{importScripts("${abs}")}catch(e){}
     }
   };
 
-  // src/utils/catalogIndex.ts
-  var norm3 = (s) => String(s || "").toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, " ").trim();
-  var tileRefKey = (tr) => {
-    const raw = String(tr ?? "");
-    const last = raw.split(/[./]/).pop() || raw;
-    return norm3(last);
+  // src/utils/shopSprites.ts
+  var spriteConfig2 = /* @__PURE__ */ new WeakMap();
+  var spriteSubscribers2 = /* @__PURE__ */ new Map();
+  var spriteCache2 = /* @__PURE__ */ new Map();
+  var spritePromises2 = /* @__PURE__ */ new Map();
+  var listenerAttached2 = false;
+  var seedSheetBases = null;
+  var eggSheetBases = null;
+  var itemSheetBases = null;
+  var decorSheetBases = null;
+  var FALLBACK_BASES = {
+    Seed: ["seeds", "Seeds"],
+    Egg: ["pets", "Pets", "eggs", "Eggs"],
+    Tool: ["items", "Items"],
+    Decor: ["decor", "Decor"]
   };
-  var _toDataURI = (s) => s ? s.startsWith("data:") ? s : `data:image/png;base64,${s}` : void 0;
+  function spriteKey(type, id) {
+    return `${type}::${id}`;
+  }
+  function parseSpriteKey(key2) {
+    const idx = key2.indexOf("::");
+    if (idx <= 0) return null;
+    const type = key2.slice(0, idx);
+    const id = key2.slice(idx + 2);
+    if (!id) return null;
+    if (type !== "Seed" && type !== "Egg" && type !== "Tool" && type !== "Decor") return null;
+    return { type, id };
+  }
+  function defaultFallback(type) {
+    switch (type) {
+      case "Seed":
+        return "\u{1F331}";
+      case "Egg":
+        return "\u{1F95A}";
+      case "Tool":
+        return "\u{1F9F0}";
+      default:
+        return "\u{1F3E0}";
+    }
+  }
+  function normalizeBase(url) {
+    const clean = url.split(/[?#]/)[0] ?? url;
+    const file = clean.split("/").pop() ?? clean;
+    return file.replace(/\.[^.]+$/, "");
+  }
+  function uniqueBases(urls, fallback) {
+    const set2 = /* @__PURE__ */ new Set();
+    for (const url of urls) {
+      if (typeof url === "string" && url.length) {
+        set2.add(normalizeBase(url));
+      }
+    }
+    if (set2.size === 0) {
+      for (const base of fallback) set2.add(base);
+    }
+    return [...set2];
+  }
+  function getSeedSheetBases() {
+    if (seedSheetBases) return seedSheetBases;
+    try {
+      if (typeof Sprites.listSeeds === "function") {
+        seedSheetBases = uniqueBases(Sprites.listSeeds(), FALLBACK_BASES.Seed);
+        return seedSheetBases;
+      }
+    } catch {
+    }
+    seedSheetBases = [...FALLBACK_BASES.Seed];
+    return seedSheetBases;
+  }
+  function getEggSheetBases() {
+    if (eggSheetBases) return eggSheetBases;
+    try {
+      if (typeof Sprites.listPets === "function") {
+        eggSheetBases = uniqueBases(Sprites.listPets(), FALLBACK_BASES.Egg);
+        return eggSheetBases;
+      }
+    } catch {
+    }
+    eggSheetBases = [...FALLBACK_BASES.Egg];
+    return eggSheetBases;
+  }
+  function getItemSheetBases() {
+    if (itemSheetBases) return itemSheetBases;
+    try {
+      if (typeof Sprites.listItems === "function") {
+        itemSheetBases = uniqueBases(Sprites.listItems(), FALLBACK_BASES.Tool);
+        return itemSheetBases;
+      }
+    } catch {
+    }
+    itemSheetBases = [...FALLBACK_BASES.Tool];
+    return itemSheetBases;
+  }
+  function getDecorSheetBases() {
+    if (decorSheetBases) return decorSheetBases;
+    try {
+      if (typeof Sprites.listTilesByCategory === "function") {
+        decorSheetBases = uniqueBases(Sprites.listTilesByCategory(/decor/i), FALLBACK_BASES.Decor);
+        return decorSheetBases;
+      }
+    } catch {
+    }
+    decorSheetBases = [...FALLBACK_BASES.Decor];
+    return decorSheetBases;
+  }
+  function getBases(type) {
+    switch (type) {
+      case "Seed":
+        return getSeedSheetBases();
+      case "Egg":
+        return getEggSheetBases();
+      case "Tool":
+        return getItemSheetBases();
+      case "Decor":
+        return getDecorSheetBases();
+    }
+  }
+  function toTileIndex2(tileRef) {
+    if (tileRef == null) return null;
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    return value - 1;
+  }
+  function getTileRef(type, id) {
+    switch (type) {
+      case "Seed":
+        return plantCatalog?.[id]?.seed?.tileRef ?? null;
+      case "Egg":
+        return eggCatalog?.[id]?.tileRef ?? null;
+      case "Tool":
+        return toolCatalog?.[id]?.tileRef ?? null;
+      case "Decor":
+        return decorCatalog?.[id]?.tileRef ?? null;
+    }
+  }
+  function subscribeSprite2(key2, el2) {
+    let subs = spriteSubscribers2.get(key2);
+    if (!subs) {
+      subs = /* @__PURE__ */ new Set();
+      spriteSubscribers2.set(key2, subs);
+    }
+    subs.add(el2);
+  }
+  function unsubscribeIfDisconnected(key2, el2) {
+    const subs = spriteSubscribers2.get(key2);
+    if (!subs) return;
+    if (!el2.isConnected) {
+      subs.delete(el2);
+      spriteConfig2.delete(el2);
+    }
+    if (subs.size === 0) {
+      spriteSubscribers2.delete(key2);
+    }
+  }
+  function applySprite2(el2, src) {
+    const cfg = spriteConfig2.get(el2);
+    if (!cfg) return;
+    const { size, fallback, alt } = cfg;
+    el2.innerHTML = "";
+    el2.style.display = "inline-flex";
+    el2.style.alignItems = "center";
+    el2.style.justifyContent = "center";
+    el2.style.width = `${size}px`;
+    el2.style.height = `${size}px`;
+    el2.style.flexShrink = "0";
+    el2.style.position = "relative";
+    el2.setAttribute("role", "img");
+    if (src) {
+      el2.removeAttribute("aria-label");
+      el2.style.fontSize = "";
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = alt;
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.draggable = false;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      el2.appendChild(img);
+    } else {
+      el2.textContent = fallback;
+      el2.style.fontSize = `${Math.max(10, Math.round(size * 0.72))}px`;
+      el2.setAttribute("aria-label", alt || fallback);
+    }
+  }
+  function notifySpriteSubscribers2(key2, src) {
+    const subs = spriteSubscribers2.get(key2);
+    if (!subs) return;
+    subs.forEach((el2) => {
+      if (!el2.isConnected) {
+        unsubscribeIfDisconnected(key2, el2);
+        return;
+      }
+      applySprite2(el2, src);
+    });
+  }
+  function clearSheetCaches() {
+    seedSheetBases = null;
+    eggSheetBases = null;
+    itemSheetBases = null;
+    decorSheetBases = null;
+  }
+  async function fetchSprite2(type, id) {
+    if (typeof window === "undefined") return null;
+    if (typeof Sprites?.getTile !== "function") return null;
+    const tileRef = getTileRef(type, id);
+    const index = toTileIndex2(tileRef);
+    if (index == null) return null;
+    const bases = getBases(type);
+    for (const base of bases) {
+      try {
+        const tile = await Sprites.getTile(base, index, "canvas");
+        const canvas = tile?.data;
+        if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
+        const copy2 = document.createElement("canvas");
+        copy2.width = canvas.width;
+        copy2.height = canvas.height;
+        const ctx = copy2.getContext("2d");
+        if (!ctx) continue;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(canvas, 0, 0);
+        return copy2.toDataURL();
+      } catch {
+      }
+    }
+    return null;
+  }
+  function ensureSpriteListener2() {
+    if (listenerAttached2 || typeof window === "undefined") return;
+    listenerAttached2 = true;
+    window.addEventListener("mg:sprite-detected", () => {
+      spriteCache2.clear();
+      spritePromises2.clear();
+      clearSheetCaches();
+      const keys = Array.from(spriteSubscribers2.keys());
+      keys.forEach((key2) => {
+        const parsed = parseSpriteKey(key2);
+        if (!parsed) return;
+        void loadSprite2(parsed.type, parsed.id, key2);
+      });
+    });
+  }
+  function loadSprite2(type, id, key2 = spriteKey(type, id)) {
+    if (typeof window === "undefined") {
+      spriteCache2.set(key2, null);
+      notifySpriteSubscribers2(key2, null);
+      return Promise.resolve(null);
+    }
+    const cached = spriteCache2.get(key2);
+    if (cached !== void 0) {
+      notifySpriteSubscribers2(key2, cached);
+      return Promise.resolve(cached);
+    }
+    const inflight = spritePromises2.get(key2);
+    if (inflight) return inflight;
+    const promise = fetchSprite2(type, id).then((src) => {
+      spriteCache2.set(key2, src);
+      spritePromises2.delete(key2);
+      notifySpriteSubscribers2(key2, src);
+      return src;
+    }).catch(() => {
+      spritePromises2.delete(key2);
+      return null;
+    });
+    spritePromises2.set(key2, promise);
+    return promise;
+  }
+  function createShopSprite(type, id, options = {}) {
+    const size = Math.max(12, options.size ?? 36);
+    const fallback = String(options.fallback ?? defaultFallback(type));
+    const alt = typeof options.alt === "string" ? options.alt : "";
+    const el2 = document.createElement("span");
+    spriteConfig2.set(el2, { size, fallback, alt });
+    if (typeof window === "undefined") {
+      applySprite2(el2, null);
+      return el2;
+    }
+    const key2 = spriteKey(type, id);
+    subscribeSprite2(key2, el2);
+    applySprite2(el2, spriteCache2.get(key2) ?? null);
+    ensureSpriteListener2();
+    void loadSprite2(type, id, key2);
+    return el2;
+  }
+
+  // src/utils/catalogIndex.ts
   function seedNameFromSpecies(species, cat = plantCatalog) {
     const e = cat?.[species];
     return e?.seed?.name ?? e?.plant?.name ?? e?.crop?.name ?? void 0;
@@ -16038,71 +16318,6 @@ try{importScripts("${abs}")}catch(e){}
   function decorNameFromId(decorId, cat = decorCatalog) {
     return cat?.[decorId]?.name ?? void 0;
   }
-  var _seedImgCache = /* @__PURE__ */ new Map();
-  var _eggImgCache = /* @__PURE__ */ new Map();
-  var _toolImgCache = /* @__PURE__ */ new Map();
-  var _decorImgCache = /* @__PURE__ */ new Map();
-  function seedImageFromSpecies(species, cat = plantCatalog) {
-    const key2 = String(species || "").toLowerCase();
-    if (_seedImgCache.has(key2)) return _seedImgCache.get(key2);
-    const entry = cat[species];
-    const src = _toDataURI(entry?.seed?.img64);
-    _seedImgCache.set(key2, src);
-    return src;
-  }
-  var _eggIndexes = null;
-  function getEggIndexes(cat) {
-    if (!_eggIndexes) _eggIndexes = /* @__PURE__ */ new WeakMap();
-    const hit = _eggIndexes.get(cat);
-    if (hit) return hit;
-    const byLowerId = /* @__PURE__ */ new Map();
-    const byTileRef = /* @__PURE__ */ new Map();
-    for (const [id, e] of Object.entries(cat)) {
-      const lc = id.toLowerCase();
-      if (!byLowerId.has(lc)) byLowerId.set(lc, id);
-      const tr = e?.tileRef;
-      if (tr != null) {
-        const k1 = String(tr).toLowerCase();
-        const k2 = tileRefKey(tr);
-        if (!byTileRef.has(k1)) byTileRef.set(k1, id);
-        if (!byTileRef.has(k2)) byTileRef.set(k2, id);
-      }
-      const last = tileRefKey(id);
-      if (!byTileRef.has(last)) byTileRef.set(last, id);
-    }
-    const idx = { byLowerId, byTileRef };
-    _eggIndexes.set(cat, idx);
-    return idx;
-  }
-  function eggImageFromEggId(eggId, cat = eggCatalog) {
-    const key2 = String(eggId || "");
-    if (!key2) return void 0;
-    const ck = key2.toLowerCase();
-    if (_eggImgCache.has(ck)) return _eggImgCache.get(ck);
-    const { byLowerId } = getEggIndexes(cat);
-    const canonical = cat[key2] ? key2 : byLowerId.get(ck);
-    const src = _toDataURI((canonical ? cat[canonical] : void 0)?.img64);
-    _eggImgCache.set(ck, src);
-    return src;
-  }
-  function toolImageFromId(toolId, cat = toolCatalog) {
-    const id = String(toolId || "").trim();
-    if (!id) return void 0;
-    const cacheKey = id.toLowerCase();
-    if (_toolImgCache.has(cacheKey)) return _toolImgCache.get(cacheKey);
-    const entry = cat[id] ?? cat[cacheKey];
-    const src = _toDataURI(entry?.img64);
-    _toolImgCache.set(cacheKey, src);
-    return src;
-  }
-  function decorImageFromId(decorId, cat = decorCatalog) {
-    const cacheKey = String(decorId || "").toLowerCase();
-    if (_decorImgCache.has(cacheKey)) return _decorImgCache.get(cacheKey);
-    const raw = cat?.[decorId]?.img64;
-    const src = _toDataURI(raw);
-    _decorImgCache.set(cacheKey, src);
-    return src;
-  }
 
   // src/ui/menus/notificationOverlay.ts
   var style = (el2, s) => Object.assign(el2.style, s);
@@ -16110,7 +16325,6 @@ try{importScripts("${abs}")}catch(e){}
     for (const [k, v] of Object.entries(props)) el2.style.setProperty(k, v);
   };
   function iconOf(id, size = 24) {
-    const [type, raw] = id.split(":");
     const wrap = document.createElement("div");
     Object.assign(wrap.style, {
       width: `${size}px`,
@@ -16120,43 +16334,22 @@ try{importScripts("${abs}")}catch(e){}
       justifyContent: "center",
       flex: `0 0 ${size}px`
     });
-    const addImg = (src) => {
-      if (!src) return false;
-      const img = new Image();
-      Object.assign(img, {
-        src,
-        width: size,
-        height: size,
-        decoding: "async",
-        loading: "lazy",
-        draggable: false
+    const [rawType, rawId] = id.split(":");
+    const type = rawType === "Seed" || rawType === "Egg" || rawType === "Tool" || rawType === "Decor" ? rawType : null;
+    const fallback = type === "Seed" ? "\u{1F331}" : type === "Egg" ? "\u{1F95A}" : type === "Tool" ? "\u{1F9F0}" : type === "Decor" ? "\u{1F3E0}" : "\u{1F514}";
+    if (type && rawId) {
+      const sprite = createShopSprite(type, rawId, {
+        size,
+        fallback,
+        alt: labelOf(id)
       });
-      Object.assign(img.style, { width: "100%", height: "100%", objectFit: "contain" });
-      wrap.appendChild(img);
-      return true;
-    };
-    const emoji = (s) => {
+      wrap.appendChild(sprite);
+    } else {
       const span = document.createElement("span");
-      span.textContent = s;
-      span.style.fontSize = `${size - 2}px`;
+      span.textContent = fallback;
+      span.style.fontSize = `${Math.max(10, size - 2)}px`;
       span.setAttribute("aria-hidden", "true");
       wrap.appendChild(span);
-    };
-    switch (type) {
-      case "Seed":
-        if (!addImg(seedImageFromSpecies(raw))) emoji("\u{1F331}");
-        break;
-      case "Egg":
-        if (!addImg(eggImageFromEggId(raw))) emoji("\u{1F95A}");
-        break;
-      case "Tool":
-        if (!addImg(toolImageFromId(raw))) emoji("\u{1F9F0}");
-        break;
-      case "Decor":
-        if (!addImg(decorImageFromId(raw))) emoji("\u{1F3E0}");
-        break;
-      default:
-        emoji("\u{1F514}");
     }
     return wrap;
   }
@@ -25171,7 +25364,7 @@ next: ${next}`;
   var plantSpriteCache = /* @__PURE__ */ new Map();
   var plantSpritePromises = /* @__PURE__ */ new Map();
   var plantSpriteSubscribers = /* @__PURE__ */ new Map();
-  var spriteConfig2 = /* @__PURE__ */ new WeakMap();
+  var spriteConfig3 = /* @__PURE__ */ new WeakMap();
   var plantSpriteListenerAttached = false;
   var lockerSpritesPreloaded = false;
   var lockerSpritePreloadTimer = null;
@@ -25222,7 +25415,7 @@ next: ${next}`;
       plantSpriteSubscribers.set(seedKey, subs);
     }
     subs.add(el2);
-    spriteConfig2.set(el2, config);
+    spriteConfig3.set(el2, config);
   }
   function notifyPlantSpriteSubscribers(seedKey, src) {
     const subs = plantSpriteSubscribers.get(seedKey);
@@ -25230,10 +25423,10 @@ next: ${next}`;
     subs.forEach((el2) => {
       if (!el2.isConnected) {
         subs.delete(el2);
-        spriteConfig2.delete(el2);
+        spriteConfig3.delete(el2);
         return;
       }
-      applySprite2(el2, src);
+      applySprite3(el2, src);
     });
     if (subs.size === 0) {
       plantSpriteSubscribers.delete(seedKey);
@@ -25259,19 +25452,19 @@ next: ${next}`;
     const normalizedBases = bases.map((base) => base.toLowerCase());
     const findPreferred = (predicate) => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
     if (TALL_PLANT_SEEDS.has(seedKey)) {
-      const tallExact = findPreferred((_, norm4) => norm4 === "tallplants");
+      const tallExact = findPreferred((_, norm3) => norm3 === "tallplants");
       if (tallExact.length) return tallExact;
-      const tallAny = findPreferred((base, norm4) => /tall/.test(base) || /tall/.test(norm4));
+      const tallAny = findPreferred((base, norm3) => /tall/.test(base) || /tall/.test(norm3));
       if (tallAny.length) return tallAny;
     } else {
-      const plantsExact = findPreferred((_, norm4) => norm4 === "plants");
+      const plantsExact = findPreferred((_, norm3) => norm3 === "plants");
       if (plantsExact.length) return plantsExact;
-      const nonTall = findPreferred((base, norm4) => !/tall/.test(base) && !/tall/.test(norm4));
+      const nonTall = findPreferred((base, norm3) => !/tall/.test(base) && !/tall/.test(norm3));
       if (nonTall.length) return nonTall;
     }
     return bases;
   }
-  function toTileIndex2(tileRef, bases = []) {
+  function toTileIndex3(tileRef, bases = []) {
     const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
     if (!Number.isFinite(value)) return null;
     if (value <= 0) return value;
@@ -25289,7 +25482,7 @@ next: ${next}`;
     if (!entry) return null;
     const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
     const bases = plantSheetBases(seedKey);
-    const index = toTileIndex2(tileRef, bases);
+    const index = toTileIndex3(tileRef, bases);
     if (index == null) return null;
     for (const base of bases) {
       try {
@@ -25310,8 +25503,8 @@ next: ${next}`;
     }
     return null;
   }
-  function applySprite2(el2, src) {
-    const cfg = spriteConfig2.get(el2);
+  function applySprite3(el2, src) {
+    const cfg = spriteConfig3.get(el2);
     if (!cfg) return;
     const { size, fallback } = cfg;
     el2.innerHTML = "";
@@ -25366,7 +25559,7 @@ next: ${next}`;
     const el2 = document.createElement("span");
     subscribePlantSprite(seedKey, el2, { size, fallback });
     const cached = plantSpriteCache.get(seedKey);
-    applySprite2(el2, cached ?? null);
+    applySprite3(el2, cached ?? null);
     loadPlantSprite(seedKey);
     return el2;
   }
@@ -25413,7 +25606,7 @@ next: ${next}`;
       mutationSpriteSubscribers.set(tag, subs);
     }
     subs.add(el2);
-    spriteConfig2.set(el2, config);
+    spriteConfig3.set(el2, config);
   }
   function notifyMutationSpriteSubscribers(tag, src) {
     const subs = mutationSpriteSubscribers.get(tag);
@@ -25421,10 +25614,10 @@ next: ${next}`;
     subs.forEach((el2) => {
       if (!el2.isConnected) {
         subs.delete(el2);
-        spriteConfig2.delete(el2);
+        spriteConfig3.delete(el2);
         return;
       }
-      applySprite2(el2, src);
+      applySprite3(el2, src);
     });
     if (subs.size === 0) {
       mutationSpriteSubscribers.delete(tag);
@@ -25434,7 +25627,7 @@ next: ${next}`;
     const entry = WEATHER_MUTATIONS.find((info) => info.key === tag);
     if (!entry || entry.tileRef == null) return null;
     const [base] = mutationSheetBases();
-    const index = toTileIndex2(entry.tileRef, base ? [base] : []);
+    const index = toTileIndex3(entry.tileRef, base ? [base] : []);
     if (index == null || !base) return null;
     try {
       const tile = await Sprites.getTile(base, index, "canvas");
@@ -25480,7 +25673,7 @@ next: ${next}`;
     const el2 = document.createElement("span");
     subscribeMutationSprite(tag, el2, { size, fallback });
     const cached = mutationSpriteCache.get(tag);
-    applySprite2(el2, cached ?? null);
+    applySprite3(el2, cached ?? null);
     loadMutationSprite(tag);
     return el2;
   }
@@ -28426,7 +28619,7 @@ next: ${next}`;
     if (!entry) return null;
     const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
     const bases = plantSheetBases2(seedKey);
-    const index = toTileIndex3(tileRef, bases);
+    const index = toTileIndex4(tileRef, bases);
     if (index == null) return null;
     for (const base of bases) {
       try {
@@ -28563,19 +28756,19 @@ next: ${next}`;
     const normalizedBases = bases.map((base) => base.toLowerCase());
     const findPreferred = (predicate) => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
     if (TALL_PLANT_SEEDS2.has(seedKey)) {
-      const tallExact = findPreferred((_, norm4) => norm4 === "tallplants");
+      const tallExact = findPreferred((_, norm3) => norm3 === "tallplants");
       if (tallExact.length) return tallExact;
-      const tallAny = findPreferred((base, norm4) => /tall/.test(base) || /tall/.test(norm4));
+      const tallAny = findPreferred((base, norm3) => /tall/.test(base) || /tall/.test(norm3));
       if (tallAny.length) return tallAny;
     } else {
-      const plantsExact = findPreferred((_, norm4) => norm4 === "plants");
+      const plantsExact = findPreferred((_, norm3) => norm3 === "plants");
       if (plantsExact.length) return plantsExact;
-      const nonTall = findPreferred((base, norm4) => !/tall/.test(base) && !/tall/.test(norm4));
+      const nonTall = findPreferred((base, norm3) => !/tall/.test(base) && !/tall/.test(norm3));
       if (nonTall.length) return nonTall;
     }
     return bases.length ? bases : ["plants"];
   }
-  function toTileIndex3(tileRef, bases = []) {
+  function toTileIndex4(tileRef, bases = []) {
     const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
     if (!Number.isFinite(value)) return null;
     if (value <= 0) return value;
@@ -29404,293 +29597,6 @@ next: ${next}`;
       renderList();
     });
     ui.mount(container);
-  }
-
-  // src/utils/shopSprites.ts
-  var spriteConfig3 = /* @__PURE__ */ new WeakMap();
-  var spriteSubscribers2 = /* @__PURE__ */ new Map();
-  var spriteCache2 = /* @__PURE__ */ new Map();
-  var spritePromises2 = /* @__PURE__ */ new Map();
-  var listenerAttached2 = false;
-  var seedSheetBases = null;
-  var eggSheetBases = null;
-  var itemSheetBases = null;
-  var decorSheetBases = null;
-  var FALLBACK_BASES = {
-    Seed: ["seeds", "Seeds"],
-    Egg: ["pets", "Pets", "eggs", "Eggs"],
-    Tool: ["items", "Items"],
-    Decor: ["decor", "Decor"]
-  };
-  function spriteKey(type, id) {
-    return `${type}::${id}`;
-  }
-  function parseSpriteKey(key2) {
-    const idx = key2.indexOf("::");
-    if (idx <= 0) return null;
-    const type = key2.slice(0, idx);
-    const id = key2.slice(idx + 2);
-    if (!id) return null;
-    if (type !== "Seed" && type !== "Egg" && type !== "Tool" && type !== "Decor") return null;
-    return { type, id };
-  }
-  function defaultFallback(type) {
-    switch (type) {
-      case "Seed":
-        return "\u{1F331}";
-      case "Egg":
-        return "\u{1F95A}";
-      case "Tool":
-        return "\u{1F9F0}";
-      default:
-        return "\u{1F3E0}";
-    }
-  }
-  function normalizeBase(url) {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  }
-  function uniqueBases(urls, fallback) {
-    const set2 = /* @__PURE__ */ new Set();
-    for (const url of urls) {
-      if (typeof url === "string" && url.length) {
-        set2.add(normalizeBase(url));
-      }
-    }
-    if (set2.size === 0) {
-      for (const base of fallback) set2.add(base);
-    }
-    return [...set2];
-  }
-  function getSeedSheetBases() {
-    if (seedSheetBases) return seedSheetBases;
-    try {
-      if (typeof Sprites.listSeeds === "function") {
-        seedSheetBases = uniqueBases(Sprites.listSeeds(), FALLBACK_BASES.Seed);
-        return seedSheetBases;
-      }
-    } catch {
-    }
-    seedSheetBases = [...FALLBACK_BASES.Seed];
-    return seedSheetBases;
-  }
-  function getEggSheetBases() {
-    if (eggSheetBases) return eggSheetBases;
-    try {
-      if (typeof Sprites.listPets === "function") {
-        eggSheetBases = uniqueBases(Sprites.listPets(), FALLBACK_BASES.Egg);
-        return eggSheetBases;
-      }
-    } catch {
-    }
-    eggSheetBases = [...FALLBACK_BASES.Egg];
-    return eggSheetBases;
-  }
-  function getItemSheetBases() {
-    if (itemSheetBases) return itemSheetBases;
-    try {
-      if (typeof Sprites.listItems === "function") {
-        itemSheetBases = uniqueBases(Sprites.listItems(), FALLBACK_BASES.Tool);
-        return itemSheetBases;
-      }
-    } catch {
-    }
-    itemSheetBases = [...FALLBACK_BASES.Tool];
-    return itemSheetBases;
-  }
-  function getDecorSheetBases() {
-    if (decorSheetBases) return decorSheetBases;
-    try {
-      if (typeof Sprites.listTilesByCategory === "function") {
-        decorSheetBases = uniqueBases(Sprites.listTilesByCategory(/decor/i), FALLBACK_BASES.Decor);
-        return decorSheetBases;
-      }
-    } catch {
-    }
-    decorSheetBases = [...FALLBACK_BASES.Decor];
-    return decorSheetBases;
-  }
-  function getBases(type) {
-    switch (type) {
-      case "Seed":
-        return getSeedSheetBases();
-      case "Egg":
-        return getEggSheetBases();
-      case "Tool":
-        return getItemSheetBases();
-      case "Decor":
-        return getDecorSheetBases();
-    }
-  }
-  function toTileIndex4(tileRef) {
-    if (tileRef == null) return null;
-    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
-    if (!Number.isFinite(value)) return null;
-    if (value <= 0) return value;
-    return value - 1;
-  }
-  function getTileRef(type, id) {
-    switch (type) {
-      case "Seed":
-        return plantCatalog?.[id]?.seed?.tileRef ?? null;
-      case "Egg":
-        return eggCatalog?.[id]?.tileRef ?? null;
-      case "Tool":
-        return toolCatalog?.[id]?.tileRef ?? null;
-      case "Decor":
-        return decorCatalog?.[id]?.tileRef ?? null;
-    }
-  }
-  function subscribeSprite2(key2, el2) {
-    let subs = spriteSubscribers2.get(key2);
-    if (!subs) {
-      subs = /* @__PURE__ */ new Set();
-      spriteSubscribers2.set(key2, subs);
-    }
-    subs.add(el2);
-  }
-  function unsubscribeIfDisconnected(key2, el2) {
-    const subs = spriteSubscribers2.get(key2);
-    if (!subs) return;
-    if (!el2.isConnected) {
-      subs.delete(el2);
-      spriteConfig3.delete(el2);
-    }
-    if (subs.size === 0) {
-      spriteSubscribers2.delete(key2);
-    }
-  }
-  function applySprite3(el2, src) {
-    const cfg = spriteConfig3.get(el2);
-    if (!cfg) return;
-    const { size, fallback, alt } = cfg;
-    el2.innerHTML = "";
-    el2.style.display = "inline-flex";
-    el2.style.alignItems = "center";
-    el2.style.justifyContent = "center";
-    el2.style.width = `${size}px`;
-    el2.style.height = `${size}px`;
-    el2.style.flexShrink = "0";
-    el2.style.position = "relative";
-    el2.setAttribute("role", "img");
-    if (src) {
-      el2.removeAttribute("aria-label");
-      el2.style.fontSize = "";
-      const img = document.createElement("img");
-      img.src = src;
-      img.alt = alt;
-      img.decoding = "async";
-      img.loading = "lazy";
-      img.draggable = false;
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-      el2.appendChild(img);
-    } else {
-      el2.textContent = fallback;
-      el2.style.fontSize = `${Math.max(10, Math.round(size * 0.72))}px`;
-      el2.setAttribute("aria-label", alt || fallback);
-    }
-  }
-  function notifySpriteSubscribers2(key2, src) {
-    const subs = spriteSubscribers2.get(key2);
-    if (!subs) return;
-    subs.forEach((el2) => {
-      if (!el2.isConnected) {
-        unsubscribeIfDisconnected(key2, el2);
-        return;
-      }
-      applySprite3(el2, src);
-    });
-  }
-  function clearSheetCaches() {
-    seedSheetBases = null;
-    eggSheetBases = null;
-    itemSheetBases = null;
-    decorSheetBases = null;
-  }
-  async function fetchSprite2(type, id) {
-    if (typeof window === "undefined") return null;
-    if (typeof Sprites?.getTile !== "function") return null;
-    const tileRef = getTileRef(type, id);
-    const index = toTileIndex4(tileRef);
-    if (index == null) return null;
-    const bases = getBases(type);
-    for (const base of bases) {
-      try {
-        const tile = await Sprites.getTile(base, index, "canvas");
-        const canvas = tile?.data;
-        if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-        const copy2 = document.createElement("canvas");
-        copy2.width = canvas.width;
-        copy2.height = canvas.height;
-        const ctx = copy2.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy2.toDataURL();
-      } catch {
-      }
-    }
-    return null;
-  }
-  function ensureSpriteListener2() {
-    if (listenerAttached2 || typeof window === "undefined") return;
-    listenerAttached2 = true;
-    window.addEventListener("mg:sprite-detected", () => {
-      spriteCache2.clear();
-      spritePromises2.clear();
-      clearSheetCaches();
-      const keys = Array.from(spriteSubscribers2.keys());
-      keys.forEach((key2) => {
-        const parsed = parseSpriteKey(key2);
-        if (!parsed) return;
-        void loadSprite2(parsed.type, parsed.id, key2);
-      });
-    });
-  }
-  function loadSprite2(type, id, key2 = spriteKey(type, id)) {
-    if (typeof window === "undefined") {
-      spriteCache2.set(key2, null);
-      notifySpriteSubscribers2(key2, null);
-      return Promise.resolve(null);
-    }
-    const cached = spriteCache2.get(key2);
-    if (cached !== void 0) {
-      notifySpriteSubscribers2(key2, cached);
-      return Promise.resolve(cached);
-    }
-    const inflight = spritePromises2.get(key2);
-    if (inflight) return inflight;
-    const promise = fetchSprite2(type, id).then((src) => {
-      spriteCache2.set(key2, src);
-      spritePromises2.delete(key2);
-      notifySpriteSubscribers2(key2, src);
-      return src;
-    }).catch(() => {
-      spritePromises2.delete(key2);
-      return null;
-    });
-    spritePromises2.set(key2, promise);
-    return promise;
-  }
-  function createShopSprite(type, id, options = {}) {
-    const size = Math.max(12, options.size ?? 36);
-    const fallback = String(options.fallback ?? defaultFallback(type));
-    const alt = typeof options.alt === "string" ? options.alt : "";
-    const el2 = document.createElement("span");
-    spriteConfig3.set(el2, { size, fallback, alt });
-    if (typeof window === "undefined") {
-      applySprite3(el2, null);
-      return el2;
-    }
-    const key2 = spriteKey(type, id);
-    subscribeSprite2(key2, el2);
-    applySprite3(el2, spriteCache2.get(key2) ?? null);
-    ensureSpriteListener2();
-    void loadSprite2(type, id, key2);
-    return el2;
   }
 
   // src/ui/menus/notifier.ts
