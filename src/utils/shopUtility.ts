@@ -32,6 +32,8 @@ const ROW_SELECTOR  = "div.McFlex.css-b9riu6";
 const INDEX_ATTR    = "data-tm-shop-index";
 
 const RESCAN_MS = 20;
+const LIST_HINT_ATTR = "data-tm-shop-type";
+const listTypeMemo = new WeakMap<Element, ShopType>();
 
 type RemainingDetails = {
   notifierItemId: string | null;
@@ -55,6 +57,43 @@ const shopInventoryLengths: Partial<Record<ShopType, number>> = {};
 
 let shopInventoryInitStarted = false;
 const shopInventoryUnsubs: Partial<Record<ShopType, (() => void) | null>> = {};
+
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function headingToShopType(txt: string): ShopType | null {
+  const s = stripDiacritics(String(txt || "").toLowerCase());
+  // exemples possibles: "new decor in", "new seeds in", "new eggs in", "new tools in"
+  if (/\bdecor|decors|deco\b/.test(s)) return "decor";
+  if (/\bseed|seeds|graine|graines\b/.test(s)) return "plant";
+  if (/\begg|eggs|oeuf|oeufs\b/.test(s)) return "egg";
+  if (/\btool|tools|outil|outils\b/.test(s)) return "tool";
+  return null;
+}
+
+/** Essaie de trouver le heading (.chakra-text.css-1fq51pf) le plus proche de la liste. */
+function findShopHeadingNear(listRoot: Element): string | null {
+  // 1) frère précédant direct
+  const prev = listRoot.previousElementSibling?.querySelector?.(".chakra-text.css-1fq51pf") as HTMLElement | null;
+  if (prev?.innerText?.trim()) return prev.innerText.trim();
+
+  // 2) enfant direct du parent
+  const parent = listRoot.parentElement;
+  const direct = parent?.querySelector?.(":scope > .chakra-text.css-1fq51pf") as HTMLElement | null;
+  if (direct?.innerText?.trim()) return direct.innerText.trim();
+
+  // 3) remonte un peu l’arbre et scanne en priorité les éléments proches
+  let scope: Element | null = parent ?? listRoot;
+  for (let i = 0; i < 3 && scope; i++) {
+    const cand = scope.querySelector(".chakra-text.css-1fq51pf") as HTMLElement | null;
+    if (cand?.innerText?.trim()) return cand.innerText.trim();
+    scope = scope.parentElement;
+  }
+
+  // 4) dernier filet: rien trouvé
+  return null;
+}
 
 function extractInventoryId(shop: ShopType, entry: any): string | null {
   if (!entry) return null;
@@ -94,6 +133,7 @@ function updateShopInventoryCache(shop: ShopType, data: any): void {
 async function initShopInventoryWatchers(): Promise<void> {
   for (const shop of SHOP_TYPES) {
     const atom = SHOP_ATOMS[shop];
+    console.log(await atom.get())
     if (!atom) continue;
 
     if (!shopInventoryInitStarted) return;
@@ -217,20 +257,59 @@ function getExpectedSizes(): Partial<Record<ShopType, number>> {
   const sizes: Partial<Record<ShopType, number>> = {};
   for (const shop of SHOP_TYPES) {
     const cached = shopInventoryLengths[shop];
+    console.log("cached: ", cached)
     if (typeof cached === "number") {
       sizes[shop] = cached;
     } else if (typeof overrides[shop] === "number") {
       sizes[shop] = overrides[shop];
     }
   }
+  console.log("sizes: ", sizes)
   return sizes;
 }
 
 function detectShopByCount(total: number): ShopType | null {
   const sizes = getExpectedSizes();
   const matches = SHOP_TYPES.filter((t) => typeof sizes[t] === "number" && sizes[t] === total);
+  console.log(matches)
   return matches.length === 1 ? matches[0] : null;
 }
+
+function detectShopFromHeadingOrCount(
+  listRoot: Element,
+  total: number,
+  sampleItemEl?: Element | null,
+  idx0?: number
+): ShopType | null {
+  // mémo déjà connu
+  const memo = listTypeMemo.get(listRoot);
+  if (memo) return memo;
+  const attr = listRoot.getAttribute(LIST_HINT_ATTR) as ShopType | null;
+  if (attr) return attr;
+
+  // 1) Heading
+  const heading = findShopHeadingNear(listRoot);
+  if (heading) {
+    const t = headingToShopType(heading);
+    if (t) {
+      listRoot.setAttribute(LIST_HINT_ATTR, t);
+      listTypeMemo.set(listRoot, t);
+      return t;
+    }
+  }
+
+  // 2) fallback: ta logique par taille
+  const byCount = detectShopByCount(total);
+  if (byCount) {
+    listRoot.setAttribute(LIST_HINT_ATTR, byCount);
+    listTypeMemo.set(listRoot, byCount);
+    return byCount;
+  }
+
+  // 3) encore rien: on laisse null (tes autres heuristiques pourront tenter leur chance)
+  return null;
+}
+
 
 // ——— number parsing (K/M/B/T + milliers) ———
 function parseCompactNumber(s: string): number | undefined {
@@ -377,7 +456,7 @@ function getRemainingDetails(shop: ShopType | null, itemId: string | null): Rema
 // ——— état disabled : si l’item contient .chakra-text.css-fcn4vq ———
 function isItemDisabled(itemEl: Element | null): boolean {
   if (!itemEl) return false;
-  return !!itemEl.querySelector(".chakra-text.css-fcn4vq");
+  return !!itemEl.querySelector(".chakra-text.css-1ox18rb");
 }
 
 // ——— DOM utils ———
@@ -482,18 +561,24 @@ function createButton(templateBtn?: HTMLElement): HTMLButtonElement {
   btn.appendChild(flex);
 
   btn.addEventListener("click", (ev) => {
+    console.log("test")
     ev.preventDefault();
     ev.stopPropagation();
 
     if ((btn as HTMLButtonElement).disabled) return;
 
     const itemEl   = btn.closest(ITEM_SELECTOR) as Element | null;
+    console.log("itemEl ", itemEl)
     const listRoot = (itemEl?.closest(LIST_SELECTOR) as Element | null) || document.body;
+    console.log("listRoot ", listRoot)
 
     const items = getListItems(listRoot);
+    console.log("items ", items)
     const total = items.length;
+    console.log("total ", total)
 
     const attrIndex = itemEl?.getAttribute(INDEX_ATTR);
+    console.log("attrIndex ", attrIndex)
     let idx0 =
       attrIndex != null && attrIndex !== ""
         ? Number.parseInt(attrIndex, 10)
@@ -502,14 +587,18 @@ function createButton(templateBtn?: HTMLElement): HTMLButtonElement {
       idx0 = itemEl ? items.indexOf(itemEl) : -1;
     }
     const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
+    console.log("idx1 ", idx1)
 
-    const shop = detectShopByCount(total);
+    const shop = detectShopFromHeadingOrCount(listRoot, total, itemEl, idx0);
+    console.log("shop ", shop)
 
     let itemId: string | null = null;
     let itemName: string | null = null;
     let reason: "coin+credit" | "coin" | "credit" | "index" | "inventory" | "none" = "none";
     let coinParsed: number | undefined;
     let creditParsed: number | undefined;
+
+    console.log("shop: ", shop, " itemEl: ", itemEl)
 
     if (shop && itemEl) {
       const row = findRowForItem(itemEl);
@@ -695,7 +784,7 @@ export interface ReorderController {
 export const DEFAULTS = {
   containerSelector: '.McFlex.css-1lfov12',
   itemSelector: '.McFlex.css-1kkwxjt',
-  flagSelector: '.chakra-text.css-rlkzj4',
+  flagSelector: '.chakra-text.css-pyjzrq',
 } as const;
 
 /** Lance un passage unique de réordonnancement, sans installer d'observer */

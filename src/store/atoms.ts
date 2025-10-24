@@ -114,10 +114,6 @@ export const expandedPetSlotId = makeAtom<string>("expandedPetSlotIdAtom")
 export const myCropItemsToSell = makeAtom<any>("myCropItemsToSellAtom")
 
 export const shops = makeAtom<any>("shopsAtom");
-export const seedShop = makeAtom<any>("seedShopAtom")
-export const toolShop = makeAtom<any>("toolShopAtom")
-export const eggShop = makeAtom<any>("eggShopAtom")
-export const decorShop = makeAtom<any>("decorShopAtom")
 export const myShopPurchases = makeAtom<any>("myShopPurchasesAtom");
 
 export const numPlayers = makeAtom<number>("numPlayersAtom");
@@ -156,6 +152,12 @@ export const stateChildData = makeView<any, any>("stateAtom", { path: "child.dat
 export const stateShops = makeView<any, any>("stateAtom", { path: "child.data.shops" });
 export const stateUserSlots = makeView<any, any>("stateAtom", { path: "child.data.userSlots" });
 export const statePlayers = makeView<any, any[] | undefined>("stateAtom", { path: "data.players" });
+
+/* Shops view */
+export const seedShop  = makeView<any, any>("shopsAtom", { path: "seed"  });
+export const toolShop  = makeView<any, any>("shopsAtom", { path: "tool"  });
+export const eggShop   = makeView<any, any>("shopsAtom", { path: "egg"   });
+export const decorShop = makeView<any, any>("shopsAtom", { path: "decor" });
 
 /* ============================================================================
  * Signatures / Channels de diff

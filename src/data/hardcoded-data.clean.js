@@ -26,9 +26,23 @@ export const harvestType = {
 };
 
 export const tileRefsMap = {
-  Dirt1: 6, Dirt2: 7, Dirt3: 8,
-  Bush1: 28, Bush2: 38, BushHomer: 48,
-  Sky0: 24, Sky1: 25, Sky2: 26, Sky3: 27, Sky4: 35, Sky5: 36, Sky6: 37, Sky7: 45, Sky8: 46, Sky9: 47};
+    Dirt1: 6,
+    Dirt2: 7,
+    Dirt3: 8,
+    Sky0: 24,
+    Sky1: 25,
+    Sky2: 26,
+    Sky3: 27,
+    Bush1: 28,
+    Sky4: 35,
+    Sky5: 36,
+    Sky6: 37,
+    Bush2: 38,
+    Sky7: 45,
+    Sky8: 46,
+    Sky9: 47,
+    BushHomer: 48
+  };
 
 export const tileRefsPlants = {
   DirtPatch: 1,
@@ -200,63 +214,63 @@ export const tileRefsMutationLabels = {
   Ambercharged: "Amberbound"};
 
 export const tileRefsDecor = {
-  // Rocks
-  SmallRock: 11,
-  MediumRock: 21,
-  LargeRock: 31,
-
-  // Wood
-  WoodPedestal: 4,
-  WoodBench: 13,
-  WoodBenchBackwards: 14,
-  WoodBenchSideways: 24,
-  WoodBucketPedestal: 34,
-  WoodLampPost: 23,
-  WoodStool: 63,
-  WoodArch: 33,
-  WoodArchSide: 43,
-  WoodBridge: 34,
-  WoodBridgeSideways: 44,
-  WoodOwl: 53,
-  WoodGardenBox: 74,
-  WoodenWindmill: 73,
-
-  // Stone
-  StonePedestal: 6,
-  StoneBench: 15,
-  StoneBenchSideways: 26,
-  StoneBucketPedestal: 16,
-  StoneLampPost: 25,
-  StoneColumn: 26,
-  StoneArch: 35,
-  StoneArchSideways: 45,
-  StoneBridge: 36,
-  StoneBridgeSideways: 46,
-  StoneGnome: 55,
-  StoneGardenBox: 66,
-  StoneBirdBath: 56,
-
-  // Marble
-  MarblePedestal: 8,
-  MarbleBench: 17,
-  MarbleBenchBackwards: 18,
-  MarbleBenchSideways: 28,
-  MarbleBucketPedestal: 58,
-  MarbleLampPost: 27,
-  MarbleColumn: 68,
-  MarbleArch: 37,
-  MarbleArchSideways: 47,
-  MarbleBridge: 38,
-  MarbleBridgeSideways: 48,
-  MarbleBlobling: 57,
-  MarbleGardenBox: 78,
-
-  // Misc
-  StrawScarecrow: 49,
-  MiniFairyCottage: 50,
-  MiniFairyForge: 40,
-  MiniFairyKeep: 60,
-  Birdhouse: 54
+    WoodPedestal: 4,
+    StonePedestal: 6,
+    MarblePedestal: 8,
+    SmallRock: 11,
+    WoodBench: 13,
+    WoodBenchBackwards: 14,
+    StoneBench: 15,
+    StoneBucketPedestal: 16,
+    MarbleBench: 17,
+    MarbleBenchBackwards: 18,
+    MediumRock: 21,
+    WoodLampPost: 23,
+    WoodBenchSideways: 24,
+    StoneLampPost: 25,
+    StoneBenchSideways: 26,
+    StoneColumn: 26,
+    MarbleLampPost: 27,
+    MarbleBenchSideways: 28,
+    HayBale: 29,
+    LargeRock: 31,
+    WoodArch: 33,
+    WoodBucketPedestal: 34,
+    WoodBridge: 34,
+    StoneArch: 35,
+    StoneBridge: 36,
+    MarbleArch: 37,
+    MarbleBridge: 38,
+    HayBaleSideways: 39,
+    MiniFairyForge: 40,
+    WoodArchSide: 43,
+    WoodBridgeSideways: 44,
+    StoneArchSideways: 45,
+    StoneBridgeSideways: 46,
+    MarbleArchSideways: 47,
+    MarbleBridgeSideways: 48,
+    StrawScarecrow: 49,
+    MiniFairyCottage: 50,
+    WoodOwl: 53,
+    Birdhouse: 54,
+    StoneGnome: 55,
+    StoneBirdBath: 56,
+    MarbleBlobling: 57,
+    MarbleBucketPedestal: 58,
+    Cauldron: 59,
+    MiniFairyKeep: 60,
+    WoodStool: 63,
+    StoneGardenBox: 66,
+    MarbleColumn: 68,
+    SmallGravestone: 69,
+    SmallGravestoneSideways: 70,
+    WoodenWindmill: 73,
+    WoodGardenBox: 74,
+    MarbleGardenBox: 78,
+    MediumGravestone: 79,
+    MediumGravestoneSideways: 80,
+    LargeGravestone: 89,
+    LargeGravestoneSideways: 90
 };
 
 export const plantCatalog = {
@@ -318,13 +332,13 @@ export const plantCatalog = {
       tileRef: tileRefsTallPlants.Tree, name: "Apple Tree",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.3, y: -1.9,  rotation: -90 },
-        { x: -0.45, y: -1.5, rotation: -75 },
-        { x:  0.15, y: -1.7, rotation: -60 },
-        { x: -0.15, y: -1.15,rotation: -55 },
-        { x:  0.59, y: -1.4, rotation: -45 },
-        { x:  0.36, y: -1.2, rotation: -35 },
-        { x:  0.85, y:  0.6, rotation: -30 }
+        { x: -0.35, y: -2.4,  rotation: 0 },
+        { x: -0.50, y: -2.0,  rotation: 0 },
+        { x:  0.10, y: -2.2,  rotation: 0 },
+        { x: -0.20, y: -1.65, rotation: 0 },
+        { x:  0.55, y: -1.9,  rotation: 0 },
+        { x:  0.30, y: -1.7,  rotation: 0 },
+        { x:  0.40, y:  0.10, rotation: 0 }
       ],
       secondsToMature: 360 * 60,
       baseTileScale: 3,
@@ -678,8 +692,9 @@ export const mutationCatalog = {
 
   Ambershine: { name: "Amberlit",    baseChance: 0, coinMultiplier: 5,  tileRef: tileRefsMutations.Ambershine },
 
-  Dawncharged:{ name: "Dawn Radiant",  baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
-  Ambercharged:{name: "Amber Radiant", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }};
+  Dawncharged:  { name: "Dawnbound",  baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
+  Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged },
+}
 
 export const eggCatalog = {
   CommonEgg: { tileRef: tileRefsPets.CommonEgg, name: "Common Egg", coinPrice: 1e5, creditPrice: 19, rarity: rarity.Common, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 600, faunaSpawnWeights: { Worm: 60, Snail: 35, Bee: 5 } },
@@ -1121,7 +1136,7 @@ export const toolCatalog = {
   },
   Shovel: {
     tileRef: tileRefsItems.Shovel,
-    name: "Shovel",
+    name: "Garden Shovel",
     coinPrice: 1e6,
     creditPrice: 100,
     rarity: rarity.Uncommon,
@@ -1147,63 +1162,54 @@ export const decorCatalog = {
     tileRef: tileRefsDecor.SmallRock,
     name: "Small Garden Rock",
     coinPrice: 1000, creditPrice: 2, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3
+    baseTileScale: 1, isOneTimePurchase: false
   },
   MediumRock: {
     tileRef: tileRefsDecor.MediumRock,
     name: "Medium Garden Rock",
     coinPrice: 2500, creditPrice: 5, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.21
+    baseTileScale: 1, isOneTimePurchase: false
   },
   LargeRock: {
     tileRef: tileRefsDecor.LargeRock,
     name: "Large Garden Rock",
     coinPrice: 5000, creditPrice: 10, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.1
+    baseTileScale: 1, isOneTimePurchase: false
   },
 
   // Bois
   WoodBench: {
     tileRef: tileRefsDecor.WoodBench,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.WoodBenchSideways, flipH: true,  baseTileScale: 1.46, nudgeY: -0.30 },
+      180: { tileRef: tileRefsDecor.WoodBenchBackwards,               },
+      270: { tileRef: tileRefsDecor.WoodBenchSideways,                baseTileScale: 1.46, nudgeY: -0.30 }
+    },
     name: "Wood Bench",
     coinPrice: 10000, creditPrice: 15, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
-  },
-  WoodBenchBackwards: {
-    tileRef: tileRefsDecor.WoodBenchBackwards,
-    name: "Wood Bench (Backwards)",
-    coinPrice: 10000, creditPrice: 15, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
-  },
-  WoodBenchSideways: {
-    tileRef: tileRefsDecor.WoodBenchSideways,
-    name: "Wood Bench (Sideways)",
-    coinPrice: 10000, creditPrice: 15, rarity: rarity.Common,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
+    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.30, avatarNudgeY: -0.18
   },
 
   WoodArch: {
     tileRef: tileRefsDecor.WoodArch,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.WoodArchSide, flipH: true,  baseTileScale: 2.10, nudgeY: -0.48 },
+      180: { tileRef: tileRefsDecor.WoodArch,     flipH: true },
+      270: { tileRef: tileRefsDecor.WoodArchSide,               baseTileScale: 2.10, nudgeY: -0.48 }
+    },
     name: "Wood Arch",
     coinPrice: 20000, creditPrice: 25, rarity: rarity.Common,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
-  },
-  WoodArchSide: {
-    tileRef: tileRefsDecor.WoodArchSide,
-    name: "Wood Arch (Side)",
-    coinPrice: 20000, creditPrice: 25, rarity: rarity.Common,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
+    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.50
   },
 
   WoodBridge: {
     tileRef: tileRefsDecor.WoodBridge,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.WoodBridgeSideways, flipH: true,  baseTileScale: 1.70, nudgeY: -0.28 },
+      180: { tileRef: tileRefsDecor.WoodBridge,         flipH: true },
+      270: { tileRef: tileRefsDecor.WoodBridgeSideways,               baseTileScale: 1.70, nudgeY: -0.28 }
+    },
     name: "Wood Bridge",
-    coinPrice: 40000, creditPrice: 35, rarity: rarity.Common,
-    baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
-  },
-  WoodBridgeSideways: {
-    tileRef: tileRefsDecor.WoodBridgeSideways,
-    name: "Wood Bridge (Sideways)",
     coinPrice: 40000, creditPrice: 35, rarity: rarity.Common,
     baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
   },
@@ -1212,57 +1218,54 @@ export const decorCatalog = {
     tileRef: tileRefsDecor.WoodLampPost,
     name: "Wood Lamp Post",
     coinPrice: 80000, creditPrice: 49, rarity: rarity.Common,
-    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.6
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.60
   },
   WoodOwl: {
     tileRef: tileRefsDecor.WoodOwl,
     name: "Wood Owl",
     coinPrice: 90000, creditPrice: 59, rarity: rarity.Common,
-    baseTileScale: 1.3, isOneTimePurchase: false, nudgeY: -0.4
+    baseTileScale: 1.3, isOneTimePurchase: false, nudgeY: -0.40
   },
   WoodBirdhouse: {
     tileRef: tileRefsDecor.Birdhouse,
     name: "Wood Birdhouse",
     coinPrice: 100000, creditPrice: 69, rarity: rarity.Common,
-    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.6
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.60
   },
 
   // Pierre
   StoneBench: {
     tileRef: tileRefsDecor.StoneBench,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.StoneBenchSideways, flipH: true,  baseTileScale: 1.47, nudgeY: -0.30 },
+      180: { tileRef: tileRefsDecor.StoneBench,         flipH: true },
+      270: { tileRef: tileRefsDecor.StoneBenchSideways,               baseTileScale: 1.47, nudgeY: -0.30 }
+    },
     name: "Stone Bench",
     coinPrice: 1000000, creditPrice: 75, rarity: rarity.Uncommon,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
-  },
-  StoneBenchSideways: {
-    tileRef: tileRefsDecor.StoneBenchSideways,
-    name: "Stone Bench (Sideways)",
-    coinPrice: 1000000, creditPrice: 75, rarity: rarity.Uncommon,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
+    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.30, avatarNudgeY: -0.18
   },
 
   StoneArch: {
     tileRef: tileRefsDecor.StoneArch,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.StoneArchSideways, flipH: true,  baseTileScale: 2.10, nudgeY: -0.44 },
+      180: { tileRef: tileRefsDecor.StoneArch,         flipH: true },
+      270: { tileRef: tileRefsDecor.StoneArchSideways,               baseTileScale: 2.10, nudgeY: -0.44 }
+    },
     name: "Stone Arch",
     coinPrice: 4000000, creditPrice: 124, rarity: rarity.Uncommon,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
-  },
-  StoneArchSideways: {
-    tileRef: tileRefsDecor.StoneArchSideways,
-    name: "Stone Arch (Sideways)",
-    coinPrice: 4000000, creditPrice: 124, rarity: rarity.Uncommon,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
+    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.50
   },
 
   StoneBridge: {
     tileRef: tileRefsDecor.StoneBridge,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.StoneBridgeSideways, flipH: true,  baseTileScale: 1.70, nudgeY: -0.28 },
+      180: { tileRef: tileRefsDecor.StoneBridge,         flipH: true },
+      270: { tileRef: tileRefsDecor.StoneBridgeSideways,               baseTileScale: 1.70, nudgeY: -0.28 }
+    },
     name: "Stone Bridge",
-    coinPrice: 5000000, creditPrice: 179, rarity: rarity.Uncommon,
-    baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
-  },
-  StoneBridgeSideways: {
-    tileRef: tileRefsDecor.StoneBridgeSideways,
-    name: "Stone Bridge (Sideways)",
     coinPrice: 5000000, creditPrice: 179, rarity: rarity.Uncommon,
     baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
   },
@@ -1271,16 +1274,16 @@ export const decorCatalog = {
     tileRef: tileRefsDecor.StoneLampPost,
     name: "Stone Lamp Post",
     coinPrice: 8000000, creditPrice: 199, rarity: rarity.Uncommon,
-    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.6
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.60
   },
   StoneGnome: {
     tileRef: tileRefsDecor.StoneGnome,
     name: "Stone Gnome",
     coinPrice: 9000000, creditPrice: 219, rarity: rarity.Uncommon,
-    baseTileScale: 1.3, isOneTimePurchase: false, nudgeY: -0.4
+    baseTileScale: 1.3, isOneTimePurchase: false, nudgeY: -0.40
   },
   StoneBirdbath: {
-    tileRef: tileRefsDecor.StoneBirdBath, // refs corrigées
+    tileRef: tileRefsDecor.StoneBirdBath,
     name: "Stone Birdbath",
     coinPrice: 10000000, creditPrice: 249, rarity: rarity.Uncommon,
     baseTileScale: 1.2, isOneTimePurchase: false, nudgeY: -0.46
@@ -1289,45 +1292,36 @@ export const decorCatalog = {
   // Marbre
   MarbleBench: {
     tileRef: tileRefsDecor.MarbleBench,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.MarbleBenchSideways, flipH: true,  baseTileScale: 1.55, nudgeY: -0.35 },
+      180: { tileRef: tileRefsDecor.MarbleBenchBackwards },
+      270: { tileRef: tileRefsDecor.MarbleBenchSideways,               baseTileScale: 1.55, nudgeY: -0.35 }
+    },
     name: "Marble Bench",
     coinPrice: 75000000, creditPrice: 349, rarity: rarity.Rare,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
-  },
-  MarbleBenchBackwards: {
-    tileRef: tileRefsDecor.MarbleBenchBackwards,
-    name: "Marble Bench (Backwards)",
-    coinPrice: 75000000, creditPrice: 349, rarity: rarity.Rare,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
-  },
-  MarbleBenchSideways: {
-    tileRef: tileRefsDecor.MarbleBenchSideways,
-    name: "Marble Bench (Sideways)",
-    coinPrice: 75000000, creditPrice: 349, rarity: rarity.Rare,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3, avatarNudgeY: -0.18
+    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.30, avatarNudgeY: -0.18
   },
 
   MarbleArch: {
     tileRef: tileRefsDecor.MarbleArch,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.MarbleArchSideways, flipH: true,  baseTileScale: 2.38, nudgeY: -0.57 },
+      180: { tileRef: tileRefsDecor.MarbleArch,         flipH: true },
+      270: { tileRef: tileRefsDecor.MarbleArchSideways,               baseTileScale: 2.38, nudgeY: -0.57 }
+    },
     name: "Marble Arch",
     coinPrice: 100000000, creditPrice: 399, rarity: rarity.Rare,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
-  },
-  MarbleArchSideways: {
-    tileRef: tileRefsDecor.MarbleArchSideways,
-    name: "Marble Arch (Sideways)",
-    coinPrice: 100000000, creditPrice: 399, rarity: rarity.Rare,
-    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.5
+    baseTileScale: 1.53, isOneTimePurchase: false, nudgeY: -0.50
   },
 
   MarbleBridge: {
     tileRef: tileRefsDecor.MarbleBridge,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.MarbleBridgeSideways, flipH: true,  baseTileScale: 1.70, nudgeY: -0.28 },
+      180: { tileRef: tileRefsDecor.MarbleBridge,         flipH: true },
+      270: { tileRef: tileRefsDecor.MarbleBridgeSideways,               baseTileScale: 1.70, nudgeY: -0.28 }
+    },
     name: "Marble Bridge",
-    coinPrice: 150000000, creditPrice: 429, rarity: rarity.Rare,
-    baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
-  },
-  MarbleBridgeSideways: {
-    tileRef: tileRefsDecor.MarbleBridgeSideways,
-    name: "Marble Bridge (Sideways)",
     coinPrice: 150000000, creditPrice: 429, rarity: rarity.Rare,
     baseTileScale: 1.22, isOneTimePurchase: false, nudgeY: -0.35, avatarNudgeY: -0.44
   },
@@ -1336,7 +1330,7 @@ export const decorCatalog = {
     tileRef: tileRefsDecor.MarbleLampPost,
     name: "Marble Lamp Post",
     coinPrice: 200000000, creditPrice: 449, rarity: rarity.Rare,
-    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.6
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.60
   },
   MarbleBlobling: {
     tileRef: tileRefsDecor.MarbleBlobling,
@@ -1352,6 +1346,13 @@ export const decorCatalog = {
     coinPrice: 500000000, creditPrice: 549, rarity: rarity.Rare,
     baseTileScale: 1.1, isOneTimePurchase: false, nudgeY: -0.37
   },
+  Cauldron: {
+    tileRef: tileRefsDecor.Cauldron,
+    name: "Cauldron",
+    coinPrice: 666000000, creditPrice: 666, rarity: rarity.Legendary,
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.25,
+    expiryDate: new Date("2025-11-07T01:00:00.000Z")
+  },
   StrawScarecrow: {
     tileRef: tileRefsDecor.StrawScarecrow,
     name: "Straw Scarecrow",
@@ -1362,15 +1363,66 @@ export const decorCatalog = {
     tileRef: tileRefsDecor.MiniFairyForge,
     name: "Mini Fairy Forge",
     coinPrice: 5000000000, creditPrice: 979, rarity: rarity.Legendary,
-    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.3
+    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.30
   },
   MiniFairyKeep: {
     tileRef: tileRefsDecor.MiniFairyKeep,
     name: "Mini Fairy Keep",
     coinPrice: 25000000000, creditPrice: 1249, rarity: rarity.Mythic,
     baseTileScale: 1.05, isOneTimePurchase: false, nudgeY: -0.33
+  },
+
+  // Saisonniers (Halloween)
+  HayBale: {
+    tileRef: tileRefsDecor.HayBale,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.HayBaleSideways, flipH: true },
+      180: { tileRef: tileRefsDecor.HayBale,         flipH: true },
+      270: { tileRef: tileRefsDecor.HayBaleSideways }
+    },
+    name: "Hay Bale",
+    coinPrice: 7000, creditPrice: 12, rarity: rarity.Common,
+    baseTileScale: 1.8, isOneTimePurchase: false, nudgeY: -0.42,
+    expiryDate: new Date("2025-11-07T01:00:00.000Z")
+  },
+  SmallGravestone: {
+    tileRef: tileRefsDecor.SmallGravestone,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.SmallGravestoneSideways, flipH: true,  baseTileScale: 1.12, nudgeY: -0.32 },
+      180: { tileRef: tileRefsDecor.SmallGravestone,         flipH: true },
+      270: { tileRef: tileRefsDecor.SmallGravestoneSideways,               baseTileScale: 1.12, nudgeY: -0.32 }
+    },
+    name: "Small Gravestone",
+    coinPrice: 8000, creditPrice: 12, rarity: rarity.Common,
+    baseTileScale: 1, isOneTimePurchase: false, nudgeY: -0.38,
+    expiryDate: new Date("2025-11-07T01:00:00.000Z")
+  },
+  MediumGravestone: {
+    tileRef: tileRefsDecor.MediumGravestone,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.MediumGravestoneSideways, flipH: true,  baseTileScale: 1.32, nudgeY: -0.33 },
+      180: { tileRef: tileRefsDecor.MediumGravestone,         flipH: true },
+      270: { tileRef: tileRefsDecor.MediumGravestoneSideways,               baseTileScale: 1.32, nudgeY: -0.33 }
+    },
+    name: "Medium Gravestone",
+    coinPrice: 500000, creditPrice: 72, rarity: rarity.Uncommon,
+    baseTileScale: 1.2, isOneTimePurchase: false, nudgeY: -0.45,
+    expiryDate: new Date("2025-11-07T01:00:00.000Z")
+  },
+  LargeGravestone: {
+    tileRef: tileRefsDecor.LargeGravestone,
+    rotationVariants: {
+      90:  { tileRef: tileRefsDecor.LargeGravestoneSideways, flipH: true,  baseTileScale: 1.50, nudgeY: -0.39 },
+      180: { tileRef: tileRefsDecor.LargeGravestone,         flipH: true },
+      270: { tileRef: tileRefsDecor.LargeGravestoneSideways,               baseTileScale: 1.50, nudgeY: -0.39 }
+    },
+    name: "Large Gravestone",
+    coinPrice: 50000000, creditPrice: 299, rarity: rarity.Rare,
+    baseTileScale: 1.4, isOneTimePurchase: false, nudgeY: -0.51,
+    expiryDate: new Date("2025-11-07T01:00:00.000Z")
   }
 };
+
 
 
 export const weatherCatalog = {
@@ -1434,9 +1486,7 @@ export const weatherCatalog = {
     mutations: [
       { name: 'Amberglow', multiplier: 5 },
     ],
-    stacking: {
-      compatible: ['Golden', 'Rainbow', 'Giant'],
-      incompatible: ['Dawnlit', 'Amberglow']},
+    stacking: { compatible: ['Gold','Rainbow'], incompatible: ['Dawnlit','Amberlit'] },
     screenEffect: 'Nightfall glow (orange)',
     notes: ['1 fois / 4h', 'Ne se cumule pas avec Dawnlit']},
   Dawn:{
@@ -1450,9 +1500,7 @@ export const weatherCatalog = {
     mutations: [
       { name: 'Dawnlit', multiplier: 2 },
     ],
-    stacking: {
-      compatible: ['Golden', 'Rainbow', 'Giant'],
-      incompatible: ['Amberglow', 'Dawnlit']},
+    stacking: { compatible: ['Gold','Rainbow'], incompatible: ['Amberlit','Dawnlit'] },
     screenEffect: 'Sunrise glow (purple)',
     notes: ['1 fois / 4h', 'Ne se cumule pas avec Amberglow']}
 }
