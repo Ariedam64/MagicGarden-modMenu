@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.4.3
+// @version      2.4.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -16939,42 +16939,31 @@ try{importScripts("${abs}")}catch(e){}
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
   var INDEX_ATTR = "data-tm-shop-index";
   var RESCAN_MS = 20;
-  var LIST_HINT_ATTR = "data-tm-shop-type";
-  var listTypeMemo = /* @__PURE__ */ new WeakMap();
   var SHOP_ATOMS = {
     plant: Atoms.shop.seedShop,
     egg: Atoms.shop.eggShop,
     tool: Atoms.shop.toolShop,
     decor: Atoms.shop.decorShop
   };
+  var MODAL_TO_SHOP_TYPE = {
+    seedShop: "plant",
+    eggShop: "egg",
+    toolShop: "tool",
+    decorShop: "decor"
+  };
   var shopInventoryCache = {};
   var shopInventoryLengths = {};
   var shopInventoryInitStarted = false;
   var shopInventoryUnsubs = {};
-  function stripDiacritics(s) {
-    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  }
-  function headingToShopType(txt) {
-    const s = stripDiacritics(String(txt || "").toLowerCase());
-    if (/\bdecor|decors|deco\b/.test(s)) return "decor";
-    if (/\bseed|seeds|graine|graines\b/.test(s)) return "plant";
-    if (/\begg|eggs|oeuf|oeufs\b/.test(s)) return "egg";
-    if (/\btool|tools|outil|outils\b/.test(s)) return "tool";
-    return null;
-  }
-  function findShopHeadingNear(listRoot) {
-    const prev = listRoot.previousElementSibling?.querySelector?.(".chakra-text.css-1fq51pf");
-    if (prev?.innerText?.trim()) return prev.innerText.trim();
-    const parent = listRoot.parentElement;
-    const direct = parent?.querySelector?.(":scope > .chakra-text.css-1fq51pf");
-    if (direct?.innerText?.trim()) return direct.innerText.trim();
-    let scope = parent ?? listRoot;
-    for (let i = 0; i < 3 && scope; i++) {
-      const cand = scope.querySelector(".chakra-text.css-1fq51pf");
-      if (cand?.innerText?.trim()) return cand.innerText.trim();
-      scope = scope.parentElement;
+  async function detectShopFromActiveModal() {
+    try {
+      const modalId = await Atoms.ui.activeModal.get();
+      if (typeof modalId !== "string" || !modalId) return null;
+      return MODAL_TO_SHOP_TYPE[modalId] ?? null;
+    } catch (error) {
+      console.warn("[TM] buyAll failed to read active modal", error);
+      return null;
     }
-    return null;
   }
   function extractInventoryId(shop, entry) {
     if (!entry) return null;
@@ -17055,7 +17044,6 @@ try{importScripts("${abs}")}catch(e){}
     if (!list || index < 0 || index >= list.length) return null;
     return list[index] ?? null;
   }
-  var DEFAULT_OVERRIDES = { tool: 3 };
   var PURCHASE_FNS = {
     plant: (id) => PlayerService.purchaseSeed(id),
     egg: (id) => PlayerService.purchaseEgg(id),
@@ -17095,49 +17083,6 @@ try{importScripts("${abs}")}catch(e){}
         break;
       }
     }
-  }
-  function getExpectedSizes() {
-    const overrides = { ...DEFAULT_OVERRIDES, ...window.BuyAllConfig?.countOverride ?? {} };
-    const sizes = {};
-    for (const shop of SHOP_TYPES) {
-      const cached = shopInventoryLengths[shop];
-      console.log("cached: ", cached);
-      if (typeof cached === "number") {
-        sizes[shop] = cached;
-      } else if (typeof overrides[shop] === "number") {
-        sizes[shop] = overrides[shop];
-      }
-    }
-    console.log("sizes: ", sizes);
-    return sizes;
-  }
-  function detectShopByCount(total) {
-    const sizes = getExpectedSizes();
-    const matches = SHOP_TYPES.filter((t) => typeof sizes[t] === "number" && sizes[t] === total);
-    console.log(matches);
-    return matches.length === 1 ? matches[0] : null;
-  }
-  function detectShopFromHeadingOrCount(listRoot, total, sampleItemEl, idx0) {
-    const memo = listTypeMemo.get(listRoot);
-    if (memo) return memo;
-    const attr = listRoot.getAttribute(LIST_HINT_ATTR);
-    if (attr) return attr;
-    const heading = findShopHeadingNear(listRoot);
-    if (heading) {
-      const t = headingToShopType(heading);
-      if (t) {
-        listRoot.setAttribute(LIST_HINT_ATTR, t);
-        listTypeMemo.set(listRoot, t);
-        return t;
-      }
-    }
-    const byCount = detectShopByCount(total);
-    if (byCount) {
-      listRoot.setAttribute(LIST_HINT_ATTR, byCount);
-      listTypeMemo.set(listRoot, byCount);
-      return byCount;
-    }
-    return null;
   }
   function parseCompactNumber(s) {
     if (!s) return void 0;
@@ -17337,35 +17282,26 @@ try{importScripts("${abs}")}catch(e){}
     label2.textContent = "Buy all";
     flex.appendChild(label2);
     btn.appendChild(flex);
-    btn.addEventListener("click", (ev) => {
-      console.log("test");
+    btn.addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (btn.disabled) return;
       const itemEl = btn.closest(ITEM_SELECTOR);
-      console.log("itemEl ", itemEl);
       const listRoot = itemEl?.closest(LIST_SELECTOR) || document.body;
-      console.log("listRoot ", listRoot);
       const items = getListItems(listRoot);
-      console.log("items ", items);
       const total = items.length;
-      console.log("total ", total);
       const attrIndex = itemEl?.getAttribute(INDEX_ATTR);
-      console.log("attrIndex ", attrIndex);
       let idx0 = attrIndex != null && attrIndex !== "" ? Number.parseInt(attrIndex, 10) : -1;
       if (!Number.isFinite(idx0) || idx0 < 0) {
         idx0 = itemEl ? items.indexOf(itemEl) : -1;
       }
       const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
-      console.log("idx1 ", idx1);
-      const shop = detectShopFromHeadingOrCount(listRoot, total, itemEl, idx0);
-      console.log("shop ", shop);
+      const shop = await detectShopFromActiveModal();
       let itemId = null;
       let itemName = null;
       let reason = "none";
       let coinParsed;
       let creditParsed;
-      console.log("shop: ", shop, " itemEl: ", itemEl);
       if (shop && itemEl) {
         const row = findRowForItem(itemEl);
         if (row) {
