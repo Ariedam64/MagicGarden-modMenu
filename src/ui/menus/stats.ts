@@ -8,6 +8,7 @@ import {
   weatherCatalog,
 } from "../../data/hardcoded-data.clean";
 import { Sprites } from "../../core/sprite";
+import { ensureSpritesReady } from "../../core/spriteBootstrap";
 import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/weatherSprites";
 import { formatPrice } from "../../utils/format";
 import { StatsService } from "../../services/stats";
@@ -921,6 +922,8 @@ function toPetTileIndex(tileRef: unknown): number | null {
 }
 
 async function fetchPetSprite(species: string): Promise<string | null> {
+  await ensureSpritesReady();
+
   const entry = petCatalog[species as keyof typeof petCatalog] as
     | { tileRef?: number | null }
     | undefined;

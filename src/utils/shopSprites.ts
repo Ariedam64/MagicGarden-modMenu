@@ -1,4 +1,5 @@
 import { Sprites } from "../core/sprite";
+import { ensureSpritesReady } from "../core/spriteBootstrap";
 import {
   plantCatalog,
   eggCatalog,
@@ -235,6 +236,8 @@ function clearSheetCaches(): void {
 }
 
 async function fetchSprite(type: ShopSpriteType, id: string): Promise<string | null> {
+  await ensureSpritesReady();
+
   if (typeof window === "undefined") return null;
   if (typeof (Sprites as any)?.getTile !== "function") return null;
 

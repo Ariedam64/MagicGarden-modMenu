@@ -1,6 +1,7 @@
 // src/ui/menus/calculator.ts
 import { addStyle } from "../../core/dom";
 import { Sprites } from "../../core/sprite";
+import { ensureSpritesReady } from "../../core/spriteBootstrap";
 import {
   coin,
   mutationCatalog,
@@ -696,6 +697,8 @@ function getMutationSheetBases(): string[] {
 }
 
 async function fetchPlantSpriteCanvas(seedKey: string): Promise<HTMLCanvasElement | null> {
+  await ensureSpritesReady();
+
   if (typeof window === "undefined") return null;
   const entry = (plantCatalog as Record<string, any>)[seedKey];
   if (!entry) return null;
@@ -812,6 +815,8 @@ function loadMutationSprite(mutation: NormalizedMutation): Promise<string | null
   if (inFlight) return inFlight;
 
   const promise = (async () => {
+    await ensureSpritesReady();
+
     const bases = getMutationSheetBases();
     const index = tileRef > 0 ? tileRef - 1 : tileRef;
     for (const base of bases) {

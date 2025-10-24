@@ -1,4 +1,5 @@
 import { Sprites } from "../core/sprite";
+import { ensureSpritesReady } from "../core/spriteBootstrap";
 import { tileRefsAnimations } from "../data/hardcoded-data.clean";
 
 export type WeatherSpriteOptions = {
@@ -163,6 +164,8 @@ function applySprite(el: HTMLSpanElement, src: string | null): void {
 }
 
 async function fetchSprite(key: SpriteKey): Promise<string | null> {
+  await ensureSpritesReady();
+
   const index = weatherTileIndices.get(key);
   if (index == null) return null;
 

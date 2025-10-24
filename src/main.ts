@@ -17,6 +17,7 @@ import { renderKeybindsMenu } from "./ui/menus/keybinds";
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
 import { initSprites, Sprites  } from "./core/sprite";
+import { ensureSpritesReady } from "./core/spriteBootstrap";
 
 (async function () {
   "use strict";
@@ -33,6 +34,8 @@ import { initSprites, Sprites  } from "./core/sprite";
       // console.log(`[Sprites] ${kind}:`, url);
     },
   });
+
+  await ensureSpritesReady();
 
   installPageWebSocketHook();
 

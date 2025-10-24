@@ -1,6 +1,7 @@
 // src/ui/menus/locker.ts
 import { Menu } from "../menu";
 import { Sprites } from "../../core/sprite";
+import { ensureSpritesReady } from "../../core/spriteBootstrap";
 import {
   plantCatalog,
   tileRefsMutations,
@@ -234,6 +235,7 @@ const plantSpriteSubscribers = new Map<string, Set<HTMLSpanElement>>();
 const spriteConfig = new WeakMap<HTMLSpanElement, { size: number; fallback: string }>();
 let plantSpriteListenerAttached = false;
 let lockerSpritesPreloaded = false;
+let lockerSpritesLoading = false;
 let lockerSpritePreloadTimer: number | null = null;
 let weatherModeNameSeq = 0;
 
@@ -374,6 +376,8 @@ function toTileIndex(tileRef: unknown, bases: string[] = []): number | null {
 }
 
 async function fetchPlantSprite(seedKey: string): Promise<string | null> {
+  await ensureSpritesReady();
+
   const entry = (plantCatalog as Record<string, any>)[seedKey];
   if (!entry) return null;
   const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
@@ -543,6 +547,8 @@ function notifyMutationSpriteSubscribers(tag: WeatherTag, src: string | null): v
 }
 
 async function fetchMutationSprite(tag: WeatherTag): Promise<string | null> {
+  await ensureSpritesReady();
+
   const entry = WEATHER_MUTATIONS.find(info => info.key === tag);
   if (!entry || entry.tileRef == null) return null;
   const [base] = mutationSheetBases();
@@ -609,35 +615,48 @@ function createMutationSprite(tag: WeatherTag, options: SpriteOptions = {}): HTM
 }
 
 function preloadLockerSprites(): void {
-  if (lockerSpritesPreloaded || typeof window === "undefined") {
+  if (lockerSpritesPreloaded || lockerSpritesLoading || typeof window === "undefined") {
     return;
   }
 
-  if (!hasLockerSpriteSources()) {
-    scheduleLockerSpritePreload(200);
-    return;
-  }
+  lockerSpritesLoading = true;
 
-  lockerSpritesPreloaded = true;
+  (async () => {
+    try {
+      await ensureSpritesReady();
 
-  ensurePlantSpriteListener();
-  ensureMutationSpriteListener();
-
-  try {
-    const catalog = plantCatalog as Record<string, unknown>;
-    Object.keys(catalog).forEach(seedKey => {
-      if (seedKey) {
-        loadPlantSprite(seedKey);
+      if (!hasLockerSpriteSources()) {
+        scheduleLockerSpritePreload(200);
+        return;
       }
-    });
-  } catch {
-    /* ignore */
-  }
 
-  WEATHER_MUTATIONS.forEach(info => {
-    if (info.tileRef != null) {
-      loadMutationSprite(info.key);
+      lockerSpritesPreloaded = true;
+
+      ensurePlantSpriteListener();
+      ensureMutationSpriteListener();
+
+      try {
+        const catalog = plantCatalog as Record<string, unknown>;
+        Object.keys(catalog).forEach(seedKey => {
+          if (seedKey) {
+            loadPlantSprite(seedKey);
+          }
+        });
+      } catch {
+        /* ignore */
+      }
+
+      WEATHER_MUTATIONS.forEach(info => {
+        if (info.tileRef != null) {
+          loadMutationSprite(info.key);
+        }
+      });
+    } finally {
+      lockerSpritesLoading = false;
     }
+  })().catch(error => {
+    console.warn("[LockerSprites]", "preload failed", error);
+    scheduleLockerSpritePreload(500);
   });
 }
 

@@ -1,4 +1,5 @@
 import { Sprites, type TileInfo } from "../core/sprite";
+import { ensureSpritesReady } from "../core/spriteBootstrap";
 import { petCatalog } from "../data/hardcoded-data.clean.js";
 
 export type PetSpriteVariant = "normal" | "gold" | "rainbow";
@@ -86,6 +87,8 @@ export function determinePetSpriteVariant(mutations: MutationInput): PetSpriteVa
 }
 
 async function fetchPetSprite(species: string, variant: PetSpriteVariant): Promise<string | null> {
+  await ensureSpritesReady();
+
   if (typeof window === "undefined") return null;
   if (typeof Sprites.getTile !== "function") return null;
 
