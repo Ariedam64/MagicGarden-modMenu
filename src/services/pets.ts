@@ -1335,13 +1335,13 @@ export const PetsService = {
         case 'CoinFinderII':
         case 'CoinFinderIII': {
           const coins = d['coinsFound'] ?? base['baseMaxCoinsFindable'];
-          return `+${fmtInt(coins)} coins`;
+          return `+ ${fmtInt(coins)} coins`;
         }
         case 'SeedFinderI':
         case 'SeedFinderII':
         case 'SeedFinderIII':
         case 'SeedFinderIV':
-          return `+${(d['seedName'] as string) ?? '—'}`;
+          return `x1 ${(d['seedName'] as string) ?? '—'}`;
 
         case 'SellBoostI':
         case 'SellBoostII':
@@ -1349,36 +1349,36 @@ export const PetsService = {
         case 'SellBoostIV': {
           if (d['bonusCoins'] != null) return `Sale bonus: +${fmtInt(d['bonusCoins'])} coins`;
           const pct = base['cropSellPriceIncreasePercentage'];
-          return pct != null ? `+${fmtPct0(pct)}` : 'Sale bonus';
+          return pct != null ? `+ ${fmtPct0(pct)}` : 'Sale bonus';
         }
         case 'ProduceRefund': {
           const n = d['numItemsRefunded'];
-          return n != null ? `+${fmtInt(n)} item(s)` : `Crops refunded`;
+          return n != null ? `+ ${fmtInt(n)} item(s)` : `Crops refunded`;
         }
         case 'ProduceScaleBoost':
         case 'ProduceScaleBoostII': {
           const inc = d['scaleIncrease'] ?? base['cropScaleIncreasePercentage'];
-          return inc != null ? `+${fmtPct0(inc)}` : 'Produce bigger';
+          return inc != null ? `+ ${fmtPct0(inc)}` : 'Produce bigger';
         }
         case 'DoubleHarvest':
-          return `Harvest duplicated`;
+          return `+1 item`;
         case 'ProduceEater': {
           const name = (d['cropName'] as string) ?? '—';
           if (d['sellPrice'] != null) return `Eaten: ${name} (value ${fmtInt(d['sellPrice'])})`;
           const pct = base['cropSellPriceIncreasePercentage'];
-          return pct != null ? `Eaten: ${name} (+${fmtPct0(pct)} price)` : `Eaten: ${name}`;
+          return pct != null ? `Eaten: ${name} (+ ${fmtPct0(pct)} price)` : `Eaten: ${name}`;
         }
 
         case 'EggGrowthBoost':
         case 'EggGrowthBoostII':
         case 'EggGrowthBoostIII': {
           const mins = d['eggGrowthTimeReductionMinutes'] ?? base['eggGrowthTimeReductionMinutes'];
-          return `-${fmtMin1(mins)}`;
+          return `- ${fmtMin1(mins)}`;
         }
         case 'PlantGrowthBoost':
         case 'PlantGrowthBoostII': {
           const mins = d['reductionMinutes'] ?? base['plantGrowthReductionMinutes'];
-          return `-${fmtMin1(mins)}`;
+          return `- ${fmtMin1(mins)}`;
         }
 
         case 'GoldGranter': {
@@ -1398,20 +1398,20 @@ export const PetsService = {
         case 'PetXpBoost':
         case 'PetXpBoostII': {
           const xp = d['bonusXp'] ?? base['bonusXp'];
-          return `+${fmtInt(xp)} XP`;
+          return `+ ${fmtInt(xp)} XP`;
         }
         case 'PetAgeBoost':
         case 'PetAgeBoostII': {
           const xp = d['bonusXp'] ?? base['bonusXp'];
           const who = (d['petName'] as string) ?? 'pet';
-          return `+${fmtInt(xp)} XP (${who})`;
+          return `+ ${fmtInt(xp)} XP (${who})`;
         }
         case 'PetHatchSizeBoost':
         case 'PetHatchSizeBoostII': {
           const who = (d['petName'] as string) ?? 'pet';
           if (d['strengthIncrease'] != null) return `+${fmtInt(d['strengthIncrease'])} strength (${who})`;
           const pct = base['maxStrengthIncreasePercentage'];
-          return pct != null ? `+${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
+          return pct != null ? `+ ${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
         }
         case 'HungerRestore':
         case 'HungerRestoreII': {
@@ -1422,12 +1422,12 @@ export const PetsService = {
         case 'HungerBoost':
         case 'HungerBoostII': {
           const pct = base['hungerDepletionRateDecreasePercentage'];
-          return pct != null ? `-${fmtPct0(pct)}` : 'Hunger reduced';
+          return pct != null ? `- ${fmtPct0(pct)}` : 'Hunger reduced';
         }
         case 'PetRefund':
         case 'PetRefundII': {
           const egg = (d['eggName'] as string) ?? null;
-          return egg ? `+${egg}` : `Pet refunded as egg`;
+          return egg ? `x1 ${egg}` : `Pet refunded as egg`;
         }
         case 'Copycat':
           return '—';
