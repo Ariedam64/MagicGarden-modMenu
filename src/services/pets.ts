@@ -1357,7 +1357,8 @@ export const PetsService = {
         }
         case 'ProduceScaleBoost':
         case 'ProduceScaleBoostII': {
-          const inc = d['scaleIncrease'] ?? base['cropScaleIncreasePercentage'];
+          if (d['cropScaleIncreasePercentage'] != null) return `+ ${fmtPct0(d['cropScaleIncreasePercentage'])}`;
+          const inc = base['cropScaleIncreasePercentage'];
           return inc != null ? `+ ${fmtPct0(inc)}` : 'Produce bigger';
         }
         case 'DoubleHarvest':
