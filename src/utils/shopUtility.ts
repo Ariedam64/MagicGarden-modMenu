@@ -50,6 +50,13 @@ const SHOP_ATOMS: Record<ShopType, any> = {
   decor: Atoms.shop.decorShop,
 };
 
+const MODAL_TO_SHOP_TYPE: Record<string, ShopType> = {
+  seedShop: "plant",
+  eggShop: "egg",
+  toolShop: "tool",
+  decorShop: "decor",
+};
+
 type InventoryEntry = { id: string; name: string | null; raw: any };
 
 const shopInventoryCache: Partial<Record<ShopType, InventoryEntry[]>> = {};
@@ -57,6 +64,17 @@ const shopInventoryLengths: Partial<Record<ShopType, number>> = {};
 
 let shopInventoryInitStarted = false;
 const shopInventoryUnsubs: Partial<Record<ShopType, (() => void) | null>> = {};
+
+async function detectShopFromActiveModal(): Promise<ShopType | null> {
+  try {
+    const modalId = await Atoms.ui.activeModal.get();
+    if (typeof modalId !== "string" || !modalId) return null;
+    return MODAL_TO_SHOP_TYPE[modalId] ?? null;
+  } catch (error) {
+    console.warn("[TM] buyAll failed to read active modal", error);
+    return null;
+  }
+}
 
 function stripDiacritics(s: string): string {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -560,25 +578,19 @@ function createButton(templateBtn?: HTMLElement): HTMLButtonElement {
   flex.appendChild(label);
   btn.appendChild(flex);
 
-  btn.addEventListener("click", (ev) => {
-    console.log("test")
+  btn.addEventListener("click", async (ev) => {
     ev.preventDefault();
     ev.stopPropagation();
 
     if ((btn as HTMLButtonElement).disabled) return;
 
     const itemEl   = btn.closest(ITEM_SELECTOR) as Element | null;
-    console.log("itemEl ", itemEl)
     const listRoot = (itemEl?.closest(LIST_SELECTOR) as Element | null) || document.body;
-    console.log("listRoot ", listRoot)
 
     const items = getListItems(listRoot);
-    console.log("items ", items)
     const total = items.length;
-    console.log("total ", total)
 
     const attrIndex = itemEl?.getAttribute(INDEX_ATTR);
-    console.log("attrIndex ", attrIndex)
     let idx0 =
       attrIndex != null && attrIndex !== ""
         ? Number.parseInt(attrIndex, 10)
@@ -587,18 +599,14 @@ function createButton(templateBtn?: HTMLElement): HTMLButtonElement {
       idx0 = itemEl ? items.indexOf(itemEl) : -1;
     }
     const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
-    console.log("idx1 ", idx1)
 
-    const shop = detectShopFromHeadingOrCount(listRoot, total, itemEl, idx0);
-    console.log("shop ", shop)
+    const shop = await detectShopFromActiveModal();
 
     let itemId: string | null = null;
     let itemName: string | null = null;
     let reason: "coin+credit" | "coin" | "credit" | "index" | "inventory" | "none" = "none";
     let coinParsed: number | undefined;
     let creditParsed: number | undefined;
-
-    console.log("shop: ", shop, " itemEl: ", itemEl)
 
     if (shop && itemEl) {
       const row = findRowForItem(itemEl);
