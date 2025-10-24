@@ -155,7 +155,7 @@ export function mountHUD(opts?: HUDOptions) {
   box.className = "qws2";
   box.innerHTML = `
     <div class="row drag">
-      <div class="title">Arie's Mod</div>
+      <div class="title">🎃 Arie's Mod</div>
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">…</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">–</button>
