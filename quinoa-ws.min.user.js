@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.4.2
+// @version      2.4.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12020,7 +12020,8 @@
           }
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII": {
-            const inc = d["scaleIncrease"] ?? base["cropScaleIncreasePercentage"];
+            if (d["cropScaleIncreasePercentage"] != null) return `+ ${fmtPct0(d["cropScaleIncreasePercentage"])}`;
+            const inc = base["cropScaleIncreasePercentage"];
             return inc != null ? `+ ${fmtPct0(inc)}` : "Produce bigger";
           }
           case "DoubleHarvest":
