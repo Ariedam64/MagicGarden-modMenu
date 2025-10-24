@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.3.7
+// @version      2.4.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2918,10 +2918,6 @@
   var expandedPetSlotId = makeAtom("expandedPetSlotIdAtom");
   var myCropItemsToSell = makeAtom("myCropItemsToSellAtom");
   var shops = makeAtom("shopsAtom");
-  var seedShop = makeAtom("seedShopAtom");
-  var toolShop = makeAtom("toolShopAtom");
-  var eggShop = makeAtom("eggShopAtom");
-  var decorShop = makeAtom("decorShopAtom");
   var myShopPurchases = makeAtom("myShopPurchasesAtom");
   var numPlayers = makeAtom("numPlayersAtom");
   var totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
@@ -2948,6 +2944,10 @@
   var stateShops = makeView("stateAtom", { path: "child.data.shops" });
   var stateUserSlots = makeView("stateAtom", { path: "child.data.userSlots" });
   var statePlayers = makeView("stateAtom", { path: "data.players" });
+  var seedShop = makeView("shopsAtom", { path: "seed" });
+  var toolShop = makeView("shopsAtom", { path: "tool" });
+  var eggShop = makeView("shopsAtom", { path: "egg" });
+  var decorShop = makeView("shopsAtom", { path: "decor" });
   function slotSig(o) {
     if (!o) return "\u2205";
     return [
@@ -3112,19 +3112,19 @@
     Dirt1: 6,
     Dirt2: 7,
     Dirt3: 8,
-    Bush1: 28,
-    Bush2: 38,
-    BushHomer: 48,
     Sky0: 24,
     Sky1: 25,
     Sky2: 26,
     Sky3: 27,
+    Bush1: 28,
     Sky4: 35,
     Sky5: 36,
     Sky6: 37,
+    Bush2: 38,
     Sky7: 45,
     Sky8: 46,
-    Sky9: 47
+    Sky9: 47,
+    BushHomer: 48
   };
   var tileRefsPlants = {
     DirtPatch: 1,
@@ -3299,59 +3299,63 @@
     Ambercharged: "Amberbound"
   };
   var tileRefsDecor = {
-    // Rocks
-    SmallRock: 11,
-    MediumRock: 21,
-    LargeRock: 31,
-    // Wood
     WoodPedestal: 4,
+    StonePedestal: 6,
+    MarblePedestal: 8,
+    SmallRock: 11,
     WoodBench: 13,
     WoodBenchBackwards: 14,
-    WoodBenchSideways: 24,
-    WoodBucketPedestal: 34,
-    WoodLampPost: 23,
-    WoodStool: 63,
-    WoodArch: 33,
-    WoodArchSide: 43,
-    WoodBridge: 34,
-    WoodBridgeSideways: 44,
-    WoodOwl: 53,
-    WoodGardenBox: 74,
-    WoodenWindmill: 73,
-    // Stone
-    StonePedestal: 6,
     StoneBench: 15,
-    StoneBenchSideways: 26,
     StoneBucketPedestal: 16,
-    StoneLampPost: 25,
-    StoneColumn: 26,
-    StoneArch: 35,
-    StoneArchSideways: 45,
-    StoneBridge: 36,
-    StoneBridgeSideways: 46,
-    StoneGnome: 55,
-    StoneGardenBox: 66,
-    StoneBirdBath: 56,
-    // Marble
-    MarblePedestal: 8,
     MarbleBench: 17,
     MarbleBenchBackwards: 18,
-    MarbleBenchSideways: 28,
-    MarbleBucketPedestal: 58,
+    MediumRock: 21,
+    WoodLampPost: 23,
+    WoodBenchSideways: 24,
+    StoneLampPost: 25,
+    StoneBenchSideways: 26,
+    StoneColumn: 26,
     MarbleLampPost: 27,
-    MarbleColumn: 68,
+    MarbleBenchSideways: 28,
+    HayBale: 29,
+    LargeRock: 31,
+    WoodArch: 33,
+    WoodBucketPedestal: 34,
+    WoodBridge: 34,
+    StoneArch: 35,
+    StoneBridge: 36,
     MarbleArch: 37,
-    MarbleArchSideways: 47,
     MarbleBridge: 38,
+    HayBaleSideways: 39,
+    MiniFairyForge: 40,
+    WoodArchSide: 43,
+    WoodBridgeSideways: 44,
+    StoneArchSideways: 45,
+    StoneBridgeSideways: 46,
+    MarbleArchSideways: 47,
     MarbleBridgeSideways: 48,
-    MarbleBlobling: 57,
-    MarbleGardenBox: 78,
-    // Misc
     StrawScarecrow: 49,
     MiniFairyCottage: 50,
-    MiniFairyForge: 40,
+    WoodOwl: 53,
+    Birdhouse: 54,
+    StoneGnome: 55,
+    StoneBirdBath: 56,
+    MarbleBlobling: 57,
+    MarbleBucketPedestal: 58,
+    Cauldron: 59,
     MiniFairyKeep: 60,
-    Birdhouse: 54
+    WoodStool: 63,
+    StoneGardenBox: 66,
+    MarbleColumn: 68,
+    SmallGravestone: 69,
+    SmallGravestoneSideways: 70,
+    WoodenWindmill: 73,
+    WoodGardenBox: 74,
+    MarbleGardenBox: 78,
+    MediumGravestone: 79,
+    MediumGravestoneSideways: 80,
+    LargeGravestone: 89,
+    LargeGravestoneSideways: 90
   };
   var plantCatalog = {
     Carrot: {
@@ -3414,13 +3418,13 @@
         name: "Apple Tree",
         harvestType: harvestType.Multiple,
         slotOffsets: [
-          { x: -0.3, y: -1.9, rotation: -90 },
-          { x: -0.45, y: -1.5, rotation: -75 },
-          { x: 0.15, y: -1.7, rotation: -60 },
-          { x: -0.15, y: -1.15, rotation: -55 },
-          { x: 0.59, y: -1.4, rotation: -45 },
-          { x: 0.36, y: -1.2, rotation: -35 },
-          { x: 0.85, y: 0.6, rotation: -30 }
+          { x: -0.35, y: -2.4, rotation: 0 },
+          { x: -0.5, y: -2, rotation: 0 },
+          { x: 0.1, y: -2.2, rotation: 0 },
+          { x: -0.2, y: -1.65, rotation: 0 },
+          { x: 0.55, y: -1.9, rotation: 0 },
+          { x: 0.3, y: -1.7, rotation: 0 },
+          { x: 0.4, y: 0.1, rotation: 0 }
         ],
         secondsToMature: 360 * 60,
         baseTileScale: 3,
@@ -3810,8 +3814,8 @@
     Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
     Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit },
     Ambershine: { name: "Amberlit", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Ambershine },
-    Dawncharged: { name: "Dawn Radiant", baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
-    Ambercharged: { name: "Amber Radiant", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }
+    Dawncharged: { name: "Dawnbound", baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
+    Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }
   };
   var eggCatalog = {
     CommonEgg: { tileRef: tileRefsPets.CommonEgg, name: "Common Egg", coinPrice: 1e5, creditPrice: 19, rarity: rarity.Common, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 600, faunaSpawnWeights: { Worm: 60, Snail: 35, Bee: 5 } },
@@ -4344,7 +4348,7 @@
     },
     Shovel: {
       tileRef: tileRefsItems.Shovel,
-      name: "Shovel",
+      name: "Garden Shovel",
       coinPrice: 1e6,
       creditPrice: 100,
       rarity: rarity.Uncommon,
@@ -4372,8 +4376,7 @@
       creditPrice: 2,
       rarity: rarity.Common,
       baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3
+      isOneTimePurchase: false
     },
     MediumRock: {
       tileRef: tileRefsDecor.MediumRock,
@@ -4382,8 +4385,7 @@
       creditPrice: 5,
       rarity: rarity.Common,
       baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.21
+      isOneTimePurchase: false
     },
     LargeRock: {
       tileRef: tileRefsDecor.LargeRock,
@@ -4392,35 +4394,17 @@
       creditPrice: 10,
       rarity: rarity.Common,
       baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.1
+      isOneTimePurchase: false
     },
     // Bois
     WoodBench: {
       tileRef: tileRefsDecor.WoodBench,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.WoodBenchSideways, flipH: true, baseTileScale: 1.46, nudgeY: -0.3 },
+        180: { tileRef: tileRefsDecor.WoodBenchBackwards },
+        270: { tileRef: tileRefsDecor.WoodBenchSideways, baseTileScale: 1.46, nudgeY: -0.3 }
+      },
       name: "Wood Bench",
-      coinPrice: 1e4,
-      creditPrice: 15,
-      rarity: rarity.Common,
-      baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3,
-      avatarNudgeY: -0.18
-    },
-    WoodBenchBackwards: {
-      tileRef: tileRefsDecor.WoodBenchBackwards,
-      name: "Wood Bench (Backwards)",
-      coinPrice: 1e4,
-      creditPrice: 15,
-      rarity: rarity.Common,
-      baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3,
-      avatarNudgeY: -0.18
-    },
-    WoodBenchSideways: {
-      tileRef: tileRefsDecor.WoodBenchSideways,
-      name: "Wood Bench (Sideways)",
       coinPrice: 1e4,
       creditPrice: 15,
       rarity: rarity.Common,
@@ -4431,17 +4415,12 @@
     },
     WoodArch: {
       tileRef: tileRefsDecor.WoodArch,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.WoodArchSide, flipH: true, baseTileScale: 2.1, nudgeY: -0.48 },
+        180: { tileRef: tileRefsDecor.WoodArch, flipH: true },
+        270: { tileRef: tileRefsDecor.WoodArchSide, baseTileScale: 2.1, nudgeY: -0.48 }
+      },
       name: "Wood Arch",
-      coinPrice: 2e4,
-      creditPrice: 25,
-      rarity: rarity.Common,
-      baseTileScale: 1.53,
-      isOneTimePurchase: false,
-      nudgeY: -0.5
-    },
-    WoodArchSide: {
-      tileRef: tileRefsDecor.WoodArchSide,
-      name: "Wood Arch (Side)",
       coinPrice: 2e4,
       creditPrice: 25,
       rarity: rarity.Common,
@@ -4451,18 +4430,12 @@
     },
     WoodBridge: {
       tileRef: tileRefsDecor.WoodBridge,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.WoodBridgeSideways, flipH: true, baseTileScale: 1.7, nudgeY: -0.28 },
+        180: { tileRef: tileRefsDecor.WoodBridge, flipH: true },
+        270: { tileRef: tileRefsDecor.WoodBridgeSideways, baseTileScale: 1.7, nudgeY: -0.28 }
+      },
       name: "Wood Bridge",
-      coinPrice: 4e4,
-      creditPrice: 35,
-      rarity: rarity.Common,
-      baseTileScale: 1.22,
-      isOneTimePurchase: false,
-      nudgeY: -0.35,
-      avatarNudgeY: -0.44
-    },
-    WoodBridgeSideways: {
-      tileRef: tileRefsDecor.WoodBridgeSideways,
-      name: "Wood Bridge (Sideways)",
       coinPrice: 4e4,
       creditPrice: 35,
       rarity: rarity.Common,
@@ -4504,18 +4477,12 @@
     // Pierre
     StoneBench: {
       tileRef: tileRefsDecor.StoneBench,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.StoneBenchSideways, flipH: true, baseTileScale: 1.47, nudgeY: -0.3 },
+        180: { tileRef: tileRefsDecor.StoneBench, flipH: true },
+        270: { tileRef: tileRefsDecor.StoneBenchSideways, baseTileScale: 1.47, nudgeY: -0.3 }
+      },
       name: "Stone Bench",
-      coinPrice: 1e6,
-      creditPrice: 75,
-      rarity: rarity.Uncommon,
-      baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3,
-      avatarNudgeY: -0.18
-    },
-    StoneBenchSideways: {
-      tileRef: tileRefsDecor.StoneBenchSideways,
-      name: "Stone Bench (Sideways)",
       coinPrice: 1e6,
       creditPrice: 75,
       rarity: rarity.Uncommon,
@@ -4526,17 +4493,12 @@
     },
     StoneArch: {
       tileRef: tileRefsDecor.StoneArch,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.StoneArchSideways, flipH: true, baseTileScale: 2.1, nudgeY: -0.44 },
+        180: { tileRef: tileRefsDecor.StoneArch, flipH: true },
+        270: { tileRef: tileRefsDecor.StoneArchSideways, baseTileScale: 2.1, nudgeY: -0.44 }
+      },
       name: "Stone Arch",
-      coinPrice: 4e6,
-      creditPrice: 124,
-      rarity: rarity.Uncommon,
-      baseTileScale: 1.53,
-      isOneTimePurchase: false,
-      nudgeY: -0.5
-    },
-    StoneArchSideways: {
-      tileRef: tileRefsDecor.StoneArchSideways,
-      name: "Stone Arch (Sideways)",
       coinPrice: 4e6,
       creditPrice: 124,
       rarity: rarity.Uncommon,
@@ -4546,18 +4508,12 @@
     },
     StoneBridge: {
       tileRef: tileRefsDecor.StoneBridge,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.StoneBridgeSideways, flipH: true, baseTileScale: 1.7, nudgeY: -0.28 },
+        180: { tileRef: tileRefsDecor.StoneBridge, flipH: true },
+        270: { tileRef: tileRefsDecor.StoneBridgeSideways, baseTileScale: 1.7, nudgeY: -0.28 }
+      },
       name: "Stone Bridge",
-      coinPrice: 5e6,
-      creditPrice: 179,
-      rarity: rarity.Uncommon,
-      baseTileScale: 1.22,
-      isOneTimePurchase: false,
-      nudgeY: -0.35,
-      avatarNudgeY: -0.44
-    },
-    StoneBridgeSideways: {
-      tileRef: tileRefsDecor.StoneBridgeSideways,
-      name: "Stone Bridge (Sideways)",
       coinPrice: 5e6,
       creditPrice: 179,
       rarity: rarity.Uncommon,
@@ -4588,7 +4544,6 @@
     },
     StoneBirdbath: {
       tileRef: tileRefsDecor.StoneBirdBath,
-      // refs corrigées
       name: "Stone Birdbath",
       coinPrice: 1e7,
       creditPrice: 249,
@@ -4600,29 +4555,12 @@
     // Marbre
     MarbleBench: {
       tileRef: tileRefsDecor.MarbleBench,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.MarbleBenchSideways, flipH: true, baseTileScale: 1.55, nudgeY: -0.35 },
+        180: { tileRef: tileRefsDecor.MarbleBenchBackwards },
+        270: { tileRef: tileRefsDecor.MarbleBenchSideways, baseTileScale: 1.55, nudgeY: -0.35 }
+      },
       name: "Marble Bench",
-      coinPrice: 75e6,
-      creditPrice: 349,
-      rarity: rarity.Rare,
-      baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3,
-      avatarNudgeY: -0.18
-    },
-    MarbleBenchBackwards: {
-      tileRef: tileRefsDecor.MarbleBenchBackwards,
-      name: "Marble Bench (Backwards)",
-      coinPrice: 75e6,
-      creditPrice: 349,
-      rarity: rarity.Rare,
-      baseTileScale: 1,
-      isOneTimePurchase: false,
-      nudgeY: -0.3,
-      avatarNudgeY: -0.18
-    },
-    MarbleBenchSideways: {
-      tileRef: tileRefsDecor.MarbleBenchSideways,
-      name: "Marble Bench (Sideways)",
       coinPrice: 75e6,
       creditPrice: 349,
       rarity: rarity.Rare,
@@ -4633,17 +4571,12 @@
     },
     MarbleArch: {
       tileRef: tileRefsDecor.MarbleArch,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.MarbleArchSideways, flipH: true, baseTileScale: 2.38, nudgeY: -0.57 },
+        180: { tileRef: tileRefsDecor.MarbleArch, flipH: true },
+        270: { tileRef: tileRefsDecor.MarbleArchSideways, baseTileScale: 2.38, nudgeY: -0.57 }
+      },
       name: "Marble Arch",
-      coinPrice: 1e8,
-      creditPrice: 399,
-      rarity: rarity.Rare,
-      baseTileScale: 1.53,
-      isOneTimePurchase: false,
-      nudgeY: -0.5
-    },
-    MarbleArchSideways: {
-      tileRef: tileRefsDecor.MarbleArchSideways,
-      name: "Marble Arch (Sideways)",
       coinPrice: 1e8,
       creditPrice: 399,
       rarity: rarity.Rare,
@@ -4653,18 +4586,12 @@
     },
     MarbleBridge: {
       tileRef: tileRefsDecor.MarbleBridge,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.MarbleBridgeSideways, flipH: true, baseTileScale: 1.7, nudgeY: -0.28 },
+        180: { tileRef: tileRefsDecor.MarbleBridge, flipH: true },
+        270: { tileRef: tileRefsDecor.MarbleBridgeSideways, baseTileScale: 1.7, nudgeY: -0.28 }
+      },
       name: "Marble Bridge",
-      coinPrice: 15e7,
-      creditPrice: 429,
-      rarity: rarity.Rare,
-      baseTileScale: 1.22,
-      isOneTimePurchase: false,
-      nudgeY: -0.35,
-      avatarNudgeY: -0.44
-    },
-    MarbleBridgeSideways: {
-      tileRef: tileRefsDecor.MarbleBridgeSideways,
-      name: "Marble Bridge (Sideways)",
       coinPrice: 15e7,
       creditPrice: 429,
       rarity: rarity.Rare,
@@ -4704,6 +4631,17 @@
       isOneTimePurchase: false,
       nudgeY: -0.37
     },
+    Cauldron: {
+      tileRef: tileRefsDecor.Cauldron,
+      name: "Cauldron",
+      coinPrice: 666e6,
+      creditPrice: 666,
+      rarity: rarity.Legendary,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.25,
+      expiryDate: /* @__PURE__ */ new Date("2025-11-07T01:00:00.000Z")
+    },
     StrawScarecrow: {
       tileRef: tileRefsDecor.StrawScarecrow,
       name: "Straw Scarecrow",
@@ -4733,6 +4671,71 @@
       baseTileScale: 1.05,
       isOneTimePurchase: false,
       nudgeY: -0.33
+    },
+    // Saisonniers (Halloween)
+    HayBale: {
+      tileRef: tileRefsDecor.HayBale,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.HayBaleSideways, flipH: true },
+        180: { tileRef: tileRefsDecor.HayBale, flipH: true },
+        270: { tileRef: tileRefsDecor.HayBaleSideways }
+      },
+      name: "Hay Bale",
+      coinPrice: 7e3,
+      creditPrice: 12,
+      rarity: rarity.Common,
+      baseTileScale: 1.8,
+      isOneTimePurchase: false,
+      nudgeY: -0.42,
+      expiryDate: /* @__PURE__ */ new Date("2025-11-07T01:00:00.000Z")
+    },
+    SmallGravestone: {
+      tileRef: tileRefsDecor.SmallGravestone,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.SmallGravestoneSideways, flipH: true, baseTileScale: 1.12, nudgeY: -0.32 },
+        180: { tileRef: tileRefsDecor.SmallGravestone, flipH: true },
+        270: { tileRef: tileRefsDecor.SmallGravestoneSideways, baseTileScale: 1.12, nudgeY: -0.32 }
+      },
+      name: "Small Gravestone",
+      coinPrice: 8e3,
+      creditPrice: 12,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false,
+      nudgeY: -0.38,
+      expiryDate: /* @__PURE__ */ new Date("2025-11-07T01:00:00.000Z")
+    },
+    MediumGravestone: {
+      tileRef: tileRefsDecor.MediumGravestone,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.MediumGravestoneSideways, flipH: true, baseTileScale: 1.32, nudgeY: -0.33 },
+        180: { tileRef: tileRefsDecor.MediumGravestone, flipH: true },
+        270: { tileRef: tileRefsDecor.MediumGravestoneSideways, baseTileScale: 1.32, nudgeY: -0.33 }
+      },
+      name: "Medium Gravestone",
+      coinPrice: 5e5,
+      creditPrice: 72,
+      rarity: rarity.Uncommon,
+      baseTileScale: 1.2,
+      isOneTimePurchase: false,
+      nudgeY: -0.45,
+      expiryDate: /* @__PURE__ */ new Date("2025-11-07T01:00:00.000Z")
+    },
+    LargeGravestone: {
+      tileRef: tileRefsDecor.LargeGravestone,
+      rotationVariants: {
+        90: { tileRef: tileRefsDecor.LargeGravestoneSideways, flipH: true, baseTileScale: 1.5, nudgeY: -0.39 },
+        180: { tileRef: tileRefsDecor.LargeGravestone, flipH: true },
+        270: { tileRef: tileRefsDecor.LargeGravestoneSideways, baseTileScale: 1.5, nudgeY: -0.39 }
+      },
+      name: "Large Gravestone",
+      coinPrice: 5e7,
+      creditPrice: 299,
+      rarity: rarity.Rare,
+      baseTileScale: 1.4,
+      isOneTimePurchase: false,
+      nudgeY: -0.51,
+      expiryDate: /* @__PURE__ */ new Date("2025-11-07T01:00:00.000Z")
     }
   };
   var weatherCatalog = {
@@ -4806,10 +4809,7 @@
       mutations: [
         { name: "Amberglow", multiplier: 5 }
       ],
-      stacking: {
-        compatible: ["Golden", "Rainbow", "Giant"],
-        incompatible: ["Dawnlit", "Amberglow"]
-      },
+      stacking: { compatible: ["Gold", "Rainbow"], incompatible: ["Dawnlit", "Amberlit"] },
       screenEffect: "Nightfall glow (orange)",
       notes: ["1 fois / 4h", "Ne se cumule pas avec Dawnlit"]
     },
@@ -4825,10 +4825,7 @@
       mutations: [
         { name: "Dawnlit", multiplier: 2 }
       ],
-      stacking: {
-        compatible: ["Golden", "Rainbow", "Giant"],
-        incompatible: ["Amberglow", "Dawnlit"]
-      },
+      stacking: { compatible: ["Gold", "Rainbow"], incompatible: ["Amberlit", "Dawnlit"] },
       screenEffect: "Sunrise glow (purple)",
       notes: ["1 fois / 4h", "Ne se cumule pas avec Amberglow"]
     }
@@ -16936,6 +16933,8 @@ try{importScripts("${abs}")}catch(e){}
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
   var INDEX_ATTR = "data-tm-shop-index";
   var RESCAN_MS = 20;
+  var LIST_HINT_ATTR = "data-tm-shop-type";
+  var listTypeMemo = /* @__PURE__ */ new WeakMap();
   var SHOP_ATOMS = {
     plant: Atoms.shop.seedShop,
     egg: Atoms.shop.eggShop,
@@ -16946,6 +16945,31 @@ try{importScripts("${abs}")}catch(e){}
   var shopInventoryLengths = {};
   var shopInventoryInitStarted = false;
   var shopInventoryUnsubs = {};
+  function stripDiacritics(s) {
+    return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+  function headingToShopType(txt) {
+    const s = stripDiacritics(String(txt || "").toLowerCase());
+    if (/\bdecor|decors|deco\b/.test(s)) return "decor";
+    if (/\bseed|seeds|graine|graines\b/.test(s)) return "plant";
+    if (/\begg|eggs|oeuf|oeufs\b/.test(s)) return "egg";
+    if (/\btool|tools|outil|outils\b/.test(s)) return "tool";
+    return null;
+  }
+  function findShopHeadingNear(listRoot) {
+    const prev = listRoot.previousElementSibling?.querySelector?.(".chakra-text.css-1fq51pf");
+    if (prev?.innerText?.trim()) return prev.innerText.trim();
+    const parent = listRoot.parentElement;
+    const direct = parent?.querySelector?.(":scope > .chakra-text.css-1fq51pf");
+    if (direct?.innerText?.trim()) return direct.innerText.trim();
+    let scope = parent ?? listRoot;
+    for (let i = 0; i < 3 && scope; i++) {
+      const cand = scope.querySelector(".chakra-text.css-1fq51pf");
+      if (cand?.innerText?.trim()) return cand.innerText.trim();
+      scope = scope.parentElement;
+    }
+    return null;
+  }
   function extractInventoryId(shop, entry) {
     if (!entry) return null;
     if (shop === "plant") return entry?.species ? String(entry.species) : null;
@@ -16980,6 +17004,7 @@ try{importScripts("${abs}")}catch(e){}
   async function initShopInventoryWatchers() {
     for (const shop of SHOP_TYPES) {
       const atom = SHOP_ATOMS[shop];
+      console.log(await atom.get());
       if (!atom) continue;
       if (!shopInventoryInitStarted) return;
       try {
@@ -17070,18 +17095,43 @@ try{importScripts("${abs}")}catch(e){}
     const sizes = {};
     for (const shop of SHOP_TYPES) {
       const cached = shopInventoryLengths[shop];
+      console.log("cached: ", cached);
       if (typeof cached === "number") {
         sizes[shop] = cached;
       } else if (typeof overrides[shop] === "number") {
         sizes[shop] = overrides[shop];
       }
     }
+    console.log("sizes: ", sizes);
     return sizes;
   }
   function detectShopByCount(total) {
     const sizes = getExpectedSizes();
     const matches = SHOP_TYPES.filter((t) => typeof sizes[t] === "number" && sizes[t] === total);
+    console.log(matches);
     return matches.length === 1 ? matches[0] : null;
+  }
+  function detectShopFromHeadingOrCount(listRoot, total, sampleItemEl, idx0) {
+    const memo = listTypeMemo.get(listRoot);
+    if (memo) return memo;
+    const attr = listRoot.getAttribute(LIST_HINT_ATTR);
+    if (attr) return attr;
+    const heading = findShopHeadingNear(listRoot);
+    if (heading) {
+      const t = headingToShopType(heading);
+      if (t) {
+        listRoot.setAttribute(LIST_HINT_ATTR, t);
+        listTypeMemo.set(listRoot, t);
+        return t;
+      }
+    }
+    const byCount = detectShopByCount(total);
+    if (byCount) {
+      listRoot.setAttribute(LIST_HINT_ATTR, byCount);
+      listTypeMemo.set(listRoot, byCount);
+      return byCount;
+    }
+    return null;
   }
   function parseCompactNumber(s) {
     if (!s) return void 0;
@@ -17193,7 +17243,7 @@ try{importScripts("${abs}")}catch(e){}
   }
   function isItemDisabled(itemEl) {
     if (!itemEl) return false;
-    return !!itemEl.querySelector(".chakra-text.css-fcn4vq");
+    return !!itemEl.querySelector(".chakra-text.css-1ox18rb");
   }
   function getListItems(listRoot) {
     const direct = listRoot.querySelectorAll(`:scope > ${ITEM_SELECTOR}`);
@@ -17282,25 +17332,34 @@ try{importScripts("${abs}")}catch(e){}
     flex.appendChild(label2);
     btn.appendChild(flex);
     btn.addEventListener("click", (ev) => {
+      console.log("test");
       ev.preventDefault();
       ev.stopPropagation();
       if (btn.disabled) return;
       const itemEl = btn.closest(ITEM_SELECTOR);
+      console.log("itemEl ", itemEl);
       const listRoot = itemEl?.closest(LIST_SELECTOR) || document.body;
+      console.log("listRoot ", listRoot);
       const items = getListItems(listRoot);
+      console.log("items ", items);
       const total = items.length;
+      console.log("total ", total);
       const attrIndex = itemEl?.getAttribute(INDEX_ATTR);
+      console.log("attrIndex ", attrIndex);
       let idx0 = attrIndex != null && attrIndex !== "" ? Number.parseInt(attrIndex, 10) : -1;
       if (!Number.isFinite(idx0) || idx0 < 0) {
         idx0 = itemEl ? items.indexOf(itemEl) : -1;
       }
       const idx1 = idx0 >= 0 ? idx0 + 1 : -1;
-      const shop = detectShopByCount(total);
+      console.log("idx1 ", idx1);
+      const shop = detectShopFromHeadingOrCount(listRoot, total, itemEl, idx0);
+      console.log("shop ", shop);
       let itemId = null;
       let itemName = null;
       let reason = "none";
       let coinParsed;
       let creditParsed;
+      console.log("shop: ", shop, " itemEl: ", itemEl);
       if (shop && itemEl) {
         const row = findRowForItem(itemEl);
         if (row) {
@@ -17407,7 +17466,7 @@ try{importScripts("${abs}")}catch(e){}
   var DEFAULTS2 = {
     containerSelector: ".McFlex.css-1lfov12",
     itemSelector: ".McFlex.css-1kkwxjt",
-    flagSelector: ".chakra-text.css-rlkzj4"
+    flagSelector: ".chakra-text.css-pyjzrq"
   };
   function startReorderObserver(options = {}) {
     if (!isBrowser2()) {
@@ -22065,7 +22124,7 @@ try{importScripts("${abs}")}catch(e){}
     box.className = "qws2";
     box.innerHTML = `
     <div class="row drag">
-      <div class="title">Arie's Mod</div>
+      <div class="title">\u{1F383} Arie's Mod</div>
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
