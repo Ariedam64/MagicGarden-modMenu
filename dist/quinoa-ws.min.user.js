@@ -37742,6 +37742,7 @@ next: ${next}`;
   // src/main.ts
   (async function() {
     "use strict";
+    installPageWebSocketHook();
     initSprites({
       config: {
         blackBelow: 10,
@@ -37753,7 +37754,6 @@ next: ${next}`;
       }
     });
     await ensureSpritesReady();
-    installPageWebSocketHook();
     mountHUD({
       onRegister(register) {
         register("players", "\u{1F465} Players", renderPlayersMenu);
