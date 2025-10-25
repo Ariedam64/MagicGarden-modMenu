@@ -22,6 +22,8 @@ import { ensureSpritesReady } from "./core/spriteBootstrap";
 (async function () {
   "use strict";
 
+  installPageWebSocketHook();
+
   initSprites({
     config: {
       blackBelow: 10,
@@ -36,8 +38,6 @@ import { ensureSpritesReady } from "./core/spriteBootstrap";
   });
 
   await ensureSpritesReady();
-
-  installPageWebSocketHook();
 
   mountHUD({
     onRegister(register) {
