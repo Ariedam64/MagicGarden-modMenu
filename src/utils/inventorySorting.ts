@@ -84,7 +84,8 @@ const DEFAULTS: Required<Pick<
   | 'checkboxLabelSelector'
   | 'injectDarkStyles'
 >> = {
-  gridSelector: 'div.McGrid.css-tqc83y',
+  // Updated to new Inventory root grid container (game UI update)
+  gridSelector: 'div.McGrid.css-1kv58ap',
   filtersBlockSelector: '.McGrid.css-o1vp12',
   closeButtonSelector: 'button.css-vuqwsg',
   checkboxSelector: 'label.chakra-checkbox.css-1v6h4z7',
@@ -278,7 +279,8 @@ const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
 };
 
 const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
-const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-ofw63c';
+// Updated items container to match new inventory DOM (inside the main content area)
+const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-zo8r2v';
 const INVENTORY_VALUE_CONTAINER_SELECTOR = '.McFlex.css-1p00rng';
 const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
 const INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
@@ -865,7 +867,12 @@ function filterInventoryItems(
 }
 
 function getInventoryItemsContainer(grid: Element): HTMLElement | null {
-  return grid.querySelector<HTMLElement>(INVENTORY_ITEMS_CONTAINER_SELECTOR);
+  // Prefer container scoped to the grid; fall back to document-level (new UI places
+  // the items list outside the header grid).
+  return (
+    grid.querySelector<HTMLElement>(INVENTORY_ITEMS_CONTAINER_SELECTOR) ||
+    document.querySelector<HTMLElement>(INVENTORY_ITEMS_CONTAINER_SELECTOR)
+  );
 }
 
 function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
@@ -2202,8 +2209,10 @@ function ensureSortingBar(
   const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
   if (!filtersBlock) return null;
 
-  const closeBtnInBlock = filtersBlock.querySelector(cfg.closeButtonSelector);
-  const closeBtn = closeBtnInBlock || grid.querySelector(cfg.closeButtonSelector);
+  // We no longer anchor to the close button, as the new UI places it
+  // in a separate column. Always append as a full-width row at the end
+  // of the filters block to avoid breaking layout.
+  const closeBtn = null as unknown as Element | null;
 
   let wrap = filtersBlock.querySelector(':scope > .tm-sort-wrap') as HTMLElement | null;
   let select: HTMLSelectElement;
@@ -2224,11 +2233,9 @@ function ensureSortingBar(
     (wrap as any).__grid = grid;
     (wrap as any).__valueSummary = valueSummaryEl ?? null;
 
-    if (closeBtn && (closeBtn as HTMLElement).parentElement) {
-      (closeBtn as HTMLElement).insertAdjacentElement('afterend', wrap);
-    } else {
-      filtersBlock.appendChild(wrap);
-    }
+    // Make the bar span across grid columns in the filters block.
+    (wrap.style as any).gridColumn = '1 / -1';
+    filtersBlock.appendChild(wrap);
 
     if (directionLabelEl) {
       directionLabelEl.textContent = directionLabelText;
@@ -2294,14 +2301,12 @@ function ensureSortingBar(
       directionLabelEl.textContent = directionLabelText;
     }
 
-    if (
-      closeBtn &&
-      (closeBtn as HTMLElement).parentElement &&
-      (closeBtn as Element).nextElementSibling !== wrap
-    ) {
-      (closeBtn as HTMLElement).insertAdjacentElement('afterend', wrap);
-    } else if (!closeBtn && wrap.parentElement !== filtersBlock) {
+    if (wrap.parentElement !== filtersBlock) {
+      (wrap.style as any).gridColumn = '1 / -1';
       filtersBlock.appendChild(wrap);
+    } else {
+      // Ensure correct spanning each update
+      (wrap.style as any).gridColumn = '1 / -1';
     }
   }
 
