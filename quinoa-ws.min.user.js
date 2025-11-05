@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.4.6
+// @version      2.4.8
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19811,7 +19811,8 @@ try{importScripts("${abs}")}catch(e){}
 
   // src/utils/inventorySorting.ts
   var DEFAULTS5 = {
-    gridSelector: "div.McGrid.css-tqc83y",
+    // Updated to new Inventory root grid container (game UI update)
+    gridSelector: "div.McGrid.css-1kv58ap",
     filtersBlockSelector: ".McGrid.css-o1vp12",
     closeButtonSelector: "button.css-vuqwsg",
     checkboxSelector: "label.chakra-checkbox.css-1v6h4z7",
@@ -19970,7 +19971,7 @@ try{importScripts("${abs}")}catch(e){}
     strength: "Strength"
   };
   var INVENTORY_BASE_INDEX_DATASET_KEY = "tmInventoryBaseIndex";
-  var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-ofw63c";
+  var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-zo8r2v";
   var INVENTORY_VALUE_CONTAINER_SELECTOR = ".McFlex.css-1p00rng";
   var INVENTORY_VALUE_ELEMENT_CLASS = "tm-inventory-item-value";
   var INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
@@ -20412,7 +20413,7 @@ try{importScripts("${abs}")}catch(e){}
     return { filteredItems, keepAll, itemTypes, detectedItemTypes };
   }
   function getInventoryItemsContainer(grid) {
-    return grid.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR);
+    return grid.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR) || document.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR);
   }
   function getInventoryDomEntries(container) {
     const entries = [];
@@ -21421,8 +21422,7 @@ try{importScripts("${abs}")}catch(e){}
   function ensureSortingBar(grid, cfg, useCustomSelectStyles, labelByValue, directionLabelText, onChange, showValues, onToggleValues) {
     const filtersBlock = grid.querySelector(cfg.filtersBlockSelector);
     if (!filtersBlock) return null;
-    const closeBtnInBlock = filtersBlock.querySelector(cfg.closeButtonSelector);
-    const closeBtn = closeBtnInBlock || grid.querySelector(cfg.closeButtonSelector);
+    const closeBtn = null;
     let wrap = filtersBlock.querySelector(":scope > .tm-sort-wrap");
     let select2;
     let directionSelect;
@@ -21439,11 +21439,8 @@ try{importScripts("${abs}")}catch(e){}
       valueSummaryEl = ui.valueSummary;
       wrap.__grid = grid;
       wrap.__valueSummary = valueSummaryEl ?? null;
-      if (closeBtn && closeBtn.parentElement) {
-        closeBtn.insertAdjacentElement("afterend", wrap);
-      } else {
-        filtersBlock.appendChild(wrap);
-      }
+      wrap.style.gridColumn = "1 / -1";
+      filtersBlock.appendChild(wrap);
       if (directionLabelEl) {
         directionLabelEl.textContent = directionLabelText;
       }
@@ -21498,10 +21495,11 @@ try{importScripts("${abs}")}catch(e){}
       if (directionLabelEl) {
         directionLabelEl.textContent = directionLabelText;
       }
-      if (closeBtn && closeBtn.parentElement && closeBtn.nextElementSibling !== wrap) {
-        closeBtn.insertAdjacentElement("afterend", wrap);
-      } else if (!closeBtn && wrap.parentElement !== filtersBlock) {
+      if (wrap.parentElement !== filtersBlock) {
+        wrap.style.gridColumn = "1 / -1";
         filtersBlock.appendChild(wrap);
+      } else {
+        wrap.style.gridColumn = "1 / -1";
       }
     }
     if (valueToggleInput) {
