@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.4.8
+// @version      2.4.9
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12654,7 +12654,7 @@
     ring: "var(--chakra-ring-color, rgba(66,153,225,0.6))"
   };
   var DEFAULTS = {
-    rootSelector: ".McFlex.css-1wu1jyg",
+    rootSelector: ".McFlex.css-cj12rt",
     checkSelector: ".McFlex.css-bvyqr8",
     buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
     buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
