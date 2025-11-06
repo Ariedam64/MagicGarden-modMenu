@@ -92,7 +92,7 @@ const DEFAULT_THEME: ThemeColors = {
 };
 
 export const DEFAULTS = {
-  rootSelector: '.McFlex.css-1wu1jyg',
+  rootSelector: '.McFlex.css-cj12rt',
   checkSelector: '.McFlex.css-bvyqr8',
   buttonSelectorWide: 'button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y',
   buttonSelectorStrict: 'button.chakra-button.css-1rizn4y',
