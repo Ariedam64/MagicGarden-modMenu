@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.4.9
+// @version      2.5.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2917,6 +2917,9 @@
   var totalPetSellPrice = makeAtom("totalPetSellPriceAtom");
   var expandedPetSlotId = makeAtom("expandedPetSlotIdAtom");
   var myCropItemsToSell = makeAtom("myCropItemsToSellAtom");
+  var myPetHutchPetItems = makeAtom("myPetHutchPetItemsAtom");
+  var isMyInventoryAtMaxLength = makeAtom("isMyInventoryAtMaxLengthAtom");
+  var myNumPetHutchItems = makeAtom("myNumPetHutchItemsAtom");
   var shops = makeAtom("shopsAtom");
   var myShopPurchases = makeAtom("myShopPurchasesAtom");
   var numPlayers = makeAtom("numPlayersAtom");
@@ -6811,6 +6814,12 @@
       } catch (err) {
       }
     },
+    async removeGardenObject(slot, slotType) {
+      try {
+        sendToGame({ type: "RemoveGardenObject", slot, slotType });
+      } catch (err) {
+      }
+    },
     async waterPlant(slot) {
       try {
         sendToGame({ type: "WaterPlant", slot });
@@ -6868,6 +6877,18 @@
     async placePet(itemId, position2, tileType, localTileIndex) {
       try {
         sendToGame({ type: "PlacePet", itemId, position: position2, tileType, localTileIndex });
+      } catch (err) {
+      }
+    },
+    async retrieveItemFromStorage(itemId, storageId) {
+      try {
+        sendToGame({ type: "RetrieveItemFromStorage", itemId, storageId });
+      } catch (err) {
+      }
+    },
+    async putItemInStorage(itemId, storageId) {
+      try {
+        sendToGame({ type: "PutItemInStorage", itemId, storageId });
       } catch (err) {
       }
     },
@@ -11078,9 +11099,11 @@
   var _teamSearch = _loadTeamSearchMap();
   var _invRaw = null;
   var _activeRaw = [];
+  var _hutchRaw = [];
   var _invPetsCache = [];
   var _invUnsub = null;
   var _activeUnsub = null;
+  var _hutchUnsub = null;
   var _invSig = null;
   var _activeSig = null;
   function _inventoryItemToPet(x) {
@@ -11153,8 +11176,13 @@
   }
   function _rebuildInvPets() {
     const map2 = /* @__PURE__ */ new Map();
-    const items = Array.isArray(_invRaw?.items) ? _invRaw.items : Array.isArray(_invRaw) ? _invRaw : [];
-    for (const it of items) {
+    const hutchItems = Array.isArray(_hutchRaw) ? _hutchRaw : [];
+    const invItems = Array.isArray(_invRaw?.items) ? _invRaw.items : Array.isArray(_invRaw) ? _invRaw : [];
+    for (const it of hutchItems) {
+      const p = _inventoryItemToPet(it);
+      if (p && p.id) map2.set(p.id, p);
+    }
+    for (const it of invItems) {
       const p = _inventoryItemToPet(it);
       if (p && p.id) map2.set(p.id, p);
     }
@@ -11213,19 +11241,42 @@
       }
     };
   }
+  async function _startHutchWatcher() {
+    const unsub = await (async () => {
+      try {
+        const cur = await myPetHutchPetItems.get();
+        _hutchRaw = Array.isArray(cur) ? cur : [];
+        _rebuildInvPets();
+      } catch {
+      }
+      return myPetHutchPetItems.onChange((list) => {
+        _hutchRaw = Array.isArray(list) ? list : [];
+        _rebuildInvPets();
+      });
+    })();
+    _hutchUnsub = () => {
+      try {
+        unsub();
+      } catch {
+      }
+    };
+  }
   async function _ensureInventoryWatchersStarted() {
     if (!_invUnsub) await _startInventoryWatcher();
     if (!_activeUnsub) await _startActivePetsWatcher();
+    if (!_hutchUnsub) await _startHutchWatcher();
     if (!_invPetsCache.length) {
       try {
-        const [inv, active] = await Promise.all([
+        const [inv, active, hutch] = await Promise.all([
           Atoms.inventory.myInventory.get(),
-          Atoms.pets.myPetInfos.get()
+          Atoms.pets.myPetInfos.get(),
+          myPetHutchPetItems.get()
         ]);
         _invSig = _buildInvSigFromInventory(inv);
         _activeSig = _buildActiveSig(active);
         _invRaw = inv;
         _activeRaw = Array.isArray(active) ? active : [];
+        _hutchRaw = Array.isArray(hutch) ? hutch : [];
         _rebuildInvPets();
       } catch {
       }
@@ -11690,6 +11741,43 @@
       });
       const payload = searchOverride && searchOverride.trim().length ? await this.buildFilteredInventoryByQuery(searchOverride, { excludeIds: exclude }) : await this.buildFilteredInventoryForTeam(teamId, { excludeIds: exclude });
       const items = Array.isArray(payload?.items) ? payload.items : [];
+      try {
+        const rawHutch = await myPetHutchPetItems.get();
+        const hutchArr = Array.isArray(rawHutch) ? rawHutch : [];
+        let hutchPets = hutchArr.map((it) => _inventoryItemToPet(it)).filter((p) => !!p);
+        const teamSearch = this.getTeamSearch(teamId) || "";
+        if (searchOverride && searchOverride.trim().length) {
+          const q = searchOverride.toLowerCase().trim();
+          if (q) {
+            hutchPets = hutchPets.filter(
+              (p) => _s(p.id).includes(q) || _s(p.petSpecies).includes(q) || _s(p.name).includes(q) || Array.isArray(p.abilities) && p.abilities.some((a) => _s(a).includes(q) || _s(_abilityName(a)).includes(q)) || Array.isArray(p.mutations) && p.mutations.some((m) => _s(m).includes(q))
+            );
+          }
+        } else if (teamSearch && teamSearch.trim().length) {
+          const { mode, value } = _parseTeamSearch(teamSearch);
+          if (mode === "ability" && value) {
+            const idSet = await _abilityNameToPresentIds(value);
+            hutchPets = idSet.size ? hutchPets.filter((p) => Array.isArray(p.abilities) && p.abilities.some((a) => idSet.has(a))) : [];
+          } else if (mode === "species" && value) {
+            const vv = value.toLowerCase();
+            hutchPets = hutchPets.filter((p) => (p.petSpecies || "").toLowerCase() === vv);
+          } else if (value) {
+            const q = value.toLowerCase();
+            hutchPets = hutchPets.filter(
+              (p) => _s(p.id).includes(q) || _s(p.petSpecies).includes(q) || _s(p.name).includes(q) || Array.isArray(p.abilities) && p.abilities.some((a) => _s(a).includes(q) || _s(_abilityName(a)).includes(q)) || Array.isArray(p.mutations) && p.mutations.some((m) => _s(m).includes(q))
+            );
+          }
+        }
+        if (exclude.size) hutchPets = hutchPets.filter((p) => !exclude.has(p.id));
+        const seen = new Set(items.map((it) => String(it?.id ?? "")));
+        for (const p of hutchPets) {
+          if (!seen.has(p.id)) {
+            items.push(_invPetToRawItem(p));
+            seen.add(p.id);
+          }
+        }
+      } catch {
+      }
       if (!items.length) return null;
       await fakeInventoryShow(payload, { open: true });
       const selIndex = await _waitValidatedInventoryIndex(2e4);
@@ -11722,7 +11810,106 @@
       const t = this.getTeams().find((tt) => tt.id === teamId) || null;
       if (!t) throw new Error("Team not found");
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      const res = await _applyTeam(targetInvIds);
+      const targetSet = new Set(targetInvIds);
+      let activeSlots = await _getActivePetSlotIds();
+      const toEvacuate = activeSlots.filter((id) => !targetSet.has(id));
+      const HUTCH_MAX = 25;
+      let evacuatedToHutchCount = 0;
+      let hutchCount = (() => {
+        try {
+          return Number(myNumPetHutchItems.get());
+        } catch {
+          return 0;
+        }
+      })();
+      try {
+        hutchCount = Number(await myNumPetHutchItems.get());
+      } catch {
+        hutchCount = 0;
+      }
+      let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
+      const oldStoredInInventory = [];
+      for (const slotId of toEvacuate) {
+        try {
+          if (freeHutch > 0) {
+            await PlayerService.storePet(slotId);
+            await PlayerService.putItemInStorage(slotId, "PetHutch");
+            freeHutch--;
+            evacuatedToHutchCount++;
+          } else {
+            await PlayerService.storePet(slotId);
+            oldStoredInInventory.push(slotId);
+          }
+        } catch {
+        }
+      }
+      let hutchItemsSet = /* @__PURE__ */ new Set();
+      try {
+        const hutchItems = await myPetHutchPetItems.get();
+        if (Array.isArray(hutchItems)) {
+          hutchItemsSet = new Set(hutchItems.map((it) => String(it?.id ?? "")));
+        }
+      } catch {
+      }
+      const retrievedFromHutch = /* @__PURE__ */ new Set();
+      for (const invId of targetInvIds) {
+        if (!hutchItemsSet.has(invId)) continue;
+        try {
+          let isFull = !!await isMyInventoryAtMaxLength.get();
+          if (isFull) {
+            try {
+              hutchCount = Number(await myNumPetHutchItems.get());
+            } catch {
+              hutchCount = HUTCH_MAX;
+            }
+            freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : HUTCH_MAX));
+            if (freeHutch > 0 && oldStoredInInventory.length) {
+              const moveId = oldStoredInInventory.shift();
+              try {
+                await PlayerService.putItemInStorage(moveId, "PetHutch");
+                freeHutch--;
+                isFull = !!await isMyInventoryAtMaxLength.get();
+              } catch {
+              }
+            }
+          }
+          if (isFull) {
+            continue;
+          }
+          await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
+          retrievedFromHutch.add(invId);
+          hutchItemsSet.delete(invId);
+        } catch {
+        }
+      }
+      let readySet = /* @__PURE__ */ new Set();
+      try {
+        const invPets = await this.getInventoryPets();
+        readySet = new Set((Array.isArray(invPets) ? invPets : []).map((p) => p.id));
+      } catch {
+      }
+      const finalTargets = targetInvIds.filter((id) => readySet.has(id));
+      let res = { swapped: 0, placed: 0, skipped: 0 };
+      const shouldPlaceOnly = retrievedFromHutch.size > 0 || evacuatedToHutchCount > 0;
+      if (shouldPlaceOnly) {
+        try {
+          const currentlyActive = new Set(await _getActivePetSlotIds());
+          for (const invId of finalTargets) {
+            if (currentlyActive.has(invId)) {
+              res.skipped++;
+              continue;
+            }
+            try {
+              await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
+              res.placed++;
+            } catch {
+            }
+          }
+        } catch {
+        }
+      } else {
+        res = await _applyTeam(finalTargets);
+      }
       markTeamAsUsed(teamId);
       return res;
     },
