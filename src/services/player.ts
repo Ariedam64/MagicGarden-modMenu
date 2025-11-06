@@ -263,6 +263,10 @@ export const PlayerService = {
     try { sendToGame({ type: "SellPet", itemId }); } catch (err) {  }
   },
 
+  async removeGardenObject(slot: number, slotType: string) {
+    try { sendToGame({ type: "RemoveGardenObject", slot, slotType }); } catch (err) {  }
+  },
+
   async waterPlant(slot: number) {
     try { sendToGame({ type: "WaterPlant", slot }); } catch (err) {  }
   },
@@ -302,6 +306,15 @@ export const PlayerService = {
   async placePet(itemId: string, position: { x: 0; y: 0 }, tileType: "Boardwalk", localTileIndex: 64) {
     try { sendToGame({ type: "PlacePet", itemId, position, tileType, localTileIndex }); } catch (err) {  }
   },
+
+  async retrieveItemFromStorage(itemId: string, storageId: string){
+    try { sendToGame({ type: "RetrieveItemFromStorage", itemId, storageId}) } catch (err) { }
+  },
+
+  async putItemInStorage(itemId: string, storageId: string){
+    try { sendToGame({ type: "PutItemInStorage", itemId, storageId}) } catch (err) { }
+  },
+
 
   async petPositions(petPositions: Record<string, XY | null | undefined>) {
     const entries = Object.entries(petPositions ?? {});

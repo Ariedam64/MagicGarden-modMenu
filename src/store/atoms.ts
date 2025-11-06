@@ -112,6 +112,9 @@ export const myPetSlotInfos = makeAtom<any>("myPetSlotInfosAtom");
 export const totalPetSellPrice = makeAtom<number>("totalPetSellPriceAtom")
 export const expandedPetSlotId = makeAtom<string>("expandedPetSlotIdAtom")
 export const myCropItemsToSell = makeAtom<any>("myCropItemsToSellAtom")
+export const myPetHutchPetItems = makeAtom<any>("myPetHutchPetItemsAtom")
+export const isMyInventoryAtMaxLength = makeAtom<any>("isMyInventoryAtMaxLengthAtom")
+export const myNumPetHutchItems = makeAtom<any>("myNumPetHutchItemsAtom")
 
 export const shops = makeAtom<any>("shopsAtom");
 export const myShopPurchases = makeAtom<any>("myShopPurchasesAtom");

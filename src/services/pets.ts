@@ -8,7 +8,7 @@ import {
 } from "./player";
 import { petCatalog, petAbilities } from "../data/hardcoded-data.clean.js";
 import { fakeInventoryShow, closeInventoryPanel, isInventoryOpen } from "./fakeModal.ts";
-import { Atoms } from "../store/atoms";
+import { Atoms, myPetHutchPetItems, myNumPetHutchItems, isMyInventoryAtMaxLength } from "../store/atoms";
 import { Hotkey, matchHotkey, stringToHotkey } from "../ui/menu.ts";
 import {
   getKeybind,
@@ -393,10 +393,12 @@ let _teamSearch: Record<string, string> = _loadTeamSearchMap();
 
 let _invRaw: any = null;      // myInventory snapshot
 let _activeRaw: any[] = [];   // myPetInfos snapshot
+let _hutchRaw: any[] = [];    // myPetHutchPetItems snapshot
 let _invPetsCache: InventoryPet[] = [];
 
 let _invUnsub: null | (() => void) = null;
 let _activeUnsub: null | (() => void) = null;
+let _hutchUnsub: null | (() => void) = null;
 
 let _invSig: Map<string, string> | null = null;
 let _activeSig: Map<string, string> | null = null;
@@ -475,10 +477,17 @@ function _mapsEqual(a: Map<string, string> | null, b: Map<string, string>): bool
 }
 function _rebuildInvPets() {
   const map = new Map<string, InventoryPet>();
-  const items: any[] =
+  const hutchItems: any[] = Array.isArray(_hutchRaw) ? _hutchRaw : [];
+  const invItems: any[] =
     Array.isArray(_invRaw?.items) ? _invRaw.items :
     Array.isArray(_invRaw) ? _invRaw : [];
-  for (const it of items) {
+
+  // Priority: active > inventory > hutch
+  for (const it of hutchItems) {
+    const p = _inventoryItemToPet(it);
+    if (p && p.id) map.set(p.id, p);
+  }
+  for (const it of invItems) {
     const p = _inventoryItemToPet(it);
     if (p && p.id) map.set(p.id, p);
   }
@@ -525,20 +534,37 @@ async function _startActivePetsWatcher() {
   })();
   _activeUnsub = () => { try { unsub(); } catch {} };
 }
+async function _startHutchWatcher() {
+  const unsub = await (async () => {
+    try {
+      const cur = await myPetHutchPetItems.get();
+      _hutchRaw = Array.isArray(cur) ? cur : [];
+      _rebuildInvPets();
+    } catch {}
+    return myPetHutchPetItems.onChange((list: any) => {
+      _hutchRaw = Array.isArray(list) ? list : [];
+      _rebuildInvPets();
+    });
+  })();
+  _hutchUnsub = () => { try { unsub(); } catch {} };
+}
 async function _ensureInventoryWatchersStarted() {
   if (!_invUnsub)  await _startInventoryWatcher();
   if (!_activeUnsub) await _startActivePetsWatcher();
+  if (!_hutchUnsub) await _startHutchWatcher();
 
   if (!_invPetsCache.length) {
     try {
-      const [inv, active] = await Promise.all([
+      const [inv, active, hutch] = await Promise.all([
         Atoms.inventory.myInventory.get(),
         Atoms.pets.myPetInfos.get(),
+        myPetHutchPetItems.get(),
       ]);
       _invSig    = _buildInvSigFromInventory(inv);
       _activeSig = _buildActiveSig(active);
       _invRaw    = inv;
       _activeRaw = Array.isArray(active) ? active : [];
+      _hutchRaw  = Array.isArray(hutch) ? hutch : [];
       _rebuildInvPets();
     } catch {}
   }
@@ -989,6 +1015,64 @@ export const PetsService = {
         : await this.buildFilteredInventoryForTeam(teamId, { excludeIds: exclude });
 
     const items: any[] = Array.isArray(payload?.items) ? payload.items : [];
+
+    // Append Pet Hutch pets to the selection list
+    try {
+      const rawHutch = await myPetHutchPetItems.get();
+      const hutchArr = Array.isArray(rawHutch) ? rawHutch : [];
+
+      // Convert to InventoryPet objects
+      let hutchPets: InventoryPet[] = hutchArr
+        .map((it: any) => _inventoryItemToPet(it))
+        .filter((p: InventoryPet | null): p is InventoryPet => !!p);
+
+      // Apply same filtering rules as the base list
+      const teamSearch = this.getTeamSearch(teamId) || "";
+      if (searchOverride && searchOverride.trim().length) {
+        const q = searchOverride.toLowerCase().trim();
+        if (q) {
+          hutchPets = hutchPets.filter(p =>
+            _s(p.id).includes(q) ||
+            _s(p.petSpecies).includes(q) ||
+            _s(p.name).includes(q) ||
+            (Array.isArray(p.abilities) && p.abilities.some(a => _s(a).includes(q) || _s(_abilityName(a)).includes(q))) ||
+            (Array.isArray(p.mutations) && p.mutations.some(m => _s(m).includes(q)))
+          );
+        }
+      } else if (teamSearch && teamSearch.trim().length) {
+        const { mode, value } = _parseTeamSearch(teamSearch);
+        if (mode === "ability" && value) {
+          const idSet = await _abilityNameToPresentIds(value);
+          hutchPets = idSet.size
+            ? hutchPets.filter(p => Array.isArray(p.abilities) && p.abilities.some(a => idSet.has(a)))
+            : [];
+        } else if (mode === "species" && value) {
+          const vv = value.toLowerCase();
+          hutchPets = hutchPets.filter(p => (p.petSpecies || "").toLowerCase() === vv);
+        } else if (value) {
+          const q = value.toLowerCase();
+          hutchPets = hutchPets.filter(p =>
+            _s(p.id).includes(q) ||
+            _s(p.petSpecies).includes(q) ||
+            _s(p.name).includes(q) ||
+            (Array.isArray(p.abilities) && p.abilities.some(a => _s(a).includes(q) || _s(_abilityName(a)).includes(q))) ||
+            (Array.isArray(p.mutations) && p.mutations.some(m => _s(m).includes(q)))
+          );
+        }
+      }
+
+      // Exclude pets already assigned to other slots
+      if (exclude.size) hutchPets = hutchPets.filter(p => !exclude.has(p.id));
+
+      // Merge unique IDs into the raw items list
+      const seen = new Set(items.map(it => String((it as any)?.id ?? "")));
+      for (const p of hutchPets) {
+        if (!seen.has(p.id)) {
+          items.push(_invPetToRawItem(p));
+          seen.add(p.id);
+        }
+      }
+    } catch {}
     if (!items.length) return null;
 
     await fakeInventoryShow(payload, { open: true });
@@ -1029,7 +1113,98 @@ export const PetsService = {
     const targetInvIds = (t.slots || [])
       .filter((x): x is string => typeof x === "string" && x.length > 0)
       .slice(0, 3);
-    const res = await _applyTeam(targetInvIds);
+
+    const targetSet = new Set<string>(targetInvIds);
+
+    // 1) Snapshot current active pets
+    let activeSlots = await _getActivePetSlotIds();
+
+    // Keep pets that are already active AND part of the target
+    const toEvacuate = activeSlots.filter(id => !targetSet.has(id));
+
+    // 2) Prefer moving current actives into Pet Hutch (then inventory)
+    const HUTCH_MAX = 25;
+    let evacuatedToHutchCount = 0;
+    let hutchCount = (() => { try { return Number(myNumPetHutchItems.get()); } catch { return 0; } })() as any;
+    try { hutchCount = Number(await myNumPetHutchItems.get()); } catch { hutchCount = 0; }
+    let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : 0));
+
+    const oldStoredInInventory: string[] = [];
+    for (const slotId of toEvacuate) {
+      try {
+        if (freeHutch > 0) {
+          await PlayerService.storePet(slotId);
+          await PlayerService.putItemInStorage(slotId, "PetHutch");
+          freeHutch--;
+          evacuatedToHutchCount++;
+        } else {
+          await PlayerService.storePet(slotId); // fallback: keep in inventory
+          oldStoredInInventory.push(slotId);
+        }
+      } catch {}
+    }
+
+    // 3) Ensure target pets are in inventory (retrieve from hutch if needed)
+    let hutchItemsSet: Set<string> = new Set();
+    try {
+      const hutchItems = await myPetHutchPetItems.get();
+      if (Array.isArray(hutchItems)) {
+        hutchItemsSet = new Set(hutchItems.map((it: any) => String(it?.id ?? "")));
+      }
+    } catch {}
+
+    const retrievedFromHutch = new Set<string>();
+    for (const invId of targetInvIds) {
+      if (!hutchItemsSet.has(invId)) continue; // already in inventory
+      // If inventory is full, try to free one slot by moving an old stored pet into hutch
+      try {
+        let isFull = !!(await isMyInventoryAtMaxLength.get());
+        if (isFull) {
+          // refresh hutch free slots
+          try { hutchCount = Number(await myNumPetHutchItems.get()); } catch { hutchCount = HUTCH_MAX; }
+          freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : HUTCH_MAX));
+          if (freeHutch > 0 && oldStoredInInventory.length) {
+            const moveId = oldStoredInInventory.shift()!;
+            try { await PlayerService.putItemInStorage(moveId, "PetHutch"); freeHutch--; isFull = !!(await isMyInventoryAtMaxLength.get()); } catch {}
+          }
+        }
+        // If still full, abort gracefully
+        if (isFull) {
+          // cannot make space to retrieve; skip retrieval for now
+          continue;
+        }
+        // Retrieve this target from hutch
+        await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
+        retrievedFromHutch.add(invId);
+        // Update local view sets
+        hutchItemsSet.delete(invId);
+      } catch {}
+    }
+
+    // 4) Equip team
+    let readySet = new Set<string>();
+    try {
+      const invPets = await this.getInventoryPets();
+      readySet = new Set((Array.isArray(invPets) ? invPets : []).map(p => p.id));
+    } catch {}
+    const finalTargets = targetInvIds.filter(id => readySet.has(id));
+
+    let res: { swapped: number; placed: number; skipped: number } = { swapped: 0, placed: 0, skipped: 0 };
+
+    const shouldPlaceOnly = (retrievedFromHutch.size > 0) || (evacuatedToHutchCount > 0);
+    if (shouldPlaceOnly) {
+      // Place-only strategy: do not swap, just place pets not already active
+      try {
+        const currentlyActive = new Set(await _getActivePetSlotIds());
+        for (const invId of finalTargets) {
+          if (currentlyActive.has(invId)) { res.skipped++; continue; }
+          try { await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64); res.placed++; }
+          catch { /* ignore */ }
+        }
+      } catch { }
+    } else {
+      res = await _applyTeam(finalTargets);
+    }
     markTeamAsUsed(teamId);
     return res;
   },
