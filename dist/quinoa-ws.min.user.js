@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.0
+// @version      2.5.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -7388,6 +7388,28 @@
     if (shouldOpen) await openJournalModal();
   }
 
+  // src/ui/toast.ts
+  async function sendToast(toast) {
+    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
+    if (sendAtom) {
+      await jSet(sendAtom, toast);
+      return;
+    }
+    const listAtom = getAtomByLabel("quinoaToastsAtom");
+    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
+    const prev = await jGet(listAtom).catch(() => []);
+    const t = { isClosable: true, duration: 1e4, ...toast };
+    if ("toastType" in t && t.toastType === "board") {
+      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
+    } else {
+      t.id = t.id ?? "quinoa-game-toast";
+    }
+    await jSet(listAtom, [...prev, t]);
+  }
+  async function toastSimple(title, description, variant = "info", duration = 3500) {
+    await sendToast({ title, description, variant, duration });
+  }
+
   // src/ui/menu.ts
   var Menu = class {
     constructor(opts = {}) {
@@ -11812,9 +11834,7 @@
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
       const targetSet = new Set(targetInvIds);
       let activeSlots = await _getActivePetSlotIds();
-      const toEvacuate = activeSlots.filter((id) => !targetSet.has(id));
       const HUTCH_MAX = 25;
-      let evacuatedToHutchCount = 0;
       let hutchCount = (() => {
         try {
           return Number(myNumPetHutchItems.get());
@@ -11828,21 +11848,6 @@
         hutchCount = 0;
       }
       let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
-      const oldStoredInInventory = [];
-      for (const slotId of toEvacuate) {
-        try {
-          if (freeHutch > 0) {
-            await PlayerService.storePet(slotId);
-            await PlayerService.putItemInStorage(slotId, "PetHutch");
-            freeHutch--;
-            evacuatedToHutchCount++;
-          } else {
-            await PlayerService.storePet(slotId);
-            oldStoredInInventory.push(slotId);
-          }
-        } catch {
-        }
-      }
       let hutchItemsSet = /* @__PURE__ */ new Set();
       try {
         const hutchItems = await myPetHutchPetItems.get();
@@ -11851,65 +11856,134 @@
         }
       } catch {
       }
-      const retrievedFromHutch = /* @__PURE__ */ new Set();
-      for (const invId of targetInvIds) {
-        if (!hutchItemsSet.has(invId)) continue;
+      const missingFromActive = targetInvIds.filter((id) => !activeSlots.includes(id));
+      const missingFromHutch = missingFromActive.filter((id) => hutchItemsSet.has(id));
+      if (missingFromHutch.length > 0) {
+        let invFull = false;
         try {
-          let isFull = !!await isMyInventoryAtMaxLength.get();
-          if (isFull) {
-            try {
-              hutchCount = Number(await myNumPetHutchItems.get());
-            } catch {
-              hutchCount = HUTCH_MAX;
-            }
-            freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : HUTCH_MAX));
-            if (freeHutch > 0 && oldStoredInInventory.length) {
-              const moveId = oldStoredInInventory.shift();
+          invFull = !!await isMyInventoryAtMaxLength.get();
+        } catch {
+          invFull = false;
+        }
+        if (invFull && freeHutch <= 0) {
+          try {
+            await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.");
+          } catch {
+          }
+          markTeamAsUsed(teamId);
+          return { swapped: 0, placed: 0, skipped: targetInvIds.length };
+        }
+      }
+      let swapped = 0, placed = 0, skipped = 0;
+      for (const invId of targetInvIds) {
+        const isAlreadyActive = activeSlots.includes(invId);
+        if (isAlreadyActive) {
+          skipped++;
+          continue;
+        }
+        const livesInHutch = hutchItemsSet.has(invId);
+        if (livesInHutch) {
+          let invFull = false;
+          try {
+            invFull = !!await isMyInventoryAtMaxLength.get();
+          } catch {
+            invFull = false;
+          }
+          if (invFull) {
+            if (freeHutch > 0) {
               try {
-                await PlayerService.putItemInStorage(moveId, "PetHutch");
-                freeHutch--;
-                isFull = !!await isMyInventoryAtMaxLength.get();
+                const invPets = await this.getInventoryPets();
+                const invPet = (Array.isArray(invPets) ? invPets : []).find((p) => {
+                  const id = String(p?.id || "");
+                  return id && !hutchItemsSet.has(id) && !activeSlots.includes(id) && !targetSet.has(id);
+                });
+                if (invPet) {
+                  await PlayerService.putItemInStorage(invPet.id, "PetHutch");
+                  freeHutch = Math.max(0, freeHutch - 1);
+                } else {
+                  try {
+                    await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error");
+                  } catch {
+                  }
+                  markTeamAsUsed(teamId);
+                  return { swapped, placed, skipped };
+                }
+              } catch {
+                try {
+                  await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error");
+                } catch {
+                }
+                markTeamAsUsed(teamId);
+                return { swapped, placed, skipped };
+              }
+            } else {
+              try {
+                await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error");
+              } catch {
+              }
+              markTeamAsUsed(teamId);
+              return { swapped, placed, skipped };
+            }
+          }
+          try {
+            await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
+            hutchItemsSet.delete(invId);
+            freeHutch = Math.min(25, freeHutch + 1);
+          } catch {
+            continue;
+          }
+        }
+        const offTargetActive = activeSlots.find((id) => !targetSet.has(id));
+        if (offTargetActive) {
+          try {
+            await PlayerService.swapPet(offTargetActive, invId);
+            swapped++;
+            if (freeHutch > 0) {
+              try {
+                await PlayerService.putItemInStorage(offTargetActive, "PetHutch");
+                freeHutch = Math.max(0, freeHutch - 1);
               } catch {
               }
             }
-          }
-          if (isFull) {
-            continue;
-          }
-          await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
-          retrievedFromHutch.add(invId);
-          hutchItemsSet.delete(invId);
-        } catch {
-        }
-      }
-      let readySet = /* @__PURE__ */ new Set();
-      try {
-        const invPets = await this.getInventoryPets();
-        readySet = new Set((Array.isArray(invPets) ? invPets : []).map((p) => p.id));
-      } catch {
-      }
-      const finalTargets = targetInvIds.filter((id) => readySet.has(id));
-      let res = { swapped: 0, placed: 0, skipped: 0 };
-      const shouldPlaceOnly = retrievedFromHutch.size > 0 || evacuatedToHutchCount > 0;
-      if (shouldPlaceOnly) {
-        try {
-          const currentlyActive = new Set(await _getActivePetSlotIds());
-          for (const invId of finalTargets) {
-            if (currentlyActive.has(invId)) {
-              res.skipped++;
-              continue;
-            }
+            activeSlots = activeSlots.filter((x) => x !== offTargetActive);
+            activeSlots.push(invId);
+          } catch {
             try {
               await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
-              res.placed++;
+              placed++;
+              activeSlots.push(invId);
             } catch {
             }
           }
+        } else {
+          try {
+            await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
+            placed++;
+            activeSlots.push(invId);
+          } catch {
+          }
+        }
+      }
+      try {
+        try {
+          hutchCount = Number(await myNumPetHutchItems.get());
         } catch {
         }
-      } else {
-        res = await _applyTeam(finalTargets);
+        freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
+        let leftovers = activeSlots.filter((id) => !targetSet.has(id));
+        for (const slotId of leftovers) {
+          if (freeHutch <= 0) break;
+          try {
+            await PlayerService.storePet(slotId);
+            await PlayerService.putItemInStorage(slotId, "PetHutch");
+            freeHutch = Math.max(0, freeHutch - 1);
+            activeSlots = activeSlots.filter((x) => x !== slotId);
+          } catch {
+          }
+        }
+      } catch {
       }
+      const res = await _applyTeam(targetInvIds);
       markTeamAsUsed(teamId);
       return res;
     },
@@ -12407,28 +12481,6 @@
       },
       true
     );
-  }
-
-  // src/ui/toast.ts
-  async function sendToast(toast) {
-    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
-    if (sendAtom) {
-      await jSet(sendAtom, toast);
-      return;
-    }
-    const listAtom = getAtomByLabel("quinoaToastsAtom");
-    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
-    const prev = await jGet(listAtom).catch(() => []);
-    const t = { isClosable: true, duration: 1e4, ...toast };
-    if ("toastType" in t && t.toastType === "board") {
-      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
-    } else {
-      t.id = t.id ?? "quinoa-game-toast";
-    }
-    await jSet(listAtom, [...prev, t]);
-  }
-  async function toastSimple(title, description, variant = "info", duration = 3500) {
-    await sendToast({ title, description, variant, duration });
   }
 
   // src/core/audioPlayer.ts
