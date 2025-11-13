@@ -73,6 +73,20 @@ export function mountHUD(opts?: HUDOptions) {
     min-width:160px;
     display:flex; flex-direction:column; gap:8px;
   }
+
+
+  .qws2 .btn{
+    cursor:pointer;
+    border-radius:10px;
+    border:1px solid var(--qws-border);
+    padding:6px 10px;
+    background:linear-gradient(180deg, #ffffff12, #ffffff06);
+    color:#fff;
+    transition:transform .1s ease, background .18s ease, border-color .18s ease;
+    width:auto !important;
+    margin-bottom:0 !important;
+  }
+    
   .qws2.hidden{ display:none }
   .qws2 .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
   .qws2 .col{ display:flex; flex-direction:column; gap:4px }
