@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.2
+// @version      2.5.3
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3176,6 +3176,9 @@
     Delphinium: 50,
     DawnCelestialCrop: 51,
     MoonCelestialCrop: 52,
+    Camellia: 57,
+    Hedge: 58,
+    FlowerBush: 59,
     Squash: 60
   };
   var tileRefsTallPlants = {
@@ -3229,23 +3232,34 @@
     Echeveria: 40,
     Bamboo: 41,
     Cactus: 42,
+    Camellia: 48,
+    Chrysanthemum: 49,
     Squash: 50
   };
   var tileRefsItems = {
     Coin: 1,
     Shovel: 2,
-    Seeds: 3,
-    PlanterPot: 5,
-    InventoryBag: 6,
-    RainbowPotion: 9,
-    GoldPotion: 10,
-    WateringCan: 14,
-    Fertilizer: 15,
+    PlanterPot: 6,
+    InventoryBag: 7,
+    WateringCan: 9,
+    Fertilizer: 10,
+    RainbowPotion: 14,
+    GoldPotion: 15,
     WetPotion: 16,
     ChilledPotion: 17,
     FrozenPotion: 18,
     DawnlitPotion: 19,
     AmberlitPotion: 20,
+    JournalStamp: 22,
+    Donut: 23,
+    ToolsRestocked: 24,
+    SeedsRestocked: 25,
+    EggsRestocked: 26,
+    DecorRestocked: 27,
+    Leaderboard: 28,
+    Stats: 29,
+    ActivityLog: 30,
+    ChatBubble: 39,
     ArrowKeys: 41,
     Touchpad: 42
   };
@@ -3321,6 +3335,7 @@
     MarbleLampPost: 27,
     MarbleBenchSideways: 28,
     HayBale: 29,
+    PetHutch: 30,
     LargeRock: 31,
     WoodArch: 33,
     WoodBucketPedestal: 34,
@@ -3345,6 +3360,7 @@
     StoneBirdBath: 56,
     MarbleBlobling: 57,
     MarbleBucketPedestal: 58,
+    MarbleFountain: 58,
     Cauldron: 59,
     MiniFairyKeep: 60,
     WoodStool: 63,
@@ -3807,6 +3823,82 @@
         growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 }
       },
       crop: { tileRef: tileRefsPlants.MoonCelestialCrop, name: "Moonbinder Bulb", baseSellPrice: 11e6, baseWeight: 2, baseTileScale: 0.4, maxScale: 2, transformOrigin: "bottom" }
+    },
+    Camellia: {
+      seed: {
+        tileRef: tileRefsSeeds.Camellia,
+        name: "Camellia Seed",
+        coinPrice: 55e3,
+        // 55e3 dans le bundle
+        creditPrice: 289,
+        rarity: rarity.Legendary
+        // éventuellement : unavailableSurfaces: ["discord"]
+      },
+      plant: {
+        tileRef: tileRefsPlants.Hedge,
+        name: "Camellia Hedge",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: -0.9, rotation: 0 },
+          { x: -0.28, y: -0.6, rotation: 0 },
+          { x: 0.28, y: -0.6, rotation: 0 },
+          { x: -0.28, y: 0.25, rotation: 0 },
+          { x: 0.28, y: 0.25, rotation: 0 },
+          { x: 0, y: 0, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 2,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: -0.4,
+        nudgeYMultiplier: 0.5
+      },
+      crop: {
+        tileRef: tileRefsPlants.Camellia,
+        name: "Camellia",
+        baseSellPrice: 4875,
+        baseWeight: 0.3,
+        baseTileScale: 0.4,
+        maxScale: 2.5
+      }
+    },
+    Chrysanthemum: {
+      seed: {
+        tileRef: tileRefsSeeds.Chrysanthemum,
+        name: "Chrysanthemum Seed",
+        coinPrice: 67e4,
+        // 67e4 dans le bundle
+        creditPrice: 567,
+        rarity: rarity.Mythic
+      },
+      plant: {
+        tileRef: tileRefsPlants.FlowerBush,
+        name: "Chrysanthemum Bush",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: 0, rotation: 0 },
+          { x: -0.28, y: 0.22, rotation: 0 },
+          { x: 0.28, y: 0.22, rotation: 0 },
+          { x: 0, y: 0.33, rotation: 0 },
+          { x: -0.25, y: -0.2, rotation: 0 },
+          { x: 0.25, y: -0.2, rotation: 0 },
+          { x: 0, y: -0.28, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom"
+        // safe par cohérence visuelle
+      },
+      crop: {
+        tileRef: tileRefsPlants.Chrysanthemum,
+        name: "Chrysanthemum",
+        baseSellPrice: 18e3,
+        // 18e3 dans le bundle
+        baseWeight: 0.01,
+        baseTileScale: 0.3,
+        maxScale: 2.75
+      }
     }
   };
   var mutationCatalog = {
@@ -3860,7 +3952,7 @@
       rarity: rarity.Common,
       tileTransformOrigin: "bottom",
       nudgeY: -0.25,
-      diet: ["Blueberry", "Tomato", "Corn", "Daffodil"]
+      diet: ["Blueberry", "Tomato", "Corn", "Daffodil", "Chrysanthemum"]
     },
     Bee: {
       tileRef: tileRefsPets.Bee,
@@ -3874,7 +3966,7 @@
       moveProbability: 0.5,
       hoursToMature: 12,
       rarity: rarity.Common,
-      diet: ["Strawberry", "Blueberry", "OrangeTulip", "Daffodil", "Lily"]
+      diet: ["Strawberry", "Blueberry", "Daffodil", "Lily"]
     },
     Chicken: {
       tileRef: tileRefsPets.Chicken,
@@ -3906,7 +3998,7 @@
       rarity: rarity.Uncommon,
       tileTransformOrigin: "bottom",
       nudgeY: -0.2,
-      diet: ["Carrot", "Strawberry", "Blueberry", "Echeveria"]
+      diet: ["Carrot", "Strawberry", "Blueberry", "OrangeTulip", "Apple"]
     },
     Dragonfly: {
       tileRef: tileRefsPets.Dragonfly,
@@ -4001,7 +4093,7 @@
       rarity: rarity.Legendary,
       tileTransformOrigin: "bottom",
       nudgeY: -0.1,
-      diet: ["Pumpkin", "Coconut", "Cactus", "Pepper"]
+      diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]
     },
     Butterfly: {
       tileRef: tileRefsPets.Butterfly,
@@ -4623,6 +4715,16 @@
       isOneTimePurchase: false,
       nudgeY: -0.56
     },
+    MarbleFountain: {
+      tileRef: tileRefsDecor.MarbleFountain,
+      name: "Marble Fountain",
+      coinPrice: 45e8,
+      creditPrice: 449,
+      rarity: rarity.Rare,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.3
+    },
     // Spéciaux
     MiniFairyCottage: {
       tileRef: tileRefsDecor.MiniFairyCottage,
@@ -4674,6 +4776,16 @@
       baseTileScale: 1.05,
       isOneTimePurchase: false,
       nudgeY: -0.33
+    },
+    PetHutch: {
+      tileRef: tileRefsDecor.PetHutch,
+      name: "Pet Hutch",
+      coinPrice: 8e10,
+      creditPrice: 499,
+      rarity: rarity.Divine,
+      baseTileScale: 2.1,
+      isOneTimePurchase: true,
+      nudgeY: -0.45
     },
     // Saisonniers (Halloween)
     HayBale: {
