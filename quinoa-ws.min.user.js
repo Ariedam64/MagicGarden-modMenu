@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.3
+// @version      2.5.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3142,6 +3142,7 @@
     Sunflower: 13,
     Lily: 14,
     Starweaver: 15,
+    Chrysanthemum: 16,
     AloePlant: 17,
     Aloe: 18,
     Blueberry: 21,
@@ -3560,6 +3561,44 @@
       plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: -0.1 },
       crop: { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 }
     },
+    Camellia: {
+      seed: {
+        tileRef: tileRefsSeeds.Camellia,
+        name: "Camellia Seed",
+        coinPrice: 55e3,
+        // 55e3 dans le bundle
+        creditPrice: 289,
+        rarity: rarity.Legendary
+        // éventuellement : unavailableSurfaces: ["discord"]
+      },
+      plant: {
+        tileRef: tileRefsPlants.Hedge,
+        name: "Camellia Hedge",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: -0.9, rotation: 0 },
+          { x: -0.28, y: -0.6, rotation: 0 },
+          { x: 0.28, y: -0.6, rotation: 0 },
+          { x: -0.28, y: 0.25, rotation: 0 },
+          { x: 0.28, y: 0.25, rotation: 0 },
+          { x: 0, y: 0, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 2,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: -0.4,
+        nudgeYMultiplier: 0.5
+      },
+      crop: {
+        tileRef: tileRefsPlants.Camellia,
+        name: "Camellia",
+        baseSellPrice: 4875,
+        baseWeight: 0.3,
+        baseTileScale: 0.4,
+        maxScale: 2.5
+      }
+    },
     Squash: {
       seed: { tileRef: tileRefsSeeds.Squash, name: "Squash Seed", coinPrice: 55e3, creditPrice: 199, rarity: rarity.Legendary },
       plant: {
@@ -3604,6 +3643,44 @@
       seed: { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 4e5, creditPrice: 300, rarity: rarity.Mythic },
       plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: -0.45, nudgeYMultiplier: 0.3 },
       crop: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 5e5, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 }
+    },
+    Chrysanthemum: {
+      seed: {
+        tileRef: tileRefsSeeds.Chrysanthemum,
+        name: "Chrysanthemum Seed",
+        coinPrice: 67e4,
+        // 67e4 dans le bundle
+        creditPrice: 567,
+        rarity: rarity.Mythic
+      },
+      plant: {
+        tileRef: tileRefsPlants.FlowerBush,
+        name: "Chrysanthemum Bush",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: 0, rotation: 0 },
+          { x: -0.28, y: 0.22, rotation: 0 },
+          { x: 0.28, y: 0.22, rotation: 0 },
+          { x: 0, y: 0.33, rotation: 0 },
+          { x: -0.25, y: -0.2, rotation: 0 },
+          { x: 0.25, y: -0.2, rotation: 0 },
+          { x: 0, y: -0.28, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom"
+        // safe par cohérence visuelle
+      },
+      crop: {
+        tileRef: tileRefsPlants.Chrysanthemum,
+        name: "Chrysanthemum",
+        baseSellPrice: 18e3,
+        // 18e3 dans le bundle
+        baseWeight: 0.01,
+        baseTileScale: 0.3,
+        maxScale: 2.75
+      }
     },
     Grape: {
       seed: {
@@ -3823,82 +3900,6 @@
         growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 }
       },
       crop: { tileRef: tileRefsPlants.MoonCelestialCrop, name: "Moonbinder Bulb", baseSellPrice: 11e6, baseWeight: 2, baseTileScale: 0.4, maxScale: 2, transformOrigin: "bottom" }
-    },
-    Camellia: {
-      seed: {
-        tileRef: tileRefsSeeds.Camellia,
-        name: "Camellia Seed",
-        coinPrice: 55e3,
-        // 55e3 dans le bundle
-        creditPrice: 289,
-        rarity: rarity.Legendary
-        // éventuellement : unavailableSurfaces: ["discord"]
-      },
-      plant: {
-        tileRef: tileRefsPlants.Hedge,
-        name: "Camellia Hedge",
-        harvestType: harvestType.Multiple,
-        slotOffsets: [
-          { x: 0, y: -0.9, rotation: 0 },
-          { x: -0.28, y: -0.6, rotation: 0 },
-          { x: 0.28, y: -0.6, rotation: 0 },
-          { x: -0.28, y: 0.25, rotation: 0 },
-          { x: 0.28, y: 0.25, rotation: 0 },
-          { x: 0, y: 0, rotation: 0 }
-        ],
-        secondsToMature: 1440 * 60,
-        baseTileScale: 2,
-        rotateSlotOffsetsRandomly: true,
-        tileTransformOrigin: "bottom",
-        nudgeY: -0.4,
-        nudgeYMultiplier: 0.5
-      },
-      crop: {
-        tileRef: tileRefsPlants.Camellia,
-        name: "Camellia",
-        baseSellPrice: 4875,
-        baseWeight: 0.3,
-        baseTileScale: 0.4,
-        maxScale: 2.5
-      }
-    },
-    Chrysanthemum: {
-      seed: {
-        tileRef: tileRefsSeeds.Chrysanthemum,
-        name: "Chrysanthemum Seed",
-        coinPrice: 67e4,
-        // 67e4 dans le bundle
-        creditPrice: 567,
-        rarity: rarity.Mythic
-      },
-      plant: {
-        tileRef: tileRefsPlants.FlowerBush,
-        name: "Chrysanthemum Bush",
-        harvestType: harvestType.Multiple,
-        slotOffsets: [
-          { x: 0, y: 0, rotation: 0 },
-          { x: -0.28, y: 0.22, rotation: 0 },
-          { x: 0.28, y: 0.22, rotation: 0 },
-          { x: 0, y: 0.33, rotation: 0 },
-          { x: -0.25, y: -0.2, rotation: 0 },
-          { x: 0.25, y: -0.2, rotation: 0 },
-          { x: 0, y: -0.28, rotation: 0 }
-        ],
-        secondsToMature: 1440 * 60,
-        baseTileScale: 1,
-        rotateSlotOffsetsRandomly: true,
-        tileTransformOrigin: "bottom"
-        // safe par cohérence visuelle
-      },
-      crop: {
-        tileRef: tileRefsPlants.Chrysanthemum,
-        name: "Chrysanthemum",
-        baseSellPrice: 18e3,
-        // 18e3 dans le bundle
-        baseWeight: 0.01,
-        baseTileScale: 0.3,
-        maxScale: 2.75
-      }
     }
   };
   var mutationCatalog = {
