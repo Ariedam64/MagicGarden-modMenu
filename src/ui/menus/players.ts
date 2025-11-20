@@ -2,7 +2,16 @@
 import { Menu, VTabItem } from "../menu";
 import { toastSimple } from "../toast";
 import { PlayersService, type Player } from "../../services/players";
-import { waitInventoryPanelClosed, isInventoryPanelOpen, isJournalModalOpen, waitJournalModalClosed  } from "../../services/fakeModal";
+import {
+  isActivityLogModalOpenAsync,
+  isInventoryPanelOpen,
+  isJournalModalOpen,
+  isStatsModalOpenAsync,
+  waitActivityLogModalClosed,
+  waitInventoryPanelClosed,
+  waitJournalModalClosed,
+  waitStatsModalClosed,
+} from "../../services/fakeModal";
 
 /* ---------------- Lecture/state ---------------- */
 
@@ -203,6 +212,10 @@ export async function renderPlayersMenu(root: HTMLElement) {
     btnInv.style.minWidth = "120px";
     const btnJournal = ui.btn("Journal", { size: "sm" });
     btnJournal.style.minWidth = "120px";
+    const btnStats = ui.btn("Stats", { size: "sm" });
+    btnStats.style.minWidth = "120px";
+    const btnActivityLog = ui.btn("Activity log", { size: "sm" });
+    btnActivityLog.style.minWidth = "120px";
 
     // Conserve la logique existante pour ouvrir l’aperçu d’inventaire
     btnInv.onclick = async () => {
@@ -229,9 +242,42 @@ export async function renderPlayersMenu(root: HTMLElement) {
       }
     };
 
+    btnStats.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openStatsModal(p.id, p.name);
+        if (await isStatsModalOpenAsync()) {
+          await waitStatsModalClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    btnActivityLog.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openActivityLogModal(p.id, p.name);
+        if (await isActivityLogModalOpenAsync()) {
+          await waitActivityLogModalClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    const inspectGrid = document.createElement("div");
+    inspectGrid.style.display = "grid";
+    inspectGrid.style.gap = "6px";
+
+    const activityRow = ui.flexRow({ justify: "center" });
+
     invRow.append(btnInv, btnJournal);
+    activityRow.append(btnStats, btnActivityLog);
+
+    inspectGrid.append(invRow, activityRow);
     const inspectCard = ui.card("🔍 Inspect", { tone: "muted", align: "center" });
-    inspectCard.body.append(invRow);
+    inspectCard.body.append(inspectGrid);
     col.appendChild(inspectCard.root);
 
     // ===== Fun =====

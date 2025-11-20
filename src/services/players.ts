@@ -2,7 +2,12 @@
 // Service central des actions liées aux joueurs (liste, positions, téléport, follow + journal)
 
 import { toastSimple } from "../ui/toast";
-import { fakeInventoryShow, fakeJournalShow } from "./fakeModal";
+import {
+  fakeActivityLogShow,
+  fakeInventoryShow,
+  fakeJournalShow,
+  fakeStatsShow,
+} from "./fakeModal";
 import { PlayerService } from "./player";
 import { Atoms } from "../store/atoms";
 import type { XY, GardenState  } from "../store/atoms";
@@ -128,6 +133,18 @@ function extractJournalFromSlot(slot: any): Journal | null {
     : undefined;
 
   return { produce: normProduce, pets: normPets };
+}
+
+function extractStatsFromSlot(slot: any): Record<string, any> | null {
+  const stats = slot?.data?.stats ?? slot?.stats;
+  if (!stats || typeof stats !== "object") return null;
+  return stats as Record<string, any>;
+}
+
+function extractActivityLogsFromSlot(slot: any): any[] | null {
+  const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
+  if (!Array.isArray(logs)) return null;
+  return logs;
 }
 
 function extractGardenFromSlot(slot: any): Garden | null {
@@ -525,6 +542,48 @@ export const PlayersService = {
       if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
     } catch (e: any) {
       await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+    }
+  },
+
+  async getStats(playerId: string): Promise<Record<string, any> | null> {
+    const st = await Atoms.root.state.get();
+    if (!st) return null;
+    const slot = getSlotByPlayerId(st, playerId);
+    return extractStatsFromSlot(slot);
+  },
+
+  async getActivityLogs(playerId: string): Promise<any[] | null> {
+    const st = await Atoms.root.state.get();
+    if (!st) return null;
+    const slot = getSlotByPlayerId(st, playerId);
+    return extractActivityLogsFromSlot(slot);
+  },
+
+  async openStatsModal(playerId: string, playerName?: string) {
+    try {
+      const stats = await this.getStats(playerId);
+      if (!stats) {
+        await toastSimple("Stats", "No stats found for this player.", "error");
+        return;
+      }
+      await fakeStatsShow(stats, { open: true });
+      if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
+    } catch (e: any) {
+      await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
+    }
+  },
+
+  async openActivityLogModal(playerId: string, playerName?: string) {
+    try {
+      const logs = await this.getActivityLogs(playerId);
+      if (!logs || logs.length === 0) {
+        await toastSimple("Activity log", "No activity logs for this player.", "info");
+        return;
+      }
+      await fakeActivityLogShow(logs, { open: true });
+      if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
+    } catch (e: any) {
+      await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
     }
   },
 

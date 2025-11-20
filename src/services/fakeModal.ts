@@ -80,6 +80,12 @@ function withModalGate<T>(cfg: FakeConfig<T>, modalId: ModalId): FakeConfig<T> {
   return { ...cfg, gate: gateForModal(modalId) };
 }
 
+const mergeMyData = (real: any, patch: any) => {
+  const base = real && typeof real === "object" ? real : {};
+  const add  = patch && typeof patch === "object" ? patch : {};
+  return { ...base, ...add };
+};
+
 /* ------------------------------- API générique ------------------------------- */
 /** Utilitaire générique (gardé pour compat) : applique une liste de FakeConfig à une modal. */
 export async function fakeModalShow<T = ModalPayload>(
@@ -115,19 +121,15 @@ export async function fakeModalHide(_modalId: ModalId, configs: FakeConfig<any>[
 /**
  * Patch PARTAGÉ sur myData:
  *  - merge générique: { ...real, ...patch }
- *  - gate: actif si inventory **ou** journal est ouvert
+ *  - gate: actif si inventory, journal, stats ou activityLog est ouvert
  *  => plus de conflit de merge quand on switch.
  */
 const SHARED_MYDATA_PATCH: FakeConfig<any> = {
   label: Atoms.data.myData.label,
-  merge: (real: any, patch: any) => {
-    const base = real && typeof real === "object" ? real : {};
-    const add  = patch && typeof patch === "object" ? patch : {};
-    return { ...base, ...add };
-  },
+  merge: mergeMyData,
   gate: {
     label: Atoms.ui.activeModal.label,
-    isOpen: (v) => v === "inventory" || v === "journal",
+    isOpen: (v) => v === "inventory" || v === "journal" || v === "stats" || v === "activityLog",
     autoDisableOnClose: true,
   },
 };
@@ -241,4 +243,84 @@ export async function fakeJournalShow(
 export async function fakeJournalHide() {
   await fakeHide(SHARED_MYDATA_PATCH.label);
   await closeJournalModal();
+}
+
+/* =============================== Spécifique STATS =============================== */
+
+export const STATS_MODAL_ID: ModalId = "stats";
+
+export async function openStatsModal() {
+  return openModal(STATS_MODAL_ID);
+}
+
+export async function closeStatsModal() {
+  return closeModal(STATS_MODAL_ID);
+}
+
+export function isStatsModalOpen(v: any) {
+  return isModalOpen(v, STATS_MODAL_ID);
+}
+
+export async function isStatsModalOpenAsync(): Promise<boolean> {
+  return isModalOpenAsync(STATS_MODAL_ID);
+}
+
+export async function waitStatsModalClosed(timeoutMs = 120000): Promise<boolean> {
+  return waitModalClosed(STATS_MODAL_ID, timeoutMs);
+}
+
+export async function fakeStatsShow(payload?: any, opts?: { open?: boolean; autoRestoreMs?: number }) {
+  const shouldOpen = opts?.open !== false;
+
+  await fakeShow(SHARED_MYDATA_PATCH, { stats: payload ?? {} }, {
+    openGate: false,
+    autoRestoreMs: opts?.autoRestoreMs,
+  });
+
+  if (shouldOpen) await openStatsModal();
+}
+
+export async function fakeStatsHide() {
+  await fakeHide(SHARED_MYDATA_PATCH.label);
+  await closeStatsModal();
+}
+
+/* ============================ Spécifique ACTIVITY LOG ============================ */
+
+export const ACTIVITY_LOG_MODAL_ID: ModalId = "activityLog";
+
+export async function openActivityLogModal() {
+  return openModal(ACTIVITY_LOG_MODAL_ID);
+}
+
+export async function closeActivityLogModal() {
+  return closeModal(ACTIVITY_LOG_MODAL_ID);
+}
+
+export function isActivityLogModalOpen(v: any) {
+  return isModalOpen(v, ACTIVITY_LOG_MODAL_ID);
+}
+
+export async function isActivityLogModalOpenAsync(): Promise<boolean> {
+  return isModalOpenAsync(ACTIVITY_LOG_MODAL_ID);
+}
+
+export async function waitActivityLogModalClosed(timeoutMs = 120000): Promise<boolean> {
+  return waitModalClosed(ACTIVITY_LOG_MODAL_ID, timeoutMs);
+}
+
+export async function fakeActivityLogShow(payload?: any, opts?: { open?: boolean; autoRestoreMs?: number }) {
+  const shouldOpen = opts?.open !== false;
+
+  await fakeShow(SHARED_MYDATA_PATCH, { activityLogs: payload ?? [] }, {
+    openGate: false,
+    autoRestoreMs: opts?.autoRestoreMs,
+  });
+
+  if (shouldOpen) await openActivityLogModal();
+}
+
+export async function fakeActivityLogHide() {
+  await fakeHide(SHARED_MYDATA_PATCH.label);
+  await closeActivityLogModal();
 }

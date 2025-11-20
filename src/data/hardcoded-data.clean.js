@@ -57,6 +57,7 @@ export const tileRefsPlants = {
   Sunflower: 13,
   Lily: 14,
   Starweaver: 15,
+  Chrysanthemum: 16,
   AloePlant: 17,
   Aloe: 18,
   Blueberry: 21,
@@ -91,6 +92,10 @@ export const tileRefsPlants = {
   Delphinium: 50,
   DawnCelestialCrop: 51,  
   MoonCelestialCrop: 52, 
+  Camellia: 57,
+  Hedge: 58,
+  FlowerBush: 59,
+
   Squash: 60,
 };
 
@@ -152,27 +157,39 @@ export const tileRefsSeeds = {
   Echeveria: 40,
   Bamboo: 41,
   Cactus: 42,
+  Camellia: 48,
+  Chrysanthemum: 49,
   Squash: 50,
 };
 
 export const tileRefsItems = {
   Coin: 1,
   Shovel: 2,
-  Seeds: 3,
-  PlanterPot: 5,
-  InventoryBag: 6,
+  PlanterPot: 6,
+  InventoryBag: 7,
 
-  RainbowPotion: 9,
-  GoldPotion: 10,
+  WateringCan: 9,
+  Fertilizer: 10,
 
-  WateringCan: 14,
-  Fertilizer: 15,
+  RainbowPotion: 14,
+  GoldPotion: 15,
   WetPotion: 16,
   ChilledPotion: 17,
   FrozenPotion: 18,
   DawnlitPotion: 19,
   AmberlitPotion: 20,
 
+  JournalStamp: 22,
+  Donut: 23,
+  ToolsRestocked: 24,
+  SeedsRestocked: 25,
+  EggsRestocked: 26,
+  DecorRestocked: 27,
+  Leaderboard: 28,
+  Stats: 29,
+  ActivityLog: 30,
+
+  ChatBubble: 39,
   ArrowKeys: 41,
   Touchpad: 42,
 };
@@ -214,63 +231,65 @@ export const tileRefsMutationLabels = {
   Ambercharged: "Amberbound"};
 
 export const tileRefsDecor = {
-    WoodPedestal: 4,
-    StonePedestal: 6,
-    MarblePedestal: 8,
-    SmallRock: 11,
-    WoodBench: 13,
-    WoodBenchBackwards: 14,
-    StoneBench: 15,
-    StoneBucketPedestal: 16,
-    MarbleBench: 17,
-    MarbleBenchBackwards: 18,
-    MediumRock: 21,
-    WoodLampPost: 23,
-    WoodBenchSideways: 24,
-    StoneLampPost: 25,
-    StoneBenchSideways: 26,
-    StoneColumn: 26,
-    MarbleLampPost: 27,
-    MarbleBenchSideways: 28,
-    HayBale: 29,
-    LargeRock: 31,
-    WoodArch: 33,
-    WoodBucketPedestal: 34,
-    WoodBridge: 34,
-    StoneArch: 35,
-    StoneBridge: 36,
-    MarbleArch: 37,
-    MarbleBridge: 38,
-    HayBaleSideways: 39,
-    MiniFairyForge: 40,
-    WoodArchSide: 43,
-    WoodBridgeSideways: 44,
-    StoneArchSideways: 45,
-    StoneBridgeSideways: 46,
-    MarbleArchSideways: 47,
-    MarbleBridgeSideways: 48,
-    StrawScarecrow: 49,
-    MiniFairyCottage: 50,
-    WoodOwl: 53,
-    Birdhouse: 54,
-    StoneGnome: 55,
-    StoneBirdBath: 56,
-    MarbleBlobling: 57,
-    MarbleBucketPedestal: 58,
-    Cauldron: 59,
-    MiniFairyKeep: 60,
-    WoodStool: 63,
-    StoneGardenBox: 66,
-    MarbleColumn: 68,
-    SmallGravestone: 69,
-    SmallGravestoneSideways: 70,
-    WoodenWindmill: 73,
-    WoodGardenBox: 74,
-    MarbleGardenBox: 78,
-    MediumGravestone: 79,
-    MediumGravestoneSideways: 80,
-    LargeGravestone: 89,
-    LargeGravestoneSideways: 90
+  WoodPedestal: 4,
+  StonePedestal: 6,
+  MarblePedestal: 8,
+  SmallRock: 11,
+  WoodBench: 13,
+  WoodBenchBackwards: 14,
+  StoneBench: 15,
+  StoneBucketPedestal: 16,
+  MarbleBench: 17,
+  MarbleBenchBackwards: 18,
+  MediumRock: 21,
+  WoodLampPost: 23,
+  WoodBenchSideways: 24,
+  StoneLampPost: 25,
+  StoneBenchSideways: 26,
+  StoneColumn: 26,
+  MarbleLampPost: 27,
+  MarbleBenchSideways: 28,
+  HayBale: 29,
+  PetHutch: 30,
+  LargeRock: 31,
+  WoodArch: 33,
+  WoodBucketPedestal: 34,
+  WoodBridge: 34,
+  StoneArch: 35,
+  StoneBridge: 36,
+  MarbleArch: 37,
+  MarbleBridge: 38,
+  HayBaleSideways: 39,
+  MiniFairyForge: 40,
+  WoodArchSide: 43,
+  WoodBridgeSideways: 44,
+  StoneArchSideways: 45,
+  StoneBridgeSideways: 46,
+  MarbleArchSideways: 47,
+  MarbleBridgeSideways: 48,
+  StrawScarecrow: 49,
+  MiniFairyCottage: 50,
+  WoodOwl: 53,
+  Birdhouse: 54,
+  StoneGnome: 55,
+  StoneBirdBath: 56,
+  MarbleBlobling: 57,
+  MarbleBucketPedestal: 58,
+  MarbleFountain: 58,
+  Cauldron: 59,
+  MiniFairyKeep: 60,
+  WoodStool: 63,
+  StoneGardenBox: 66,
+  MarbleColumn: 68,
+  SmallGravestone: 69,
+  SmallGravestoneSideways: 70,
+  WoodenWindmill: 73,
+  WoodGardenBox: 74,
+  MarbleGardenBox: 78,
+  MediumGravestone: 79,
+  MediumGravestoneSideways: 80,
+  LargeGravestone: 89,
+  LargeGravestoneSideways: 90,
 };
 
 export const plantCatalog = {
@@ -450,6 +469,44 @@ export const plantCatalog = {
     crop:  { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 }
   },
 
+  Camellia: {
+    seed: {
+      tileRef: tileRefsSeeds.Camellia,
+      name: "Camellia Seed",
+      coinPrice: 55000,          // 55e3 dans le bundle
+      creditPrice: 289,
+      rarity: rarity.Legendary,
+      // éventuellement : unavailableSurfaces: ["discord"]
+    },
+    plant: {
+      tileRef: tileRefsPlants.Hedge,
+      name: "Camellia Hedge",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x:  0.00, y: -0.90, rotation: 0 },
+        { x: -0.28, y: -0.60, rotation: 0 },
+        { x:  0.28, y: -0.60, rotation: 0 },
+        { x: -0.28, y:  0.25, rotation: 0 },
+        { x:  0.28, y:  0.25, rotation: 0 },
+        { x:  0.00, y:  0.00, rotation: 0 },
+      ],
+      secondsToMature: 1440 * 60,
+      baseTileScale: 2,
+      rotateSlotOffsetsRandomly: true,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.4,
+      nudgeYMultiplier: 0.5,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Camellia,
+      name: "Camellia",
+      baseSellPrice: 4875,
+      baseWeight: 0.3,
+      baseTileScale: 0.4,
+      maxScale: 2.5,
+    },
+  },
+
   Squash: {
     seed:  { tileRef: tileRefsSeeds.Squash, name: "Squash Seed", coinPrice: 55000, creditPrice: 199, rarity: rarity.Legendary },
     plant: {
@@ -492,6 +549,42 @@ export const plantCatalog = {
     seed:  { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 400000, creditPrice: 300, rarity: rarity.Mythic },
     plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: -0.45, nudgeYMultiplier: 0.3 },
     crop:  { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 500000, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 }
+  },
+
+  Chrysanthemum: {
+    seed: {
+      tileRef: tileRefsSeeds.Chrysanthemum,
+      name: "Chrysanthemum Seed",
+      coinPrice: 670000,         // 67e4 dans le bundle
+      creditPrice: 567,
+      rarity: rarity.Mythic,
+    },
+    plant: {
+      tileRef: tileRefsPlants.FlowerBush,
+      name: "Chrysanthemum Bush",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x:  0.00, y:  0.00, rotation: 0 },
+        { x: -0.28, y:  0.22, rotation: 0 },
+        { x:  0.28, y:  0.22, rotation: 0 },
+        { x:  0.00, y:  0.33, rotation: 0 },
+        { x: -0.25, y: -0.20, rotation: 0 },
+        { x:  0.25, y: -0.20, rotation: 0 },
+        { x:  0.00, y: -0.28, rotation: 0 },
+      ],
+      secondsToMature: 1440 * 60,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: true,
+      tileTransformOrigin: "bottom", // safe par cohérence visuelle
+    },
+    crop: {
+      tileRef: tileRefsPlants.Chrysanthemum,
+      name: "Chrysanthemum",
+      baseSellPrice: 18000,      // 18e3 dans le bundle
+      baseWeight: 0.01,
+      baseTileScale: 0.3,
+      maxScale: 2.75,
+    },
   },
 
   Grape: {
@@ -678,7 +771,8 @@ export const plantCatalog = {
       growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 }
     },
     crop:  { tileRef: tileRefsPlants.MoonCelestialCrop, name: "Moonbinder Bulb", baseSellPrice: 11000000, baseWeight: 2, baseTileScale: 0.4, maxScale: 2, transformOrigin: "bottom" }
-  }
+  },
+
 };
 
 export const mutationCatalog = {
@@ -720,14 +814,14 @@ export const petCatalog = {
     baseTileScale: 0.6, maxScale: 2, maturitySellPrice: 5e3, matureWeight: 0.15,
     moveProbability: 0.01, hoursToMature: 12, rarity: rarity.Common,
     tileTransformOrigin: "bottom", nudgeY: -0.25,
-    diet: ["Blueberry","Tomato","Corn","Daffodil"]},
+    diet: ["Blueberry", "Tomato", "Corn", "Daffodil", "Chrysanthemum"]},
   Bee: {
     tileRef: tileRefsPets.Bee, name: "Bee",
     coinsToFullyReplenishHunger: 1500,
     innateAbilityWeights: { ProduceScaleBoost: 50, ProduceMutationBoost: 50 },
     baseTileScale: 0.6, maxScale: 2.5, maturitySellPrice: 3e4, matureWeight: 0.2,
     moveProbability: 0.5, hoursToMature: 12, rarity: rarity.Common,
-    diet: ["Strawberry","Blueberry","OrangeTulip","Daffodil","Lily"]},
+    diet: ["Strawberry", "Blueberry", "Daffodil", "Lily"],},
   Chicken: {
     tileRef: tileRefsPets.Chicken, name: "Chicken",
     coinsToFullyReplenishHunger: 3000,
@@ -743,7 +837,7 @@ export const petCatalog = {
     baseTileScale: 0.7, maxScale: 2, maturitySellPrice: 75e3, matureWeight: 2,
     moveProbability: 0.3, hoursToMature: 24, rarity: rarity.Uncommon,
     tileTransformOrigin: "bottom", nudgeY: -0.2,
-    diet: ["Carrot","Strawberry","Blueberry","Echeveria"]},
+    diet: ["Carrot", "Strawberry", "Blueberry", "OrangeTulip", "Apple"]},
   Dragonfly: {
     tileRef: tileRefsPets.Dragonfly, name: "Dragonfly",
     coinsToFullyReplenishHunger: 250,
@@ -791,7 +885,7 @@ export const petCatalog = {
     baseTileScale: 1, maxScale: 2, maturitySellPrice: 2e7, matureWeight: 100,
     moveProbability: 0.2, hoursToMature: 100, rarity: rarity.Legendary,
     tileTransformOrigin: "bottom", nudgeY: -0.1,
-    diet: ["Pumpkin","Coconut","Cactus","Pepper"]},
+    diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]},
   Butterfly: {
     tileRef: tileRefsPets.Butterfly, name: "Butterfly",
     coinsToFullyReplenishHunger: 25000,
@@ -1339,6 +1433,13 @@ export const decorCatalog = {
     baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.56
   },
 
+  MarbleFountain: {
+    tileRef: tileRefsDecor.MarbleFountain,
+    name: "Marble Fountain",
+    coinPrice: 4500000000, creditPrice: 449, rarity: rarity.Rare,
+    baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.30
+  },
+
   // Spéciaux
   MiniFairyCottage: {
     tileRef: tileRefsDecor.MiniFairyCottage,
@@ -1370,6 +1471,13 @@ export const decorCatalog = {
     name: "Mini Fairy Keep",
     coinPrice: 25000000000, creditPrice: 1249, rarity: rarity.Mythic,
     baseTileScale: 1.05, isOneTimePurchase: false, nudgeY: -0.33
+  },
+
+  PetHutch: {
+    tileRef: tileRefsDecor.PetHutch,
+    name: "Pet Hutch",
+    coinPrice: 80000000000, creditPrice: 499, rarity: rarity.Divine,
+    baseTileScale: 2.1, isOneTimePurchase: true, nudgeY: -0.45
   },
 
   // Saisonniers (Halloween)
@@ -1422,8 +1530,6 @@ export const decorCatalog = {
     expiryDate: new Date("2025-11-07T01:00:00.000Z")
   }
 };
-
-
 
 export const weatherCatalog = {
   Rain: {

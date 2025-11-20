@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.1
+// @version      2.5.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3142,6 +3142,7 @@
     Sunflower: 13,
     Lily: 14,
     Starweaver: 15,
+    Chrysanthemum: 16,
     AloePlant: 17,
     Aloe: 18,
     Blueberry: 21,
@@ -3176,6 +3177,9 @@
     Delphinium: 50,
     DawnCelestialCrop: 51,
     MoonCelestialCrop: 52,
+    Camellia: 57,
+    Hedge: 58,
+    FlowerBush: 59,
     Squash: 60
   };
   var tileRefsTallPlants = {
@@ -3229,23 +3233,34 @@
     Echeveria: 40,
     Bamboo: 41,
     Cactus: 42,
+    Camellia: 48,
+    Chrysanthemum: 49,
     Squash: 50
   };
   var tileRefsItems = {
     Coin: 1,
     Shovel: 2,
-    Seeds: 3,
-    PlanterPot: 5,
-    InventoryBag: 6,
-    RainbowPotion: 9,
-    GoldPotion: 10,
-    WateringCan: 14,
-    Fertilizer: 15,
+    PlanterPot: 6,
+    InventoryBag: 7,
+    WateringCan: 9,
+    Fertilizer: 10,
+    RainbowPotion: 14,
+    GoldPotion: 15,
     WetPotion: 16,
     ChilledPotion: 17,
     FrozenPotion: 18,
     DawnlitPotion: 19,
     AmberlitPotion: 20,
+    JournalStamp: 22,
+    Donut: 23,
+    ToolsRestocked: 24,
+    SeedsRestocked: 25,
+    EggsRestocked: 26,
+    DecorRestocked: 27,
+    Leaderboard: 28,
+    Stats: 29,
+    ActivityLog: 30,
+    ChatBubble: 39,
     ArrowKeys: 41,
     Touchpad: 42
   };
@@ -3321,6 +3336,7 @@
     MarbleLampPost: 27,
     MarbleBenchSideways: 28,
     HayBale: 29,
+    PetHutch: 30,
     LargeRock: 31,
     WoodArch: 33,
     WoodBucketPedestal: 34,
@@ -3345,6 +3361,7 @@
     StoneBirdBath: 56,
     MarbleBlobling: 57,
     MarbleBucketPedestal: 58,
+    MarbleFountain: 58,
     Cauldron: 59,
     MiniFairyKeep: 60,
     WoodStool: 63,
@@ -3544,6 +3561,44 @@
       plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: -0.1 },
       crop: { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 }
     },
+    Camellia: {
+      seed: {
+        tileRef: tileRefsSeeds.Camellia,
+        name: "Camellia Seed",
+        coinPrice: 55e3,
+        // 55e3 dans le bundle
+        creditPrice: 289,
+        rarity: rarity.Legendary
+        // éventuellement : unavailableSurfaces: ["discord"]
+      },
+      plant: {
+        tileRef: tileRefsPlants.Hedge,
+        name: "Camellia Hedge",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: -0.9, rotation: 0 },
+          { x: -0.28, y: -0.6, rotation: 0 },
+          { x: 0.28, y: -0.6, rotation: 0 },
+          { x: -0.28, y: 0.25, rotation: 0 },
+          { x: 0.28, y: 0.25, rotation: 0 },
+          { x: 0, y: 0, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 2,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: -0.4,
+        nudgeYMultiplier: 0.5
+      },
+      crop: {
+        tileRef: tileRefsPlants.Camellia,
+        name: "Camellia",
+        baseSellPrice: 4875,
+        baseWeight: 0.3,
+        baseTileScale: 0.4,
+        maxScale: 2.5
+      }
+    },
     Squash: {
       seed: { tileRef: tileRefsSeeds.Squash, name: "Squash Seed", coinPrice: 55e3, creditPrice: 199, rarity: rarity.Legendary },
       plant: {
@@ -3588,6 +3643,44 @@
       seed: { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 4e5, creditPrice: 300, rarity: rarity.Mythic },
       plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: -0.45, nudgeYMultiplier: 0.3 },
       crop: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 5e5, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 }
+    },
+    Chrysanthemum: {
+      seed: {
+        tileRef: tileRefsSeeds.Chrysanthemum,
+        name: "Chrysanthemum Seed",
+        coinPrice: 67e4,
+        // 67e4 dans le bundle
+        creditPrice: 567,
+        rarity: rarity.Mythic
+      },
+      plant: {
+        tileRef: tileRefsPlants.FlowerBush,
+        name: "Chrysanthemum Bush",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: 0, y: 0, rotation: 0 },
+          { x: -0.28, y: 0.22, rotation: 0 },
+          { x: 0.28, y: 0.22, rotation: 0 },
+          { x: 0, y: 0.33, rotation: 0 },
+          { x: -0.25, y: -0.2, rotation: 0 },
+          { x: 0.25, y: -0.2, rotation: 0 },
+          { x: 0, y: -0.28, rotation: 0 }
+        ],
+        secondsToMature: 1440 * 60,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom"
+        // safe par cohérence visuelle
+      },
+      crop: {
+        tileRef: tileRefsPlants.Chrysanthemum,
+        name: "Chrysanthemum",
+        baseSellPrice: 18e3,
+        // 18e3 dans le bundle
+        baseWeight: 0.01,
+        baseTileScale: 0.3,
+        maxScale: 2.75
+      }
     },
     Grape: {
       seed: {
@@ -3860,7 +3953,7 @@
       rarity: rarity.Common,
       tileTransformOrigin: "bottom",
       nudgeY: -0.25,
-      diet: ["Blueberry", "Tomato", "Corn", "Daffodil"]
+      diet: ["Blueberry", "Tomato", "Corn", "Daffodil", "Chrysanthemum"]
     },
     Bee: {
       tileRef: tileRefsPets.Bee,
@@ -3874,7 +3967,7 @@
       moveProbability: 0.5,
       hoursToMature: 12,
       rarity: rarity.Common,
-      diet: ["Strawberry", "Blueberry", "OrangeTulip", "Daffodil", "Lily"]
+      diet: ["Strawberry", "Blueberry", "Daffodil", "Lily"]
     },
     Chicken: {
       tileRef: tileRefsPets.Chicken,
@@ -3906,7 +3999,7 @@
       rarity: rarity.Uncommon,
       tileTransformOrigin: "bottom",
       nudgeY: -0.2,
-      diet: ["Carrot", "Strawberry", "Blueberry", "Echeveria"]
+      diet: ["Carrot", "Strawberry", "Blueberry", "OrangeTulip", "Apple"]
     },
     Dragonfly: {
       tileRef: tileRefsPets.Dragonfly,
@@ -4001,7 +4094,7 @@
       rarity: rarity.Legendary,
       tileTransformOrigin: "bottom",
       nudgeY: -0.1,
-      diet: ["Pumpkin", "Coconut", "Cactus", "Pepper"]
+      diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]
     },
     Butterfly: {
       tileRef: tileRefsPets.Butterfly,
@@ -4623,6 +4716,16 @@
       isOneTimePurchase: false,
       nudgeY: -0.56
     },
+    MarbleFountain: {
+      tileRef: tileRefsDecor.MarbleFountain,
+      name: "Marble Fountain",
+      coinPrice: 45e8,
+      creditPrice: 449,
+      rarity: rarity.Rare,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.3
+    },
     // Spéciaux
     MiniFairyCottage: {
       tileRef: tileRefsDecor.MiniFairyCottage,
@@ -4674,6 +4777,16 @@
       baseTileScale: 1.05,
       isOneTimePurchase: false,
       nudgeY: -0.33
+    },
+    PetHutch: {
+      tileRef: tileRefsDecor.PetHutch,
+      name: "Pet Hutch",
+      coinPrice: 8e10,
+      creditPrice: 499,
+      rarity: rarity.Divine,
+      baseTileScale: 2.1,
+      isOneTimePurchase: true,
+      nudgeY: -0.45
     },
     // Saisonniers (Halloween)
     HayBale: {
@@ -7313,16 +7426,17 @@
     }
     return false;
   }
+  var mergeMyData = (real, patch) => {
+    const base = real && typeof real === "object" ? real : {};
+    const add = patch && typeof patch === "object" ? patch : {};
+    return { ...base, ...add };
+  };
   var SHARED_MYDATA_PATCH = {
     label: Atoms.data.myData.label,
-    merge: (real, patch) => {
-      const base = real && typeof real === "object" ? real : {};
-      const add = patch && typeof patch === "object" ? patch : {};
-      return { ...base, ...add };
-    },
+    merge: mergeMyData,
     gate: {
       label: Atoms.ui.activeModal.label,
-      isOpen: (v) => v === "inventory" || v === "journal",
+      isOpen: (v) => v === "inventory" || v === "journal" || v === "stats" || v === "activityLog",
       autoDisableOnClose: true
     }
   };
@@ -7386,6 +7500,42 @@
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openJournalModal();
+  }
+  var STATS_MODAL_ID = "stats";
+  async function openStatsModal() {
+    return openModal(STATS_MODAL_ID);
+  }
+  async function isStatsModalOpenAsync() {
+    return isModalOpenAsync(STATS_MODAL_ID);
+  }
+  async function waitStatsModalClosed(timeoutMs = 12e4) {
+    return waitModalClosed(STATS_MODAL_ID, timeoutMs);
+  }
+  async function fakeStatsShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    await fakeShow(SHARED_MYDATA_PATCH, { stats: payload ?? {} }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openStatsModal();
+  }
+  var ACTIVITY_LOG_MODAL_ID = "activityLog";
+  async function openActivityLogModal() {
+    return openModal(ACTIVITY_LOG_MODAL_ID);
+  }
+  async function isActivityLogModalOpenAsync() {
+    return isModalOpenAsync(ACTIVITY_LOG_MODAL_ID);
+  }
+  async function waitActivityLogModalClosed(timeoutMs = 12e4) {
+    return waitModalClosed(ACTIVITY_LOG_MODAL_ID, timeoutMs);
+  }
+  async function fakeActivityLogShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    await fakeShow(SHARED_MYDATA_PATCH, { activityLogs: payload ?? [] }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openActivityLogModal();
   }
 
   // src/ui/toast.ts
@@ -22330,7 +22480,7 @@ try{importScripts("${abs}")}catch(e){}
     width:auto !important;
     margin-bottom:0 !important;
   }
-    
+
   .qws2.hidden{ display:none }
   .qws2 .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
   .qws2 .col{ display:flex; flex-direction:column; gap:4px }
@@ -22410,7 +22560,7 @@ try{importScripts("${abs}")}catch(e){}
     box.className = "qws2";
     box.innerHTML = `
     <div class="row drag">
-      <div class="title">\u{1F383} Arie's Mod</div>
+      <div class="title">Arie's Mod</div>
       <div class="sp"></div>
       <span id="qws2-status-mini" class="pill warn mini">\u2026</span>
       <button id="qws2-min" class="btn" title="Minimize/Expand">\u2013</button>
@@ -27562,6 +27712,16 @@ next: ${next}`;
     ])) : void 0;
     return { produce: normProduce, pets: normPets };
   }
+  function extractStatsFromSlot(slot) {
+    const stats = slot?.data?.stats ?? slot?.stats;
+    if (!stats || typeof stats !== "object") return null;
+    return stats;
+  }
+  function extractActivityLogsFromSlot(slot) {
+    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
+    if (!Array.isArray(logs)) return null;
+    return logs;
+  }
   function extractGardenFromSlot(slot) {
     const g = slot?.data?.garden ?? slot?.garden;
     if (!g || typeof g !== "object") return null;
@@ -27913,6 +28073,44 @@ next: ${next}`;
         if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+      }
+    },
+    async getStats(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractStatsFromSlot(slot);
+    },
+    async getActivityLogs(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractActivityLogsFromSlot(slot);
+    },
+    async openStatsModal(playerId2, playerName) {
+      try {
+        const stats = await this.getStats(playerId2);
+        if (!stats) {
+          await toastSimple("Stats", "No stats found for this player.", "error");
+          return;
+        }
+        await fakeStatsShow(stats, { open: true });
+        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
+      }
+    },
+    async openActivityLogModal(playerId2, playerName) {
+      try {
+        const logs = await this.getActivityLogs(playerId2);
+        if (!logs || logs.length === 0) {
+          await toastSimple("Activity log", "No activity logs for this player.", "info");
+          return;
+        }
+        await fakeActivityLogShow(logs, { open: true });
+        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
       }
     },
     /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
@@ -28268,6 +28466,10 @@ next: ${next}`;
       btnInv.style.minWidth = "120px";
       const btnJournal = ui.btn("Journal", { size: "sm" });
       btnJournal.style.minWidth = "120px";
+      const btnStats = ui.btn("Stats", { size: "sm" });
+      btnStats.style.minWidth = "120px";
+      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
+      btnActivityLog.style.minWidth = "120px";
       btnInv.onclick = async () => {
         try {
           ui.setWindowVisible(false);
@@ -28290,9 +28492,37 @@ next: ${next}`;
           ui.setWindowVisible(true);
         }
       };
+      btnStats.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openStatsModal(p.id, p.name);
+          if (await isStatsModalOpenAsync()) {
+            await waitStatsModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      btnActivityLog.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openActivityLogModal(p.id, p.name);
+          if (await isActivityLogModalOpenAsync()) {
+            await waitActivityLogModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      const inspectGrid = document.createElement("div");
+      inspectGrid.style.display = "grid";
+      inspectGrid.style.gap = "6px";
+      const activityRow = ui.flexRow({ justify: "center" });
       invRow.append(btnInv, btnJournal);
+      activityRow.append(btnStats, btnActivityLog);
+      inspectGrid.append(invRow, activityRow);
       const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
-      inspectCard.body.append(invRow);
+      inspectCard.body.append(inspectGrid);
       col.appendChild(inspectCard.root);
       const funWrap = document.createElement("div");
       funWrap.style.display = "grid";
