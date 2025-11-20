@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.4
+// @version      2.5.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -7426,16 +7426,17 @@
     }
     return false;
   }
+  var mergeMyData = (real, patch) => {
+    const base = real && typeof real === "object" ? real : {};
+    const add = patch && typeof patch === "object" ? patch : {};
+    return { ...base, ...add };
+  };
   var SHARED_MYDATA_PATCH = {
     label: Atoms.data.myData.label,
-    merge: (real, patch) => {
-      const base = real && typeof real === "object" ? real : {};
-      const add = patch && typeof patch === "object" ? patch : {};
-      return { ...base, ...add };
-    },
+    merge: mergeMyData,
     gate: {
       label: Atoms.ui.activeModal.label,
-      isOpen: (v) => v === "inventory" || v === "journal",
+      isOpen: (v) => v === "inventory" || v === "journal" || v === "stats" || v === "activityLog",
       autoDisableOnClose: true
     }
   };
@@ -7499,6 +7500,42 @@
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openJournalModal();
+  }
+  var STATS_MODAL_ID = "stats";
+  async function openStatsModal() {
+    return openModal(STATS_MODAL_ID);
+  }
+  async function isStatsModalOpenAsync() {
+    return isModalOpenAsync(STATS_MODAL_ID);
+  }
+  async function waitStatsModalClosed(timeoutMs = 12e4) {
+    return waitModalClosed(STATS_MODAL_ID, timeoutMs);
+  }
+  async function fakeStatsShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    await fakeShow(SHARED_MYDATA_PATCH, { stats: payload ?? {} }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openStatsModal();
+  }
+  var ACTIVITY_LOG_MODAL_ID = "activityLog";
+  async function openActivityLogModal() {
+    return openModal(ACTIVITY_LOG_MODAL_ID);
+  }
+  async function isActivityLogModalOpenAsync() {
+    return isModalOpenAsync(ACTIVITY_LOG_MODAL_ID);
+  }
+  async function waitActivityLogModalClosed(timeoutMs = 12e4) {
+    return waitModalClosed(ACTIVITY_LOG_MODAL_ID, timeoutMs);
+  }
+  async function fakeActivityLogShow(payload, opts) {
+    const shouldOpen = opts?.open !== false;
+    await fakeShow(SHARED_MYDATA_PATCH, { activityLogs: payload ?? [] }, {
+      openGate: false,
+      autoRestoreMs: opts?.autoRestoreMs
+    });
+    if (shouldOpen) await openActivityLogModal();
   }
 
   // src/ui/toast.ts
@@ -27675,6 +27712,16 @@ next: ${next}`;
     ])) : void 0;
     return { produce: normProduce, pets: normPets };
   }
+  function extractStatsFromSlot(slot) {
+    const stats = slot?.data?.stats ?? slot?.stats;
+    if (!stats || typeof stats !== "object") return null;
+    return stats;
+  }
+  function extractActivityLogsFromSlot(slot) {
+    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
+    if (!Array.isArray(logs)) return null;
+    return logs;
+  }
   function extractGardenFromSlot(slot) {
     const g = slot?.data?.garden ?? slot?.garden;
     if (!g || typeof g !== "object") return null;
@@ -28026,6 +28073,44 @@ next: ${next}`;
         if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
       } catch (e) {
         await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+      }
+    },
+    async getStats(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractStatsFromSlot(slot);
+    },
+    async getActivityLogs(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractActivityLogsFromSlot(slot);
+    },
+    async openStatsModal(playerId2, playerName) {
+      try {
+        const stats = await this.getStats(playerId2);
+        if (!stats) {
+          await toastSimple("Stats", "No stats found for this player.", "error");
+          return;
+        }
+        await fakeStatsShow(stats, { open: true });
+        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
+      }
+    },
+    async openActivityLogModal(playerId2, playerName) {
+      try {
+        const logs = await this.getActivityLogs(playerId2);
+        if (!logs || logs.length === 0) {
+          await toastSimple("Activity log", "No activity logs for this player.", "info");
+          return;
+        }
+        await fakeActivityLogShow(logs, { open: true });
+        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
       }
     },
     /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
@@ -28381,6 +28466,10 @@ next: ${next}`;
       btnInv.style.minWidth = "120px";
       const btnJournal = ui.btn("Journal", { size: "sm" });
       btnJournal.style.minWidth = "120px";
+      const btnStats = ui.btn("Stats", { size: "sm" });
+      btnStats.style.minWidth = "120px";
+      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
+      btnActivityLog.style.minWidth = "120px";
       btnInv.onclick = async () => {
         try {
           ui.setWindowVisible(false);
@@ -28403,9 +28492,37 @@ next: ${next}`;
           ui.setWindowVisible(true);
         }
       };
+      btnStats.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openStatsModal(p.id, p.name);
+          if (await isStatsModalOpenAsync()) {
+            await waitStatsModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      btnActivityLog.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openActivityLogModal(p.id, p.name);
+          if (await isActivityLogModalOpenAsync()) {
+            await waitActivityLogModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      const inspectGrid = document.createElement("div");
+      inspectGrid.style.display = "grid";
+      inspectGrid.style.gap = "6px";
+      const activityRow = ui.flexRow({ justify: "center" });
       invRow.append(btnInv, btnJournal);
+      activityRow.append(btnStats, btnActivityLog);
+      inspectGrid.append(invRow, activityRow);
       const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
-      inspectCard.body.append(invRow);
+      inspectCard.body.append(inspectGrid);
       col.appendChild(inspectCard.root);
       const funWrap = document.createElement("div");
       funWrap.style.display = "grid";
