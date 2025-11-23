@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.5
+// @version      2.5.6
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -8094,7 +8094,7 @@
           }, 300);
           btn.setPointerCapture?.(ev.pointerId);
         };
-        const stop = () => {
+        const stop2 = () => {
           if (pressTimer != null) {
             clearTimeout(pressTimer);
             pressTimer = null;
@@ -8106,7 +8106,7 @@
         };
         btn.addEventListener("pointerdown", start);
         ["pointerup", "pointercancel", "pointerleave", "blur"].forEach(
-          (ev) => btn.addEventListener(ev, stop)
+          (ev) => btn.addEventListener(ev, stop2)
         );
         btn.addEventListener("click", (e) => {
           if (suppressNextClick) {
@@ -11743,13 +11743,13 @@
     },
     async startAutofeedWatcher(onTrigger) {
       _userTriggerCb = onTrigger ?? null;
-      const stop = await PlayerService.onPetsChangeNow((arr) => {
+      const stop2 = await PlayerService.onPetsChangeNow((arr) => {
         _currentPets = Array.isArray(arr) ? arr.slice() : [];
         void _evaluateAll();
       });
       return () => {
         try {
-          stop();
+          stop2();
         } catch {
         }
         _currentPets = [];
@@ -13544,12 +13544,17 @@
       __publicField(this, "weatherMode", "oneshot");
       __publicField(this, "weatherStopConf", { mode: "manual" });
       __publicField(this, "weatherLoopIntervalMs", 1500);
+      __publicField(this, "petMode", "oneshot");
+      __publicField(this, "petStopConf", { mode: "manual" });
+      __publicField(this, "petLoopIntervalMs", 1500);
       __publicField(this, "loops", /* @__PURE__ */ new Map());
       __publicField(this, "oneshotQueue", []);
       __publicField(this, "oneshotQueueTimer", null);
       __publicField(this, "oneshotProcessing", false);
       __publicField(this, "weatherVolume", 0.7);
       __publicField(this, "weatherDefaultSoundName", null);
+      __publicField(this, "petVolume", 0.7);
+      __publicField(this, "petDefaultSoundName", null);
       // Optional purchase checker (for stop: purchase)
       __publicField(this, "purchaseChecker");
       // WebAudio priming (optional)
@@ -13609,6 +13614,11 @@
         this.weatherDefaultSoundName = nextWeather;
         changed = true;
       }
+      const nextPets = ensureName(this.petDefaultSoundName, nextShops);
+      if (nextPets !== this.petDefaultSoundName) {
+        this.petDefaultSoundName = nextPets;
+        changed = true;
+      }
       return changed;
     }
     persistSettings() {
@@ -13636,6 +13646,13 @@
               stop: this.weatherStopConf,
               loopIntervalMs: this.weatherLoopIntervalMs,
               defaultSoundName: this.weatherDefaultSoundName
+            },
+            pets: {
+              volume: this.petVolume,
+              mode: this.petMode,
+              stop: this.petStopConf,
+              loopIntervalMs: this.petLoopIntervalMs,
+              defaultSoundName: this.petDefaultSoundName
             }
           }
         };
@@ -13705,6 +13722,11 @@
               let weatherStopLoaded = false;
               let weatherLoopLoaded = false;
               let weatherDefaultLoaded = false;
+              let petVolumeLoaded = false;
+              let petModeLoaded = false;
+              let petStopLoaded = false;
+              let petLoopLoaded = false;
+              let petDefaultLoaded = false;
               const applyContext = (ctx, conf) => {
                 if (!conf || typeof conf !== "object") return;
                 const applyVolume = (value) => {
@@ -13713,6 +13735,9 @@
                   if (ctx === "weather") {
                     this.weatherVolume = normalized;
                     weatherVolumeLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petVolume = normalized;
+                    petVolumeLoaded = true;
                   } else this.volume = normalized;
                 };
                 const applyMode = (value) => {
@@ -13720,6 +13745,9 @@
                     if (ctx === "weather") {
                       this.weatherMode = value;
                       weatherModeLoaded = true;
+                    } else if (ctx === "pets") {
+                      this.petMode = value;
+                      petModeLoaded = true;
                     } else this.mode = value;
                   }
                 };
@@ -13730,16 +13758,25 @@
                     if (ctx === "weather") {
                       this.weatherStopConf = { mode: "purchase" };
                       weatherStopLoaded = true;
+                    } else if (ctx === "pets") {
+                      this.petStopConf = { mode: "purchase" };
+                      petStopLoaded = true;
                     } else this.stopConf = { mode: "purchase" };
                   } else if (mode === "manual") {
                     if (ctx === "weather") {
                       this.weatherStopConf = { mode: "manual" };
                       weatherStopLoaded = true;
+                    } else if (ctx === "pets") {
+                      this.petStopConf = { mode: "manual" };
+                      petStopLoaded = true;
                     } else this.stopConf = { mode: "manual" };
                   } else if (mode === "repeat") {
                     if (ctx === "weather") {
                       this.weatherStopConf = { mode: "manual" };
                       weatherStopLoaded = true;
+                    } else if (ctx === "pets") {
+                      this.petStopConf = { mode: "manual" };
+                      petStopLoaded = true;
                     } else {
                       this.stopConf = { mode: "manual" };
                     }
@@ -13751,6 +13788,9 @@
                   if (ctx === "weather") {
                     this.weatherLoopIntervalMs = normalized;
                     weatherLoopLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petLoopIntervalMs = normalized;
+                    petLoopLoaded = true;
                   } else this.loopIntervalMs = normalized;
                 };
                 const applyDefault = (value) => {
@@ -13759,6 +13799,9 @@
                   if (ctx === "weather") {
                     this.weatherDefaultSoundName = nm ? nm : null;
                     weatherDefaultLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petDefaultSoundName = nm ? nm : null;
+                    petDefaultLoaded = true;
                   } else this.defaultSoundName = nm ? nm : null;
                 };
                 applyVolume(conf.volume);
@@ -13770,6 +13813,7 @@
               if (parsed.contexts && typeof parsed.contexts === "object") {
                 applyContext("shops", parsed.contexts.shops);
                 applyContext("weather", parsed.contexts.weather);
+                applyContext("pets", parsed.contexts.pets);
               }
               if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
               if (!weatherModeLoaded) this.weatherMode = this.mode;
@@ -13778,6 +13822,13 @@
               }
               if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
               if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
+              if (!petVolumeLoaded) this.petVolume = this.volume;
+              if (!petModeLoaded) this.petMode = this.mode;
+              if (!petStopLoaded) {
+                this.petStopConf = this.stopConf.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
+              }
+              if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
+              if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
             }
           }
         } catch {
@@ -13800,11 +13851,13 @@
       this.library.set(safeName, dataUrl);
       const prevDefault = this.defaultSoundName;
       const prevWeatherDefault = this.weatherDefaultSoundName;
+      const prevPetDefault = this.petDefaultSoundName;
       if (!this.defaultSoundName) this.defaultSoundName = safeName;
       if (!this.weatherDefaultSoundName) this.weatherDefaultSoundName = safeName;
+      if (!this.petDefaultSoundName) this.petDefaultSoundName = safeName;
       this.ensureBuiltinPresent();
       this.persistLibrary();
-      if (prevDefault !== this.defaultSoundName || prevWeatherDefault !== this.weatherDefaultSoundName) {
+      if (prevDefault !== this.defaultSoundName || prevWeatherDefault !== this.weatherDefaultSoundName || prevPetDefault !== this.petDefaultSoundName) {
         this.persistSettings();
       }
     }
@@ -13814,9 +13867,11 @@
       if (!existed) return;
       const prevDefault = this.defaultSoundName;
       const prevWeatherDefault = this.weatherDefaultSoundName;
+      const prevPetDefault = this.petDefaultSoundName;
       if (prevDefault === name) this.defaultSoundName = null;
       if (prevWeatherDefault === name) this.weatherDefaultSoundName = null;
-      const changed = prevDefault === name || prevWeatherDefault === name || this.ensureDefaultSoundValidity();
+      if (prevPetDefault === name) this.petDefaultSoundName = null;
+      const changed = prevDefault === name || prevWeatherDefault === name || prevPetDefault === name || this.ensureDefaultSoundValidity();
       this.persistLibrary();
       if (changed) this.persistSettings();
     }
@@ -13828,6 +13883,9 @@
       if (context === "weather") {
         if (this.weatherDefaultSoundName === name) return;
         this.weatherDefaultSoundName = name;
+      } else if (context === "pets") {
+        if (this.petDefaultSoundName === name) return;
+        this.petDefaultSoundName = name;
       } else {
         if (this.defaultSoundName === name) return;
         this.defaultSoundName = name;
@@ -13875,11 +13933,14 @@
       if (context === "weather") {
         return this.weatherDefaultSoundName ?? this.defaultSoundName;
       }
+      if (context === "pets") {
+        return this.petDefaultSoundName ?? this.defaultSoundName;
+      }
       return this.defaultSoundName;
     }
     resolveToDataUrl(src, context) {
       if (!src) {
-        const name = context === "weather" ? this.weatherDefaultSoundName ?? this.defaultSoundName : this.defaultSoundName;
+        const name = context === "weather" ? this.weatherDefaultSoundName ?? this.defaultSoundName : context === "pets" ? this.petDefaultSoundName ?? this.defaultSoundName : this.defaultSoundName;
         if (name && this.library.has(name)) return this.library.get(name);
         return this.defaultSoundDataUrl || null;
       }
@@ -13912,6 +13973,9 @@
       if (context === "weather") {
         if (this.weatherVolume === next) return;
         this.weatherVolume = next;
+      } else if (context === "pets") {
+        if (this.petVolume === next) return;
+        this.petVolume = next;
       } else {
         if (this.volume === next) return;
         this.volume = next;
@@ -13922,7 +13986,9 @@
       this.persistSettings();
     }
     getVolume(context = "shops") {
-      return context === "weather" ? this.weatherVolume : this.volume;
+      if (context === "weather") return this.weatherVolume;
+      if (context === "pets") return this.petVolume;
+      return this.volume;
     }
     setMinPlayGap(ms) {
       const next = Math.max(0, ms | 0);
@@ -13937,6 +14003,9 @@
       if (context === "weather") {
         if (this.weatherMode === mode) return;
         this.weatherMode = mode;
+      } else if (context === "pets") {
+        if (this.petMode === mode) return;
+        this.petMode = mode;
       } else {
         if (this.mode === mode) return;
         this.mode = mode;
@@ -13944,7 +14013,9 @@
       this.persistSettings();
     }
     getPlaybackMode(context = "shops") {
-      return context === "weather" ? this.weatherMode : this.mode;
+      if (context === "weather") return this.weatherMode;
+      if (context === "pets") return this.petMode;
+      return this.mode;
     }
     setStopRepeat(repeats, context = "shops") {
       this.setStopManual(context);
@@ -13953,6 +14024,9 @@
       if (context === "weather") {
         if (this.weatherStopConf.mode === "manual") return;
         this.weatherStopConf = { mode: "manual" };
+      } else if (context === "pets") {
+        if (this.petStopConf.mode === "manual") return;
+        this.petStopConf = { mode: "manual" };
       } else {
         if (this.stopConf.mode === "manual") return;
         this.stopConf = { mode: "manual" };
@@ -13966,6 +14040,9 @@
       if (context === "weather") {
         if (this.weatherStopConf.mode === "purchase") return;
         this.weatherStopConf = { mode: "purchase" };
+      } else if (context === "pets") {
+        if (this.petStopConf.mode === "purchase") return;
+        this.petStopConf = { mode: "purchase" };
       } else {
         if (this.stopConf.mode === "purchase") return;
         this.stopConf = { mode: "purchase" };
@@ -13983,6 +14060,9 @@
       if (context === "weather") {
         if (this.weatherLoopIntervalMs === next) return;
         this.weatherLoopIntervalMs = next;
+      } else if (context === "pets") {
+        if (this.petLoopIntervalMs === next) return;
+        this.petLoopIntervalMs = next;
       } else {
         if (this.loopIntervalMs === next) return;
         this.loopIntervalMs = next;
@@ -13993,7 +14073,9 @@
       this.persistSettings();
     }
     getLoopInterval(context = "shops") {
-      return context === "weather" ? this.weatherLoopIntervalMs : this.loopIntervalMs;
+      if (context === "weather") return this.weatherLoopIntervalMs;
+      if (context === "pets") return this.petLoopIntervalMs;
+      return this.loopIntervalMs;
     }
     setPurchaseChecker(fn) {
       this.purchaseChecker = fn;
@@ -14001,8 +14083,8 @@
     getPlaybackSettings(context = "shops") {
       const volume = this.getVolume(context);
       const mode = this.getPlaybackMode(context);
-      const stop = context === "weather" ? this.weatherStopConf : this.stopConf;
-      const stopSnapshot = stop.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
+      const stop2 = context === "weather" ? this.weatherStopConf : context === "pets" ? this.petStopConf : this.stopConf;
+      const stopSnapshot = stop2.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
       const loopIntervalMs = this.getLoopInterval(context);
       const defaultSoundName = this.getDefaultSoundName(context);
       return {
@@ -14050,7 +14132,7 @@
       const sound = normalizeSound(overrides.sound ?? null);
       const baseMode = this.getPlaybackMode(context);
       const mode = overrides.mode === "oneshot" || overrides.mode === "loop" ? overrides.mode : baseMode;
-      const baseStopSource = context === "weather" ? this.weatherStopConf : this.stopConf;
+      const baseStopSource = context === "weather" ? this.weatherStopConf : context === "pets" ? this.petStopConf : this.stopConf;
       const baseStop = baseStopSource.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
       const baseLoopInterval = this.getLoopInterval(context);
       const baseVolume = this.getVolume(context);
@@ -16426,10 +16508,10 @@ try{importScripts("${abs}")}catch(e){}
       const next = enabled ? bits | 1 : bits & ~1;
       _setPrefBits(id, next);
     },
-    setPrefs(id, prefs) {
+    setPrefs(id, prefs2) {
       const bits = _getPrefBits(id);
       let next = bits;
-      if (typeof prefs.popup === "boolean") next = prefs.popup ? next | 1 : next & ~1;
+      if (typeof prefs2.popup === "boolean") next = prefs2.popup ? next | 1 : next & ~1;
       _setPrefBits(id, next);
     },
     clearPrefs(id) {
@@ -17294,13 +17376,13 @@ try{importScripts("${abs}")}catch(e){}
       return panel;
     }
     installScrollGuards(el2) {
-      const stop = (e) => {
+      const stop2 = (e) => {
         e.stopPropagation();
       };
-      el2.addEventListener("wheel", stop, { passive: true, capture: true });
-      el2.addEventListener("mousewheel", stop, { passive: true, capture: true });
-      el2.addEventListener("DOMMouseScroll", stop, { passive: true, capture: true });
-      el2.addEventListener("touchmove", stop, { passive: true, capture: true });
+      el2.addEventListener("wheel", stop2, { passive: true, capture: true });
+      el2.addEventListener("mousewheel", stop2, { passive: true, capture: true });
+      el2.addEventListener("DOMMouseScroll", stop2, { passive: true, capture: true });
+      el2.addEventListener("touchmove", stop2, { passive: true, capture: true });
     }
     /* ========= Anchoring ========= */
     findTargetCanvas() {
@@ -19742,14 +19824,14 @@ try{importScripts("${abs}")}catch(e){}
     };
     tick();
     const timer = pageWindow.setInterval(tick, intervalMs);
-    const stop = () => {
+    const stop2 = () => {
       if (stopped) return;
       stopped = true;
       pageWindow.clearInterval(timer);
       log(doLog, "\u23F9\uFE0F Observateur arr\xEAt\xE9.");
     };
     log(doLog, `\u25B6\uFE0F Observateur d\xE9marr\xE9 (intervalle: ${intervalMs} ms).`);
-    return { stop, tick };
+    return { stop: stop2, tick };
   }
   var exposed = {
     startModalObserver,
@@ -29418,8 +29500,8 @@ next: ${next}`;
       const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
       const stops = effect.colors.length - 1;
       effect.colors.forEach((color, index) => {
-        const stop = stops === 0 ? 0 : index / stops;
-        gradient.addColorStop(stop, color);
+        const stop2 = stops === 0 ? 0 : index / stops;
+        gradient.addColorStop(stop2, color);
       });
       ctx.fillStyle = gradient;
     }
@@ -30190,6 +30272,317 @@ next: ${next}`;
     ui.mount(container);
   }
 
+  // src/services/pet-alerts.ts
+  var LS_KEY2 = "qws:petAlerts:v1";
+  var clampPct2 = (v) => Math.max(1, Math.min(100, Math.round(v)));
+  var prefs = {
+    globalEnabled: true,
+    generalEnabled: false,
+    defaultThresholdPct: 25,
+    pets: {}
+  };
+  var started3 = false;
+  var unsubPets = null;
+  var lastPets = [];
+  var seenBelow = /* @__PURE__ */ new Map();
+  function loadPrefs() {
+    try {
+      const raw = localStorage.getItem(LS_KEY2);
+      if (!raw) return prefs;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        prefs = {
+          globalEnabled: parsed.globalEnabled !== false,
+          generalEnabled: !!parsed.generalEnabled,
+          defaultThresholdPct: clampPct2(parsed.defaultThresholdPct ?? prefs.defaultThresholdPct),
+          pets: typeof parsed.pets === "object" && parsed.pets ? parsed.pets : {}
+        };
+      }
+    } catch {
+    }
+    return prefs;
+  }
+  function savePrefs() {
+    try {
+      localStorage.setItem(LS_KEY2, JSON.stringify(prefs));
+    } catch {
+    }
+  }
+  function prefFor(petId) {
+    const baseThreshold = clampPct2(prefs.defaultThresholdPct);
+    if (prefs.generalEnabled) {
+      return { enabled: prefs.globalEnabled !== false, thresholdPct: baseThreshold };
+    }
+    if (!petId) return { enabled: false, thresholdPct: baseThreshold };
+    const entry = prefs.pets[petId] ?? {};
+    const enabled = entry.enabled ?? false;
+    const thresholdPct = clampPct2(entry.thresholdPct ?? baseThreshold);
+    return { enabled, thresholdPct };
+  }
+  async function triggerAlert(key2) {
+    try {
+      await audio.trigger(key2, {}, "pets");
+    } catch {
+    }
+  }
+  function evaluatePet(pet) {
+    const petId = String(pet?.slot?.id || "");
+    if (!petId || !prefs.globalEnabled) {
+      seenBelow.set(petId, false);
+      return;
+    }
+    const { enabled, thresholdPct } = prefFor(petId);
+    const hungerPct = PetsService.getHungerPctFor(pet);
+    const below = enabled && Number.isFinite(hungerPct) && hungerPct < thresholdPct;
+    const wasBelow = seenBelow.get(petId) === true;
+    const loopKey = prefs.generalEnabled ? "pets:general" : `pet:${petId}`;
+    const mode = audio.getPlaybackMode?.("pets") ?? "oneshot";
+    if (below) {
+      if (mode === "loop") {
+        void triggerAlert(loopKey);
+      } else if (!wasBelow) {
+        void triggerAlert(loopKey);
+      }
+    } else {
+      try {
+        audio.stopLoop(loopKey);
+      } catch {
+      }
+    }
+    seenBelow.set(petId, below);
+  }
+  async function evaluateAll(pets = null) {
+    const list = pets ?? lastPets;
+    for (const pet of Array.isArray(list) ? list : []) {
+      try {
+        evaluatePet(pet);
+      } catch {
+      }
+    }
+  }
+  async function ensureStarted() {
+    if (started3) return;
+    loadPrefs();
+    try {
+      unsubPets = await PetsService.onPetsChangeNow((arr) => {
+        lastPets = Array.isArray(arr) ? arr.slice(0, 3) : [];
+        void evaluateAll(lastPets);
+      });
+    } catch {
+      unsubPets = null;
+    }
+    started3 = true;
+  }
+  function stop() {
+    try {
+      unsubPets?.();
+    } catch {
+    }
+    unsubPets = null;
+    started3 = false;
+    seenBelow.clear();
+  }
+  var PetAlertService = {
+    async start() {
+      await ensureStarted();
+      return () => stop();
+    },
+    isGlobalEnabled() {
+      return prefs.globalEnabled !== false;
+    },
+    setGlobalEnabled(on) {
+      prefs.globalEnabled = !!on;
+      if (!on) seenBelow.clear();
+      savePrefs();
+    },
+    isGeneralEnabled() {
+      return !!prefs.generalEnabled;
+    },
+    setGeneralEnabled(on) {
+      prefs.generalEnabled = !!on;
+      savePrefs();
+      void this.refreshNow();
+    },
+    getGeneralThresholdPct() {
+      return clampPct2(prefs.defaultThresholdPct);
+    },
+    setGeneralThresholdPct(pct) {
+      const next = clampPct2(pct);
+      prefs.defaultThresholdPct = next;
+      savePrefs();
+      void this.refreshNow();
+      return next;
+    },
+    getDefaultThresholdPct() {
+      return clampPct2(prefs.defaultThresholdPct);
+    },
+    setDefaultThresholdPct(pct) {
+      const next = clampPct2(pct);
+      prefs.defaultThresholdPct = next;
+      savePrefs();
+      return next;
+    },
+    isPetEnabled(petId) {
+      return prefFor(petId).enabled;
+    },
+    setPetEnabled(petId, on) {
+      if (!petId) return;
+      prefs.pets[petId] = { ...prefs.pets[petId] || {}, enabled: !!on };
+      savePrefs();
+      void evaluateAll();
+    },
+    getPetThresholdPct(petId) {
+      return prefFor(petId).thresholdPct;
+    },
+    setPetThresholdPct(petId, pct) {
+      if (!petId) return this.getDefaultThresholdPct();
+      const next = clampPct2(pct);
+      prefs.pets[petId] = { ...prefs.pets[petId] || {}, thresholdPct: next };
+      savePrefs();
+      void evaluateAll();
+      return next;
+    },
+    async refreshNow() {
+      await evaluateAll();
+    }
+  };
+
+  // src/utils/petSprites.ts
+  var spriteCache3 = /* @__PURE__ */ new Map();
+  var spritePromises3 = /* @__PURE__ */ new Map();
+  var petSheetBasesCache = null;
+  var listenerAttached3 = false;
+  function canonicalSpecies(raw) {
+    if (!raw) return raw;
+    if (petCatalog[raw]) return raw;
+    const pretty = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    return petCatalog[pretty] ? pretty : raw;
+  }
+  function toPetTileIndex(tileRef) {
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    return value - 1;
+  }
+  function getPetSheetBases() {
+    if (petSheetBasesCache) return petSheetBasesCache;
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      const list = typeof Sprites.listPets === "function" ? Sprites.listPets() : [];
+      for (const url of list) {
+        if (typeof url === "string" && url.length) {
+          urls.add(url);
+        }
+      }
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => {
+      const clean = url.split(/[?#]/)[0] ?? url;
+      const file = clean.split("/").pop() ?? clean;
+      return file.replace(/\.[^.]+$/, "");
+    });
+    petSheetBasesCache = bases;
+    return bases;
+  }
+  function resetCaches() {
+    spriteCache3.clear();
+    spritePromises3.clear();
+    petSheetBasesCache = null;
+  }
+  function ensureListener() {
+    if (listenerAttached3 || typeof window === "undefined") return;
+    listenerAttached3 = true;
+    window.addEventListener("mg:sprite-detected", () => {
+      resetCaches();
+    });
+  }
+  function keyFor(species, variant) {
+    return `${species.toLowerCase()}::${variant}`;
+  }
+  function hasMutation(target, mutations) {
+    if (!mutations) return false;
+    const list = Array.isArray(mutations) ? mutations : [mutations];
+    return list.map((value) => String(value ?? "").toLowerCase()).some((value) => value.includes(target));
+  }
+  function determinePetSpriteVariant(mutations) {
+    if (hasMutation("rainbow", mutations)) return "rainbow";
+    if (hasMutation("gold", mutations)) return "gold";
+    return "normal";
+  }
+  async function fetchPetSprite(species, variant) {
+    await ensureSpritesReady();
+    if (typeof window === "undefined") return null;
+    if (typeof Sprites.getTile !== "function") return null;
+    const entry = petCatalog[species];
+    const tileRef = entry?.tileRef;
+    if (tileRef == null) return null;
+    const index = toPetTileIndex(tileRef);
+    if (index == null) return null;
+    const baseCandidates = new Set(getPetSheetBases());
+    if (baseCandidates.size === 0) {
+      baseCandidates.add("pets");
+      baseCandidates.add("Pets");
+    }
+    for (const base of baseCandidates) {
+      try {
+        const tile = await Sprites.getTile(base, index, "canvas");
+        if (!tile) continue;
+        const data = tile.data;
+        if (!(data instanceof HTMLCanvasElement) || data.width === 0 || data.height === 0) {
+          continue;
+        }
+        let canvas = null;
+        if (variant === "gold" && typeof Sprites.effectGold === "function") {
+          canvas = Sprites.effectGold(tile);
+        } else if (variant === "rainbow" && typeof Sprites.effectRainbow === "function") {
+          canvas = Sprites.effectRainbow(tile);
+        } else {
+          const copy2 = document.createElement("canvas");
+          copy2.width = data.width;
+          copy2.height = data.height;
+          const ctx = copy2.getContext("2d");
+          if (!ctx) continue;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(data, 0, 0);
+          canvas = copy2;
+        }
+        if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
+        return canvas.toDataURL();
+      } catch {
+      }
+    }
+    return null;
+  }
+  function loadPetSprite(speciesRaw, variant = "normal") {
+    if (typeof window === "undefined") {
+      return Promise.resolve(null);
+    }
+    const species = canonicalSpecies(String(speciesRaw ?? "").trim());
+    if (!species) return Promise.resolve(null);
+    ensureListener();
+    const key2 = keyFor(species, variant);
+    const cached = spriteCache3.get(key2);
+    if (cached !== void 0) {
+      return Promise.resolve(cached);
+    }
+    const inflight = spritePromises3.get(key2);
+    if (inflight) return inflight;
+    const promise = fetchPetSprite(species, variant).then((src) => {
+      spriteCache3.set(key2, src);
+      spritePromises3.delete(key2);
+      return src;
+    }).catch(() => {
+      spritePromises3.delete(key2);
+      return null;
+    });
+    spritePromises3.set(key2, promise);
+    return promise;
+  }
+  function loadPetSpriteFromMutations(species, mutations) {
+    const variant = determinePetSpriteVariant(mutations);
+    return loadPetSprite(species, variant);
+  }
+
   // src/ui/menus/notifier.ts
   var rulePopover = null;
   var detachRuleDocHandler = null;
@@ -30543,7 +30936,7 @@ next: ${next}`;
     pop.appendChild(header);
     const current = NotifierService.getRule(row.id);
     const defaults = audio.getPlaybackSettings(row.context);
-    const contextDefaults = NotifierService.getContextStopDefaults(row.context);
+    const contextDefaults = row.context === "shops" || row.context === "weather" ? NotifierService.getContextStopDefaults(row.context) : { stopMode: "manual", stopRepeats: null, loopIntervalMs: defaults.loopIntervalMs };
     const allowPurchase = row.context === "shops";
     const defaultSoundName = (() => {
       const label2 = (defaults.defaultSoundName || "").trim();
@@ -30785,6 +31178,8 @@ next: ${next}`;
   };
   function renderSettingsTab(view, ui) {
     view.innerHTML = "";
+    void PetAlertService.start().catch(() => {
+    });
     const section = (title) => {
       const card = ui.card(title, { tone: "muted" });
       card.body.style.display = "grid";
@@ -30825,8 +31220,9 @@ next: ${next}`;
     root.appendChild(s1.root);
     const contextControls = {};
     const contextOrder = [
-      { key: "shops", label: "Shops", allowPurchase: true },
-      { key: "weather", label: "Weather", allowPurchase: false }
+      { key: "shops", label: "Shops", allowPurchase: true, showStop: true },
+      { key: "weather", label: "Weather", allowPurchase: false },
+      { key: "pets", label: "Pets", allowPurchase: true, showStop: false }
     ];
     for (const cfg of contextOrder) {
       const card = document.createElement("div");
@@ -30913,12 +31309,16 @@ next: ${next}`;
         loopBox.append(loopInput, loopLabel);
         loopWrap.append(loopTitle, loopBox);
         const stopInfo = document.createElement("div");
-        stopInfo.textContent = "Loops stop automatically when the item is purchased.";
+        stopInfo.textContent = cfg.showStop === false ? "Loops keep repeating; stop manually by disabling the alert." : "Loops stop automatically when the item is purchased.";
         stopInfo.style.opacity = "0.75";
         stopInfo.style.fontSize = "12px";
         stopInfo.style.lineHeight = "1.4";
         stopWrap.append(stopInfo, loopWrap);
-        stopRow = row("Stop condition", stopWrap);
+        if (cfg.showStop !== false) {
+          stopRow = row("Stop condition", stopWrap);
+        } else {
+          stopRow = row("Loop interval", stopWrap);
+        }
         card.appendChild(stopRow);
       } else {
         const info = document.createElement("div");
@@ -31248,10 +31648,12 @@ next: ${next}`;
         };
         const isShopsDefault = defaultShops === name;
         const isWeatherDefault = defaultWeather === name;
+        const isPetsDefault = audio.getDefaultSoundName("pets") === name;
         if (isShopsDefault) badges.appendChild(makeBadge("Shops"));
         if (isWeatherDefault) badges.appendChild(makeBadge("Weather"));
+        if (isPetsDefault) badges.appendChild(makeBadge("Pets"));
         if (badges.childElementCount) info.appendChild(badges);
-        if (isShopsDefault || isWeatherDefault) {
+        if (isShopsDefault || isWeatherDefault || isPetsDefault) {
           row2.style.borderColor = "#2b5cff99";
           row2.style.boxShadow = "0 0 0 1px #2b5cff33";
         }
@@ -31265,10 +31667,12 @@ next: ${next}`;
         const btnPlay = smallBtn("\u25B6");
         const btnSetShops = smallBtn("Set shops");
         const btnSetWeather = smallBtn("Set weather");
+        const btnSetPets = smallBtn("Set pets");
         const btnDel = smallBtn("Remove");
         btnPlay.title = "Preview";
         btnSetShops.title = "Set as shops default";
         btnSetWeather.title = "Set as weather default";
+        btnSetPets.title = "Set as pets default";
         btnDel.title = "Remove from library";
         const isProtected = typeof audio.isProtectedSound === "function" && audio.isProtectedSound(name);
         if (isProtected || isShopsDefault || isWeatherDefault) {
@@ -31289,12 +31693,17 @@ next: ${next}`;
           refreshAllSoundSelects();
           renderLibList();
         };
+        btnSetPets.onclick = () => {
+          audio.setDefaultSoundByName(name, "pets");
+          refreshAllSoundSelects();
+          renderLibList();
+        };
         btnDel.onclick = () => {
           audio.unregisterSound(name);
           refreshAllSoundSelects();
           renderLibList();
         };
-        actions.append(btnPlay, btnSetShops, btnSetWeather, btnDel);
+        actions.append(btnPlay, btnSetShops, btnSetWeather, btnSetPets, btnDel);
         row2.append(info, actions);
         listBody.appendChild(row2);
       }
@@ -31311,8 +31720,11 @@ next: ${next}`;
       controls.volumeValue.textContent = `${volPercent}%`;
       if (controls.modeLoop && settings.mode === "loop") controls.modeLoop.checked = true;
       else controls.modeOneshot.checked = true;
-      const defaults = NotifierService.getContextStopDefaults(context);
-      const fallbackLoop = Math.max(150, Math.min(1e4, Math.floor(defaults.loopIntervalMs || settings.loopIntervalMs || 150)));
+      const defaults = context === "shops" || context === "weather" ? NotifierService.getContextStopDefaults(context) : { stopMode: "manual", stopRepeats: null, loopIntervalMs: settings.loopIntervalMs };
+      const fallbackLoop = Math.max(
+        150,
+        Math.min(1e4, Math.floor(defaults.loopIntervalMs || settings.loopIntervalMs || 150))
+      );
       const loopMs = controls.loopInput ? sanitizeLoopInput(controls.loopInput, fallbackLoop) : fallbackLoop;
       audio.setLoopInterval(loopMs, context);
       if (context === "shops") {
@@ -31323,10 +31735,13 @@ next: ${next}`;
           audio.setStopManual("shops");
           NotifierService.setContextStopDefaults("shops", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
         }
-      } else {
+      } else if (context === "weather") {
         applyMode("weather", "oneshot");
         audio.setStopManual("weather");
         NotifierService.setContextStopDefaults("weather", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
+      } else if (context === "pets") {
+        audio.setLoopInterval(loopMs, "pets");
+        audio.setStopManual("pets");
       }
       updateStopVisibility(context);
     };
@@ -31334,6 +31749,7 @@ next: ${next}`;
       refreshAllSoundSelects();
       syncContext("shops");
       syncContext("weather");
+      syncContext("pets");
       renderLibList();
     };
     const handleFiles = async (files) => {
@@ -31842,6 +32258,209 @@ next: ${next}`;
       };
     })();
   }
+  function renderPetAlertsTab(view, ui) {
+    view.innerHTML = "";
+    void PetAlertService.start().catch(() => {
+    });
+    const card = document.createElement("div");
+    Object.assign(card.style, {
+      display: "grid",
+      gridTemplateColumns: "minmax(220px, 260px) minmax(0, 1fr)",
+      gap: "10px",
+      alignItems: "stretch",
+      height: "54vh",
+      overflow: "hidden",
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      padding: "10px",
+      background: "#0f1318"
+    });
+    view.appendChild(card);
+    const petList = document.createElement("div");
+    Object.assign(petList.style, {
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      rowGap: "6px",
+      overflow: "auto",
+      padding: "6px",
+      border: "1px solid #4445",
+      borderRadius: "10px"
+    });
+    card.appendChild(petList);
+    const right = document.createElement("div");
+    Object.assign(right.style, {
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      overflow: "auto",
+      minHeight: "0"
+    });
+    card.appendChild(right);
+    let pets = [];
+    let unsubPets2 = null;
+    let generalEnabled = PetAlertService.isGeneralEnabled();
+    const formRow = (labelTxt, control) => {
+      const { root } = ui.formRow(labelTxt, control, { labelWidth: "180px" });
+      return root;
+    };
+    const generalCard = ui.card("General notifications", { tone: "muted", align: "stretch" });
+    generalCard.body.style.display = "grid";
+    generalCard.body.style.gap = "10px";
+    const generalRow = ui.flexRow({ justify: "start", gap: 10 });
+    const generalSw = ui.switch(PetAlertService.isGeneralEnabled());
+    const generalLbl = document.createElement("div");
+    generalLbl.textContent = "Use a shared threshold for all pets";
+    generalLbl.style.opacity = "0.9";
+    generalRow.append(generalSw, generalLbl);
+    generalCard.body.append(formRow("Enable general", generalRow));
+    const generalInput = ui.inputNumber(1, 100, 1, PetAlertService.getGeneralThresholdPct());
+    generalCard.body.append(formRow("General threshold (%)", generalInput.wrap ?? generalInput));
+    right.appendChild(generalCard.root);
+    const syncGeneralUI = () => {
+      generalEnabled = PetAlertService.isGeneralEnabled();
+      generalSw.checked = generalEnabled;
+      generalInput.value = String(PetAlertService.getGeneralThresholdPct());
+    };
+    generalSw.onchange = () => {
+      PetAlertService.setGeneralEnabled(generalSw.checked);
+      syncGeneralUI();
+    };
+    generalInput.addEventListener("change", () => {
+      const next = Math.max(1, Math.min(100, Number(generalInput.value) || PetAlertService.getGeneralThresholdPct()));
+      generalInput.value = String(PetAlertService.setGeneralThresholdPct(next));
+    });
+    syncGeneralUI();
+    const renderPetList = () => {
+      petList.innerHTML = "";
+      if (!pets.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No active pets.";
+        empty.style.opacity = "0.75";
+        petList.appendChild(empty);
+        return;
+      }
+      for (const pet of pets) {
+        const slot = pet?.slot ?? {};
+        const name = String(slot?.name || slot?.petSpecies || "Pet");
+        const hunger = PetsService.getHungerPctFor(pet);
+        const hungerText = Number.isFinite(hunger) ? `${hunger}%` : "\u2014";
+        const row = document.createElement("div");
+        row.style.display = "flex";
+        row.style.alignItems = "center";
+        row.style.justifyContent = "space-between";
+        row.style.gap = "10px";
+        row.style.width = "100%";
+        row.style.textAlign = "left";
+        row.style.padding = "6px 8px";
+        row.style.borderRadius = "8px";
+        row.style.border = "1px solid #4445";
+        row.style.background = "#121820";
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.alignItems = "center";
+        left.style.gap = "8px";
+        left.style.minWidth = "0";
+        const avatar = document.createElement("div");
+        avatar.style.width = "40px";
+        avatar.style.height = "40px";
+        avatar.style.borderRadius = "8px";
+        avatar.style.display = "inline-flex";
+        avatar.style.alignItems = "center";
+        avatar.style.justifyContent = "center";
+        avatar.style.background = "#111821";
+        avatar.style.border = "1px solid #1f2429";
+        avatar.style.overflow = "hidden";
+        const useEmojiFallback = () => {
+          avatar.replaceChildren();
+          const span = document.createElement("span");
+          span.textContent = "\u{1F43E}";
+          span.style.fontSize = "28px";
+          span.setAttribute("aria-hidden", "true");
+          avatar.appendChild(span);
+        };
+        let iconRequestId = 0;
+        const setIcon = (species2, mutation) => {
+          iconRequestId += 1;
+          const requestId = iconRequestId;
+          const speciesLabel = String(species2 ?? "").trim();
+          if (!speciesLabel) {
+            useEmojiFallback();
+            return;
+          }
+          useEmojiFallback();
+          loadPetSpriteFromMutations(speciesLabel, mutation).then((src) => {
+            if (requestId !== iconRequestId) return;
+            if (!src) {
+              useEmojiFallback();
+              return;
+            }
+            const img = new Image();
+            img.src = src;
+            img.alt = speciesLabel || "pet";
+            img.decoding = "async";
+            img.loading = "lazy";
+            img.draggable = false;
+            Object.assign(img.style, {
+              width: "100%",
+              height: "100%",
+              imageRendering: "auto",
+              objectFit: "contain"
+            });
+            avatar.replaceChildren(img);
+          }).catch(() => {
+            if (requestId !== iconRequestId) return;
+            useEmojiFallback();
+          });
+        };
+        const species = String(slot?.petSpecies || "");
+        const mutations = slot?.mutations ?? pet?.mutations;
+        setIcon(species, mutations);
+        const titleWrap = document.createElement("div");
+        titleWrap.style.display = "flex";
+        titleWrap.style.flexDirection = "column";
+        titleWrap.style.gap = "2px";
+        titleWrap.style.minWidth = "0";
+        const title = document.createElement("div");
+        title.textContent = name;
+        title.style.fontWeight = "600";
+        title.style.overflow = "hidden";
+        title.style.textOverflow = "ellipsis";
+        title.style.whiteSpace = "nowrap";
+        titleWrap.append(title);
+        left.append(avatar, titleWrap);
+        const hungerValue = document.createElement("div");
+        hungerValue.textContent = hungerText;
+        hungerValue.style.fontWeight = "700";
+        hungerValue.style.color = "#FFD84D";
+        row.append(left, hungerValue);
+        petList.appendChild(row);
+      }
+    };
+    (async () => {
+      try {
+        unsubPets2 = await PetsService.onPetsChangeNow((arr) => {
+          pets = Array.isArray(arr) ? arr.slice(0, 3) : [];
+          renderPetList();
+        });
+      } catch {
+        pets = [];
+        renderPetList();
+      }
+    })();
+    view.__cleanup__ = (() => {
+      const prev = view.__cleanup__;
+      return () => {
+        try {
+          unsubPets2?.();
+        } catch {
+        }
+        try {
+          prev?.();
+        } catch {
+        }
+      };
+    })();
+  }
   function renderWeatherTab(view, ui) {
     view.innerHTML = "";
     view.style.cssText = "";
@@ -32199,6 +32818,7 @@ next: ${next}`;
     const ui = new Menu({ id: "alerts", compact: true, windowSelector: ".qws-win" });
     ui.addTab("shops", "\u{1F6D2} Shops", (view) => renderShopTab(view, ui));
     ui.addTab("weather", "\u{1F326} Weather", (view) => renderWeatherTab(view, ui));
+    ui.addTab("pets", "\u{1F43E} Pets", (view) => renderPetAlertsTab(view, ui));
     ui.addTab("settings", "\u2699\uFE0F General settings", (view) => renderSettingsTab(view, ui));
     ui.mount(root);
   }
@@ -32865,12 +33485,12 @@ next: ${next}`;
   var petSpriteSubscribers = /* @__PURE__ */ new Map();
   var petSpriteConfig = /* @__PURE__ */ new WeakMap();
   var petSpriteListenerAttached = false;
-  var petSheetBasesCache = null;
+  var petSheetBasesCache2 = null;
   function resetPetSheetBases() {
-    petSheetBasesCache = null;
+    petSheetBasesCache2 = null;
   }
-  function getPetSheetBases() {
-    if (petSheetBasesCache) return petSheetBasesCache;
+  function getPetSheetBases2() {
+    if (petSheetBasesCache2) return petSheetBasesCache2;
     const urls = /* @__PURE__ */ new Set();
     try {
       Sprites.listPets().forEach((url) => urls.add(url));
@@ -32881,23 +33501,23 @@ next: ${next}`;
       const file = clean.split("/").pop() ?? clean;
       return file.replace(/\.[^.]+$/, "");
     });
-    petSheetBasesCache = bases;
+    petSheetBasesCache2 = bases;
     return bases;
   }
-  function toPetTileIndex(tileRef) {
+  function toPetTileIndex2(tileRef) {
     const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
     if (!Number.isFinite(value)) return null;
     if (value <= 0) return value;
     return value - 1;
   }
-  async function fetchPetSprite(species) {
+  async function fetchPetSprite2(species) {
     await ensureSpritesReady();
     const entry = petCatalog[species];
     const tileRef = entry?.tileRef;
     if (tileRef == null) return null;
-    const index = toPetTileIndex(tileRef);
+    const index = toPetTileIndex2(tileRef);
     if (index == null) return null;
-    const baseCandidates = new Set(getPetSheetBases());
+    const baseCandidates = new Set(getPetSheetBases2());
     if (baseCandidates.size === 0) {
       baseCandidates.add("pets");
       baseCandidates.add("Pets");
@@ -32966,7 +33586,7 @@ next: ${next}`;
       petSpriteSubscribers.delete(species);
     }
   }
-  function loadPetSprite(species) {
+  function loadPetSprite2(species) {
     if (typeof window === "undefined") {
       return Promise.resolve(null);
     }
@@ -32977,7 +33597,7 @@ next: ${next}`;
     }
     const inflight = petSpritePromises.get(species);
     if (inflight) return inflight;
-    const promise = fetchPetSprite(species).then((src) => {
+    const promise = fetchPetSprite2(species).then((src) => {
       petSpriteCache.set(species, src);
       petSpritePromises.delete(species);
       notifyPetSpriteSubscribers(species, src);
@@ -32998,7 +33618,7 @@ next: ${next}`;
       resetPetSheetBases();
       const keys = Array.from(petSpriteSubscribers.keys());
       keys.forEach((key2) => {
-        void loadPetSprite(key2);
+        void loadPetSprite2(key2);
       });
     });
   }
@@ -33019,7 +33639,7 @@ next: ${next}`;
     subscribePetSprite(species, el2, { size, fallback });
     const cached = petSpriteCache.get(species);
     applyPetSprite(el2, cached ?? null);
-    void loadPetSprite(species);
+    void loadPetSprite2(species);
     return el2;
   }
   function createPetSpeciesCell(species) {
@@ -33234,142 +33854,6 @@ next: ${next}`;
     if (previousScrollTop !== null) {
       view.scrollTop = previousScrollTop;
     }
-  }
-
-  // src/utils/petSprites.ts
-  var spriteCache3 = /* @__PURE__ */ new Map();
-  var spritePromises3 = /* @__PURE__ */ new Map();
-  var petSheetBasesCache2 = null;
-  var listenerAttached3 = false;
-  function canonicalSpecies(raw) {
-    if (!raw) return raw;
-    if (petCatalog[raw]) return raw;
-    const pretty = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-    return petCatalog[pretty] ? pretty : raw;
-  }
-  function toPetTileIndex2(tileRef) {
-    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
-    if (!Number.isFinite(value)) return null;
-    if (value <= 0) return value;
-    return value - 1;
-  }
-  function getPetSheetBases2() {
-    if (petSheetBasesCache2) return petSheetBasesCache2;
-    const urls = /* @__PURE__ */ new Set();
-    try {
-      const list = typeof Sprites.listPets === "function" ? Sprites.listPets() : [];
-      for (const url of list) {
-        if (typeof url === "string" && url.length) {
-          urls.add(url);
-        }
-      }
-    } catch {
-    }
-    const bases = Array.from(urls, (url) => {
-      const clean = url.split(/[?#]/)[0] ?? url;
-      const file = clean.split("/").pop() ?? clean;
-      return file.replace(/\.[^.]+$/, "");
-    });
-    petSheetBasesCache2 = bases;
-    return bases;
-  }
-  function resetCaches() {
-    spriteCache3.clear();
-    spritePromises3.clear();
-    petSheetBasesCache2 = null;
-  }
-  function ensureListener() {
-    if (listenerAttached3 || typeof window === "undefined") return;
-    listenerAttached3 = true;
-    window.addEventListener("mg:sprite-detected", () => {
-      resetCaches();
-    });
-  }
-  function keyFor(species, variant) {
-    return `${species.toLowerCase()}::${variant}`;
-  }
-  function hasMutation(target, mutations) {
-    if (!mutations) return false;
-    const list = Array.isArray(mutations) ? mutations : [mutations];
-    return list.map((value) => String(value ?? "").toLowerCase()).some((value) => value.includes(target));
-  }
-  function determinePetSpriteVariant(mutations) {
-    if (hasMutation("rainbow", mutations)) return "rainbow";
-    if (hasMutation("gold", mutations)) return "gold";
-    return "normal";
-  }
-  async function fetchPetSprite2(species, variant) {
-    await ensureSpritesReady();
-    if (typeof window === "undefined") return null;
-    if (typeof Sprites.getTile !== "function") return null;
-    const entry = petCatalog[species];
-    const tileRef = entry?.tileRef;
-    if (tileRef == null) return null;
-    const index = toPetTileIndex2(tileRef);
-    if (index == null) return null;
-    const baseCandidates = new Set(getPetSheetBases2());
-    if (baseCandidates.size === 0) {
-      baseCandidates.add("pets");
-      baseCandidates.add("Pets");
-    }
-    for (const base of baseCandidates) {
-      try {
-        const tile = await Sprites.getTile(base, index, "canvas");
-        if (!tile) continue;
-        const data = tile.data;
-        if (!(data instanceof HTMLCanvasElement) || data.width === 0 || data.height === 0) {
-          continue;
-        }
-        let canvas = null;
-        if (variant === "gold" && typeof Sprites.effectGold === "function") {
-          canvas = Sprites.effectGold(tile);
-        } else if (variant === "rainbow" && typeof Sprites.effectRainbow === "function") {
-          canvas = Sprites.effectRainbow(tile);
-        } else {
-          const copy2 = document.createElement("canvas");
-          copy2.width = data.width;
-          copy2.height = data.height;
-          const ctx = copy2.getContext("2d");
-          if (!ctx) continue;
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(data, 0, 0);
-          canvas = copy2;
-        }
-        if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
-        return canvas.toDataURL();
-      } catch {
-      }
-    }
-    return null;
-  }
-  function loadPetSprite2(speciesRaw, variant = "normal") {
-    if (typeof window === "undefined") {
-      return Promise.resolve(null);
-    }
-    const species = canonicalSpecies(String(speciesRaw ?? "").trim());
-    if (!species) return Promise.resolve(null);
-    ensureListener();
-    const key2 = keyFor(species, variant);
-    const cached = spriteCache3.get(key2);
-    if (cached !== void 0) {
-      return Promise.resolve(cached);
-    }
-    const inflight = spritePromises3.get(key2);
-    if (inflight) return inflight;
-    const promise = fetchPetSprite2(species, variant).then((src) => {
-      spriteCache3.set(key2, src);
-      spritePromises3.delete(key2);
-      return src;
-    }).catch(() => {
-      spritePromises3.delete(key2);
-      return null;
-    });
-    spritePromises3.set(key2, promise);
-    return promise;
-  }
-  function loadPetSpriteFromMutations(species, mutations) {
-    const variant = determinePetSpriteVariant(mutations);
-    return loadPetSprite2(species, variant);
   }
 
   // src/ui/menus/pets.ts
@@ -34311,10 +34795,10 @@ next: ${next}`;
         isApplyingTeam = false;
       }
     };
-    let unsubPets = null;
+    let unsubPets2 = null;
     (async () => {
       try {
-        unsubPets = await onActivePetsStructuralChangeNow(async () => {
+        unsubPets2 = await onActivePetsStructuralChangeNow(async () => {
           if (isApplyingTeam) return;
           await repaintSlots(getSelectedTeam());
           await refreshTeamList();
@@ -34349,7 +34833,7 @@ next: ${next}`;
         } catch {
         }
         try {
-          unsubPets?.();
+          unsubPets2?.();
         } catch {
         }
         try {
@@ -38004,11 +38488,11 @@ next: ${next}`;
     }
     controls.appendChild(actionsWrap);
     updateButtons(getKeybind(action2.id));
-    const stop = onKeybindChange(action2.id, (hk) => {
+    const stop2 = onKeybindChange(action2.id, (hk) => {
       button.refreshHotkey(hk);
       updateButtons(hk);
     });
-    ui.on("unmounted", stop);
+    ui.on("unmounted", stop2);
     if (detachHoldListener) ui.on("unmounted", detachHoldListener);
     const row = ui.formRow(action2.label, controls, { labelWidth: "180px" });
     row.label.style.fontSize = "13px";
