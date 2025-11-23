@@ -20,6 +20,10 @@ import { createShopSprite } from "../../utils/shopSprites";
 import { createWeatherSprite } from "../../utils/weatherSprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
+import { PetAlertService } from "../../services/pet-alerts";
+import { PetsService } from "../../services/pets";
+import type { PetInfo } from "../../services/player";
+import { loadPetSpriteFromMutations } from "../../utils/petSprites";
 
 type RuleEditorRow = {
   id: string;
@@ -416,7 +420,9 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
 
   const current = NotifierService.getRule(row.id);
   const defaults = audio.getPlaybackSettings(row.context);
-  const contextDefaults = NotifierService.getContextStopDefaults(row.context);
+  const contextDefaults = (row.context === "shops" || row.context === "weather")
+    ? NotifierService.getContextStopDefaults(row.context)
+    : { stopMode: "manual", stopRepeats: null, loopIntervalMs: defaults.loopIntervalMs };
   const allowPurchase = row.context === "shops";
 
   const defaultSoundName = (() => {
@@ -696,6 +702,7 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
 
 function renderSettingsTab(view: HTMLElement, ui: Menu) {
   view.innerHTML = "";
+  void PetAlertService.start().catch(() => {});
 
   // ========= Helpers UI =========
   const section = (title: string) => {
@@ -765,9 +772,10 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
 
   const contextControls: Record<AudioContextKey, ContextControls> = {} as Record<AudioContextKey, ContextControls>;
 
-  const contextOrder: Array<{ key: AudioContextKey; label: string; allowPurchase: boolean }> = [
-    { key: "shops", label: "Shops", allowPurchase: true },
+  const contextOrder: Array<{ key: AudioContextKey; label: string; allowPurchase: boolean; showStop?: boolean }> = [
+    { key: "shops", label: "Shops", allowPurchase: true, showStop: true },
     { key: "weather", label: "Weather", allowPurchase: false },
+    { key: "pets", label: "Pets", allowPurchase: true, showStop: false },
   ];
 
   for (const cfg of contextOrder) {
@@ -868,13 +876,20 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
       loopWrap.append(loopTitle, loopBox);
 
       const stopInfo = document.createElement("div");
-      stopInfo.textContent = "Loops stop automatically when the item is purchased.";
+      stopInfo.textContent = cfg.showStop === false
+        ? "Loops keep repeating; stop manually by disabling the alert."
+        : "Loops stop automatically when the item is purchased.";
       stopInfo.style.opacity = "0.75";
       stopInfo.style.fontSize = "12px";
       stopInfo.style.lineHeight = "1.4";
 
       stopWrap.append(stopInfo, loopWrap);
-      stopRow = row("Stop condition", stopWrap);
+
+      if (cfg.showStop !== false) {
+        stopRow = row("Stop condition", stopWrap);
+      } else {
+        stopRow = row("Loop interval", stopWrap);
+      }
       card.appendChild(stopRow);
     } else {
       const info = document.createElement("div");
@@ -1258,11 +1273,13 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
 
       const isShopsDefault = defaultShops === name;
       const isWeatherDefault = defaultWeather === name;
+      const isPetsDefault = audio.getDefaultSoundName("pets") === name;
       if (isShopsDefault) badges.appendChild(makeBadge("Shops"));
       if (isWeatherDefault) badges.appendChild(makeBadge("Weather"));
+      if (isPetsDefault) badges.appendChild(makeBadge("Pets"));
       if (badges.childElementCount) info.appendChild(badges);
 
-      if (isShopsDefault || isWeatherDefault) {
+      if (isShopsDefault || isWeatherDefault || isPetsDefault) {
         row.style.borderColor = "#2b5cff99";
         row.style.boxShadow = "0 0 0 1px #2b5cff33";
       }
@@ -1278,11 +1295,13 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
       const btnPlay = smallBtn("▶");
       const btnSetShops = smallBtn("Set shops");
       const btnSetWeather = smallBtn("Set weather");
+      const btnSetPets = smallBtn("Set pets");
       const btnDel = smallBtn("Remove");
 
       btnPlay.title = "Preview";
       btnSetShops.title = "Set as shops default";
       btnSetWeather.title = "Set as weather default";
+      btnSetPets.title = "Set as pets default";
       btnDel.title = "Remove from library";
 
       const isProtected = typeof (audio as any).isProtectedSound === "function" && audio.isProtectedSound(name);
@@ -1304,13 +1323,18 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
         refreshAllSoundSelects();
         renderLibList();
       };
+      btnSetPets.onclick = () => {
+        audio.setDefaultSoundByName(name, "pets");
+        refreshAllSoundSelects();
+        renderLibList();
+      };
       btnDel.onclick = () => {
         audio.unregisterSound(name);
         refreshAllSoundSelects();
         renderLibList();
       };
 
-      actions.append(btnPlay, btnSetShops, btnSetWeather, btnDel);
+      actions.append(btnPlay, btnSetShops, btnSetWeather, btnSetPets, btnDel);
       row.append(info, actions);
       listBody.appendChild(row);
     }
@@ -1332,8 +1356,14 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
     if (controls.modeLoop && settings.mode === "loop") controls.modeLoop.checked = true;
     else controls.modeOneshot.checked = true;
 
-    const defaults = NotifierService.getContextStopDefaults(context);
-    const fallbackLoop = Math.max(150, Math.min(10000, Math.floor(defaults.loopIntervalMs || settings.loopIntervalMs || 150)));
+    const defaults =
+      context === "shops" || context === "weather"
+        ? NotifierService.getContextStopDefaults(context)
+        : { stopMode: "manual" as const, stopRepeats: null, loopIntervalMs: settings.loopIntervalMs };
+    const fallbackLoop = Math.max(
+      150,
+      Math.min(10000, Math.floor(defaults.loopIntervalMs || settings.loopIntervalMs || 150)),
+    );
     const loopMs = controls.loopInput ? sanitizeLoopInput(controls.loopInput, fallbackLoop) : fallbackLoop;
     audio.setLoopInterval(loopMs, context);
 
@@ -1345,10 +1375,14 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
         audio.setStopManual("shops");
         NotifierService.setContextStopDefaults("shops", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
       }
-    } else {
+    } else if (context === "weather") {
       applyMode("weather", "oneshot");
       audio.setStopManual("weather");
       NotifierService.setContextStopDefaults("weather", { stopMode: "manual", stopRepeats: null, loopIntervalMs: loopMs });
+    } else if (context === "pets") {
+      // Pets: loops are manual stop; inherit mode selection and loop interval
+      audio.setLoopInterval(loopMs, "pets");
+      audio.setStopManual("pets");
     }
 
     updateStopVisibility(context);
@@ -1358,6 +1392,7 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
     refreshAllSoundSelects();
     syncContext("shops");
     syncContext("weather");
+    syncContext("pets");
     renderLibList();
   };
 
@@ -1928,6 +1963,233 @@ style.textContent = `
   })();
 }
 
+function renderPetAlertsTab(view: HTMLElement, ui: Menu) {
+  view.innerHTML = "";
+  void PetAlertService.start().catch(() => {});
+
+  const card = document.createElement("div");
+  Object.assign(card.style, {
+    display: "grid",
+    gridTemplateColumns: "minmax(220px, 260px) minmax(0, 1fr)",
+    gap: "10px",
+    alignItems: "stretch",
+    height: "54vh",
+    overflow: "hidden",
+    border: "1px solid #4445",
+    borderRadius: "10px",
+    padding: "10px",
+    background: "#0f1318",
+  });
+  view.appendChild(card);
+
+  const petList = document.createElement("div");
+  Object.assign(petList.style, {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    rowGap: "6px",
+    overflow: "auto",
+    padding: "6px",
+    border: "1px solid #4445",
+    borderRadius: "10px",
+  });
+  card.appendChild(petList);
+
+  const right = document.createElement("div");
+  Object.assign(right.style, {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    overflow: "auto",
+    minHeight: "0",
+  });
+  card.appendChild(right);
+
+  let pets: PetInfo[] = [];
+  let unsubPets: (() => void) | null = null;
+  let generalEnabled = PetAlertService.isGeneralEnabled();
+
+  const formRow = (labelTxt: string, control: HTMLElement) => {
+    const { root } = ui.formRow(labelTxt, control, { labelWidth: "180px" });
+    return root;
+  };
+
+  const generalCard = ui.card("General notifications", { tone: "muted", align: "stretch" });
+  generalCard.body.style.display = "grid";
+  generalCard.body.style.gap = "10px";
+
+  const generalRow = ui.flexRow({ justify: "start", gap: 10 });
+  const generalSw = ui.switch(PetAlertService.isGeneralEnabled());
+  const generalLbl = document.createElement("div");
+  generalLbl.textContent = "Use a shared threshold for all pets";
+  generalLbl.style.opacity = "0.9";
+  generalRow.append(generalSw, generalLbl);
+  generalCard.body.append(formRow("Enable general", generalRow));
+
+  const generalInput = ui.inputNumber(1, 100, 1, PetAlertService.getGeneralThresholdPct());
+  generalCard.body.append(formRow("General threshold (%)", (generalInput as any).wrap ?? generalInput));
+
+  right.appendChild(generalCard.root);
+
+  const syncGeneralUI = () => {
+    generalEnabled = PetAlertService.isGeneralEnabled();
+    generalSw.checked = generalEnabled;
+    generalInput.value = String(PetAlertService.getGeneralThresholdPct());
+  };
+
+  generalSw.onchange = () => {
+    PetAlertService.setGeneralEnabled(generalSw.checked);
+    syncGeneralUI();
+    // no per-pet selection anymore
+  };
+
+  generalInput.addEventListener("change", () => {
+    const next = Math.max(1, Math.min(100, Number(generalInput.value) || PetAlertService.getGeneralThresholdPct()));
+    generalInput.value = String(PetAlertService.setGeneralThresholdPct(next));
+  });
+
+  // run once after controls exist
+  syncGeneralUI();
+
+  const renderPetList = () => {
+    petList.innerHTML = "";
+    if (!pets.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "No active pets.";
+      empty.style.opacity = "0.75";
+      petList.appendChild(empty);
+      return;
+    }
+
+    for (const pet of pets) {
+      const slot = (pet as any)?.slot ?? {};
+      const name = String(slot?.name || slot?.petSpecies || "Pet");
+      const hunger = PetsService.getHungerPctFor(pet);
+      const hungerText = Number.isFinite(hunger) ? `${hunger}%` : "—";
+
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.justifyContent = "space-between";
+      row.style.gap = "10px";
+      row.style.width = "100%";
+      row.style.textAlign = "left";
+      row.style.padding = "6px 8px";
+      row.style.borderRadius = "8px";
+      row.style.border = "1px solid #4445";
+      row.style.background = "#121820";
+
+      const left = document.createElement("div");
+      left.style.display = "flex";
+      left.style.alignItems = "center";
+      left.style.gap = "8px";
+      left.style.minWidth = "0";
+
+      const avatar = document.createElement("div");
+      avatar.style.width = "40px";
+      avatar.style.height = "40px";
+      avatar.style.borderRadius = "8px";
+      avatar.style.display = "inline-flex";
+      avatar.style.alignItems = "center";
+      avatar.style.justifyContent = "center";
+      avatar.style.background = "#111821";
+      avatar.style.border = "1px solid #1f2429";
+      avatar.style.overflow = "hidden";
+
+      const useEmojiFallback = () => {
+        avatar.replaceChildren();
+        const span = document.createElement("span");
+        span.textContent = "🐾";
+        span.style.fontSize = "28px";
+        span.setAttribute("aria-hidden", "true");
+        avatar.appendChild(span);
+      };
+
+      let iconRequestId = 0;
+      const setIcon = (species?: string, mutation?: string | string[]) => {
+        iconRequestId += 1;
+        const requestId = iconRequestId;
+        const speciesLabel = String(species ?? "").trim();
+        if (!speciesLabel) {
+          useEmojiFallback();
+          return;
+        }
+        useEmojiFallback();
+        loadPetSpriteFromMutations(speciesLabel, mutation)
+          .then((src) => {
+            if (requestId !== iconRequestId) return;
+            if (!src) {
+              useEmojiFallback();
+              return;
+            }
+            const img = new Image();
+            img.src = src;
+            img.alt = speciesLabel || "pet";
+            img.decoding = "async";
+            img.loading = "lazy";
+            img.draggable = false;
+            Object.assign(img.style, {
+              width: "100%",
+              height: "100%",
+              imageRendering: "auto",
+              objectFit: "contain",
+            });
+            avatar.replaceChildren(img);
+          })
+          .catch(() => {
+            if (requestId !== iconRequestId) return;
+            useEmojiFallback();
+          });
+      };
+      const species = String(slot?.petSpecies || "");
+      const mutations = (slot as any)?.mutations ?? (pet as any)?.mutations;
+      setIcon(species, mutations);
+
+      const titleWrap = document.createElement("div");
+      titleWrap.style.display = "flex";
+      titleWrap.style.flexDirection = "column";
+      titleWrap.style.gap = "2px";
+      titleWrap.style.minWidth = "0";
+      const title = document.createElement("div");
+      title.textContent = name;
+      title.style.fontWeight = "600";
+      title.style.overflow = "hidden";
+      title.style.textOverflow = "ellipsis";
+      title.style.whiteSpace = "nowrap";
+      titleWrap.append(title);
+
+      left.append(avatar, titleWrap);
+
+      const hungerValue = document.createElement("div");
+      hungerValue.textContent = hungerText;
+      hungerValue.style.fontWeight = "700";
+      hungerValue.style.color = "#FFD84D";
+
+      row.append(left, hungerValue);
+      petList.appendChild(row);
+    }
+  };
+
+  (async () => {
+    try {
+      unsubPets = await PetsService.onPetsChangeNow((arr) => {
+        pets = Array.isArray(arr) ? arr.slice(0, 3) : [];
+        renderPetList();
+      });
+    } catch {
+      pets = [];
+      renderPetList();
+    }
+  })();
+
+  (view as any).__cleanup__ = (() => {
+    const prev = (view as any).__cleanup__;
+    return () => {
+      try { unsubPets?.(); } catch {}
+      try { prev?.(); } catch {}
+    };
+  })();
+}
+
 function renderWeatherTab(view: HTMLElement, ui: Menu) {
   view.innerHTML = "";
   view.style.cssText = "";
@@ -2294,6 +2556,8 @@ export function renderNotifierMenu(root: HTMLElement) {
   const ui = new Menu({ id: "alerts", compact: true, windowSelector: ".qws-win" });
   ui.addTab("shops", "🛒 Shops", (view) => renderShopTab(view, ui));
   ui.addTab("weather", "🌦 Weather", (view) => renderWeatherTab(view, ui));
+  ui.addTab("pets", "🐾 Pets", (view) => renderPetAlertsTab(view, ui));
   ui.addTab("settings", "⚙️ General settings", (view) => renderSettingsTab(view, ui));
   ui.mount(root);
 }
+

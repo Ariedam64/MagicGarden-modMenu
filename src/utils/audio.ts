@@ -71,7 +71,7 @@ function toDataUrl(dataOrBase64: string, mime = "audio/mpeg") {
 const LS_SETTINGS_KEY = "qws:alerts:audio:settings:v1";
 const LS_LIBRARY_KEY = "qws:alerts:audio:library:v1";
 
-export type AudioContextKey = "shops" | "weather";
+export type AudioContextKey = "shops" | "weather" | "pets";
 
 type StoredContextSettings = {
   volume?: number;
@@ -113,6 +113,9 @@ export class AudioNotifier {
   private weatherMode: PlaybackMode = "oneshot";
   private weatherStopConf: StopConfig = { mode: "manual" };
   private weatherLoopIntervalMs = 1500;
+  private petMode: PlaybackMode = "oneshot";
+  private petStopConf: StopConfig = { mode: "manual" };
+  private petLoopIntervalMs = 1500;
   private loops = new Map<string, LoopState>();
 
   private oneshotQueue: PendingOneshot[] = [];
@@ -121,6 +124,8 @@ export class AudioNotifier {
 
   private weatherVolume = 0.7;
   private weatherDefaultSoundName: string | null = null;
+  private petVolume = 0.7;
+  private petDefaultSoundName: string | null = null;
 
   // Optional purchase checker (for stop: purchase)
   private purchaseChecker?: (itemId: string) => boolean;
@@ -194,6 +199,12 @@ export class AudioNotifier {
       changed = true;
     }
 
+    const nextPets = ensureName(this.petDefaultSoundName, nextShops);
+    if (nextPets !== this.petDefaultSoundName) {
+      this.petDefaultSoundName = nextPets;
+      changed = true;
+    }
+
     return changed;
   }
 
@@ -222,6 +233,13 @@ export class AudioNotifier {
             stop: this.weatherStopConf,
             loopIntervalMs: this.weatherLoopIntervalMs,
             defaultSoundName: this.weatherDefaultSoundName,
+          },
+          pets: {
+            volume: this.petVolume,
+            mode: this.petMode,
+            stop: this.petStopConf,
+            loopIntervalMs: this.petLoopIntervalMs,
+            defaultSoundName: this.petDefaultSoundName,
           },
         },
       };
@@ -295,6 +313,11 @@ export class AudioNotifier {
             let weatherStopLoaded = false;
             let weatherLoopLoaded = false;
             let weatherDefaultLoaded = false;
+            let petVolumeLoaded = false;
+            let petModeLoaded = false;
+            let petStopLoaded = false;
+            let petLoopLoaded = false;
+            let petDefaultLoaded = false;
 
             const applyContext = (ctx: AudioContextKey, conf?: StoredContextSettings | null) => {
               if (!conf || typeof conf !== "object") return;
@@ -302,11 +325,13 @@ export class AudioNotifier {
                 if (typeof value !== "number") return;
                 const normalized = clamp01(value);
                 if (ctx === "weather") { this.weatherVolume = normalized; weatherVolumeLoaded = true; }
+                else if (ctx === "pets") { this.petVolume = normalized; petVolumeLoaded = true; }
                 else this.volume = normalized;
               };
               const applyMode = (value: unknown) => {
                 if (value === "loop" || value === "oneshot") {
                   if (ctx === "weather") { this.weatherMode = value; weatherModeLoaded = true; }
+                  else if (ctx === "pets") { this.petMode = value; petModeLoaded = true; }
                   else this.mode = value;
                 }
               };
@@ -315,14 +340,19 @@ export class AudioNotifier {
                 const mode = (value as any).mode;
                 if (mode === "purchase") {
                   if (ctx === "weather") { this.weatherStopConf = { mode: "purchase" }; weatherStopLoaded = true; }
+                  else if (ctx === "pets") { this.petStopConf = { mode: "purchase" }; petStopLoaded = true; }
                   else this.stopConf = { mode: "purchase" };
                 } else if (mode === "manual") {
                   if (ctx === "weather") { this.weatherStopConf = { mode: "manual" }; weatherStopLoaded = true; }
+                  else if (ctx === "pets") { this.petStopConf = { mode: "manual" }; petStopLoaded = true; }
                   else this.stopConf = { mode: "manual" };
                 } else if (mode === "repeat") {
                   if (ctx === "weather") {
                     this.weatherStopConf = { mode: "manual" };
                     weatherStopLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petStopConf = { mode: "manual" };
+                    petStopLoaded = true;
                   } else {
                     this.stopConf = { mode: "manual" };
                   }
@@ -332,12 +362,14 @@ export class AudioNotifier {
                 if (typeof value !== "number" || !Number.isFinite(value)) return;
                 const normalized = Math.max(150, Math.floor(value));
                 if (ctx === "weather") { this.weatherLoopIntervalMs = normalized; weatherLoopLoaded = true; }
+                else if (ctx === "pets") { this.petLoopIntervalMs = normalized; petLoopLoaded = true; }
                 else this.loopIntervalMs = normalized;
               };
               const applyDefault = (value: unknown) => {
                 if (typeof value !== "string") return;
                 const nm = value.trim();
                 if (ctx === "weather") { this.weatherDefaultSoundName = nm ? nm : null; weatherDefaultLoaded = true; }
+                else if (ctx === "pets") { this.petDefaultSoundName = nm ? nm : null; petDefaultLoaded = true; }
                 else this.defaultSoundName = nm ? nm : null;
               };
 
@@ -351,6 +383,7 @@ export class AudioNotifier {
             if (parsed.contexts && typeof parsed.contexts === "object") {
               applyContext("shops", (parsed.contexts as any).shops);
               applyContext("weather", (parsed.contexts as any).weather);
+              applyContext("pets", (parsed.contexts as any).pets);
             }
 
             if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
@@ -362,6 +395,16 @@ export class AudioNotifier {
             }
             if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
             if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
+
+            if (!petVolumeLoaded) this.petVolume = this.volume;
+            if (!petModeLoaded) this.petMode = this.mode;
+            if (!petStopLoaded) {
+              this.petStopConf = this.stopConf.mode === "purchase"
+                ? { mode: "purchase" }
+                : { mode: "manual" };
+            }
+            if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
+            if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
           }
         }
       } catch {}
@@ -385,11 +428,17 @@ export class AudioNotifier {
     this.library.set(safeName, dataUrl);
     const prevDefault = this.defaultSoundName;
     const prevWeatherDefault = this.weatherDefaultSoundName;
+    const prevPetDefault = this.petDefaultSoundName;
     if (!this.defaultSoundName) this.defaultSoundName = safeName;
     if (!this.weatherDefaultSoundName) this.weatherDefaultSoundName = safeName;
+    if (!this.petDefaultSoundName) this.petDefaultSoundName = safeName;
     this.ensureBuiltinPresent();
     this.persistLibrary();
-    if (prevDefault !== this.defaultSoundName || prevWeatherDefault !== this.weatherDefaultSoundName) {
+    if (
+      prevDefault !== this.defaultSoundName ||
+      prevWeatherDefault !== this.weatherDefaultSoundName ||
+      prevPetDefault !== this.petDefaultSoundName
+    ) {
       this.persistSettings();
     }
   }
@@ -399,9 +448,11 @@ export class AudioNotifier {
     if (!existed) return;
     const prevDefault = this.defaultSoundName;
     const prevWeatherDefault = this.weatherDefaultSoundName;
+    const prevPetDefault = this.petDefaultSoundName;
     if (prevDefault === name) this.defaultSoundName = null;
     if (prevWeatherDefault === name) this.weatherDefaultSoundName = null;
-    const changed = (prevDefault === name) || (prevWeatherDefault === name) || this.ensureDefaultSoundValidity();
+    if (prevPetDefault === name) this.petDefaultSoundName = null;
+    const changed = (prevDefault === name) || (prevWeatherDefault === name) || (prevPetDefault === name) || this.ensureDefaultSoundValidity();
     this.persistLibrary();
     if (changed) this.persistSettings();
   }
@@ -411,6 +462,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherDefaultSoundName === name) return;
       this.weatherDefaultSoundName = name;
+    } else if (context === "pets") {
+      if (this.petDefaultSoundName === name) return;
+      this.petDefaultSoundName = name;
     } else {
       if (this.defaultSoundName === name) return;
       this.defaultSoundName = name;
@@ -463,6 +517,9 @@ export class AudioNotifier {
     if (context === "weather") {
       return this.weatherDefaultSoundName ?? this.defaultSoundName;
     }
+    if (context === "pets") {
+      return this.petDefaultSoundName ?? this.defaultSoundName;
+    }
     return this.defaultSoundName;
   }
 
@@ -470,7 +527,9 @@ export class AudioNotifier {
     if (!src) {
       const name = context === "weather"
         ? this.weatherDefaultSoundName ?? this.defaultSoundName
-        : this.defaultSoundName;
+        : context === "pets"
+          ? this.petDefaultSoundName ?? this.defaultSoundName
+          : this.defaultSoundName;
       if (name && this.library.has(name)) return this.library.get(name)!;
       return this.defaultSoundDataUrl || null;
     }
@@ -498,6 +557,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherVolume === next) return;
       this.weatherVolume = next;
+    } else if (context === "pets") {
+      if (this.petVolume === next) return;
+      this.petVolume = next;
     } else {
       if (this.volume === next) return;
       this.volume = next;
@@ -505,7 +567,11 @@ export class AudioNotifier {
     this.forEachLoop(context, (st) => { st.volume = next; });
     this.persistSettings();
   }
-  getVolume(context: AudioContextKey = "shops") { return context === "weather" ? this.weatherVolume : this.volume; }
+  getVolume(context: AudioContextKey = "shops") {
+    if (context === "weather") return this.weatherVolume;
+    if (context === "pets") return this.petVolume;
+    return this.volume;
+  }
   setMinPlayGap(ms: number) {
     const next = Math.max(0, ms | 0);
     if (this.minPlayGapMs === next) return;
@@ -517,6 +583,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherMode === mode) return;
       this.weatherMode = mode;
+    } else if (context === "pets") {
+      if (this.petMode === mode) return;
+      this.petMode = mode;
     } else {
       if (this.mode === mode) return;
       this.mode = mode;
@@ -524,7 +593,9 @@ export class AudioNotifier {
     this.persistSettings();
   }
   getPlaybackMode(context: AudioContextKey = "shops"): PlaybackMode {
-    return context === "weather" ? this.weatherMode : this.mode;
+    if (context === "weather") return this.weatherMode;
+    if (context === "pets") return this.petMode;
+    return this.mode;
   }
   setStopRepeat(repeats: number, context: AudioContextKey = "shops") {
     // Legacy API — now maps to manual stop to keep infinite loops by default.
@@ -535,6 +606,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherStopConf.mode === "manual") return;
       this.weatherStopConf = { mode: "manual" };
+    } else if (context === "pets") {
+      if (this.petStopConf.mode === "manual") return;
+      this.petStopConf = { mode: "manual" };
     } else {
       if (this.stopConf.mode === "manual") return;
       this.stopConf = { mode: "manual" };
@@ -546,6 +620,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherStopConf.mode === "purchase") return;
       this.weatherStopConf = { mode: "purchase" };
+    } else if (context === "pets") {
+      if (this.petStopConf.mode === "purchase") return;
+      this.petStopConf = { mode: "purchase" };
     } else {
       if (this.stopConf.mode === "purchase") return;
       this.stopConf = { mode: "purchase" };
@@ -561,6 +638,9 @@ export class AudioNotifier {
     if (context === "weather") {
       if (this.weatherLoopIntervalMs === next) return;
       this.weatherLoopIntervalMs = next;
+    } else if (context === "pets") {
+      if (this.petLoopIntervalMs === next) return;
+      this.petLoopIntervalMs = next;
     } else {
       if (this.loopIntervalMs === next) return;
       this.loopIntervalMs = next;
@@ -569,14 +649,20 @@ export class AudioNotifier {
     this.persistSettings();
   }
   getLoopInterval(context: AudioContextKey = "shops") {
-    return context === "weather" ? this.weatherLoopIntervalMs : this.loopIntervalMs;
+    if (context === "weather") return this.weatherLoopIntervalMs;
+    if (context === "pets") return this.petLoopIntervalMs;
+    return this.loopIntervalMs;
   }
   setPurchaseChecker(fn?: (itemId: string) => boolean) { this.purchaseChecker = fn; }
 
   getPlaybackSettings(context: AudioContextKey = "shops") {
     const volume = this.getVolume(context);
     const mode = this.getPlaybackMode(context);
-    const stop = context === "weather" ? this.weatherStopConf : this.stopConf;
+    const stop = context === "weather"
+      ? this.weatherStopConf
+      : context === "pets"
+        ? this.petStopConf
+        : this.stopConf;
     const stopSnapshot = stop.mode === "purchase"
       ? { mode: "purchase" as const }
       : { mode: "manual" as const };
@@ -632,7 +718,11 @@ export class AudioNotifier {
     const sound = normalizeSound(overrides.sound ?? null);
     const baseMode = this.getPlaybackMode(context);
     const mode = overrides.mode === "oneshot" || overrides.mode === "loop" ? overrides.mode : baseMode;
-    const baseStopSource = context === "weather" ? this.weatherStopConf : this.stopConf;
+    const baseStopSource = context === "weather"
+      ? this.weatherStopConf
+      : context === "pets"
+        ? this.petStopConf
+        : this.stopConf;
     const baseStop = baseStopSource.mode === "purchase"
       ? { mode: "purchase" as const }
       : { mode: "manual" as const };
