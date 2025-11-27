@@ -26,23 +26,23 @@ export const harvestType = {
 };
 
 export const tileRefsMap = {
-    Dirt1: 6,
-    Dirt2: 7,
-    Dirt3: 8,
-    Sky0: 24,
-    Sky1: 25,
-    Sky2: 26,
-    Sky3: 27,
-    Bush1: 28,
-    Sky4: 35,
-    Sky5: 36,
-    Sky6: 37,
-    Bush2: 38,
-    Sky7: 45,
-    Sky8: 46,
-    Sky9: 47,
-    BushHomer: 48
-  };
+  Dirt1: 6,
+  Dirt2: 7,
+  Dirt3: 8,
+  Bush1: 28,
+  Bush2: 38,
+  BushHomer: 48,
+  Sky0: 24,
+  Sky1: 25,
+  Sky2: 26,
+  Sky3: 27,
+  Sky4: 35,
+  Sky5: 36,
+  Sky6: 37,
+  Sky7: 45,
+  Sky8: 46,
+  Sky9: 47,
+};
 
 export const tileRefsPlants = {
   DirtPatch: 1,
@@ -52,6 +52,7 @@ export const tileRefsPlants = {
   SproutVine: 5,
   StemFlower: 6,
   Trellis: 7,
+
   Daffodil: 11,
   Tulip: 12,
   Sunflower: 13,
@@ -60,6 +61,7 @@ export const tileRefsPlants = {
   Chrysanthemum: 16,
   AloePlant: 17,
   Aloe: 18,
+
   Blueberry: 21,
   Banana: 22,
   Strawberry: 23,
@@ -76,8 +78,9 @@ export const tileRefsPlants = {
   Carrot: 34,
   Pumpkin: 35,
   Corn: 36,
-  Peach: 37,
-  BroadBean: 38,
+  FavaBean: 37,
+  Cacao: 38,
+
   PalmTreeTop: 39,
   BushyTree: 40,
   Coconut: 41,
@@ -87,20 +90,20 @@ export const tileRefsPlants = {
   Lychee: 45,
   Mushroom: 46,
   BurrosTail: 47,
-  Cacao: 48,
+
   Echeveria: 49,
   Delphinium: 50,
-  DawnCelestialCrop: 51,  
-  MoonCelestialCrop: 52, 
+  DawnCelestialCrop: 51,
+  MoonCelestialCrop: 52,
+
   Camellia: 57,
   Hedge: 58,
   FlowerBush: 59,
-
   Squash: 60,
 };
 
 export const tileRefsTallPlants = {
- Bamboo: 1,
+  Bamboo: 1,
   PalmTree: 2,
 
   DawnCelestialPlatform: 3,
@@ -117,6 +120,8 @@ export const tileRefsTallPlants = {
 
   StarweaverPlatform: 13,
   StarweaverPlant: 14,
+
+  CacaoTree: 15,
 };
 
 export const tileRefsSeeds = {
@@ -144,19 +149,22 @@ export const tileRefsSeeds = {
   Pumpkin: 25,
   Corn: 26,
   Peach: 27,
-  BroadBean: 28,
+  FavaBean: 28,
+  Cacao: 29,
   Delphinium: 30,
+
   Coconut: 31,
   Mushroom: 32,
   PassionFruit: 33,
   DragonFruit: 34,
   Lychee: 35,
   BurrosTail: 37,
-  Cacao: 38,
+
   Aloe: 39,
   Echeveria: 40,
   Bamboo: 41,
   Cactus: 42,
+
   Camellia: 48,
   Chrysanthemum: 49,
   Squash: 50,
@@ -169,7 +177,7 @@ export const tileRefsItems = {
   InventoryBag: 7,
 
   WateringCan: 9,
-  Fertilizer: 10,
+  MoneyBag: 11,
 
   RainbowPotion: 14,
   GoldPotion: 15,
@@ -205,20 +213,89 @@ export const tileRefsAnimations = {
 };
 
 export const tileRefsPets = {
-  Bee: 1, Chicken: 2, Bunny: 3, Turtle: 4, Capybara: 5, Cow: 6, Pig: 7,
-  Butterfly: 8, Snail: 9, Worm: 10, CommonEgg: 11, UncommonEgg: 12, RareEgg: 13,
-  LegendaryEgg: 14, MythicalEgg: 15, DivineEgg: 16, CelestialEgg: 17, Squirrel: 18,
-  Goat: 19, Dragonfly: 20, Peacock: 30};
+  Bee: 1,
+  Chicken: 2,
+  Bunny: 3,
+  Turtle: 4,
+  Capybara: 5,
+  Cow: 6,
+  Pig: 7,
+  Butterfly: 8,
+  Snail: 9,
+  Worm: 10,
+  CommonEgg: 11,
+  UncommonEgg: 12,
+  RareEgg: 13,
+  LegendaryEgg: 14,
+  MythicalEgg: 15,
+  DivineEgg: 16,
+  CelestialEgg: 17,
+  Squirrel: 18,
+  Goat: 19,
+  Dragonfly: 20,
+  Turkey: 29,
+  Peacock: 30
+}
 
 export const tileRefsMutations = {
   Wet: 1,
   Chilled: 2,
   Frozen: 3,
   Puddle: 5,
+
   Dawnlit: 11,
-  Ambershine: 12,
+  Amberlit: 12,
   Dawncharged: 13,
-  Ambercharged: 14};
+  Ambercharged: 14,
+
+  // Jack-o'-lantern dark eyes 0–9
+  jackOLanternEyesDark0: 21,
+  jackOLanternEyesDark1: 22,
+  jackOLanternEyesDark2: 23,
+  jackOLanternEyesDark3: 24,
+  jackOLanternEyesDark4: 25,
+  jackOLanternEyesDark5: 26,
+  jackOLanternEyesDark6: 27,
+  jackOLanternEyesDark7: 28,
+  jackOLanternEyesDark8: 29,
+  jackOLanternEyesDark9: 30,
+
+  // Jack-o'-lantern dark mouth 0–9
+  jackOLanternMouthDark0: 31,
+  jackOLanternMouthDark1: 32,
+  jackOLanternMouthDark2: 33,
+  jackOLanternMouthDark3: 34,
+  jackOLanternMouthDark4: 35,
+  jackOLanternMouthDark5: 36,
+  jackOLanternMouthDark6: 37,
+  jackOLanternMouthDark7: 38,
+  jackOLanternMouthDark8: 39,
+  jackOLanternMouthDark9: 40,
+
+  // Jack-o'-lantern light eyes 0–9
+  jackOLanternEyesLight0: 41,
+  jackOLanternEyesLight1: 42,
+  jackOLanternEyesLight2: 43,
+  jackOLanternEyesLight3: 44,
+  jackOLanternEyesLight4: 45,
+  jackOLanternEyesLight5: 46,
+  jackOLanternEyesLight6: 47,
+  jackOLanternEyesLight7: 48,
+  jackOLanternEyesLight8: 49,
+  jackOLanternEyesLight9: 50,
+
+  // Jack-o'-lantern light mouth 0–9
+  jackOLanternMouthLight0: 51,
+  jackOLanternMouthLight1: 52,
+  jackOLanternMouthLight2: 53,
+  jackOLanternMouthLight3: 54,
+  jackOLanternMouthLight4: 55,
+  jackOLanternMouthLight5: 56,
+  jackOLanternMouthLight6: 57,
+  jackOLanternMouthLight7: 58,
+  jackOLanternMouthLight8: 59,
+  jackOLanternMouthLight9: 60,
+};
 
 export const tileRefsMutationLabels = {
   Wet: "Wet",
@@ -294,201 +371,521 @@ export const tileRefsDecor = {
 
 export const plantCatalog = {
   Carrot: {
-    seed:   { tileRef: tileRefsSeeds.Carrot, name: "Carrot Seed", coinPrice: 10, creditPrice: 7, rarity: rarity.Common },
-    plant:  { tileRef: tileRefsPlants.BabyCarrot, name: "Carrot Plant", harvestType: harvestType.Single, baseTileScale: 0.7 },
-    crop:   { tileRef: tileRefsPlants.Carrot, name: "Carrot", baseSellPrice: 20, baseWeight: 0.1, baseTileScale: 0.6, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Carrot,
+      name: "Carrot Seed",
+      coinPrice: 10,
+      creditPrice: 7,
+      rarity: rarity.Common,
+    },
+    plant: {
+      tileRef: tileRefsPlants.BabyCarrot,
+      name: "Carrot Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.7,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Carrot,
+      name: "Carrot",
+      baseSellPrice: 20,
+      baseWeight: 0.1,
+      baseTileScale: 0.6,
+      maxScale: 3,
+    },
   },
 
   Strawberry: {
-    seed:  { tileRef: tileRefsSeeds.Strawberry, name: "Strawberry Seed", coinPrice: 50, creditPrice: 21, rarity: rarity.Common },
+    seed: {
+      tileRef: tileRefsSeeds.Strawberry,
+      name: "Strawberry Seed",
+      coinPrice: 50,
+      creditPrice: 21,
+      rarity: rarity.Common,
+    },
     plant: {
-      tileRef: tileRefsPlants.SproutFruit, name: "Strawberry Plant",
+      tileRef: tileRefsPlants.SproutFruit,
+      name: "Strawberry Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.2,  y: -0.1, rotation: 0 },
-        { x:  0.175, y: -0.2, rotation: 0 },
-        { x: -0.18, y:  0.22, rotation: 0 },
-        { x:  0.2,  y:  0.2, rotation: 0 },
-        { x:  0.01, y:  0.01, rotation: 0 }
+        { x: -0.2, y: -0.1, rotation: 0 },
+        { x: 0.175, y: -0.2, rotation: 0 },
+        { x: -0.18, y: 0.22, rotation: 0 },
+        { x: 0.2, y: 0.2, rotation: 0 },
+        { x: 0.01, y: 0.01, rotation: 0 },
       ],
-      secondsToMature: 70, baseTileScale: 1, rotateSlotOffsetsRandomly: true
+      secondsToMature: 70,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Strawberry, name: "Strawberry", baseSellPrice: 14, baseWeight: 0.05, baseTileScale: 0.25, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Strawberry,
+      name: "Strawberry",
+      baseSellPrice: 14,
+      baseWeight: 0.05,
+      baseTileScale: 0.25,
+      maxScale: 2,
+    },
   },
 
   Aloe: {
-    seed:  { tileRef: tileRefsSeeds.Aloe, name: "Aloe Seed", coinPrice: 135, creditPrice: 18, rarity: rarity.Common },
-    plant: { tileRef: tileRefsPlants.AloePlant, name: "Aloe Plant", harvestType: harvestType.Single, baseTileScale: 0.9 },
-    crop:  { tileRef: tileRefsPlants.Aloe, name: "Aloe", baseSellPrice: 310, baseWeight: 1.5, baseTileScale: 0.7, maxScale: 2.5 }
+    seed: {
+      tileRef: tileRefsSeeds.Aloe,
+      name: "Aloe Seed",
+      coinPrice: 135,
+      creditPrice: 18,
+      rarity: rarity.Common,
+    },
+    plant: {
+      tileRef: tileRefsPlants.AloePlant,
+      name: "Aloe Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.9,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Aloe,
+      name: "Aloe",
+      baseSellPrice: 310,
+      baseWeight: 1.5,
+      baseTileScale: 0.7,
+      maxScale: 2.5,
+    },
+  },
+
+  FavaBean: {
+    seed: {
+      tileRef: tileRefsSeeds.FavaBean,
+      name: "Fava Bean",
+      coinPrice: 250,
+      creditPrice: 30,
+      rarity: rarity.Uncommon,
+    },
+    plant: {
+      tileRef: tileRefsPlants.SproutFlower,
+      name: "Fava Bean Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x: -0.1, y: 0.15, rotation: 35 },
+        { x: -0.23, y: 0.22, rotation: 35 },
+        { x: 0.05, y: 0.3, rotation: 35 },
+        { x: 0.18, y: 0.25, rotation: 35 },
+        { x: 0.22, y: -0.02, rotation: 35 },
+        { x: 0.1, y: -0.15, rotation: 35 },
+        { x: -0.1, y: -0.17, rotation: 35 },
+        { x: -0.25, y: -0.11, rotation: 35 },
+      ],
+      secondsToMature: 900,
+      baseTileScale: 1.1,
+      rotateSlotOffsetsRandomly: true,
+    },
+    crop: {
+      tileRef: tileRefsPlants.FavaBean,
+      name: "Fava Bean Pod",
+      baseSellPrice: 30,
+      baseWeight: 0.03,
+      baseTileScale: 0.3,
+      maxScale: 3,
+    },
   },
 
   Delphinium: {
-    seed:  { tileRef: tileRefsSeeds.Delphinium, name: "Delphinium Seed", coinPrice: 300, creditPrice: 12, rarity: rarity.Uncommon },
-    plant: { tileRef: tileRefsPlants.Delphinium, name: "Delphinium Plant", harvestType: harvestType.Single, baseTileScale: 0.8, tileTransformOrigin: "bottom", nudgeY: -0.43, nudgeYMultiplier: 0.05 },
-    crop:  { tileRef: tileRefsPlants.Delphinium, name: "Delphinium", baseSellPrice: 530, baseWeight: 0.02, baseTileScale: 0.8, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Delphinium,
+      name: "Delphinium Seed",
+      coinPrice: 300,
+      creditPrice: 12,
+      rarity: rarity.Uncommon,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Delphinium,
+      name: "Delphinium Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.8,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.43,
+      nudgeYMultiplier: 0.05,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Delphinium,
+      name: "Delphinium",
+      baseSellPrice: 530,
+      baseWeight: 0.02,
+      baseTileScale: 0.8,
+      maxScale: 3,
+    },
   },
 
   Blueberry: {
-    seed:  { tileRef: tileRefsSeeds.Blueberry, name: "Blueberry Seed", coinPrice: 400, creditPrice: 49, rarity: rarity.Uncommon },
+    seed: {
+      tileRef: tileRefsSeeds.Blueberry,
+      name: "Blueberry Seed",
+      coinPrice: 400,
+      creditPrice: 49,
+      rarity: rarity.Uncommon,
+    },
     plant: {
-      tileRef: tileRefsPlants.SproutFruit, name: "Blueberry Plant",
+      tileRef: tileRefsPlants.SproutFruit,
+      name: "Blueberry Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.2,  y: -0.1, rotation: 0 },
-        { x:  0.175, y: -0.2, rotation: 0 },
-        { x: -0.18, y:  0.22, rotation: 0 },
-        { x:  0.2,  y:  0.2, rotation: 0 },
-        { x:  0.01, y:  0.01, rotation: 0 }
+        { x: -0.2, y: -0.1, rotation: 0 },
+        { x: 0.175, y: -0.2, rotation: 0 },
+        { x: -0.18, y: 0.22, rotation: 0 },
+        { x: 0.2, y: 0.2, rotation: 0 },
+        { x: 0.01, y: 0.01, rotation: 0 },
       ],
-      secondsToMature: 105, baseTileScale: 1, rotateSlotOffsetsRandomly: true
+      secondsToMature: 105,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Blueberry, name: "Blueberry", baseSellPrice: 23, baseWeight: 0.01, baseTileScale: 0.25, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Blueberry,
+      name: "Blueberry",
+      baseSellPrice: 23,
+      baseWeight: 0.01,
+      baseTileScale: 0.25,
+      maxScale: 2,
+    },
   },
 
   Apple: {
-    seed:  { tileRef: tileRefsSeeds.Apple, name: "Apple Seed", coinPrice: 500, creditPrice: 67, rarity: rarity.Uncommon, unavailableSurfaces: ["discord"] },
+    seed: {
+      tileRef: tileRefsSeeds.Apple,
+      name: "Apple Seed",
+      coinPrice: 500,
+      creditPrice: 67,
+      rarity: rarity.Uncommon,
+      unavailableSurfaces: ["discord"],
+    },
     plant: {
-      tileRef: tileRefsTallPlants.Tree, name: "Apple Tree",
+      tileRef: tileRefsTallPlants.Tree,
+      name: "Apple Tree",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.35, y: -2.4,  rotation: 0 },
-        { x: -0.50, y: -2.0,  rotation: 0 },
-        { x:  0.10, y: -2.2,  rotation: 0 },
-        { x: -0.20, y: -1.65, rotation: 0 },
-        { x:  0.55, y: -1.9,  rotation: 0 },
-        { x:  0.30, y: -1.7,  rotation: 0 },
-        { x:  0.40, y:  0.10, rotation: 0 }
+        { x: -0.35, y: -2.4, rotation: 0 },
+        { x: -0.5, y: -2, rotation: 0 },
+        { x: 0.1, y: -2.2, rotation: 0 },
+        { x: -0.2, y: -1.65, rotation: 0 },
+        { x: 0.55, y: -1.9, rotation: 0 },
+        { x: 0.3, y: -1.7, rotation: 0 },
+        { x: 0.4, y: 0.1, rotation: 0 },
       ],
       secondsToMature: 360 * 60,
       baseTileScale: 3,
       rotateSlotOffsetsRandomly: true,
       tileTransformOrigin: "bottom",
-      nudgeY: -0.25
+      nudgeY: -0.25,
     },
-    crop:  { tileRef: tileRefsPlants.Apple, name: "Apple", baseSellPrice: 73, baseWeight: 0.18, baseTileScale: 0.5, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Apple,
+      name: "Apple",
+      baseSellPrice: 73,
+      baseWeight: 0.18,
+      baseTileScale: 0.5,
+      maxScale: 2,
+    },
   },
 
   OrangeTulip: {
-    seed:  { tileRef: tileRefsSeeds.Tulip, name: "Tulip Seed", coinPrice: 600, creditPrice: 14, rarity: rarity.Uncommon },
-    plant: { tileRef: tileRefsPlants.Tulip, name: "Tulip Plant", harvestType: harvestType.Single, baseTileScale: 0.5 },
-    crop:  { tileRef: tileRefsPlants.Tulip, name: "Tulip", baseSellPrice: 767, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Tulip,
+      name: "Tulip Seed",
+      coinPrice: 600,
+      creditPrice: 14,
+      rarity: rarity.Uncommon,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Tulip,
+      name: "Tulip Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.5,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Tulip,
+      name: "Tulip",
+      baseSellPrice: 767,
+      baseWeight: 0.01,
+      baseTileScale: 0.5,
+      maxScale: 3,
+    },
   },
 
   Tomato: {
-    seed:  { tileRef: tileRefsSeeds.Tomato, name: "Tomato Seed", coinPrice: 800, creditPrice: 79, rarity: rarity.Uncommon },
-    plant: {
-      tileRef: tileRefsPlants.SproutVine, name: "Tomato Plant",
-      harvestType: harvestType.Multiple,
-      slotOffsets: [{ x: -0.3, y: -0.3, rotation: 0 }, { x: 0.3, y: 0.3, rotation: 0 }],
-      secondsToMature: 1100, baseTileScale: 1, rotateSlotOffsetsRandomly: false
+    seed: {
+      tileRef: tileRefsSeeds.Tomato,
+      name: "Tomato Seed",
+      coinPrice: 800,
+      creditPrice: 79,
+      rarity: rarity.Uncommon,
     },
-    crop:  { tileRef: tileRefsPlants.Tomato, name: "Tomato", baseSellPrice: 27, baseWeight: 0.3, baseTileScale: 0.33, maxScale: 2 }
+    plant: {
+      tileRef: tileRefsPlants.SproutVine,
+      name: "Tomato Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x: -0.3, y: -0.3, rotation: 0 },
+        { x: 0.3, y: 0.3, rotation: 0 },
+      ],
+      secondsToMature: 1100,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: false,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Tomato,
+      name: "Tomato",
+      baseSellPrice: 27,
+      baseWeight: 0.3,
+      baseTileScale: 0.33,
+      maxScale: 2,
+    },
   },
 
   Daffodil: {
-    seed:  { tileRef: tileRefsSeeds.Daffodil, name: "Daffodil Seed", coinPrice: 1000, creditPrice: 19, rarity: rarity.Rare },
-    plant: { tileRef: tileRefsPlants.Daffodil, name: "Daffodil Plant", harvestType: harvestType.Single, baseTileScale: 0.5 },
-    crop:  { tileRef: tileRefsPlants.Daffodil, name: "Daffodil", baseSellPrice: 1090, baseWeight: 0.01, baseTileScale: 0.5, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Daffodil,
+      name: "Daffodil Seed",
+      coinPrice: 1000,
+      creditPrice: 19,
+      rarity: rarity.Rare,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Daffodil,
+      name: "Daffodil Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.5,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Daffodil,
+      name: "Daffodil",
+      baseSellPrice: 1090,
+      baseWeight: 0.01,
+      baseTileScale: 0.5,
+      maxScale: 3,
+    },
   },
 
   Corn: {
-    seed:  { tileRef: tileRefsSeeds.Corn, name: "Corn Kernel", coinPrice: 1300, creditPrice: 135, rarity: rarity.Rare },
+    seed: {
+      tileRef: tileRefsSeeds.Corn,
+      name: "Corn Kernel",
+      coinPrice: 1300,
+      creditPrice: 135,
+      rarity: rarity.Rare,
+    },
     plant: {
-      tileRef: tileRefsPlants.SproutVegetable, name: "Corn Plant",
+      tileRef: tileRefsPlants.SproutVegetable,
+      name: "Corn Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [{ x: 0, y: -0.1, rotation: 0 }],
-      secondsToMature: 130, baseTileScale: 1, rotateSlotOffsetsRandomly: false
+      secondsToMature: 130,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: false,
     },
-    crop:  { tileRef: tileRefsPlants.Corn, name: "Corn", baseSellPrice: 36, baseWeight: 1.2, baseTileScale: 0.7, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Corn,
+      name: "Corn",
+      baseSellPrice: 36,
+      baseWeight: 1.2,
+      baseTileScale: 0.7,
+      maxScale: 2,
+    },
   },
 
   Watermelon: {
-    seed:  { tileRef: tileRefsSeeds.Watermelon, name: "Watermelon Seed", coinPrice: 2500, creditPrice: 195, rarity: rarity.Rare },
-    plant: { tileRef: tileRefsPlants.Watermelon, name: "Watermelon Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
-    crop:  { tileRef: tileRefsPlants.Watermelon, name: "Watermelon", baseSellPrice: 2708, baseWeight: 4.5, baseTileScale: 0.8, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Watermelon,
+      name: "Watermelon Seed",
+      coinPrice: 2500,
+      creditPrice: 195,
+      rarity: rarity.Rare,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Watermelon,
+      name: "Watermelon Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.8,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Watermelon,
+      name: "Watermelon",
+      baseSellPrice: 2708,
+      baseWeight: 4.5,
+      baseTileScale: 0.8,
+      maxScale: 3,
+    },
   },
 
   Pumpkin: {
-    seed:  { tileRef: tileRefsSeeds.Pumpkin, name: "Pumpkin Seed", coinPrice: 3000, creditPrice: 210, rarity: rarity.Rare },
-    plant: { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
-    crop:  { tileRef: tileRefsPlants.Pumpkin, name: "Pumpkin", baseSellPrice: 3700, baseWeight: 6, baseTileScale: 0.8, maxScale: 3 }
+    seed: {
+      tileRef: tileRefsSeeds.Pumpkin,
+      name: "Pumpkin Seed",
+      coinPrice: 3000,
+      creditPrice: 210,
+      rarity: rarity.Rare,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Pumpkin,
+      name: "Pumpkin Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.8,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Pumpkin,
+      name: "Pumpkin",
+      baseSellPrice: 3700,
+      baseWeight: 6,
+      baseTileScale: 0.8,
+      maxScale: 3,
+    },
   },
 
   Echeveria: {
-    seed:  { tileRef: tileRefsSeeds.Echeveria, name: "Echeveria Cutting", coinPrice: 4200, creditPrice: 113, rarity: rarity.Legendary },
-    plant: { tileRef: tileRefsPlants.Echeveria, name: "Echeveria Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
-    crop:  { tileRef: tileRefsPlants.Echeveria, name: "Echeveria", baseSellPrice: 4600, baseWeight: 0.8, baseTileScale: 0.8, maxScale: 2.75 }
+    seed: {
+      tileRef: tileRefsSeeds.Echeveria,
+      name: "Echeveria Cutting",
+      coinPrice: 4200,
+      creditPrice: 113,
+      rarity: rarity.Rare,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Echeveria,
+      name: "Echeveria Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.8,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Echeveria,
+      name: "Echeveria",
+      baseSellPrice: 4600,
+      baseWeight: 0.8,
+      baseTileScale: 0.8,
+      maxScale: 2.75,
+    },
   },
 
   Coconut: {
-    seed:  { tileRef: tileRefsSeeds.Coconut, name: "Coconut Seed", coinPrice: 6000, creditPrice: 235, rarity: rarity.Legendary },
+    seed: {
+      tileRef: tileRefsSeeds.Coconut,
+      name: "Coconut Seed",
+      coinPrice: 6000,
+      creditPrice: 235,
+      rarity: rarity.Legendary,
+    },
     plant: {
-      tileRef: tileRefsTallPlants.PalmTree, name: "Coconut Tree",
+      tileRef: tileRefsTallPlants.PalmTree,
+      name: "Coconut Tree",
       harvestType: harvestType.Multiple,
       slotOffsets: [
         { x: -0.2, y: -2.6, rotation: 0 },
         { x: -0.3, y: -2.4, rotation: 0 },
-        { x:  0.2, y: -2.5, rotation: 0 },
-        { x: -0.25,y: -2.1, rotation: 0 },
-        { x:  0.0, y: -2.3, rotation: 0 },
-        { x:  0.3, y: -2.2, rotation: 0 },
-        { x:  0.05,y: -2.0, rotation: 0 }
+        { x: 0.2, y: -2.5, rotation: 0 },
+        { x: -0.25, y: -2.1, rotation: 0 },
+        { x: 0.0, y: -2.3, rotation: 0 },
+        { x: 0.3, y: -2.2, rotation: 0 },
+        { x: 0.05, y: -2.0, rotation: 0 },
       ],
-      secondsToMature: 720 * 60, baseTileScale: 3,
+      secondsToMature: 720 * 60,
+      baseTileScale: 3,
       rotateSlotOffsetsRandomly: true,
-      tileTransformOrigin: "bottom", nudgeY: -0.35
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.35,
     },
-    crop:  { tileRef: tileRefsPlants.Coconut, name: "Coconut", baseSellPrice: 302, baseWeight: 5, baseTileScale: 0.25, maxScale: 3 }
+    crop: {
+      tileRef: tileRefsPlants.Coconut,
+      name: "Coconut",
+      baseSellPrice: 302,
+      baseWeight: 5,
+      baseTileScale: 0.25,
+      maxScale: 3,
+    },
   },
 
   Banana: {
-    seed:  {
-      tileRef: tileRefsSeeds.Banana, name: "Banana Seed",
-      coinPrice: 7500, creditPrice: 199, rarity: rarity.Legendary,
-      getCanSpawnInGuild: guildId => isEvenGuild(guildId)
+    seed: {
+      tileRef: tileRefsSeeds.Banana,
+      name: "Banana Seed",
+      coinPrice: 7500,
+      creditPrice: 199,
+      rarity: rarity.Legendary,
+      getCanSpawnInGuild: guildId => {
+        const last = guildId.slice(-1);
+        const r = parseInt(last, 10);
+        return !isNaN(r) && r % 2 === 0;
+      },
+      unavailableSurfaces: ["web"],
     },
     plant: {
-      tileRef: tileRefsTallPlants.PalmTree, name: "Banana Plant",
+      tileRef: tileRefsTallPlants.PalmTree,
+      name: "Banana Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
         { x: -0.3, y: -1.7, rotation: 10 },
         { x: -0.2, y: -1.7, rotation: -10 },
         { x: -0.1, y: -1.7, rotation: -30 },
-        { x:  0.0, y: -1.7, rotation: -50 },
-        { x:  0.1, y: -1.7, rotation: -70 }
+        { x: 0.0, y: -1.7, rotation: -50 },
+        { x: 0.1, y: -1.7, rotation: -70 },
       ],
-      secondsToMature: 14400, baseTileScale: 2.5, rotateSlotOffsetsRandomly: false,
-      tileTransformOrigin: "bottom", nudgeY: -0.4
+      secondsToMature: 14400,
+      baseTileScale: 2.5,
+      rotateSlotOffsetsRandomly: false,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.4,
     },
-    crop:  { tileRef: tileRefsPlants.Banana, name: "Banana", baseSellPrice: 1750, baseWeight: 0.12, baseTileScale: 0.5, maxScale: 1.7 }
+    crop: {
+      tileRef: tileRefsPlants.Banana,
+      name: "Banana",
+      baseSellPrice: 1750,
+      baseWeight: 0.12,
+      baseTileScale: 0.5,
+      maxScale: 1.7,
+    },
   },
 
   Lily: {
-    seed:  { tileRef: tileRefsSeeds.Lily, name: "Lily Seed", coinPrice: 20000, creditPrice: 34, rarity: rarity.Legendary },
-    plant: { tileRef: tileRefsPlants.Lily, name: "Lily Plant", harvestType: harvestType.Single, baseTileScale: 0.75, nudgeY: -0.1 },
-    crop:  { tileRef: tileRefsPlants.Lily, name: "Lily", baseSellPrice: 20123, baseWeight: 0.02, baseTileScale: 0.5, maxScale: 2.75 }
+    seed: {
+      tileRef: tileRefsSeeds.Lily,
+      name: "Lily Seed",
+      coinPrice: 20000,
+      creditPrice: 34,
+      rarity: rarity.Legendary,
+    },
+    plant: {
+      tileRef: tileRefsPlants.Lily,
+      name: "Lily Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.75,
+      nudgeY: -0.1,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Lily,
+      name: "Lily",
+      baseSellPrice: 20123,
+      baseWeight: 0.02,
+      baseTileScale: 0.5,
+      maxScale: 2.75,
+    },
   },
 
   Camellia: {
     seed: {
       tileRef: tileRefsSeeds.Camellia,
       name: "Camellia Seed",
-      coinPrice: 55000,          // 55e3 dans le bundle
+      coinPrice: 55000,
       creditPrice: 289,
       rarity: rarity.Legendary,
-      // éventuellement : unavailableSurfaces: ["discord"]
     },
     plant: {
       tileRef: tileRefsPlants.Hedge,
       name: "Camellia Hedge",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x:  0.00, y: -0.90, rotation: 0 },
-        { x: -0.28, y: -0.60, rotation: 0 },
-        { x:  0.28, y: -0.60, rotation: 0 },
-        { x: -0.28, y:  0.25, rotation: 0 },
-        { x:  0.28, y:  0.25, rotation: 0 },
-        { x:  0.00, y:  0.00, rotation: 0 },
+        { x: 0.0, y: -0.9, rotation: 0 },
+        { x: -0.28, y: -0.6, rotation: 0 },
+        { x: 0.28, y: -0.6, rotation: 0 },
+        { x: -0.35, y: -0.2, rotation: 0 },
+        { x: 0.32, y: -0.2, rotation: 0 },
+        { x: -0.3, y: 0.25, rotation: 0 },
+        { x: 0.28, y: 0.25, rotation: 0 },
+        { x: 0.0, y: 0.0, rotation: 0 },
       ],
       secondsToMature: 1440 * 60,
       baseTileScale: 2,
@@ -508,54 +905,149 @@ export const plantCatalog = {
   },
 
   Squash: {
-    seed:  { tileRef: tileRefsSeeds.Squash, name: "Squash Seed", coinPrice: 55000, creditPrice: 199, rarity: rarity.Legendary },
+    seed: {
+      tileRef: tileRefsSeeds.Squash,
+      name: "Squash Seed",
+      coinPrice: 55000,
+      creditPrice: 199,
+      rarity: rarity.Legendary,
+    },
     plant: {
-      tileRef: tileRefsPlants.SproutFlower, name: "Squash Plant",
+      tileRef: tileRefsPlants.SproutFlower,
+      name: "Squash Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
         { x: -0.08, y: 0.2, rotation: 35 },
-        { x:  0.2,  y: 0.0, rotation: 35 },
-        { x: -0.2,  y:-0.1, rotation: 35 }
+        { x: 0.2, y: 0.0, rotation: 35 },
+        { x: -0.2, y: -0.1, rotation: 35 },
       ],
-      secondsToMature: 1500, baseTileScale: 1.2, rotateSlotOffsetsRandomly: true
+      secondsToMature: 1500,
+      baseTileScale: 1.2,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Squash, name: "Squash", baseSellPrice: 3500, baseWeight: 0.3, baseTileScale: 0.4, maxScale: 2.5 }
+    crop: {
+      tileRef: tileRefsPlants.Squash,
+      name: "Squash",
+      baseSellPrice: 3500,
+      baseWeight: 0.3,
+      baseTileScale: 0.4,
+      maxScale: 2.5,
+    },
   },
 
   BurrosTail: {
-    seed:  { tileRef: tileRefsSeeds.BurrosTail, name: "Burro's Tail Cutting", coinPrice: 93000, creditPrice: 338, rarity: rarity.Legendary },
-    plant: {
-      tileRef: tileRefsPlants.Trellis, name: "Burro's Tail Plant",
-      harvestType: harvestType.Multiple,
-      slotOffsets: [{ x: -0.13, y: -0.1, rotation: 0 }, { x: 0.17, y: 0.13, rotation: 0 }],
-      secondsToMature: 1800, baseTileScale: 0.8, rotateSlotOffsetsRandomly: false
+    seed: {
+      tileRef: tileRefsSeeds.BurrosTail,
+      name: "Burro's Tail Cutting",
+      coinPrice: 93000,
+      creditPrice: 338,
+      rarity: rarity.Legendary,
     },
-    crop:  { tileRef: tileRefsPlants.BurrosTail, name: "Burro's Tail", baseSellPrice: 6000, baseWeight: 0.4, baseTileScale: 0.4, maxScale: 2.5 }
+    plant: {
+      tileRef: tileRefsPlants.Trellis,
+      name: "Burro's Tail Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x: -0.13, y: -0.1, rotation: 0 },
+        { x: 0.17, y: 0.13, rotation: 0 },
+      ],
+      secondsToMature: 1800,
+      baseTileScale: 0.8,
+      rotateSlotOffsetsRandomly: false,
+    },
+    crop: {
+      tileRef: tileRefsPlants.BurrosTail,
+      name: "Burro's Tail",
+      baseSellPrice: 6000,
+      baseWeight: 0.4,
+      baseTileScale: 0.4,
+      maxScale: 2.5,
+    },
   },
 
   Mushroom: {
-    seed:  { tileRef: tileRefsSeeds.Mushroom, name: "Mushroom Spore", coinPrice: 150000, creditPrice: 249, rarity: rarity.Mythic },
-    plant: { tileRef: tileRefsPlants.MushroomPlant, name: "Mushroom Plant", harvestType: harvestType.Single, baseTileScale: 0.8 },
-    crop:  { tileRef: tileRefsPlants.Mushroom, name: "Mushroom", baseSellPrice: 160000, baseWeight: 25, baseTileScale: 0.65, maxScale: 3.5 }
+    seed: {
+      tileRef: tileRefsSeeds.Mushroom,
+      name: "Mushroom Spore",
+      coinPrice: 150000,
+      creditPrice: 249,
+      rarity: rarity.Mythic,
+    },
+    plant: {
+      tileRef: tileRefsPlants.MushroomPlant,
+      name: "Mushroom Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 0.8,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Mushroom,
+      name: "Mushroom",
+      baseSellPrice: 160000,
+      baseWeight: 25,
+      baseTileScale: 0.65,
+      maxScale: 3.5,
+    },
   },
 
   Cactus: {
-    seed:  { tileRef: tileRefsSeeds.Cactus, name: "Cactus Seed", coinPrice: 250000, creditPrice: 250, rarity: rarity.Mythic },
-    plant: { tileRef: tileRefsTallPlants.Cactus, name: "Cactus Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: -0.4, nudgeYMultiplier: 0.3 },
-    crop:  { tileRef: tileRefsTallPlants.Cactus, name: "Cactus", baseSellPrice: 261000, baseWeight: 1500, baseTileScale: 2.5, maxScale: 1.8 }
+    seed: {
+      tileRef: tileRefsSeeds.Cactus,
+      name: "Cactus Seed",
+      coinPrice: 250000,
+      creditPrice: 250,
+      rarity: rarity.Mythic,
+    },
+    plant: {
+      tileRef: tileRefsTallPlants.Cactus,
+      name: "Cactus Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 2.5,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.4,
+      nudgeYMultiplier: 0.3,
+    },
+    crop: {
+      tileRef: tileRefsTallPlants.Cactus,
+      name: "Cactus",
+      baseSellPrice: 261000,
+      baseWeight: 1500,
+      baseTileScale: 2.5,
+      maxScale: 1.8,
+    },
   },
 
   Bamboo: {
-    seed:  { tileRef: tileRefsSeeds.Bamboo, name: "Bamboo Seed", coinPrice: 400000, creditPrice: 300, rarity: rarity.Mythic },
-    plant: { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Plant", harvestType: harvestType.Single, baseTileScale: 2.5, tileTransformOrigin: "bottom", nudgeY: -0.45, nudgeYMultiplier: 0.3 },
-    crop:  { tileRef: tileRefsTallPlants.Bamboo, name: "Bamboo Shoot", baseSellPrice: 500000, baseWeight: 1, baseTileScale: 2.5, maxScale: 2 }
+    seed: {
+      tileRef: tileRefsSeeds.Bamboo,
+      name: "Bamboo Seed",
+      coinPrice: 400000,
+      creditPrice: 300,
+      rarity: rarity.Mythic,
+    },
+    plant: {
+      tileRef: tileRefsTallPlants.Bamboo,
+      name: "Bamboo Plant",
+      harvestType: harvestType.Single,
+      baseTileScale: 2.5,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.45,
+      nudgeYMultiplier: 0.3,
+    },
+    crop: {
+      tileRef: tileRefsTallPlants.Bamboo,
+      name: "Bamboo Shoot",
+      baseSellPrice: 500000,
+      baseWeight: 1,
+      baseTileScale: 2.5,
+      maxScale: 2,
+    },
   },
 
   Chrysanthemum: {
     seed: {
       tileRef: tileRefsSeeds.Chrysanthemum,
       name: "Chrysanthemum Seed",
-      coinPrice: 670000,         // 67e4 dans le bundle
+      coinPrice: 670000,
       creditPrice: 567,
       rarity: rarity.Mythic,
     },
@@ -564,23 +1056,23 @@ export const plantCatalog = {
       name: "Chrysanthemum Bush",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x:  0.00, y:  0.00, rotation: 0 },
-        { x: -0.28, y:  0.22, rotation: 0 },
-        { x:  0.28, y:  0.22, rotation: 0 },
-        { x:  0.00, y:  0.33, rotation: 0 },
-        { x: -0.25, y: -0.20, rotation: 0 },
-        { x:  0.25, y: -0.20, rotation: 0 },
-        { x:  0.00, y: -0.28, rotation: 0 },
+        { x: 0.0, y: 0.0, rotation: 0 },
+        { x: -0.28, y: 0.22, rotation: 0 },
+        { x: 0.28, y: 0.22, rotation: 0 },
+        { x: 0.0, y: 0.33, rotation: 0 },
+        { x: -0.25, y: -0.2, rotation: 0 },
+        { x: 0.25, y: -0.2, rotation: 0 },
+        { x: 0.0, y: -0.28, rotation: 0 },
       ],
       secondsToMature: 1440 * 60,
       baseTileScale: 1,
-      rotateSlotOffsetsRandomly: true,
-      tileTransformOrigin: "bottom", // safe par cohérence visuelle
+      rotateSlotOffsetsRandomly: false,
+      tileTransformOrigin: "bottom",
     },
     crop: {
       tileRef: tileRefsPlants.Chrysanthemum,
       name: "Chrysanthemum",
-      baseSellPrice: 18000,      // 18e3 dans le bundle
+      baseSellPrice: 18000,
       baseWeight: 0.01,
       baseTileScale: 0.3,
       maxScale: 2.75,
@@ -588,191 +1080,389 @@ export const plantCatalog = {
   },
 
   Grape: {
-    seed:  {
-      tileRef: tileRefsSeeds.Grape, name: "Grape Seed",
-      coinPrice: 850000, creditPrice: 599, rarity: rarity.Mythic,
-      getCanSpawnInGuild: guildId => endsWith1(guildId)
+    seed: {
+      tileRef: tileRefsSeeds.Grape,
+      name: "Grape Seed",
+      coinPrice: 850000,
+      creditPrice: 599,
+      rarity: rarity.Mythic,
+      getCanSpawnInGuild: guildId => guildId.endsWith("1"),
+      unavailableSurfaces: ["web"],
     },
     plant: {
-      tileRef: tileRefsPlants.SproutVine, name: "Grape Plant",
+      tileRef: tileRefsPlants.SproutVine,
+      name: "Grape Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [{ x: 0, y: 0, rotation: 0 }],
-      secondsToMature: 1440 * 60, baseTileScale: 1, rotateSlotOffsetsRandomly: true
+      secondsToMature: 1440 * 60,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Grape, name: "Grape", baseSellPrice: 7085, baseWeight: 3, baseTileScale: 0.5, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Grape,
+      name: "Grape",
+      baseSellPrice: 12500,
+      baseWeight: 3,
+      baseTileScale: 0.5,
+      maxScale: 2,
+    },
   },
 
   Pepper: {
-    seed:  { tileRef: tileRefsSeeds.Pepper, name: "Pepper Seed", coinPrice: 1000000, creditPrice: 629, rarity: rarity.Divine },
+    seed: {
+      tileRef: tileRefsSeeds.Pepper,
+      name: "Pepper Seed",
+      coinPrice: 1000000,
+      creditPrice: 629,
+      rarity: rarity.Divine,
+    },
     plant: {
-      tileRef: tileRefsPlants.SproutVine, name: "Pepper Plant",
+      tileRef: tileRefsPlants.SproutVine,
+      name: "Pepper Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.02, y:  0.219, rotation: 0 },
-        { x:  0.172, y:  0.172, rotation: 0 },
-        { x: -0.172, y:  0.137, rotation: 0 },
-        { x:  0.168, y: -0.035, rotation: 0 },
+        { x: -0.02, y: 0.219, rotation: 0 },
+        { x: 0.172, y: 0.172, rotation: 0 },
+        { x: -0.172, y: 0.137, rotation: 0 },
+        { x: 0.168, y: -0.035, rotation: 0 },
         { x: -0.082, y: -0.047, rotation: 0 },
         { x: -0.207, y: -0.074, rotation: 0 },
-        { x:  0.18,  y: -0.176, rotation: 0 },
+        { x: 0.18, y: -0.176, rotation: 0 },
         { x: -0.273, y: -0.195, rotation: 0 },
-        { x: -0.074, y: -0.25,  rotation: 0 }
+        { x: -0.074, y: -0.25, rotation: 0 },
       ],
-      secondsToMature: 560, baseTileScale: 1, rotateSlotOffsetsRandomly: true
+      secondsToMature: 560,
+      baseTileScale: 1,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Pepper, name: "Pepper", baseSellPrice: 7220, baseWeight: 0.5, baseTileScale: 0.3, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Pepper,
+      name: "Pepper",
+      baseSellPrice: 7220,
+      baseWeight: 0.5,
+      baseTileScale: 0.3,
+      maxScale: 2,
+    },
   },
 
   Lemon: {
-    seed:  {
-      tileRef: tileRefsSeeds.Lemon, name: "Lemon Seed",
-      coinPrice: 2000000, creditPrice: 500, rarity: rarity.Divine,
-      getCanSpawnInGuild: guildId => endsWith2(guildId)
+    seed: {
+      tileRef: tileRefsSeeds.Lemon,
+      name: "Lemon Seed",
+      coinPrice: 2000000,
+      creditPrice: 500,
+      rarity: rarity.Divine,
+      getCanSpawnInGuild: guildId => guildId.endsWith("2"),
+      unavailableSurfaces: ["web"],
     },
     plant: {
-      tileRef: tileRefsTallPlants.Tree, name: "Lemon Tree",
+      tileRef: tileRefsTallPlants.Tree,
+      name: "Lemon Tree",
       harvestType: harvestType.Multiple,
       slotOffsets: [
-        { x: -0.5, y: -1.5,  rotation: 0 },
-        { x:  0.4, y: -1.6,  rotation: 0 },
+        { x: -0.5, y: -1.5, rotation: 0 },
+        { x: 0.4, y: -1.6, rotation: 0 },
         { x: -0.3, y: -1.18, rotation: 0 },
-        { x:  0.2, y: -1.2,  rotation: 0 },
-        { x:  0.01,y: -1.5,  rotation: 0 },
-        { x: -0.05,y: -1.8,  rotation: 0 }
+        { x: 0.2, y: -1.2, rotation: 0 },
+        { x: 0.01, y: -1.5, rotation: 0 },
+        { x: -0.05, y: -1.8, rotation: 0 },
       ],
-      secondsToMature: 720 * 60, baseTileScale: 2.3,
-      rotateSlotOffsetsRandomly: true, tileTransformOrigin: "bottom", nudgeY: -0.25
+      secondsToMature: 720 * 60,
+      baseTileScale: 2.3,
+      rotateSlotOffsetsRandomly: true,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.25,
     },
-    crop:  { tileRef: tileRefsPlants.Lemon, name: "Lemon", baseSellPrice: 10000, baseWeight: 0.5, baseTileScale: 0.25, maxScale: 3 }
+    crop: {
+      tileRef: tileRefsPlants.Lemon,
+      name: "Lemon",
+      baseSellPrice: 10000,
+      baseWeight: 0.5,
+      baseTileScale: 0.25,
+      maxScale: 3,
+    },
   },
 
   PassionFruit: {
-    seed:  { tileRef: tileRefsSeeds.PassionFruit, name: "Passion Fruit Seed", coinPrice: 2750000, creditPrice: 679, rarity: rarity.Divine },
-    plant: {
-      tileRef: tileRefsPlants.SproutVine, name: "Passion Fruit Plant",
-      harvestType: harvestType.Multiple,
-      slotOffsets: [{ x: -0.3, y: -0.3, rotation: 0 }, { x: 0.3, y: 0.3, rotation: 0 }],
-      secondsToMature: 1440 * 60, baseTileScale: 1.1, rotateSlotOffsetsRandomly: false
+    seed: {
+      tileRef: tileRefsSeeds.PassionFruit,
+      name: "Passion Fruit Seed",
+      coinPrice: 2750000,
+      creditPrice: 679,
+      rarity: rarity.Divine,
     },
-    crop:  { tileRef: tileRefsPlants.PassionFruit, name: "Passion Fruit", baseSellPrice: 24500, baseWeight: 9.5, baseTileScale: 0.35, maxScale: 2 }
+    plant: {
+      tileRef: tileRefsPlants.SproutVine,
+      name: "Passion Fruit Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x: -0.3, y: -0.3, rotation: 0 },
+        { x: 0.3, y: 0.3, rotation: 0 },
+      ],
+      secondsToMature: 1440 * 60,
+      baseTileScale: 1.1,
+      rotateSlotOffsetsRandomly: false,
+    },
+    crop: {
+      tileRef: tileRefsPlants.PassionFruit,
+      name: "Passion Fruit",
+      baseSellPrice: 24500,
+      baseWeight: 9.5,
+      baseTileScale: 0.35,
+      maxScale: 2,
+    },
   },
 
   DragonFruit: {
-    seed:  { tileRef: tileRefsSeeds.DragonFruit, name: "Dragon Fruit Seed", coinPrice: 5000000, creditPrice: 715, rarity: rarity.Divine },
+    seed: {
+      tileRef: tileRefsSeeds.DragonFruit,
+      name: "Dragon Fruit Seed",
+      coinPrice: 5000000,
+      creditPrice: 715,
+      rarity: rarity.Divine,
+    },
     plant: {
-      tileRef: tileRefsPlants.PalmTreeTop, name: "Dragon Fruit Plant",
+      tileRef: tileRefsPlants.PalmTreeTop,
+      name: "Dragon Fruit Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
         { x: -0.3, y: -0.4, rotation: 0 },
         { x: -0.4, y: -0.05, rotation: 0 },
-        { x:  0.36,y: -0.3, rotation: 0 },
-        { x: -0.25,y:  0.3, rotation: 0 },
-        { x:  0.0, y: -0.1, rotation: 0 },
-        { x:  0.4, y:  0.1, rotation: 0 },
-        { x:  0.1, y:  0.2, rotation: 0 }
+        { x: 0.36, y: -0.3, rotation: 0 },
+        { x: -0.25, y: 0.3, rotation: 0 },
+        { x: 0.0, y: -0.1, rotation: 0 },
+        { x: 0.4, y: 0.1, rotation: 0 },
+        { x: 0.1, y: 0.2, rotation: 0 },
       ],
-      secondsToMature: 600, baseTileScale: 1.6, rotateSlotOffsetsRandomly: true
+      secondsToMature: 600,
+      baseTileScale: 1.6,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.DragonFruit, name: "Dragon Fruit", baseSellPrice: 24500, baseWeight: 8.4, baseTileScale: 0.4, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.DragonFruit,
+      name: "Dragon Fruit",
+      baseSellPrice: 24500,
+      baseWeight: 8.4,
+      baseTileScale: 0.4,
+      maxScale: 2,
+    },
+  },
+
+  Cacao: {
+    seed: {
+      tileRef: tileRefsSeeds.Cacao,
+      name: "Cacao Bean",
+      coinPrice: 10000000,
+      creditPrice: 750,
+      rarity: rarity.Divine,
+    },
+    plant: {
+      tileRef: tileRefsTallPlants.CacaoTree,
+      name: "Cacao Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [
+        { x: 0.28, y: -1.17, rotation: 20 },
+        { x: -0.3, y: -1.07, rotation: 20 },
+        { x: -0.05, y: -1.42, rotation: 20 },
+        { x: 0.45, y: -1.67, rotation: 20 },
+        { x: -0.5, y: -1.57, rotation: 20 },
+        { x: -0.05, y: -1.87, rotation: 20 },
+      ],
+      secondsToMature: 1440 * 60,
+      baseTileScale: 2.8,
+      rotateSlotOffsetsRandomly: true,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.32,
+    },
+    crop: {
+      tileRef: tileRefsPlants.Cacao,
+      name: "Cacao Fruit",
+      baseSellPrice: 70000,
+      baseWeight: 0.5,
+      baseTileScale: 0.4,
+      maxScale: 2.5,
+    },
   },
 
   Lychee: {
-    seed:  {
-      tileRef: tileRefsSeeds.Lychee, name: "Lychee Pit",
-      coinPrice: 25000000, creditPrice: 819, rarity: rarity.Divine,
-      getCanSpawnInGuild: guildId => endsWith2(guildId)
+    seed: {
+      tileRef: tileRefsSeeds.Lychee,
+      name: "Lychee Pit",
+      coinPrice: 25000000,
+      creditPrice: 819,
+      rarity: rarity.Divine,
+      getCanSpawnInGuild: guildId => guildId.endsWith("2"),
+      unavailableSurfaces: ["web"],
     },
     plant: {
-      tileRef: tileRefsPlants.BushyTree, name: "Lychee Plant",
+      tileRef: tileRefsPlants.BushyTree,
+      name: "Lychee Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [
         { x: -0.4, y: -0.1, rotation: 0 },
-        { x:  0.3, y: -0.2, rotation: 0 },
-        { x: -0.3, y:  0.22,rotation: 0 },
-        { x:  0.2, y:  0.2, rotation: 0 },
-        { x:  0.01,y: -0.1, rotation: 0 },
-        { x: -0.2, y: -0.3, rotation: 0 }
+        { x: 0.3, y: -0.2, rotation: 0 },
+        { x: -0.3, y: 0.22, rotation: 0 },
+        { x: 0.2, y: 0.2, rotation: 0 },
+        { x: 0.01, y: -0.1, rotation: 0 },
+        { x: -0.2, y: -0.3, rotation: 0 },
       ],
-      secondsToMature: 1440 * 60, baseTileScale: 1.2, rotateSlotOffsetsRandomly: true
+      secondsToMature: 1440 * 60,
+      baseTileScale: 1.2,
+      rotateSlotOffsetsRandomly: true,
     },
-    crop:  { tileRef: tileRefsPlants.Lychee, name: "Lychee Fruit", baseSellPrice: 50000, baseWeight: 9, baseTileScale: 0.2, maxScale: 2 }
+    crop: {
+      tileRef: tileRefsPlants.Lychee,
+      name: "Lychee Fruit",
+      baseSellPrice: 50000,
+      baseWeight: 9,
+      baseTileScale: 0.2,
+      maxScale: 2,
+    },
   },
 
   Sunflower: {
-    seed:  { tileRef: tileRefsSeeds.Sunflower, name: "Sunflower Seed", coinPrice: 100000000, creditPrice: 900, rarity: rarity.Divine },
+    seed: {
+      tileRef: tileRefsSeeds.Sunflower,
+      name: "Sunflower Seed",
+      coinPrice: 100000000,
+      creditPrice: 900,
+      rarity: rarity.Divine,
+    },
     plant: {
-      tileRef: tileRefsPlants.StemFlower, name: "Sunflower Plant",
+      tileRef: tileRefsPlants.StemFlower,
+      name: "Sunflower Plant",
       harvestType: harvestType.Multiple,
       slotOffsets: [{ x: 0.01, y: -0.6, rotation: 0 }],
       secondsToMature: 1440 * 60,
       rotateSlotOffsetsRandomly: false,
-      tileTransformOrigin: "bottom", baseTileScale: 0.8, nudgeY: -0.35
+      tileTransformOrigin: "bottom",
+      baseTileScale: 0.8,
+      nudgeY: -0.35,
     },
-    crop:  { tileRef: tileRefsPlants.Sunflower, name: "Sunflower", baseSellPrice: 750000, baseWeight: 10, baseTileScale: 0.5, maxScale: 2.5 }
+    crop: {
+      tileRef: tileRefsPlants.Sunflower,
+      name: "Sunflower",
+      baseSellPrice: 750000,
+      baseWeight: 10,
+      baseTileScale: 0.5,
+      maxScale: 2.5,
+    },
   },
 
   Starweaver: {
-    seed:  { tileRef: tileRefsSeeds.Starweaver, name: "Starweaver Pod", coinPrice: 1000000000, creditPrice: 1000, rarity: rarity.Celestial },
-    plant: {
-      tileRef: tileRefsTallPlants.StarweaverPlant, name: "Starweaver Plant",
-      harvestType: harvestType.Multiple,
-      immatureTileRef: tileRefsTallPlants.StarweaverPlatform,
-      baseTileScale: 1.5, tileTransformOrigin: "bottom", nudgeY: -0.27, isFixedScale: true,
-      rotateSlotOffsetsRandomly: false,
-      secondsToMature: 1440 * 60,
-      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 },
-      slotOffsets: [{ x: 0, y: -0.918, rotation: 0 }]
+    seed: {
+      tileRef: tileRefsSeeds.Starweaver,
+      name: "Starweaver Pod",
+      coinPrice: 1000000000,
+      creditPrice: 1000,
+      rarity: rarity.Celestial,
     },
-    crop:  { tileRef: tileRefsPlants.Starweaver, name: "Starweaver Fruit", baseSellPrice: 10000000, baseWeight: 10, baseTileScale: 0.6, maxScale: 2 }
+    plant: {
+      tileRef: tileRefsTallPlants.StarweaverPlant,
+      name: "Starweaver Plant",
+      harvestType: harvestType.Multiple,
+      slotOffsets: [{ x: 0, y: -0.918, rotation: 0 }],
+      secondsToMature: 1440 * 60,
+      baseTileScale: 1.5,
+      rotateSlotOffsetsRandomly: false,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.27,
+      immatureTileRef: tileRefsTallPlants.StarweaverPlatform,
+      isFixedScale: true,
+      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 },
+    },
+    crop: {
+      tileRef: tileRefsPlants.Starweaver,
+      name: "Starweaver Fruit",
+      baseSellPrice: 10000000,
+      baseWeight: 10,
+      baseTileScale: 0.6,
+      maxScale: 2,
+    },
   },
 
   DawnCelestial: {
-    seed:  { tileRef: tileRefsSeeds.DawnCelestial, name: "Dawnbinder Pod", coinPrice: 10000000000, creditPrice: 1129, rarity: rarity.Celestial },
+    seed: {
+      tileRef: tileRefsSeeds.DawnCelestial,
+      name: "Dawnbinder Pod",
+      coinPrice: 10000000000,
+      creditPrice: 1129,
+      rarity: rarity.Celestial,
+    },
     plant: {
-      tileRef: tileRefsTallPlants.DawnCelestialPlant, name: "Dawnbinder",
+      tileRef: tileRefsTallPlants.DawnCelestialPlant,
+      name: "Dawnbinder",
       harvestType: harvestType.Multiple,
       secondsToMature: 1440 * 60,
       slotOffsets: [{ x: -0.015, y: -0.95, rotation: 0 }],
-      baseTileScale: 2.3, rotateSlotOffsetsRandomly: false,
-      tileTransformOrigin: "bottom", nudgeY: -0.2, isFixedScale: true,
+      baseTileScale: 2.3,
+      rotateSlotOffsetsRandomly: false,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.2,
       abilities: ["DawnKisser"],
       activeState: {
         tileRef: tileRefsTallPlants.DawnCelestialPlantActive,
-        requiredWeather: "Dawn",
-        activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 }
+        weatherRequirement: Weather.Dawn,
+        activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 },
       },
       topmostLayerTileRef: tileRefsTallPlants.DawnCelestialPlatformTopmostLayer,
       immatureTileRef: tileRefsTallPlants.DawnCelestialPlatform,
-      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 }
+      isFixedScale: true,
+      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 },
     },
-    crop:  { tileRef: tileRefsPlants.DawnCelestialCrop, name: "Dawnbinder Bulb", baseSellPrice: 11000000, baseWeight: 6, baseTileScale: 0.4, maxScale: 2.5, transformOrigin: "top" }
+    crop: {
+      tileRef: tileRefsPlants.DawnCelestialCrop,
+      name: "Dawnbinder Bulb",
+      baseSellPrice: 11000000,
+      baseWeight: 6,
+      baseTileScale: 0.4,
+      maxScale: 2.5,
+      transformOrigin: "top",
+    },
   },
 
   MoonCelestial: {
-    seed:  { tileRef: tileRefsSeeds.MoonCelestial, name: "Moonbinder Pod", coinPrice: 50000000000, creditPrice: 1249, rarity: rarity.Celestial },
+    seed: {
+      tileRef: tileRefsSeeds.MoonCelestial,
+      name: "Moonbinder Pod",
+      coinPrice: 50000000000,
+      creditPrice: 1249,
+      rarity: rarity.Celestial,
+    },
     plant: {
-      tileRef: tileRefsTallPlants.MoonCelestialPlant, name: "Moonbinder",
+      tileRef: tileRefsTallPlants.MoonCelestialPlant,
+      name: "Moonbinder",
       harvestType: harvestType.Multiple,
-      secondsToMature: 1440 * 60,
       slotOffsets: [
         { x: 0.01, y: -1.81, rotation: 0 },
         { x: -0.26, y: -0.82, rotation: -20 },
-        { x: 0.23, y: -1.0,  rotation: 20 }
+        { x: 0.23, y: -1.0, rotation: 20 },
       ],
-      baseTileScale: 2.5, rotateSlotOffsetsRandomly: false,
-      tileTransformOrigin: "bottom", nudgeY: -0.2, isFixedScale: true,
+      secondsToMature: 1440 * 60,
+      baseTileScale: 2.5,
+      rotateSlotOffsetsRandomly: false,
+      tileTransformOrigin: "bottom",
+      nudgeY: -0.2,
       abilities: ["MoonKisser"],
       activeState: {
         tileRef: tileRefsTallPlants.MoonCelestialPlantActive,
-        requiredWeather: "AmberMoon",
-        activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 }
+        weatherRequirement: Weather.AmberMoon,
+        activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 },
       },
       immatureTileRef: tileRefsTallPlants.MoonCelestialPlatform,
-      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 }
+      isFixedScale: true,
+      growingAnimationTiles: { frames: 10, row: 8, fps: 20, nudgeY: -0.2 },
     },
-    crop:  { tileRef: tileRefsPlants.MoonCelestialCrop, name: "Moonbinder Bulb", baseSellPrice: 11000000, baseWeight: 2, baseTileScale: 0.4, maxScale: 2, transformOrigin: "bottom" }
+    crop: {
+      tileRef: tileRefsPlants.MoonCelestialCrop,
+      name: "Moonbinder Bulb",
+      baseSellPrice: 11000000,
+      baseWeight: 2,
+      baseTileScale: 0.4,
+      maxScale: 2,
+      transformOrigin: "bottom",
+    },
   },
-
 };
 
 export const mutationCatalog = {
@@ -805,23 +1495,29 @@ export const petCatalog = {
     innateAbilityWeights: { SeedFinderI: 50, ProduceEater: 50 },
     baseTileScale: 0.6, maxScale: 2, maturitySellPrice: 5e3, matureWeight: 0.1,
     moveProbability: 0.1, hoursToMature: 12, rarity: rarity.Common,
-    tileTransformOrigin: "bottom", nudgeY: 0.25,
-    diet: ["Carrot","Strawberry","Aloe","Tomato","Apple"]},
+    tileTransformOrigin: "bottom", nudgeY: -0.25,
+    diet: ["Carrot","Strawberry","Aloe","Tomato","Apple"]
+  },
+
   Snail: {
     tileRef: tileRefsPets.Snail, name: "Snail", description: "",
     coinsToFullyReplenishHunger: 1000,
     innateAbilityWeights: { CoinFinderI: 100 },
-    baseTileScale: 0.6, maxScale: 2, maturitySellPrice: 5e3, matureWeight: 0.15,
+    baseTileScale: 0.6, maxScale: 2, maturitySellPrice: 1e4, matureWeight: 0.15,
     moveProbability: 0.01, hoursToMature: 12, rarity: rarity.Common,
     tileTransformOrigin: "bottom", nudgeY: -0.25,
-    diet: ["Blueberry", "Tomato", "Corn", "Daffodil", "Chrysanthemum"]},
+    diet: ["Blueberry", "Tomato", "Corn", "Daffodil", "Chrysanthemum"]
+  },
+
   Bee: {
     tileRef: tileRefsPets.Bee, name: "Bee",
     coinsToFullyReplenishHunger: 1500,
     innateAbilityWeights: { ProduceScaleBoost: 50, ProduceMutationBoost: 50 },
     baseTileScale: 0.6, maxScale: 2.5, maturitySellPrice: 3e4, matureWeight: 0.2,
     moveProbability: 0.5, hoursToMature: 12, rarity: rarity.Common,
-    diet: ["Strawberry", "Blueberry", "Daffodil", "Lily"],},
+    diet: ["Strawberry", "Blueberry", "Daffodil", "Lily", "Chrysanthemum"]
+  },
+
   Chicken: {
     tileRef: tileRefsPets.Chicken, name: "Chicken",
     coinsToFullyReplenishHunger: 3000,
@@ -829,7 +1525,9 @@ export const petCatalog = {
     baseTileScale: 0.8, maxScale: 2, maturitySellPrice: 5e4, matureWeight: 3,
     moveProbability: 0.2, hoursToMature: 24, rarity: rarity.Uncommon,
     tileTransformOrigin: "bottom", nudgeY: -0.2,
-    diet: ["Aloe","Corn","Watermelon","Pumpkin"]},
+    diet: ["Aloe","Corn","Watermelon","Pumpkin"]
+  },
+
   Bunny: {
     tileRef: tileRefsPets.Bunny, name: "Bunny",
     coinsToFullyReplenishHunger: 750,
@@ -837,7 +1535,9 @@ export const petCatalog = {
     baseTileScale: 0.7, maxScale: 2, maturitySellPrice: 75e3, matureWeight: 2,
     moveProbability: 0.3, hoursToMature: 24, rarity: rarity.Uncommon,
     tileTransformOrigin: "bottom", nudgeY: -0.2,
-    diet: ["Carrot", "Strawberry", "Blueberry", "OrangeTulip", "Apple"]},
+    diet: ["Carrot", "Strawberry", "Blueberry", "OrangeTulip", "Apple"]
+  },
+
   Dragonfly: {
     tileRef: tileRefsPets.Dragonfly, name: "Dragonfly",
     coinsToFullyReplenishHunger: 250,
@@ -845,7 +1545,9 @@ export const petCatalog = {
     baseTileScale: 0.6, maxScale: 2.5, maturitySellPrice: 150000, matureWeight: 0.2,
     moveProbability: 0.7, hoursToMature: 24, rarity: rarity.Uncommon,
     tileTransformOrigin: "center",
-    diet: ["Apple","OrangeTulip","Echeveria"]},
+    diet: ["Apple","OrangeTulip","Echeveria"]
+  },
+
   Pig: {
     tileRef: tileRefsPets.Pig, name: "Pig",
     coinsToFullyReplenishHunger: 50000,
@@ -853,7 +1555,9 @@ export const petCatalog = {
     baseTileScale: 1, maxScale: 2.5, maturitySellPrice: 5e5, matureWeight: 200,
     moveProbability: 0.2, hoursToMature: 72, rarity: rarity.Rare,
     tileTransformOrigin: "bottom", nudgeY: -0.15,
-    diet: ["Watermelon","Pumpkin","Mushroom","Bamboo"]},
+    diet: ["Watermelon","Pumpkin","Mushroom","Bamboo"]
+  },
+
   Cow: {
     tileRef: tileRefsPets.Cow, name: "Cow",
     coinsToFullyReplenishHunger: 25000,
@@ -861,7 +1565,19 @@ export const petCatalog = {
     baseTileScale: 1.1, maxScale: 2.5, maturitySellPrice: 1e6, matureWeight: 600,
     moveProbability: 0.1, hoursToMature: 72, rarity: rarity.Rare,
     tileTransformOrigin: "bottom", nudgeY: -0.15,
-    diet: ["Coconut","Banana","BurrosTail","Mushroom"]},
+    diet: ["Coconut","Banana","BurrosTail","Mushroom"]
+  },
+
+  Turkey: {
+    tileRef: tileRefsPets.Turkey, name: "Turkey",
+    coinsToFullyReplenishHunger: 500,
+    innateAbilityWeights: { RainDance: 60, EggGrowthBoostII_NEW: 35, DoubleHatch: 5 },
+    baseTileScale: 1, maxScale: 2.5, maturitySellPrice: 3e6, matureWeight: 10,
+    moveProbability: 0.25, hoursToMature: 72, rarity: rarity.Rare,
+    tileTransformOrigin: "bottom", nudgeY: -0.15,
+    diet: ["FavaBean", "Corn", "Squash"]
+  },
+
   Squirrel: {
     tileRef: tileRefsPets.Squirrel, name: "Squirrel",
     coinsToFullyReplenishHunger: 15000,
@@ -869,7 +1585,9 @@ export const petCatalog = {
     baseTileScale: 0.6, maxScale: 2, maturitySellPrice: 5e6, matureWeight: 0.5,
     moveProbability: 0.4, hoursToMature: 100, rarity: rarity.Legendary,
     tileTransformOrigin: "bottom", nudgeY: -0.1,
-    diet: ["Pumpkin","Banana","Grape"]},
+    diet: ["Pumpkin","Banana","Grape"]
+  },
+
   Turtle: {
     tileRef: tileRefsPets.Turtle, name: "Turtle",
     coinsToFullyReplenishHunger: 100000,
@@ -877,7 +1595,9 @@ export const petCatalog = {
     baseTileScale: 1, maxScale: 2.5, maturitySellPrice: 1e7, matureWeight: 150,
     moveProbability: 0.05, hoursToMature: 100, rarity: rarity.Legendary,
     tileTransformOrigin: "bottom", nudgeY: -0.15,
-    diet: ["Watermelon","BurrosTail","Bamboo","Pepper"]},
+    diet: ["Watermelon","BurrosTail","Bamboo","Pepper"]
+  },
+
   Goat: {
     tileRef: tileRefsPets.Goat, name: "Goat",
     coinsToFullyReplenishHunger: 20000,
@@ -885,7 +1605,9 @@ export const petCatalog = {
     baseTileScale: 1, maxScale: 2, maturitySellPrice: 2e7, matureWeight: 100,
     moveProbability: 0.2, hoursToMature: 100, rarity: rarity.Legendary,
     tileTransformOrigin: "bottom", nudgeY: -0.1,
-    diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]},
+    diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]
+  },
+
   Butterfly: {
     tileRef: tileRefsPets.Butterfly, name: "Butterfly",
     coinsToFullyReplenishHunger: 25000,
@@ -893,7 +1615,9 @@ export const petCatalog = {
     baseTileScale: 0.6, maxScale: 2.5, maturitySellPrice: 5e7, matureWeight: 0.2,
     moveProbability: 0.6, hoursToMature: 144, rarity: rarity.Mythic,
     tileTransformOrigin: "center",
-    diet: ["Daffodil","Lily","Grape","Lemon","Sunflower"]},
+    diet: ["Daffodil","Lily","Grape","Lemon","Sunflower"]
+  },
+
   Capybara: {
     tileRef: tileRefsPets.Capybara, name: "Capybara",
     coinsToFullyReplenishHunger: 150000,
@@ -901,7 +1625,9 @@ export const petCatalog = {
     baseTileScale: 1, maxScale: 2.5, maturitySellPrice: 2e8, matureWeight: 50,
     moveProbability: 0.2, hoursToMature: 144, rarity: rarity.Mythic,
     tileTransformOrigin: "bottom", nudgeY: -0.1,
-    diet: ["Lemon","PassionFruit","DragonFruit","Lychee"]},
+    diet: ["Lemon","PassionFruit","DragonFruit","Lychee"]
+  },
+
   Peacock: {
     tileRef: tileRefsPets.Peacock, name: "Peacock",
     coinsToFullyReplenishHunger: 100000,
@@ -909,7 +1635,9 @@ export const petCatalog = {
     baseTileScale: 1.2, maxScale: 2.5, maturitySellPrice: 1e8, matureWeight: 5,
     moveProbability: 0.2, hoursToMature: 144, rarity: rarity.Mythic,
     tileTransformOrigin: "bottom", nudgeY: -0.1,
-    diet: ["Cactus","Sunflower","Lychee"]}};
+    diet: ["Cactus","Sunflower","Lychee"]
+  }
+};
 
 export const petAbilities = {
   ProduceScaleBoost: {
@@ -917,14 +1645,14 @@ export const petAbilities = {
     description: "Increases the scale of garden crops",
     trigger: "continuous",
     baseProbability: 0.3,
-    baseParameters: { cropScaleIncreasePercentage: 6 }
+    baseParameters: { scaleIncreasePercentage: 6 }
   },
   ProduceScaleBoostII: {
     name: "Crop Size Boost II",
     description: "Increases the scale of garden crops",
     trigger: "continuous",
     baseProbability: 0.4,
-    baseParameters: { cropScaleIncreasePercentage: 10 }
+    baseParameters: { scaleIncreasePercentage: 10 }
   },
 
   DoubleHarvest: {
@@ -932,6 +1660,13 @@ export const petAbilities = {
     description: "Chance to duplicate harvested crops",
     trigger: "harvest",
     baseProbability: 5,
+    baseParameters: {}
+  },
+  DoubleHatch: {
+    name: "Double Hatch",
+    description: "Chance to hatch an extra pet from eggs",
+    trigger: "hatchEgg",
+    baseProbability: 3,
     baseParameters: {}
   },
 
@@ -1035,6 +1770,13 @@ export const petAbilities = {
     baseProbability: 0.72,
     baseParameters: { grantedMutations: ["Rainbow"] }
   },
+  RainDance: {
+    name: "Rain Dance",
+    description: "Grants the Wet mutation to a garden crop",
+    trigger: "continuous",
+    baseProbability: 10,
+    baseParameters: { grantedMutations: ["Wet"] }
+  },
 
   EggGrowthBoost: {
     name: "Egg Growth Boost I",
@@ -1043,19 +1785,21 @@ export const petAbilities = {
     baseProbability: 21,
     baseParameters: { eggGrowthTimeReductionMinutes: 7 }
   },
-  EggGrowthBoostII: {
+  // utilisé par la dinde: EggGrowthBoostII_NEW
+  EggGrowthBoostII_NEW: {
     name: "Egg Growth Boost II",
     description: "Reduces the time for eggs to hatch",
     trigger: "continuous",
     baseProbability: 24,
-    baseParameters: { eggGrowthTimeReductionMinutes: 10 }
+    baseParameters: { eggGrowthTimeReductionMinutes: 9 }
   },
-  EggGrowthBoostIII: {
+  // ancien EggGrowthBoostIII remplacé par ce bloc
+  EggGrowthBoostII: {
     name: "Egg Growth Boost III",
     description: "Reduces the time for eggs to hatch",
     trigger: "continuous",
     baseProbability: 27,
-    baseParameters: { eggGrowthTimeReductionMinutes: 13 }
+    baseParameters: { eggGrowthTimeReductionMinutes: 11 }
   },
 
   PetAgeBoost: {
@@ -1187,14 +1931,14 @@ export const petAbilities = {
     name: "Seed Finder II",
     description: "Finds rare and legendary seeds in your garden",
     trigger: "continuous",
-    baseProbability: 16,
+    baseProbability: 20,
     baseParameters: {}
   },
   SeedFinderIII: {
     name: "Seed Finder III",
     description: "Finds mythical seeds in your garden",
     trigger: "continuous",
-    baseProbability: 9,
+    baseProbability: 10,
     baseParameters: {}
   },
   SeedFinderIV: {

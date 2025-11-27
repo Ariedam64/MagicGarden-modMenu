@@ -1,4 +1,3 @@
-
 /* ======================== BUY ALL =========================*/
 
 import {
@@ -68,10 +67,13 @@ const shopInventoryUnsubs: Partial<Record<ShopType, (() => void) | null>> = {};
 async function detectShopFromActiveModal(): Promise<ShopType | null> {
   try {
     const modalId = await Atoms.ui.activeModal.get();
+    console.log("[TM][BuyAll] activeModal =", modalId);
     if (typeof modalId !== "string" || !modalId) return null;
-    return MODAL_TO_SHOP_TYPE[modalId] ?? null;
+    const shop = MODAL_TO_SHOP_TYPE[modalId] ?? null;
+    console.log("[TM][BuyAll] mapped modal -> shop =", { modalId, shop });
+    return shop;
   } catch (error) {
-    console.warn("[TM] buyAll failed to read active modal", error);
+    console.warn("[TM][BuyAll] failed to read active modal", error);
     return null;
   }
 }
@@ -424,8 +426,17 @@ function ensureNotifierSnapshots(): void {
   }
 }
 
-function extractInitialStock(shop: ShopType | null, rawId: string | null): { initialStock: number | null; canSpawn: boolean } {
-  if (!shop || !rawId || !lastShops) return { initialStock: null, canSpawn: false };
+/**
+ * On ne gère plus canSpawnHere / canSpawn.
+ * On renvoie uniquement le stock initial trouvé dans les shops.
+ */
+function extractInitialStock(
+  shop: ShopType | null,
+  rawId: string | null
+): { initialStock: number | null } {
+  if (!shop || !rawId || !lastShops) {
+    return { initialStock: null };
+  }
 
   const byShop =
     shop === "plant" ? lastShops.seed?.inventory ?? [] :
@@ -441,12 +452,11 @@ function extractInitialStock(shop: ShopType | null, rawId: string | null): { ini
     return String(entry.decorId) === rawId;
   });
 
-  if (!match) return { initialStock: null, canSpawn: false };
+  if (!match) return { initialStock: null };
 
   const initial = Number(match.initialStock);
   const normalized = Number.isFinite(initial) ? initial : null;
-  const canSpawn = !!match.canSpawnHere;
-  return { initialStock: normalized, canSpawn };
+  return { initialStock: normalized };
 }
 
 function getRemainingDetails(shop: ShopType | null, itemId: string | null): RemainingDetails {
@@ -456,14 +466,10 @@ function getRemainingDetails(shop: ShopType | null, itemId: string | null): Rema
   }
 
   const rawId = notifierItemId.split(":")[1] ?? null;
-  const { initialStock, canSpawn } = extractInitialStock(shop, rawId);
+  const { initialStock } = extractInitialStock(shop, rawId);
 
   if (initialStock == null) {
     return { notifierItemId, initialStock, purchased: null, remaining: null };
-  }
-
-  if (!canSpawn) {
-    return { notifierItemId, initialStock, purchased: null, remaining: 0 };
   }
 
   const purchased = purchasedCountForId(notifierItemId, lastPurchases);
