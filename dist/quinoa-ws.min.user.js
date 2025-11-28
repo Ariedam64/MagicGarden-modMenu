@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.62
+// @version      2.6.63
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23530,11 +23530,18 @@ try{importScripts("${abs}")}catch(e){}
     } catch {
     }
   }
+  function stableStringify(value) {
+    if (value === null || typeof value !== "object") return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+    const keys = Object.keys(value).sort();
+    const body = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",");
+    return `{${body}}`;
+  }
   function mergeHistory(current, incoming) {
     const map2 = /* @__PURE__ */ new Map();
     const push = (entry) => {
       if (!entry) return;
-      const key2 = `${entry.timestamp}|${entry.action ?? ""}|${JSON.stringify(entry)}`;
+      const key2 = stableStringify(entry);
       map2.set(key2, entry);
     };
     current.forEach(push);
