@@ -13,23 +13,25 @@ export interface AppendOptions {
 export interface AppendController { stop(): void; runOnce(): void; isRunning(): boolean; }
 
 export const DEFAULTS = {
- rootSelector: ".McFlex.css-fsggty",
-  innerSelector: ".McFlex.css-1l3zq7, .McFlex css-11dqzw",
+  rootSelector: ".McFlex.css-fsggty",
+  innerSelector: ".McFlex.css-1l3zq7, .McFlex.css-11dqzw",
   markerClass: "tm-crop-price",
 } as const;
 
 // Pour le skip ciblé
-const OMA_SEL = ".McFlex.css-1omaybc";
+const OMA_SEL = ".McFlex.css-1l3zq7, .McFlex.css-11dqzw";
 
 // Classes internes de notre bloc marqueur
 const ICON_CLASS = "tm-crop-price-icon";
 const LABEL_CLASS = "tm-crop-price-label";
 const LOCK_TEXT_SELECTOR = ":scope > .chakra-text.css-1uvlb8k";
-const TOOLTIP_ROOT_CLASS = "css-115gc9o";
+
 const LOCK_EMOJI = "🔒";
 const LOCK_BORDER_STYLE = "2px solid rgb(188, 53, 215)";
 const LOCK_BORDER_RADIUS = "15px";
+const TOOLTIP_ROOT_CLASS = "css-qnqsp4";
 const LOCK_ICON_CLASS = "tm-locker-tooltip-lock-icon";
+
 const DATASET_KEY_COLOR = "tmLockerOriginalColor";
 const DATASET_KEY_DISPLAY = "tmLockerOriginalDisplay";
 const DATASET_KEY_ALIGN = "tmLockerOriginalAlign";
@@ -38,6 +40,7 @@ const DATASET_KEY_BORDER = "tmLockerOriginalBorder";
 const DATASET_KEY_BORDER_RADIUS = "tmLockerOriginalBorderRadius";
 const DATASET_KEY_POSITION = "tmLockerOriginalPosition";
 const DATASET_KEY_OVERFLOW = "tmLockerOriginalOverflow";
+
 const LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
 
 export function startCropValuesObserverFromGardenAtom(options: AppendOptions = {}): AppendController {
@@ -162,7 +165,7 @@ function queryAll(root: ParentNode, sel: string): Element[] {
   return Array.from(root.querySelectorAll(sel));
 }
 
-/** true si inner est un .McFlex.css-1omaybc avec **exactement 1** enfant élément réel (hors span marqueur) */
+/** true si inner est un bloc cible avec **exactement 1** enfant élément réel (hors span marqueur) */
 function shouldSkipInner(inner: Element, markerClass: string): boolean {
   if (!(inner instanceof Element)) return false;
   if (!inner.matches(OMA_SEL)) return false;
@@ -188,14 +191,47 @@ function removeMarker(inner: Element, markerClass: string): void {
   markers.forEach((m) => m.remove());
 }
 
+/**
+ * Nettoie les vieux 🔒 ajoutés au mauvais endroit (par l’ancienne version),
+ * typiquement accroché sur `.css-502lyi` au lieu du panel.
+ */
+function cleanupLegacyLockIcons(): void {
+  if (typeof document === "undefined") return;
+  const all = document.querySelectorAll<HTMLElement>(`span.${LOCK_ICON_CLASS}`);
+  all.forEach(icon => {
+    // Si le lock n’est pas dans un vrai panel `.css-qnqsp4`, on le vire
+    if (!icon.closest(`.${TOOLTIP_ROOT_CLASS}`)) {
+      icon.remove();
+    }
+  });
+}
+
+function getTooltipRoot(inner: HTMLElement): HTMLElement | null {
+  return inner.closest<HTMLElement>(`.${TOOLTIP_ROOT_CLASS}`);
+}
+
 function updateLockEmoji(inner: Element, locked: boolean): void {
   if (!(inner instanceof HTMLElement)) return;
 
   // Nettoie les anciens spans hérités des versions précédentes
   inner.querySelectorAll(":scope > span.tm-locker-lock-emoji").forEach((node) => node.remove());
-  const textTarget = inner.querySelector<HTMLElement>(LOCK_TEXT_SELECTOR)
-    ?? inner.querySelector<HTMLElement>(":scope > .chakra-text");
-  const tooltipRoot = inner.closest<HTMLElement>(`.${TOOLTIP_ROOT_CLASS}`);
+
+  // Supprime les locks orphelins qui ne sont pas dans un vrai panel
+  cleanupLegacyLockIcons();
+
+  const textTarget =
+    inner.querySelector<HTMLElement>(LOCK_TEXT_SELECTOR) ??
+    inner.querySelector<HTMLElement>(":scope > .chakra-text");
+
+  const tooltipRoot = getTooltipRoot(inner);
+
+  // 🔧 IMPORTANT : on nettoie systématiquement le container .css-502lyi
+  // si on l’avait déjà locké avant (bordure violette + icône dessus).
+  const outerContainer = inner.closest<HTMLElement>(".css-502lyi");
+  if (outerContainer && outerContainer !== tooltipRoot) {
+    restoreTooltipStyles(outerContainer);
+    removeLockIcon(outerContainer);
+  }
 
   if (!locked) {
     if (textTarget) {
@@ -219,6 +255,7 @@ function updateLockEmoji(inner: Element, locked: boolean): void {
     ensureLockIcon(tooltipRoot);
   }
 }
+
 
 function restoreTextStyles(textTarget: HTMLElement): void {
   restoreStyleFromDataset(textTarget, DATASET_KEY_COLOR, "color");
@@ -334,7 +371,13 @@ function restoreTooltipStyles(tooltip: HTMLElement): void {
 }
 
 function ensureLockIcon(tooltip: HTMLElement): void {
-  let icon = tooltip.querySelector<HTMLElement>(`:scope > span.${LOCK_ICON_CLASS}`);
+  // On ne garde qu’un lock par tooltip
+  const icons = tooltip.querySelectorAll<HTMLElement>(`:scope > span.${LOCK_ICON_CLASS}`);
+  icons.forEach((node, idx) => {
+    if (idx > 0) node.remove();
+  });
+
+  let icon = icons[0] ?? null;
   if (!icon) {
     icon = document.createElement("span");
     icon.className = LOCK_ICON_CLASS;
@@ -389,14 +432,13 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
   span.style.color = "#FFD84D";
   span.style.fontSize = "14px";
 
-  // — Icône (img) + label interne séparé —
+  // Icône (img) + label interne séparé
   let icon = span.querySelector<HTMLImageElement>(`:scope > img.${ICON_CLASS}`);
   if (!icon) {
     icon = document.createElement("img");
     icon.className = ICON_CLASS;
     icon.alt = "";
     icon.setAttribute("aria-hidden", "true");
-    // Styles de l'icône
     icon.style.width = "18px";
     icon.style.height = "18px";
     icon.style.display = "inline-block";
@@ -406,14 +448,12 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
     icon.style.pointerEvents = "none";
     span.insertBefore(icon, span.firstChild);
   }
-  // met à jour la source (au cas où tu changes d’icône dynamiquement)
   if (icon.src !== coin.img64) icon.src = coin.img64;
 
   let label = span.querySelector<HTMLSpanElement>(`:scope > span.${LABEL_CLASS}`);
   if (!label) {
     label = document.createElement("span");
     label.className = LABEL_CLASS;
-    // le label hérite la couleur/typo du conteneur
     label.style.display = "inline";
     span.appendChild(label);
   }
