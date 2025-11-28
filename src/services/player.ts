@@ -295,8 +295,8 @@ export const PlayerService = {
     try { sendToGame({ type: "HatchEgg", slot }); } catch (err) {  }
   },
 
-  async placeDecor(tileType: "Dirt" | "Boardwalk", localTileIndex: number, decorId: string) {
-    try { sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId }); } catch (err) {  }
+  async placeDecor(tileType: "Dirt" | "Boardwalk", localTileIndex: number, decorId: string, rotation: 0) {
+    try { sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId, rotation}); } catch (err) {  }
   },
 
   async swapPet(petSlotId: string, petInventoryId: string) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.1
+// @version      2.6.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3307,7 +3307,7 @@
     Frozen: "Frozen",
     Puddle: "Puddle",
     Dawnlit: "Dawnlit",
-    Ambershine: "Amberlit",
+    Amberlit: "Amberlit",
     Dawncharged: "Dawnbound",
     Ambercharged: "Amberbound"
   };
@@ -4438,7 +4438,7 @@
     Chilled: { name: "Chilled", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Chilled },
     Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
     Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit },
-    Ambershine: { name: "Amberlit", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Ambershine },
+    Amberlit: { name: "Amberlit", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Amberlit },
     Dawncharged: { name: "Dawnbound", baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
     Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }
   };
@@ -4978,6 +4978,18 @@
       description: "Finds divine and celestial seeds in your garden",
       trigger: "continuous",
       baseProbability: 0.01,
+      baseParameters: {}
+    },
+    MoonKisser: {
+      name: "Moon Kisser",
+      description: "Empowers amber moon crops with special mutations",
+      trigger: "continuous",
+      baseParameters: {}
+    },
+    DawnKisser: {
+      name: "Dawn Kisser",
+      description: "Empowers dawn crops with special mutations",
+      trigger: "continuous",
       baseParameters: {}
     }
   };
@@ -7590,9 +7602,9 @@
       } catch (err) {
       }
     },
-    async placeDecor(tileType, localTileIndex, decorId) {
+    async placeDecor(tileType, localTileIndex, decorId, rotation) {
       try {
-        sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId });
+        sendToGame({ type: "PlaceDecor", tileType, localTileIndex, decorId, rotation });
       } catch (err) {
       }
     },
@@ -12785,18 +12797,23 @@
         case "ProduceEater":
           return num(data["sellPrice"] ?? 0);
         case "EggGrowthBoost":
-        case "EggGrowthBoostII":
-        case "EggGrowthBoostIII": {
-          const minutes = data["eggGrowthTimeReductionMinutes"] ?? data["reductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"] ?? 0;
+        case "EggGrowthBoostII_NEW":
+        case "EggGrowthBoostII": {
+          const minutes = data["eggGrowthTimeReductionMinutes"] ?? data["minutesReduced"] ?? data["reductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PlantGrowthBoost":
         case "PlantGrowthBoostII": {
-          const minutes = data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base["plantGrowthReductionMinutes"] ?? 0;
+          const minutes = data["minutesReduced"] ?? data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base["plantGrowthReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PetXpBoost":
         case "PetXpBoostII": {
+          const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
+          return num(xp);
+        }
+        case "PetAgeBoost":
+        case "PetAgeBoostII": {
           const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
           return num(xp);
         }
@@ -12807,8 +12824,8 @@
         }
         case "HungerRestore":
         case "HungerRestoreII": {
-          const pct = data["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"] ?? 0;
-          return num(pct);
+          const amount = data["hungerRestoreAmount"] ?? data["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"] ?? 0;
+          return num(amount);
         }
         default:
           return 0;
@@ -13020,18 +13037,64 @@
       const formatDetails = (abilityId, data) => {
         const d = data ?? {};
         const base = petAbilities[abilityId]?.baseParameters ?? {};
+        const label2 = (value, fallback) => {
+          const s = typeof value === "string" ? value.trim() : "";
+          return s || fallback;
+        };
+        const percentOr = (value, fallback) => value != null ? value : fallback;
+        const cropNameFromGrowSlot = (src) => {
+          if (!src || typeof src !== "object") return null;
+          const species = src.species;
+          if (typeof species !== "string" || !species.trim()) return null;
+          const key2 = species.trim();
+          const variants = [key2, key2.charAt(0).toUpperCase() + key2.slice(1), key2.toLowerCase()];
+          for (const v of variants) {
+            const name = plantCatalog?.[v]?.crop?.name;
+            if (typeof name === "string" && name.trim()) return name;
+          }
+          return null;
+        };
         switch (abilityId) {
           case "CoinFinderI":
           case "CoinFinderII":
           case "CoinFinderIII": {
-            const coins = d["coinsFound"] ?? base["baseMaxCoinsFindable"];
-            return `+ ${fmtInt(coins)} coins`;
+            const coins = d["coinsFound"] ?? d["coins"] ?? base["baseMaxCoinsFindable"];
+            return coins != null ? `+ ${fmtInt(coins)} coins` : "Coins found";
           }
           case "SeedFinderI":
           case "SeedFinderII":
           case "SeedFinderIII":
-          case "SeedFinderIV":
-            return `x1 ${d["seedName"] ?? "\u2014"}`;
+          case "SeedFinderIV": {
+            const seed = label2(d["seedName"], "seed");
+            return `x1 ${seed}`;
+          }
+          case "HungerRestore":
+          case "HungerRestoreII": {
+            const whoRaw = d["petName"];
+            const who = label2(whoRaw === "itself" ? "itself" : whoRaw, "pet");
+            const amount = d["hungerRestoreAmount"];
+            const pct = percentOr(d["hungerRestoredPercentage"], base["hungerRestorePercentage"]);
+            if (amount != null) return `${who}: +${fmtInt(amount)} hunger`;
+            return pct != null ? `${who}: ${fmtPct0(pct)}` : `${who}: Hunger restored`;
+          }
+          case "DoubleHarvest": {
+            const crop = label2(d["cropName"], "crop");
+            return `+1 ${crop}`;
+          }
+          case "DoubleHatch": {
+            const pet = label2(d["petName"], "pet");
+            return `+1 ${pet}`;
+          }
+          case "ProduceEater": {
+            const name = label2(d["cropName"], "crop");
+            if (d["sellPrice"] != null) return `Sold ${name}: +${fmtInt(d["sellPrice"])} coins`;
+            const pct = base["cropSellPriceIncreasePercentage"];
+            return pct != null ? `Eaten: ${name} (+${fmtPct0(pct)} value)` : `Eaten: ${name}`;
+          }
+          case "ProduceRefund": {
+            const n = d["numCropsRefunded"] ?? d["numItemsRefunded"];
+            return n != null ? `+ ${fmtInt(n)} crop(s)` : "Crops refunded";
+          }
           case "SellBoostI":
           case "SellBoostII":
           case "SellBoostIII":
@@ -13040,48 +13103,43 @@
             const pct = base["cropSellPriceIncreasePercentage"];
             return pct != null ? `+ ${fmtPct0(pct)}` : "Sale bonus";
           }
-          case "ProduceRefund": {
-            const n = d["numItemsRefunded"];
-            return n != null ? `+ ${fmtInt(n)} item(s)` : `Crops refunded`;
+          case "GoldGranter":
+          case "RainbowGranter": {
+            const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+            const crop = label2(d["cropName"], cropFromSlot ?? "crop");
+            const mut = abilityId === "GoldGranter" ? "Gold" : "Rainbow";
+            return `${crop} -> ${mut}`;
+          }
+          case "RainDance": {
+            const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+            const crop = label2(d["cropName"], cropFromSlot ?? "crop");
+            const muts = Array.isArray(d.mutations) ? d.mutations : Array.isArray(d.growSlot?.mutations) ? d.growSlot.mutations : [];
+            const hasFrozen = muts.some((m) => typeof m === "string" && m.toLowerCase() === "frozen");
+            return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
           }
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII": {
-            if (d["cropScaleIncreasePercentage"] != null) return `+ ${fmtPct0(d["cropScaleIncreasePercentage"])}`;
-            const inc = base["cropScaleIncreasePercentage"];
-            return inc != null ? `+ ${fmtPct0(inc)}` : "Produce bigger";
-          }
-          case "DoubleHarvest":
-            return `+1 item`;
-          case "ProduceEater": {
-            const name = d["cropName"] ?? "\u2014";
-            if (d["sellPrice"] != null) return `Eaten: ${name} (value ${fmtInt(d["sellPrice"])})`;
-            const pct = base["cropSellPriceIncreasePercentage"];
-            return pct != null ? `Eaten: ${name} (+ ${fmtPct0(pct)} price)` : `Eaten: ${name}`;
-          }
-          case "EggGrowthBoost":
-          case "EggGrowthBoostII":
-          case "EggGrowthBoostIII": {
-            const mins = d["eggGrowthTimeReductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"];
-            return `- ${fmtMin1(mins)}`;
-          }
-          case "PlantGrowthBoost":
-          case "PlantGrowthBoostII": {
-            const mins = d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
-            return `- ${fmtMin1(mins)}`;
-          }
-          case "GoldGranter": {
-            const target = d["cropName"] ?? "\u2014";
-            return `${target}`;
-          }
-          case "RainbowGranter": {
-            const target = d["cropName"] ?? "\u2014";
-            return `${target}`;
+            const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
+            return inc != null ? `+ ${fmtPct0(inc)}` : "Crop size boosted";
           }
           case "ProduceMutationBoost":
           case "ProduceMutationBoostII":
           case "PetMutationBoost":
-          case "PetMutationBoostII":
-            return "\u2014";
+          case "PetMutationBoostII": {
+            const inc = percentOr(d["mutationChanceIncreasePercentage"], base["mutationChanceIncreasePercentage"]);
+            return inc != null ? `+ ${fmtPct0(inc)} mutation chance` : "Mutation chance up";
+          }
+          case "EggGrowthBoost":
+          case "EggGrowthBoostII_NEW":
+          case "EggGrowthBoostII": {
+            const mins = d["minutesReduced"] ?? d["eggGrowthTimeReductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"];
+            return mins != null ? `- ${fmtMin1(mins)}` : "Egg growth reduced";
+          }
+          case "PlantGrowthBoost":
+          case "PlantGrowthBoostII": {
+            const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
+            return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
+          }
           case "PetXpBoost":
           case "PetXpBoostII": {
             const xp = d["bonusXp"] ?? base["bonusXp"];
@@ -13090,26 +13148,20 @@
           case "PetAgeBoost":
           case "PetAgeBoostII": {
             const xp = d["bonusXp"] ?? base["bonusXp"];
-            const who = d["petName"] ?? "pet";
+            const who = label2(d["petName"], "pet");
             return `+ ${fmtInt(xp)} XP (${who})`;
           }
           case "PetHatchSizeBoost":
           case "PetHatchSizeBoostII": {
-            const who = d["petName"] ?? "pet";
+            const who = label2(d["petName"], "pet");
             if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
             const pct = base["maxStrengthIncreasePercentage"];
             return pct != null ? `+ ${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
           }
-          case "HungerRestore":
-          case "HungerRestoreII": {
-            const pct = d["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"];
-            const who = d["petName"] ?? "pet";
-            return `(${who}): ${fmtPct0(pct)}`;
-          }
           case "HungerBoost":
           case "HungerBoostII": {
             const pct = base["hungerDepletionRateDecreasePercentage"];
-            return pct != null ? `- ${fmtPct0(pct)}` : "Hunger reduced";
+            return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
           }
           case "PetRefund":
           case "PetRefundII": {
@@ -13117,7 +13169,11 @@
             return egg ? `x1 ${egg}` : `Pet refunded as egg`;
           }
           case "Copycat":
-            return "\u2014";
+            return "Copied another ability";
+          case "MoonKisser":
+            return "Amber mutations empowered";
+          case "DawnKisser":
+            return "Dawn mutations empowered";
           default: {
             const meta = petAbilities[abilityId];
             if (d && typeof d === "object" && Object.keys(d).length) return JSON.stringify(d);
@@ -36236,6 +36292,11 @@ next: ${next}`;
   var selectedMap = /* @__PURE__ */ new Map();
   var seedStockByName = /* @__PURE__ */ new Map();
   var seedSourceCache = [];
+  var selectedDecorMap = /* @__PURE__ */ new Map();
+  var decorStockByName = /* @__PURE__ */ new Map();
+  var decorSourceCache = [];
+  var _decorDeleteAbort = null;
+  var _decorDeleteBusy = false;
   var NF_US = new Intl.NumberFormat("en-US");
   var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
   async function clearUiSelectionAtoms() {
@@ -36255,6 +36316,9 @@ next: ${next}`;
   var OVERLAY_ID = "qws-seeddeleter-overlay";
   var LIST_ID = "qws-seeddeleter-list";
   var SUMMARY_ID = "qws-seeddeleter-summary";
+  var OVERLAY_DECOR_ID = "qws-decordeleter-overlay";
+  var LIST_DECOR_ID = "qws-decordeleter-list";
+  var SUMMARY_DECOR_ID = "qws-decordeleter-summary";
   function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
   }
@@ -36445,11 +36509,45 @@ next: ${next}`;
   function buildInventoryShapeFrom(items) {
     return { items, favoritedItemIds: [] };
   }
+  function decorDisplayNameFromId(decorId) {
+    try {
+      const node = decorCatalog?.[decorId];
+      const n = node?.name;
+      if (typeof n === "string" && n) return n;
+    } catch {
+    }
+    return decorId || "Decor";
+  }
+  function normalizeDecorItem(x) {
+    if (!x || typeof x !== "object") return null;
+    const decorId = typeof x.decorId === "string" ? x.decorId.trim() : "";
+    const itemType = x.itemType === "Decor" ? "Decor" : null;
+    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+    if (!decorId || itemType !== "Decor" || quantity <= 0) return null;
+    return { decorId, itemType: "Decor", quantity, id: `decor:${decorId}` };
+  }
+  async function getMyDecorInventory() {
+    try {
+      const raw = await Atoms.inventory.myDecorInventory.get();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      raw.forEach((x) => {
+        const s = normalizeDecorItem(x);
+        if (s) out.push(s);
+      });
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function buildDecorInventoryShapeFrom(items) {
+    return { items, favoritedItemIds: [] };
+  }
   function setStyles(el2, styles) {
     Object.assign(el2.style, styles);
   }
-  function styleOverlayBox(div) {
-    div.id = OVERLAY_ID;
+  function styleOverlayBox(div, id) {
+    div.id = id;
     setStyles(div, {
       position: "fixed",
       left: "12px",
@@ -36518,7 +36616,7 @@ next: ${next}`;
   }
   var overlayKeyGuardsOn = false;
   function isInsideOverlay(el2) {
-    return !!(el2 && el2.closest?.(`#${OVERLAY_ID}`));
+    return !!(el2 && (el2.closest?.(`#${OVERLAY_ID}`) || el2.closest?.(`#${OVERLAY_DECOR_ID}`)));
   }
   function keyGuardCapture(e) {
     const ae = document.activeElement;
@@ -36552,7 +36650,7 @@ next: ${next}`;
   }
   function createSeedOverlay() {
     const box = document.createElement("div");
-    styleOverlayBox(box);
+    styleOverlayBox(box, OVERLAY_ID);
     const header = document.createElement("div");
     setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
     const title = document.createElement("div");
@@ -36612,10 +36710,11 @@ next: ${next}`;
   function hideSeedOverlay() {
     const el2 = document.getElementById(OVERLAY_ID);
     if (el2) el2.remove();
-    removeOverlayKeyGuards();
+    if (!document.getElementById(OVERLAY_DECOR_ID)) removeOverlayKeyGuards();
   }
   var _btnConfirm = null;
   var unsubSelectedName = null;
+  var unsubDecorSelectedName = null;
   function renderListRow(item) {
     const row = document.createElement("div");
     setStyles(row, {
@@ -36660,7 +36759,7 @@ next: ${next}`;
       }
     };
     qty.addEventListener("keydown", swallowDigits);
-    qty.onchange = () => {
+    const updateQty = async () => {
       const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
       qty.value = String(v);
       const cur = selectedMap.get(item.name);
@@ -36668,8 +36767,14 @@ next: ${next}`;
       cur.qty = v;
       selectedMap.set(item.name, cur);
       updateSummary();
+      await repatchFakeSeedInventoryWithSelection();
     };
-    qty.oninput = qty.onchange;
+    qty.onchange = () => {
+      void updateQty();
+    };
+    qty.oninput = () => {
+      void updateQty();
+    };
     const remove = createButton2("Remove", { background: "transparent" });
     remove.onclick = async () => {
       selectedMap.delete(item.name);
@@ -36715,13 +36820,30 @@ next: ${next}`;
     }
   }
   async function repatchFakeSeedInventoryWithSelection() {
-    const selectedNames = new Set(Array.from(selectedMap.keys()));
-    const filtered = (Array.isArray(seedSourceCache) ? seedSourceCache : []).filter((s) => {
+    const src = Array.isArray(seedSourceCache) ? seedSourceCache : [];
+    const remainingByName = /* @__PURE__ */ new Map();
+    for (const s of src) {
       const disp = seedDisplayNameFromSpecies(s.species);
-      return !selectedNames.has(disp);
-    });
+      const qty = Math.max(0, Math.floor(s.quantity || 0));
+      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+    }
+    for (const sel of selectedMap.values()) {
+      const cur = remainingByName.get(sel.name) ?? 0;
+      const picked = Math.max(0, Math.floor(sel.qty || 0));
+      remainingByName.set(sel.name, Math.max(0, cur - picked));
+    }
+    const patched = [];
+    for (const s of src) {
+      const disp = seedDisplayNameFromSpecies(s.species);
+      const remaining = remainingByName.get(disp) ?? 0;
+      if (remaining <= 0) continue;
+      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+      if (take <= 0) continue;
+      patched.push({ ...s, quantity: take });
+      remainingByName.set(disp, remaining - take);
+    }
     try {
-      await fakeInventoryShow({ items: filtered, favoritedItemIds: [] }, { open: false });
+      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
     } catch {
     }
   }
@@ -36730,10 +36852,13 @@ next: ${next}`;
     const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
       const n = (name || "").trim();
       if (!n) return;
-      if (selectedMap.has(n)) {
-        selectedMap.delete(n);
+      const max = Math.max(1, seedStockByName.get(n) ?? 1);
+      const existing = selectedMap.get(n);
+      if (existing) {
+        existing.qty = max;
+        existing.maxQty = max;
+        selectedMap.set(n, existing);
       } else {
-        const max = Math.max(1, seedStockByName.get(n) ?? 1);
         selectedMap.set(n, { name: n, qty: max, maxQty: max });
       }
       refreshList();
@@ -36789,6 +36914,365 @@ next: ${next}`;
       setWindowVisible?.(true);
     }
   }
+  function createDecorOverlay() {
+    const box = document.createElement("div");
+    styleOverlayBox(box, OVERLAY_DECOR_ID);
+    const header = document.createElement("div");
+    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+    const title = document.createElement("div");
+    title.textContent = "Decor selection";
+    setStyles(title, { fontWeight: "700", fontSize: "13px" });
+    const hint = document.createElement("div");
+    hint.textContent = "Click decor in inventory to toggle selection.";
+    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+    const hr = document.createElement("div");
+    setStyles(hr, { height: "1px", background: "#2d333b" });
+    const list = document.createElement("div");
+    list.id = LIST_DECOR_ID;
+    setStyles(list, {
+      minHeight: "44px",
+      maxHeight: "26vh",
+      overflow: "auto",
+      padding: "4px",
+      border: "1px dashed #39424c",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.84)",
+      userSelect: "text"
+    });
+    const actions = document.createElement("div");
+    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+    const summary = document.createElement("div");
+    summary.id = SUMMARY_DECOR_ID;
+    setStyles(summary, { fontWeight: "600" });
+    summary.textContent = "Selected: 0 decor \xB7 0 items";
+    const btnClear = createButton2("Clear");
+    btnClear.title = "Clear selection";
+    btnClear.onclick = async () => {
+      selectedDecorMap.clear();
+      refreshDecorList();
+      updateDecorSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    const btnConfirm = createButton2("Confirm", { background: "#1F2328CC" });
+    btnConfirm.disabled = true;
+    btnConfirm.onclick = async () => {
+      await closeSeedInventoryPanel();
+    };
+    header.append(title);
+    actions.append(summary, btnClear, btnConfirm);
+    box.append(header, hint, hr, list, actions);
+    makeDraggable(box, header);
+    box.__btnConfirm = btnConfirm;
+    return box;
+  }
+  function showDecorOverlay() {
+    if (document.getElementById(OVERLAY_DECOR_ID)) return;
+    const el2 = createDecorOverlay();
+    document.body.appendChild(el2);
+    installOverlayKeyGuards();
+    refreshDecorList();
+    updateDecorSummary();
+  }
+  function hideDecorOverlay() {
+    const el2 = document.getElementById(OVERLAY_DECOR_ID);
+    if (el2) el2.remove();
+    if (!document.getElementById(OVERLAY_ID)) removeOverlayKeyGuards();
+  }
+  function renderDecorListRow(item) {
+    const row = document.createElement("div");
+    setStyles(row, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 6px",
+      borderBottom: "1px dashed #2d333b"
+    });
+    const name = document.createElement("div");
+    name.textContent = item.name;
+    setStyles(name, {
+      fontSize: "12px",
+      fontWeight: "600",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    });
+    const controls = document.createElement("div");
+    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "1";
+    qty.max = String(Math.max(1, item.maxQty));
+    qty.step = "1";
+    qty.value = String(item.qty);
+    qty.className = "qmm-input";
+    setStyles(qty, {
+      width: "68px",
+      height: "28px",
+      border: "1px solid #4446",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.90)",
+      padding: "0 8px",
+      fontSize: "12px"
+    });
+    const swallowDigits = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    qty.addEventListener("keydown", swallowDigits);
+    const updateQty = async () => {
+      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+      qty.value = String(v);
+      const cur = selectedDecorMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      cur.maxQty = Math.max(cur.maxQty, v);
+      selectedDecorMap.set(item.name, cur);
+      updateDecorSummary();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    qty.onchange = () => {
+      void updateQty();
+    };
+    qty.oninput = () => {
+      void updateQty();
+    };
+    const remove = createButton2("Remove", { background: "transparent" });
+    remove.onclick = async () => {
+      selectedDecorMap.delete(item.name);
+      refreshDecorList();
+      updateDecorSummary();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    controls.append(qty, remove);
+    row.append(name, controls);
+    return row;
+  }
+  function refreshDecorList() {
+    const list = document.getElementById(LIST_DECOR_ID);
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = Array.from(selectedDecorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No decor selected.";
+      empty.style.opacity = "0.8";
+      list.appendChild(empty);
+      return;
+    }
+    for (const it of entries) list.appendChild(renderDecorListRow(it));
+  }
+  function totalDecorSelected() {
+    let kinds = 0, qty = 0;
+    for (const it of selectedDecorMap.values()) {
+      kinds += 1;
+      qty += it.qty;
+    }
+    return { kinds, qty };
+  }
+  function updateDecorSummary() {
+    const { kinds, qty } = totalDecorSelected();
+    const el2 = document.getElementById(SUMMARY_DECOR_ID);
+    if (el2) el2.textContent = `Selected: ${kinds} decor \xB7 ${formatNum(qty)} items`;
+    const overlay = document.getElementById(OVERLAY_DECOR_ID);
+    const btn = overlay?.__btnConfirm;
+    if (btn) {
+      btn.textContent = "Confirm";
+      btn.disabled = qty <= 0;
+      btn.style.opacity = qty <= 0 ? "0.6" : "1";
+      btn.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+    }
+  }
+  async function repatchFakeDecorInventoryWithSelection() {
+    const src = Array.isArray(decorSourceCache) ? decorSourceCache : [];
+    const remainingByName = /* @__PURE__ */ new Map();
+    for (const s of src) {
+      const disp = decorDisplayNameFromId(s.decorId);
+      const qty = Math.max(0, Math.floor(s.quantity || 0));
+      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+    }
+    for (const sel of selectedDecorMap.values()) {
+      const cur = remainingByName.get(sel.name) ?? 0;
+      const picked = Math.max(0, Math.floor(sel.qty || 0));
+      remainingByName.set(sel.name, Math.max(0, cur - picked));
+    }
+    const patched = [];
+    for (const s of src) {
+      const disp = decorDisplayNameFromId(s.decorId);
+      const remaining = remainingByName.get(disp) ?? 0;
+      if (remaining <= 0) continue;
+      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+      if (take <= 0) continue;
+      patched.push({ ...s, quantity: take });
+      remainingByName.set(disp, remaining - take);
+    }
+    try {
+      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
+    } catch {
+    }
+  }
+  async function beginSelectedDecorNameListener() {
+    if (unsubDecorSelectedName) return;
+    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
+      const n = (name || "").trim();
+      if (!n) return;
+      const max = Math.max(1, decorStockByName.get(n) ?? 1);
+      const decorId = Array.from(decorSourceCache || []).find((d) => decorDisplayNameFromId(d.decorId) === n)?.decorId || n;
+      const existing = selectedDecorMap.get(n);
+      if (existing) {
+        existing.qty = max;
+        existing.maxQty = max;
+        selectedDecorMap.set(n, existing);
+      } else {
+        selectedDecorMap.set(n, { name: n, qty: max, maxQty: max, decorId });
+      }
+      refreshDecorList();
+      updateDecorSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeDecorInventoryWithSelection();
+    });
+    unsubDecorSelectedName = typeof unsub === "function" ? unsub : null;
+  }
+  async function endSelectedDecorNameListener() {
+    const fn = unsubDecorSelectedName;
+    unsubDecorSelectedName = null;
+    try {
+      await fn?.();
+    } catch {
+    }
+  }
+  async function findFirstEmptySlot() {
+    const state2 = await PlayerService.getGardenState();
+    const dirt = state2?.tileObjects || {};
+    const boardwalk = state2?.boardwalkTileObjects || {};
+    for (let i = 0; i < 200; i++) {
+      const key2 = String(i);
+      const has = Object.prototype.hasOwnProperty.call(dirt, key2) && dirt[key2] != null;
+      if (!has) return { tileType: "Dirt", index: i };
+    }
+    for (let i = 0; i < 76; i++) {
+      const key2 = String(i);
+      const has = Object.prototype.hasOwnProperty.call(boardwalk, key2) && boardwalk[key2] != null;
+      if (!has) return { tileType: "Boardwalk", index: i };
+    }
+    return null;
+  }
+  async function deleteSelectedDecor(opts = {}) {
+    if (_decorDeleteBusy) {
+      await toastSimple("Decor deleter", "Deletion already in progress.", "info");
+      return;
+    }
+    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 25));
+    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedDecorMap.values())).map((s) => ({ name: s.name, decorId: s.decorId, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
+    if (!selection.length) {
+      await toastSimple("Decor deleter", "No decor selected.", "info");
+      return;
+    }
+    const stock = /* @__PURE__ */ new Map();
+    (await getMyDecorInventory()).forEach((d) => {
+      stock.set(d.decorId, (stock.get(d.decorId) ?? 0) + Math.max(0, Math.floor(d.quantity || 0)));
+    });
+    const tasks = selection.map((s) => {
+      const available = stock.get(s.decorId) ?? 0;
+      const qty = Math.min(s.qty, available);
+      return { decorId: s.decorId, qty, name: s.name };
+    }).filter((t) => t.qty > 0);
+    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+    if (total <= 0) {
+      await toastSimple("Decor deleter", "Nothing to delete (not in inventory).", "info");
+      return;
+    }
+    const emptySlot = await findFirstEmptySlot();
+    if (!emptySlot) {
+      await toastSimple("Decor deleter", "No empty slot available to delete decor (dirt 0-199, boardwalk 0-75).", "error");
+      return;
+    }
+    _decorDeleteBusy = true;
+    const abort = new AbortController();
+    _decorDeleteAbort = abort;
+    try {
+      await toastSimple("Decor deleter", `Deleting ${formatNum(total)} decor items across ${tasks.length} types...`, "info");
+      let done = 0;
+      for (const t of tasks) {
+        let remaining = t.qty;
+        while (remaining > 0) {
+          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+          try {
+            await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0);
+          } catch {
+          }
+          try {
+            await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType);
+          } catch {
+          }
+          done += 1;
+          remaining -= 1;
+          try {
+            opts.onProgress?.({ done, total, decorId: t.decorId, remainingForDecor: remaining });
+            window.dispatchEvent(new CustomEvent("qws:decordeleter:progress", {
+              detail: { done, total, decorId: t.decorId, remainingForDecor: remaining }
+            }));
+          } catch {
+          }
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+        }
+      }
+      if (!opts.keepSelection) selectedDecorMap.clear();
+      try {
+        window.dispatchEvent(new CustomEvent("qws:decordeleter:done", { detail: { total, decorCount: tasks.length } }));
+      } catch {
+      }
+      await toastSimple("Decor deleter", `Deleted ${formatNum(total)} decor items (${tasks.length} types).`, "success");
+    } catch (e) {
+      const msg = e?.message || "Deletion failed.";
+      try {
+        window.dispatchEvent(new CustomEvent("qws:decordeleter:error", { detail: { message: msg } }));
+      } catch {
+      }
+      await toastSimple("Decor deleter", msg, "error");
+    } finally {
+      _decorDeleteBusy = false;
+      _decorDeleteAbort = null;
+    }
+  }
+  function cancelDecorDeletion() {
+    try {
+      _decorDeleteAbort?.abort();
+    } catch {
+    }
+  }
+  function isDecorDeletionRunning() {
+    return _decorDeleteBusy;
+  }
+  async function openDecorSelectorFlow(setWindowVisible) {
+    try {
+      setWindowVisible?.(false);
+      decorSourceCache = await getMyDecorInventory();
+      decorStockByName = /* @__PURE__ */ new Map();
+      for (const d of decorSourceCache) {
+        const display = decorDisplayNameFromId(d.decorId);
+        decorStockByName.set(display, Math.max(1, Math.floor(d.quantity || 0)));
+      }
+      selectedDecorMap.clear();
+      showDecorOverlay();
+      await beginSelectedDecorNameListener();
+      await fakeInventoryShow(buildDecorInventoryShapeFrom(decorSourceCache), { open: true });
+      if (await isInventoryPanelOpen()) {
+        await waitInventoryPanelClosed();
+      }
+    } catch (e) {
+      await toastSimple("Decor inventory", e?.message || "Failed to open decor selector.", "error");
+    } finally {
+      await endSelectedDecorNameListener();
+      hideDecorOverlay();
+      decorSourceCache = [];
+      decorStockByName.clear();
+      setWindowVisible?.(true);
+    }
+  }
   var MiscService = {
     // ghost
     readGhostEnabled,
@@ -36809,6 +37293,18 @@ next: ${next}`;
     },
     clearSeedSelection() {
       selectedMap.clear();
+    },
+    // decor
+    getMyDecorInventory,
+    openDecorSelectorFlow,
+    deleteSelectedDecor,
+    cancelDecorDeletion,
+    isDecorDeletionRunning,
+    getCurrentDecorSelection() {
+      return Array.from(selectedDecorMap.values());
+    },
+    clearDecorSelection() {
+      selectedDecorMap.clear();
     }
   };
 
@@ -36935,11 +37431,68 @@ next: ${next}`;
       card.body.append(grid);
       return card.root;
     })();
+    const secDecor = (() => {
+      const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
+      const selLabel = ui.label("Selected");
+      selLabel.style.fontSize = "13px";
+      selLabel.style.margin = "0";
+      selLabel.style.justifySelf = "start";
+      const selValue = document.createElement("div");
+      selValue.id = "misc.decorDeleter.summary";
+      selValue.style.fontSize = "13px";
+      selValue.style.opacity = "0.9";
+      selValue.textContent = "0 decor \xB7 0 items";
+      grid.append(selLabel, selValue);
+      const actLabel = ui.label("Actions");
+      actLabel.style.fontSize = "13px";
+      actLabel.style.margin = "0";
+      actLabel.style.justifySelf = "start";
+      const actions = ui.flexRow({ gap: 6 });
+      actions.style.justifyContent = "flex-start";
+      const btnSelect = ui.btn("Select decor", { variant: "primary", size: "sm" });
+      const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
+      const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
+      actions.append(btnSelect, btnDelete, btnClear);
+      grid.append(actLabel, actions);
+      function readSelection() {
+        const sel = MiscService.getCurrentDecorSelection?.() || [];
+        const decorCount = sel.length;
+        let totalQty = 0;
+        for (const it of sel) totalQty += Math.max(0, Math.floor(it?.qty || 0));
+        return { sel, decorCount, totalQty };
+      }
+      function updateSummaryUI() {
+        const { decorCount, totalQty } = readSelection();
+        selValue.textContent = `${decorCount} decor \xB7 ${formatNum2(totalQty)} items`;
+        const has = decorCount > 0 && totalQty > 0;
+        ui.setButtonEnabled(btnDelete, has);
+        ui.setButtonEnabled(btnClear, has);
+      }
+      btnSelect.onclick = async () => {
+        await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
+        updateSummaryUI();
+      };
+      btnDelete.onclick = async () => {
+        await MiscService.deleteSelectedDecor?.();
+        updateSummaryUI();
+      };
+      btnClear.onclick = () => {
+        try {
+          MiscService.clearDecorSelection?.();
+        } catch {
+        }
+        updateSummaryUI();
+      };
+      const card = ui.card("\u{1F5D1}\uFE0F Decor deleter", { tone: "muted", align: "center" });
+      card.root.style.maxWidth = "440px";
+      card.body.append(grid);
+      return card.root;
+    })();
     const content = document.createElement("div");
     content.style.display = "grid";
     content.style.gap = "8px";
     content.style.justifyItems = "center";
-    content.append(secPlayer, secSeed);
+    content.append(secPlayer, secSeed, secDecor);
     view.appendChild(content);
     view.__cleanup__ = () => {
       try {

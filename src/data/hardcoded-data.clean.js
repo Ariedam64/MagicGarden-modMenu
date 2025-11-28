@@ -255,7 +255,7 @@ export const tileRefsMutationLabels = {
   Frozen: "Frozen",
   Puddle: "Puddle",
   Dawnlit: "Dawnlit",
-  Ambershine: "Amberlit",
+  Amberlit: "Amberlit",
   Dawncharged: "Dawnbound",
   Ambercharged: "Amberbound"};
 
@@ -1424,7 +1424,7 @@ export const mutationCatalog = {
   Frozen:     { name: "Frozen",      baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
   Dawnlit:    { name: "Dawnlit",     baseChance: 0, coinMultiplier: 2,  tileRef: tileRefsMutations.Dawnlit },
 
-  Ambershine: { name: "Amberlit",    baseChance: 0, coinMultiplier: 5,  tileRef: tileRefsMutations.Ambershine },
+  Amberlit: { name: "Amberlit",    baseChance: 0, coinMultiplier: 5,  tileRef: tileRefsMutations.Amberlit },
 
   Dawncharged:  { name: "Dawnbound",  baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
   Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged },
@@ -1896,6 +1896,19 @@ export const petAbilities = {
     description: "Finds divine and celestial seeds in your garden",
     trigger: "continuous",
     baseProbability: 0.01,
+    baseParameters: {}
+  },
+
+  MoonKisser: {
+    name: "Moon Kisser",
+    description: "Empowers amber moon crops with special mutations",
+    trigger: "continuous",
+    baseParameters: {}
+  },
+  DawnKisser: {
+    name: "Dawn Kisser",
+    description: "Empowers dawn crops with special mutations",
+    trigger: "continuous",
     baseParameters: {}
   }
 };

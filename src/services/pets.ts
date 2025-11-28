@@ -6,7 +6,7 @@ import {
   type CropItem,
   type CropInventoryState,
 } from "./player";
-import { petCatalog, petAbilities } from "../data/hardcoded-data.clean.js";
+import { petCatalog, petAbilities, plantCatalog } from "../data/hardcoded-data.clean.js";
 import { fakeInventoryShow, closeInventoryPanel, isInventoryOpen } from "./fakeModal.ts";
 import { Atoms, myPetHutchPetItems, myNumPetHutchItems, isMyInventoryAtMaxLength } from "../store/atoms";
 import { toastSimple } from "../ui/toast";
@@ -1285,10 +1285,11 @@ export const PetsService = {
         return num(data["sellPrice"] ?? 0);
 
       case "EggGrowthBoost":
-      case "EggGrowthBoostII":
-      case "EggGrowthBoostIII": {
+      case "EggGrowthBoostII_NEW":
+      case "EggGrowthBoostII":{
         const minutes =
           data["eggGrowthTimeReductionMinutes"] ??
+          data["minutesReduced"] ??
           data["reductionMinutes"] ??
           base["eggGrowthTimeReductionMinutes"] ??
           0;
@@ -1298,6 +1299,7 @@ export const PetsService = {
       case "PlantGrowthBoost":
       case "PlantGrowthBoostII": {
         const minutes =
+          data["minutesReduced"] ??
           data["reductionMinutes"] ??
           data["plantGrowthReductionMinutes"] ??
           base["plantGrowthReductionMinutes"] ??
@@ -1311,6 +1313,12 @@ export const PetsService = {
         return num(xp);
       }
 
+      case "PetAgeBoost":
+      case "PetAgeBoostII": {
+        const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
+        return num(xp);
+      }
+
       case "PetHatchSizeBoost":
       case "PetHatchSizeBoostII": {
         const strength = data["strengthIncrease"] ?? 0;
@@ -1319,11 +1327,12 @@ export const PetsService = {
 
       case "HungerRestore":
       case "HungerRestoreII": {
-        const pct =
+        const amount =
+          data["hungerRestoreAmount"] ??
           data["hungerRestoredPercentage"] ??
           base["hungerRestorePercentage"] ??
           0;
-        return num(pct);
+        return num(amount);
       }
 
       default:
@@ -1542,113 +1551,174 @@ export const PetsService = {
     const formatDetails = (abilityId: string, data: any): string => {
       const d = (data ?? {}) as Record<string, unknown>;
       const base = (petAbilities as Record<string, any>)[abilityId]?.baseParameters ?? {};
+      const label = (value: unknown, fallback: string): string => {
+        const s = typeof value === "string" ? value.trim() : "";
+        return s || fallback;
+      };
+      const percentOr = (value: unknown, fallback?: unknown) => (value != null ? value : fallback);
+      const cropNameFromGrowSlot = (src: unknown): string | null => {
+        if (!src || typeof src !== "object") return null;
+        const species = (src as any).species;
+        if (typeof species !== "string" || !species.trim()) return null;
+        const key = species.trim();
+        const variants = [key, key.charAt(0).toUpperCase() + key.slice(1), key.toLowerCase()];
+        for (const v of variants) {
+          const name = (plantCatalog as any)?.[v]?.crop?.name;
+          if (typeof name === "string" && name.trim()) return name;
+        }
+        return null;
+      };
+
       switch (abilityId as keyof typeof petAbilities) {
-        case 'CoinFinderI':
-        case 'CoinFinderII':
-        case 'CoinFinderIII': {
-          const coins = d['coinsFound'] ?? base['baseMaxCoinsFindable'];
-          return `+ ${fmtInt(coins)} coins`;
-        }
-        case 'SeedFinderI':
-        case 'SeedFinderII':
-        case 'SeedFinderIII':
-        case 'SeedFinderIV':
-          return `x1 ${(d['seedName'] as string) ?? '—'}`;
-
-        case 'SellBoostI':
-        case 'SellBoostII':
-        case 'SellBoostIII':
-        case 'SellBoostIV': {
-          if (d['bonusCoins'] != null) return `Sale bonus: +${fmtInt(d['bonusCoins'])} coins`;
-          const pct = base['cropSellPriceIncreasePercentage'];
-          return pct != null ? `+ ${fmtPct0(pct)}` : 'Sale bonus';
-        }
-        case 'ProduceRefund': {
-          const n = d['numItemsRefunded'];
-          return n != null ? `+ ${fmtInt(n)} item(s)` : `Crops refunded`;
-        }
-        case 'ProduceScaleBoost':
-        case 'ProduceScaleBoostII': {
-          if (d['cropScaleIncreasePercentage'] != null) return `+ ${fmtPct0(d['cropScaleIncreasePercentage'])}`;
-          const inc = base['cropScaleIncreasePercentage'];
-          return inc != null ? `+ ${fmtPct0(inc)}` : 'Produce bigger';
-        }
-        case 'DoubleHarvest':
-          return `+1 item`;
-        case 'ProduceEater': {
-          const name = (d['cropName'] as string) ?? '—';
-          if (d['sellPrice'] != null) return `Eaten: ${name} (value ${fmtInt(d['sellPrice'])})`;
-          const pct = base['cropSellPriceIncreasePercentage'];
-          return pct != null ? `Eaten: ${name} (+ ${fmtPct0(pct)} price)` : `Eaten: ${name}`;
+        case "CoinFinderI":
+        case "CoinFinderII":
+        case "CoinFinderIII": {
+          const coins = d["coinsFound"] ?? d["coins"] ?? base["baseMaxCoinsFindable"];
+          return coins != null ? `+ ${fmtInt(coins)} coins` : "Coins found";
         }
 
-        case 'EggGrowthBoost':
-        case 'EggGrowthBoostII':
-        case 'EggGrowthBoostIII': {
-          const mins = d['eggGrowthTimeReductionMinutes'] ?? base['eggGrowthTimeReductionMinutes'];
-          return `- ${fmtMin1(mins)}`;
-        }
-        case 'PlantGrowthBoost':
-        case 'PlantGrowthBoostII': {
-          const mins = d['reductionMinutes'] ?? base['plantGrowthReductionMinutes'];
-          return `- ${fmtMin1(mins)}`;
+        case "SeedFinderI":
+        case "SeedFinderII":
+        case "SeedFinderIII":
+        case "SeedFinderIV": {
+          const seed = label(d["seedName"], "seed");
+          return `x1 ${seed}`;
         }
 
-        case 'GoldGranter': {
-          const target = (d['cropName'] as string) ?? '—';
-          return `${target}`;
+        case "HungerRestore":
+        case "HungerRestoreII": {
+          const whoRaw = d["petName"];
+          const who = label(whoRaw === "itself" ? "itself" : whoRaw, "pet");
+          const amount = d["hungerRestoreAmount"];
+          const pct = percentOr(d["hungerRestoredPercentage"], base["hungerRestorePercentage"]);
+          if (amount != null) return `${who}: +${fmtInt(amount)} hunger`;
+          return pct != null ? `${who}: ${fmtPct0(pct)}` : `${who}: Hunger restored`;
         }
-        case 'RainbowGranter': {
-          const target = (d['cropName'] as string) ?? '—';
-          return `${target}`;
-        }
-        case 'ProduceMutationBoost':
-        case 'ProduceMutationBoostII':
-        case 'PetMutationBoost':
-        case 'PetMutationBoostII':
-          return '—';
 
-        case 'PetXpBoost':
-        case 'PetXpBoostII': {
-          const xp = d['bonusXp'] ?? base['bonusXp'];
+        case "DoubleHarvest": {
+          const crop = label(d["cropName"], "crop");
+          return `+1 ${crop}`;
+        }
+        case "DoubleHatch": {
+          const pet = label(d["petName"], "pet");
+          return `+1 ${pet}`;
+        }
+
+        case "ProduceEater": {
+          const name = label(d["cropName"], "crop");
+          if (d["sellPrice"] != null) return `Sold ${name}: +${fmtInt(d["sellPrice"])} coins`;
+          const pct = base["cropSellPriceIncreasePercentage"];
+          return pct != null ? `Eaten: ${name} (+${fmtPct0(pct)} value)` : `Eaten: ${name}`;
+        }
+
+        case "ProduceRefund": {
+          const n = d["numCropsRefunded"] ?? d["numItemsRefunded"];
+          return n != null ? `+ ${fmtInt(n)} crop(s)` : "Crops refunded";
+        }
+
+        case "SellBoostI":
+        case "SellBoostII":
+        case "SellBoostIII":
+        case "SellBoostIV": {
+          if (d["bonusCoins"] != null) return `Sale bonus: +${fmtInt(d["bonusCoins"])} coins`;
+          const pct = base["cropSellPriceIncreasePercentage"];
+          return pct != null ? `+ ${fmtPct0(pct)}` : "Sale bonus";
+        }
+
+        case "GoldGranter":
+        case "RainbowGranter": {
+          const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+          const crop = label(d["cropName"], cropFromSlot ?? "crop");
+          const mut = abilityId === "GoldGranter" ? "Gold" : "Rainbow";
+          return `${crop} -> ${mut}`;
+        }
+        case "RainDance": {
+          const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+          const crop = label(d["cropName"], cropFromSlot ?? "crop");
+          const muts = Array.isArray((d as any).mutations)
+            ? (d as any).mutations
+            : Array.isArray((d as any).growSlot?.mutations)
+              ? (d as any).growSlot.mutations
+              : [];
+          const hasFrozen = muts.some((m: unknown) => typeof m === "string" && m.toLowerCase() === "frozen");
+          return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
+        }
+
+        case "ProduceScaleBoost":
+        case "ProduceScaleBoostII": {
+          const inc =
+            d["scaleIncreasePercentage"] ??
+            d["cropScaleIncreasePercentage"] ??
+            base["scaleIncreasePercentage"];
+          return inc != null ? `+ ${fmtPct0(inc)}` : "Crop size boosted";
+        }
+
+        case "ProduceMutationBoost":
+        case "ProduceMutationBoostII":
+        case "PetMutationBoost":
+        case "PetMutationBoostII": {
+          const inc = percentOr(d["mutationChanceIncreasePercentage"], base["mutationChanceIncreasePercentage"]);
+          return inc != null ? `+ ${fmtPct0(inc)} mutation chance` : "Mutation chance up";
+        }
+
+        case "EggGrowthBoost":
+        case "EggGrowthBoostII_NEW":
+        case "EggGrowthBoostII": {
+          const mins =
+            d["minutesReduced"] ??
+            d["eggGrowthTimeReductionMinutes"] ??
+            base["eggGrowthTimeReductionMinutes"];
+          return mins != null ? `- ${fmtMin1(mins)}` : "Egg growth reduced";
+        }
+        case "PlantGrowthBoost":
+        case "PlantGrowthBoostII": {
+          const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
+          return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
+        }
+
+        case "PetXpBoost":
+        case "PetXpBoostII": {
+          const xp = d["bonusXp"] ?? base["bonusXp"];
           return `+ ${fmtInt(xp)} XP`;
         }
-        case 'PetAgeBoost':
-        case 'PetAgeBoostII': {
-          const xp = d['bonusXp'] ?? base['bonusXp'];
-          const who = (d['petName'] as string) ?? 'pet';
+        case "PetAgeBoost":
+        case "PetAgeBoostII": {
+          const xp = d["bonusXp"] ?? base["bonusXp"];
+          const who = label(d["petName"], "pet");
           return `+ ${fmtInt(xp)} XP (${who})`;
         }
-        case 'PetHatchSizeBoost':
-        case 'PetHatchSizeBoostII': {
-          const who = (d['petName'] as string) ?? 'pet';
-          if (d['strengthIncrease'] != null) return `+${fmtInt(d['strengthIncrease'])} strength (${who})`;
-          const pct = base['maxStrengthIncreasePercentage'];
+        case "PetHatchSizeBoost":
+        case "PetHatchSizeBoostII": {
+          const who = label(d["petName"], "pet");
+          if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
+          const pct = base["maxStrengthIncreasePercentage"];
           return pct != null ? `+ ${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
         }
-        case 'HungerRestore':
-        case 'HungerRestoreII': {
-          const pct = d['hungerRestoredPercentage'] ?? base['hungerRestorePercentage'];
-          const who = (d['petName'] as string) ?? 'pet';
-          return `(${who}): ${fmtPct0(pct)}`;
+
+        case "HungerBoost":
+        case "HungerBoostII": {
+          const pct = base["hungerDepletionRateDecreasePercentage"];
+          return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
         }
-        case 'HungerBoost':
-        case 'HungerBoostII': {
-          const pct = base['hungerDepletionRateDecreasePercentage'];
-          return pct != null ? `- ${fmtPct0(pct)}` : 'Hunger reduced';
-        }
-        case 'PetRefund':
-        case 'PetRefundII': {
-          const egg = (d['eggName'] as string) ?? null;
+
+        case "PetRefund":
+        case "PetRefundII": {
+          const egg = (d["eggName"] as string) ?? null;
           return egg ? `x1 ${egg}` : `Pet refunded as egg`;
         }
-        case 'Copycat':
-          return '—';
+
+        case "Copycat":
+          return "Copied another ability";
+
+        case "MoonKisser":
+          return "Amber mutations empowered";
+        case "DawnKisser":
+          return "Dawn mutations empowered";
 
         default: {
           const meta = (petAbilities as Record<string, any>)[abilityId];
-          if (d && typeof d === 'object' && Object.keys(d).length) return JSON.stringify(d);
-          return meta?.description || '—';
+          if (d && typeof d === "object" && Object.keys(d).length) return JSON.stringify(d);
+          return meta?.description || "—";
         }
       }
     };

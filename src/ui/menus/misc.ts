@@ -1,6 +1,7 @@
 // src/ui/menus/misc.ts
 import { Menu } from "../menu";
 import { MiscService } from "../../services/misc";
+import { PlayerService } from "../../services/player";
 
 /* ---------------- helpers ---------------- */
 
@@ -155,12 +156,81 @@ export async function renderMiscMenu(container: HTMLElement) {
     return card.root;
   })();
 
+  /* ===== Section: Decor deleter (same layout, stub logic) ===== */
+  const secDecor = (() => {
+    const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
+
+    // Row: Selected
+    const selLabel = ui.label("Selected");
+    selLabel.style.fontSize = "13px";
+    selLabel.style.margin = "0";
+    selLabel.style.justifySelf = "start";
+
+    const selValue = document.createElement("div");
+    selValue.id = "misc.decorDeleter.summary";
+    selValue.style.fontSize = "13px";
+    selValue.style.opacity = "0.9";
+    selValue.textContent = "0 decor · 0 items";
+    grid.append(selLabel, selValue);
+
+    // Row: Actions
+    const actLabel = ui.label("Actions");
+    actLabel.style.fontSize = "13px";
+    actLabel.style.margin = "0";
+    actLabel.style.justifySelf = "start";
+
+    const actions = ui.flexRow({ gap: 6 });
+    actions.style.justifyContent = "flex-start";
+
+    const btnSelect = ui.btn("Select decor", { variant: "primary", size: "sm" });
+    const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
+    const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
+
+    actions.append(btnSelect, btnDelete, btnClear);
+    grid.append(actLabel, actions);
+
+    // Helpers
+    function readSelection() {
+      const sel = MiscService.getCurrentDecorSelection?.() || [];
+      const decorCount = sel.length;
+      let totalQty = 0;
+      for (const it of sel) totalQty += Math.max(0, Math.floor(it?.qty || 0));
+      return { sel, decorCount, totalQty };
+    }
+    function updateSummaryUI() {
+      const { decorCount, totalQty } = readSelection();
+      selValue.textContent = `${decorCount} decor · ${formatNum(totalQty)} items`;
+      const has = decorCount > 0 && totalQty > 0;
+      ui.setButtonEnabled(btnDelete, has);
+      ui.setButtonEnabled(btnClear, has);
+    }
+
+    // Events
+    btnSelect.onclick = async () => {
+      await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
+      updateSummaryUI();
+    };
+    btnDelete.onclick = async () => {
+      await MiscService.deleteSelectedDecor?.();
+      updateSummaryUI();
+    };
+    btnClear.onclick = () => {
+      try { MiscService.clearDecorSelection?.(); } catch {}
+      updateSummaryUI();
+    };
+
+    const card = ui.card("🗑️ Decor deleter", { tone: "muted", align: "center" });
+    card.root.style.maxWidth = "440px";
+    card.body.append(grid);
+    return card.root;
+  })();
+
   // Layout principal (compact)
   const content = document.createElement("div");
   content.style.display = "grid";
   content.style.gap = "8px";
   content.style.justifyItems = "center";
-  content.append(secPlayer, secSeed);
+  content.append(secPlayer, secSeed, secDecor);
 
   view.appendChild(content);
 

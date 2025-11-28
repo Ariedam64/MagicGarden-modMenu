@@ -1,9 +1,9 @@
 // src/services/misc.ts
 import { PlayerService } from "./player";
+import { decorCatalog, plantCatalog } from "../data/hardcoded-data.clean";
 import { Atoms } from "../store/atoms";
 import { fakeInventoryShow, isInventoryPanelOpen, waitInventoryPanelClosed, fakeInventoryHide } from "./fakeModal";
 import { toastSimple } from "../ui/toast";
-import { plantCatalog } from "../data/hardcoded-data.clean";
 
 /* ========================================================================== */
 /*                               GHOST HELPERS                                */
@@ -160,15 +160,27 @@ export type SeedItem = {
   quantity: number;
   id?: string;
 };
+export type DecorItem = {
+  decorId: string;
+  itemType: "Decor";
+  quantity: number;
+  id?: string;
+};
 export type InventoryShape = { items: any[]; favoritedItemIds?: string[] };
 
 // Ce que l’utilisateur sélectionne dans l’overlay
 type SeedSelection = { name: string; qty: number; maxQty: number };
+type DecorSelection = { name: string; qty: number; maxQty: number; decorId: string };
 
 // État interne du flow de sélection
 const selectedMap = new Map<string, SeedSelection>();      // key = display name (ex: "Tulip Seed")
 let seedStockByName = new Map<string, number>();           // "Tulip Seed" -> quantité dispo
 let seedSourceCache: SeedItem[] = [];                      // snapshot des seeds au lancement
+const selectedDecorMap = new Map<string, DecorSelection>(); // key = display name
+let decorStockByName = new Map<string, number>();           // display name -> quantité dispo
+let decorSourceCache: DecorItem[] = [];                     // snapshot des decors au lancement
+let _decorDeleteAbort: AbortController | null = null;
+let _decorDeleteBusy = false;
 
 // ------ US number formatting ------
 const NF_US = new Intl.NumberFormat("en-US");
@@ -184,6 +196,10 @@ async function clearUiSelectionAtoms() {
 const OVERLAY_ID = "qws-seeddeleter-overlay";
 const LIST_ID = "qws-seeddeleter-list";
 const SUMMARY_ID = "qws-seeddeleter-summary";
+
+const OVERLAY_DECOR_ID = "qws-decordeleter-overlay";
+const LIST_DECOR_ID = "qws-decordeleter-list";
+const SUMMARY_DECOR_ID = "qws-decordeleter-summary";
 
 /* ------------------------------ helpers data ------------------------------ */
 
@@ -428,6 +444,38 @@ function buildInventoryShapeFrom(items: SeedItem[]): InventoryShape {
   return { items, favoritedItemIds: [] };
 }
 
+function decorDisplayNameFromId(decorId: string): string {
+  try {
+    const node = (decorCatalog as any)?.[decorId];
+    const n = node?.name;
+    if (typeof n === "string" && n) return n;
+  } catch {}
+  return decorId || "Decor";
+}
+
+function normalizeDecorItem(x: any): DecorItem | null {
+  if (!x || typeof x !== "object") return null;
+  const decorId = typeof x.decorId === "string" ? x.decorId.trim() : "";
+  const itemType = x.itemType === "Decor" ? "Decor" : null;
+  const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+  if (!decorId || itemType !== "Decor" || quantity <= 0) return null;
+  return { decorId, itemType: "Decor", quantity, id: `decor:${decorId}` };
+}
+
+export async function getMyDecorInventory(): Promise<DecorItem[]> {
+  try {
+    const raw = await Atoms.inventory.myDecorInventory.get();
+    if (!Array.isArray(raw)) return [];
+    const out: DecorItem[] = [];
+    raw.forEach((x) => { const s = normalizeDecorItem(x); if (s) out.push(s); });
+    return out;
+  } catch { return []; }
+}
+
+function buildDecorInventoryShapeFrom(items: DecorItem[]): InventoryShape {
+  return { items, favoritedItemIds: [] };
+}
+
 // Remplit le cache des quantités par nom d’affichage
 export async function buildSeedInventoryShape(): Promise<InventoryShape | null> {
   const seeds = await getMySeedInventory();
@@ -446,8 +494,8 @@ function setStyles(el: HTMLElement, styles: Partial<CSSStyleDeclaration>) {
   Object.assign(el.style, styles);
 }
 
-function styleOverlayBox(div: HTMLDivElement) {
-  div.id = OVERLAY_ID;
+function styleOverlayBox(div: HTMLDivElement, id: string) {
+  div.id = id;
   setStyles(div, {
     position: "fixed",
     left: "12px",
@@ -522,7 +570,9 @@ function createButton(label: string, styleOverride?: Partial<CSSStyleDeclaration
 // ------------ BLOCK GAME KEYS WHEN TYPING IN OVERLAY INPUTS ----------------
 let overlayKeyGuardsOn = false;
 function isInsideOverlay(el: Element | null) {
-  return !!(el && (el as HTMLElement).closest?.(`#${OVERLAY_ID}`));
+  return !!(el &&
+    ((el as HTMLElement).closest?.(`#${OVERLAY_ID}`) ||
+     (el as HTMLElement).closest?.(`#${OVERLAY_DECOR_ID}`)));
 }
 function keyGuardCapture(e: KeyboardEvent) {
   // Only when typing inside overlay inputs/textareas/contenteditable
@@ -563,7 +613,7 @@ async function closeSeedInventoryPanel() {
 
 function createSeedOverlay(): HTMLDivElement {
   const box = document.createElement("div");
-  styleOverlayBox(box);
+  styleOverlayBox(box, OVERLAY_ID);
 
   const header = document.createElement("div");
   setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
@@ -635,13 +685,14 @@ function showSeedOverlay() {
 function hideSeedOverlay() {
   const el = document.getElementById(OVERLAY_ID);
   if (el) el.remove();
-  removeOverlayKeyGuards(); // <-- retire key guard
+  if (!document.getElementById(OVERLAY_DECOR_ID)) removeOverlayKeyGuards();
 }
 
 /* --------------------------- sélection (atom) --------------------------- */
 
 let _btnConfirm: HTMLButtonElement | null = null;
 let unsubSelectedName: null | (() => void | Promise<void>) = null;
+let unsubDecorSelectedName: null | (() => void | Promise<void>) = null;
 
 function renderListRow(item: SeedSelection): HTMLElement {
   const row = document.createElement("div");
@@ -695,7 +746,7 @@ function renderListRow(item: SeedSelection): HTMLElement {
   qty.addEventListener("keydown", swallowDigits);
 
 
-  qty.onchange = () => {
+  const updateQty = async () => {
     const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
     qty.value = String(v);
     const cur = selectedMap.get(item.name);
@@ -703,8 +754,10 @@ function renderListRow(item: SeedSelection): HTMLElement {
     cur.qty = v;
     selectedMap.set(item.name, cur);
     updateSummary();
+    await repatchFakeSeedInventoryWithSelection();
   };
-  qty.oninput = qty.onchange as any;
+  qty.onchange = () => { void updateQty(); };
+  qty.oninput = () => { void updateQty(); };
 
   const remove = createButton("Remove", { background: "transparent" });
   remove.onclick = async () => {
@@ -753,14 +806,35 @@ function updateSummary() {
 }
 
 async function repatchFakeSeedInventoryWithSelection() {
-  const selectedNames = new Set(Array.from(selectedMap.keys()));
-  const filtered = (Array.isArray(seedSourceCache) ? seedSourceCache : []).filter(s => {
+  const src = Array.isArray(seedSourceCache) ? seedSourceCache : [];
+
+  // Reste par nom d'affichage = stock initial - quantités sélectionnées
+  const remainingByName = new Map<string, number>();
+  for (const s of src) {
     const disp = seedDisplayNameFromSpecies(s.species);
-    return !selectedNames.has(disp);
-  });
+    const qty = Math.max(0, Math.floor(s.quantity || 0));
+    remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+  }
+  for (const sel of selectedMap.values()) {
+    const cur = remainingByName.get(sel.name) ?? 0;
+    const picked = Math.max(0, Math.floor(sel.qty || 0));
+    remainingByName.set(sel.name, Math.max(0, cur - picked));
+  }
+
+  // Reconstruit la liste en tronquant chaque entrée avec ce qu'il reste
+  const patched: SeedItem[] = [];
+  for (const s of src) {
+    const disp = seedDisplayNameFromSpecies(s.species);
+    const remaining = remainingByName.get(disp) ?? 0;
+    if (remaining <= 0) continue;
+    const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+    if (take <= 0) continue;
+    patched.push({ ...s, quantity: take });
+    remainingByName.set(disp, remaining - take);
+  }
 
   try {
-    await fakeInventoryShow({ items: filtered, favoritedItemIds: [] }, { open: false });
+    await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
   } catch {
     // panel fermé entre-temps → on ignore
   }
@@ -774,10 +848,14 @@ async function beginSelectedNameListener() {
     const n = (name || "").trim();
     if (!n) return;
 
-    if (selectedMap.has(n)) {
-      selectedMap.delete(n);
+    const max = Math.max(1, seedStockByName.get(n) ?? 1);
+    const existing = selectedMap.get(n);
+    if (existing) {
+      // Re-clicking a selected item bumps it back to the full remaining stock
+      existing.qty = max;
+      existing.maxQty = max;
+      selectedMap.set(n, existing);
     } else {
-      const max = Math.max(1, seedStockByName.get(n) ?? 1);
       selectedMap.set(n, { name: n, qty: max, maxQty: max });
     }
 
@@ -850,6 +928,416 @@ export async function openSeedSelectorFlow(setWindowVisible?: (v: boolean) => vo
 }
 
 /* ========================================================================== */
+/*                          DECOR SELECTOR (overlay)                          */
+/* ========================================================================== */
+
+function createDecorOverlay(): HTMLDivElement {
+  const box = document.createElement("div");
+  styleOverlayBox(box, OVERLAY_DECOR_ID);
+
+  const header = document.createElement("div");
+  setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+
+  const title = document.createElement("div");
+  title.textContent = "Decor selection";
+  setStyles(title, { fontWeight: "700", fontSize: "13px" });
+
+  const hint = document.createElement("div");
+  hint.textContent = "Click decor in inventory to toggle selection.";
+  setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+
+  const hr = document.createElement("div");
+  setStyles(hr, { height: "1px", background: "#2d333b" });
+
+  const list = document.createElement("div");
+  list.id = LIST_DECOR_ID;
+  setStyles(list, {
+    minHeight: "44px",
+    maxHeight: "26vh",
+    overflow: "auto",
+    padding: "4px",
+    border: "1px dashed #39424c",
+    borderRadius: "8px",
+    background: "rgba(15,19,24,0.84)",
+    userSelect: "text",
+  });
+
+  const actions = document.createElement("div");
+  setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+
+  const summary = document.createElement("div");
+  summary.id = SUMMARY_DECOR_ID;
+  setStyles(summary, { fontWeight: "600" });
+  summary.textContent = "Selected: 0 decor · 0 items";
+
+  const btnClear = createButton("Clear");
+  btnClear.title = "Clear selection";
+  btnClear.onclick = async () => {
+    selectedDecorMap.clear();
+    refreshDecorList();
+    updateDecorSummary();
+    await clearUiSelectionAtoms();
+    await repatchFakeDecorInventoryWithSelection();
+  };
+
+  const btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+  btnConfirm.disabled = true;
+  btnConfirm.onclick = async () => {
+    await closeSeedInventoryPanel();
+  };
+
+  header.append(title);
+  actions.append(summary, btnClear, btnConfirm);
+  box.append(header, hint, hr, list, actions);
+
+  makeDraggable(box, header);
+
+  (box as any).__btnConfirm = btnConfirm;
+  return box;
+}
+
+function showDecorOverlay() {
+  if (document.getElementById(OVERLAY_DECOR_ID)) return;
+  const el = createDecorOverlay();
+  document.body.appendChild(el);
+  installOverlayKeyGuards();
+  refreshDecorList();
+  updateDecorSummary();
+}
+function hideDecorOverlay() {
+  const el = document.getElementById(OVERLAY_DECOR_ID);
+  if (el) el.remove();
+  if (!document.getElementById(OVERLAY_ID)) removeOverlayKeyGuards();
+}
+
+function renderDecorListRow(item: DecorSelection): HTMLElement {
+  const row = document.createElement("div");
+  setStyles(row, {
+    display: "grid",
+    gridTemplateColumns: "1fr auto",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 6px",
+    borderBottom: "1px dashed #2d333b",
+  });
+
+  const name = document.createElement("div");
+  name.textContent = item.name;
+  setStyles(name, {
+    fontSize: "12px",
+    fontWeight: "600",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  });
+
+  const controls = document.createElement("div");
+  setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+
+  const qty = document.createElement("input");
+  qty.type = "number";
+  qty.min = "1";
+  qty.max = String(Math.max(1, item.maxQty));
+  qty.step = "1";
+  qty.value = String(item.qty);
+  qty.className = "qmm-input";
+  setStyles(qty, {
+    width: "68px",
+    height: "28px",
+    border: "1px solid #4446",
+    borderRadius: "8px",
+    background: "rgba(15,19,24,0.90)",
+    padding: "0 8px",
+    fontSize: "12px",
+  } as any);
+
+  const swallowDigits = (e: KeyboardEvent) => {
+    if (/^[0-9]$/.test(e.key)) {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+  };
+  qty.addEventListener("keydown", swallowDigits);
+
+  const updateQty = async () => {
+    const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+    qty.value = String(v);
+    const cur = selectedDecorMap.get(item.name);
+    if (!cur) return;
+    cur.qty = v;
+    cur.maxQty = Math.max(cur.maxQty, v);
+    selectedDecorMap.set(item.name, cur);
+    updateDecorSummary();
+    await repatchFakeDecorInventoryWithSelection();
+  };
+  qty.onchange = () => { void updateQty(); };
+  qty.oninput = () => { void updateQty(); };
+
+  const remove = createButton("Remove", { background: "transparent" });
+  remove.onclick = async () => {
+    selectedDecorMap.delete(item.name);
+    refreshDecorList();
+    updateDecorSummary();
+    await repatchFakeDecorInventoryWithSelection();
+  };
+
+  controls.append(qty, remove);
+  row.append(name, controls);
+  return row;
+}
+
+function refreshDecorList() {
+  const list = document.getElementById(LIST_DECOR_ID) as HTMLDivElement | null;
+  if (!list) return;
+  list.innerHTML = "";
+  const entries = Array.from(selectedDecorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  if (entries.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No decor selected.";
+    empty.style.opacity = "0.8";
+    list.appendChild(empty);
+    return;
+  }
+  for (const it of entries) list.appendChild(renderDecorListRow(it));
+}
+
+function totalDecorSelected() {
+  let kinds = 0, qty = 0;
+  for (const it of selectedDecorMap.values()) { kinds += 1; qty += it.qty; }
+  return { kinds, qty };
+}
+
+function updateDecorSummary() {
+  const { kinds, qty } = totalDecorSelected();
+  const el = document.getElementById(SUMMARY_DECOR_ID);
+  if (el) el.textContent = `Selected: ${kinds} decor · ${formatNum(qty)} items`;
+  const overlay = document.getElementById(OVERLAY_DECOR_ID) as any;
+  const btn = overlay?.__btnConfirm as HTMLButtonElement | undefined;
+  if (btn) {
+    btn.textContent = "Confirm";
+    btn.disabled = qty <= 0;
+    btn.style.opacity = qty <= 0 ? "0.6" : "1";
+    btn.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+  }
+}
+
+async function repatchFakeDecorInventoryWithSelection() {
+  const src = Array.isArray(decorSourceCache) ? decorSourceCache : [];
+  const remainingByName = new Map<string, number>();
+  for (const s of src) {
+    const disp = decorDisplayNameFromId(s.decorId);
+    const qty = Math.max(0, Math.floor(s.quantity || 0));
+    remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+  }
+  for (const sel of selectedDecorMap.values()) {
+    const cur = remainingByName.get(sel.name) ?? 0;
+    const picked = Math.max(0, Math.floor(sel.qty || 0));
+    remainingByName.set(sel.name, Math.max(0, cur - picked));
+  }
+
+  const patched: DecorItem[] = [];
+  for (const s of src) {
+    const disp = decorDisplayNameFromId(s.decorId);
+    const remaining = remainingByName.get(disp) ?? 0;
+    if (remaining <= 0) continue;
+    const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+    if (take <= 0) continue;
+    patched.push({ ...s, quantity: take });
+    remainingByName.set(disp, remaining - take);
+  }
+
+  try {
+    await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
+  } catch {}
+}
+
+async function beginSelectedDecorNameListener() {
+  if (unsubDecorSelectedName) return;
+
+  const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name: string | null) => {
+    const n = (name || "").trim();
+    if (!n) return;
+
+    const max = Math.max(1, decorStockByName.get(n) ?? 1);
+    const decorId = Array.from(decorSourceCache || []).find((d) => decorDisplayNameFromId(d.decorId) === n)?.decorId || n;
+    const existing = selectedDecorMap.get(n);
+    if (existing) {
+      existing.qty = max;
+      existing.maxQty = max;
+      selectedDecorMap.set(n, existing);
+    } else {
+      selectedDecorMap.set(n, { name: n, qty: max, maxQty: max, decorId });
+    }
+
+    refreshDecorList();
+    updateDecorSummary();
+
+    await clearUiSelectionAtoms();
+    await repatchFakeDecorInventoryWithSelection();
+  });
+
+  unsubDecorSelectedName = typeof unsub === "function" ? unsub : null;
+}
+
+async function endSelectedDecorNameListener() {
+  const fn = unsubDecorSelectedName;
+  unsubDecorSelectedName = null;
+  try { await fn?.(); } catch {}
+}
+
+async function findFirstEmptySlot(): Promise<{ tileType: "Dirt" | "Boardwalk"; index: number } | null> {
+  const state = await PlayerService.getGardenState();
+  const dirt = state?.tileObjects || {};
+  const boardwalk = state?.boardwalkTileObjects || {};
+
+  for (let i = 0; i < 200; i++) {
+    const key = String(i);
+    const has = Object.prototype.hasOwnProperty.call(dirt, key) && dirt[key] != null;
+    if (!has) return { tileType: "Dirt", index: i };
+  }
+  for (let i = 0; i < 76; i++) {
+    const key = String(i);
+    const has = Object.prototype.hasOwnProperty.call(boardwalk, key) && boardwalk[key] != null;
+    if (!has) return { tileType: "Boardwalk", index: i };
+  }
+  return null;
+}
+
+type DecorDeleteOpts = {
+  selection?: DecorSelection[];
+  delayMs?: number;
+  keepSelection?: boolean;
+  onProgress?: (info: { done: number; total: number; decorId: string; remainingForDecor: number }) => void;
+};
+
+export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
+  if (_decorDeleteBusy) {
+    await toastSimple("Decor deleter", "Deletion already in progress.", "info");
+    return;
+  }
+
+  const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 25));
+
+  const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedDecorMap.values()))
+    .map(s => ({ name: s.name, decorId: s.decorId, qty: Math.max(0, Math.floor(s.qty || 0)) }))
+    .filter(s => s.qty > 0);
+
+  if (!selection.length) {
+    await toastSimple("Decor deleter", "No decor selected.", "info");
+    return;
+  }
+
+  const stock = new Map<string, number>();
+  (await getMyDecorInventory()).forEach((d) => {
+    stock.set(d.decorId, (stock.get(d.decorId) ?? 0) + Math.max(0, Math.floor(d.quantity || 0)));
+  });
+
+  const tasks = selection
+    .map(s => {
+      const available = stock.get(s.decorId) ?? 0;
+      const qty = Math.min(s.qty, available);
+      return { decorId: s.decorId, qty, name: s.name };
+    })
+    .filter(t => t.qty > 0);
+
+  const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+  if (total <= 0) {
+    await toastSimple("Decor deleter", "Nothing to delete (not in inventory).", "info");
+    return;
+  }
+
+  const emptySlot = await findFirstEmptySlot();
+  if (!emptySlot) {
+    await toastSimple("Decor deleter", "No empty slot available to delete decor (dirt 0-199, boardwalk 0-75).", "error");
+    return;
+  }
+
+  _decorDeleteBusy = true;
+  const abort = new AbortController();
+  _decorDeleteAbort = abort;
+
+  try {
+    await toastSimple("Decor deleter", `Deleting ${formatNum(total)} decor items across ${tasks.length} types...`, "info");
+    let done = 0;
+
+    for (const t of tasks) {
+      let remaining = t.qty;
+      while (remaining > 0) {
+        if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+
+        try { await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0); } catch {}
+        try { await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType); } catch {}
+
+        done += 1;
+        remaining -= 1;
+
+        try {
+          opts.onProgress?.({ done, total, decorId: t.decorId, remainingForDecor: remaining });
+          window.dispatchEvent(new CustomEvent("qws:decordeleter:progress", {
+            detail: { done, total, decorId: t.decorId, remainingForDecor: remaining }
+          }));
+        } catch {}
+
+        if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+      }
+    }
+
+    if (!opts.keepSelection) selectedDecorMap.clear();
+
+    try {
+      window.dispatchEvent(new CustomEvent("qws:decordeleter:done", { detail: { total, decorCount: tasks.length } }));
+    } catch {}
+
+    await toastSimple("Decor deleter", `Deleted ${formatNum(total)} decor items (${tasks.length} types).`, "success");
+  } catch (e: any) {
+    const msg = e?.message || "Deletion failed.";
+    try { window.dispatchEvent(new CustomEvent("qws:decordeleter:error", { detail: { message: msg } })); } catch {}
+    await toastSimple("Decor deleter", msg, "error");
+  } finally {
+    _decorDeleteBusy = false;
+    _decorDeleteAbort = null;
+  }
+}
+
+export function cancelDecorDeletion() {
+  try { _decorDeleteAbort?.abort(); } catch {}
+}
+export function isDecorDeletionRunning() {
+  return _decorDeleteBusy;
+}
+
+export async function openDecorSelectorFlow(setWindowVisible?: (v: boolean) => void) {
+  try {
+    setWindowVisible?.(false);
+
+    decorSourceCache = await getMyDecorInventory();
+    decorStockByName = new Map<string, number>();
+    for (const d of decorSourceCache) {
+      const display = decorDisplayNameFromId(d.decorId);
+      decorStockByName.set(display, Math.max(1, Math.floor(d.quantity || 0)));
+    }
+
+    selectedDecorMap.clear();
+    showDecorOverlay();
+    await beginSelectedDecorNameListener();
+
+    await fakeInventoryShow(buildDecorInventoryShapeFrom(decorSourceCache), { open: true });
+
+    if (await isInventoryPanelOpen()) {
+      await waitInventoryPanelClosed();
+    }
+  } catch (e: any) {
+    await toastSimple("Decor inventory", e?.message || "Failed to open decor selector.", "error");
+  } finally {
+    await endSelectedDecorNameListener();
+    hideDecorOverlay();
+    decorSourceCache = [];
+    decorStockByName.clear();
+    setWindowVisible?.(true);
+  }
+}
+
+/* ========================================================================== */
 /*                             SERVICE UNIQUE (facile)                        */
 /* ========================================================================== */
 
@@ -876,5 +1364,19 @@ export const MiscService = {
   },
   clearSeedSelection() {
     selectedMap.clear();
+  },
+
+  // decor
+  getMyDecorInventory,
+  openDecorSelectorFlow,
+  deleteSelectedDecor,
+  cancelDecorDeletion,
+  isDecorDeletionRunning,
+
+  getCurrentDecorSelection(): DecorSelection[] {
+    return Array.from(selectedDecorMap.values());
+  },
+  clearDecorSelection() {
+    selectedDecorMap.clear();
   },
 };
