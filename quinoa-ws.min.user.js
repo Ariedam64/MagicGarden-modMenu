@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.91
+// @version      2.5.93
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19033,17 +19033,17 @@ try{importScripts("${abs}")}catch(e){}
   // src/utils/cropValues.ts
   var DEFAULTS3 = {
     rootSelector: ".McFlex.css-fsggty",
-    innerSelector: ".McFlex.css-1omaybc, .McFlex.css-1c3sifn",
+    innerSelector: ".McFlex.css-1l3zq7, .McFlex.css-11dqzw",
     markerClass: "tm-crop-price"
   };
-  var OMA_SEL = ".McFlex.css-1omaybc";
+  var OMA_SEL = ".McFlex.css-1l3zq7, .McFlex.css-11dqzw";
   var ICON_CLASS = "tm-crop-price-icon";
   var LABEL_CLASS = "tm-crop-price-label";
   var LOCK_TEXT_SELECTOR = ":scope > .chakra-text.css-1uvlb8k";
-  var TOOLTIP_ROOT_CLASS = "css-115gc9o";
   var LOCK_EMOJI = "\u{1F512}";
   var LOCK_BORDER_STYLE = "2px solid rgb(188, 53, 215)";
   var LOCK_BORDER_RADIUS = "15px";
+  var TOOLTIP_ROOT_CLASS = "css-qnqsp4";
   var LOCK_ICON_CLASS = "tm-locker-tooltip-lock-icon";
   var DATASET_KEY_COLOR = "tmLockerOriginalColor";
   var DATASET_KEY_DISPLAY = "tmLockerOriginalDisplay";
@@ -19149,11 +19149,29 @@ try{importScripts("${abs}")}catch(e){}
     const markers = inner.querySelectorAll(`:scope > span.${CSS.escape(markerClass)}`);
     markers.forEach((m) => m.remove());
   }
+  function cleanupLegacyLockIcons() {
+    if (typeof document === "undefined") return;
+    const all = document.querySelectorAll(`span.${LOCK_ICON_CLASS}`);
+    all.forEach((icon) => {
+      if (!icon.closest(`.${TOOLTIP_ROOT_CLASS}`)) {
+        icon.remove();
+      }
+    });
+  }
+  function getTooltipRoot(inner) {
+    return inner.closest(`.${TOOLTIP_ROOT_CLASS}`);
+  }
   function updateLockEmoji(inner, locked) {
     if (!(inner instanceof HTMLElement)) return;
     inner.querySelectorAll(":scope > span.tm-locker-lock-emoji").forEach((node) => node.remove());
+    cleanupLegacyLockIcons();
     const textTarget = inner.querySelector(LOCK_TEXT_SELECTOR) ?? inner.querySelector(":scope > .chakra-text");
-    const tooltipRoot = inner.closest(`.${TOOLTIP_ROOT_CLASS}`);
+    const tooltipRoot = getTooltipRoot(inner);
+    const outerContainer = inner.closest(".css-502lyi");
+    if (outerContainer && outerContainer !== tooltipRoot) {
+      restoreTooltipStyles(outerContainer);
+      removeLockIcon(outerContainer);
+    }
     if (!locked) {
       if (textTarget) {
         restoreTextContent(textTarget);
@@ -19273,7 +19291,11 @@ try{importScripts("${abs}")}catch(e){}
     }
   }
   function ensureLockIcon(tooltip) {
-    let icon = tooltip.querySelector(`:scope > span.${LOCK_ICON_CLASS}`);
+    const icons = tooltip.querySelectorAll(`:scope > span.${LOCK_ICON_CLASS}`);
+    icons.forEach((node, idx) => {
+      if (idx > 0) node.remove();
+    });
+    let icon = icons[0] ?? null;
     if (!icon) {
       icon = document.createElement("span");
       icon.className = LOCK_ICON_CLASS;
