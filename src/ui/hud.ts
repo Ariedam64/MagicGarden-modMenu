@@ -22,6 +22,8 @@ import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
 import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
 import { startModalObserver } from "../utils/checkModal";
 import { startInventorySortingObserver } from "../utils/inventorySorting";
+import { startActivityLogHistoryWatcher } from "../services/activityLogHistory";
+import { startActivityLogFilter } from "../utils/activityLogFilter";
 
 // ========================
 // Types d’intégration
@@ -1028,6 +1030,8 @@ export function initWatchers(){
           });
         } catch {}
       await PetsService.startAbilityLogsWatcher()
+      await startActivityLogHistoryWatcher()
+      startActivityLogFilter();
       await renderOverlay()
       setupBuyAll()
       startReorderObserver();

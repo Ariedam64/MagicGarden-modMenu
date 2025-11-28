@@ -155,6 +155,7 @@ export const stateChildData = makeView<any, any>("stateAtom", { path: "child.dat
 export const stateShops = makeView<any, any>("stateAtom", { path: "child.data.shops" });
 export const stateUserSlots = makeView<any, any>("stateAtom", { path: "child.data.userSlots" });
 export const statePlayers = makeView<any, any[] | undefined>("stateAtom", { path: "data.players" });
+export const myActivityLog = makeView<any>("myDataAtom", { path: "activityLogs"});
 
 /* Shops view */
 export const seedShop  = makeView<any, any>("shopsAtom", { path: "seed"  });

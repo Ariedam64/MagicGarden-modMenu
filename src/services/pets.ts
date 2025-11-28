@@ -1630,7 +1630,7 @@ export const PetsService = {
           const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
           const crop = label(d["cropName"], cropFromSlot ?? "crop");
           const mut = abilityId === "GoldGranter" ? "Gold" : "Rainbow";
-          return `${crop} -> ${mut}`;
+          return `${crop}`;
         }
         case "RainDance": {
           const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
