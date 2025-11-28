@@ -75,7 +75,10 @@ function mergeHistory(current: ActivityLogEntry[], incoming: any[]): ActivityLog
   const map = new Map<string, ActivityLogEntry>();
   const push = (entry: ActivityLogEntry | null) => {
     if (!entry) return;
-    const key = `${entry.timestamp}|${entry.action ?? ""}`;
+    // Allow multiple entries with same timestamp+action but different payloads.
+    // We build the key with a lightweight, stable JSON of the entry (sorted props would be overkill here;
+    // stringify on normalized objects is stable enough for our use case).
+    const key = `${entry.timestamp}|${entry.action ?? ""}|${JSON.stringify(entry)}`;
     map.set(key, entry);
   };
   current.forEach(push);
