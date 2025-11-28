@@ -25,6 +25,17 @@ function normalizeEntry(raw: any): ActivityLogEntry | null {
   if (!raw || typeof raw !== "object") return null;
   const ts = Number((raw as any).timestamp);
   if (!Number.isFinite(ts)) return null;
+
+  const parameters = (() => {
+    const p = (raw as any).parameters;
+    if (!p || typeof p !== "object") return p;
+    const petId = typeof (p as any)?.pet?.id === "string" ? (p as any).pet.id : null;
+    if (petId && !p.petId) {
+      return { ...p, petId };
+    }
+    return p;
+  })();
+
   const action =
     typeof (raw as any).action === "string" && (raw as any).action.trim()
       ? String((raw as any).action)
@@ -32,9 +43,76 @@ function normalizeEntry(raw: any): ActivityLogEntry | null {
   const entry: ActivityLogEntry = {
     ...raw,
     timestamp: ts,
+    parameters,
   };
   if (action !== null) entry.action = action;
   return entry;
+}
+
+function normalizeList(logs: any): ActivityLogEntry[] {
+  const out: ActivityLogEntry[] = [];
+  if (!Array.isArray(logs)) return out;
+  for (const raw of logs) {
+    const norm = normalizeEntry(raw);
+    if (norm) out.push(norm);
+  }
+  return out;
+}
+
+function stableStringify(value: any): string {
+  const seen = new WeakSet();
+  const walk = (val: any): any => {
+    if (val === null) return null;
+    if (typeof val !== "object") return val;
+    if (seen.has(val)) return "__CYCLE__";
+    seen.add(val);
+    if (Array.isArray(val)) return val.map(walk);
+    const obj: Record<string, any> = {};
+    const keys = Object.keys(val).sort();
+    for (const k of keys) obj[k] = walk((val as any)[k]);
+    return obj;
+  };
+  try {
+    return JSON.stringify(walk(value));
+  } catch {
+    return "";
+  }
+}
+
+function entryIdentity(entry: ActivityLogEntry): string | null {
+  const p = entry?.parameters;
+  const candidates = [
+    p?.id,
+    p?.pet?.id,
+    p?.petId,
+    p?.playerId,
+    p?.userId,
+    p?.objectId,
+    p?.slotId,
+    p?.itemId,
+    p?.cropId,
+    p?.seedId,
+    p?.decorId,
+    p?.toolId,
+    p?.targetId,
+    p?.abilityId,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c;
+  }
+  return null;
+}
+
+function entryKey(entry: ActivityLogEntry): string {
+  const ts = Number(entry.timestamp);
+  const action = typeof entry.action === "string" ? entry.action : "";
+  const identity = entryIdentity(entry) ?? "__noid__";
+  const tsPart = Number.isFinite(ts) ? String(ts) : `t:${stableStringify({ timestamp: entry.timestamp ?? null })}`;
+  return `${tsPart}|${action}|${identity}`;
+}
+
+function entriesEqual(a: ActivityLogEntry, b: ActivityLogEntry): boolean {
+  return stableStringify(a) === stableStringify(b);
 }
 
 function loadHistory(): ActivityLogEntry[] {
@@ -71,32 +149,61 @@ function saveHistory(entries: ActivityLogEntry[]) {
   }
 }
 
-// Stable stringify (order-insensitive for object keys) to compare full payloads
-function stableStringify(value: any): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
-  const keys = Object.keys(value).sort();
-  const body = keys.map((k) => `${JSON.stringify(k)}:${stableStringify((value as any)[k])}`).join(",");
-  return `{${body}}`;
-}
-
-function mergeHistory(current: ActivityLogEntry[], incoming: any[]): ActivityLogEntry[] {
-  const map = new Map<string, ActivityLogEntry>();
-  const push = (entry: ActivityLogEntry | null) => {
-    if (!entry) return;
-    // Deduplicate only if the entire payload is identical (order-insensitive on object keys).
-    const key = stableStringify(entry);
-    map.set(key, entry);
+function diffSnapshots(prev: ActivityLogEntry[], next: ActivityLogEntry[]): {
+  added: ActivityLogEntry[];
+  updated: ActivityLogEntry[];
+} {
+  const prevBuckets = new Map<string, ActivityLogEntry[]>();
+  const bucketPush = (k: string, entry: ActivityLogEntry) => {
+    const arr = prevBuckets.get(k);
+    if (arr) arr.push(entry);
+    else prevBuckets.set(k, [entry]);
   };
-  current.forEach(push);
-  (Array.isArray(incoming) ? incoming : []).forEach((raw) => push(normalizeEntry(raw)));
-  return Array.from(map.values());
+  for (const entry of prev) bucketPush(entryKey(entry), entry);
+
+  const added: ActivityLogEntry[] = [];
+  const updated: ActivityLogEntry[] = [];
+
+  for (const entry of next) {
+    const key = entryKey(entry);
+    const bucket = prevBuckets.get(key);
+    const prevEntry = bucket?.shift();
+    if (!prevEntry) {
+      added.push(entry);
+    } else if (!entriesEqual(prevEntry, entry)) {
+      updated.push(entry);
+    }
+    if (bucket && bucket.length === 0) prevBuckets.delete(key);
+  }
+
+  return { added, updated };
 }
 
-async function appendHistory(logs: any[]) {
+function syncHistory(prevSnapshot: ActivityLogEntry[], nextSnapshot: ActivityLogEntry[]): ActivityLogEntry[] {
   const history = loadHistory();
-  const merged = mergeHistory(history, logs);
+  const { added, updated } = diffSnapshots(prevSnapshot, nextSnapshot);
+  if (!added.length && !updated.length) return history;
+
+  const map = new Map<string, ActivityLogEntry>();
+  for (const h of history) map.set(entryKey(h), h);
+
+  let changed = false;
+  const upsert = (entry: ActivityLogEntry) => {
+    const key = entryKey(entry);
+    const cur = map.get(key);
+    if (!cur || !entriesEqual(cur, entry)) {
+      map.set(key, entry);
+      changed = true;
+    }
+  };
+
+  updated.forEach(upsert);
+  added.forEach(upsert);
+
+  if (!changed) return history;
+  const merged = Array.from(map.values());
   saveHistory(merged);
+  return merged;
 }
 
 async function reopenFakeActivityLogFromHistory() {
@@ -113,22 +220,26 @@ export function getActivityLogHistory(): ActivityLogEntry[] {
 
 export async function startActivityLogHistoryWatcher(): Promise<() => void> {
   const stops: Array<() => void | Promise<void>> = [];
+  let lastSnapshot: ActivityLogEntry[] = [];
 
-  const ingest = async (logs: any) => {
+  const ingest = async (logs: any, prev?: any) => {
     try {
-      await appendHistory(Array.isArray(logs) ? logs : []);
+      const prevSnapshot = typeof prev !== "undefined" ? normalizeList(prev) : lastSnapshot;
+      const nextSnapshot = normalizeList(logs);
+      syncHistory(prevSnapshot, nextSnapshot);
+      lastSnapshot = nextSnapshot;
     } catch {
     }
   };
 
   try {
-    const initial = await myActivityLog.get();
+    const initial = normalizeList(await myActivityLog.get());
     await ingest(initial);
   } catch {
   }
 
   try {
-    const unsub = await myActivityLog.onChange((next) => { void ingest(next); });
+    const unsub = await myActivityLog.onChange((next, prev) => { void ingest(next, prev); });
     stops.push(() => { try { unsub(); } catch {} });
   } catch {
   }

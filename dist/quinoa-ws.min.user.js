@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.63
+// @version      2.6.65
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23492,13 +23492,84 @@ try{importScripts("${abs}")}catch(e){}
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
     if (!Number.isFinite(ts)) return null;
+    const parameters = (() => {
+      const p = raw.parameters;
+      if (!p || typeof p !== "object") return p;
+      const petId = typeof p?.pet?.id === "string" ? p.pet.id : null;
+      if (petId && !p.petId) {
+        return { ...p, petId };
+      }
+      return p;
+    })();
     const action2 = typeof raw.action === "string" && raw.action.trim() ? String(raw.action) : null;
     const entry = {
       ...raw,
-      timestamp: ts
+      timestamp: ts,
+      parameters
     };
     if (action2 !== null) entry.action = action2;
     return entry;
+  }
+  function normalizeList(logs) {
+    const out = [];
+    if (!Array.isArray(logs)) return out;
+    for (const raw of logs) {
+      const norm3 = normalizeEntry(raw);
+      if (norm3) out.push(norm3);
+    }
+    return out;
+  }
+  function stableStringify(value) {
+    const seen = /* @__PURE__ */ new WeakSet();
+    const walk = (val) => {
+      if (val === null) return null;
+      if (typeof val !== "object") return val;
+      if (seen.has(val)) return "__CYCLE__";
+      seen.add(val);
+      if (Array.isArray(val)) return val.map(walk);
+      const obj = {};
+      const keys = Object.keys(val).sort();
+      for (const k of keys) obj[k] = walk(val[k]);
+      return obj;
+    };
+    try {
+      return JSON.stringify(walk(value));
+    } catch {
+      return "";
+    }
+  }
+  function entryIdentity(entry) {
+    const p = entry?.parameters;
+    const candidates = [
+      p?.id,
+      p?.pet?.id,
+      p?.petId,
+      p?.playerId,
+      p?.userId,
+      p?.objectId,
+      p?.slotId,
+      p?.itemId,
+      p?.cropId,
+      p?.seedId,
+      p?.decorId,
+      p?.toolId,
+      p?.targetId,
+      p?.abilityId
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c;
+    }
+    return null;
+  }
+  function entryKey(entry) {
+    const ts = Number(entry.timestamp);
+    const action2 = typeof entry.action === "string" ? entry.action : "";
+    const identity = entryIdentity(entry) ?? "__noid__";
+    const tsPart = Number.isFinite(ts) ? String(ts) : `t:${stableStringify({ timestamp: entry.timestamp ?? null })}`;
+    return `${tsPart}|${action2}|${identity}`;
+  }
+  function entriesEqual(a, b) {
+    return stableStringify(a) === stableStringify(b);
   }
   function loadHistory() {
     const storage = getStorage2();
@@ -23530,28 +23601,50 @@ try{importScripts("${abs}")}catch(e){}
     } catch {
     }
   }
-  function stableStringify(value) {
-    if (value === null || typeof value !== "object") return JSON.stringify(value);
-    if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
-    const keys = Object.keys(value).sort();
-    const body = keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(",");
-    return `{${body}}`;
-  }
-  function mergeHistory(current, incoming) {
-    const map2 = /* @__PURE__ */ new Map();
-    const push = (entry) => {
-      if (!entry) return;
-      const key2 = stableStringify(entry);
-      map2.set(key2, entry);
+  function diffSnapshots(prev, next) {
+    const prevBuckets = /* @__PURE__ */ new Map();
+    const bucketPush = (k, entry) => {
+      const arr = prevBuckets.get(k);
+      if (arr) arr.push(entry);
+      else prevBuckets.set(k, [entry]);
     };
-    current.forEach(push);
-    (Array.isArray(incoming) ? incoming : []).forEach((raw) => push(normalizeEntry(raw)));
-    return Array.from(map2.values());
+    for (const entry of prev) bucketPush(entryKey(entry), entry);
+    const added = [];
+    const updated = [];
+    for (const entry of next) {
+      const key2 = entryKey(entry);
+      const bucket = prevBuckets.get(key2);
+      const prevEntry = bucket?.shift();
+      if (!prevEntry) {
+        added.push(entry);
+      } else if (!entriesEqual(prevEntry, entry)) {
+        updated.push(entry);
+      }
+      if (bucket && bucket.length === 0) prevBuckets.delete(key2);
+    }
+    return { added, updated };
   }
-  async function appendHistory(logs) {
+  function syncHistory(prevSnapshot, nextSnapshot) {
     const history2 = loadHistory();
-    const merged = mergeHistory(history2, logs);
+    const { added, updated } = diffSnapshots(prevSnapshot, nextSnapshot);
+    if (!added.length && !updated.length) return history2;
+    const map2 = /* @__PURE__ */ new Map();
+    for (const h of history2) map2.set(entryKey(h), h);
+    let changed = false;
+    const upsert = (entry) => {
+      const key2 = entryKey(entry);
+      const cur = map2.get(key2);
+      if (!cur || !entriesEqual(cur, entry)) {
+        map2.set(key2, entry);
+        changed = true;
+      }
+    };
+    updated.forEach(upsert);
+    added.forEach(upsert);
+    if (!changed) return history2;
+    const merged = Array.from(map2.values());
     saveHistory(merged);
+    return merged;
   }
   async function reopenFakeActivityLogFromHistory() {
     try {
@@ -23562,20 +23655,24 @@ try{importScripts("${abs}")}catch(e){}
   }
   async function startActivityLogHistoryWatcher() {
     const stops = [];
-    const ingest = async (logs) => {
+    let lastSnapshot = [];
+    const ingest = async (logs, prev) => {
       try {
-        await appendHistory(Array.isArray(logs) ? logs : []);
+        const prevSnapshot = typeof prev !== "undefined" ? normalizeList(prev) : lastSnapshot;
+        const nextSnapshot = normalizeList(logs);
+        syncHistory(prevSnapshot, nextSnapshot);
+        lastSnapshot = nextSnapshot;
       } catch {
       }
     };
     try {
-      const initial = await myActivityLog.get();
+      const initial = normalizeList(await myActivityLog.get());
       await ingest(initial);
     } catch {
     }
     try {
-      const unsub = await myActivityLog.onChange((next) => {
-        void ingest(next);
+      const unsub = await myActivityLog.onChange((next, prev) => {
+        void ingest(next, prev);
       });
       stops.push(() => {
         try {

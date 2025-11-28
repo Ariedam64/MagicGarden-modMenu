@@ -46,6 +46,7 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Vertical list of every player in the room with online status and Discord avatar.
 - Right column reveals crop and inventory value estimates, live teleport buttons, and quick links to inspect inventory or journal.
 - Toggle follow modes (you and your pets) directly from the panel.
+- Activity log viewer fetches up to 500 events per player and adds sorting so you can reorder the history fast.
 
 ### 🐾 Pets
 - Manage pet teams with drag & drop, custom icons, and quick duplication.
@@ -59,13 +60,14 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Scrollable cards highlight capacity, tags, and join actions.
 
 ### 🔒 Locker
-- Curate crop lockers with weather recipes, gold/rainbow toggles and scale filters.
+- Curate crop lockers with weather recipes, gold/rainbow toggles and scale filters, plus lock modes for both **block** and **allow** flows.
 - Preview sprites directly inside the menu to avoid guessing IDs.
 - Persisted settings let you restore preferred layouts every session.
 
 ### 🔔 Alerts
 - Build granular notifier rules for seeds, eggs, tools, or decors using visual pickers and rarity filters.
 - Overlay bell shows live shop restocks with thumbnails, quantity badges, and audio cues.
+- Buy items straight from the alert overlay when a restock pops, instead of diving back into vendor panels.
 - Global mute, per-rule enable switches, and weather-state conditions keep spam under control.
 
 ### 🛠️ Tools
@@ -75,7 +77,7 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 
 ### 🧩 Misc
 - Player ghost movement toggle with adjustable delay to move silently.
-- Seed deleter workflow to bulk-select species, review totals, and delete/clear in one place.
+- Seed and decor deleter workflows to bulk-select items, review totals, and delete/clear in one place.
 - Inventory sorter upgrade with direction selector, toggle to reveal item values with filtered totals, and persistence so your last sort/search combo is reapplied automatically.
 
 ### 📊 Stats
