@@ -484,6 +484,31 @@ class OverlayBarebone {
     }
   }
 
+  private async handleBuyAllClick(id: string, btn: HTMLButtonElement) {
+    const resolved = this.resolveShopItem(id);
+    if (!resolved) {
+      btn.disabled = true;
+      return;
+    }
+    const available = this.rows.find((r) => r.id === id)?.qty ?? 0;
+    if (available <= 0) {
+      btn.disabled = true;
+      return;
+    }
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = "Buying...";
+    try {
+      for (let i = 0; i < available; i++) {
+        await Promise.resolve(ShopsService.buyOne(resolved.kind, resolved.item));
+      }
+    } catch {
+    } finally {
+      btn.textContent = prevLabel || "Buy all";
+      btn.disabled = false;
+    }
+  }
+
   private renderPanel() {
     const sig = JSON.stringify(this.rows.map((r) => [r.id, r.qty]));
     if (sig === this.lastPanelSig) return;
@@ -514,7 +539,7 @@ class OverlayBarebone {
       const row = document.createElement("div");
       Object.assign(row.style, {
         display: "grid",
-        gridTemplateColumns: "24px 1fr max-content max-content",
+        gridTemplateColumns: "24px 1fr max-content max-content max-content",
         alignItems: "center",
         gap: "8px",
         padding: "6px 4px",
@@ -573,7 +598,38 @@ class OverlayBarebone {
         buyBtn.title = "Unavailable";
       }
 
-      row.append(icon, title, qty, buyBtn);
+      const buyAllBtn = document.createElement("button");
+      buyAllBtn.type = "button";
+      buyAllBtn.textContent = "Buy all";
+      Object.assign(buyAllBtn.style, {
+        padding: "4px 10px",
+        borderRadius: "10px",
+        border: "1px solid var(--qws-border, #ffffff33)",
+        background: "var(--qws-panel, #111823cc)",
+        color: "var(--qws-text, #e7eef7)",
+        fontWeight: "700",
+        cursor: "pointer",
+        fontSize: "12px",
+        boxShadow: "var(--qws-shadow, 0 6px 18px rgba(0,0,0,.35))",
+        transition: "filter 120ms ease, transform 120ms ease",
+      });
+      buyAllBtn.onmouseenter = () => { buyAllBtn.style.filter = "brightness(1.08)"; };
+      buyAllBtn.onmouseleave = () => { buyAllBtn.style.filter = ""; buyAllBtn.style.transform = ""; };
+      buyAllBtn.onmousedown = () => { buyAllBtn.style.transform = "translateY(1px)"; };
+      buyAllBtn.onmouseup = () => { buyAllBtn.style.transform = ""; };
+      buyAllBtn.onclick = (e) => {
+        e.stopPropagation();
+        void this.handleBuyAllClick(r.id, buyAllBtn);
+      };
+
+      if (!this.resolveShopItem(r.id)) {
+        buyAllBtn.disabled = true;
+        buyAllBtn.style.opacity = "0.6";
+        buyAllBtn.style.cursor = "not-allowed";
+        buyAllBtn.title = "Unavailable";
+      }
+
+      row.append(icon, title, qty, buyBtn, buyAllBtn);
       this.panel.appendChild(row);
     }
   }
