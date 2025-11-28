@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.94
+// @version      2.5.95
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13604,10 +13604,12 @@
     ring: "var(--chakra-ring-color, rgba(66,153,225,0.6))"
   };
   var DEFAULTS = {
-    rootSelector: ".McFlex.css-cj12rt",
+    rootSelector: ".McFlex.css-wqzc3n",
+    // gate inchangé : bloc qui contient le bouton
     checkSelector: ".McFlex.css-bvyqr8",
-    buttonSelectorWide: "button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y",
-    buttonSelectorStrict: "button.chakra-button.css-1rizn4y",
+    // nouveau bouton "Sell Pet"
+    buttonSelectorWide: "button.chakra-button.css-o7uz17, button.chakra-button, button.css-o7uz17",
+    buttonSelectorStrict: "button.chakra-button.css-o7uz17",
     targetText: "Sell Pet",
     // Back-compat only
     injectText: "Sell all Pets",
