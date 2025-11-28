@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.61
+// @version      2.6.62
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23534,7 +23534,7 @@ try{importScripts("${abs}")}catch(e){}
     const map2 = /* @__PURE__ */ new Map();
     const push = (entry) => {
       if (!entry) return;
-      const key2 = `${entry.timestamp}|${entry.action ?? ""}`;
+      const key2 = `${entry.timestamp}|${entry.action ?? ""}|${JSON.stringify(entry)}`;
       map2.set(key2, entry);
     };
     current.forEach(push);
