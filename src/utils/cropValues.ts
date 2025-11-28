@@ -13,8 +13,8 @@ export interface AppendOptions {
 export interface AppendController { stop(): void; runOnce(): void; isRunning(): boolean; }
 
 export const DEFAULTS = {
-  rootSelector: ".McFlex.css-fsggty",
-  innerSelector: ".McFlex.css-1omaybc, .McFlex.css-1c3sifn",
+ rootSelector: ".McFlex.css-fsggty",
+  innerSelector: ".McFlex.css-1l3zq7, .McFlex css-11dqzw",
   markerClass: "tm-crop-price",
 } as const;
 
