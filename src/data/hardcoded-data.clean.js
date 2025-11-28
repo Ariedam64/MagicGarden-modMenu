@@ -247,54 +247,6 @@ export const tileRefsMutations = {
   Amberlit: 12,
   Dawncharged: 13,
   Ambercharged: 14,
-
-  // Jack-o'-lantern dark eyes 0–9
-  jackOLanternEyesDark0: 21,
-  jackOLanternEyesDark1: 22,
-  jackOLanternEyesDark2: 23,
-  jackOLanternEyesDark3: 24,
-  jackOLanternEyesDark4: 25,
-  jackOLanternEyesDark5: 26,
-  jackOLanternEyesDark6: 27,
-  jackOLanternEyesDark7: 28,
-  jackOLanternEyesDark8: 29,
-  jackOLanternEyesDark9: 30,
-
-  // Jack-o'-lantern dark mouth 0–9
-  jackOLanternMouthDark0: 31,
-  jackOLanternMouthDark1: 32,
-  jackOLanternMouthDark2: 33,
-  jackOLanternMouthDark3: 34,
-  jackOLanternMouthDark4: 35,
-  jackOLanternMouthDark5: 36,
-  jackOLanternMouthDark6: 37,
-  jackOLanternMouthDark7: 38,
-  jackOLanternMouthDark8: 39,
-  jackOLanternMouthDark9: 40,
-
-  // Jack-o'-lantern light eyes 0–9
-  jackOLanternEyesLight0: 41,
-  jackOLanternEyesLight1: 42,
-  jackOLanternEyesLight2: 43,
-  jackOLanternEyesLight3: 44,
-  jackOLanternEyesLight4: 45,
-  jackOLanternEyesLight5: 46,
-  jackOLanternEyesLight6: 47,
-  jackOLanternEyesLight7: 48,
-  jackOLanternEyesLight8: 49,
-  jackOLanternEyesLight9: 50,
-
-  // Jack-o'-lantern light mouth 0–9
-  jackOLanternMouthLight0: 51,
-  jackOLanternMouthLight1: 52,
-  jackOLanternMouthLight2: 53,
-  jackOLanternMouthLight3: 54,
-  jackOLanternMouthLight4: 55,
-  jackOLanternMouthLight5: 56,
-  jackOLanternMouthLight6: 57,
-  jackOLanternMouthLight7: 58,
-  jackOLanternMouthLight8: 59,
-  jackOLanternMouthLight9: 60,
 };
 
 export const tileRefsMutationLabels = {
