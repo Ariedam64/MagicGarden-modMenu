@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.95
+// @version      2.5.96
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17512,6 +17512,7 @@ try{importScripts("${abs}")}catch(e){}
       __publicField(this, "btn", document.createElement("button"));
       __publicField(this, "badge", document.createElement("span"));
       __publicField(this, "panel", document.createElement("div"));
+      __publicField(this, "bellWrap", document.createElement("div"));
       __publicField(this, "lastShops", null);
       __publicField(this, "lastPurch", null);
       // Suivi des IDs visibles dans l’overlay (pour loops & diff)
@@ -17701,18 +17702,17 @@ try{importScripts("${abs}")}catch(e){}
     async recompute() {
       if (!this.lastShops || !this.lastPurch) return;
       const out = [];
-      const consider = (id, initialStock, canSpawnHere) => {
-        if (!canSpawnHere) return;
+      const consider = (id, initialStock) => {
         const pref = NotifierService.getPref?.(id) || {};
         if (!pref.popup) return;
         const bought = purchasedCountForId(id, this.lastPurch);
         const remaining = Math.max(initialStock - bought, 0);
         if (remaining > 0) out.push({ id, qty: remaining });
       };
-      for (const it of this.lastShops.seed.inventory) consider(`Seed:${it.species}`, it.initialStock, it.canSpawnHere);
-      for (const it of this.lastShops.tool.inventory) consider(`Tool:${it.toolId}`, it.initialStock, it.canSpawnHere);
-      for (const it of this.lastShops.egg.inventory) consider(`Egg:${it.eggId}`, it.initialStock, it.canSpawnHere);
-      for (const it of this.lastShops.decor.inventory) consider(`Decor:${it.decorId}`, it.initialStock, it.canSpawnHere);
+      for (const it of this.lastShops.seed.inventory) consider(`Seed:${it.species}`, it.initialStock);
+      for (const it of this.lastShops.tool.inventory) consider(`Tool:${it.toolId}`, it.initialStock);
+      for (const it of this.lastShops.egg.inventory) consider(`Egg:${it.eggId}`, it.initialStock);
+      for (const it of this.lastShops.decor.inventory) consider(`Decor:${it.decorId}`, it.initialStock);
       this.rows = out;
       this.renderBadge();
       if (this.panel.style.display === "block") this.renderPanel();
@@ -17828,7 +17828,7 @@ try{importScripts("${abs}")}catch(e){}
         position: "relative",
         display: "inline-flex",
         alignItems: "center",
-        marginRight: "var(--chakra-space-2, 0.5rem)",
+        marginRight: "0",
         pointerEvents: "auto",
         fontFamily: "var(--chakra-fonts-body, GreyCliff CF), system-ui, sans-serif",
         color: "var(--chakra-colors-chakra-body-text, #e7eef7)",
@@ -17849,34 +17849,16 @@ try{importScripts("${abs}")}catch(e){}
       bell.className = "qws-bell";
       bell.textContent = "\u{1F514}";
       bell.setAttribute("aria-hidden", "true");
-      style(btn, {
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "6px",
-        height: "36px",
-        padding: "0 12px",
-        borderRadius: "var(--chakra-radii-button, 50px)",
-        border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
-        background: "var(--qws-panel, #111823cc)",
-        backdropFilter: "blur(var(--qws-blur, 8px))",
-        color: "var(--qws-text, #e7eef7)",
-        boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
-        cursor: "pointer",
-        transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
-        outline: "none",
-        position: "relative"
-      });
-      setProps(btn, {
-        "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
-        "-webkit-tap-highlight-color": "transparent"
-      });
-      btn.appendChild(bell);
+      this.bellWrap = document.createElement("div");
+      this.bellWrap.className = "qws-bell-wrap";
+      this.bellWrap.appendChild(bell);
+      this.applyFallbackButtonStyles();
+      btn.appendChild(this.bellWrap);
       btn.addEventListener("mouseenter", () => {
-        btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
       });
       btn.addEventListener("mouseleave", () => {
-        btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
       });
       return btn;
     }
@@ -17959,6 +17941,84 @@ try{importScripts("${abs}")}catch(e){}
         return null;
       }
     }
+    closestFlexWithEnoughChildren(el2, minChildren = 3) {
+      let cur = el2;
+      while (cur && cur.parentElement) {
+        const parent = cur.parentElement;
+        const cs = getComputedStyle(parent);
+        if (cs.display.includes("flex") && parent.children.length >= minChildren) return parent;
+        cur = parent;
+      }
+      return null;
+    }
+    findToolbarContainer() {
+      try {
+        const chatBtn = document.querySelector('button[aria-label="Chat"]');
+        const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
+        if (flexFromChat) return flexFromChat;
+        const canvas = this.findTargetCanvas();
+        if (canvas) {
+          const flexFromCanvas = this.closestFlexWithEnoughChildren(canvas);
+          if (flexFromCanvas) return flexFromCanvas;
+          const block = this.findAnchorBlockFromCanvas(canvas);
+          if (block && block.parentElement) return block.parentElement;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    applyFallbackButtonStyles() {
+      this.btn.className = "";
+      style(this.btn, {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "36px",
+        padding: "0 12px",
+        borderRadius: "var(--chakra-radii-button, 50px)",
+        border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
+        background: "var(--qws-panel, #111823cc)",
+        backdropFilter: "blur(var(--qws-blur, 8px))",
+        color: "var(--qws-text, #e7eef7)",
+        boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
+        cursor: "pointer",
+        transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
+        outline: "none",
+        position: "relative"
+      });
+      setProps(this.btn, {
+        "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
+        "-webkit-tap-highlight-color": "transparent"
+      });
+      this.bellWrap.className = "qws-bell-wrap";
+      style(this.bellWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "100%"
+      });
+    }
+    applyToolbarLook(toolbar) {
+      const refBtn = toolbar?.querySelector("button.chakra-button");
+      if (!refBtn) return;
+      this.btn.className = refBtn.className;
+      this.btn.removeAttribute("style");
+      this.btn.removeAttribute("data-focus-visible-added");
+      const refInner = refBtn.querySelector("div");
+      if (refInner) {
+        this.bellWrap.className = refInner.className;
+        this.bellWrap.removeAttribute("style");
+      }
+      style(this.bellWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%"
+      });
+    }
     findAnchorBlockFromCanvas(c) {
       try {
         const tabbable = c.closest("span[tabindex]");
@@ -17993,6 +18053,14 @@ try{importScripts("${abs}")}catch(e){}
     }
     attachLeftOfTargetCanvas() {
       try {
+        const toolbar = this.findToolbarContainer();
+        if (toolbar && toolbar.isConnected) {
+          this.applyToolbarLook(toolbar);
+          if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
+            toolbar.appendChild(this.slot);
+          }
+          return;
+        }
         const canvas = this.findTargetCanvas();
         const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
         if (!block || !block.parentElement || !block.isConnected) {
@@ -18008,9 +18076,11 @@ try{importScripts("${abs}")}catch(e){}
             });
             document.body.appendChild(fixed);
           }
+          this.applyFallbackButtonStyles();
           if (!fixed.contains(this.slot)) fixed.appendChild(this.slot);
           return;
         }
+        this.applyFallbackButtonStyles();
         if (this.slot.parentElement !== block.parentElement || this.slot.nextElementSibling !== block && block.previousElementSibling !== this.slot) {
           this.insertLeftOf(block, this.slot);
         }
