@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.96
+// @version      2.6.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5928,6 +5928,7 @@
       minScalePct: 50,
       maxScalePct: 100,
       scaleLockMode: "RANGE",
+      lockMode: "BLOCK",
       minInventory: 91,
       avoidNormal: false,
       includeNormal: true,
@@ -5948,14 +5949,15 @@
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
     const base = defaultSettings();
-    const scaleMode = raw?.scaleLockMode === "MINIMUM" ? "MINIMUM" : raw?.scaleLockMode === "NONE" ? "NONE" : "RANGE";
+    base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+    const rawMode = raw?.scaleLockMode;
+    const scaleMode = rawMode === "MINIMUM" ? "MINIMUM" : rawMode === "MAXIMUM" ? "MAXIMUM" : rawMode === "NONE" ? "NONE" : "RANGE";
     base.scaleLockMode = scaleMode;
-    const minClampHigh = scaleMode === "MINIMUM" ? 100 : 99;
     const minScaleRaw = Number(raw?.minScalePct);
-    let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, minClampHigh) : 50;
+    let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, 100) : 50;
     const maxScaleRaw = Number(raw?.maxScalePct);
     let maxScale = Number.isFinite(maxScaleRaw) ? clampNumber(Math.round(maxScaleRaw), 50, 100) : 100;
-    if (scaleMode === "RANGE" || scaleMode === "NONE") {
+    if (scaleMode === "RANGE") {
       maxScale = clampNumber(maxScale, 51, 100);
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -5965,6 +5967,10 @@
           maxScale = clampNumber(minScale + 1, 51, 100);
         }
       }
+    } else if (scaleMode === "MAXIMUM") {
+      maxScale = clampNumber(maxScale, 50, 100);
+    } else if (scaleMode === "MINIMUM") {
+      minScale = clampNumber(minScale, 50, 100);
     }
     base.minScalePct = minScale;
     base.maxScalePct = maxScale;
@@ -6007,6 +6013,7 @@
       minScalePct: settings.minScalePct,
       maxScalePct: settings.maxScalePct,
       scaleLockMode: settings.scaleLockMode,
+      lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
       minInventory: settings.minInventory,
       avoidNormal: settings.avoidNormal,
       includeNormal: settings.includeNormal,
@@ -6299,78 +6306,123 @@
       }
       return { enabled: true, settings: this.state.settings };
     }
-    slotShouldBeBlocked(settings, args) {
-      const scaleMode = settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : settings.scaleLockMode === "NONE" ? "NONE" : "RANGE";
-      const minScaleClamp = scaleMode === "MINIMUM" ? 100 : 99;
-      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
+    evaluateLockFilters(settings, args) {
+      const size = { hasCriteria: false, matched: false };
+      const color = { hasCriteria: false, matched: false };
+      const weatherInfo = { hasCriteria: false, matched: false };
+      const scaleMode = settings.scaleLockMode === "MAXIMUM" ? "MAXIMUM" : settings.scaleLockMode === "MINIMUM" ? "MINIMUM" : settings.scaleLockMode === "NONE" ? "NONE" : "RANGE";
+      const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 100);
       const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
-      if (scaleMode === "MINIMUM") {
-        if (args.sizePercent < minScale) return true;
-      } else if (scaleMode === "RANGE") {
+      const epsilon = 1e-4;
+      let sizeMin = null;
+      let sizeMax = null;
+      if (scaleMode === "RANGE") {
+        size.hasCriteria = true;
         const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
         const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
-        if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
+        sizeMin = minScale;
+        sizeMax = maxScale;
+        const inRange = args.sizePercent + epsilon >= minScale && args.sizePercent - epsilon <= maxScale;
+        size.matched = inRange;
+      } else if (scaleMode === "MINIMUM") {
+        size.hasCriteria = true;
+        sizeMin = minScale;
+        size.matched = args.sizePercent + epsilon >= minScale;
+      } else if (scaleMode === "MAXIMUM") {
+        size.hasCriteria = true;
+        const maxScale = clampNumber(maxScaleBase, 50, 100);
+        sizeMax = maxScale;
+        size.matched = args.sizePercent - epsilon <= maxScale;
       }
       const { hasGold, hasRainbow, weather: weather2 } = mutationsToArrays(args.mutations);
       const isNormal = !hasGold && !hasRainbow;
-      if (isNormal) {
-        if (settings.avoidNormal) return true;
-      } else {
-        const avoidGold = settings.visualMutations.includes("Gold");
-        const avoidRainbow = settings.visualMutations.includes("Rainbow");
-        if (avoidGold && hasGold || avoidRainbow && hasRainbow) return true;
+      const avoidGold = settings.visualMutations.includes("Gold");
+      const avoidRainbow = settings.visualMutations.includes("Rainbow");
+      const colorFilters = [
+        settings.avoidNormal ? "normal" : null,
+        avoidGold ? "gold" : null,
+        avoidRainbow ? "rainbow" : null
+      ].filter(Boolean);
+      if (colorFilters.length) {
+        color.hasCriteria = true;
+        const matches = settings.avoidNormal && isNormal || avoidGold && hasGold || avoidRainbow && hasRainbow;
+        color.matched = matches;
       }
       const selected = settings.weatherSelected ?? [];
       const mode = settings.weatherMode ?? "ANY";
       if (mode === "RECIPES") {
         const recipes = settings.weatherRecipes ?? [];
-        if (!recipes.length) return false;
-        for (let i = 0; i < recipes.length; i++) {
-          const recipe = recipes[i];
-          if (!Array.isArray(recipe) || recipe.length === 0) continue;
-          let matches = true;
-          for (let j = 0; j < recipe.length; j++) {
-            const required = recipe[j];
+        if (recipes.length) {
+          weatherInfo.hasCriteria = true;
+          let recipeMatch = false;
+          for (let i = 0; i < recipes.length; i++) {
+            const recipe = recipes[i];
+            if (!Array.isArray(recipe) || recipe.length === 0) continue;
+            let matches = true;
+            for (let j = 0; j < recipe.length; j++) {
+              const required = recipe[j];
+              if (required === LOCKER_NO_WEATHER_TAG) {
+                if (weather2.length !== 0) {
+                  matches = false;
+                  break;
+                }
+                continue;
+              }
+              if (!weather2.includes(required)) {
+                matches = false;
+                break;
+              }
+            }
+            if (matches) {
+              recipeMatch = true;
+              break;
+            }
+          }
+          weatherInfo.matched = recipeMatch;
+        }
+        const matchAny2 = size.matched || color.matched || weatherInfo.matched;
+        return { size, color, weather: weatherInfo, matchAny: matchAny2, sizeMin, sizeMax, scaleMode };
+      }
+      if (selected.length) {
+        weatherInfo.hasCriteria = true;
+        if (mode === "ALL") {
+          let allMatch = true;
+          for (let i = 0; i < selected.length; i++) {
+            const required = selected[i];
             if (required === LOCKER_NO_WEATHER_TAG) {
               if (weather2.length !== 0) {
-                matches = false;
+                allMatch = false;
                 break;
               }
               continue;
             }
             if (!weather2.includes(required)) {
-              matches = false;
+              allMatch = false;
               break;
             }
           }
-          if (matches) return true;
-        }
-        return false;
-      }
-      if (!selected.length) return false;
-      if (mode === "ALL") {
-        let hasRequirement = false;
-        for (let i = 0; i < selected.length; i++) {
-          const required = selected[i];
-          if (required === LOCKER_NO_WEATHER_TAG) {
-            hasRequirement = true;
-            if (weather2.length !== 0) return false;
-            continue;
+          weatherInfo.matched = allMatch;
+        } else {
+          let anyMatch = false;
+          for (let i = 0; i < selected.length; i++) {
+            const required = selected[i];
+            if (required === LOCKER_NO_WEATHER_TAG) {
+              if (weather2.length === 0) {
+                anyMatch = true;
+                break;
+              }
+              continue;
+            }
+            if (weather2.includes(required)) {
+              anyMatch = true;
+              break;
+            }
           }
-          hasRequirement = true;
-          if (!weather2.includes(required)) return false;
+          weatherInfo.matched = anyMatch;
         }
-        return hasRequirement;
       }
-      for (let i = 0; i < selected.length; i++) {
-        const required = selected[i];
-        if (required === LOCKER_NO_WEATHER_TAG) {
-          if (weather2.length === 0) return true;
-          continue;
-        }
-        if (weather2.includes(required)) return true;
-      }
-      return false;
+      const matchAny = size.matched || color.matched || weatherInfo.matched;
+      return { size, color, weather: weatherInfo, matchAny, sizeMin, sizeMax, scaleMode };
     }
     emitSlotInfoChange() {
       if (!this.slotInfoListeners.size) {
@@ -6394,7 +6446,9 @@
       if (!effective.enabled) {
         return true;
       }
-      const blocked = this.slotShouldBeBlocked(effective.settings, args);
+      const { size, color, weather: weather2, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
+      const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+      const blocked = lockMode === "ALLOW" ? size.hasCriteria && !size.matched || color.hasCriteria && !color.matched || weather2.hasCriteria && !weather2.matched : matchAny;
       return !blocked;
     }
   };
@@ -13193,6 +13247,54 @@
       true
     );
   }
+  var ShopsService = {
+    buyOne(kind, it) {
+      if (kind === "seeds") {
+        const species = it.species ?? it.name;
+        if (species) {
+          try {
+            sendToGame({ type: "PurchaseSeed", species });
+            StatsService.incrementShopStat("seedsBought");
+          } catch (err) {
+          }
+        }
+        return;
+      }
+      if (kind === "tools") {
+        const toolId = it.toolId ?? it.id;
+        if (toolId) {
+          try {
+            sendToGame({ type: "PurchaseTool", toolId });
+            StatsService.incrementShopStat("toolsBought");
+          } catch (err) {
+          }
+        }
+        return;
+      }
+      if (kind === "eggs") {
+        const eggId = it.eggId ?? it.id;
+        if (eggId) {
+          try {
+            sendToGame({ type: "PurchaseEgg", eggId });
+            StatsService.incrementShopStat("eggsBought");
+          } catch (err) {
+          }
+        }
+        return;
+      }
+      if (kind === "decor") {
+        const decorId = it.decorId ?? it.id;
+        if (decorId) {
+          try {
+            sendToGame({ type: "PurchaseDecor", decorId });
+            StatsService.incrementShopStat("decorBought");
+          } catch (err) {
+          }
+        }
+        return;
+      }
+    }
+  };
 
   // src/core/audioPlayer.ts
   var AudioPlayer = class {
@@ -13931,7 +14033,11 @@
       ...Array.from(scope.querySelectorAll(btnWide)),
       ...Array.from(scope.querySelectorAll(btnStrict))
     ])).filter((b) => b instanceof HTMLButtonElement).filter((b) => !b.classList.contains(DEFAULTS.injectedClass));
-    const target = all.find((b) => isSellTwoWordLabel(getLabel(b)));
+    const target = all.find((b) => {
+      const label2 = getLabel(b);
+      if (/crops/i.test(label2)) return false;
+      return isSellTwoWordLabel(label2);
+    });
     return target ?? null;
   }
   function ensureInjectedNextTo(targetBtn, injectedClass, injectedText, onClick) {
@@ -17526,6 +17632,7 @@ try{importScripts("${abs}")}catch(e){}
       __publicField(this, "mo", null);
       // Items à afficher dans l’overlay (déjà filtrés)
       __publicField(this, "rows", []);
+      __publicField(this, "lastPanelSig", null);
       this.slot = this.createSlot();
       this.btn = this.createButton();
       this.ensureBellCSS();
@@ -17770,7 +17877,49 @@ try{importScripts("${abs}")}catch(e){}
       this.badge.textContent = n ? String(n) : "";
       style(this.badge, { display: n ? "inline-flex" : "none" });
     }
+    resolveShopItem(id) {
+      if (!this.lastShops) return null;
+      const [type, raw] = String(id).split(":");
+      if (!type || !raw) return null;
+      if (type === "Seed") {
+        const item = this.lastShops.seed?.inventory?.find((it) => String(it.species) === raw);
+        return item ? { kind: "seeds", item } : null;
+      }
+      if (type === "Tool") {
+        const item = this.lastShops.tool?.inventory?.find((it) => String(it.toolId) === raw);
+        return item ? { kind: "tools", item } : null;
+      }
+      if (type === "Egg") {
+        const item = this.lastShops.egg?.inventory?.find((it) => String(it.eggId) === raw);
+        return item ? { kind: "eggs", item } : null;
+      }
+      if (type === "Decor") {
+        const item = this.lastShops.decor?.inventory?.find((it) => String(it.decorId) === raw);
+        return item ? { kind: "decor", item } : null;
+      }
+      return null;
+    }
+    async handleBuyClick(id, btn) {
+      const resolved = this.resolveShopItem(id);
+      if (!resolved) {
+        btn.disabled = true;
+        return;
+      }
+      btn.disabled = true;
+      const prevLabel = btn.textContent;
+      btn.textContent = "Buying...";
+      try {
+        await Promise.resolve(ShopsService.buyOne(resolved.kind, resolved.item));
+      } catch {
+      } finally {
+        btn.textContent = prevLabel || "Buy";
+        btn.disabled = false;
+      }
+    }
     renderPanel() {
+      const sig = JSON.stringify(this.rows.map((r) => [r.id, r.qty]));
+      if (sig === this.lastPanelSig) return;
+      this.lastPanelSig = sig;
       this.panel.replaceChildren();
       const head = document.createElement("div");
       head.textContent = "Tracked items available";
@@ -17793,7 +17942,7 @@ try{importScripts("${abs}")}catch(e){}
         const row = document.createElement("div");
         Object.assign(row.style, {
           display: "grid",
-          gridTemplateColumns: "24px 1fr max-content",
+          gridTemplateColumns: "24px 1fr max-content max-content",
           alignItems: "center",
           gap: "8px",
           padding: "6px 4px",
@@ -17814,9 +17963,48 @@ try{importScripts("${abs}")}catch(e){}
         Object.assign(qty.style, {
           fontVariantNumeric: "tabular-nums",
           opacity: "0.9",
-          color: "var(--qws-text-dim, #b9c3cf)"
+          color: "var(--qws-text-dim, #b9c3cf)",
+          textAlign: "right"
         });
-        row.append(icon, title, qty);
+        const buyBtn = document.createElement("button");
+        buyBtn.type = "button";
+        buyBtn.textContent = "Buy";
+        Object.assign(buyBtn.style, {
+          padding: "4px 10px",
+          borderRadius: "10px",
+          border: "1px solid var(--qws-border, #ffffff33)",
+          background: "var(--qws-accent, #7aa2ff)",
+          color: "#0b1017",
+          fontWeight: "700",
+          cursor: "pointer",
+          fontSize: "12px",
+          boxShadow: "var(--qws-shadow, 0 6px 18px rgba(0,0,0,.35))",
+          transition: "filter 120ms ease, transform 120ms ease"
+        });
+        buyBtn.onmouseenter = () => {
+          buyBtn.style.filter = "brightness(1.05)";
+        };
+        buyBtn.onmouseleave = () => {
+          buyBtn.style.filter = "";
+          buyBtn.style.transform = "";
+        };
+        buyBtn.onmousedown = () => {
+          buyBtn.style.transform = "translateY(1px)";
+        };
+        buyBtn.onmouseup = () => {
+          buyBtn.style.transform = "";
+        };
+        buyBtn.onclick = (e) => {
+          e.stopPropagation();
+          void this.handleBuyClick(r.id, buyBtn);
+        };
+        if (!this.resolveShopItem(r.id)) {
+          buyBtn.disabled = true;
+          buyBtn.style.opacity = "0.6";
+          buyBtn.style.cursor = "not-allowed";
+          buyBtn.title = "Unavailable";
+        }
+        row.append(icon, title, qty, buyBtn);
         this.panel.appendChild(row);
       }
     }
@@ -26559,13 +26747,13 @@ next: ${next}`;
     Chilled: "condition",
     Frozen: "condition",
     Dawnlit: "lighting",
-    Ambershine: "lighting",
+    Amberlit: "lighting",
     Dawncharged: "lighting",
     Ambercharged: "lighting"
   };
   var WEATHER_RECIPE_GROUP_MEMBERS = {
     condition: ["Wet", "Chilled", "Frozen"],
-    lighting: ["Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"]
+    lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"]
   };
   function normalizeWeatherSelection(selection) {
     selection.forEach((tag) => {
@@ -26963,6 +27151,7 @@ next: ${next}`;
       minScalePct: 50,
       maxScalePct: 100,
       scaleLockMode: "RANGE",
+      lockMode: "BLOCK",
       minInventory: 91,
       avoidNormal: false,
       visualMutations: /* @__PURE__ */ new Set(),
@@ -26975,6 +27164,7 @@ next: ${next}`;
     target.minScalePct = source.minScalePct;
     target.maxScalePct = source.maxScalePct;
     target.scaleLockMode = source.scaleLockMode;
+    target.lockMode = source.lockMode;
     target.minInventory = source.minInventory;
     target.avoidNormal = source.avoidNormal;
     target.visualMutations.clear();
@@ -26987,11 +27177,10 @@ next: ${next}`;
   }
   function hydrateSettingsFromPersisted(target, persisted) {
     const src = persisted ?? {};
-    const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : src.scaleLockMode === "NONE" ? "NONE" : "RANGE";
-    const minClampHigh = mode === "MINIMUM" ? 100 : 99;
-    let minScale = Math.max(50, Math.min(minClampHigh, Math.round(src.minScalePct ?? 50)));
+    const mode = src.scaleLockMode === "MINIMUM" ? "MINIMUM" : src.scaleLockMode === "MAXIMUM" ? "MAXIMUM" : src.scaleLockMode === "NONE" ? "NONE" : "RANGE";
+    let minScale = Math.max(50, Math.min(100, Math.round(src.minScalePct ?? 50)));
     let maxScale = Math.max(50, Math.min(100, Math.round(src.maxScalePct ?? 100)));
-    if (mode === "RANGE" || mode === "NONE") {
+    if (mode === "RANGE") {
       maxScale = Math.max(51, Math.min(100, maxScale));
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -27001,10 +27190,15 @@ next: ${next}`;
           maxScale = Math.min(100, Math.max(51, minScale + 1));
         }
       }
+    } else if (mode === "MINIMUM") {
+      minScale = Math.max(50, Math.min(100, minScale));
+    } else if (mode === "MAXIMUM") {
+      maxScale = Math.max(50, Math.min(100, maxScale));
     }
     target.minScalePct = minScale;
     target.maxScalePct = maxScale;
     target.scaleLockMode = mode;
+    target.lockMode = src.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
     target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
     target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
     target.visualMutations.clear();
@@ -27036,11 +27230,10 @@ next: ${next}`;
   function serializeSettingsState(state2) {
     normalizeWeatherSelection(state2.weatherSelected);
     state2.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
-    const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : state2.scaleLockMode === "NONE" ? "NONE" : "RANGE";
-    const minClampHigh = mode === "MINIMUM" ? 100 : 99;
-    let minScale = Math.max(50, Math.min(minClampHigh, Math.round(state2.minScalePct || 50)));
+    const mode = state2.scaleLockMode === "MINIMUM" ? "MINIMUM" : state2.scaleLockMode === "MAXIMUM" ? "MAXIMUM" : state2.scaleLockMode === "NONE" ? "NONE" : "RANGE";
+    let minScale = Math.max(50, Math.min(100, Math.round(state2.minScalePct || 50)));
     let maxScale = Math.max(50, Math.min(100, Math.round(state2.maxScalePct || 100)));
-    if (mode === "RANGE" || mode === "NONE") {
+    if (mode === "RANGE") {
       maxScale = Math.max(51, Math.min(100, maxScale));
       if (maxScale <= minScale) {
         if (minScale >= 99) {
@@ -27050,11 +27243,16 @@ next: ${next}`;
           maxScale = Math.min(100, Math.max(51, minScale + 1));
         }
       }
+    } else if (mode === "MINIMUM") {
+      minScale = Math.max(50, Math.min(100, minScale));
+    } else if (mode === "MAXIMUM") {
+      maxScale = Math.max(50, Math.min(100, maxScale));
     }
     return {
       minScalePct: minScale,
       maxScalePct: maxScale,
       scaleLockMode: mode,
+      lockMode: state2.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
       minInventory: Math.max(0, Math.min(999, Math.round(state2.minInventory || 91))),
       avoidNormal: !!state2.avoidNormal,
       includeNormal: !state2.avoidNormal,
@@ -27350,6 +27548,45 @@ next: ${next}`;
       row.style.gap = "8px";
       return row;
     };
+    const toLockMode = (value) => value === "allow" ? "ALLOW" : "BLOCK";
+    const fromLockMode = (mode) => mode === "ALLOW" ? "allow" : "block";
+    const lockModeRow = centerRow();
+    lockModeRow.style.flexDirection = "column";
+    lockModeRow.style.alignItems = "center";
+    lockModeRow.style.gap = "10px";
+    const lockModeHint = document.createElement("div");
+    lockModeHint.style.fontSize = "12px";
+    lockModeHint.style.opacity = "0.8";
+    lockModeHint.style.textAlign = "center";
+    let isProgrammaticLockMode = false;
+    const lockModeSegmented = ui.segmented(
+      [
+        { value: "block", label: "Block" },
+        { value: "allow", label: "Allow" }
+      ],
+      fromLockMode(state2.lockMode),
+      (value) => {
+        if (isProgrammaticLockMode) return;
+        state2.lockMode = toLockMode(value);
+        updateLockModeUI();
+        opts.onChange?.();
+      },
+      { ariaLabel: "Harvest mode" }
+    );
+    lockModeRow.append(lockModeSegmented, lockModeHint);
+    const updateLockModeUI = () => {
+      const value = fromLockMode(state2.lockMode);
+      const current = lockModeSegmented.get?.();
+      if (current !== value) {
+        isProgrammaticLockMode = true;
+        try {
+          lockModeSegmented.set?.(value);
+        } finally {
+          isProgrammaticLockMode = false;
+        }
+      }
+      lockModeHint.textContent = value === "allow" ? "Harvest only when every active filter category matches" : "Harvest is locked whenever any active filter matches";
+    };
     const scaleRow = centerRow();
     scaleRow.style.flexDirection = "column";
     scaleRow.style.alignItems = "center";
@@ -27359,10 +27596,16 @@ next: ${next}`;
     scaleModeRow.style.flexWrap = "wrap";
     scaleModeRow.style.justifyContent = "center";
     scaleModeRow.style.gap = "12px";
+    const minSlider = ui.slider(50, 100, 1, state2.minScalePct);
+    applyStyles(minSlider, { width: "min(420px, 100%)" });
+    const maxSlider = ui.slider(50, 100, 1, state2.maxScalePct);
+    applyStyles(maxSlider, { width: "min(420px, 100%)" });
     const toMode = (value) => {
       switch (value) {
         case "minimum":
           return "MINIMUM";
+        case "maximum":
+          return "MAXIMUM";
         case "ranged":
           return "RANGE";
         default:
@@ -27373,6 +27616,8 @@ next: ${next}`;
       switch (mode) {
         case "MINIMUM":
           return "minimum";
+        case "MAXIMUM":
+          return "maximum";
         case "RANGE":
           return "ranged";
         default:
@@ -27384,8 +27629,9 @@ next: ${next}`;
     const scaleModeSegmented = ui.segmented(
       [
         { value: "none", label: "None" },
-        { value: "minimum", label: "Minimum size" },
-        { value: "ranged", label: "Range size" }
+        { value: "minimum", label: "Minimum" },
+        { value: "maximum", label: "Maximum" },
+        { value: "ranged", label: "Range" }
       ],
       initialScaleMode,
       (value) => {
@@ -27395,10 +27641,6 @@ next: ${next}`;
       { ariaLabel: "Scale lock mode" }
     );
     scaleModeRow.append(scaleModeSegmented);
-    const minSlider = ui.slider(50, 100, 1, state2.minScalePct);
-    applyStyles(minSlider, {
-      width: "min(420px, 100%)"
-    });
     const scaleSlider = ui.rangeDual(50, 100, 1, state2.minScalePct, state2.maxScalePct);
     applyStyles(scaleSlider.root, {
       width: "min(420px, 100%)",
@@ -27407,10 +27649,11 @@ next: ${next}`;
     });
     const scaleMinSlider = scaleSlider.min;
     const scaleMaxSlider = scaleSlider.max;
-    const scaleMinimumValue = ui.label("50%");
     const scaleMinValue = ui.label("50%");
     const scaleMaxValue = ui.label("100%");
-    [scaleMinimumValue, scaleMinValue, scaleMaxValue].forEach((label2) => {
+    const scaleMinimumValue = ui.label("50%");
+    const scaleMaximumValue = ui.label("100%");
+    [scaleMinValue, scaleMaxValue, scaleMinimumValue, scaleMaximumValue].forEach((label2) => {
       label2.style.margin = "0";
       label2.style.fontWeight = "600";
     });
@@ -27434,22 +27677,22 @@ next: ${next}`;
       gap: "16px"
     });
     scaleValues.append(makeScaleValue("Min", scaleMinValue), makeScaleValue("Max", scaleMaxValue));
-    const minimumValues = applyStyles(document.createElement("div"), {
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      width: "min(420px, 100%)",
-      gap: "16px"
-    });
-    minimumValues.append(makeScaleValue("Minimum", scaleMinimumValue));
-    const minimumControls = applyStyles(document.createElement("div"), {
+    const minControls = applyStyles(document.createElement("div"), {
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
       gap: "12px",
       width: "100%"
     });
-    minimumControls.append(minSlider, minimumValues);
+    minControls.append(minSlider, makeScaleValue("Minimum", scaleMinimumValue));
+    const maxControls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "12px",
+      width: "100%"
+    });
+    maxControls.append(maxSlider, makeScaleValue("Maximum", scaleMaximumValue));
     const rangeControls = applyStyles(document.createElement("div"), {
       display: "flex",
       flexDirection: "column",
@@ -27458,7 +27701,7 @@ next: ${next}`;
       width: "100%"
     });
     rangeControls.append(scaleSlider.root, scaleValues);
-    scaleRow.append(scaleModeRow, minimumControls, rangeControls);
+    scaleRow.append(scaleModeRow, minControls, maxControls, rangeControls);
     const applyScaleRange = (commit, notify = commit) => {
       let minValue = parseInt(scaleMinSlider.value, 10);
       let maxValue = parseInt(scaleMaxSlider.value, 10);
@@ -27494,11 +27737,24 @@ next: ${next}`;
         if (notify) opts.onChange?.();
       }
     };
+    const applyScaleMaximum = (commit, notify = commit) => {
+      let maxValue = parseInt(maxSlider.value, 10);
+      if (!Number.isFinite(maxValue)) maxValue = state2.maxScalePct;
+      maxValue = Math.max(50, Math.min(100, maxValue));
+      maxSlider.value = String(maxValue);
+      scaleMaximumValue.textContent = `${maxValue}%`;
+      if (commit) {
+        state2.maxScalePct = maxValue;
+        if (notify) opts.onChange?.();
+      }
+    };
     const updateScaleModeUI = () => {
-      const isMinimum = state2.scaleLockMode === "MINIMUM";
       const isRange = state2.scaleLockMode === "RANGE";
-      minimumControls.style.display = isMinimum ? "" : "none";
+      const isMin = state2.scaleLockMode === "MINIMUM";
+      const isMax = state2.scaleLockMode === "MAXIMUM";
       rangeControls.style.display = isRange ? "" : "none";
+      minControls.style.display = isMin ? "" : "none";
+      maxControls.style.display = isMax ? "" : "none";
       const segValue = fromMode(state2.scaleLockMode);
       if (scaleModeSegmented.get?.() !== segValue) {
         isProgrammaticScaleMode = true;
@@ -27512,15 +27768,15 @@ next: ${next}`;
     const applyScaleMode = (mode, notify) => {
       const prevMode = state2.scaleLockMode;
       state2.scaleLockMode = mode;
-      if (mode === "MINIMUM") {
-        minSlider.value = String(state2.minScalePct);
-        applyScaleMinimum(prevMode !== mode, false);
-      } else if (mode === "RANGE") {
+      if (mode === "RANGE") {
         scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
         applyScaleRange(prevMode !== mode, false);
-      } else {
+      } else if (mode === "MINIMUM") {
         minSlider.value = String(state2.minScalePct);
-        scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
+        applyScaleMinimum(prevMode !== mode, false);
+      } else if (mode === "MAXIMUM") {
+        maxSlider.value = String(state2.maxScalePct);
+        applyScaleMaximum(prevMode !== mode, false);
       }
       updateScaleModeUI();
       if (notify && prevMode !== mode) {
@@ -27529,12 +27785,15 @@ next: ${next}`;
     };
     minSlider.addEventListener("input", () => applyScaleMinimum(false));
     minSlider.addEventListener("change", () => applyScaleMinimum(true));
+    maxSlider.addEventListener("input", () => applyScaleMaximum(false));
+    maxSlider.addEventListener("change", () => applyScaleMaximum(true));
     scaleMinSlider.addEventListener("input", () => applyScaleRange(false));
     scaleMaxSlider.addEventListener("input", () => applyScaleRange(false));
     scaleMinSlider.addEventListener("change", () => applyScaleRange(true));
     scaleMaxSlider.addEventListener("change", () => applyScaleRange(true));
     applyScaleRange(false);
     applyScaleMinimum(false);
+    applyScaleMaximum(false);
     applyScaleMode(state2.scaleLockMode, false);
     const colorsRow = centerRow();
     colorsRow.style.flexWrap = "wrap";
@@ -27997,17 +28256,21 @@ next: ${next}`;
     };
     recipesWrap.append(recipesHeader, recipesList);
     card.append(
-      makeSection("Lock by size", scaleRow),
-      makeSection("Lock by color", colorsRow),
-      makeSection("Lock by weather", weatherGrid),
-      makeSection("Weather lock mode", weatherModeRow),
-      makeSection("Recipe lockers", recipesWrap)
+      makeSection("Harvest mode", lockModeRow),
+      makeSection("Filter by size", scaleRow),
+      makeSection("Filter by color", colorsRow),
+      makeSection("Filter by weather", weatherGrid),
+      makeSection("Weather filter mode", weatherModeRow),
+      makeSection("Weather recipes", recipesWrap)
     );
     const refresh = () => {
+      updateLockModeUI();
       scaleSlider.setValues(state2.minScalePct, state2.maxScalePct);
       minSlider.value = String(state2.minScalePct);
+      maxSlider.value = String(state2.maxScalePct);
       applyScaleRange(false);
       applyScaleMinimum(false);
+      applyScaleMaximum(false);
       applyScaleMode(state2.scaleLockMode, false);
       updateColorButtons();
       weatherToggles.forEach((toggle) => toggle.setChecked(state2.weatherSelected.has(toggle.key)));
@@ -28062,7 +28325,7 @@ next: ${next}`;
     title.style.fontWeight = "600";
     title.style.fontSize = "15px";
     const subtitle = document.createElement("div");
-    subtitle.textContent = "Set the rules for locking harvests using the filters below.";
+    subtitle.textContent = "Set the rules for locking or allowing harvests using the filters below";
     subtitle.style.opacity = "0.8";
     subtitle.style.fontSize = "12px";
     textWrap.append(title, subtitle);
