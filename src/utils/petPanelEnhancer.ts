@@ -5,7 +5,7 @@ import { PlayerService, type PetInfo } from "../services/player";
 import { closeInventoryPanel, fakeInventoryShow, isInventoryOpen } from "../services/fakeModal";
 import { toastSimple } from "../ui/toast";
 
-const PANEL_SELECTOR = ".css-ycloo9";
+const PANEL_SELECTOR = ".css-1rszi55";
 const LOG_BUTTON_CLASS = "tm-pet-log-crops-btn";
 const FEED_BUTTON_CLASS = "tm-feed-from-inventory-btn";
 const FEED_ROW_CLASS = "tm-feed-from-inventory-row";
