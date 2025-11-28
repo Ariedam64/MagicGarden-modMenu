@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.5
+// @version      2.6.6
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -2947,6 +2947,7 @@
   var stateShops = makeView("stateAtom", { path: "child.data.shops" });
   var stateUserSlots = makeView("stateAtom", { path: "child.data.userSlots" });
   var statePlayers = makeView("stateAtom", { path: "data.players" });
+  var myActivityLog = makeView("myDataAtom", { path: "activityLogs" });
   var seedShop = makeView("shopsAtom", { path: "seed" });
   var toolShop = makeView("shopsAtom", { path: "tool" });
   var eggShop = makeView("shopsAtom", { path: "egg" });
@@ -13108,7 +13109,7 @@
             const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
             const crop = label2(d["cropName"], cropFromSlot ?? "crop");
             const mut = abilityId === "GoldGranter" ? "Gold" : "Rainbow";
-            return `${crop} -> ${mut}`;
+            return `${crop}`;
           }
           case "RainDance": {
             const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
@@ -14130,8 +14131,8 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID2 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID2)) return;
+    const STYLE_ID3 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID3)) return;
     const css = `
 .${injectedClass}{
   font-synthesis: none;
@@ -14186,7 +14187,7 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID2;
+    s.id = STYLE_ID3;
     s.textContent = css;
     document.head.appendChild(s);
   }
@@ -23474,6 +23475,478 @@ try{importScripts("${abs}")}catch(e){}
     };
   }
 
+  // src/services/activityLogHistory.ts
+  var HISTORY_STORAGE_KEY = "qws:activityLogs:history:v1";
+  var HISTORY_LIMIT = 500;
+  function getStorage2() {
+    if (typeof window === "undefined") return null;
+    try {
+      return window.localStorage ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function normalizeEntry(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const ts = Number(raw.timestamp);
+    if (!Number.isFinite(ts)) return null;
+    const action2 = typeof raw.action === "string" && raw.action.trim() ? String(raw.action) : null;
+    const entry = {
+      ...raw,
+      timestamp: ts
+    };
+    if (action2 !== null) entry.action = action2;
+    return entry;
+  }
+  function loadHistory() {
+    const storage = getStorage2();
+    if (!storage) return [];
+    try {
+      const raw = storage.getItem(HISTORY_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const out = [];
+      for (const item of parsed) {
+        const norm3 = normalizeEntry(item);
+        if (norm3) out.push(norm3);
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function saveHistory(entries) {
+    const storage = getStorage2();
+    if (!storage) return;
+    const sorted = entries.slice().sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    if (sorted.length > HISTORY_LIMIT) {
+      sorted.splice(0, sorted.length - HISTORY_LIMIT);
+    }
+    try {
+      storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sorted));
+    } catch {
+    }
+  }
+  function mergeHistory(current, incoming) {
+    const map2 = /* @__PURE__ */ new Map();
+    const push = (entry) => {
+      if (!entry) return;
+      const key2 = `${entry.timestamp}|${entry.action ?? ""}`;
+      map2.set(key2, entry);
+    };
+    current.forEach(push);
+    (Array.isArray(incoming) ? incoming : []).forEach((raw) => push(normalizeEntry(raw)));
+    return Array.from(map2.values());
+  }
+  async function appendHistory(logs) {
+    const history2 = loadHistory();
+    const merged = mergeHistory(history2, logs);
+    saveHistory(merged);
+  }
+  async function reopenFakeActivityLogFromHistory() {
+    try {
+      const history2 = loadHistory();
+      await fakeActivityLogShow(history2, { open: true });
+    } catch {
+    }
+  }
+  async function startActivityLogHistoryWatcher() {
+    const stops = [];
+    const ingest = async (logs) => {
+      try {
+        await appendHistory(Array.isArray(logs) ? logs : []);
+      } catch {
+      }
+    };
+    try {
+      const initial = await myActivityLog.get();
+      await ingest(initial);
+    } catch {
+    }
+    try {
+      const unsub = await myActivityLog.onChange((next) => {
+        void ingest(next);
+      });
+      stops.push(() => {
+        try {
+          unsub();
+        } catch {
+        }
+      });
+    } catch {
+    }
+    let lastModal = null;
+    try {
+      const cur = await Atoms.ui.activeModal.get();
+      lastModal = cur ?? null;
+    } catch {
+    }
+    const onModalChange = async (modalId) => {
+      const cur = modalId ?? null;
+      if (cur === ACTIVITY_LOG_MODAL_ID && lastModal !== ACTIVITY_LOG_MODAL_ID) {
+        await reopenFakeActivityLogFromHistory();
+      }
+      lastModal = cur;
+    };
+    try {
+      const unsubModal = await Atoms.ui.activeModal.onChange(onModalChange);
+      stops.push(() => {
+        try {
+          unsubModal();
+        } catch {
+        }
+      });
+    } catch {
+    }
+    return async () => {
+      for (const stop2 of stops) {
+        try {
+          await stop2();
+        } catch {
+        }
+      }
+    };
+  }
+
+  // src/utils/activityLogFilter.ts
+  var FILTER_STORAGE_KEY = "qws:activityLog:filter";
+  var STYLE_ID2 = "mg-activity-log-filter-style";
+  var ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
+  var WRAPPER_CLASS = "mg-activity-log-filter";
+  var BUTTON_CLASS = "mg-activity-log-filter-btn";
+  var ACTIVE_CLASS = "is-active";
+  var ACTION_ORDER = [
+    "all",
+    "found",
+    "buy",
+    "sell",
+    "harvest",
+    "plant",
+    "feed",
+    "hatch",
+    "water",
+    "boost",
+    "remove",
+    "other"
+  ];
+  var ACTION_LABELS = {
+    all: "All",
+    found: "Finds",
+    buy: "Purchases",
+    sell: "Sold",
+    harvest: "Harvests",
+    plant: "Planted",
+    feed: "Feed",
+    hatch: "Hatch",
+    water: "Water",
+    boost: "Boosts",
+    remove: "Remove",
+    other: "Other"
+  };
+  var ACTION_MAP = {
+    purchaseDecor: "buy",
+    purchaseSeed: "buy",
+    purchaseEgg: "buy",
+    purchaseTool: "buy",
+    waterPlant: "water",
+    plantSeed: "plant",
+    plantGardenPlant: "plant",
+    potPlant: "plant",
+    removeGardenObject: "remove",
+    harvest: "harvest",
+    feedPet: "feed",
+    plantEgg: "hatch",
+    hatchEgg: "hatch",
+    instaGrow: "boost",
+    customRestock: "boost",
+    spinSlotMachine: "boost",
+    sellAllCrops: "sell",
+    sellPet: "sell",
+    logItems: "boost",
+    mutationPotion: "boost",
+    ProduceScaleBoost: "boost",
+    ProduceScaleBoostII: "boost",
+    DoubleHarvest: "boost",
+    DoubleHatch: "boost",
+    ProduceEater: "boost",
+    SellBoostI: "boost",
+    SellBoostII: "boost",
+    SellBoostIII: "boost",
+    SellBoostIV: "boost",
+    ProduceRefund: "boost",
+    PlantGrowthBoost: "boost",
+    PlantGrowthBoostII: "boost",
+    HungerRestore: "boost",
+    HungerRestoreII: "boost",
+    GoldGranter: "boost",
+    RainbowGranter: "boost",
+    RainDance: "boost",
+    PetXpBoost: "boost",
+    PetXpBoostII: "boost",
+    EggGrowthBoost: "boost",
+    EggGrowthBoostII_NEW: "boost",
+    EggGrowthBoostII: "boost",
+    PetAgeBoost: "boost",
+    PetAgeBoostII: "boost",
+    CoinFinderI: "boost",
+    CoinFinderII: "boost",
+    CoinFinderIII: "boost",
+    SeedFinderI: "boost",
+    SeedFinderII: "boost",
+    SeedFinderIII: "boost",
+    SeedFinderIV: "boost",
+    PetHatchSizeBoost: "boost",
+    PetHatchSizeBoostII: "boost",
+    MoonKisser: "boost",
+    DawnKisser: "boost",
+    PetRefund: "boost",
+    PetRefundII: "boost"
+  };
+  var ACTION_MAP_LOWER = Object.fromEntries(
+    Object.entries(ACTION_MAP).map(([k, v]) => [k.toLowerCase(), v])
+  );
+  var PATTERNS = [
+    { key: "found", re: /\bfound\b/i },
+    { key: "buy", re: /\b(bought|purchas(e|ed))\b/i },
+    { key: "sell", re: /\bsold\b/i },
+    { key: "harvest", re: /harvest/i },
+    { key: "water", re: /water(ed)?/i },
+    { key: "plant", re: /planted/i },
+    { key: "feed", re: /\bfed\b/i },
+    { key: "hatch", re: /\bhatched?\b/i },
+    { key: "remove", re: /\b(remove|removed|delete)\b/i },
+    { key: "boost", re: /\b(boost|potion|refund|granter|growth|restock|spin)\b/i }
+  ];
+  var started3 = false;
+  var activeFilter = loadPersistedFilter() ?? "all";
+  function startActivityLogFilter() {
+    if (started3 || typeof document === "undefined") return;
+    started3 = true;
+    ensureStyles();
+    onAdded(
+      (el2) => el2 instanceof HTMLElement && el2.matches("p.chakra-text") && /activity\s*log/i.test(el2.textContent || ""),
+      (titleEl) => {
+        const root = titleEl.closest("div.McGrid");
+        if (!root || root.hasAttribute(ROOT_FLAG_ATTR)) return;
+        const header = root.querySelector("div.McFlex.css-2tfeb0") ?? titleEl.closest("div.McFlex");
+        const content = root.querySelector("div.McFlex.css-iek5kf") ?? root.querySelectorAll("div.McFlex")[1] ?? null;
+        if (!header || !content) return;
+        root.setAttribute(ROOT_FLAG_ATTR, "1");
+        injectFilter(header, content);
+      },
+      { callForExisting: true }
+    );
+  }
+  function injectFilter(header, content) {
+    const wrapper = document.createElement("div");
+    wrapper.className = WRAPPER_CLASS;
+    wrapper.style.width = "100%";
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.gridColumn = "1 / -1";
+    wrapper.style.alignSelf = "start";
+    wrapper.style.justifyContent = "flex-start";
+    wrapper.style.flex = "0 0 auto";
+    wrapper.style.minHeight = "auto";
+    const label2 = document.createElement("span");
+    label2.textContent = "Filter by action:";
+    label2.className = `${WRAPPER_CLASS}__label`;
+    const buttons = document.createElement("div");
+    buttons.className = `${WRAPPER_CLASS}__buttons`;
+    buttons.style.flex = "1 1 100%";
+    buttons.style.minWidth = "0";
+    buttons.style.alignItems = "center";
+    wrapper.append(label2, buttons);
+    content.insertBefore(wrapper, content.firstChild);
+    const entriesContainer = content.querySelector("div.McFlex.css-173k61n") ?? content.querySelector("div.McFlex") ?? content;
+    const renderButtons = (counts) => {
+      const actions = mergeActions(Array.from(counts.keys()));
+      if (!actions.includes("all")) actions.unshift("all");
+      buttons.innerHTML = "";
+      for (const action2 of actions) {
+        const count = counts.get(action2) ?? 0;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `${BUTTON_CLASS}${action2 === activeFilter ? ` ${ACTIVE_CLASS}` : ""}`;
+        btn.textContent = `${getActionLabel(action2)}${count ? ` (${count})` : ""}`;
+        btn.dataset.action = action2;
+        btn.addEventListener("click", () => {
+          activeFilter = action2;
+          persistFilter(action2);
+          updateButtons(buttons);
+          applyFilter(entriesContainer, activeFilter);
+        });
+        buttons.appendChild(btn);
+      }
+    };
+    const refresh = () => {
+      const counts = /* @__PURE__ */ new Map();
+      for (const entry of getEntryElements(entriesContainer)) {
+        const action2 = classifyEntry(entry);
+        counts.set(action2, (counts.get(action2) ?? 0) + 1);
+      }
+      renderButtons(counts);
+      if (!counts.has(activeFilter) && activeFilter !== "all") {
+        activeFilter = "all";
+        persistFilter(activeFilter);
+        updateButtons(buttons);
+      }
+      applyFilter(entriesContainer, activeFilter);
+    };
+    const obs = new MutationObserver(() => refresh());
+    obs.observe(entriesContainer, { childList: true, subtree: true });
+    refresh();
+    const cleanup2 = () => obs.disconnect();
+    const onRemoved = () => cleanup2();
+    wrapper.addEventListener("DOMNodeRemovedFromDocument", onRemoved, { once: true });
+  }
+  function classifyEntry(entry) {
+    const preset = entry.dataset.action || entry.getAttribute("data-action") || entry.getAttribute("data-activity") || entry.dataset.mgAction;
+    if (preset && typeof preset === "string") {
+      const trimmed = preset.trim();
+      if (trimmed) {
+        const normalized = normalizeAction(trimmed);
+        entry.dataset.mgAction = normalized;
+        return normalized;
+      }
+    }
+    const text = (entry.textContent || "").trim();
+    for (const { key: key2, re } of PATTERNS) {
+      if (re.test(text)) {
+        entry.dataset.mgAction = key2;
+        return key2;
+      }
+    }
+    entry.dataset.mgAction = "other";
+    return "other";
+  }
+  function normalizeAction(raw) {
+    const lowered = raw.toLowerCase();
+    if (ACTION_MAP[raw]) return ACTION_MAP[raw];
+    if (ACTION_MAP_LOWER[lowered]) return ACTION_MAP_LOWER[lowered];
+    for (const { key: key2, re } of PATTERNS) {
+      if (re.test(lowered)) return key2;
+    }
+    return lowered || "other";
+  }
+  function getEntryElements(container) {
+    const candidates = Array.from(container.children).filter((child) => child instanceof HTMLElement);
+    return candidates.filter((child) => {
+      if (child.classList.contains(WRAPPER_CLASS)) return false;
+      const text = child.textContent || "";
+      return /\bago\b/i.test(text) || child.querySelector("p.chakra-text");
+    });
+  }
+  function mergeActions(actions) {
+    const seen = /* @__PURE__ */ new Set();
+    const ordered = [];
+    for (const k of ACTION_ORDER) {
+      if (k === "all") continue;
+      if (actions.includes(k) && !seen.has(k)) {
+        seen.add(k);
+        ordered.push(k);
+      }
+    }
+    for (const a of actions) {
+      if (a === "all") continue;
+      if (!seen.has(a)) {
+        seen.add(a);
+        ordered.push(a);
+      }
+    }
+    return ordered;
+  }
+  function applyFilter(container, filter) {
+    for (const entry of getEntryElements(container)) {
+      const action2 = entry.dataset.mgAction ?? classifyEntry(entry);
+      const visible = filter === "all" || action2 === filter;
+      entry.style.display = visible ? "" : "none";
+    }
+  }
+  function updateButtons(buttons) {
+    buttons.querySelectorAll(`.${BUTTON_CLASS}`).forEach((btn) => {
+      if (!(btn instanceof HTMLButtonElement)) return;
+      const action2 = btn.dataset.action;
+      btn.classList.toggle(ACTIVE_CLASS, action2 === activeFilter);
+    });
+  }
+  function getActionLabel(action2) {
+    return ACTION_LABELS[action2] ?? action2.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+  }
+  function loadPersistedFilter() {
+    if (typeof window === "undefined") return null;
+    try {
+      const stored = window.localStorage?.getItem(FILTER_STORAGE_KEY);
+      return stored || null;
+    } catch {
+      return null;
+    }
+  }
+  function persistFilter(value) {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(FILTER_STORAGE_KEY, String(value));
+    } catch {
+    }
+  }
+  function ensureStyles() {
+    if (document.getElementById(STYLE_ID2)) return;
+    const css = `
+.${WRAPPER_CLASS}{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  margin:8px 0 10px 0;
+  border-radius:12px;
+  background:linear-gradient(180deg, #f7e8d4, #f1dcc1);
+  border:1px solid #d7b989;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.45), 0 6px 14px rgba(120,70,34,0.22);
+  flex-wrap:wrap;
+  max-width:100%;
+  box-sizing:border-box;
+}
+.${WRAPPER_CLASS}__label{
+  font-size:12px;
+  letter-spacing:0.03em;
+  text-transform:uppercase;
+  opacity:0.85;
+  font-weight:700;
+  color:#7b4b2b;
+}
+.${WRAPPER_CLASS}__buttons{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  flex:1 1 100%;
+  min-width:0;
+}
+.${BUTTON_CLASS}{
+  border:1px solid #caa56f;
+  background:linear-gradient(180deg, #ffe9c8, #f6d7aa);
+  color:#5c3416;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:12px;
+  cursor:pointer;
+  transition:background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  white-space:nowrap;
+}
+.${BUTTON_CLASS}:hover{
+  background:linear-gradient(180deg, #ffe2b2, #f3c98d);
+  border-color:#d7b989;
+}
+.${BUTTON_CLASS}.${ACTIVE_CLASS}{
+  background:linear-gradient(180deg, #ffcd82, #f3b05e);
+  border-color:#e3a23d;
+  box-shadow:0 0 0 1px rgba(227,162,61,0.35), 0 4px 10px rgba(158,94,32,0.25);
+  transform:translateY(-1px);
+}
+`;
+    const s = addStyle(css);
+    s.id = STYLE_ID2;
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -24372,6 +24845,8 @@ try{importScripts("${abs}")}catch(e){}
       } catch {
       }
       await PetsService.startAbilityLogsWatcher();
+      await startActivityLogHistoryWatcher();
+      startActivityLogFilter();
       await renderOverlay();
       setupBuyAll();
       startReorderObserver();
@@ -24650,7 +25125,7 @@ try{importScripts("${abs}")}catch(e){}
 
   // src/ui/menus/debug-data.ts
   var stylesInjected = false;
-  function ensureStyles() {
+  function ensureStyles2() {
     if (stylesInjected) return;
     stylesInjected = true;
     const style2 = document.createElement("style");
@@ -24776,7 +25251,7 @@ try{importScripts("${abs}")}catch(e){}
     return { columns, leftCol, rightCol };
   }
   async function renderDebugDataMenu(root) {
-    ensureStyles();
+    ensureStyles2();
     const ui = new Menu({ id: "debug-tools", compact: true });
     ui.mount(root);
     ui.addTab("jotai", "Jotai", (view) => renderJotaiTab(view, ui));
@@ -25609,7 +26084,7 @@ next: ${next}`;
       size: "sm",
       onClick: () => {
         filterInput.value = "";
-        applyFilter(true);
+        applyFilter2(true);
         filterInput.focus();
       }
     });
@@ -25661,7 +26136,7 @@ next: ${next}`;
         selectedBase = allEntries[0]?.base ?? null;
       }
       updateListTitle();
-      applyFilter(true);
+      applyFilter2(true);
     }
     function getCategoryUrls(catId) {
       const cat = tileCategories.find((c) => c.id === catId) ?? tileCategories[0];
@@ -25674,7 +26149,7 @@ next: ${next}`;
     function toEntries(urls) {
       return urls.map((url) => ({ url, base: baseName(url) })).sort((a, b) => a.base.localeCompare(b.base));
     }
-    function applyFilter(preserveSelection) {
+    function applyFilter2(preserveSelection) {
       const query = filterInput.value.trim();
       const rx = query ? safeRegex(query) : /.*/i;
       filteredEntries = allEntries.filter((entry) => rx.test(entry.base) || rx.test(entry.url));
@@ -25986,11 +26461,11 @@ next: ${next}`;
     function onSpriteDetected() {
       refreshList2({ preserveSelection: true });
     }
-    filterInput.addEventListener("input", () => applyFilter(true));
+    filterInput.addEventListener("input", () => applyFilter2(true));
     filterInput.addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") {
         ev.preventDefault();
-        applyFilter(true);
+        applyFilter2(true);
       }
     });
     modeSelect.addEventListener("change", () => {
@@ -31318,7 +31793,7 @@ next: ${next}`;
     defaultThresholdPct: 25,
     pets: {}
   };
-  var started3 = false;
+  var started4 = false;
   var unsubPets = null;
   var lastPets = [];
   var seenBelow = /* @__PURE__ */ new Map();
@@ -31398,7 +31873,7 @@ next: ${next}`;
     }
   }
   async function ensureStarted() {
-    if (started3) return;
+    if (started4) return;
     loadPrefs();
     try {
       unsubPets = await PetsService.onPetsChangeNow((arr) => {
@@ -31408,7 +31883,7 @@ next: ${next}`;
     } catch {
       unsubPets = null;
     }
-    started3 = true;
+    started4 = true;
   }
   function stop() {
     try {
@@ -31416,7 +31891,7 @@ next: ${next}`;
     } catch {
     }
     unsubPets = null;
-    started3 = false;
+    started4 = false;
     seenBelow.clear();
   }
   var PetAlertService = {
@@ -38040,7 +38515,7 @@ next: ${next}`;
     }
   }
   var CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
-  function getStorage2() {
+  function getStorage3() {
     if (typeof window === "undefined") return null;
     try {
       return window.localStorage;
@@ -38060,7 +38535,7 @@ next: ${next}`;
     };
   }
   function loadStoredCustomRooms() {
-    const storage = getStorage2();
+    const storage = getStorage3();
     if (!storage) return [];
     try {
       const raw = storage.getItem(CUSTOM_ROOMS_STORAGE_KEY);
@@ -38080,7 +38555,7 @@ next: ${next}`;
     }
   }
   function persistCustomRooms(rooms) {
-    const storage = getStorage2();
+    const storage = getStorage3();
     if (!storage) return;
     try {
       const payload = rooms.map((room) => ({
@@ -39994,7 +40469,7 @@ next: ${next}`;
         btn.setAttribute("aria-disabled", (!enabled).toString());
       }
     };
-    const updateButtons = (current) => {
+    const updateButtons2 = (current) => {
       const hasHotkey = hotkeyToString(current).length > 0;
       if (clearBtn) {
         setButtonEnabled(clearBtn, hasHotkey);
@@ -40009,7 +40484,7 @@ next: ${next}`;
         setKeybind(action2.id, null);
         const refreshed = getKeybind(action2.id);
         button.refreshHotkey(refreshed);
-        updateButtons(refreshed);
+        updateButtons2(refreshed);
       });
     }
     if (resetBtn) {
@@ -40017,14 +40492,14 @@ next: ${next}`;
         resetKeybind(action2.id);
         const refreshed = getKeybind(action2.id);
         button.refreshHotkey(refreshed);
-        updateButtons(refreshed);
+        updateButtons2(refreshed);
       });
     }
     controls.appendChild(actionsWrap);
-    updateButtons(getKeybind(action2.id));
+    updateButtons2(getKeybind(action2.id));
     const stop2 = onKeybindChange(action2.id, (hk) => {
       button.refreshHotkey(hk);
-      updateButtons(hk);
+      updateButtons2(hk);
     });
     ui.on("unmounted", stop2);
     if (detachHoldListener) ui.on("unmounted", detachHoldListener);
