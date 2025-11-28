@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.1
+// @version      2.6.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3307,7 +3307,7 @@
     Frozen: "Frozen",
     Puddle: "Puddle",
     Dawnlit: "Dawnlit",
-    Ambershine: "Amberlit",
+    Amberlit: "Amberlit",
     Dawncharged: "Dawnbound",
     Ambercharged: "Amberbound"
   };
