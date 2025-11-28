@@ -97,6 +97,62 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Sprite explorer that lists discovered assets, matching tile refs, and renders each variant.
 - Jotai atom browser for spelunking the captured React state tree.
 
+## How to Use the Mod (Detailed Walkthrough)
+
+Skip installation steps and jump into usage. Open the HUD with `ALT + X` or `INSERT` (`Option + X` on macOS). Windows are draggable but not resizable. The HUD header shows:
+- Status dot: green = websocket + Jotai storage healthy; yellow = some features may be degraded; red = nothing works.
+- Version badge: green when you are up to date, yellow when a newer build exists (e.g., `2.6.6 -> 2.6.65`).
+- Tip: every menu can open/minimize independently. If a window is stuck off-screen, hover it, hold `ALT`, and drag to free it.
+
+### Players menu
+- Left column lists players in your room; right column shows info/actions for the selected player.
+- Crop value covers crops only (not animals, eggs, seeds, tools, or decor).
+- Teleport to the player or jump into their garden.
+- Inspect inventory, journal, stats, and activity log; these views are read-only and cannot give you items.
+- Follow keeps you right behind the target; Pet follow sends your pets to trail them.
+
+### Room menu
+- Three tabs. **Public Rooms** lists 100+ public rooms you can join directly on the web version (magicgarden.gg / magiccircle.gg / starweaver.org). Discord Activity cannot join directly. View who is inside, sort, and refresh.
+- **Custom Room** saves rooms you can rejoin anytime.
+- **Search Player** scans public rooms for a player and lets you join their room when found.
+
+### Locker menu
+- **General** tab: global crop locker. Harvest mode: **Block** (block harvest if any active filter matches) or **Allow** (allow harvest only if all active filters match). Filters include size (50-100), color (none/gold/rainbow), and weather. Weather supports **Any match** (at least one active filter), **All match** (all active filters), or **Recipes** (multi-select weather mutation combos, e.g., `Frozen + Amberbound` or `Frozen + Dawnbound`).
+- **Overrides** tab: per-crop rules that bypass the general locker so specific crops use their own settings.
+
+### Calculator menu
+- Crop value calculator: pick a crop, size, mutations, and friend bonus to get min/max sell prices. Includes a mutation visualizer to avoid mistakes.
+
+### Pets menu
+- **Manager**: create pet teams, name them, and see the active team (green indicator). Filter pets by ability or species, add pets with the `+` (opens filtered inventory), or import your current active pets. Remove with `-` or `Clear`, and reorder teams by dragging the three-dot handle.
+- **Log**: view and filter the last 500 pet ability procs.
+
+### Stats menu
+- Legacy stats dashboard (from before in-game stats existed); still handy for tracking rainbow/gold hatch rates.
+
+### Tool menu
+- Collection of community tools, calculators, scripts, and guides.
+
+### Keybind menu
+- Rebind most game keys and mod actions. Use the trash button to clear (falls back to default if one exists) or the circular arrow to reset. The game "Action" key has a "Hold" toggle (green dot) to auto-spam while held.
+
+### Alert menu
+- Four tabs. **Shops** notifies when chosen items appear; shows a bell with a moving badge and optional sound. Configure per-item sounds and choose **One shot** (plays once) or **Loop** (until the item leaves the shop). Buy directly from the "tracked items available" bell.
+- **Weather**: alerts for specific weather events with per-rule sounds and last-seen timestamps.
+- **Pets**: warns when a pet's food drops below a threshold.
+- **Audio**: add custom sounds and set defaults for shop/weather/pet alerts.
+
+### Mic menu
+- **Ghost**: fly through the map (speed adjustable) and pass through walls.
+- **Seed deleter**: click **Select seeds**, choose seeds/quantities in selection mode, confirm, then **Delete** once sure.
+- **Decor deleter**: same flow but requires a shovel and an empty plot or edge slot.
+
+### Debug menu
+- Jotai explorer: list atoms, inspect one, and update it (all atoms are writable). **Live atom** records an atom state over time.
+- Sprite viewer: browse sprites and variants (gold/rainbow).
+- Audio player: preview many in-game sounds.
+- Websocket inspector: live traffic viewer with filters; copy, edit, or replay messages.
+
 ## 🤝 Compatibility notes
 
 - Official browser: tested on Chrome & Edge. Firefox works but might show more layout shifts (CSS grid heavy UI).
