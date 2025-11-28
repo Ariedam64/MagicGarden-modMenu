@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.93
+// @version      2.5.94
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19681,7 +19681,7 @@ try{importScripts("${abs}")}catch(e){}
   }
 
   // src/utils/petPanelEnhancer.ts
-  var PANEL_SELECTOR = ".css-ycloo9";
+  var PANEL_SELECTOR = ".css-1rszi55";
   var FEED_BUTTON_CLASS = "tm-feed-from-inventory-btn";
   var FEED_ROW_CLASS = "tm-feed-from-inventory-row";
   var started = false;
