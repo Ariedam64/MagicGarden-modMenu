@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.5.7
+// @version      2.5.
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -4416,7 +4416,6 @@
         abilities: ["DawnKisser"],
         activeState: {
           tileRef: tileRefsTallPlants.DawnCelestialPlantActive,
-          weatherRequirement: Weather.Dawn,
           activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 }
         },
         topmostLayerTileRef: tileRefsTallPlants.DawnCelestialPlatformTopmostLayer,
@@ -4459,7 +4458,6 @@
         abilities: ["MoonKisser"],
         activeState: {
           tileRef: tileRefsTallPlants.MoonCelestialPlantActive,
-          weatherRequirement: Weather.AmberMoon,
           activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 }
         },
         immatureTileRef: tileRefsTallPlants.MoonCelestialPlatform,
