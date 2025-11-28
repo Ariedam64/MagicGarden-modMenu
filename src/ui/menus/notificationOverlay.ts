@@ -637,7 +637,6 @@ class OverlayBarebone {
   /* ========= DOM bits ========= */
   private createSlot(): HTMLDivElement {
     const d = document.createElement("div");
-    d.id = "qws-notifier-slot";
     style(d, {
       position: "relative",
       display: "inline-flex",
@@ -779,6 +778,9 @@ class OverlayBarebone {
 
   private findToolbarContainer(): HTMLElement | null {
     try {
+      const mcFlex = document.querySelector<HTMLElement>(".McFlex.css-13izacw");
+      if (mcFlex) return mcFlex;
+
       const chatBtn = document.querySelector('button[aria-label="Chat"]') as HTMLElement | null;
       const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
       if (flexFromChat) return flexFromChat;
@@ -850,6 +852,8 @@ class OverlayBarebone {
       justifyContent: "center",
       height: "100%",
     });
+    // Keep a positioning context for badge/panel
+    style(this.btn, { position: "relative" });
   }
 
   private findAnchorBlockFromCanvas(c: HTMLCanvasElement): HTMLElement | null {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.6
+// @version      2.6.61
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18130,7 +18130,6 @@ try{importScripts("${abs}")}catch(e){}
     /* ========= DOM bits ========= */
     createSlot() {
       const d = document.createElement("div");
-      d.id = "qws-notifier-slot";
       style(d, {
         position: "relative",
         display: "inline-flex",
@@ -18260,6 +18259,8 @@ try{importScripts("${abs}")}catch(e){}
     }
     findToolbarContainer() {
       try {
+        const mcFlex = document.querySelector(".McFlex.css-13izacw");
+        if (mcFlex) return mcFlex;
         const chatBtn = document.querySelector('button[aria-label="Chat"]');
         const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
         if (flexFromChat) return flexFromChat;
@@ -18325,6 +18326,7 @@ try{importScripts("${abs}")}catch(e){}
         justifyContent: "center",
         height: "100%"
       });
+      style(this.btn, { position: "relative" });
     }
     findAnchorBlockFromCanvas(c) {
       try {
