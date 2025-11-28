@@ -48,12 +48,14 @@ const MAX_SCALE_BY_SPECIES = (() => {
 type VisualTag = "Gold" | "Rainbow";
 type WeatherTag = string;
 export type WeatherMode = "ANY" | "ALL" | "RECIPES";
-export type LockerScaleLockMode = "MINIMUM" | "RANGE" | "NONE";
+export type LockerScaleLockMode = "MINIMUM" | "MAXIMUM" | "RANGE" | "NONE";
+export type LockerLockMode = "BLOCK" | "ALLOW";
 
 export type LockerSettingsPersisted = {
   minScalePct: number;
   maxScalePct: number;
   scaleLockMode: LockerScaleLockMode;
+  lockMode?: LockerLockMode;
   minInventory: number;
   avoidNormal: boolean;
   includeNormal?: boolean;
@@ -591,6 +593,7 @@ function defaultSettings(): LockerSettingsPersisted {
     minScalePct: 50,
     maxScalePct: 100,
     scaleLockMode: "RANGE",
+    lockMode: "BLOCK",
     minInventory: 91,
     avoidNormal: false,
     includeNormal: true,
@@ -615,17 +618,18 @@ const clampNumber = (value: number, min: number, max: number) => Math.max(min, M
 
 function sanitizeSettings(raw: any): LockerSettingsPersisted {
   const base = defaultSettings();
-  const scaleMode = raw?.scaleLockMode === "MINIMUM"
-    ? "MINIMUM"
-    : raw?.scaleLockMode === "NONE"
-      ? "NONE"
-      : "RANGE";
+  base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+  const rawMode = raw?.scaleLockMode;
+  const scaleMode: LockerScaleLockMode =
+    rawMode === "MINIMUM" ? "MINIMUM"
+    : rawMode === "MAXIMUM" ? "MAXIMUM"
+    : rawMode === "NONE" ? "NONE"
+    : "RANGE";
   base.scaleLockMode = scaleMode;
 
-  const minClampHigh = scaleMode === "MINIMUM" ? 100 : 99;
   const minScaleRaw = Number(raw?.minScalePct);
   let minScale = Number.isFinite(minScaleRaw)
-    ? clampNumber(Math.round(minScaleRaw), 50, minClampHigh)
+    ? clampNumber(Math.round(minScaleRaw), 50, 100)
     : 50;
 
   const maxScaleRaw = Number(raw?.maxScalePct);
@@ -633,7 +637,7 @@ function sanitizeSettings(raw: any): LockerSettingsPersisted {
     ? clampNumber(Math.round(maxScaleRaw), 50, 100)
     : 100;
 
-  if (scaleMode === "RANGE" || scaleMode === "NONE") {
+  if (scaleMode === "RANGE") {
     maxScale = clampNumber(maxScale, 51, 100);
     if (maxScale <= minScale) {
       if (minScale >= 99) {
@@ -643,6 +647,10 @@ function sanitizeSettings(raw: any): LockerSettingsPersisted {
         maxScale = clampNumber(minScale + 1, 51, 100);
       }
     }
+  } else if (scaleMode === "MAXIMUM") {
+    maxScale = clampNumber(maxScale, 50, 100);
+  } else if (scaleMode === "MINIMUM") {
+    minScale = clampNumber(minScale, 50, 100);
   }
 
   base.minScalePct = minScale;
@@ -708,6 +716,7 @@ function cloneSettings(settings: LockerSettingsPersisted): LockerSettingsPersist
     minScalePct: settings.minScalePct,
     maxScalePct: settings.maxScalePct,
     scaleLockMode: settings.scaleLockMode,
+    lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
     minInventory: settings.minInventory,
     avoidNormal: settings.avoidNormal,
     includeNormal: settings.includeNormal,
@@ -1048,36 +1057,75 @@ export class LockerService {
     return { enabled: true, settings: this.state.settings };
   }
 
-  private slotShouldBeBlocked(
+  private evaluateLockFilters(
     settings: LockerSettingsPersisted,
     args: HarvestCheckArgs,
-  ): boolean {
-    const scaleMode = settings.scaleLockMode === "MINIMUM"
-      ? "MINIMUM"
-      : settings.scaleLockMode === "NONE"
-        ? "NONE"
-        : "RANGE";
-    const minScaleClamp = scaleMode === "MINIMUM" ? 100 : 99;
-    const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, minScaleClamp);
-    const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
+  ): {
+    size: { hasCriteria: boolean; matched: boolean };
+    color: { hasCriteria: boolean; matched: boolean };
+    weather: { hasCriteria: boolean; matched: boolean };
+    matchAny: boolean;
+    sizeMin: number | null;
+    sizeMax: number | null;
+    scaleMode: LockerScaleLockMode;
+  } {
+    const size = { hasCriteria: false, matched: false };
+    const color = { hasCriteria: false, matched: false };
+    const weatherInfo = { hasCriteria: false, matched: false };
 
-    if (scaleMode === "MINIMUM") {
-      if (args.sizePercent < minScale) return true;
-    } else if (scaleMode === "RANGE") {
+    const scaleMode: LockerScaleLockMode = settings.scaleLockMode === "MAXIMUM"
+      ? "MAXIMUM"
+      : settings.scaleLockMode === "MINIMUM"
+        ? "MINIMUM"
+        : settings.scaleLockMode === "NONE"
+          ? "NONE"
+          : "RANGE";
+    const minScale = clampNumber(Math.round(settings.minScalePct ?? 50), 50, 100);
+    const maxScaleBase = clampNumber(Math.round(settings.maxScalePct ?? 100), 50, 100);
+    const epsilon = 0.0001;
+
+    let sizeMin: number | null = null;
+    let sizeMax: number | null = null;
+
+    if (scaleMode === "RANGE") {
+      size.hasCriteria = true;
       const maxScaleRaw = clampNumber(maxScaleBase, 51, 100);
       const maxScale = maxScaleRaw <= minScale ? Math.min(100, Math.max(51, minScale + 1)) : maxScaleRaw;
-      if (args.sizePercent >= minScale && args.sizePercent <= maxScale) return true;
+      sizeMin = minScale;
+      sizeMax = maxScale;
+      const inRange =
+        args.sizePercent + epsilon >= minScale &&
+        args.sizePercent - epsilon <= maxScale;
+      size.matched = inRange;
+    } else if (scaleMode === "MINIMUM") {
+      size.hasCriteria = true;
+      sizeMin = minScale;
+      size.matched = args.sizePercent + epsilon >= minScale;
+    } else if (scaleMode === "MAXIMUM") {
+      size.hasCriteria = true;
+      const maxScale = clampNumber(maxScaleBase, 50, 100);
+      sizeMax = maxScale;
+      size.matched = args.sizePercent - epsilon <= maxScale;
     }
 
     const { hasGold, hasRainbow, weather } = mutationsToArrays(args.mutations);
     const isNormal = !hasGold && !hasRainbow;
+    const avoidGold = settings.visualMutations.includes("Gold");
+    const avoidRainbow = settings.visualMutations.includes("Rainbow");
 
-    if (isNormal) {
-      if (settings.avoidNormal) return true;
-    } else {
-      const avoidGold = settings.visualMutations.includes("Gold");
-      const avoidRainbow = settings.visualMutations.includes("Rainbow");
-      if ((avoidGold && hasGold) || (avoidRainbow && hasRainbow)) return true;
+    const colorFilters = [
+      settings.avoidNormal ? "normal" : null,
+      avoidGold ? "gold" : null,
+      avoidRainbow ? "rainbow" : null,
+    ].filter(Boolean);
+
+    if (colorFilters.length) {
+      color.hasCriteria = true;
+      const matches =
+        (settings.avoidNormal && isNormal) ||
+        (avoidGold && hasGold) ||
+        (avoidRainbow && hasRainbow);
+      color.matched = matches;
     }
 
     const selected = settings.weatherSelected ?? [];
@@ -1085,57 +1133,80 @@ export class LockerService {
 
     if (mode === "RECIPES") {
       const recipes = settings.weatherRecipes ?? [];
-      if (!recipes.length) return false;
-      for (let i = 0; i < recipes.length; i++) {
-        const recipe = recipes[i];
-        if (!Array.isArray(recipe) || recipe.length === 0) continue;
-        let matches = true;
-        for (let j = 0; j < recipe.length; j++) {
-          const required = recipe[j]!;
+      if (recipes.length) {
+        weatherInfo.hasCriteria = true;
+        let recipeMatch = false;
+        for (let i = 0; i < recipes.length; i++) {
+          const recipe = recipes[i];
+          if (!Array.isArray(recipe) || recipe.length === 0) continue;
+          let matches = true;
+          for (let j = 0; j < recipe.length; j++) {
+            const required = recipe[j]!;
+            if (required === LOCKER_NO_WEATHER_TAG) {
+              if (weather.length !== 0) {
+                matches = false;
+                break;
+              }
+              continue;
+            }
+            if (!weather.includes(required)) {
+              matches = false;
+              break;
+            }
+        }
+        if (matches) {
+          recipeMatch = true;
+          break;
+        }
+      }
+        weatherInfo.matched = recipeMatch;
+      }
+      const matchAny = size.matched || color.matched || weatherInfo.matched;
+      return { size, color, weather: weatherInfo, matchAny, sizeMin, sizeMax, scaleMode };
+    }
+
+    if (selected.length) {
+      weatherInfo.hasCriteria = true;
+      if (mode === "ALL") {
+        let allMatch = true;
+        for (let i = 0; i < selected.length; i++) {
+          const required = selected[i]!;
           if (required === LOCKER_NO_WEATHER_TAG) {
             if (weather.length !== 0) {
-              matches = false;
+              allMatch = false;
               break;
             }
             continue;
           }
-          if (!weather.includes(required)) {
-            matches = false;
-            break;
-          }
+        if (!weather.includes(required)) {
+          allMatch = false;
+          break;
         }
-        if (matches) return true;
       }
-      return false;
-    }
-
-    if (!selected.length) return false;
-
-    if (mode === "ALL") {
-      let hasRequirement = false;
+        weatherInfo.matched = allMatch;
+    } else {
+      // ANY
+      let anyMatch = false;
       for (let i = 0; i < selected.length; i++) {
         const required = selected[i]!;
         if (required === LOCKER_NO_WEATHER_TAG) {
-          hasRequirement = true;
-          if (weather.length !== 0) return false;
+          if (weather.length === 0) {
+            anyMatch = true;
+            break;
+          }
           continue;
         }
-        hasRequirement = true;
-        if (!weather.includes(required)) return false;
+        if (weather.includes(required)) {
+          anyMatch = true;
+          break;
+        }
       }
-      return hasRequirement;
+        weatherInfo.matched = anyMatch;
+      }
     }
 
-    // mode ANY
-    for (let i = 0; i < selected.length; i++) {
-      const required = selected[i]!;
-      if (required === LOCKER_NO_WEATHER_TAG) {
-        if (weather.length === 0) return true;
-        continue;
-      }
-      if (weather.includes(required)) return true;
-    }
-    return false;
+    const matchAny = size.matched || color.matched || weatherInfo.matched;
+    return { size, color, weather: weatherInfo, matchAny, sizeMin, sizeMax, scaleMode };
   }
 
   private emitSlotInfoChange(): void {
@@ -1163,7 +1234,14 @@ export class LockerService {
       return true;
     }
 
-    const blocked = this.slotShouldBeBlocked(effective.settings, args);
+    const { size, color, weather, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
+    const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+    const blocked = lockMode === "ALLOW"
+      ? ((size.hasCriteria && !size.matched) ||
+        (color.hasCriteria && !color.matched) ||
+        (weather.hasCriteria && !weather.matched))
+      : matchAny;
+
     return !blocked;
   }
 }

@@ -1,5 +1,6 @@
 // src/ui/notificationOverlay.ts
 import { NotifierService, type NotifierRule } from "../../services/notifier";
+import { ShopsService, type Kind as ShopKind } from "../../services/shops";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../../utils/audio"; // ← utilise le singleton unifié
 import { createShopSprite, type ShopSpriteType } from "../../utils/shopSprites";
 import {
@@ -133,6 +134,7 @@ class OverlayBarebone {
 
   // Items à afficher dans l’overlay (déjà filtrés)
   private rows: Array<{ id: string; qty: number }> = [];
+  private lastPanelSig: string | null = null;
 
   constructor() {
     this.slot = this.createSlot();
@@ -440,7 +442,53 @@ class OverlayBarebone {
     style(this.badge, { display: n ? "inline-flex" : "none" });
   }
 
+  private resolveShopItem(id: string): { kind: ShopKind; item: any } | null {
+    if (!this.lastShops) return null;
+    const [type, raw] = String(id).split(":") as [string | undefined, string | undefined];
+    if (!type || !raw) return null;
+
+    if (type === "Seed") {
+      const item = this.lastShops.seed?.inventory?.find((it) => String(it.species) === raw);
+      return item ? { kind: "seeds", item } : null;
+    }
+    if (type === "Tool") {
+      const item = this.lastShops.tool?.inventory?.find((it) => String(it.toolId) === raw);
+      return item ? { kind: "tools", item } : null;
+    }
+    if (type === "Egg") {
+      const item = this.lastShops.egg?.inventory?.find((it) => String(it.eggId) === raw);
+      return item ? { kind: "eggs", item } : null;
+    }
+    if (type === "Decor") {
+      const item = this.lastShops.decor?.inventory?.find((it) => String(it.decorId) === raw);
+      return item ? { kind: "decor", item } : null;
+    }
+    return null;
+  }
+
+  private async handleBuyClick(id: string, btn: HTMLButtonElement) {
+    const resolved = this.resolveShopItem(id);
+    if (!resolved) {
+      btn.disabled = true;
+      return;
+    }
+    btn.disabled = true;
+    const prevLabel = btn.textContent;
+    btn.textContent = "Buying...";
+    try {
+      await Promise.resolve(ShopsService.buyOne(resolved.kind, resolved.item));
+    } catch {
+    } finally {
+      btn.textContent = prevLabel || "Buy";
+      btn.disabled = false;
+    }
+  }
+
   private renderPanel() {
+    const sig = JSON.stringify(this.rows.map((r) => [r.id, r.qty]));
+    if (sig === this.lastPanelSig) return;
+    this.lastPanelSig = sig;
+
     this.panel.replaceChildren();
 
     const head = document.createElement("div");
@@ -466,7 +514,7 @@ class OverlayBarebone {
       const row = document.createElement("div");
       Object.assign(row.style, {
         display: "grid",
-        gridTemplateColumns: "24px 1fr max-content",
+        gridTemplateColumns: "24px 1fr max-content max-content",
         alignItems: "center",
         gap: "8px",
         padding: "6px 4px",
@@ -491,9 +539,41 @@ class OverlayBarebone {
         fontVariantNumeric: "tabular-nums",
         opacity: "0.9",
         color: "var(--qws-text-dim, #b9c3cf)",
+        textAlign: "right",
       });
 
-      row.append(icon, title, qty);
+      const buyBtn = document.createElement("button");
+      buyBtn.type = "button";
+      buyBtn.textContent = "Buy";
+      Object.assign(buyBtn.style, {
+        padding: "4px 10px",
+        borderRadius: "10px",
+        border: "1px solid var(--qws-border, #ffffff33)",
+        background: "var(--qws-accent, #7aa2ff)",
+        color: "#0b1017",
+        fontWeight: "700",
+        cursor: "pointer",
+        fontSize: "12px",
+        boxShadow: "var(--qws-shadow, 0 6px 18px rgba(0,0,0,.35))",
+        transition: "filter 120ms ease, transform 120ms ease",
+      });
+      buyBtn.onmouseenter = () => { buyBtn.style.filter = "brightness(1.05)"; };
+      buyBtn.onmouseleave = () => { buyBtn.style.filter = ""; buyBtn.style.transform = ""; };
+      buyBtn.onmousedown = () => { buyBtn.style.transform = "translateY(1px)"; };
+      buyBtn.onmouseup = () => { buyBtn.style.transform = ""; };
+      buyBtn.onclick = (e) => {
+        e.stopPropagation();
+        void this.handleBuyClick(r.id, buyBtn);
+      };
+
+      if (!this.resolveShopItem(r.id)) {
+        buyBtn.disabled = true;
+        buyBtn.style.opacity = "0.6";
+        buyBtn.style.cursor = "not-allowed";
+        buyBtn.title = "Unavailable";
+      }
+
+      row.append(icon, title, qty, buyBtn);
       this.panel.appendChild(row);
     }
   }

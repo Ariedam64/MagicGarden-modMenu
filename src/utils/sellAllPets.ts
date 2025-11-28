@@ -504,7 +504,11 @@ function findTargetButton(
     .filter((b): b is HTMLButtonElement => b instanceof HTMLButtonElement)
     .filter((b) => !b.classList.contains(DEFAULTS.injectedClass)); // ignore our injected button
 
-  const target = all.find((b) => isSellTwoWordLabel(getLabel(b)));
+  const target = all.find((b) => {
+    const label = getLabel(b);
+    if (/crops/i.test(label)) return false; // do not inject next to "Sell Crops"
+    return isSellTwoWordLabel(label);
+  });
   return target ?? null;
 }
 
