@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.64
+// @version      2.6.65
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23492,10 +23492,20 @@ try{importScripts("${abs}")}catch(e){}
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
     if (!Number.isFinite(ts)) return null;
+    const parameters = (() => {
+      const p = raw.parameters;
+      if (!p || typeof p !== "object") return p;
+      const petId = typeof p?.pet?.id === "string" ? p.pet.id : null;
+      if (petId && !p.petId) {
+        return { ...p, petId };
+      }
+      return p;
+    })();
     const action2 = typeof raw.action === "string" && raw.action.trim() ? String(raw.action) : null;
     const entry = {
       ...raw,
-      timestamp: ts
+      timestamp: ts,
+      parameters
     };
     if (action2 !== null) entry.action = action2;
     return entry;
@@ -23528,11 +23538,35 @@ try{importScripts("${abs}")}catch(e){}
       return "";
     }
   }
+  function entryIdentity(entry) {
+    const p = entry?.parameters;
+    const candidates = [
+      p?.id,
+      p?.pet?.id,
+      p?.petId,
+      p?.playerId,
+      p?.userId,
+      p?.objectId,
+      p?.slotId,
+      p?.itemId,
+      p?.cropId,
+      p?.seedId,
+      p?.decorId,
+      p?.toolId,
+      p?.targetId,
+      p?.abilityId
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c;
+    }
+    return null;
+  }
   function entryKey(entry) {
     const ts = Number(entry.timestamp);
     const action2 = typeof entry.action === "string" ? entry.action : "";
-    if (Number.isFinite(ts)) return `${ts}|${action2}`;
-    return `${action2}|${stableStringify({ timestamp: entry.timestamp ?? null })}`;
+    const identity = entryIdentity(entry) ?? "__noid__";
+    const tsPart = Number.isFinite(ts) ? String(ts) : `t:${stableStringify({ timestamp: entry.timestamp ?? null })}`;
+    return `${tsPart}|${action2}|${identity}`;
   }
   function entriesEqual(a, b) {
     return stableStringify(a) === stableStringify(b);
@@ -23568,20 +23602,25 @@ try{importScripts("${abs}")}catch(e){}
     }
   }
   function diffSnapshots(prev, next) {
-    const prevMap = /* @__PURE__ */ new Map();
-    for (const entry of prev) {
-      prevMap.set(entryKey(entry), entry);
-    }
+    const prevBuckets = /* @__PURE__ */ new Map();
+    const bucketPush = (k, entry) => {
+      const arr = prevBuckets.get(k);
+      if (arr) arr.push(entry);
+      else prevBuckets.set(k, [entry]);
+    };
+    for (const entry of prev) bucketPush(entryKey(entry), entry);
     const added = [];
     const updated = [];
     for (const entry of next) {
       const key2 = entryKey(entry);
-      const prevEntry = prevMap.get(key2);
+      const bucket = prevBuckets.get(key2);
+      const prevEntry = bucket?.shift();
       if (!prevEntry) {
         added.push(entry);
       } else if (!entriesEqual(prevEntry, entry)) {
         updated.push(entry);
       }
+      if (bucket && bucket.length === 0) prevBuckets.delete(key2);
     }
     return { added, updated };
   }
