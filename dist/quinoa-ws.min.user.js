@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.65
+// @version      2.6.7
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5527,6 +5527,52 @@
   // src/services/locker.ts
   var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
   var LOCKER_NO_WEATHER_TAG = "NoWeatherEffect";
+  var normalizeMutationTag = (value) => {
+    const raw = typeof value === "string" ? value : value == null ? "" : String(value);
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    const collapsed = trimmed.toLowerCase().replace(/[\s_-]+/g, "");
+    switch (collapsed) {
+      case "gold":
+        return "Gold";
+      case "rainbow":
+        return "Rainbow";
+      case "wet":
+        return "Wet";
+      case "chilled":
+        return "Chilled";
+      case "frozen":
+        return "Frozen";
+      case "dawn":
+      case "dawnlit":
+      case "dawnlight":
+        return "Dawnlit";
+      case "dawnbound":
+      case "dawncharged":
+      case "dawnradiant":
+        return "Dawnbound";
+      case "amberlit":
+      case "amberlight":
+      case "amberglow":
+      case "ambershine":
+        return "Amberlit";
+      case "amberbound":
+      case "ambercharged":
+      case "amberradiant":
+        return "Amberbound";
+      default:
+        return trimmed;
+    }
+  };
+  var normalizeMutationsList = (raw) => {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const normalized = normalizeMutationTag(raw[i]);
+      if (normalized) out.push(normalized);
+    }
+    return out;
+  };
   var normalizeSpeciesKey = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
   var MAX_SCALE_BY_SPECIES = (() => {
     const map2 = /* @__PURE__ */ new Map();
@@ -5730,18 +5776,7 @@
       return pos >= 0 ? pos : 0;
     }
     function sanitizeMutations2(raw) {
-      if (!Array.isArray(raw)) return [];
-      const out = [];
-      for (let i = 0; i < raw.length; i++) {
-        const value = raw[i];
-        if (typeof value === "string") {
-          if (value) out.push(value);
-        } else if (value != null) {
-          const str = String(value);
-          if (str) out.push(str);
-        }
-      }
-      return out;
+      return normalizeMutationsList(raw);
     }
     function computeSlotInfo() {
       const seedKey = extractSeedKey(cur);
@@ -6061,14 +6096,12 @@
     };
   }
   function mutationsToArrays(raw) {
+    const normalized = normalizeMutationsList(raw);
     let hasGold = false;
     let hasRainbow = false;
     const weather2 = [];
-    if (!Array.isArray(raw)) {
-      return { hasGold, hasRainbow, weather: weather2 };
-    }
-    for (let i = 0; i < raw.length; i++) {
-      const tag = String(raw[i] || "");
+    for (let i = 0; i < normalized.length; i++) {
+      const tag = String(normalized[i] || "");
       if (!tag) continue;
       if (tag === "Gold") {
         hasGold = true;
@@ -6231,7 +6264,7 @@
       const { silent = false } = opts;
       const prevInfo = this.currentSlotInfo;
       const prevHarvestAllowed = this.currentSlotHarvestAllowed;
-      const normalizedMutations = Array.isArray(info.mutations) ? info.mutations.slice() : [];
+      const normalizedMutations = normalizeMutationsList(info.mutations);
       const nextInfo = { ...info, mutations: normalizedMutations };
       let computedSizePercent = null;
       let harvestAllowed = null;

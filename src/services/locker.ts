@@ -1,3 +1,4 @@
+
 // src/services/locker.ts
 // Détection du slot sélectionné dans le garden pour le menu Locker.
 // On réutilise la même logique que cropPrice.ts pour déterminer la plante courante
@@ -15,6 +16,44 @@ import { plantCatalog } from "../data/hardcoded-data.clean";
 /** Référence des mutations visuelles reconnues par le locker. */
 const VISUAL_MUTATIONS = new Set(["Gold", "Rainbow"] as const);
 const LOCKER_NO_WEATHER_TAG = "NoWeatherEffect" as const;
+
+const normalizeMutationTag = (value: unknown): string => {
+  const raw = typeof value === "string" ? value : value == null ? "" : String(value);
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  const collapsed = trimmed.toLowerCase().replace(/[\s_-]+/g, "");
+  switch (collapsed) {
+    case "gold": return "Gold";
+    case "rainbow": return "Rainbow";
+    case "wet": return "Wet";
+    case "chilled": return "Chilled";
+    case "frozen": return "Frozen";
+    case "dawn":
+    case "dawnlit":
+    case "dawnlight": return "Dawnlit";
+    case "dawnbound":
+    case "dawncharged":
+    case "dawnradiant": return "Dawnbound";
+    case "amberlit":
+    case "amberlight":
+    case "amberglow":
+    case "ambershine": return "Amberlit";
+    case "amberbound":
+    case "ambercharged":
+    case "amberradiant": return "Amberbound";
+    default: return trimmed;
+  }
+};
+
+const normalizeMutationsList = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const normalized = normalizeMutationTag(raw[i]);
+    if (normalized) out.push(normalized);
+  }
+  return out;
+};
 
 const normalizeSpeciesKey = (value: string): string =>
   value
@@ -362,18 +401,7 @@ export function startLockerSlotWatcherViaGardenObject(): LockerSlotWatcher {
   }
 
   function sanitizeMutations(raw: unknown): string[] {
-    if (!Array.isArray(raw)) return [];
-    const out: string[] = [];
-    for (let i = 0; i < raw.length; i++) {
-      const value = raw[i];
-      if (typeof value === "string") {
-        if (value) out.push(value);
-      } else if (value != null) {
-        const str = String(value);
-        if (str) out.push(str);
-      }
-    }
-    return out;
+    return normalizeMutationsList(raw);
   }
 
   function computeSlotInfo(): LockerSlotInfo {
@@ -754,16 +782,13 @@ function cloneSlotInfo(info: LockerSlotInfo): LockerSlotInfo {
 }
 
 function mutationsToArrays(raw: readonly string[] | null | undefined) {
+  const normalized = normalizeMutationsList(raw);
   let hasGold = false;
   let hasRainbow = false;
   const weather: string[] = [];
 
-  if (!Array.isArray(raw)) {
-    return { hasGold, hasRainbow, weather };
-  }
-
-  for (let i = 0; i < raw.length; i++) {
-    const tag = String(raw[i] || "");
+  for (let i = 0; i < normalized.length; i++) {
+    const tag = String(normalized[i] || "");
     if (!tag) continue;
     if (tag === "Gold") {
       hasGold = true;
@@ -952,7 +977,7 @@ export class LockerService {
     const { silent = false } = opts;
     const prevInfo = this.currentSlotInfo;
     const prevHarvestAllowed = this.currentSlotHarvestAllowed;
-    const normalizedMutations = Array.isArray(info.mutations) ? info.mutations.slice() : [];
+    const normalizedMutations = normalizeMutationsList(info.mutations);
     const nextInfo = { ...info, mutations: normalizedMutations };
 
     let computedSizePercent: number | null = null;
