@@ -92,10 +92,12 @@ const DEFAULT_THEME: ThemeColors = {
 };
 
 export const DEFAULTS = {
-  rootSelector: '.McFlex.css-cj12rt',
+  rootSelector: '.McFlex.css-wqzc3n',
+  // gate inchangé : bloc qui contient le bouton
   checkSelector: '.McFlex.css-bvyqr8',
-  buttonSelectorWide: 'button.chakra-button.css-1rizn4y, button.chakra-button, button.css-1rizn4y',
-  buttonSelectorStrict: 'button.chakra-button.css-1rizn4y',
+  // nouveau bouton "Sell Pet"
+  buttonSelectorWide: 'button.chakra-button.css-o7uz17, button.chakra-button, button.css-o7uz17',
+  buttonSelectorStrict: 'button.chakra-button.css-o7uz17',
   targetText: 'Sell Pet', // Back-compat only
   injectText: 'Sell all Pets',
   injectedClass: 'tm-injected-sell-all',
