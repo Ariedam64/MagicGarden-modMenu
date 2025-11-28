@@ -71,14 +71,21 @@ function saveHistory(entries: ActivityLogEntry[]) {
   }
 }
 
+// Stable stringify (order-insensitive for object keys) to compare full payloads
+function stableStringify(value: any): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((v) => stableStringify(v)).join(",")}]`;
+  const keys = Object.keys(value).sort();
+  const body = keys.map((k) => `${JSON.stringify(k)}:${stableStringify((value as any)[k])}`).join(",");
+  return `{${body}}`;
+}
+
 function mergeHistory(current: ActivityLogEntry[], incoming: any[]): ActivityLogEntry[] {
   const map = new Map<string, ActivityLogEntry>();
   const push = (entry: ActivityLogEntry | null) => {
     if (!entry) return;
-    // Allow multiple entries with same timestamp+action but different payloads.
-    // We build the key with a lightweight, stable JSON of the entry (sorted props would be overkill here;
-    // stringify on normalized objects is stable enough for our use case).
-    const key = `${entry.timestamp}|${entry.action ?? ""}|${JSON.stringify(entry)}`;
+    // Deduplicate only if the entire payload is identical (order-insensitive on object keys).
+    const key = stableStringify(entry);
     map.set(key, entry);
   };
   current.forEach(push);
