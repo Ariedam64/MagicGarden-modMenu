@@ -1402,7 +1402,6 @@ export const plantCatalog = {
       abilities: ["DawnKisser"],
       activeState: {
         tileRef: tileRefsTallPlants.DawnCelestialPlantActive,
-        weatherRequirement: Weather.Dawn,
         activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 },
       },
       topmostLayerTileRef: tileRefsTallPlants.DawnCelestialPlatformTopmostLayer,
@@ -1446,7 +1445,6 @@ export const plantCatalog = {
       abilities: ["MoonKisser"],
       activeState: {
         tileRef: tileRefsTallPlants.MoonCelestialPlantActive,
-        weatherRequirement: Weather.AmberMoon,
         activeAnimationTiles: { frames: 10, row: 6, fps: 20, nudgeY: -0.1 },
       },
       immatureTileRef: tileRefsTallPlants.MoonCelestialPlatform,
