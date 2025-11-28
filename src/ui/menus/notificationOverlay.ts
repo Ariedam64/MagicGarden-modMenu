@@ -10,10 +10,10 @@ import {
 } from "../../utils/catalogIndex";
 
 /* ========= Types min ========= */
-type SeedItem  = { itemType: "Seed";  species: string; initialStock: number; canSpawnHere: boolean };
-type ToolItem  = { itemType: "Tool";  toolId: string;  initialStock: number; canSpawnHere: boolean };
-type EggItem   = { itemType: "Egg";   eggId:  string;  initialStock: number; canSpawnHere: boolean };
-type DecorItem = { itemType: "Decor"; decorId:string;  initialStock: number; canSpawnHere: boolean };
+type SeedItem  = { itemType: "Seed";  species: string; initialStock: number };
+type ToolItem  = { itemType: "Tool";  toolId: string;  initialStock: number };
+type EggItem   = { itemType: "Egg";   eggId:  string;  initialStock: number };
+type DecorItem = { itemType: "Decor"; decorId:string;  initialStock: number };
 
 type Section<T> = { inventory: T[]; secondsUntilRestock: number };
 
@@ -114,6 +114,7 @@ class OverlayBarebone {
   private btn:   HTMLButtonElement = document.createElement("button");
   private badge: HTMLSpanElement   = document.createElement("span");
   private panel: HTMLDivElement    = document.createElement("div");
+  private bellWrap: HTMLDivElement = document.createElement("div");
 
   private lastShops: ShopsSnapshot | null = null;
   private lastPurch: PurchasesSnapshot | null = null;
@@ -342,8 +343,7 @@ class OverlayBarebone {
     // ===== 1) Calcul overlay (popup + stock restant > 0)
     const out: Array<{ id: string; qty: number }> = [];
 
-    const consider = (id: string, initialStock: number, canSpawnHere: boolean) => {
-      if (!canSpawnHere) return;
+    const consider = (id: string, initialStock: number) => {
       const pref = (NotifierService.getPref?.(id) as any) || {};
       if (!pref.popup) return; // overlay = source de vérité
       const bought = purchasedCountForId(id, this.lastPurch!);
@@ -351,10 +351,10 @@ class OverlayBarebone {
       if (remaining > 0) out.push({ id, qty: remaining });
     };
 
-    for (const it of this.lastShops.seed.inventory)  consider(`Seed:${it.species}`, it.initialStock, it.canSpawnHere);
-    for (const it of this.lastShops.tool.inventory)  consider(`Tool:${it.toolId}`,   it.initialStock, it.canSpawnHere);
-    for (const it of this.lastShops.egg.inventory)   consider(`Egg:${it.eggId}`,     it.initialStock, it.canSpawnHere);
-    for (const it of this.lastShops.decor.inventory) consider(`Decor:${it.decorId}`, it.initialStock, it.canSpawnHere);
+    for (const it of this.lastShops.seed.inventory)  consider(`Seed:${it.species}`, it.initialStock);
+    for (const it of this.lastShops.tool.inventory)  consider(`Tool:${it.toolId}`,   it.initialStock);
+    for (const it of this.lastShops.egg.inventory)   consider(`Egg:${it.eggId}`,     it.initialStock);
+    for (const it of this.lastShops.decor.inventory) consider(`Decor:${it.decorId}`, it.initialStock);
 
     // ---- Render (badge / panel) + MAJ cloche
     this.rows = out;
@@ -506,7 +506,7 @@ class OverlayBarebone {
       position: "relative",
       display: "inline-flex",
       alignItems: "center",
-      marginRight: "var(--chakra-space-2, 0.5rem)",
+      marginRight: "0",
       pointerEvents: "auto",
       fontFamily: "var(--chakra-fonts-body, GreyCliff CF), system-ui, sans-serif",
       color: "var(--chakra-colors-chakra-body-text, #e7eef7)",
@@ -528,31 +528,17 @@ class OverlayBarebone {
     bell.className = "qws-bell";
     bell.textContent = "🔔";
     bell.setAttribute("aria-hidden", "true");
-    style(btn, {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "6px",
-      height: "36px",
-      padding: "0 12px",
-      borderRadius: "var(--chakra-radii-button, 50px)",
-      border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
-      background: "var(--qws-panel, #111823cc)",
-      backdropFilter: "blur(var(--qws-blur, 8px))",
-      color: "var(--qws-text, #e7eef7)",
-      boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
-      cursor: "pointer",
-      transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
-      outline: "none",
-      position: "relative",
+    this.bellWrap = document.createElement("div");
+    this.bellWrap.className = "qws-bell-wrap";
+    this.bellWrap.appendChild(bell);
+    this.applyFallbackButtonStyles();
+    btn.appendChild(this.bellWrap);
+    btn.addEventListener("mouseenter", () => {
+      if (btn.hasAttribute("style")) btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
     });
-    setProps(btn, {
-      "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
-      "-webkit-tap-highlight-color": "transparent",
+    btn.addEventListener("mouseleave", () => {
+      if (btn.hasAttribute("style")) btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
     });
-    btn.appendChild(bell);
-    btn.addEventListener("mouseenter", () => { btn.style.borderColor = "var(--qws-accent, #7aa2ff)"; });
-    btn.addEventListener("mouseleave", () => { btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)"; });
     return btn;
   }
 
@@ -644,6 +630,92 @@ class OverlayBarebone {
     } catch { return null; }
   }
 
+  private closestFlexWithEnoughChildren(el: HTMLElement, minChildren = 3): HTMLElement | null {
+    let cur: HTMLElement | null = el;
+    while (cur && cur.parentElement) {
+      const parent = cur.parentElement as HTMLElement;
+      const cs = getComputedStyle(parent);
+      if (cs.display.includes("flex") && parent.children.length >= minChildren) return parent;
+      cur = parent;
+    }
+    return null;
+  }
+
+  private findToolbarContainer(): HTMLElement | null {
+    try {
+      const chatBtn = document.querySelector('button[aria-label="Chat"]') as HTMLElement | null;
+      const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
+      if (flexFromChat) return flexFromChat;
+
+      const canvas = this.findTargetCanvas();
+      if (canvas) {
+        const flexFromCanvas = this.closestFlexWithEnoughChildren(canvas);
+        if (flexFromCanvas) return flexFromCanvas;
+        const block = this.findAnchorBlockFromCanvas(canvas);
+        if (block && block.parentElement) return block.parentElement as HTMLElement;
+      }
+      return null;
+    } catch { return null; }
+  }
+
+  private applyFallbackButtonStyles() {
+    this.btn.className = "";
+    style(this.btn, {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
+      height: "36px",
+      padding: "0 12px",
+      borderRadius: "var(--chakra-radii-button, 50px)",
+      border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
+      background: "var(--qws-panel, #111823cc)",
+      backdropFilter: "blur(var(--qws-blur, 8px))",
+      color: "var(--qws-text, #e7eef7)",
+      boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
+      cursor: "pointer",
+      transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
+      outline: "none",
+      position: "relative",
+    });
+    setProps(this.btn, {
+      "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
+      "-webkit-tap-highlight-color": "transparent",
+    });
+    this.bellWrap.className = "qws-bell-wrap";
+    style(this.bellWrap, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
+      height: "100%",
+    });
+  }
+
+  private applyToolbarLook(toolbar: HTMLElement | null) {
+    const refBtn = toolbar?.querySelector("button.chakra-button") as HTMLButtonElement | null;
+    if (!refBtn) return;
+
+    // Mirror classes from the toolbar buttons for a native look
+    this.btn.className = refBtn.className;
+    this.btn.removeAttribute("style");
+    this.btn.removeAttribute("data-focus-visible-added");
+
+    const refInner = refBtn.querySelector("div") as HTMLElement | null;
+    if (refInner) {
+      this.bellWrap.className = refInner.className;
+      this.bellWrap.removeAttribute("style");
+    }
+
+    // Ensure the bell stays centered even if class layout differs
+    style(this.bellWrap, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+    });
+  }
+
   private findAnchorBlockFromCanvas(c: HTMLCanvasElement): HTMLElement | null {
     try {
       const tabbable = c.closest("span[tabindex]");
@@ -680,6 +752,15 @@ class OverlayBarebone {
 
   private attachLeftOfTargetCanvas() {
     try {
+      const toolbar = this.findToolbarContainer();
+      if (toolbar && (toolbar as any).isConnected) {
+        this.applyToolbarLook(toolbar);
+        if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
+          toolbar.appendChild(this.slot); // append to keep it at the end of the buttons row
+        }
+        return;
+      }
+
       const canvas = this.findTargetCanvas();
       const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
 
@@ -696,10 +777,12 @@ class OverlayBarebone {
           });
           document.body.appendChild(fixed);
         }
+        this.applyFallbackButtonStyles();
         if (!fixed.contains(this.slot)) fixed.appendChild(this.slot);
         return;
       }
 
+      this.applyFallbackButtonStyles();
       if (this.slot.parentElement !== block.parentElement ||
           (this.slot.nextElementSibling !== block && block.previousElementSibling !== this.slot)) {
         this.insertLeftOf(block, this.slot);
