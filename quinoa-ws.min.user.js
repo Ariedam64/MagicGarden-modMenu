@@ -2937,6 +2937,7 @@
   var weather = makeAtom("weatherAtom");
   var activeModal = makeAtom("activeModalAtom");
   var avatarTriggerAnimationAtom = makeAtom("avatarTriggerAnimationAtom");
+  var friendBonusMultiplier = makeAtom("friendBonusMultiplierAtom");
   var garden = makeView("myDataAtom", { path: "garden" });
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
   var favoriteIds = makeView("myInventoryAtom", { path: "favoritedItemIds" });
@@ -3005,7 +3006,7 @@
   });
   var Atoms = {
     ui: { activeModal },
-    server: { numPlayers },
+    server: { numPlayers, friendBonusMultiplier },
     player: {
       position,
       avatarTriggerAnimationAtom,
@@ -6847,6 +6848,154 @@
     }
   };
 
+  // src/services/lockerRestrictions.ts
+  var LS_KEY2 = "qws:locker:restrictions.v1";
+  var clampPercent2 = (value) => Math.max(0, Math.min(50, Math.round(value)));
+  var roundToStep = (value, step) => Math.round(value / step) * step;
+  var DEFAULT_STATE = {
+    minRequiredPlayers: 1,
+    eggLocks: {}
+  };
+  var FRIEND_BONUS_STEP = 10;
+  var FRIEND_BONUS_MAX = 50;
+  var sanitizePercent = (value) => {
+    const clamped = clampPercent2(value);
+    return Math.max(0, Math.min(FRIEND_BONUS_MAX, roundToStep(clamped, FRIEND_BONUS_STEP)));
+  };
+  var sanitizePlayers = (value) => {
+    if (!Number.isFinite(value)) return 1;
+    return Math.max(1, Math.min(6, Math.round(value)));
+  };
+  var sanitizeEggLocks = (raw) => {
+    const out = {};
+    if (!raw || typeof raw !== "object") return out;
+    for (const [key2, value] of Object.entries(raw)) {
+      if (!key2) continue;
+      out[key2] = value === true;
+    }
+    return out;
+  };
+  function friendBonusPercentFromMultiplier(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n <= 0) return 0;
+    if (n > 0 && n <= 2) {
+      return clampPercent2(Math.round((n - 1) * 100));
+    }
+    const clamped = Math.max(1, Math.min(6, Math.round(n)));
+    return clampPercent2((clamped - 1) * 10);
+  }
+  function friendBonusPercentFromPlayers(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    const clamped = Math.max(1, Math.min(6, Math.round(n)));
+    return clampPercent2((clamped - 1) * 10);
+  }
+  function percentToRequiredFriendCount(percent) {
+    const pct = sanitizePercent(percent);
+    return Math.max(1, Math.min(6, Math.round(pct / 10) + 1));
+  }
+  var requiredPercentFromPlayers = (players) => sanitizePercent((sanitizePlayers(players) - 1) * 10);
+  var LockerRestrictionsService = class {
+    constructor() {
+      __publicField(this, "state", { ...DEFAULT_STATE });
+      __publicField(this, "listeners", /* @__PURE__ */ new Set());
+      this.load();
+    }
+    load() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") {
+        this.state = { ...DEFAULT_STATE };
+        return;
+      }
+      try {
+        const raw = localStorage.getItem(LS_KEY2);
+        if (!raw) {
+          this.state = { ...DEFAULT_STATE };
+          return;
+        }
+        const parsed = JSON.parse(raw);
+        const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
+        const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
+        this.state = { minRequiredPlayers: players, eggLocks };
+      } catch {
+        this.state = { ...DEFAULT_STATE };
+      }
+    }
+    save() {
+      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+      try {
+        localStorage.setItem(LS_KEY2, JSON.stringify(this.state));
+      } catch {
+      }
+    }
+    emit() {
+      for (const listener of this.listeners) {
+        try {
+          listener(this.getState());
+        } catch {
+        }
+      }
+    }
+    getState() {
+      return { ...this.state };
+    }
+    setMinRequiredPlayers(value) {
+      const players = sanitizePlayers(value);
+      if (players === this.state.minRequiredPlayers) return;
+      this.state = { ...this.state, minRequiredPlayers: players };
+      this.save();
+      this.emit();
+    }
+    setEggLock(eggId, locked) {
+      if (!eggId) return;
+      const nextLocks = { ...this.state.eggLocks, [eggId]: !!locked };
+      this.state = { ...this.state, eggLocks: nextLocks };
+      this.save();
+      this.emit();
+    }
+    isEggLocked(eggId) {
+      if (!eggId) return false;
+      return this.state.eggLocks?.[eggId] === true;
+    }
+    allowsCropSale(currentFriendBonusPercent) {
+      const required = requiredPercentFromPlayers(this.state.minRequiredPlayers);
+      if (required <= 0) return true;
+      if (!Number.isFinite(currentFriendBonusPercent)) return false;
+      const current = clampPercent2(Number(currentFriendBonusPercent));
+      return current + 1e-4 >= required;
+    }
+    getRequiredPercent() {
+      return requiredPercentFromPlayers(this.state.minRequiredPlayers);
+    }
+    subscribe(listener) {
+      this.listeners.add(listener);
+      return () => this.listeners.delete(listener);
+    }
+  };
+  var lockerRestrictionsService = new LockerRestrictionsService();
+
+  // src/ui/toast.ts
+  async function sendToast(toast) {
+    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
+    if (sendAtom) {
+      await jSet(sendAtom, toast);
+      return;
+    }
+    const listAtom = getAtomByLabel("quinoaToastsAtom");
+    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
+    const prev = await jGet(listAtom).catch(() => []);
+    const t = { isClosable: true, duration: 1e4, ...toast };
+    if ("toastType" in t && t.toastType === "board") {
+      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
+    } else {
+      t.id = t.id ?? "quinoa-game-toast";
+    }
+    await jSet(listAtom, [...prev, t]);
+  }
+  async function toastSimple(title, description, variant = "info", duration = 3500) {
+    await sendToast({ title, description, variant, duration });
+  }
+
   // src/hooks/ws-hook.ts
   function installPageWebSocketHook() {
     if (!pageWindow || !NativeWS) return;
@@ -7003,6 +7152,9 @@
   function installHarvestCropInterceptor() {
     if (readSharedGlobal("__tmHarvestHookInstalled")) return;
     let latestGardenState = null;
+    let friendBonusPercent = null;
+    let friendBonusFromPlayers = null;
+    let latestEggId = null;
     void (async () => {
       try {
         latestGardenState = await Atoms.data.garden.get() ?? null;
@@ -7014,7 +7166,43 @@
         });
       } catch {
       }
+      try {
+        const initialObj = await Atoms.data.myCurrentGardenObject.get();
+        latestEggId = extractEggId(initialObj);
+      } catch {
+      }
+      try {
+        await Atoms.data.myCurrentGardenObject.onChange((next) => {
+          latestEggId = extractEggId(next);
+        });
+      } catch {
+      }
     })();
+    void (async () => {
+      try {
+        const initial = await Atoms.server.friendBonusMultiplier.get();
+        friendBonusPercent = friendBonusPercentFromMultiplier(initial);
+      } catch {
+      }
+      try {
+        await Atoms.server.friendBonusMultiplier.onChange((next) => {
+          friendBonusPercent = friendBonusPercentFromMultiplier(next);
+        });
+      } catch {
+      }
+      try {
+        const initialPlayers = await Atoms.server.numPlayers.get();
+        friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+      } catch {
+      }
+      try {
+        await Atoms.server.numPlayers.onChange((next) => {
+          friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
+        });
+      } catch {
+      }
+    })();
+    const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
     registerMessageInterceptor("HarvestCrop", (message) => {
       const slot = message.slot;
       const slotsIndex = message.slotsIndex;
@@ -7104,6 +7292,17 @@
       StatsService.incrementShopStat("toolsBought");
     });
     registerMessageInterceptor("HatchEgg", () => {
+      const locked = lockerRestrictionsService.isEggLocked(latestEggId);
+      if (locked) {
+        console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
+        void (async () => {
+          try {
+            await dedupeEggLockToast(latestEggId);
+          } catch {
+          }
+        })();
+        return { kind: "drop" };
+      }
       void (async () => {
         const previousPets = await readInventoryPetSnapshots();
         const previousMap = buildPetMap(previousPets);
@@ -7120,6 +7319,32 @@
       })();
     });
     registerMessageInterceptor("SellAllCrops", (message) => {
+      const restrictionState = lockerRestrictionsService.getState();
+      const requiredPct = lockerRestrictionsService.getRequiredPercent();
+      const requiredPlayers = restrictionState.minRequiredPlayers;
+      const currentBonusPct = resolveFriendBonusPercent();
+      const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
+      if (!allowed) {
+        const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
+        console.log("[SellAllCrops] Blocked by friend bonus restriction", {
+          requiredPct,
+          requiredPlayers,
+          currentBonusPct,
+          currentPlayers
+        });
+        void (async () => {
+          try {
+            await toastSimple(
+              "Friend bonus locker",
+              `Require at least ${requiredPct}% friend bonus`,
+              "error"
+            );
+          } catch {
+          }
+          void removeSellSuccessToast();
+        })();
+        return { kind: "drop" };
+      }
       void (async () => {
         try {
           const items = await Atoms.inventory.myCropItemsToSell.get();
@@ -7230,7 +7455,7 @@
       slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
     );
     if (Number.isFinite(direct)) {
-      return clampPercent2(Math.round(direct), 0, 100);
+      return clampPercent3(Math.round(direct), 0, 100);
     }
     const scale = Number(slot.targetScale ?? slot.scale);
     if (Number.isFinite(scale)) {
@@ -7238,14 +7463,14 @@
       if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
         const clamped = Math.max(1, Math.min(maxScale, scale));
         const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
-        return clampPercent2(Math.round(pct2), 50, 100);
+        return clampPercent3(Math.round(pct2), 50, 100);
       }
       if (scale > 1 && scale <= 2) {
         const pct2 = 50 + (scale - 1) / 1 * 50;
-        return clampPercent2(Math.round(pct2), 50, 100);
+        return clampPercent3(Math.round(pct2), 50, 100);
       }
       const pct = Math.round(scale * 100);
-      return clampPercent2(pct, 0, 100);
+      return clampPercent3(pct, 0, 100);
     }
     return 100;
   }
@@ -7263,7 +7488,7 @@
     }
     return out;
   }
-  function clampPercent2(value, min, max) {
+  function clampPercent3(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
   var HATCH_EGG_TIMEOUT_MS = 5e3;
@@ -7318,6 +7543,31 @@
   }
   function extractNewPets(pets, previous) {
     return pets.filter((pet) => !previous.has(pet.id));
+  }
+  function extractEggId(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (obj.objectType !== "egg") return null;
+    const eggId = obj.eggId;
+    return typeof eggId === "string" && eggId ? eggId : null;
+  }
+  async function dedupeEggLockToast(latestEggId) {
+    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+    const description = latestEggId ? `Hatching locked for ${latestEggId}` : "Hatching locked by egg locker";
+    if (!toastsAtom) {
+      await toastSimple("Egg hatch locker", description, "error");
+      return;
+    }
+    const list = await jGet(toastsAtom).catch(() => []);
+    const filtered = Array.isArray(list) ? list.filter((t) => !(t?.title === "Egg hatch locker")) : [];
+    filtered.push({
+      isClosable: true,
+      duration: 3500,
+      title: "Egg hatch locker",
+      description,
+      variant: "error",
+      id: "quinoa-game-toast"
+    });
+    await jSet(toastsAtom, filtered);
   }
   function inferPetRarity(mutations) {
     if (!Array.isArray(mutations) || mutations.length === 0) {
@@ -7394,6 +7644,25 @@
       return { kind: "proto", fn: Conn.prototype.sendMessage };
     }
     return null;
+  }
+  async function removeSellSuccessToast() {
+    try {
+      const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+      if (!toastsAtom) return;
+      const list = await jGet(toastsAtom).catch(() => []);
+      const filtered = Array.isArray(list) ? list.filter((t) => {
+        if (!t || typeof t !== "object") return true;
+        if (t.variant !== "success") return true;
+        const icon = t.icon;
+        const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
+        const hasCropText = !!t?.description?.props?.values?.cropText;
+        return !(isTileSell || hasCropText);
+      }) : list;
+      if (filtered.length !== list.length) {
+        await jSet(toastsAtom, filtered);
+      }
+    } catch {
+    }
   }
 
   // src/core/webSocketBridge.ts
@@ -8221,28 +8490,6 @@
     if (shouldOpen) await openActivityLogModal();
   }
 
-  // src/ui/toast.ts
-  async function sendToast(toast) {
-    const sendAtom = getAtomByLabel("sendQuinoaToastAtom");
-    if (sendAtom) {
-      await jSet(sendAtom, toast);
-      return;
-    }
-    const listAtom = getAtomByLabel("quinoaToastsAtom");
-    if (!listAtom) throw new Error("Aucun atom de toast trouv\xE9");
-    const prev = await jGet(listAtom).catch(() => []);
-    const t = { isClosable: true, duration: 1e4, ...toast };
-    if ("toastType" in t && t.toastType === "board") {
-      t.id = t.id ?? (t.isStackable ? `quinoa-stackable-${Date.now()}-${Math.random()}` : "quinoa-game-toast");
-    } else {
-      t.id = t.id ?? "quinoa-game-toast";
-    }
-    await jSet(listAtom, [...prev, t]);
-  }
-  async function toastSimple(title, description, variant = "info", duration = 3500) {
-    await sendToast({ title, description, variant, duration });
-  }
-
   // src/ui/menu.ts
   var Menu = class {
     constructor(opts = {}) {
@@ -8862,11 +9109,11 @@
           fill.style.right = "100%";
           return;
         }
-        const clampPercent3 = (value) => Math.max(0, Math.min(100, value));
+        const clampPercent4 = (value) => Math.max(0, Math.min(100, value));
         const start = (Math.min(minValue, maxValue) - min) / total * 100;
         const end = (Math.max(minValue, maxValue) - min) / total * 100;
-        fill.style.left = `${clampPercent3(start)}%`;
-        fill.style.right = `${clampPercent3(100 - end)}%`;
+        fill.style.left = `${clampPercent4(start)}%`;
+        fill.style.right = `${clampPercent4(100 - end)}%`;
       };
       minInput.addEventListener("input", updateFill);
       maxInput.addEventListener("input", updateFill);
@@ -19167,7 +19414,7 @@ try{importScripts("${abs}")}catch(e){}
         return Math.round(v);
     }
   }
-  function friendBonusMultiplier(playersInRoom) {
+  function friendBonusMultiplier2(playersInRoom) {
     if (!Number.isFinite(playersInRoom)) return 1;
     const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
     return 1 + (n - 1) * 0.1;
@@ -19296,7 +19543,7 @@ try{importScripts("${abs}")}catch(e){}
     const effScale = sXform(species, sc);
     if (!Number.isFinite(effScale) || effScale <= 0) return 0;
     const mutMult = mutationsMultiplier(mutations);
-    const friendsMult = friendBonusMultiplier(opts?.friendPlayers);
+    const friendsMult = friendBonusMultiplier2(opts?.friendPlayers);
     const pre = base * effScale * mutMult * friendsMult;
     const out = Math.max(0, applyRounding(pre, round));
     return out;
@@ -24108,6 +24355,316 @@ try{importScripts("${abs}")}catch(e){}
     s.id = STYLE_ID2;
   }
 
+  // src/utils/sellCropsLock.ts
+  var CONTAINER_SELECTOR = ".css-vmnhaw";
+  var LOCK_ICON_CLASS2 = "tm-sell-crops-lock";
+  var DATA_BORDER = "tmSellLockBorder";
+  var DATA_RADIUS = "tmSellLockRadius";
+  var DATA_POSITION = "tmSellLockPosition";
+  var DATA_PADDING = "tmSellLockPadding";
+  var DATA_BOX = "tmSellLockBox";
+  var DATA_SHADOW = "tmSellLockShadow";
+  var DATA_OVERFLOW = "tmSellLockOverflow";
+  function startSellCropsLockWatcher() {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return { stop() {
+      } };
+    }
+    let bonusFromMultiplier = null;
+    let bonusFromPlayers = friendBonusPercentFromPlayers(1);
+    let running = true;
+    const disposables = [];
+    const resolveCurrentBonus = () => bonusFromMultiplier ?? bonusFromPlayers ?? 0;
+    const applyLockState = (locked) => {
+      const containers = Array.from(
+        document.querySelectorAll(CONTAINER_SELECTOR)
+      );
+      containers.forEach((wrap) => setContainerLocked(wrap, locked));
+    };
+    const recompute = () => {
+      if (!running) return;
+      const requiredPct = lockerRestrictionsService.getRequiredPercent();
+      const current = resolveCurrentBonus();
+      const locked = requiredPct > 0 && !(Number.isFinite(current) && current + 1e-4 >= requiredPct);
+      applyLockState(locked);
+    };
+    const observeDom = () => {
+      const mo = new MutationObserver(() => recompute());
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+      disposables.push(() => mo.disconnect());
+    };
+    const subscribeAtoms = async () => {
+      try {
+        const initial = await Atoms.server.friendBonusMultiplier.get();
+        bonusFromMultiplier = friendBonusPercentFromMultiplier(initial);
+      } catch {
+      }
+      try {
+        const unsub = await Atoms.server.friendBonusMultiplier.onChange((next) => {
+          bonusFromMultiplier = friendBonusPercentFromMultiplier(next);
+          recompute();
+        });
+        if (typeof unsub === "function") disposables.push(unsub);
+      } catch {
+      }
+      try {
+        const initialPlayers = await Atoms.server.numPlayers.get();
+        bonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+      } catch {
+      }
+      try {
+        const unsubPlayers = await Atoms.server.numPlayers.onChange((next) => {
+          bonusFromPlayers = friendBonusPercentFromPlayers(next);
+          recompute();
+        });
+        if (typeof unsubPlayers === "function") disposables.push(unsubPlayers);
+      } catch {
+      }
+    };
+    observeDom();
+    disposables.push(lockerRestrictionsService.subscribe(() => recompute()));
+    void subscribeAtoms();
+    recompute();
+    return {
+      stop() {
+        running = false;
+        disposables.splice(0).forEach((fn) => {
+          try {
+            fn();
+          } catch {
+          }
+        });
+        applyLockState(false);
+      }
+    };
+  }
+  function setContainerLocked(container, locked) {
+    if (!container) return;
+    const sellButton = findSellButton(container);
+    if (!sellButton) {
+      restoreContainerStyles(container);
+      removeLockIcon2(container);
+      return;
+    }
+    if (!locked) {
+      restoreContainerStyles(container);
+      removeLockIcon2(container);
+      return;
+    }
+    storeOriginalStyle(container, DATA_BORDER, "border");
+    storeOriginalStyle(container, DATA_RADIUS, "borderRadius");
+    storeOriginalStyle(container, DATA_POSITION, "position");
+    storeOriginalStyle(container, DATA_PADDING, "padding");
+    storeOriginalStyle(container, DATA_BOX, "boxSizing");
+    storeOriginalStyle(container, DATA_SHADOW, "boxShadow");
+    storeOriginalStyle(container, DATA_OVERFLOW, "overflow");
+    container.style.border = "none";
+    container.style.borderRadius = "";
+    container.style.padding = "";
+    container.style.boxSizing = "";
+    container.style.boxShadow = "none";
+    container.style.overflow = "";
+    const computedPos = window.getComputedStyle(container).position;
+    if (computedPos === "static") {
+      container.style.position = "relative";
+    }
+    container.style.zIndex = "1000";
+    ensureLockIcon2(container);
+  }
+  function storeOriginalStyle(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] !== void 0) return;
+    data[key2] = el2.style[cssProperty];
+  }
+  function restoreContainerStyles(el2) {
+    restoreStyle(el2, DATA_BORDER, "border");
+    restoreStyle(el2, DATA_RADIUS, "borderRadius");
+    restoreStyle(el2, DATA_POSITION, "position");
+    restoreStyle(el2, DATA_PADDING, "padding");
+    restoreStyle(el2, DATA_BOX, "boxSizing");
+    restoreStyle(el2, DATA_SHADOW, "boxShadow");
+    restoreStyle(el2, DATA_OVERFLOW, "overflow");
+  }
+  function restoreStyle(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] === void 0) return;
+    const value = data[key2];
+    if (value) {
+      el2.style.setProperty(camelToKebab(cssProperty), value);
+    } else {
+      el2.style.removeProperty(camelToKebab(cssProperty));
+    }
+    delete data[key2];
+  }
+  function camelToKebab(str) {
+    return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+  }
+  function ensureLockIcon2(btn) {
+    const existing = btn.querySelector(`span.${LOCK_ICON_CLASS2}`);
+    if (existing) return;
+    const icon = document.createElement("span");
+    icon.className = LOCK_ICON_CLASS2;
+    icon.textContent = "\u{1F512}";
+    icon.style.position = "absolute";
+    icon.style.top = "-4px";
+    icon.style.right = "-4px";
+    icon.style.fontSize = "16px";
+    icon.style.pointerEvents = "none";
+    icon.style.userSelect = "none";
+    icon.style.zIndex = "2";
+    btn.appendChild(icon);
+  }
+  function removeLockIcon2(btn) {
+    btn.querySelectorAll(`span.${LOCK_ICON_CLASS2}`).forEach((node) => node.remove());
+  }
+  function findSellButton(container) {
+    const btn = container.querySelector("button");
+    if (!btn) return null;
+    const text = (btn.textContent || "").trim();
+    return /sell\s*crops/i.test(text) ? btn : null;
+  }
+
+  // src/utils/eggHatchLockIndicator.ts
+  var CONTAINER_SELECTOR2 = ".css-502lyi";
+  var LOCK_CLASS = "tm-egg-lock";
+  var BORDER_COLOR = "rgb(188, 53, 215)";
+  var DATA_BORDER2 = "tmEggLockBorder";
+  var DATA_RADIUS2 = "tmEggLockRadius";
+  var DATA_POSITION2 = "tmEggLockPosition";
+  var DATA_OVERFLOW2 = "tmEggLockOverflow";
+  function startEggHatchLockIndicator() {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return { stop() {
+      } };
+    }
+    let running = true;
+    let currentEggId = null;
+    const disposables = [];
+    const isEggLocked = () => lockerRestrictionsService.isEggLocked(currentEggId);
+    const applyLockState = () => {
+      if (!running) return;
+      const locked = isEggLocked();
+      const containers = Array.from(document.querySelectorAll(CONTAINER_SELECTOR2));
+      containers.forEach((el2) => {
+        if (!containsEggLabel(el2)) {
+          restore(el2);
+          return;
+        }
+        setLocked(el2, locked);
+      });
+    };
+    const observeDom = () => {
+      const mo = new MutationObserver(() => applyLockState());
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+      disposables.push(() => mo.disconnect());
+    };
+    const subscribeAtoms = async () => {
+      try {
+        const initial = await Atoms.data.myCurrentGardenObject.get();
+        currentEggId = extractEggId2(initial);
+      } catch {
+      }
+      try {
+        const unsub = await Atoms.data.myCurrentGardenObject.onChange((next) => {
+          currentEggId = extractEggId2(next);
+          applyLockState();
+        });
+        if (typeof unsub === "function") disposables.push(unsub);
+      } catch {
+      }
+      const unsubLocker = lockerRestrictionsService.subscribe(() => applyLockState());
+      disposables.push(unsubLocker);
+    };
+    observeDom();
+    void subscribeAtoms();
+    applyLockState();
+    return {
+      stop() {
+        running = false;
+        disposables.splice(0).forEach((fn) => {
+          try {
+            fn();
+          } catch {
+          }
+        });
+        const containers = Array.from(document.querySelectorAll(CONTAINER_SELECTOR2));
+        containers.forEach(restore);
+      }
+    };
+  }
+  function containsEggLabel(el2) {
+    const text = (el2.textContent || "").toLowerCase();
+    return text.includes("egg");
+  }
+  function setLocked(el2, locked) {
+    if (!locked) {
+      restore(el2);
+      return;
+    }
+    storeStyle(el2, DATA_BORDER2, "border");
+    storeStyle(el2, DATA_RADIUS2, "borderRadius");
+    storeStyle(el2, DATA_POSITION2, "position");
+    storeStyle(el2, DATA_OVERFLOW2, "overflow");
+    el2.style.border = `3px solid ${BORDER_COLOR}`;
+    el2.style.borderRadius = "16px";
+    el2.style.overflow = "visible";
+    const pos = window.getComputedStyle(el2).position;
+    if (pos === "static") {
+      el2.style.position = "relative";
+    }
+    ensureLockIcon3(el2);
+  }
+  function restore(el2) {
+    restoreStyle2(el2, DATA_BORDER2, "border");
+    restoreStyle2(el2, DATA_RADIUS2, "borderRadius");
+    restoreStyle2(el2, DATA_POSITION2, "position");
+    restoreStyle2(el2, DATA_OVERFLOW2, "overflow");
+    removeLockIcon3(el2);
+  }
+  function storeStyle(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] !== void 0) return;
+    data[key2] = el2.style[cssProperty];
+  }
+  function restoreStyle2(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] === void 0) return;
+    const value = data[key2];
+    if (value) {
+      el2.style.setProperty(camelToKebab2(cssProperty), value);
+    } else {
+      el2.style.removeProperty(camelToKebab2(cssProperty));
+    }
+    delete data[key2];
+  }
+  function camelToKebab2(str) {
+    return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+  }
+  function ensureLockIcon3(el2) {
+    const existing = el2.querySelector(`span.${LOCK_CLASS}`);
+    if (existing) return;
+    const icon = document.createElement("span");
+    icon.className = LOCK_CLASS;
+    icon.textContent = "\u{1F512}";
+    icon.style.position = "absolute";
+    icon.style.top = "-8px";
+    icon.style.right = "-8px";
+    icon.style.fontSize = "16px";
+    icon.style.pointerEvents = "none";
+    icon.style.userSelect = "none";
+    icon.style.zIndex = "2";
+    el2.appendChild(icon);
+  }
+  function removeLockIcon3(el2) {
+    el2.querySelectorAll(`span.${LOCK_CLASS}`).forEach((node) => node.remove());
+  }
+  function extractEggId2(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (obj.objectType !== "egg") return null;
+    const eggId = obj.eggId;
+    return typeof eggId === "string" && eggId ? eggId : null;
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -25011,8 +25568,10 @@ try{importScripts("${abs}")}catch(e){}
       await renderOverlay();
       setupBuyAll();
       startReorderObserver();
+      startSellCropsLockWatcher();
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
+      startEggHatchLockIndicator();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
       startInventorySortingObserver();
@@ -29042,6 +29601,260 @@ next: ${next}`;
     refresh();
     return { root: card, refresh, setDisabled };
   }
+  function createRestrictionsTabRenderer(ui) {
+    let state2 = lockerRestrictionsService.getState();
+    let bonusFromMultiplier = null;
+    let bonusFromPlayers = friendBonusPercentFromPlayers(1);
+    let eggOptions = [];
+    const disposables = [];
+    let subsAttached = false;
+    const clampPercent4 = (value) => Math.max(0, Math.min(FRIEND_BONUS_MAX, Math.round(value / FRIEND_BONUS_STEP) * FRIEND_BONUS_STEP));
+    const resolveCurrentBonus = () => bonusFromMultiplier ?? bonusFromPlayers ?? 0;
+    const layout = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "12px",
+      justifyItems: "center",
+      width: "100%",
+      maxWidth: "1100px"
+    });
+    const card = ui.card("Friend bonus locker", {
+      align: "stretch"
+    });
+    card.root.style.width = "100%";
+    card.header.style.display = "flex";
+    card.header.style.alignItems = "center";
+    card.header.style.justifyContent = "space-between";
+    const sliderWrap = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "6px"
+    });
+    const sliderHeader = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
+    const sliderTitle = document.createElement("div");
+    sliderTitle.textContent = "Minimum friend bonus required\u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E \u200E ";
+    sliderTitle.style.fontWeight = "600";
+    const sliderValue = applyStyles(document.createElement("div"), {
+      fontWeight: "700",
+      color: "#ff7a1f",
+      textShadow: "0 1px 1px rgba(0, 0, 0, 0.5)"
+    });
+    sliderHeader.append(sliderTitle, sliderValue);
+    const initialRequiredPct = friendBonusPercentFromPlayers(state2.minRequiredPlayers) ?? 0;
+    const slider = ui.slider(0, FRIEND_BONUS_MAX, FRIEND_BONUS_STEP, initialRequiredPct);
+    slider.style.width = "100%";
+    sliderWrap.append(sliderHeader, slider);
+    const statusBadge = applyStyles(document.createElement("div"), {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 10px",
+      borderRadius: "999px",
+      fontWeight: "700",
+      fontSize: "12px",
+      letterSpacing: "0.25px"
+    });
+    statusBadge.style.marginLeft = "auto";
+    card.header.appendChild(statusBadge);
+    const statusText = applyStyles(document.createElement("div"), {
+      fontSize: "12.5px",
+      lineHeight: "1.5",
+      opacity: "0.92"
+    });
+    card.body.append(sliderWrap, statusText);
+    layout.append(card.root);
+    const eggCard = ui.card("Egg hatch locker", { align: "stretch" });
+    eggCard.root.style.width = "100%";
+    const eggList = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "8px",
+      width: "100%"
+    });
+    eggCard.body.append(eggList);
+    layout.append(eggCard.root);
+    const renderEggList = () => {
+      eggList.innerHTML = "";
+      if (!eggOptions.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No eggs detected in shop.";
+        empty.style.opacity = "0.7";
+        empty.style.fontSize = "12px";
+        eggList.appendChild(empty);
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      eggOptions.forEach((opt) => {
+        const row = applyStyles(document.createElement("div"), {
+          display: "grid",
+          gridTemplateColumns: "auto auto 1fr",
+          alignItems: "center",
+          gap: "10px",
+          padding: "8px 10px",
+          border: "1px solid #4445",
+          borderRadius: "10px",
+          background: "#0f1318"
+        });
+        const locked = !!state2.eggLocks?.[opt.id];
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.textContent = locked ? "\u{1F512}" : "\u{1F513}";
+        toggle.style.border = "1px solid #4445";
+        toggle.style.borderRadius = "10px";
+        toggle.style.padding = "6px 10px";
+        toggle.style.fontSize = "14px";
+        toggle.style.fontWeight = "700";
+        toggle.style.background = locked ? "#331616" : "#12301d";
+        toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
+        toggle.onclick = () => {
+          const next = !locked;
+          state2.eggLocks = { ...state2.eggLocks || {}, [opt.id]: next };
+          lockerRestrictionsService.setEggLock(opt.id, next);
+          renderEggList();
+        };
+        const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "\u{1F95A}" });
+        sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
+        const name = document.createElement("div");
+        name.textContent = opt.name || opt.id;
+        name.style.fontWeight = "600";
+        name.style.color = "#e7eef7";
+        row.append(toggle, sprite, name);
+        fragment.appendChild(row);
+      });
+      eggList.appendChild(fragment);
+    };
+    const updateSliderValue = (pct) => {
+      slider.value = String(pct);
+      sliderValue.textContent = `+${pct}%`;
+    };
+    const setStatusTone = (tone) => {
+      const palette = tone === "success" ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" } : tone === "warn" ? { bg: "#321616", border: "#c74343", color: "#fca5a5" } : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
+      statusBadge.style.background = palette.bg;
+      statusBadge.style.border = `1px solid ${palette.border}`;
+      statusBadge.style.color = palette.color;
+    };
+    const updateStatus = () => {
+      const requiredPct = clampPercent4(friendBonusPercentFromPlayers(state2.minRequiredPlayers) ?? 0);
+      const currentPct = resolveCurrentBonus();
+      const requiredPlayers = state2.minRequiredPlayers;
+      const currentPlayers = currentPct != null ? percentToRequiredFriendCount(currentPct) : null;
+      const allowed = requiredPct <= 0 || currentPct != null && currentPct + 1e-4 >= requiredPct;
+      if (requiredPct <= 0) {
+        statusBadge.textContent = "Unlocked";
+        setStatusTone("info");
+        statusText.textContent = currentPct != null ? `Current friend bonus: ${currentPct}% (${currentPlayers} players).` : "Current friend bonus not detected yet.";
+        return;
+      }
+      statusBadge.textContent = allowed ? "Sale allowed" : "Sale blocked";
+      setStatusTone(allowed ? "success" : "warn");
+      statusText.textContent = allowed ? `Current bonus ${currentPct}% (${currentPlayers} players) meets the requirement (${requiredPct}%).` : `Requires ${requiredPct}% (${requiredPlayers} players) or more`;
+    };
+    const handleSliderInput = (commit) => {
+      const raw = Number(slider.value);
+      const pct = clampPercent4(Number.isFinite(raw) ? raw : 0);
+      updateSliderValue(pct);
+      state2.minRequiredPlayers = percentToRequiredFriendCount(pct);
+      updateStatus();
+      if (commit) {
+        lockerRestrictionsService.setMinRequiredPlayers(state2.minRequiredPlayers);
+      }
+    };
+    slider.addEventListener("input", () => handleSliderInput(false));
+    slider.addEventListener("change", () => handleSliderInput(true));
+    const syncFromService = (next) => {
+      state2 = { ...next };
+      updateSliderValue(friendBonusPercentFromPlayers(state2.minRequiredPlayers) ?? 0);
+      updateStatus();
+      renderEggList();
+    };
+    const attachSubscriptions = async () => {
+      if (subsAttached) return;
+      subsAttached = true;
+      try {
+        const initialBonus = await Atoms.server.friendBonusMultiplier.get();
+        bonusFromMultiplier = friendBonusPercentFromMultiplier(initialBonus);
+      } catch {
+      }
+      try {
+        const unsub = await Atoms.server.friendBonusMultiplier.onChange((next) => {
+          bonusFromMultiplier = friendBonusPercentFromMultiplier(next);
+          updateStatus();
+        });
+        if (typeof unsub === "function") disposables.push(unsub);
+      } catch {
+      }
+      try {
+        const initialPlayers = await Atoms.server.numPlayers.get();
+        bonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+      } catch {
+      }
+      try {
+        const unsubPlayers = await Atoms.server.numPlayers.onChange((next) => {
+          bonusFromPlayers = friendBonusPercentFromPlayers(next);
+          updateStatus();
+        });
+        if (typeof unsubPlayers === "function") disposables.push(unsubPlayers);
+      } catch {
+      }
+      const unsubService = lockerRestrictionsService.subscribe(syncFromService);
+      disposables.push(unsubService);
+      try {
+        const initialEggShop = await Atoms.shop.eggShop.get();
+        eggOptions = extractEggOptions(initialEggShop);
+        renderEggList();
+      } catch {
+      }
+      try {
+        const unsubEggShop = await Atoms.shop.eggShop.onChange((next) => {
+          eggOptions = extractEggOptions(next);
+          renderEggList();
+        });
+        if (typeof unsubEggShop === "function") disposables.push(unsubEggShop);
+      } catch {
+      }
+    };
+    const render = (view) => {
+      view.innerHTML = "";
+      view.style.maxHeight = "54vh";
+      view.style.overflow = "auto";
+      view.append(layout);
+      syncFromService(lockerRestrictionsService.getState());
+      updateStatus();
+      void attachSubscriptions();
+    };
+    const destroy = () => {
+      while (disposables.length) {
+        const dispose = disposables.pop();
+        try {
+          dispose?.();
+        } catch {
+        }
+      }
+    };
+    return { render, destroy };
+  }
+  function extractEggOptions(raw) {
+    const seen = /* @__PURE__ */ new Set();
+    const options = [];
+    const add = (id, name) => {
+      if (typeof id !== "string" || !id) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      const label2 = typeof name === "string" && name || typeof raw?.names?.[id] === "string" && raw.names[id] || id;
+      options.push({ id, name: label2 });
+    };
+    const walk = (node) => {
+      if (!node || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        node.forEach(walk);
+        return;
+      }
+      const candidate = node.eggId ?? node.id ?? null;
+      add(candidate, node.name);
+      for (const value of Object.values(node)) {
+        if (value && typeof value === "object") walk(value);
+      }
+    };
+    walk(raw);
+    return options;
+  }
   function createGeneralTabRenderer(ui, store) {
     const viewRoot = applyStyles(document.createElement("div"), {
       display: "flex",
@@ -29371,15 +30184,18 @@ next: ${next}`;
     const ui = new Menu({ id: "locker", compact: true });
     ui.mount(container);
     const store = new LockerMenuStore(lockerService.getState());
+    const restrictionsTab = createRestrictionsTabRenderer(ui);
     const generalTab = createGeneralTabRenderer(ui, store);
     const overridesTab = createOverridesTabRenderer(ui, store);
     ui.addTabs([
       { id: "locker-general", title: "General", render: (view) => generalTab.render(view) },
-      { id: "locker-overrides", title: "Overrides by species", render: (view) => overridesTab.render(view) }
+      { id: "locker-overrides", title: "Overrides", render: (view) => overridesTab.render(view) },
+      { id: "locker-restrictions", title: "Restrictions", render: (view) => restrictionsTab.render(view) }
     ]);
     ui.switchTo("locker-general");
     const disposables = [];
     disposables.push(lockerService.subscribe((event) => store.syncFromService(event.state)));
+    disposables.push(() => restrictionsTab.destroy());
     disposables.push(() => generalTab.destroy());
     disposables.push(() => overridesTab.destroy());
     const cleanup2 = () => {
@@ -30418,7 +31234,7 @@ next: ${next}`;
     minimumFractionDigits: 3,
     maximumFractionDigits: 3
   });
-  var DEFAULT_STATE = {
+  var DEFAULT_STATE2 = {
     sizePercent: SIZE_MIN,
     color: "None",
     weatherCondition: "None",
@@ -31728,7 +32544,7 @@ next: ${next}`;
       const getStateForKey = (key2) => {
         const existing = states.get(key2);
         if (existing) return existing;
-        const state2 = { ...DEFAULT_STATE };
+        const state2 = { ...DEFAULT_STATE2 };
         states.set(key2, state2);
         return state2;
       };
@@ -31946,7 +32762,7 @@ next: ${next}`;
   }
 
   // src/services/pet-alerts.ts
-  var LS_KEY2 = "qws:petAlerts:v1";
+  var LS_KEY3 = "qws:petAlerts:v1";
   var clampPct2 = (v) => Math.max(1, Math.min(100, Math.round(v)));
   var prefs = {
     globalEnabled: true,
@@ -31960,7 +32776,7 @@ next: ${next}`;
   var seenBelow = /* @__PURE__ */ new Map();
   function loadPrefs() {
     try {
-      const raw = localStorage.getItem(LS_KEY2);
+      const raw = localStorage.getItem(LS_KEY3);
       if (!raw) return prefs;
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
@@ -31977,7 +32793,7 @@ next: ${next}`;
   }
   function savePrefs() {
     try {
-      localStorage.setItem(LS_KEY2, JSON.stringify(prefs));
+      localStorage.setItem(LS_KEY3, JSON.stringify(prefs));
     } catch {
     }
   }
@@ -34492,7 +35308,7 @@ next: ${next}`;
     ui.addTab("shops", "\u{1F6D2} Shops", (view) => renderShopTab(view, ui));
     ui.addTab("weather", "\u{1F326} Weather", (view) => renderWeatherTab(view, ui));
     ui.addTab("pets", "\u{1F43E} Pets", (view) => renderPetAlertsTab(view, ui));
-    ui.addTab("settings", "\u2699\uFE0F General settings", (view) => renderSettingsTab(view, ui));
+    ui.addTab("settings", "\u2699\uFE0F Settings", (view) => renderSettingsTab(view, ui));
     ui.mount(root);
   }
 
