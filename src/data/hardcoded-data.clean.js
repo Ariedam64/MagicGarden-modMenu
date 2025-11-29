@@ -308,8 +308,10 @@ export const tileRefsDecor = {
   Cauldron: 59,
   MiniFairyKeep: 60,
   WoodStool: 63,
+  WoodWindmill: 64,
   StoneGardenBox: 66,
   MarbleColumn: 68,
+  MiniWizardTower: 68,
   SmallGravestone: 69,
   SmallGravestoneSideways: 70,
   WoodenWindmill: 73,
@@ -2034,6 +2036,13 @@ export const decorCatalog = {
     baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.60
   },
 
+  WoodWindmill: {
+        tileRef: tileRefsDecor.WoodWindmill,
+        name: "Wood Windmill",
+        coinPrice: 500000, creditPrice: 74, rarity: rarity.Common,
+        baseTileScale: 1.5,isOneTimePurchase: false, nudgeY: -0.47
+    },
+
   // Pierre
   StoneBench: {
     tileRef: tileRefsDecor.StoneBench,
@@ -2185,6 +2194,13 @@ export const decorCatalog = {
     name: "Pet Hutch",
     coinPrice: 80000000000, creditPrice: 499, rarity: rarity.Divine,
     baseTileScale: 2.1, isOneTimePurchase: true, nudgeY: -0.45
+  },
+
+  MiniWizardTower: {
+    tileRef: tileRefsDecor.MiniWizardTower,
+    name: "Mini Wizard Tower",
+    coinPrice: 75000000000, creditPrice: 1379, rarity: rarity.Mythic,
+    baseTileScale: 1.8, isOneTimePurchase: false, nudgeY: -0.59
   },
 
   // Saisonniers (Halloween)
