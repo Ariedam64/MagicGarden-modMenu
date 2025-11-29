@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.81
+// @version      2.6.85
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6996,673 +6996,168 @@
     await sendToast({ title, description, variant, duration });
   }
 
-  // src/hooks/ws-hook.ts
-  function installPageWebSocketHook() {
-    if (!pageWindow || !NativeWS) return;
-    function WrappedWebSocket(url, protocols) {
-      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
-      sockets.push(ws);
-      ws.addEventListener("open", () => {
-        setTimeout(() => {
-          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
-        }, 800);
-      });
-      ws.addEventListener("message", async (ev) => {
-        const j = await parseWSData(ev.data);
-        if (!j) return;
-        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
-          setQWS(ws, "message:" + (j.type || "state"));
-        }
-      });
-      return ws;
-    }
-    WrappedWebSocket.prototype = NativeWS.prototype;
-    try {
-      WrappedWebSocket.OPEN = NativeWS.OPEN;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
-    } catch {
-    }
-    try {
-      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
-    } catch {
-    }
-    pageWindow.WebSocket = WrappedWebSocket;
-    if (pageWindow !== window) {
+  // src/utils/api.ts
+  function detectEnvironment() {
+    const isInIframe = (() => {
       try {
-        window.WebSocket = WrappedWebSocket;
+        return window.top !== window.self;
       } catch {
-      }
-    }
-    function hasSharedQuinoaWS() {
-      const existing = readSharedGlobal("quinoaWS");
-      return !!existing;
-    }
-    installHarvestCropInterceptor();
-  }
-  var interceptorsByType = /* @__PURE__ */ new Map();
-  var interceptorStatus = readSharedGlobal(
-    "__tmMessageHookInstalled"
-  ) ? "installed" : "idle";
-  var interceptorPoll = null;
-  var interceptorTimeout = null;
-  function registerMessageInterceptor(type, interceptor) {
-    const list = interceptorsByType.get(type);
-    if (list) {
-      list.push(interceptor);
-    } else {
-      interceptorsByType.set(type, [interceptor]);
-    }
-    ensureMessageInterceptorInstalled();
-    return () => {
-      const current = interceptorsByType.get(type);
-      if (!current) return;
-      const index = current.indexOf(interceptor);
-      if (index !== -1) current.splice(index, 1);
-      if (current.length === 0) interceptorsByType.delete(type);
-    };
-  }
-  function ensureMessageInterceptorInstalled() {
-    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
-    interceptorStatus = "installing";
-    const tryInstall = () => {
-      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
-      if (!Conn) return false;
-      const original = resolveSendMessage(Conn);
-      if (!original) return false;
-      const wrap = function(message, ...rest) {
-        let currentMessage = message;
-        try {
-          const type = currentMessage?.type;
-          if (type && interceptorsByType.size > 0) {
-            const context = { thisArg: this, args: rest };
-            const result = applyInterceptors(type, currentMessage, context);
-            if (result.drop) return;
-            currentMessage = result.message;
-          }
-        } catch (error) {
-          console.error("[MG-mod] Erreur dans le hook WS :", error);
-        }
-        return original.fn.call(this, currentMessage, ...rest);
-      };
-      if (original.kind === "static") {
-        Conn.sendMessage = wrap;
-      } else {
-        Conn.prototype.sendMessage = wrap;
-      }
-      interceptorStatus = "installed";
-      shareGlobal("__tmMessageHookInstalled", true);
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorTimeout !== null) {
-        clearTimeout(interceptorTimeout);
-        interceptorTimeout = null;
-      }
-      return true;
-    };
-    if (tryInstall()) return;
-    interceptorPoll = window.setInterval(() => {
-      if (tryInstall()) {
-        if (interceptorPoll !== null) {
-          clearInterval(interceptorPoll);
-          interceptorPoll = null;
-        }
-      }
-    }, 200);
-    interceptorTimeout = window.setTimeout(() => {
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorStatus !== "installed") {
-        interceptorStatus = "idle";
-      }
-      interceptorTimeout = null;
-    }, 2e4);
-  }
-  function applyInterceptors(type, initialMessage, context) {
-    const interceptors = interceptorsByType.get(type);
-    if (!interceptors || interceptors.length === 0) {
-      return { message: initialMessage, drop: false };
-    }
-    let currentMessage = initialMessage;
-    for (const interceptor of [...interceptors]) {
-      try {
-        const result = interceptor(currentMessage, context);
-        if (!result) continue;
-        if (result.kind === "drop") {
-          return { message: currentMessage, drop: true };
-        }
-        if (result.kind === "replace") {
-          currentMessage = result.message;
-        }
-      } catch (error) {
-      }
-    }
-    return { message: currentMessage, drop: false };
-  }
-  function installHarvestCropInterceptor() {
-    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
-    let latestGardenState = null;
-    let friendBonusPercent = null;
-    let friendBonusFromPlayers = null;
-    let latestEggId = null;
-    void (async () => {
-      try {
-        latestGardenState = await Atoms.data.garden.get() ?? null;
-      } catch {
-      }
-      try {
-        await Atoms.data.garden.onChange((next) => {
-          latestGardenState = next ?? null;
-        });
-      } catch {
-      }
-      try {
-        const initialObj = await Atoms.data.myCurrentGardenObject.get();
-        latestEggId = extractEggId(initialObj);
-      } catch {
-      }
-      try {
-        await Atoms.data.myCurrentGardenObject.onChange((next) => {
-          latestEggId = extractEggId(next);
-        });
-      } catch {
+        return true;
       }
     })();
-    void (async () => {
-      try {
-        const initial = await Atoms.server.friendBonusMultiplier.get();
-        friendBonusPercent = friendBonusPercentFromMultiplier(initial);
-      } catch {
-      }
-      try {
-        await Atoms.server.friendBonusMultiplier.onChange((next) => {
-          friendBonusPercent = friendBonusPercentFromMultiplier(next);
-        });
-      } catch {
-      }
-      try {
-        const initialPlayers = await Atoms.server.numPlayers.get();
-        friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
-      } catch {
-      }
-      try {
-        await Atoms.server.numPlayers.onChange((next) => {
-          friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
-        });
-      } catch {
-      }
-    })();
-    const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
-    registerMessageInterceptor("HarvestCrop", (message) => {
-      const slot = message.slot;
-      const slotsIndex = message.slotsIndex;
-      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
-        return;
-      }
-      const garden2 = latestGardenState;
-      const tileObjects = garden2?.tileObjects;
-      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
-      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
-        return;
-      }
-      const slots = Array.isArray(tile.slots) ? tile.slots : [];
-      const cropSlot = slots[slotsIndex];
-      if (!cropSlot || typeof cropSlot !== "object") {
-        return;
-      }
-      const seedKey = extractSeedKey2(tile);
-      const sizePercent = extractSizePercent2(cropSlot);
-      const mutations = sanitizeMutations(cropSlot?.mutations);
-      const lockerEnabled = (() => {
-        try {
-          return lockerService.getState().enabled;
-        } catch {
-          return false;
-        }
-      })();
-      if (lockerEnabled) {
-        let harvestAllowed = true;
-        try {
-          harvestAllowed = lockerService.allowsHarvest({
-            seedKey,
-            sizePercent,
-            mutations
-          });
-        } catch {
-          harvestAllowed = true;
-        }
-        if (!harvestAllowed) {
-          console.log("[HarvestCrop] Blocked by locker", {
-            slot,
-            slotsIndex,
-            seedKey,
-            sizePercent,
-            mutations
-          });
-          return { kind: "drop" };
-        }
-      }
-      StatsService.incrementGardenStat("totalHarvested");
-      void (async () => {
-        try {
-          const garden3 = await Atoms.data.garden.get();
-          const tileObjects2 = garden3?.tileObjects ?? null;
-          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
-          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
-          console.log("[HarvestCrop]", {
-            slot,
-            slotsIndex,
-            cropSlot: cropSlot2
-          });
-        } catch (error) {
-          console.error("[HarvestCrop] Unable to log crop slot", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("RemoveGardenObject", (message) => {
-      StatsService.incrementGardenStat("totalDestroyed");
-    });
-    registerMessageInterceptor("WaterPlant", (message) => {
-      StatsService.incrementGardenStat("watercanUsed");
-      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
-    });
-    registerMessageInterceptor("PlantSeed", (message) => {
-      StatsService.incrementGardenStat("totalPlanted");
-    });
-    registerMessageInterceptor("PurchaseDecor", (message) => {
-      StatsService.incrementShopStat("decorBought");
-    });
-    registerMessageInterceptor("PurchaseSeed", (message) => {
-      StatsService.incrementShopStat("seedsBought");
-    });
-    registerMessageInterceptor("PurchaseEgg", (message) => {
-      StatsService.incrementShopStat("eggsBought");
-    });
-    registerMessageInterceptor("PurchaseTool", (message) => {
-      StatsService.incrementShopStat("toolsBought");
-    });
-    registerMessageInterceptor("HatchEgg", () => {
-      const locked = lockerRestrictionsService.isEggLocked(latestEggId);
-      if (locked) {
-        console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
-        void (async () => {
-          try {
-            await dedupeEggLockToast(latestEggId);
-          } catch {
-          }
-        })();
-        return { kind: "drop" };
-      }
-      void (async () => {
-        const previousPets = await readInventoryPetSnapshots();
-        const previousMap = buildPetMap(previousPets);
-        const nextPets = await waitForInventoryPetAddition(previousMap);
-        if (!nextPets) return;
-        const newPets = extractNewPets(nextPets, previousMap);
-        if (!newPets.length) return;
-        for (const pet of newPets) {
-          const rarity2 = inferPetRarity(pet.mutations);
-          if (pet.species) {
-            StatsService.incrementPetHatched(pet.species, rarity2);
-          }
-        }
-      })();
-    });
-    registerMessageInterceptor("SellAllCrops", (message) => {
-      const restrictionState = lockerRestrictionsService.getState();
-      const requiredPct = lockerRestrictionsService.getRequiredPercent();
-      const requiredPlayers = restrictionState.minRequiredPlayers;
-      const currentBonusPct = resolveFriendBonusPercent();
-      const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
-      if (!allowed) {
-        const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
-        console.log("[SellAllCrops] Blocked by friend bonus restriction", {
-          requiredPct,
-          requiredPlayers,
-          currentBonusPct,
-          currentPlayers
-        });
-        void (async () => {
-          try {
-            await toastSimple(
-              "Friend bonus locker",
-              `Require at least ${requiredPct}% friend bonus`,
-              "error"
-            );
-          } catch {
-          }
-          void removeSellSuccessToast();
-        })();
-        return { kind: "drop" };
-      }
-      void (async () => {
-        try {
-          const items = await Atoms.inventory.myCropItemsToSell.get();
-          const count = Array.isArray(items) ? items.length : 0;
-          if (count > 0) {
-            StatsService.incrementShopStat("cropsSoldCount", count);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop items", error);
-        }
-        try {
-          const total = await Atoms.shop.totalCropSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("cropsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop sell price", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("SellPet", (message) => {
-      StatsService.incrementShopStat("petsSoldCount");
-      void (async () => {
-        try {
-          const total = await Atoms.pets.totalPetSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("petsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellPet] Unable to read pet sell price", error);
-        }
-      })();
-    });
-    shareGlobal("__tmHarvestHookInstalled", true);
-  }
-  function extractSeedKey2(tile) {
-    if (!tile || typeof tile !== "object") return null;
-    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
-    if (typeof tile.species === "string" && tile.species) return tile.species;
-    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
-    for (const key2 of fallbacks) {
-      const value = tile[key2];
-      if (typeof value === "string" && value) return value;
-    }
-    return null;
-  }
-  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
-  var MAX_SCALE_BY_SPECIES2 = (() => {
-    const map2 = /* @__PURE__ */ new Map();
-    const register = (key2, value) => {
-      if (typeof key2 !== "string") return;
-      const normalized = normalizeSpeciesKey2(key2.trim());
-      if (!normalized || map2.has(normalized)) return;
-      map2.set(normalized, value);
-    };
-    for (const [species, entry] of Object.entries(plantCatalog)) {
-      const maxScale = Number(entry?.crop?.maxScale);
-      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
-      register(species, maxScale);
-      register(entry?.seed?.name, maxScale);
-      register(entry?.plant?.name, maxScale);
-      register(entry?.crop?.name, maxScale);
-    }
-    return map2;
-  })();
-  function lookupMaxScale2(species) {
-    if (typeof species !== "string") return null;
-    const normalized = normalizeSpeciesKey2(species.trim());
-    if (!normalized) return null;
-    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
-    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
-      return found;
-    }
-    return null;
-  }
-  function getMaxScaleForSlot2(slot) {
-    if (!slot || typeof slot !== "object") return null;
-    const candidates = /* @__PURE__ */ new Set();
-    const fromSeedKey = extractSeedKey2(slot);
-    if (fromSeedKey) candidates.add(fromSeedKey);
-    const fields = [
-      "species",
-      "seedSpecies",
-      "plantSpecies",
-      "cropSpecies",
-      "baseSpecies",
-      "seedKey"
-    ];
-    for (const field of fields) {
-      const value = slot[field];
-      if (typeof value === "string" && value) {
-        candidates.add(value);
-      }
-    }
-    for (const cand of candidates) {
-      const max = lookupMaxScale2(cand);
-      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
-        return max;
-      }
-    }
-    return null;
-  }
-  function extractSizePercent2(slot) {
-    if (!slot || typeof slot !== "object") return 100;
-    const direct = Number(
-      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
-    );
-    if (Number.isFinite(direct)) {
-      return clampPercent3(Math.round(direct), 0, 100);
-    }
-    const scale = Number(slot.targetScale ?? slot.scale);
-    if (Number.isFinite(scale)) {
-      const maxScale = getMaxScaleForSlot2(slot);
-      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
-        const clamped = Math.max(1, Math.min(maxScale, scale));
-        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
-        return clampPercent3(Math.round(pct2), 50, 100);
-      }
-      if (scale > 1 && scale <= 2) {
-        const pct2 = 50 + (scale - 1) / 1 * 50;
-        return clampPercent3(Math.round(pct2), 50, 100);
-      }
-      const pct = Math.round(scale * 100);
-      return clampPercent3(pct, 0, 100);
-    }
-    return 100;
-  }
-  function sanitizeMutations(raw) {
-    if (!Array.isArray(raw)) return [];
-    const out = [];
-    for (let i = 0; i < raw.length; i++) {
-      const value = raw[i];
-      if (typeof value === "string") {
-        if (value) out.push(value);
-      } else if (value != null) {
-        const str = String(value);
-        if (str) out.push(str);
-      }
-    }
-    return out;
-  }
-  function clampPercent3(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-  var HATCH_EGG_TIMEOUT_MS = 5e3;
-  async function readInventoryPetSnapshots() {
-    try {
-      const inventory = await Atoms.inventory.myInventory.get();
-      return collectInventoryPets(inventory);
-    } catch (error) {
-      console.error("[HatchEgg] Unable to read inventory", error);
-      return [];
-    }
-  }
-  function collectInventoryPets(rawInventory) {
-    const items = extractInventoryItems(rawInventory);
-    const pets = [];
-    for (const entry of items) {
-      const pet = toInventoryPet(entry);
-      if (pet) pets.push(pet);
-    }
-    return pets;
-  }
-  function extractInventoryItems(rawInventory) {
-    if (!rawInventory) return [];
-    if (Array.isArray(rawInventory)) return rawInventory;
-    if (Array.isArray(rawInventory.items)) return rawInventory.items;
-    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
-    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
-    return [];
-  }
-  function toInventoryPet(entry) {
-    if (!entry || typeof entry !== "object") return null;
-    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
-    if (!source || typeof source !== "object") return null;
-    const type = source.itemType ?? source.data?.itemType ?? "";
-    if (String(type).toLowerCase() !== "pet") return null;
-    const id = source.id ?? source.data?.id;
-    const species = source.petSpecies ?? source.data?.petSpecies;
-    if (!id || !species) return null;
-    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
+    const refHost = safeHost(document.referrer);
+    const parentLooksDiscord = isInIframe && !!refHost && /(^|\.)discord(app)?\.com$/i.test(refHost);
+    const host = location.hostname;
+    const surface = parentLooksDiscord ? "discord" : "web";
+    const platform = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "mobile" : "desktop";
     return {
-      id: String(id),
-      species: String(species),
-      mutations
+      surface,
+      host,
+      origin: location.origin,
+      isInIframe,
+      platform
     };
   }
-  function buildPetMap(pets) {
-    const map2 = /* @__PURE__ */ new Map();
-    for (const pet of pets) {
-      map2.set(pet.id, pet);
+  function isDiscordSurface() {
+    return detectEnvironment().surface === "discord";
+  }
+  function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
+    return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
+  }
+  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        credentials: "include",
+        headers,
+        signal: controller.signal
+      });
+      const body = await res.text();
+      return { status: res.status, ok: res.ok, body };
+    } finally {
+      clearTimeout(timeout);
     }
-    return map2;
   }
-  function extractNewPets(pets, previous) {
-    return pets.filter((pet) => !previous.has(pet.id));
-  }
-  function extractEggId(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (obj.objectType !== "egg") return null;
-    const eggId = obj.eggId;
-    return typeof eggId === "string" && eggId ? eggId : null;
-  }
-  async function dedupeEggLockToast(latestEggId) {
-    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
-    const description = latestEggId ? `Hatching locked for ${latestEggId}` : "Hatching locked by egg locker";
-    if (!toastsAtom) {
-      await toastSimple("Egg hatch locker", description, "error");
-      return;
-    }
-    const list = await jGet(toastsAtom).catch(() => []);
-    const filtered = Array.isArray(list) ? list.filter((t) => !(t?.title === "Egg hatch locker")) : [];
-    filtered.push({
-      isClosable: true,
-      duration: 3500,
-      title: "Egg hatch locker",
-      description,
-      variant: "error",
-      id: "quinoa-game-toast"
-    });
-    await jSet(toastsAtom, filtered);
-  }
-  function inferPetRarity(mutations) {
-    if (!Array.isArray(mutations) || mutations.length === 0) {
-      return "normal";
-    }
-    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
-    if (seen.has("rainbow")) return "rainbow";
-    if (seen.has("gold") || seen.has("golden")) return "gold";
-    return "normal";
-  }
-  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay(0);
-    const initial = await readInventoryPetSnapshots();
-    if (hasNewInventoryPet(initial, previous)) {
-      return initial;
-    }
-    return new Promise(async (resolve2) => {
-      let settled = false;
-      let unsub = null;
-      let timer = null;
-      const finalize = (value) => {
-        if (settled) return;
-        settled = true;
-        if (timer !== null) {
-          clearTimeout(timer);
-        }
-        if (unsub) {
-          try {
-            unsub();
-          } catch {
-          }
-        }
-        resolve2(value);
-      };
-      const evaluate = (source) => {
-        const pets = collectInventoryPets(source);
-        if (hasNewInventoryPet(pets, previous)) {
-          finalize(pets);
-        }
-      };
-      try {
-        unsub = await Atoms.inventory.myInventory.onChange((next) => {
-          evaluate(next);
-        });
-      } catch (error) {
-        console.error("[HatchEgg] Unable to observe inventory", error);
-        finalize(null);
+  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
+    return new Promise((resolve2, reject) => {
+      if (typeof GM_xmlhttpRequest !== "function") {
+        reject(new Error("GM_xmlhttpRequest is not available"));
         return;
       }
-      timer = setTimeout(() => {
-        void (async () => {
-          const latest = await readInventoryPetSnapshots();
-          if (hasNewInventoryPet(latest, previous)) {
-            finalize(latest);
-          } else {
-            finalize(null);
-          }
-        })();
-      }, timeoutMs);
+      GM_xmlhttpRequest({
+        method: "GET",
+        url,
+        headers,
+        timeout: timeoutMs,
+        onload: (response) => resolve2({
+          status: response.status,
+          ok: response.status >= 200 && response.status < 300,
+          body: response.responseText
+        }),
+        onerror: (error) => reject(error),
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timed out"))
+      });
     });
   }
-  function hasNewInventoryPet(pets, previous) {
-    return pets.some((pet) => !previous.has(pet.id));
-  }
-  function delay(ms) {
-    return new Promise((resolve2) => setTimeout(resolve2, ms));
-  }
-  function resolveSendMessage(Conn) {
-    const isFn = (value) => typeof value === "function";
-    if (isFn(Conn.sendMessage)) {
-      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
+  async function requestRoomEndpoint(roomIdOrCode, options = {}) {
+    const endpoint = options.endpoint ?? "info";
+    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
+    const headers = {};
+    if (options.jwt) {
+      headers["Authorization"] = `Bearer ${options.jwt}`;
     }
-    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
-      return { kind: "proto", fn: Conn.prototype.sendMessage };
-    }
-    return null;
-  }
-  async function removeSellSuccessToast() {
-    try {
-      const toastsAtom = getAtomByLabel("quinoaToastsAtom");
-      if (!toastsAtom) return;
-      const list = await jGet(toastsAtom).catch(() => []);
-      const filtered = Array.isArray(list) ? list.filter((t) => {
-        if (!t || typeof t !== "object") return true;
-        if (t.variant !== "success") return true;
-        const icon = t.icon;
-        const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
-        const hasCropText = !!t?.description?.props?.values?.cropText;
-        return !(isTileSell || hasCropText);
-      }) : list;
-      if (filtered.length !== list.length) {
-        await jSet(toastsAtom, filtered);
+    let rawResponse;
+    if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
+      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+    } else {
+      try {
+        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
+      } catch (error) {
+        if (typeof GM_xmlhttpRequest === "function") {
+          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+        } else {
+          throw error;
+        }
       }
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(rawResponse.body);
     } catch {
     }
+    return { url, ...rawResponse, parsed };
+  }
+  function safeHost(url) {
+    if (!url) return null;
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return null;
+    }
+  }
+  function buildSoftJoinUrl(roomCode) {
+    const merged = new URLSearchParams(location.search);
+    const url = new URL(location.href);
+    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
+    url.search = merged.toString();
+    return url.toString();
+  }
+  function buildHardJoinUrl(roomCode) {
+    return buildSoftJoinUrl(roomCode);
+  }
+  function joinRoom(roomCode, options = {}) {
+    const env = detectEnvironment();
+    const isDiscord = env.surface === "discord";
+    const preferSoft = options.preferSoft ?? !isDiscord;
+    const hardIfSoftFails = options.hardIfSoftFails ?? true;
+    if (isDiscord) {
+      if (options.siteFallbackOnDiscord) {
+        const fallback = `https://magiccircle.gg/r/${encodeURIComponent(roomCode)}`;
+        if (options.openInNewTab) {
+          window.open(fallback, "_blank", "noopener,noreferrer");
+        } else {
+          location.assign(fallback);
+        }
+        return {
+          ok: true,
+          mode: "site-fallback",
+          url: fallback,
+          message: "Discord activity does not support room switching by code, redirecting to the official site."
+        };
+      }
+      return {
+        ok: false,
+        mode: "discord-unsupported",
+        message: "Discord activity does not support joining a room by code. Open the website or use an activity invite."
+      };
+    }
+    const softUrl = buildSoftJoinUrl(roomCode);
+    if (preferSoft) {
+      try {
+        const url = new URL(softUrl);
+        if (url.origin === location.origin) {
+          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
+          window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
+          console.log("[joinRoom] soft \u2192", url.toString());
+          return { ok: true, mode: "soft", url: url.toString() };
+        }
+      } catch {
+      }
+      if (!hardIfSoftFails) {
+        return {
+          ok: false,
+          mode: "noop",
+          url: softUrl,
+          message: "Soft navigation failed because the origins differ."
+        };
+      }
+    }
+    const hardUrl = buildHardJoinUrl(roomCode);
+    console.log("[joinRoom] hard \u2192", hardUrl);
+    location.assign(hardUrl);
+    return { ok: true, mode: "hard", url: hardUrl };
   }
 
   // src/core/webSocketBridge.ts
@@ -8488,6 +7983,1949 @@
       autoRestoreMs: opts?.autoRestoreMs
     });
     if (shouldOpen) await openActivityLogModal();
+  }
+
+  // src/services/misc.ts
+  var LS_GHOST_KEY = "qws:player:ghostMode";
+  var LS_DELAY_KEY = "qws:ghost:delayMs";
+  var DEFAULT_DELAY_MS = 50;
+  var LS_AUTO_RECO_ENABLED = "qws:autoReco:onNewSession";
+  var LS_AUTO_RECO_DELAY_MS = "qws:autoReco:delayMs";
+  var AUTO_RECO_MIN_MS = 3e4;
+  var AUTO_RECO_MAX_MS = 5 * 6e4;
+  var AUTO_RECO_DEFAULT_MS = 6e4;
+  var readGhostEnabled = (def = false) => {
+    try {
+      return localStorage.getItem(LS_GHOST_KEY) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writeGhostEnabled = (v) => {
+    try {
+      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
+    } catch (err) {
+    }
+  };
+  var getGhostDelayMs = () => {
+    try {
+      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
+      return Math.max(5, n);
+    } catch {
+      return DEFAULT_DELAY_MS;
+    }
+  };
+  var setGhostDelayMs = (n) => {
+    const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+    try {
+      localStorage.setItem(LS_DELAY_KEY, String(v));
+    } catch (err) {
+    }
+  };
+  var clampAutoRecoDelay = (ms) => Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
+  var readAutoRecoEnabled = (def = false) => {
+    try {
+      return localStorage.getItem(LS_AUTO_RECO_ENABLED) === "1";
+    } catch {
+      return def;
+    }
+  };
+  var writeAutoRecoEnabled = (on) => {
+    try {
+      localStorage.setItem(LS_AUTO_RECO_ENABLED, on ? "1" : "0");
+    } catch {
+    }
+  };
+  var getAutoRecoDelayMs = () => {
+    try {
+      const raw = Number(localStorage.getItem(LS_AUTO_RECO_DELAY_MS));
+      if (Number.isFinite(raw)) return clampAutoRecoDelay(raw);
+    } catch {
+    }
+    return AUTO_RECO_DEFAULT_MS;
+  };
+  var setAutoRecoDelayMs = (ms) => {
+    const v = clampAutoRecoDelay(ms);
+    try {
+      localStorage.setItem(LS_AUTO_RECO_DELAY_MS, String(v));
+    } catch {
+    }
+  };
+  function createGhostController() {
+    let DELAY_MS = getGhostDelayMs();
+    const KEYS = /* @__PURE__ */ new Set();
+    const onKeyDownCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.repeat) return;
+      KEYS.add(k);
+    };
+    const onKeyUpCapture = (e) => {
+      const k = e.key.toLowerCase();
+      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
+      if (!isMove) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      KEYS.delete(k);
+    };
+    const onBlur = () => {
+      KEYS.clear();
+    };
+    const onVisibility = () => {
+      if (document.hidden) KEYS.clear();
+    };
+    function getDir() {
+      let dx = 0, dy = 0;
+      if (KEYS.has("z") || KEYS.has("w") || KEYS.has("arrowup")) dy -= 1;
+      if (KEYS.has("s") || KEYS.has("arrowdown")) dy += 1;
+      if (KEYS.has("q") || KEYS.has("a") || KEYS.has("arrowleft")) dx -= 1;
+      if (KEYS.has("d") || KEYS.has("arrowright")) dx += 1;
+      if (dx) dx = dx > 0 ? 1 : -1;
+      if (dy) dy = dy > 0 ? 1 : -1;
+      return { dx, dy };
+    }
+    let rafId = null;
+    let lastTs = 0, accMs = 0, inMove = false;
+    async function step(dx, dy) {
+      let cur;
+      try {
+        cur = await PlayerService.getPosition();
+      } catch (err) {
+      }
+      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
+      try {
+        await PlayerService.move(cx + dx, cy + dy);
+      } catch (err) {
+      }
+    }
+    const CAPTURE = { capture: true };
+    function frame(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = ts - lastTs;
+      lastTs = ts;
+      const { dx, dy } = getDir();
+      accMs += dt;
+      if (dx === 0 && dy === 0) {
+        accMs = Math.min(accMs, DELAY_MS * 4);
+        rafId = requestAnimationFrame(frame);
+        return;
+      }
+      if (accMs >= DELAY_MS && !inMove) {
+        accMs -= DELAY_MS;
+        inMove = true;
+        (async () => {
+          try {
+            await step(dx, dy);
+          } finally {
+            inMove = false;
+          }
+        })();
+      }
+      accMs = Math.min(accMs, DELAY_MS * 4);
+      rafId = requestAnimationFrame(frame);
+    }
+    return {
+      start() {
+        if (rafId !== null) return;
+        lastTs = 0;
+        accMs = 0;
+        inMove = false;
+        window.addEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.addEventListener("keyup", onKeyUpCapture, CAPTURE);
+        window.addEventListener("blur", onBlur);
+        document.addEventListener("visibilitychange", onVisibility);
+        rafId = requestAnimationFrame(frame);
+      },
+      stop() {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+        KEYS.clear();
+        window.removeEventListener("keydown", onKeyDownCapture, CAPTURE);
+        window.removeEventListener("keyup", onKeyUpCapture, CAPTURE);
+        window.removeEventListener("blur", onBlur);
+        document.removeEventListener("visibilitychange", onVisibility);
+      },
+      setSpeed(n) {
+        const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
+        DELAY_MS = v;
+        setGhostDelayMs(v);
+      },
+      getSpeed() {
+        return DELAY_MS;
+      }
+    };
+  }
+  var selectedMap = /* @__PURE__ */ new Map();
+  var seedStockByName = /* @__PURE__ */ new Map();
+  var seedSourceCache = [];
+  var selectedDecorMap = /* @__PURE__ */ new Map();
+  var decorStockByName = /* @__PURE__ */ new Map();
+  var decorSourceCache = [];
+  var _decorDeleteAbort = null;
+  var _decorDeleteBusy = false;
+  var NF_US = new Intl.NumberFormat("en-US");
+  var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
+  async function clearUiSelectionAtoms() {
+    try {
+      await Atoms.inventory.mySelectedItemName.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
+    } catch {
+    }
+    try {
+      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+    } catch {
+    }
+  }
+  var OVERLAY_ID = "qws-seeddeleter-overlay";
+  var LIST_ID = "qws-seeddeleter-list";
+  var SUMMARY_ID = "qws-seeddeleter-summary";
+  var OVERLAY_DECOR_ID = "qws-decordeleter-overlay";
+  var LIST_DECOR_ID = "qws-decordeleter-list";
+  var SUMMARY_DECOR_ID = "qws-decordeleter-summary";
+  function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+  function buildDisplayNameToSpeciesFromCatalog() {
+    const map2 = /* @__PURE__ */ new Map();
+    try {
+      const cat = plantCatalog;
+      for (const species of Object.keys(cat || {})) {
+        const seedName = cat?.[species]?.seed?.name && String(cat?.[species]?.seed?.name) || `${species} Seed`;
+        const arr = map2.get(seedName) ?? [];
+        arr.push(species);
+        map2.set(seedName, arr);
+      }
+    } catch {
+    }
+    return map2;
+  }
+  async function buildSpeciesStockFromInventory() {
+    const inv = await getMySeedInventory();
+    const stock = /* @__PURE__ */ new Map();
+    for (const it of inv) {
+      const q = Math.max(0, Math.floor(it.quantity || 0));
+      if (q > 0) stock.set(it.species, (stock.get(it.species) ?? 0) + q);
+    }
+    return stock;
+  }
+  function allocateForRequestedName(requested, nameToSpecies, speciesStock) {
+    let remaining = Math.max(0, Math.floor(requested.qty || 0));
+    let candidates = nameToSpecies.get(requested.name) ?? [];
+    if (!candidates.length && / seed$/i.test(requested.name)) {
+      const fallbackSpecies = requested.name.replace(/\s+seed$/i, "");
+      if (plantCatalog?.[fallbackSpecies]) candidates = [fallbackSpecies];
+    }
+    if (!candidates.length || remaining <= 0) return [];
+    const ranked = candidates.map((sp) => ({ sp, available: speciesStock.get(sp) ?? 0 })).filter((x) => x.available > 0).sort((a, b) => b.available - a.available);
+    const out = [];
+    for (const { sp, available } of ranked) {
+      if (remaining <= 0) break;
+      const take = Math.min(available, remaining);
+      if (take > 0) {
+        out.push({ species: sp, qty: take });
+        remaining -= take;
+      }
+    }
+    return out;
+  }
+  var _seedDeleteAbort = null;
+  var _seedDeleteBusy = false;
+  async function deleteSelectedSeeds(opts = {}) {
+    if (_seedDeleteBusy) {
+      await toastSimple("Seed deleter", "Deletion already in progress.", "info");
+      return;
+    }
+    const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
+    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 16));
+    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values())).map((s) => ({ name: s.name, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
+    if (selection.length === 0) {
+      await toastSimple("Seed deleter", "No seeds selected.", "info");
+      return;
+    }
+    const nameToSpecies = buildDisplayNameToSpeciesFromCatalog();
+    const speciesStock = await buildSpeciesStockFromInventory();
+    const allocatedBySpecies = /* @__PURE__ */ new Map();
+    let requestedTotal = 0, cappedTotal = 0;
+    for (const req of selection) {
+      requestedTotal += req.qty;
+      const chunks = allocateForRequestedName(req, nameToSpecies, speciesStock);
+      const okForThis = chunks.reduce((a, c) => a + c.qty, 0);
+      cappedTotal += okForThis;
+      for (const c of chunks) {
+        allocatedBySpecies.set(c.species, (allocatedBySpecies.get(c.species) ?? 0) + c.qty);
+      }
+    }
+    if (cappedTotal <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete (not in inventory).", "info");
+      return;
+    }
+    if (cappedTotal < requestedTotal) {
+      await toastSimple(
+        "Seed deleter",
+        `Requested ${formatNum(requestedTotal)} but only ${formatNum(cappedTotal)} available. Proceeding.`,
+        "info"
+      );
+    }
+    const tasks = Array.from(allocatedBySpecies.entries()).map(([species, qty]) => ({ species, qty: Math.max(0, Math.floor(qty || 0)) })).filter((t) => t.qty > 0);
+    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+    if (total <= 0) {
+      await toastSimple("Seed deleter", "Nothing to delete.", "info");
+      return;
+    }
+    _seedDeleteBusy = true;
+    const abort = new AbortController();
+    _seedDeleteAbort = abort;
+    try {
+      await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
+      let done = 0;
+      for (const t of tasks) {
+        let remaining = t.qty;
+        while (remaining > 0) {
+          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+          const n = Math.min(batchSize, remaining);
+          for (let i = 0; i < n; i++) {
+            try {
+              await PlayerService.wish(t.species);
+            } catch (err) {
+            }
+          }
+          done += n;
+          remaining -= n;
+          try {
+            opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
+            window.dispatchEvent(new CustomEvent("qws:seeddeleter:progress", {
+              detail: { done, total, species: t.species, remainingForSpecies: remaining }
+            }));
+          } catch {
+          }
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+        }
+      }
+      if (!opts.keepSelection) selectedMap.clear();
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
+    } catch (e) {
+      const msg = e?.message || "Deletion failed.";
+      try {
+        window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } }));
+      } catch {
+      }
+      await toastSimple("Seed deleter", msg, "error");
+    } finally {
+      _seedDeleteBusy = false;
+      _seedDeleteAbort = null;
+    }
+  }
+  function cancelSeedDeletion() {
+    try {
+      _seedDeleteAbort?.abort();
+    } catch (err) {
+    }
+  }
+  function isSeedDeletionRunning() {
+    return _seedDeleteBusy;
+  }
+  try {
+    window.addEventListener("qws:seeddeleter:apply", async (e) => {
+      try {
+        const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : void 0;
+        await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
+      } catch {
+      }
+    });
+  } catch {
+  }
+  function seedDisplayNameFromSpecies(species) {
+    try {
+      const node = plantCatalog?.[species];
+      const n = node?.seed?.name;
+      if (typeof n === "string" && n) return n;
+    } catch {
+    }
+    return `${species} Seed`;
+  }
+  function normalizeSeedItem(x, _idx) {
+    if (!x || typeof x !== "object") return null;
+    const species = typeof x.species === "string" ? x.species.trim() : "";
+    const itemType = x.itemType === "Seed" ? "Seed" : null;
+    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+    if (!species || itemType !== "Seed" || quantity <= 0) return null;
+    return { species, itemType: "Seed", quantity, id: `seed:${species}` };
+  }
+  async function getMySeedInventory() {
+    try {
+      const raw = await Atoms.inventory.mySeedInventory.get();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      raw.forEach((x, i) => {
+        const s = normalizeSeedItem(x, i);
+        if (s) out.push(s);
+      });
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function buildInventoryShapeFrom(items) {
+    return { items, favoritedItemIds: [] };
+  }
+  function decorDisplayNameFromId(decorId) {
+    try {
+      const node = decorCatalog?.[decorId];
+      const n = node?.name;
+      if (typeof n === "string" && n) return n;
+    } catch {
+    }
+    return decorId || "Decor";
+  }
+  function normalizeDecorItem(x) {
+    if (!x || typeof x !== "object") return null;
+    const decorId = typeof x.decorId === "string" ? x.decorId.trim() : "";
+    const itemType = x.itemType === "Decor" ? "Decor" : null;
+    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
+    if (!decorId || itemType !== "Decor" || quantity <= 0) return null;
+    return { decorId, itemType: "Decor", quantity, id: `decor:${decorId}` };
+  }
+  async function getMyDecorInventory() {
+    try {
+      const raw = await Atoms.inventory.myDecorInventory.get();
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      raw.forEach((x) => {
+        const s = normalizeDecorItem(x);
+        if (s) out.push(s);
+      });
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function buildDecorInventoryShapeFrom(items) {
+    return { items, favoritedItemIds: [] };
+  }
+  function setStyles(el2, styles) {
+    Object.assign(el2.style, styles);
+  }
+  function styleOverlayBox(div, id) {
+    div.id = id;
+    setStyles(div, {
+      position: "fixed",
+      left: "12px",
+      top: "12px",
+      zIndex: "999999",
+      display: "grid",
+      gridTemplateRows: "auto auto 1px 1fr auto",
+      gap: "6px",
+      minWidth: "320px",
+      maxWidth: "420px",
+      maxHeight: "52vh",
+      padding: "8px",
+      border: "1px solid #39424c",
+      borderRadius: "10px",
+      background: "rgba(22,27,34,0.92)",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      backdropFilter: "blur(2px)",
+      userSelect: "none",
+      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
+      fontSize: "12px",
+      lineHeight: "1.25"
+    });
+    div.dataset["qwsSeedDeleter"] = "1";
+  }
+  function makeDraggable(root, handle) {
+    let dragging = false;
+    let ox = 0, oy = 0;
+    const onDown = (e) => {
+      dragging = true;
+      const r = root.getBoundingClientRect();
+      ox = e.clientX - r.left;
+      oy = e.clientY - r.top;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp, { once: true });
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const nx = Math.max(4, e.clientX - ox);
+      const ny = Math.max(4, e.clientY - oy);
+      root.style.left = `${nx}px`;
+      root.style.top = `${ny}px`;
+    };
+    const onUp = () => {
+      dragging = false;
+      document.removeEventListener("mousemove", onMove);
+    };
+    handle.addEventListener("mousedown", onDown);
+  }
+  function createButton(label2, styleOverride) {
+    const b = document.createElement("button");
+    b.textContent = label2;
+    setStyles(b, {
+      padding: "4px 8px",
+      borderRadius: "8px",
+      border: "1px solid #4446",
+      background: "#161b22",
+      color: "#E7EEF7",
+      cursor: "pointer",
+      fontWeight: "600",
+      fontSize: "12px",
+      ...styleOverride
+    });
+    b.onmouseenter = () => b.style.borderColor = "#6aa1";
+    b.onmouseleave = () => b.style.borderColor = "#4446";
+    return b;
+  }
+  var overlayKeyGuardsOn = false;
+  function isInsideOverlay(el2) {
+    return !!(el2 && (el2.closest?.(`#${OVERLAY_ID}`) || el2.closest?.(`#${OVERLAY_DECOR_ID}`)));
+  }
+  function keyGuardCapture(e) {
+    const ae = document.activeElement;
+    if (!isInsideOverlay(ae)) return;
+    const tag = (ae?.tagName || "").toLowerCase();
+    const isEditable = tag === "input" || tag === "textarea" || ae && ae.isContentEditable;
+    if (!isEditable) return;
+    if (/^[0-9]$/.test(e.key)) {
+      e.stopImmediatePropagation();
+    }
+  }
+  function installOverlayKeyGuards() {
+    if (overlayKeyGuardsOn) return;
+    window.addEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = true;
+  }
+  function removeOverlayKeyGuards() {
+    if (!overlayKeyGuardsOn) return;
+    window.removeEventListener("keydown", keyGuardCapture, { capture: true });
+    overlayKeyGuardsOn = false;
+  }
+  async function closeSeedInventoryPanel() {
+    try {
+      await fakeInventoryHide();
+    } catch {
+      try {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      } catch {
+      }
+    }
+  }
+  function createSeedOverlay() {
+    const box = document.createElement("div");
+    styleOverlayBox(box, OVERLAY_ID);
+    const header = document.createElement("div");
+    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+    const title = document.createElement("div");
+    title.textContent = "\u{1F3AF} Selection mode";
+    setStyles(title, { fontWeight: "700", fontSize: "13px" });
+    const hint = document.createElement("div");
+    hint.textContent = "Click seeds in inventory to toggle selection.";
+    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+    const hr = document.createElement("div");
+    setStyles(hr, { height: "1px", background: "#2d333b" });
+    const list = document.createElement("div");
+    list.id = LIST_ID;
+    setStyles(list, {
+      minHeight: "44px",
+      maxHeight: "26vh",
+      overflow: "auto",
+      padding: "4px",
+      border: "1px dashed #39424c",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.84)",
+      userSelect: "text"
+    });
+    const actions = document.createElement("div");
+    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+    const summary = document.createElement("div");
+    summary.id = SUMMARY_ID;
+    setStyles(summary, { fontWeight: "600" });
+    summary.textContent = "Selected: 0 species \xB7 0 seeds";
+    const btnClear = createButton("Clear");
+    btnClear.title = "Clear selection";
+    btnClear.onclick = async () => {
+      selectedMap.clear();
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    _btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+    _btnConfirm.disabled = true;
+    _btnConfirm.onclick = async () => {
+      await closeSeedInventoryPanel();
+    };
+    header.append(title);
+    actions.append(summary, btnClear, _btnConfirm);
+    box.append(header, hint, hr, list, actions);
+    makeDraggable(box, header);
+    return box;
+  }
+  function showSeedOverlay() {
+    if (document.getElementById(OVERLAY_ID)) return;
+    const el2 = createSeedOverlay();
+    document.body.appendChild(el2);
+    installOverlayKeyGuards();
+    refreshList();
+    updateSummary();
+  }
+  function hideSeedOverlay() {
+    const el2 = document.getElementById(OVERLAY_ID);
+    if (el2) el2.remove();
+    if (!document.getElementById(OVERLAY_DECOR_ID)) removeOverlayKeyGuards();
+  }
+  var _btnConfirm = null;
+  var unsubSelectedName = null;
+  var unsubDecorSelectedName = null;
+  function renderListRow(item) {
+    const row = document.createElement("div");
+    setStyles(row, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 6px",
+      borderBottom: "1px dashed #2d333b"
+    });
+    const name = document.createElement("div");
+    name.textContent = item.name;
+    setStyles(name, {
+      fontSize: "12px",
+      fontWeight: "600",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    });
+    const controls = document.createElement("div");
+    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "1";
+    qty.max = String(Math.max(1, item.maxQty));
+    qty.step = "1";
+    qty.value = String(item.qty);
+    qty.className = "qmm-input";
+    setStyles(qty, {
+      width: "68px",
+      height: "28px",
+      border: "1px solid #4446",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.90)",
+      padding: "0 8px",
+      fontSize: "12px"
+    });
+    const swallowDigits = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    qty.addEventListener("keydown", swallowDigits);
+    const updateQty = async () => {
+      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+      qty.value = String(v);
+      const cur = selectedMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      selectedMap.set(item.name, cur);
+      updateSummary();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    qty.onchange = () => {
+      void updateQty();
+    };
+    qty.oninput = () => {
+      void updateQty();
+    };
+    const remove = createButton("Remove", { background: "transparent" });
+    remove.onclick = async () => {
+      selectedMap.delete(item.name);
+      refreshList();
+      updateSummary();
+      await repatchFakeSeedInventoryWithSelection();
+    };
+    controls.append(qty, remove);
+    row.append(name, controls);
+    return row;
+  }
+  function refreshList() {
+    const list = document.getElementById(LIST_ID);
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No seeds selected.";
+      empty.style.opacity = "0.8";
+      list.appendChild(empty);
+      return;
+    }
+    for (const it of entries) list.appendChild(renderListRow(it));
+  }
+  function totalSelected() {
+    let species = 0, qty = 0;
+    for (const it of selectedMap.values()) {
+      species += 1;
+      qty += it.qty;
+    }
+    return { species, qty };
+  }
+  function updateSummary() {
+    const { species, qty } = totalSelected();
+    const el2 = document.getElementById(SUMMARY_ID);
+    if (el2) el2.textContent = `Selected: ${species} species \xB7 ${formatNum(qty)} seeds`;
+    if (_btnConfirm) {
+      _btnConfirm.textContent = "Confirm";
+      _btnConfirm.disabled = qty <= 0;
+      _btnConfirm.style.opacity = qty <= 0 ? "0.6" : "1";
+      _btnConfirm.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+    }
+  }
+  async function repatchFakeSeedInventoryWithSelection() {
+    const src = Array.isArray(seedSourceCache) ? seedSourceCache : [];
+    const remainingByName = /* @__PURE__ */ new Map();
+    for (const s of src) {
+      const disp = seedDisplayNameFromSpecies(s.species);
+      const qty = Math.max(0, Math.floor(s.quantity || 0));
+      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+    }
+    for (const sel of selectedMap.values()) {
+      const cur = remainingByName.get(sel.name) ?? 0;
+      const picked = Math.max(0, Math.floor(sel.qty || 0));
+      remainingByName.set(sel.name, Math.max(0, cur - picked));
+    }
+    const patched = [];
+    for (const s of src) {
+      const disp = seedDisplayNameFromSpecies(s.species);
+      const remaining = remainingByName.get(disp) ?? 0;
+      if (remaining <= 0) continue;
+      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+      if (take <= 0) continue;
+      patched.push({ ...s, quantity: take });
+      remainingByName.set(disp, remaining - take);
+    }
+    try {
+      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
+    } catch {
+    }
+  }
+  async function beginSelectedNameListener() {
+    if (unsubSelectedName) return;
+    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
+      const n = (name || "").trim();
+      if (!n) return;
+      const max = Math.max(1, seedStockByName.get(n) ?? 1);
+      const existing = selectedMap.get(n);
+      if (existing) {
+        existing.qty = max;
+        existing.maxQty = max;
+        selectedMap.set(n, existing);
+      } else {
+        selectedMap.set(n, { name: n, qty: max, maxQty: max });
+      }
+      refreshList();
+      updateSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeSeedInventoryWithSelection();
+    });
+    unsubSelectedName = typeof unsub === "function" ? unsub : null;
+  }
+  async function endSelectedNameListener() {
+    const fn = unsubSelectedName;
+    unsubSelectedName = null;
+    try {
+      await fn?.();
+    } catch {
+    }
+  }
+  async function openSeedInventoryPreview() {
+    try {
+      const src = await getMySeedInventory();
+      if (!src.length) {
+        await toastSimple("Seed inventory", "No seeds to display.", "info");
+        return;
+      }
+      await fakeInventoryShow(buildInventoryShapeFrom(src), { open: true });
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed inventory.", "error");
+    }
+  }
+  async function openSeedSelectorFlow(setWindowVisible) {
+    try {
+      setWindowVisible?.(false);
+      seedSourceCache = await getMySeedInventory();
+      seedStockByName = /* @__PURE__ */ new Map();
+      for (const s of seedSourceCache) {
+        const display = seedDisplayNameFromSpecies(s.species);
+        seedStockByName.set(display, Math.max(1, Math.floor(s.quantity || 0)));
+      }
+      selectedMap.clear();
+      showSeedOverlay();
+      await beginSelectedNameListener();
+      await fakeInventoryShow(buildInventoryShapeFrom(seedSourceCache), { open: true });
+      if (await isInventoryPanelOpen()) {
+        await waitInventoryPanelClosed();
+      }
+    } catch (e) {
+      await toastSimple("Seed inventory", e?.message || "Failed to open seed selector.", "error");
+    } finally {
+      await endSelectedNameListener();
+      hideSeedOverlay();
+      seedSourceCache = [];
+      seedStockByName.clear();
+      setWindowVisible?.(true);
+    }
+  }
+  function createDecorOverlay() {
+    const box = document.createElement("div");
+    styleOverlayBox(box, OVERLAY_DECOR_ID);
+    const header = document.createElement("div");
+    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
+    const title = document.createElement("div");
+    title.textContent = "Decor selection";
+    setStyles(title, { fontWeight: "700", fontSize: "13px" });
+    const hint = document.createElement("div");
+    hint.textContent = "Click decor in inventory to toggle selection.";
+    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
+    const hr = document.createElement("div");
+    setStyles(hr, { height: "1px", background: "#2d333b" });
+    const list = document.createElement("div");
+    list.id = LIST_DECOR_ID;
+    setStyles(list, {
+      minHeight: "44px",
+      maxHeight: "26vh",
+      overflow: "auto",
+      padding: "4px",
+      border: "1px dashed #39424c",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.84)",
+      userSelect: "text"
+    });
+    const actions = document.createElement("div");
+    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
+    const summary = document.createElement("div");
+    summary.id = SUMMARY_DECOR_ID;
+    setStyles(summary, { fontWeight: "600" });
+    summary.textContent = "Selected: 0 decor \xB7 0 items";
+    const btnClear = createButton("Clear");
+    btnClear.title = "Clear selection";
+    btnClear.onclick = async () => {
+      selectedDecorMap.clear();
+      refreshDecorList();
+      updateDecorSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    const btnConfirm = createButton("Confirm", { background: "#1F2328CC" });
+    btnConfirm.disabled = true;
+    btnConfirm.onclick = async () => {
+      await closeSeedInventoryPanel();
+    };
+    header.append(title);
+    actions.append(summary, btnClear, btnConfirm);
+    box.append(header, hint, hr, list, actions);
+    makeDraggable(box, header);
+    box.__btnConfirm = btnConfirm;
+    return box;
+  }
+  function showDecorOverlay() {
+    if (document.getElementById(OVERLAY_DECOR_ID)) return;
+    const el2 = createDecorOverlay();
+    document.body.appendChild(el2);
+    installOverlayKeyGuards();
+    refreshDecorList();
+    updateDecorSummary();
+  }
+  function hideDecorOverlay() {
+    const el2 = document.getElementById(OVERLAY_DECOR_ID);
+    if (el2) el2.remove();
+    if (!document.getElementById(OVERLAY_ID)) removeOverlayKeyGuards();
+  }
+  function renderDecorListRow(item) {
+    const row = document.createElement("div");
+    setStyles(row, {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 6px",
+      borderBottom: "1px dashed #2d333b"
+    });
+    const name = document.createElement("div");
+    name.textContent = item.name;
+    setStyles(name, {
+      fontSize: "12px",
+      fontWeight: "600",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap"
+    });
+    const controls = document.createElement("div");
+    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "1";
+    qty.max = String(Math.max(1, item.maxQty));
+    qty.step = "1";
+    qty.value = String(item.qty);
+    qty.className = "qmm-input";
+    setStyles(qty, {
+      width: "68px",
+      height: "28px",
+      border: "1px solid #4446",
+      borderRadius: "8px",
+      background: "rgba(15,19,24,0.90)",
+      padding: "0 8px",
+      fontSize: "12px"
+    });
+    const swallowDigits = (e) => {
+      if (/^[0-9]$/.test(e.key)) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    qty.addEventListener("keydown", swallowDigits);
+    const updateQty = async () => {
+      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
+      qty.value = String(v);
+      const cur = selectedDecorMap.get(item.name);
+      if (!cur) return;
+      cur.qty = v;
+      cur.maxQty = Math.max(cur.maxQty, v);
+      selectedDecorMap.set(item.name, cur);
+      updateDecorSummary();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    qty.onchange = () => {
+      void updateQty();
+    };
+    qty.oninput = () => {
+      void updateQty();
+    };
+    const remove = createButton("Remove", { background: "transparent" });
+    remove.onclick = async () => {
+      selectedDecorMap.delete(item.name);
+      refreshDecorList();
+      updateDecorSummary();
+      await repatchFakeDecorInventoryWithSelection();
+    };
+    controls.append(qty, remove);
+    row.append(name, controls);
+    return row;
+  }
+  function refreshDecorList() {
+    const list = document.getElementById(LIST_DECOR_ID);
+    if (!list) return;
+    list.innerHTML = "";
+    const entries = Array.from(selectedDecorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    if (entries.length === 0) {
+      const empty = document.createElement("div");
+      empty.textContent = "No decor selected.";
+      empty.style.opacity = "0.8";
+      list.appendChild(empty);
+      return;
+    }
+    for (const it of entries) list.appendChild(renderDecorListRow(it));
+  }
+  function totalDecorSelected() {
+    let kinds = 0, qty = 0;
+    for (const it of selectedDecorMap.values()) {
+      kinds += 1;
+      qty += it.qty;
+    }
+    return { kinds, qty };
+  }
+  function updateDecorSummary() {
+    const { kinds, qty } = totalDecorSelected();
+    const el2 = document.getElementById(SUMMARY_DECOR_ID);
+    if (el2) el2.textContent = `Selected: ${kinds} decor \xB7 ${formatNum(qty)} items`;
+    const overlay = document.getElementById(OVERLAY_DECOR_ID);
+    const btn = overlay?.__btnConfirm;
+    if (btn) {
+      btn.textContent = "Confirm";
+      btn.disabled = qty <= 0;
+      btn.style.opacity = qty <= 0 ? "0.6" : "1";
+      btn.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
+    }
+  }
+  async function repatchFakeDecorInventoryWithSelection() {
+    const src = Array.isArray(decorSourceCache) ? decorSourceCache : [];
+    const remainingByName = /* @__PURE__ */ new Map();
+    for (const s of src) {
+      const disp = decorDisplayNameFromId(s.decorId);
+      const qty = Math.max(0, Math.floor(s.quantity || 0));
+      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
+    }
+    for (const sel of selectedDecorMap.values()) {
+      const cur = remainingByName.get(sel.name) ?? 0;
+      const picked = Math.max(0, Math.floor(sel.qty || 0));
+      remainingByName.set(sel.name, Math.max(0, cur - picked));
+    }
+    const patched = [];
+    for (const s of src) {
+      const disp = decorDisplayNameFromId(s.decorId);
+      const remaining = remainingByName.get(disp) ?? 0;
+      if (remaining <= 0) continue;
+      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
+      if (take <= 0) continue;
+      patched.push({ ...s, quantity: take });
+      remainingByName.set(disp, remaining - take);
+    }
+    try {
+      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
+    } catch {
+    }
+  }
+  async function beginSelectedDecorNameListener() {
+    if (unsubDecorSelectedName) return;
+    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
+      const n = (name || "").trim();
+      if (!n) return;
+      const max = Math.max(1, decorStockByName.get(n) ?? 1);
+      const decorId = Array.from(decorSourceCache || []).find((d) => decorDisplayNameFromId(d.decorId) === n)?.decorId || n;
+      const existing = selectedDecorMap.get(n);
+      if (existing) {
+        existing.qty = max;
+        existing.maxQty = max;
+        selectedDecorMap.set(n, existing);
+      } else {
+        selectedDecorMap.set(n, { name: n, qty: max, maxQty: max, decorId });
+      }
+      refreshDecorList();
+      updateDecorSummary();
+      await clearUiSelectionAtoms();
+      await repatchFakeDecorInventoryWithSelection();
+    });
+    unsubDecorSelectedName = typeof unsub === "function" ? unsub : null;
+  }
+  async function endSelectedDecorNameListener() {
+    const fn = unsubDecorSelectedName;
+    unsubDecorSelectedName = null;
+    try {
+      await fn?.();
+    } catch {
+    }
+  }
+  async function findFirstEmptySlot() {
+    const state2 = await PlayerService.getGardenState();
+    const dirt = state2?.tileObjects || {};
+    const boardwalk = state2?.boardwalkTileObjects || {};
+    for (let i = 0; i < 200; i++) {
+      const key2 = String(i);
+      const has = Object.prototype.hasOwnProperty.call(dirt, key2) && dirt[key2] != null;
+      if (!has) return { tileType: "Dirt", index: i };
+    }
+    for (let i = 0; i < 76; i++) {
+      const key2 = String(i);
+      const has = Object.prototype.hasOwnProperty.call(boardwalk, key2) && boardwalk[key2] != null;
+      if (!has) return { tileType: "Boardwalk", index: i };
+    }
+    return null;
+  }
+  async function deleteSelectedDecor(opts = {}) {
+    if (_decorDeleteBusy) {
+      await toastSimple("Decor deleter", "Deletion already in progress.", "info");
+      return;
+    }
+    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 25));
+    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedDecorMap.values())).map((s) => ({ name: s.name, decorId: s.decorId, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
+    if (!selection.length) {
+      await toastSimple("Decor deleter", "No decor selected.", "info");
+      return;
+    }
+    const stock = /* @__PURE__ */ new Map();
+    (await getMyDecorInventory()).forEach((d) => {
+      stock.set(d.decorId, (stock.get(d.decorId) ?? 0) + Math.max(0, Math.floor(d.quantity || 0)));
+    });
+    const tasks = selection.map((s) => {
+      const available = stock.get(s.decorId) ?? 0;
+      const qty = Math.min(s.qty, available);
+      return { decorId: s.decorId, qty, name: s.name };
+    }).filter((t) => t.qty > 0);
+    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
+    if (total <= 0) {
+      await toastSimple("Decor deleter", "Nothing to delete (not in inventory).", "info");
+      return;
+    }
+    const emptySlot = await findFirstEmptySlot();
+    if (!emptySlot) {
+      await toastSimple("Decor deleter", "No empty slot available to delete decor (dirt 0-199, boardwalk 0-75).", "error");
+      return;
+    }
+    _decorDeleteBusy = true;
+    const abort = new AbortController();
+    _decorDeleteAbort = abort;
+    try {
+      await toastSimple("Decor deleter", `Deleting ${formatNum(total)} decor items across ${tasks.length} types...`, "info");
+      let done = 0;
+      for (const t of tasks) {
+        let remaining = t.qty;
+        while (remaining > 0) {
+          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+          try {
+            await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0);
+          } catch {
+          }
+          try {
+            await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType);
+          } catch {
+          }
+          done += 1;
+          remaining -= 1;
+          try {
+            opts.onProgress?.({ done, total, decorId: t.decorId, remainingForDecor: remaining });
+            window.dispatchEvent(new CustomEvent("qws:decordeleter:progress", {
+              detail: { done, total, decorId: t.decorId, remainingForDecor: remaining }
+            }));
+          } catch {
+          }
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+        }
+      }
+      if (!opts.keepSelection) selectedDecorMap.clear();
+      try {
+        window.dispatchEvent(new CustomEvent("qws:decordeleter:done", { detail: { total, decorCount: tasks.length } }));
+      } catch {
+      }
+      await toastSimple("Decor deleter", `Deleted ${formatNum(total)} decor items (${tasks.length} types).`, "success");
+    } catch (e) {
+      const msg = e?.message || "Deletion failed.";
+      try {
+        window.dispatchEvent(new CustomEvent("qws:decordeleter:error", { detail: { message: msg } }));
+      } catch {
+      }
+      await toastSimple("Decor deleter", msg, "error");
+    } finally {
+      _decorDeleteBusy = false;
+      _decorDeleteAbort = null;
+    }
+  }
+  function cancelDecorDeletion() {
+    try {
+      _decorDeleteAbort?.abort();
+    } catch {
+    }
+  }
+  function isDecorDeletionRunning() {
+    return _decorDeleteBusy;
+  }
+  async function openDecorSelectorFlow(setWindowVisible) {
+    try {
+      setWindowVisible?.(false);
+      decorSourceCache = await getMyDecorInventory();
+      decorStockByName = /* @__PURE__ */ new Map();
+      for (const d of decorSourceCache) {
+        const display = decorDisplayNameFromId(d.decorId);
+        decorStockByName.set(display, Math.max(1, Math.floor(d.quantity || 0)));
+      }
+      selectedDecorMap.clear();
+      showDecorOverlay();
+      await beginSelectedDecorNameListener();
+      await fakeInventoryShow(buildDecorInventoryShapeFrom(decorSourceCache), { open: true });
+      if (await isInventoryPanelOpen()) {
+        await waitInventoryPanelClosed();
+      }
+    } catch (e) {
+      await toastSimple("Decor inventory", e?.message || "Failed to open decor selector.", "error");
+    } finally {
+      await endSelectedDecorNameListener();
+      hideDecorOverlay();
+      decorSourceCache = [];
+      decorStockByName.clear();
+      setWindowVisible?.(true);
+    }
+  }
+  var MiscService = {
+    // ghost
+    readGhostEnabled,
+    writeGhostEnabled,
+    getGhostDelayMs,
+    setGhostDelayMs,
+    createGhostController,
+    readAutoRecoEnabled,
+    writeAutoRecoEnabled,
+    getAutoRecoDelayMs,
+    setAutoRecoDelayMs,
+    // seeds
+    getMySeedInventory,
+    openSeedInventoryPreview,
+    openSeedSelectorFlow,
+    //delete
+    deleteSelectedSeeds,
+    cancelSeedDeletion,
+    isSeedDeletionRunning,
+    getCurrentSeedSelection() {
+      return Array.from(selectedMap.values());
+    },
+    clearSeedSelection() {
+      selectedMap.clear();
+    },
+    // decor
+    getMyDecorInventory,
+    openDecorSelectorFlow,
+    deleteSelectedDecor,
+    cancelDecorDeletion,
+    isDecorDeletionRunning,
+    getCurrentDecorSelection() {
+      return Array.from(selectedDecorMap.values());
+    },
+    clearDecorSelection() {
+      selectedDecorMap.clear();
+    }
+  };
+
+  // src/hooks/ws-hook.ts
+  var wsCloseListeners = [];
+  var versionReloadScheduled = false;
+  var autoRecoTimer = null;
+  function onWebSocketClose(cb) {
+    wsCloseListeners.push(cb);
+    return () => {
+      const idx = wsCloseListeners.indexOf(cb);
+      if (idx !== -1) wsCloseListeners.splice(idx, 1);
+    };
+  }
+  function notifyWebSocketClose(ev, ws) {
+    for (const listener of [...wsCloseListeners]) {
+      try {
+        listener(ev, ws);
+      } catch {
+      }
+    }
+  }
+  function isVersionExpiredClose(ev) {
+    return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
+  }
+  function startAutoReloadOnVersionExpired() {
+    onWebSocketClose((ev) => {
+      if (!isVersionExpiredClose(ev)) return;
+      const env = detectEnvironment();
+      if (env.surface === "discord" || env.isInIframe) return;
+      if (versionReloadScheduled) return;
+      versionReloadScheduled = true;
+      try {
+        console.warn("[MagicGarden] Version expired, reloading...");
+      } catch {
+      }
+      try {
+        pageWindow.location.reload();
+      } catch {
+        try {
+          window.location.reload();
+        } catch {
+        }
+      }
+    });
+  }
+  function isSupersededSessionClose(ev) {
+    if (ev?.code !== 4250) return false;
+    const reason = ev?.reason || "";
+    return /superseded/i.test(reason) || /newer user session/i.test(reason);
+  }
+  function startAutoReconnectOnSuperseded() {
+    onWebSocketClose((ev) => {
+      if (!isSupersededSessionClose(ev)) return;
+      if (!MiscService.readAutoRecoEnabled(false)) return;
+      const delayMs = MiscService.getAutoRecoDelayMs();
+      if (autoRecoTimer !== null) {
+        clearTimeout(autoRecoTimer);
+        autoRecoTimer = null;
+      }
+      autoRecoTimer = window.setTimeout(() => {
+        autoRecoTimer = null;
+        if (!MiscService.readAutoRecoEnabled(false)) return;
+        try {
+          const conn = pageWindow.MagicCircle_RoomConnection;
+          const connect = conn?.connect;
+          if (typeof connect === "function") {
+            connect.call(conn);
+          }
+        } catch (error) {
+          console.warn("[MagicGarden] Auto reco failed:", error);
+        }
+      }, delayMs);
+    });
+  }
+  function installPageWebSocketHook() {
+    if (!pageWindow || !NativeWS) return;
+    startAutoReloadOnVersionExpired();
+    startAutoReconnectOnSuperseded();
+    function WrappedWebSocket(url, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+      sockets.push(ws);
+      ws.addEventListener("open", () => {
+        setTimeout(() => {
+          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
+        }, 800);
+      });
+      ws.addEventListener("message", async (ev) => {
+        const j = await parseWSData(ev.data);
+        if (!j) return;
+        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+          setQWS(ws, "message:" + (j.type || "state"));
+        }
+      });
+      ws.addEventListener("close", (ev) => {
+        notifyWebSocketClose(ev, ws);
+      });
+      return ws;
+    }
+    WrappedWebSocket.prototype = NativeWS.prototype;
+    try {
+      WrappedWebSocket.OPEN = NativeWS.OPEN;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
+    } catch {
+    }
+    pageWindow.WebSocket = WrappedWebSocket;
+    if (pageWindow !== window) {
+      try {
+        window.WebSocket = WrappedWebSocket;
+      } catch {
+      }
+    }
+    function hasSharedQuinoaWS() {
+      const existing = readSharedGlobal("quinoaWS");
+      return !!existing;
+    }
+    installHarvestCropInterceptor();
+  }
+  var interceptorsByType = /* @__PURE__ */ new Map();
+  var interceptorStatus = readSharedGlobal(
+    "__tmMessageHookInstalled"
+  ) ? "installed" : "idle";
+  var interceptorPoll = null;
+  var interceptorTimeout = null;
+  function registerMessageInterceptor(type, interceptor) {
+    const list = interceptorsByType.get(type);
+    if (list) {
+      list.push(interceptor);
+    } else {
+      interceptorsByType.set(type, [interceptor]);
+    }
+    ensureMessageInterceptorInstalled();
+    return () => {
+      const current = interceptorsByType.get(type);
+      if (!current) return;
+      const index = current.indexOf(interceptor);
+      if (index !== -1) current.splice(index, 1);
+      if (current.length === 0) interceptorsByType.delete(type);
+    };
+  }
+  function ensureMessageInterceptorInstalled() {
+    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
+    interceptorStatus = "installing";
+    const tryInstall = () => {
+      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
+      if (!Conn) return false;
+      const original = resolveSendMessage(Conn);
+      if (!original) return false;
+      const wrap = function(message, ...rest) {
+        let currentMessage = message;
+        try {
+          const type = currentMessage?.type;
+          if (type && interceptorsByType.size > 0) {
+            const context = { thisArg: this, args: rest };
+            const result = applyInterceptors(type, currentMessage, context);
+            if (result.drop) return;
+            currentMessage = result.message;
+          }
+        } catch (error) {
+          console.error("[MG-mod] Erreur dans le hook WS :", error);
+        }
+        return original.fn.call(this, currentMessage, ...rest);
+      };
+      if (original.kind === "static") {
+        Conn.sendMessage = wrap;
+      } else {
+        Conn.prototype.sendMessage = wrap;
+      }
+      interceptorStatus = "installed";
+      shareGlobal("__tmMessageHookInstalled", true);
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorTimeout !== null) {
+        clearTimeout(interceptorTimeout);
+        interceptorTimeout = null;
+      }
+      return true;
+    };
+    if (tryInstall()) return;
+    interceptorPoll = window.setInterval(() => {
+      if (tryInstall()) {
+        if (interceptorPoll !== null) {
+          clearInterval(interceptorPoll);
+          interceptorPoll = null;
+        }
+      }
+    }, 200);
+    interceptorTimeout = window.setTimeout(() => {
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorStatus !== "installed") {
+        interceptorStatus = "idle";
+      }
+      interceptorTimeout = null;
+    }, 2e4);
+  }
+  function applyInterceptors(type, initialMessage, context) {
+    const interceptors = interceptorsByType.get(type);
+    if (!interceptors || interceptors.length === 0) {
+      return { message: initialMessage, drop: false };
+    }
+    let currentMessage = initialMessage;
+    for (const interceptor of [...interceptors]) {
+      try {
+        const result = interceptor(currentMessage, context);
+        if (!result) continue;
+        if (result.kind === "drop") {
+          return { message: currentMessage, drop: true };
+        }
+        if (result.kind === "replace") {
+          currentMessage = result.message;
+        }
+      } catch (error) {
+      }
+    }
+    return { message: currentMessage, drop: false };
+  }
+  function installHarvestCropInterceptor() {
+    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
+    let latestGardenState = null;
+    let friendBonusPercent = null;
+    let friendBonusFromPlayers = null;
+    let latestEggId = null;
+    void (async () => {
+      try {
+        latestGardenState = await Atoms.data.garden.get() ?? null;
+      } catch {
+      }
+      try {
+        await Atoms.data.garden.onChange((next) => {
+          latestGardenState = next ?? null;
+        });
+      } catch {
+      }
+      try {
+        const initialObj = await Atoms.data.myCurrentGardenObject.get();
+        latestEggId = extractEggId(initialObj);
+      } catch {
+      }
+      try {
+        await Atoms.data.myCurrentGardenObject.onChange((next) => {
+          latestEggId = extractEggId(next);
+        });
+      } catch {
+      }
+    })();
+    void (async () => {
+      try {
+        const initial = await Atoms.server.friendBonusMultiplier.get();
+        friendBonusPercent = friendBonusPercentFromMultiplier(initial);
+      } catch {
+      }
+      try {
+        await Atoms.server.friendBonusMultiplier.onChange((next) => {
+          friendBonusPercent = friendBonusPercentFromMultiplier(next);
+        });
+      } catch {
+      }
+      try {
+        const initialPlayers = await Atoms.server.numPlayers.get();
+        friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+      } catch {
+      }
+      try {
+        await Atoms.server.numPlayers.onChange((next) => {
+          friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
+        });
+      } catch {
+      }
+    })();
+    const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
+    registerMessageInterceptor("HarvestCrop", (message) => {
+      const slot = message.slot;
+      const slotsIndex = message.slotsIndex;
+      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
+        return;
+      }
+      const garden2 = latestGardenState;
+      const tileObjects = garden2?.tileObjects;
+      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
+      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
+        return;
+      }
+      const slots = Array.isArray(tile.slots) ? tile.slots : [];
+      const cropSlot = slots[slotsIndex];
+      if (!cropSlot || typeof cropSlot !== "object") {
+        return;
+      }
+      const seedKey = extractSeedKey2(tile);
+      const sizePercent = extractSizePercent2(cropSlot);
+      const mutations = sanitizeMutations(cropSlot?.mutations);
+      const lockerEnabled = (() => {
+        try {
+          return lockerService.getState().enabled;
+        } catch {
+          return false;
+        }
+      })();
+      if (lockerEnabled) {
+        let harvestAllowed = true;
+        try {
+          harvestAllowed = lockerService.allowsHarvest({
+            seedKey,
+            sizePercent,
+            mutations
+          });
+        } catch {
+          harvestAllowed = true;
+        }
+        if (!harvestAllowed) {
+          console.log("[HarvestCrop] Blocked by locker", {
+            slot,
+            slotsIndex,
+            seedKey,
+            sizePercent,
+            mutations
+          });
+          return { kind: "drop" };
+        }
+      }
+      StatsService.incrementGardenStat("totalHarvested");
+      void (async () => {
+        try {
+          const garden3 = await Atoms.data.garden.get();
+          const tileObjects2 = garden3?.tileObjects ?? null;
+          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
+          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
+          console.log("[HarvestCrop]", {
+            slot,
+            slotsIndex,
+            cropSlot: cropSlot2
+          });
+        } catch (error) {
+          console.error("[HarvestCrop] Unable to log crop slot", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("RemoveGardenObject", (message) => {
+      StatsService.incrementGardenStat("totalDestroyed");
+    });
+    registerMessageInterceptor("WaterPlant", (message) => {
+      StatsService.incrementGardenStat("watercanUsed");
+      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
+    });
+    registerMessageInterceptor("PlantSeed", (message) => {
+      StatsService.incrementGardenStat("totalPlanted");
+    });
+    registerMessageInterceptor("PurchaseDecor", (message) => {
+      StatsService.incrementShopStat("decorBought");
+    });
+    registerMessageInterceptor("PurchaseSeed", (message) => {
+      StatsService.incrementShopStat("seedsBought");
+    });
+    registerMessageInterceptor("PurchaseEgg", (message) => {
+      StatsService.incrementShopStat("eggsBought");
+    });
+    registerMessageInterceptor("PurchaseTool", (message) => {
+      StatsService.incrementShopStat("toolsBought");
+    });
+    registerMessageInterceptor("HatchEgg", () => {
+      const locked = lockerRestrictionsService.isEggLocked(latestEggId);
+      if (locked) {
+        console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
+        void (async () => {
+          try {
+            await dedupeEggLockToast(latestEggId);
+          } catch {
+          }
+        })();
+        return { kind: "drop" };
+      }
+      void (async () => {
+        const previousPets = await readInventoryPetSnapshots();
+        const previousMap = buildPetMap(previousPets);
+        const nextPets = await waitForInventoryPetAddition(previousMap);
+        if (!nextPets) return;
+        const newPets = extractNewPets(nextPets, previousMap);
+        if (!newPets.length) return;
+        for (const pet of newPets) {
+          const rarity2 = inferPetRarity(pet.mutations);
+          if (pet.species) {
+            StatsService.incrementPetHatched(pet.species, rarity2);
+          }
+        }
+      })();
+    });
+    registerMessageInterceptor("SellAllCrops", (message) => {
+      const restrictionState = lockerRestrictionsService.getState();
+      const requiredPct = lockerRestrictionsService.getRequiredPercent();
+      const requiredPlayers = restrictionState.minRequiredPlayers;
+      const currentBonusPct = resolveFriendBonusPercent();
+      const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
+      if (!allowed) {
+        const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
+        console.log("[SellAllCrops] Blocked by friend bonus restriction", {
+          requiredPct,
+          requiredPlayers,
+          currentBonusPct,
+          currentPlayers
+        });
+        void (async () => {
+          try {
+            await toastSimple(
+              "Friend bonus locker",
+              `Require at least ${requiredPct}% friend bonus`,
+              "error"
+            );
+          } catch {
+          }
+          void removeSellSuccessToast();
+        })();
+        return { kind: "drop" };
+      }
+      void (async () => {
+        try {
+          const items = await Atoms.inventory.myCropItemsToSell.get();
+          const count = Array.isArray(items) ? items.length : 0;
+          if (count > 0) {
+            StatsService.incrementShopStat("cropsSoldCount", count);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop items", error);
+        }
+        try {
+          const total = await Atoms.shop.totalCropSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("cropsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop sell price", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("SellPet", (message) => {
+      StatsService.incrementShopStat("petsSoldCount");
+      void (async () => {
+        try {
+          const total = await Atoms.pets.totalPetSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("petsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellPet] Unable to read pet sell price", error);
+        }
+      })();
+    });
+    shareGlobal("__tmHarvestHookInstalled", true);
+  }
+  function extractSeedKey2(tile) {
+    if (!tile || typeof tile !== "object") return null;
+    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
+    if (typeof tile.species === "string" && tile.species) return tile.species;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = tile[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  }
+  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES2 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey2(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  function lookupMaxScale2(species) {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey2(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  }
+  function getMaxScaleForSlot2(slot) {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey2(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale2(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  }
+  function extractSizePercent2(slot) {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(
+      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
+    );
+    if (Number.isFinite(direct)) {
+      return clampPercent3(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot2(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent3(Math.round(pct2), 50, 100);
+      }
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent3(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent3(pct, 0, 100);
+    }
+    return 100;
+  }
+  function sanitizeMutations(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const value = raw[i];
+      if (typeof value === "string") {
+        if (value) out.push(value);
+      } else if (value != null) {
+        const str = String(value);
+        if (str) out.push(str);
+      }
+    }
+    return out;
+  }
+  function clampPercent3(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+  var HATCH_EGG_TIMEOUT_MS = 5e3;
+  async function readInventoryPetSnapshots() {
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      return collectInventoryPets(inventory);
+    } catch (error) {
+      console.error("[HatchEgg] Unable to read inventory", error);
+      return [];
+    }
+  }
+  function collectInventoryPets(rawInventory) {
+    const items = extractInventoryItems(rawInventory);
+    const pets = [];
+    for (const entry of items) {
+      const pet = toInventoryPet(entry);
+      if (pet) pets.push(pet);
+    }
+    return pets;
+  }
+  function extractInventoryItems(rawInventory) {
+    if (!rawInventory) return [];
+    if (Array.isArray(rawInventory)) return rawInventory;
+    if (Array.isArray(rawInventory.items)) return rawInventory.items;
+    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
+    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+    return [];
+  }
+  function toInventoryPet(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
+    if (!source || typeof source !== "object") return null;
+    const type = source.itemType ?? source.data?.itemType ?? "";
+    if (String(type).toLowerCase() !== "pet") return null;
+    const id = source.id ?? source.data?.id;
+    const species = source.petSpecies ?? source.data?.petSpecies;
+    if (!id || !species) return null;
+    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
+    return {
+      id: String(id),
+      species: String(species),
+      mutations
+    };
+  }
+  function buildPetMap(pets) {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const pet of pets) {
+      map2.set(pet.id, pet);
+    }
+    return map2;
+  }
+  function extractNewPets(pets, previous) {
+    return pets.filter((pet) => !previous.has(pet.id));
+  }
+  function extractEggId(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (obj.objectType !== "egg") return null;
+    const eggId = obj.eggId;
+    return typeof eggId === "string" && eggId ? eggId : null;
+  }
+  async function dedupeEggLockToast(latestEggId) {
+    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+    const description = latestEggId ? `Hatching locked for ${latestEggId}` : "Hatching locked by egg locker";
+    if (!toastsAtom) {
+      await toastSimple("Egg hatch locker", description, "error");
+      return;
+    }
+    const list = await jGet(toastsAtom).catch(() => []);
+    const filtered = Array.isArray(list) ? list.filter((t) => !(t?.title === "Egg hatch locker")) : [];
+    filtered.push({
+      isClosable: true,
+      duration: 3500,
+      title: "Egg hatch locker",
+      description,
+      variant: "error",
+      id: "quinoa-game-toast"
+    });
+    await jSet(toastsAtom, filtered);
+  }
+  function inferPetRarity(mutations) {
+    if (!Array.isArray(mutations) || mutations.length === 0) {
+      return "normal";
+    }
+    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
+    if (seen.has("rainbow")) return "rainbow";
+    if (seen.has("gold") || seen.has("golden")) return "gold";
+    return "normal";
+  }
+  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
+    await delay(0);
+    const initial = await readInventoryPetSnapshots();
+    if (hasNewInventoryPet(initial, previous)) {
+      return initial;
+    }
+    return new Promise(async (resolve2) => {
+      let settled = false;
+      let unsub = null;
+      let timer = null;
+      const finalize = (value) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        if (unsub) {
+          try {
+            unsub();
+          } catch {
+          }
+        }
+        resolve2(value);
+      };
+      const evaluate = (source) => {
+        const pets = collectInventoryPets(source);
+        if (hasNewInventoryPet(pets, previous)) {
+          finalize(pets);
+        }
+      };
+      try {
+        unsub = await Atoms.inventory.myInventory.onChange((next) => {
+          evaluate(next);
+        });
+      } catch (error) {
+        console.error("[HatchEgg] Unable to observe inventory", error);
+        finalize(null);
+        return;
+      }
+      timer = setTimeout(() => {
+        void (async () => {
+          const latest = await readInventoryPetSnapshots();
+          if (hasNewInventoryPet(latest, previous)) {
+            finalize(latest);
+          } else {
+            finalize(null);
+          }
+        })();
+      }, timeoutMs);
+    });
+  }
+  function hasNewInventoryPet(pets, previous) {
+    return pets.some((pet) => !previous.has(pet.id));
+  }
+  function delay(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  function resolveSendMessage(Conn) {
+    const isFn = (value) => typeof value === "function";
+    if (isFn(Conn.sendMessage)) {
+      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
+    }
+    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
+      return { kind: "proto", fn: Conn.prototype.sendMessage };
+    }
+    return null;
+  }
+  async function removeSellSuccessToast() {
+    try {
+      const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+      if (!toastsAtom) return;
+      const list = await jGet(toastsAtom).catch(() => []);
+      const filtered = Array.isArray(list) ? list.filter((t) => {
+        if (!t || typeof t !== "object") return true;
+        if (t.variant !== "success") return true;
+        const icon = t.icon;
+        const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
+        const hasCropText = !!t?.description?.props?.values?.cropText;
+        return !(isTileSell || hasCropText);
+      }) : list;
+      if (filtered.length !== list.length) {
+        await jSet(toastsAtom, filtered);
+      }
+    } catch {
+    }
   }
 
   // src/ui/menu.ts
@@ -19075,7 +20513,7 @@ try{importScripts("${abs}")}catch(e){}
     style2.textContent = css;
     document.head.appendChild(style2);
   }
-  function createButton(templateBtn) {
+  function createButton2(templateBtn) {
     const btn = document.createElement("button");
     btn.type = "button";
     if (templateBtn?.className) {
@@ -19165,7 +20603,7 @@ try{importScripts("${abs}")}catch(e){}
     if (btns.length < 2) return;
     let middle = row.querySelector(`button.${BTN_CLASS}`);
     if (!middle) {
-      middle = createButton(btns[0]);
+      middle = createButton2(btns[0]);
       row.insertBefore(middle, btns[1]);
     }
     const disabled = isItemDisabled(itemEl);
@@ -20046,170 +21484,6 @@ try{importScripts("${abs}")}catch(e){}
     }
     if (label2.textContent !== text) label2.textContent = text;
     if (inner.lastElementChild !== span) inner.appendChild(span);
-  }
-
-  // src/utils/api.ts
-  function detectEnvironment() {
-    const isInIframe = (() => {
-      try {
-        return window.top !== window.self;
-      } catch {
-        return true;
-      }
-    })();
-    const refHost = safeHost(document.referrer);
-    const parentLooksDiscord = isInIframe && !!refHost && /(^|\.)discord(app)?\.com$/i.test(refHost);
-    const host = location.hostname;
-    const surface = parentLooksDiscord ? "discord" : "web";
-    const platform = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? "mobile" : "desktop";
-    return {
-      surface,
-      host,
-      origin: location.origin,
-      isInIframe,
-      platform
-    };
-  }
-  function isDiscordSurface() {
-    return detectEnvironment().surface === "discord";
-  }
-  function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
-    return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
-  }
-  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        method: "GET",
-        credentials: "include",
-        headers,
-        signal: controller.signal
-      });
-      const body = await res.text();
-      return { status: res.status, ok: res.ok, body };
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
-    return new Promise((resolve2, reject) => {
-      if (typeof GM_xmlhttpRequest !== "function") {
-        reject(new Error("GM_xmlhttpRequest is not available"));
-        return;
-      }
-      GM_xmlhttpRequest({
-        method: "GET",
-        url,
-        headers,
-        timeout: timeoutMs,
-        onload: (response) => resolve2({
-          status: response.status,
-          ok: response.status >= 200 && response.status < 300,
-          body: response.responseText
-        }),
-        onerror: (error) => reject(error),
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timed out"))
-      });
-    });
-  }
-  async function requestRoomEndpoint(roomIdOrCode, options = {}) {
-    const endpoint = options.endpoint ?? "info";
-    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
-    const headers = {};
-    if (options.jwt) {
-      headers["Authorization"] = `Bearer ${options.jwt}`;
-    }
-    let rawResponse;
-    if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
-      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
-    } else {
-      try {
-        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
-      } catch (error) {
-        if (typeof GM_xmlhttpRequest === "function") {
-          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
-        } else {
-          throw error;
-        }
-      }
-    }
-    let parsed;
-    try {
-      parsed = JSON.parse(rawResponse.body);
-    } catch {
-    }
-    return { url, ...rawResponse, parsed };
-  }
-  function safeHost(url) {
-    if (!url) return null;
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return null;
-    }
-  }
-  function buildSoftJoinUrl(roomCode) {
-    const merged = new URLSearchParams(location.search);
-    const url = new URL(location.href);
-    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
-    url.search = merged.toString();
-    return url.toString();
-  }
-  function buildHardJoinUrl(roomCode) {
-    return buildSoftJoinUrl(roomCode);
-  }
-  function joinRoom(roomCode, options = {}) {
-    const env = detectEnvironment();
-    const isDiscord = env.surface === "discord";
-    const preferSoft = options.preferSoft ?? !isDiscord;
-    const hardIfSoftFails = options.hardIfSoftFails ?? true;
-    if (isDiscord) {
-      if (options.siteFallbackOnDiscord) {
-        const fallback = `https://magiccircle.gg/r/${encodeURIComponent(roomCode)}`;
-        if (options.openInNewTab) {
-          window.open(fallback, "_blank", "noopener,noreferrer");
-        } else {
-          location.assign(fallback);
-        }
-        return {
-          ok: true,
-          mode: "site-fallback",
-          url: fallback,
-          message: "Discord activity does not support room switching by code, redirecting to the official site."
-        };
-      }
-      return {
-        ok: false,
-        mode: "discord-unsupported",
-        message: "Discord activity does not support joining a room by code. Open the website or use an activity invite."
-      };
-    }
-    const softUrl = buildSoftJoinUrl(roomCode);
-    if (preferSoft) {
-      try {
-        const url = new URL(softUrl);
-        if (url.origin === location.origin) {
-          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
-          window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-          console.log("[joinRoom] soft \u2192", url.toString());
-          return { ok: true, mode: "soft", url: url.toString() };
-        }
-      } catch {
-      }
-      if (!hardIfSoftFails) {
-        return {
-          ok: false,
-          mode: "noop",
-          url: softUrl,
-          message: "Soft navigation failed because the origins differ."
-        };
-      }
-    }
-    const hardUrl = buildHardJoinUrl(roomCode);
-    console.log("[joinRoom] hard \u2192", hardUrl);
-    location.assign(hardUrl);
-    return { ok: true, mode: "hard", url: hardUrl };
   }
 
   // src/utils/version.ts
@@ -37600,1167 +38874,15 @@ next: ${next}`;
     ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 
-  // src/services/misc.ts
-  var LS_GHOST_KEY = "qws:player:ghostMode";
-  var LS_DELAY_KEY = "qws:ghost:delayMs";
-  var DEFAULT_DELAY_MS = 50;
-  var readGhostEnabled = (def = false) => {
-    try {
-      return localStorage.getItem(LS_GHOST_KEY) === "1";
-    } catch {
-      return def;
-    }
-  };
-  var writeGhostEnabled = (v) => {
-    try {
-      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
-    } catch (err) {
-    }
-  };
-  var getGhostDelayMs = () => {
-    try {
-      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
-      return Math.max(5, n);
-    } catch {
-      return DEFAULT_DELAY_MS;
-    }
-  };
-  var setGhostDelayMs = (n) => {
-    const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
-    try {
-      localStorage.setItem(LS_DELAY_KEY, String(v));
-    } catch (err) {
-    }
-  };
-  function createGhostController() {
-    let DELAY_MS = getGhostDelayMs();
-    const KEYS = /* @__PURE__ */ new Set();
-    const onKeyDownCapture = (e) => {
-      const k = e.key.toLowerCase();
-      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
-      if (!isMove) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (e.repeat) return;
-      KEYS.add(k);
-    };
-    const onKeyUpCapture = (e) => {
-      const k = e.key.toLowerCase();
-      const isMove = k === "z" || k === "q" || k === "s" || k === "d" || k === "w" || k === "a" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight";
-      if (!isMove) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      KEYS.delete(k);
-    };
-    const onBlur = () => {
-      KEYS.clear();
-    };
-    const onVisibility = () => {
-      if (document.hidden) KEYS.clear();
-    };
-    function getDir() {
-      let dx = 0, dy = 0;
-      if (KEYS.has("z") || KEYS.has("w") || KEYS.has("arrowup")) dy -= 1;
-      if (KEYS.has("s") || KEYS.has("arrowdown")) dy += 1;
-      if (KEYS.has("q") || KEYS.has("a") || KEYS.has("arrowleft")) dx -= 1;
-      if (KEYS.has("d") || KEYS.has("arrowright")) dx += 1;
-      if (dx) dx = dx > 0 ? 1 : -1;
-      if (dy) dy = dy > 0 ? 1 : -1;
-      return { dx, dy };
-    }
-    let rafId = null;
-    let lastTs = 0, accMs = 0, inMove = false;
-    async function step(dx, dy) {
-      let cur;
-      try {
-        cur = await PlayerService.getPosition();
-      } catch (err) {
-      }
-      const cx = Math.round(cur?.x ?? 0), cy = Math.round(cur?.y ?? 0);
-      try {
-        await PlayerService.move(cx + dx, cy + dy);
-      } catch (err) {
-      }
-    }
-    const CAPTURE = { capture: true };
-    function frame(ts) {
-      if (!lastTs) lastTs = ts;
-      const dt = ts - lastTs;
-      lastTs = ts;
-      const { dx, dy } = getDir();
-      accMs += dt;
-      if (dx === 0 && dy === 0) {
-        accMs = Math.min(accMs, DELAY_MS * 4);
-        rafId = requestAnimationFrame(frame);
-        return;
-      }
-      if (accMs >= DELAY_MS && !inMove) {
-        accMs -= DELAY_MS;
-        inMove = true;
-        (async () => {
-          try {
-            await step(dx, dy);
-          } finally {
-            inMove = false;
-          }
-        })();
-      }
-      accMs = Math.min(accMs, DELAY_MS * 4);
-      rafId = requestAnimationFrame(frame);
-    }
-    return {
-      start() {
-        if (rafId !== null) return;
-        lastTs = 0;
-        accMs = 0;
-        inMove = false;
-        window.addEventListener("keydown", onKeyDownCapture, CAPTURE);
-        window.addEventListener("keyup", onKeyUpCapture, CAPTURE);
-        window.addEventListener("blur", onBlur);
-        document.addEventListener("visibilitychange", onVisibility);
-        rafId = requestAnimationFrame(frame);
-      },
-      stop() {
-        if (rafId !== null) {
-          cancelAnimationFrame(rafId);
-          rafId = null;
-        }
-        KEYS.clear();
-        window.removeEventListener("keydown", onKeyDownCapture, CAPTURE);
-        window.removeEventListener("keyup", onKeyUpCapture, CAPTURE);
-        window.removeEventListener("blur", onBlur);
-        document.removeEventListener("visibilitychange", onVisibility);
-      },
-      setSpeed(n) {
-        const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
-        DELAY_MS = v;
-        setGhostDelayMs(v);
-      },
-      getSpeed() {
-        return DELAY_MS;
-      }
-    };
-  }
-  var selectedMap = /* @__PURE__ */ new Map();
-  var seedStockByName = /* @__PURE__ */ new Map();
-  var seedSourceCache = [];
-  var selectedDecorMap = /* @__PURE__ */ new Map();
-  var decorStockByName = /* @__PURE__ */ new Map();
-  var decorSourceCache = [];
-  var _decorDeleteAbort = null;
-  var _decorDeleteBusy = false;
-  var NF_US = new Intl.NumberFormat("en-US");
-  var formatNum = (n) => NF_US.format(Math.max(0, Math.floor(n || 0)));
-  async function clearUiSelectionAtoms() {
-    try {
-      await Atoms.inventory.mySelectedItemName.set(null);
-    } catch {
-    }
-    try {
-      await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
-    } catch {
-    }
-    try {
-      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
-    } catch {
-    }
-  }
-  var OVERLAY_ID = "qws-seeddeleter-overlay";
-  var LIST_ID = "qws-seeddeleter-list";
-  var SUMMARY_ID = "qws-seeddeleter-summary";
-  var OVERLAY_DECOR_ID = "qws-decordeleter-overlay";
-  var LIST_DECOR_ID = "qws-decordeleter-list";
-  var SUMMARY_DECOR_ID = "qws-decordeleter-summary";
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-  function buildDisplayNameToSpeciesFromCatalog() {
-    const map2 = /* @__PURE__ */ new Map();
-    try {
-      const cat = plantCatalog;
-      for (const species of Object.keys(cat || {})) {
-        const seedName = cat?.[species]?.seed?.name && String(cat?.[species]?.seed?.name) || `${species} Seed`;
-        const arr = map2.get(seedName) ?? [];
-        arr.push(species);
-        map2.set(seedName, arr);
-      }
-    } catch {
-    }
-    return map2;
-  }
-  async function buildSpeciesStockFromInventory() {
-    const inv = await getMySeedInventory();
-    const stock = /* @__PURE__ */ new Map();
-    for (const it of inv) {
-      const q = Math.max(0, Math.floor(it.quantity || 0));
-      if (q > 0) stock.set(it.species, (stock.get(it.species) ?? 0) + q);
-    }
-    return stock;
-  }
-  function allocateForRequestedName(requested, nameToSpecies, speciesStock) {
-    let remaining = Math.max(0, Math.floor(requested.qty || 0));
-    let candidates = nameToSpecies.get(requested.name) ?? [];
-    if (!candidates.length && / seed$/i.test(requested.name)) {
-      const fallbackSpecies = requested.name.replace(/\s+seed$/i, "");
-      if (plantCatalog?.[fallbackSpecies]) candidates = [fallbackSpecies];
-    }
-    if (!candidates.length || remaining <= 0) return [];
-    const ranked = candidates.map((sp) => ({ sp, available: speciesStock.get(sp) ?? 0 })).filter((x) => x.available > 0).sort((a, b) => b.available - a.available);
-    const out = [];
-    for (const { sp, available } of ranked) {
-      if (remaining <= 0) break;
-      const take = Math.min(available, remaining);
-      if (take > 0) {
-        out.push({ species: sp, qty: take });
-        remaining -= take;
-      }
-    }
-    return out;
-  }
-  var _seedDeleteAbort = null;
-  var _seedDeleteBusy = false;
-  async function deleteSelectedSeeds(opts = {}) {
-    if (_seedDeleteBusy) {
-      await toastSimple("Seed deleter", "Deletion already in progress.", "info");
-      return;
-    }
-    const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
-    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 16));
-    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values())).map((s) => ({ name: s.name, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
-    if (selection.length === 0) {
-      await toastSimple("Seed deleter", "No seeds selected.", "info");
-      return;
-    }
-    const nameToSpecies = buildDisplayNameToSpeciesFromCatalog();
-    const speciesStock = await buildSpeciesStockFromInventory();
-    const allocatedBySpecies = /* @__PURE__ */ new Map();
-    let requestedTotal = 0, cappedTotal = 0;
-    for (const req of selection) {
-      requestedTotal += req.qty;
-      const chunks = allocateForRequestedName(req, nameToSpecies, speciesStock);
-      const okForThis = chunks.reduce((a, c) => a + c.qty, 0);
-      cappedTotal += okForThis;
-      for (const c of chunks) {
-        allocatedBySpecies.set(c.species, (allocatedBySpecies.get(c.species) ?? 0) + c.qty);
-      }
-    }
-    if (cappedTotal <= 0) {
-      await toastSimple("Seed deleter", "Nothing to delete (not in inventory).", "info");
-      return;
-    }
-    if (cappedTotal < requestedTotal) {
-      await toastSimple(
-        "Seed deleter",
-        `Requested ${formatNum(requestedTotal)} but only ${formatNum(cappedTotal)} available. Proceeding.`,
-        "info"
-      );
-    }
-    const tasks = Array.from(allocatedBySpecies.entries()).map(([species, qty]) => ({ species, qty: Math.max(0, Math.floor(qty || 0)) })).filter((t) => t.qty > 0);
-    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
-    if (total <= 0) {
-      await toastSimple("Seed deleter", "Nothing to delete.", "info");
-      return;
-    }
-    _seedDeleteBusy = true;
-    const abort = new AbortController();
-    _seedDeleteAbort = abort;
-    try {
-      await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
-      let done = 0;
-      for (const t of tasks) {
-        let remaining = t.qty;
-        while (remaining > 0) {
-          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
-          const n = Math.min(batchSize, remaining);
-          for (let i = 0; i < n; i++) {
-            try {
-              await PlayerService.wish(t.species);
-            } catch (err) {
-            }
-          }
-          done += n;
-          remaining -= n;
-          try {
-            opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
-            window.dispatchEvent(new CustomEvent("qws:seeddeleter:progress", {
-              detail: { done, total, species: t.species, remainingForSpecies: remaining }
-            }));
-          } catch {
-          }
-          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
-        }
-      }
-      if (!opts.keepSelection) selectedMap.clear();
-      try {
-        window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
-      } catch {
-      }
-      await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
-    } catch (e) {
-      const msg = e?.message || "Deletion failed.";
-      try {
-        window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } }));
-      } catch {
-      }
-      await toastSimple("Seed deleter", msg, "error");
-    } finally {
-      _seedDeleteBusy = false;
-      _seedDeleteAbort = null;
-    }
-  }
-  function cancelSeedDeletion() {
-    try {
-      _seedDeleteAbort?.abort();
-    } catch (err) {
-    }
-  }
-  function isSeedDeletionRunning() {
-    return _seedDeleteBusy;
-  }
-  try {
-    window.addEventListener("qws:seeddeleter:apply", async (e) => {
-      try {
-        const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : void 0;
-        await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
-      } catch {
-      }
-    });
-  } catch {
-  }
-  function seedDisplayNameFromSpecies(species) {
-    try {
-      const node = plantCatalog?.[species];
-      const n = node?.seed?.name;
-      if (typeof n === "string" && n) return n;
-    } catch {
-    }
-    return `${species} Seed`;
-  }
-  function normalizeSeedItem(x, _idx) {
-    if (!x || typeof x !== "object") return null;
-    const species = typeof x.species === "string" ? x.species.trim() : "";
-    const itemType = x.itemType === "Seed" ? "Seed" : null;
-    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
-    if (!species || itemType !== "Seed" || quantity <= 0) return null;
-    return { species, itemType: "Seed", quantity, id: `seed:${species}` };
-  }
-  async function getMySeedInventory() {
-    try {
-      const raw = await Atoms.inventory.mySeedInventory.get();
-      if (!Array.isArray(raw)) return [];
-      const out = [];
-      raw.forEach((x, i) => {
-        const s = normalizeSeedItem(x, i);
-        if (s) out.push(s);
-      });
-      return out;
-    } catch {
-      return [];
-    }
-  }
-  function buildInventoryShapeFrom(items) {
-    return { items, favoritedItemIds: [] };
-  }
-  function decorDisplayNameFromId(decorId) {
-    try {
-      const node = decorCatalog?.[decorId];
-      const n = node?.name;
-      if (typeof n === "string" && n) return n;
-    } catch {
-    }
-    return decorId || "Decor";
-  }
-  function normalizeDecorItem(x) {
-    if (!x || typeof x !== "object") return null;
-    const decorId = typeof x.decorId === "string" ? x.decorId.trim() : "";
-    const itemType = x.itemType === "Decor" ? "Decor" : null;
-    const quantity = Number.isFinite(x.quantity) ? Math.max(0, Math.floor(x.quantity)) : 0;
-    if (!decorId || itemType !== "Decor" || quantity <= 0) return null;
-    return { decorId, itemType: "Decor", quantity, id: `decor:${decorId}` };
-  }
-  async function getMyDecorInventory() {
-    try {
-      const raw = await Atoms.inventory.myDecorInventory.get();
-      if (!Array.isArray(raw)) return [];
-      const out = [];
-      raw.forEach((x) => {
-        const s = normalizeDecorItem(x);
-        if (s) out.push(s);
-      });
-      return out;
-    } catch {
-      return [];
-    }
-  }
-  function buildDecorInventoryShapeFrom(items) {
-    return { items, favoritedItemIds: [] };
-  }
-  function setStyles(el2, styles) {
-    Object.assign(el2.style, styles);
-  }
-  function styleOverlayBox(div, id) {
-    div.id = id;
-    setStyles(div, {
-      position: "fixed",
-      left: "12px",
-      top: "12px",
-      zIndex: "999999",
-      display: "grid",
-      gridTemplateRows: "auto auto 1px 1fr auto",
-      gap: "6px",
-      minWidth: "320px",
-      maxWidth: "420px",
-      maxHeight: "52vh",
-      padding: "8px",
-      border: "1px solid #39424c",
-      borderRadius: "10px",
-      background: "rgba(22,27,34,0.92)",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      backdropFilter: "blur(2px)",
-      userSelect: "none",
-      fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
-      fontSize: "12px",
-      lineHeight: "1.25"
-    });
-    div.dataset["qwsSeedDeleter"] = "1";
-  }
-  function makeDraggable(root, handle) {
-    let dragging = false;
-    let ox = 0, oy = 0;
-    const onDown = (e) => {
-      dragging = true;
-      const r = root.getBoundingClientRect();
-      ox = e.clientX - r.left;
-      oy = e.clientY - r.top;
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp, { once: true });
-    };
-    const onMove = (e) => {
-      if (!dragging) return;
-      const nx = Math.max(4, e.clientX - ox);
-      const ny = Math.max(4, e.clientY - oy);
-      root.style.left = `${nx}px`;
-      root.style.top = `${ny}px`;
-    };
-    const onUp = () => {
-      dragging = false;
-      document.removeEventListener("mousemove", onMove);
-    };
-    handle.addEventListener("mousedown", onDown);
-  }
-  function createButton2(label2, styleOverride) {
-    const b = document.createElement("button");
-    b.textContent = label2;
-    setStyles(b, {
-      padding: "4px 8px",
-      borderRadius: "8px",
-      border: "1px solid #4446",
-      background: "#161b22",
-      color: "#E7EEF7",
-      cursor: "pointer",
-      fontWeight: "600",
-      fontSize: "12px",
-      ...styleOverride
-    });
-    b.onmouseenter = () => b.style.borderColor = "#6aa1";
-    b.onmouseleave = () => b.style.borderColor = "#4446";
-    return b;
-  }
-  var overlayKeyGuardsOn = false;
-  function isInsideOverlay(el2) {
-    return !!(el2 && (el2.closest?.(`#${OVERLAY_ID}`) || el2.closest?.(`#${OVERLAY_DECOR_ID}`)));
-  }
-  function keyGuardCapture(e) {
-    const ae = document.activeElement;
-    if (!isInsideOverlay(ae)) return;
-    const tag = (ae?.tagName || "").toLowerCase();
-    const isEditable = tag === "input" || tag === "textarea" || ae && ae.isContentEditable;
-    if (!isEditable) return;
-    if (/^[0-9]$/.test(e.key)) {
-      e.stopImmediatePropagation();
-    }
-  }
-  function installOverlayKeyGuards() {
-    if (overlayKeyGuardsOn) return;
-    window.addEventListener("keydown", keyGuardCapture, { capture: true });
-    overlayKeyGuardsOn = true;
-  }
-  function removeOverlayKeyGuards() {
-    if (!overlayKeyGuardsOn) return;
-    window.removeEventListener("keydown", keyGuardCapture, { capture: true });
-    overlayKeyGuardsOn = false;
-  }
-  async function closeSeedInventoryPanel() {
-    try {
-      await fakeInventoryHide();
-    } catch {
-      try {
-        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-      } catch {
-      }
-    }
-  }
-  function createSeedOverlay() {
-    const box = document.createElement("div");
-    styleOverlayBox(box, OVERLAY_ID);
-    const header = document.createElement("div");
-    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
-    const title = document.createElement("div");
-    title.textContent = "\u{1F3AF} Selection mode";
-    setStyles(title, { fontWeight: "700", fontSize: "13px" });
-    const hint = document.createElement("div");
-    hint.textContent = "Click seeds in inventory to toggle selection.";
-    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
-    const hr = document.createElement("div");
-    setStyles(hr, { height: "1px", background: "#2d333b" });
-    const list = document.createElement("div");
-    list.id = LIST_ID;
-    setStyles(list, {
-      minHeight: "44px",
-      maxHeight: "26vh",
-      overflow: "auto",
-      padding: "4px",
-      border: "1px dashed #39424c",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.84)",
-      userSelect: "text"
-    });
-    const actions = document.createElement("div");
-    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
-    const summary = document.createElement("div");
-    summary.id = SUMMARY_ID;
-    setStyles(summary, { fontWeight: "600" });
-    summary.textContent = "Selected: 0 species \xB7 0 seeds";
-    const btnClear = createButton2("Clear");
-    btnClear.title = "Clear selection";
-    btnClear.onclick = async () => {
-      selectedMap.clear();
-      refreshList();
-      updateSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeSeedInventoryWithSelection();
-    };
-    _btnConfirm = createButton2("Confirm", { background: "#1F2328CC" });
-    _btnConfirm.disabled = true;
-    _btnConfirm.onclick = async () => {
-      await closeSeedInventoryPanel();
-    };
-    header.append(title);
-    actions.append(summary, btnClear, _btnConfirm);
-    box.append(header, hint, hr, list, actions);
-    makeDraggable(box, header);
-    return box;
-  }
-  function showSeedOverlay() {
-    if (document.getElementById(OVERLAY_ID)) return;
-    const el2 = createSeedOverlay();
-    document.body.appendChild(el2);
-    installOverlayKeyGuards();
-    refreshList();
-    updateSummary();
-  }
-  function hideSeedOverlay() {
-    const el2 = document.getElementById(OVERLAY_ID);
-    if (el2) el2.remove();
-    if (!document.getElementById(OVERLAY_DECOR_ID)) removeOverlayKeyGuards();
-  }
-  var _btnConfirm = null;
-  var unsubSelectedName = null;
-  var unsubDecorSelectedName = null;
-  function renderListRow(item) {
-    const row = document.createElement("div");
-    setStyles(row, {
-      display: "grid",
-      gridTemplateColumns: "1fr auto",
-      alignItems: "center",
-      gap: "6px",
-      padding: "4px 6px",
-      borderBottom: "1px dashed #2d333b"
-    });
-    const name = document.createElement("div");
-    name.textContent = item.name;
-    setStyles(name, {
-      fontSize: "12px",
-      fontWeight: "600",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    });
-    const controls = document.createElement("div");
-    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
-    const qty = document.createElement("input");
-    qty.type = "number";
-    qty.min = "1";
-    qty.max = String(Math.max(1, item.maxQty));
-    qty.step = "1";
-    qty.value = String(item.qty);
-    qty.className = "qmm-input";
-    setStyles(qty, {
-      width: "68px",
-      height: "28px",
-      border: "1px solid #4446",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.90)",
-      padding: "0 8px",
-      fontSize: "12px"
-    });
-    const swallowDigits = (e) => {
-      if (/^[0-9]$/.test(e.key)) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-    qty.addEventListener("keydown", swallowDigits);
-    const updateQty = async () => {
-      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
-      qty.value = String(v);
-      const cur = selectedMap.get(item.name);
-      if (!cur) return;
-      cur.qty = v;
-      selectedMap.set(item.name, cur);
-      updateSummary();
-      await repatchFakeSeedInventoryWithSelection();
-    };
-    qty.onchange = () => {
-      void updateQty();
-    };
-    qty.oninput = () => {
-      void updateQty();
-    };
-    const remove = createButton2("Remove", { background: "transparent" });
-    remove.onclick = async () => {
-      selectedMap.delete(item.name);
-      refreshList();
-      updateSummary();
-      await repatchFakeSeedInventoryWithSelection();
-    };
-    controls.append(qty, remove);
-    row.append(name, controls);
-    return row;
-  }
-  function refreshList() {
-    const list = document.getElementById(LIST_ID);
-    if (!list) return;
-    list.innerHTML = "";
-    const entries = Array.from(selectedMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    if (entries.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = "No seeds selected.";
-      empty.style.opacity = "0.8";
-      list.appendChild(empty);
-      return;
-    }
-    for (const it of entries) list.appendChild(renderListRow(it));
-  }
-  function totalSelected() {
-    let species = 0, qty = 0;
-    for (const it of selectedMap.values()) {
-      species += 1;
-      qty += it.qty;
-    }
-    return { species, qty };
-  }
-  function updateSummary() {
-    const { species, qty } = totalSelected();
-    const el2 = document.getElementById(SUMMARY_ID);
-    if (el2) el2.textContent = `Selected: ${species} species \xB7 ${formatNum(qty)} seeds`;
-    if (_btnConfirm) {
-      _btnConfirm.textContent = "Confirm";
-      _btnConfirm.disabled = qty <= 0;
-      _btnConfirm.style.opacity = qty <= 0 ? "0.6" : "1";
-      _btnConfirm.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
-    }
-  }
-  async function repatchFakeSeedInventoryWithSelection() {
-    const src = Array.isArray(seedSourceCache) ? seedSourceCache : [];
-    const remainingByName = /* @__PURE__ */ new Map();
-    for (const s of src) {
-      const disp = seedDisplayNameFromSpecies(s.species);
-      const qty = Math.max(0, Math.floor(s.quantity || 0));
-      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
-    }
-    for (const sel of selectedMap.values()) {
-      const cur = remainingByName.get(sel.name) ?? 0;
-      const picked = Math.max(0, Math.floor(sel.qty || 0));
-      remainingByName.set(sel.name, Math.max(0, cur - picked));
-    }
-    const patched = [];
-    for (const s of src) {
-      const disp = seedDisplayNameFromSpecies(s.species);
-      const remaining = remainingByName.get(disp) ?? 0;
-      if (remaining <= 0) continue;
-      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
-      if (take <= 0) continue;
-      patched.push({ ...s, quantity: take });
-      remainingByName.set(disp, remaining - take);
-    }
-    try {
-      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
-    } catch {
-    }
-  }
-  async function beginSelectedNameListener() {
-    if (unsubSelectedName) return;
-    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
-      const n = (name || "").trim();
-      if (!n) return;
-      const max = Math.max(1, seedStockByName.get(n) ?? 1);
-      const existing = selectedMap.get(n);
-      if (existing) {
-        existing.qty = max;
-        existing.maxQty = max;
-        selectedMap.set(n, existing);
-      } else {
-        selectedMap.set(n, { name: n, qty: max, maxQty: max });
-      }
-      refreshList();
-      updateSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeSeedInventoryWithSelection();
-    });
-    unsubSelectedName = typeof unsub === "function" ? unsub : null;
-  }
-  async function endSelectedNameListener() {
-    const fn = unsubSelectedName;
-    unsubSelectedName = null;
-    try {
-      await fn?.();
-    } catch {
-    }
-  }
-  async function openSeedInventoryPreview() {
-    try {
-      const src = await getMySeedInventory();
-      if (!src.length) {
-        await toastSimple("Seed inventory", "No seeds to display.", "info");
-        return;
-      }
-      await fakeInventoryShow(buildInventoryShapeFrom(src), { open: true });
-    } catch (e) {
-      await toastSimple("Seed inventory", e?.message || "Failed to open seed inventory.", "error");
-    }
-  }
-  async function openSeedSelectorFlow(setWindowVisible) {
-    try {
-      setWindowVisible?.(false);
-      seedSourceCache = await getMySeedInventory();
-      seedStockByName = /* @__PURE__ */ new Map();
-      for (const s of seedSourceCache) {
-        const display = seedDisplayNameFromSpecies(s.species);
-        seedStockByName.set(display, Math.max(1, Math.floor(s.quantity || 0)));
-      }
-      selectedMap.clear();
-      showSeedOverlay();
-      await beginSelectedNameListener();
-      await fakeInventoryShow(buildInventoryShapeFrom(seedSourceCache), { open: true });
-      if (await isInventoryPanelOpen()) {
-        await waitInventoryPanelClosed();
-      }
-    } catch (e) {
-      await toastSimple("Seed inventory", e?.message || "Failed to open seed selector.", "error");
-    } finally {
-      await endSelectedNameListener();
-      hideSeedOverlay();
-      seedSourceCache = [];
-      seedStockByName.clear();
-      setWindowVisible?.(true);
-    }
-  }
-  function createDecorOverlay() {
-    const box = document.createElement("div");
-    styleOverlayBox(box, OVERLAY_DECOR_ID);
-    const header = document.createElement("div");
-    setStyles(header, { display: "flex", alignItems: "center", gap: "4px", cursor: "move" });
-    const title = document.createElement("div");
-    title.textContent = "Decor selection";
-    setStyles(title, { fontWeight: "700", fontSize: "13px" });
-    const hint = document.createElement("div");
-    hint.textContent = "Click decor in inventory to toggle selection.";
-    setStyles(hint, { opacity: "0.8", fontSize: "11px" });
-    const hr = document.createElement("div");
-    setStyles(hr, { height: "1px", background: "#2d333b" });
-    const list = document.createElement("div");
-    list.id = LIST_DECOR_ID;
-    setStyles(list, {
-      minHeight: "44px",
-      maxHeight: "26vh",
-      overflow: "auto",
-      padding: "4px",
-      border: "1px dashed #39424c",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.84)",
-      userSelect: "text"
-    });
-    const actions = document.createElement("div");
-    setStyles(actions, { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" });
-    const summary = document.createElement("div");
-    summary.id = SUMMARY_DECOR_ID;
-    setStyles(summary, { fontWeight: "600" });
-    summary.textContent = "Selected: 0 decor \xB7 0 items";
-    const btnClear = createButton2("Clear");
-    btnClear.title = "Clear selection";
-    btnClear.onclick = async () => {
-      selectedDecorMap.clear();
-      refreshDecorList();
-      updateDecorSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeDecorInventoryWithSelection();
-    };
-    const btnConfirm = createButton2("Confirm", { background: "#1F2328CC" });
-    btnConfirm.disabled = true;
-    btnConfirm.onclick = async () => {
-      await closeSeedInventoryPanel();
-    };
-    header.append(title);
-    actions.append(summary, btnClear, btnConfirm);
-    box.append(header, hint, hr, list, actions);
-    makeDraggable(box, header);
-    box.__btnConfirm = btnConfirm;
-    return box;
-  }
-  function showDecorOverlay() {
-    if (document.getElementById(OVERLAY_DECOR_ID)) return;
-    const el2 = createDecorOverlay();
-    document.body.appendChild(el2);
-    installOverlayKeyGuards();
-    refreshDecorList();
-    updateDecorSummary();
-  }
-  function hideDecorOverlay() {
-    const el2 = document.getElementById(OVERLAY_DECOR_ID);
-    if (el2) el2.remove();
-    if (!document.getElementById(OVERLAY_ID)) removeOverlayKeyGuards();
-  }
-  function renderDecorListRow(item) {
-    const row = document.createElement("div");
-    setStyles(row, {
-      display: "grid",
-      gridTemplateColumns: "1fr auto",
-      alignItems: "center",
-      gap: "6px",
-      padding: "4px 6px",
-      borderBottom: "1px dashed #2d333b"
-    });
-    const name = document.createElement("div");
-    name.textContent = item.name;
-    setStyles(name, {
-      fontSize: "12px",
-      fontWeight: "600",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      whiteSpace: "nowrap"
-    });
-    const controls = document.createElement("div");
-    setStyles(controls, { display: "flex", alignItems: "center", gap: "6px" });
-    const qty = document.createElement("input");
-    qty.type = "number";
-    qty.min = "1";
-    qty.max = String(Math.max(1, item.maxQty));
-    qty.step = "1";
-    qty.value = String(item.qty);
-    qty.className = "qmm-input";
-    setStyles(qty, {
-      width: "68px",
-      height: "28px",
-      border: "1px solid #4446",
-      borderRadius: "8px",
-      background: "rgba(15,19,24,0.90)",
-      padding: "0 8px",
-      fontSize: "12px"
-    });
-    const swallowDigits = (e) => {
-      if (/^[0-9]$/.test(e.key)) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-      }
-    };
-    qty.addEventListener("keydown", swallowDigits);
-    const updateQty = async () => {
-      const v = Math.min(item.maxQty, Math.max(1, Math.floor(Number(qty.value) || 1)));
-      qty.value = String(v);
-      const cur = selectedDecorMap.get(item.name);
-      if (!cur) return;
-      cur.qty = v;
-      cur.maxQty = Math.max(cur.maxQty, v);
-      selectedDecorMap.set(item.name, cur);
-      updateDecorSummary();
-      await repatchFakeDecorInventoryWithSelection();
-    };
-    qty.onchange = () => {
-      void updateQty();
-    };
-    qty.oninput = () => {
-      void updateQty();
-    };
-    const remove = createButton2("Remove", { background: "transparent" });
-    remove.onclick = async () => {
-      selectedDecorMap.delete(item.name);
-      refreshDecorList();
-      updateDecorSummary();
-      await repatchFakeDecorInventoryWithSelection();
-    };
-    controls.append(qty, remove);
-    row.append(name, controls);
-    return row;
-  }
-  function refreshDecorList() {
-    const list = document.getElementById(LIST_DECOR_ID);
-    if (!list) return;
-    list.innerHTML = "";
-    const entries = Array.from(selectedDecorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-    if (entries.length === 0) {
-      const empty = document.createElement("div");
-      empty.textContent = "No decor selected.";
-      empty.style.opacity = "0.8";
-      list.appendChild(empty);
-      return;
-    }
-    for (const it of entries) list.appendChild(renderDecorListRow(it));
-  }
-  function totalDecorSelected() {
-    let kinds = 0, qty = 0;
-    for (const it of selectedDecorMap.values()) {
-      kinds += 1;
-      qty += it.qty;
-    }
-    return { kinds, qty };
-  }
-  function updateDecorSummary() {
-    const { kinds, qty } = totalDecorSelected();
-    const el2 = document.getElementById(SUMMARY_DECOR_ID);
-    if (el2) el2.textContent = `Selected: ${kinds} decor \xB7 ${formatNum(qty)} items`;
-    const overlay = document.getElementById(OVERLAY_DECOR_ID);
-    const btn = overlay?.__btnConfirm;
-    if (btn) {
-      btn.textContent = "Confirm";
-      btn.disabled = qty <= 0;
-      btn.style.opacity = qty <= 0 ? "0.6" : "1";
-      btn.style.cursor = qty <= 0 ? "not-allowed" : "pointer";
-    }
-  }
-  async function repatchFakeDecorInventoryWithSelection() {
-    const src = Array.isArray(decorSourceCache) ? decorSourceCache : [];
-    const remainingByName = /* @__PURE__ */ new Map();
-    for (const s of src) {
-      const disp = decorDisplayNameFromId(s.decorId);
-      const qty = Math.max(0, Math.floor(s.quantity || 0));
-      remainingByName.set(disp, (remainingByName.get(disp) ?? 0) + qty);
-    }
-    for (const sel of selectedDecorMap.values()) {
-      const cur = remainingByName.get(sel.name) ?? 0;
-      const picked = Math.max(0, Math.floor(sel.qty || 0));
-      remainingByName.set(sel.name, Math.max(0, cur - picked));
-    }
-    const patched = [];
-    for (const s of src) {
-      const disp = decorDisplayNameFromId(s.decorId);
-      const remaining = remainingByName.get(disp) ?? 0;
-      if (remaining <= 0) continue;
-      const take = Math.min(remaining, Math.max(0, Math.floor(s.quantity || 0)));
-      if (take <= 0) continue;
-      patched.push({ ...s, quantity: take });
-      remainingByName.set(disp, remaining - take);
-    }
-    try {
-      await fakeInventoryShow({ items: patched, favoritedItemIds: [] }, { open: false });
-    } catch {
-    }
-  }
-  async function beginSelectedDecorNameListener() {
-    if (unsubDecorSelectedName) return;
-    const unsub = await Atoms.inventory.mySelectedItemName.onChange(async (name) => {
-      const n = (name || "").trim();
-      if (!n) return;
-      const max = Math.max(1, decorStockByName.get(n) ?? 1);
-      const decorId = Array.from(decorSourceCache || []).find((d) => decorDisplayNameFromId(d.decorId) === n)?.decorId || n;
-      const existing = selectedDecorMap.get(n);
-      if (existing) {
-        existing.qty = max;
-        existing.maxQty = max;
-        selectedDecorMap.set(n, existing);
-      } else {
-        selectedDecorMap.set(n, { name: n, qty: max, maxQty: max, decorId });
-      }
-      refreshDecorList();
-      updateDecorSummary();
-      await clearUiSelectionAtoms();
-      await repatchFakeDecorInventoryWithSelection();
-    });
-    unsubDecorSelectedName = typeof unsub === "function" ? unsub : null;
-  }
-  async function endSelectedDecorNameListener() {
-    const fn = unsubDecorSelectedName;
-    unsubDecorSelectedName = null;
-    try {
-      await fn?.();
-    } catch {
-    }
-  }
-  async function findFirstEmptySlot() {
-    const state2 = await PlayerService.getGardenState();
-    const dirt = state2?.tileObjects || {};
-    const boardwalk = state2?.boardwalkTileObjects || {};
-    for (let i = 0; i < 200; i++) {
-      const key2 = String(i);
-      const has = Object.prototype.hasOwnProperty.call(dirt, key2) && dirt[key2] != null;
-      if (!has) return { tileType: "Dirt", index: i };
-    }
-    for (let i = 0; i < 76; i++) {
-      const key2 = String(i);
-      const has = Object.prototype.hasOwnProperty.call(boardwalk, key2) && boardwalk[key2] != null;
-      if (!has) return { tileType: "Boardwalk", index: i };
-    }
-    return null;
-  }
-  async function deleteSelectedDecor(opts = {}) {
-    if (_decorDeleteBusy) {
-      await toastSimple("Decor deleter", "Deletion already in progress.", "info");
-      return;
-    }
-    const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 25));
-    const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedDecorMap.values())).map((s) => ({ name: s.name, decorId: s.decorId, qty: Math.max(0, Math.floor(s.qty || 0)) })).filter((s) => s.qty > 0);
-    if (!selection.length) {
-      await toastSimple("Decor deleter", "No decor selected.", "info");
-      return;
-    }
-    const stock = /* @__PURE__ */ new Map();
-    (await getMyDecorInventory()).forEach((d) => {
-      stock.set(d.decorId, (stock.get(d.decorId) ?? 0) + Math.max(0, Math.floor(d.quantity || 0)));
-    });
-    const tasks = selection.map((s) => {
-      const available = stock.get(s.decorId) ?? 0;
-      const qty = Math.min(s.qty, available);
-      return { decorId: s.decorId, qty, name: s.name };
-    }).filter((t) => t.qty > 0);
-    const total = tasks.reduce((acc, t) => acc + t.qty, 0);
-    if (total <= 0) {
-      await toastSimple("Decor deleter", "Nothing to delete (not in inventory).", "info");
-      return;
-    }
-    const emptySlot = await findFirstEmptySlot();
-    if (!emptySlot) {
-      await toastSimple("Decor deleter", "No empty slot available to delete decor (dirt 0-199, boardwalk 0-75).", "error");
-      return;
-    }
-    _decorDeleteBusy = true;
-    const abort = new AbortController();
-    _decorDeleteAbort = abort;
-    try {
-      await toastSimple("Decor deleter", `Deleting ${formatNum(total)} decor items across ${tasks.length} types...`, "info");
-      let done = 0;
-      for (const t of tasks) {
-        let remaining = t.qty;
-        while (remaining > 0) {
-          if (abort.signal.aborted) throw new Error("Deletion cancelled.");
-          try {
-            await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0);
-          } catch {
-          }
-          try {
-            await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType);
-          } catch {
-          }
-          done += 1;
-          remaining -= 1;
-          try {
-            opts.onProgress?.({ done, total, decorId: t.decorId, remainingForDecor: remaining });
-            window.dispatchEvent(new CustomEvent("qws:decordeleter:progress", {
-              detail: { done, total, decorId: t.decorId, remainingForDecor: remaining }
-            }));
-          } catch {
-          }
-          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
-        }
-      }
-      if (!opts.keepSelection) selectedDecorMap.clear();
-      try {
-        window.dispatchEvent(new CustomEvent("qws:decordeleter:done", { detail: { total, decorCount: tasks.length } }));
-      } catch {
-      }
-      await toastSimple("Decor deleter", `Deleted ${formatNum(total)} decor items (${tasks.length} types).`, "success");
-    } catch (e) {
-      const msg = e?.message || "Deletion failed.";
-      try {
-        window.dispatchEvent(new CustomEvent("qws:decordeleter:error", { detail: { message: msg } }));
-      } catch {
-      }
-      await toastSimple("Decor deleter", msg, "error");
-    } finally {
-      _decorDeleteBusy = false;
-      _decorDeleteAbort = null;
-    }
-  }
-  function cancelDecorDeletion() {
-    try {
-      _decorDeleteAbort?.abort();
-    } catch {
-    }
-  }
-  function isDecorDeletionRunning() {
-    return _decorDeleteBusy;
-  }
-  async function openDecorSelectorFlow(setWindowVisible) {
-    try {
-      setWindowVisible?.(false);
-      decorSourceCache = await getMyDecorInventory();
-      decorStockByName = /* @__PURE__ */ new Map();
-      for (const d of decorSourceCache) {
-        const display = decorDisplayNameFromId(d.decorId);
-        decorStockByName.set(display, Math.max(1, Math.floor(d.quantity || 0)));
-      }
-      selectedDecorMap.clear();
-      showDecorOverlay();
-      await beginSelectedDecorNameListener();
-      await fakeInventoryShow(buildDecorInventoryShapeFrom(decorSourceCache), { open: true });
-      if (await isInventoryPanelOpen()) {
-        await waitInventoryPanelClosed();
-      }
-    } catch (e) {
-      await toastSimple("Decor inventory", e?.message || "Failed to open decor selector.", "error");
-    } finally {
-      await endSelectedDecorNameListener();
-      hideDecorOverlay();
-      decorSourceCache = [];
-      decorStockByName.clear();
-      setWindowVisible?.(true);
-    }
-  }
-  var MiscService = {
-    // ghost
-    readGhostEnabled,
-    writeGhostEnabled,
-    getGhostDelayMs,
-    setGhostDelayMs,
-    createGhostController,
-    // seeds
-    getMySeedInventory,
-    openSeedInventoryPreview,
-    openSeedSelectorFlow,
-    //delete
-    deleteSelectedSeeds,
-    cancelSeedDeletion,
-    isSeedDeletionRunning,
-    getCurrentSeedSelection() {
-      return Array.from(selectedMap.values());
-    },
-    clearSeedSelection() {
-      selectedMap.clear();
-    },
-    // decor
-    getMyDecorInventory,
-    openDecorSelectorFlow,
-    deleteSelectedDecor,
-    cancelDecorDeletion,
-    isDecorDeletionRunning,
-    getCurrentDecorSelection() {
-      return Array.from(selectedDecorMap.values());
-    },
-    clearDecorSelection() {
-      selectedDecorMap.clear();
-    }
-  };
-
   // src/ui/menus/misc.ts
+  var formatShortDuration = (seconds) => {
+    const sec = Math.max(0, Math.round(seconds));
+    if (sec < 60) return `${sec} s`;
+    const m = Math.floor(sec / 60);
+    const r = sec % 60;
+    if (r === 0) return `${m} min`;
+    return `${m} min ${r} s`;
+  };
   var NF_US2 = new Intl.NumberFormat("en-US");
   var formatNum2 = (n) => NF_US2.format(Math.max(0, Math.floor(n || 0)));
   async function renderMiscMenu(container) {
@@ -38772,6 +38894,57 @@ next: ${next}`;
     view.style.gap = "8px";
     view.style.minHeight = "0";
     view.style.justifyItems = "center";
+    const secAutoReco = (() => {
+      const card = ui.card("\u{1F504} Auto reconnect on session conflict", { tone: "muted", align: "center" });
+      card.root.style.maxWidth = "480px";
+      card.body.style.display = "grid";
+      card.body.style.gap = "10px";
+      const header = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
+      const toggleWrap = document.createElement("div");
+      toggleWrap.style.display = "inline-flex";
+      toggleWrap.style.alignItems = "center";
+      toggleWrap.style.gap = "8px";
+      const toggleLabel = ui.label("Activate");
+      toggleLabel.style.margin = "0";
+      const toggle = ui.switch(MiscService.readAutoRecoEnabled(false));
+      toggleWrap.append(toggleLabel, toggle);
+      header.append(toggleWrap);
+      const initialSeconds = Math.round(MiscService.getAutoRecoDelayMs() / 1e3);
+      const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
+      const sliderLabel = ui.label("Reconnect after");
+      sliderLabel.style.margin = "0";
+      const slider = ui.slider(30, 300, 30, initialSeconds);
+      slider.style.flex = "1";
+      const sliderValue = document.createElement("div");
+      sliderValue.style.minWidth = "72px";
+      sliderValue.style.textAlign = "right";
+      sliderValue.textContent = formatShortDuration(initialSeconds);
+      sliderRow.append(sliderLabel, slider, sliderValue);
+      const hint = document.createElement("div");
+      hint.style.opacity = "0.8";
+      hint.style.fontSize = "12px";
+      hint.style.lineHeight = "1.35";
+      const clampSeconds = (value) => Math.max(30, Math.min(300, Math.round(value / 30) * 30));
+      const syncToggle = () => {
+        const on = !!toggle.checked;
+        slider.disabled = !on;
+        MiscService.writeAutoRecoEnabled(on);
+        hint.textContent = on ? "Automatically log back in if this account is disconnected because it was opened in another session." : "Auto reconnect on session conflict is turned off.";
+      };
+      const updateSlider = (raw, persist) => {
+        const seconds = clampSeconds(raw);
+        slider.value = String(seconds);
+        sliderValue.textContent = formatShortDuration(seconds);
+        if (persist) MiscService.setAutoRecoDelayMs(seconds * 1e3);
+        syncToggle();
+      };
+      toggle.addEventListener("change", syncToggle);
+      slider.addEventListener("input", () => updateSlider(Number(slider.value), false));
+      slider.addEventListener("change", () => updateSlider(Number(slider.value), true));
+      syncToggle();
+      card.body.append(header, sliderRow, hint);
+      return card.root;
+    })();
     const secPlayer = (() => {
       const row = document.createElement("div");
       row.style.display = "flex";
@@ -38836,7 +39009,7 @@ next: ${next}`;
       selValue.id = "misc.seedDeleter.summary";
       selValue.style.fontSize = "13px";
       selValue.style.opacity = "0.9";
-      selValue.textContent = "0 species \xB7 0 seeds";
+      selValue.textContent = "0 species - 0 seeds";
       grid.append(selLabel, selValue);
       const actLabel = ui.label("Actions");
       actLabel.style.fontSize = "13px";
@@ -38858,7 +39031,7 @@ next: ${next}`;
       }
       function updateSummaryUI() {
         const { speciesCount, totalQty } = readSelection();
-        selValue.textContent = `${speciesCount} species \xB7 ${formatNum2(totalQty)} seeds`;
+        selValue.textContent = `${speciesCount} species - ${formatNum2(totalQty)} seeds`;
         const has = speciesCount > 0 && totalQty > 0;
         ui.setButtonEnabled(btnDelete, has);
         ui.setButtonEnabled(btnClear, has);
@@ -38878,7 +39051,7 @@ next: ${next}`;
         await MiscService.deleteSelectedSeeds();
         updateSummaryUI();
       };
-      const card = ui.card("\u{1F5D1}\uFE0F Seed deleter", { tone: "muted", align: "center" });
+      const card = ui.card("\u{1F331} Seed deleter", { tone: "muted", align: "center" });
       card.root.style.maxWidth = "440px";
       card.body.append(grid);
       return card.root;
@@ -38893,7 +39066,7 @@ next: ${next}`;
       selValue.id = "misc.decorDeleter.summary";
       selValue.style.fontSize = "13px";
       selValue.style.opacity = "0.9";
-      selValue.textContent = "0 decor \xB7 0 items";
+      selValue.textContent = "0 decor - 0 items";
       grid.append(selLabel, selValue);
       const actLabel = ui.label("Actions");
       actLabel.style.fontSize = "13px";
@@ -38915,7 +39088,7 @@ next: ${next}`;
       }
       function updateSummaryUI() {
         const { decorCount, totalQty } = readSelection();
-        selValue.textContent = `${decorCount} decor \xB7 ${formatNum2(totalQty)} items`;
+        selValue.textContent = `${decorCount} decor - ${formatNum2(totalQty)} items`;
         const has = decorCount > 0 && totalQty > 0;
         ui.setButtonEnabled(btnDelete, has);
         ui.setButtonEnabled(btnClear, has);
@@ -38935,7 +39108,7 @@ next: ${next}`;
         }
         updateSummaryUI();
       };
-      const card = ui.card("\u{1F5D1}\uFE0F Decor deleter", { tone: "muted", align: "center" });
+      const card = ui.card("\u{1F9F1} Decor deleter", { tone: "muted", align: "center" });
       card.root.style.maxWidth = "440px";
       card.body.append(grid);
       return card.root;
@@ -38944,7 +39117,7 @@ next: ${next}`;
     content.style.display = "grid";
     content.style.gap = "8px";
     content.style.justifyItems = "center";
-    content.append(secPlayer, secSeed, secDecor);
+    content.append(secAutoReco, secPlayer, secSeed, secDecor);
     view.appendChild(content);
     view.__cleanup__ = () => {
       try {
