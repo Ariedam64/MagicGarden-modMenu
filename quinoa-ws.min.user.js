@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.7
+// @version      2.6.71
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3361,8 +3361,10 @@
     Cauldron: 59,
     MiniFairyKeep: 60,
     WoodStool: 63,
+    WoodWindmill: 64,
     StoneGardenBox: 66,
     MarbleColumn: 68,
+    MiniWizardTower: 68,
     SmallGravestone: 69,
     SmallGravestoneSideways: 70,
     WoodenWindmill: 73,
@@ -5144,6 +5146,16 @@
       isOneTimePurchase: false,
       nudgeY: -0.6
     },
+    WoodWindmill: {
+      tileRef: tileRefsDecor.WoodWindmill,
+      name: "Wood Windmill",
+      coinPrice: 5e5,
+      creditPrice: 74,
+      rarity: rarity.Common,
+      baseTileScale: 1.5,
+      isOneTimePurchase: false,
+      nudgeY: -0.47
+    },
     // Pierre
     StoneBench: {
       tileRef: tileRefsDecor.StoneBench,
@@ -5361,6 +5373,16 @@
       baseTileScale: 2.1,
       isOneTimePurchase: true,
       nudgeY: -0.45
+    },
+    MiniWizardTower: {
+      tileRef: tileRefsDecor.MiniWizardTower,
+      name: "Mini Wizard Tower",
+      coinPrice: 75e9,
+      creditPrice: 1379,
+      rarity: rarity.Mythic,
+      baseTileScale: 1.8,
+      isOneTimePurchase: false,
+      nudgeY: -0.59
     },
     // Saisonniers (Halloween)
     HayBale: {
