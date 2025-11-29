@@ -1,9 +1,16 @@
 // src/ui/menus/misc.ts
 import { Menu } from "../menu";
 import { MiscService } from "../../services/misc";
-import { PlayerService } from "../../services/player";
 
 /* ---------------- helpers ---------------- */
+const formatShortDuration = (seconds: number) => {
+  const sec = Math.max(0, Math.round(seconds));
+  if (sec < 60) return `${sec} s`;
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  if (r === 0) return `${m} min`;
+  return `${m} min ${r} s`;
+};
 
 /* ---------------- number formatting (US) ---------------- */
 const NF_US = new Intl.NumberFormat("en-US");
@@ -22,9 +29,73 @@ export async function renderMiscMenu(container: HTMLElement) {
   view.style.minHeight = "0";
   view.style.justifyItems = "center";
 
-  /* ===== Section: Player controls (Ghost + Delay sur la même ligne) ===== */
+  /* ===== Section: Auto reco ===== */
+  const secAutoReco = (() => {
+    const card = ui.card("🔄 Auto reconnect on session conflict", { tone: "muted", align: "center" });
+    card.root.style.maxWidth = "480px";
+    card.body.style.display = "grid";
+    card.body.style.gap = "10px";
+
+    const header = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
+    const toggleWrap = document.createElement("div");
+    toggleWrap.style.display = "inline-flex";
+    toggleWrap.style.alignItems = "center";
+    toggleWrap.style.gap = "8px";
+    const toggleLabel = ui.label("Activate");
+    toggleLabel.style.margin = "0";
+    const toggle = ui.switch(MiscService.readAutoRecoEnabled(false)) as HTMLInputElement;
+    toggleWrap.append(toggleLabel, toggle as unknown as HTMLElement);
+    header.append(toggleWrap);
+
+    const initialSeconds = Math.round(MiscService.getAutoRecoDelayMs() / 1000);
+    const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
+    const sliderLabel = ui.label("Reconnect after");
+    sliderLabel.style.margin = "0";
+    const slider = ui.slider(30, 300, 30, initialSeconds) as HTMLInputElement;
+    slider.style.flex = "1";
+    const sliderValue = document.createElement("div");
+    sliderValue.style.minWidth = "72px";
+    sliderValue.style.textAlign = "right";
+    sliderValue.textContent = formatShortDuration(initialSeconds);
+    sliderRow.append(sliderLabel, slider, sliderValue);
+
+    const hint = document.createElement("div");
+    hint.style.opacity = "0.8";
+    hint.style.fontSize = "12px";
+    hint.style.lineHeight = "1.35";
+
+    const clampSeconds = (value: number) =>
+      Math.max(30, Math.min(300, Math.round(value / 30) * 30));
+
+    const syncToggle = () => {
+      const on = !!toggle.checked;
+      slider.disabled = !on;
+      MiscService.writeAutoRecoEnabled(on);
+      hint.textContent = on
+        ? "Automatically log back in if this account is disconnected because it was opened in another session."
+        : "Auto reconnect on session conflict is turned off.";
+    };
+
+    const updateSlider = (raw: number, persist: boolean) => {
+      const seconds = clampSeconds(raw);
+      slider.value = String(seconds);
+      sliderValue.textContent = formatShortDuration(seconds);
+      if (persist) MiscService.setAutoRecoDelayMs(seconds * 1000);
+      syncToggle();
+    };
+
+    toggle.addEventListener("change", syncToggle);
+    slider.addEventListener("input", () => updateSlider(Number(slider.value), false));
+    slider.addEventListener("change", () => updateSlider(Number(slider.value), true));
+
+    syncToggle();
+
+    card.body.append(header, sliderRow, hint);
+    return card.root;
+  })();
+
+  /* ===== Section: Player controls (Ghost + Delay on same line) ===== */
   const secPlayer = (() => {
-    // Ligne unique, deux paires label+control
     const row = document.createElement("div");
     row.style.display = "flex";
     row.style.alignItems = "center";
@@ -38,7 +109,7 @@ export async function renderMiscMenu(container: HTMLElement) {
       wrap.style.gap = "6px";
 
       const lab = ui.label(labelText);
-      lab.style.fontSize = "13px";  // +1px
+      lab.style.fontSize = "13px";
       lab.style.margin = "0";
       lab.style.justifySelf = "start";
       if (labelId) (lab as any).id = labelId;
@@ -47,12 +118,10 @@ export async function renderMiscMenu(container: HTMLElement) {
       return wrap;
     };
 
-    // Ghost pair
     const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false)) as HTMLInputElement;
     (ghostSwitch as any).id = "player.ghostMode";
     const ghostPair = pair("Ghost", ghostSwitch as unknown as HTMLElement, "label.ghost");
 
-    // Delay pair
     const delayInput = ui.inputNumber(10, 1000, 5, 50) as HTMLInputElement;
     (delayInput as any).id = "player.moveDelay";
     const delayWrap = ((delayInput as any).wrap ?? delayInput) as HTMLElement;
@@ -62,7 +131,6 @@ export async function renderMiscMenu(container: HTMLElement) {
 
     row.append(ghostPair, delayPair);
 
-    // Wire to service
     const ghost = MiscService.createGhostController();
     delayInput.value = String(MiscService.getGhostDelayMs());
     delayInput.addEventListener("change", () => {
@@ -87,26 +155,24 @@ export async function renderMiscMenu(container: HTMLElement) {
     return card.root;
   })();
 
-  /* ===== Section: Seed deleter (compact, neutral buttons) ===== */
+  /* ===== Section: Seed deleter ===== */
   const secSeed = (() => {
     const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
 
-    // Row: Selected
     const selLabel = ui.label("Selected");
-    selLabel.style.fontSize = "13px"; // +1px
+    selLabel.style.fontSize = "13px";
     selLabel.style.margin = "0";
     selLabel.style.justifySelf = "start";
 
     const selValue = document.createElement("div");
     selValue.id = "misc.seedDeleter.summary";
-    selValue.style.fontSize = "13px"; // +1px
+    selValue.style.fontSize = "13px";
     selValue.style.opacity = "0.9";
-    selValue.textContent = "0 species · 0 seeds";
+    selValue.textContent = "0 species - 0 seeds";
     grid.append(selLabel, selValue);
 
-    // Row: Actions
     const actLabel = ui.label("Actions");
-    actLabel.style.fontSize = "13px"; // +1px
+    actLabel.style.fontSize = "13px";
     actLabel.style.margin = "0";
     actLabel.style.justifySelf = "start";
 
@@ -120,7 +186,6 @@ export async function renderMiscMenu(container: HTMLElement) {
     actions.append(btnSelect, btnDelete, btnClear);
     grid.append(actLabel, actions);
 
-    // Helpers
     function readSelection() {
       const sel = MiscService.getCurrentSeedSelection?.() || [];
       const speciesCount = sel.length;
@@ -130,13 +195,12 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
     function updateSummaryUI() {
       const { speciesCount, totalQty } = readSelection();
-      selValue.textContent = `${speciesCount} species · ${formatNum(totalQty)} seeds`;
+      selValue.textContent = `${speciesCount} species - ${formatNum(totalQty)} seeds`;
       const has = speciesCount > 0 && totalQty > 0;
       ui.setButtonEnabled(btnDelete, has);
       ui.setButtonEnabled(btnClear, has);
     }
 
-    // Events
     btnSelect.onclick = async () => {
       await MiscService.openSeedSelectorFlow(ui.setWindowVisible.bind(ui));
       updateSummaryUI();
@@ -146,21 +210,20 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
     btnDelete.onclick = async () => {
-      await MiscService.deleteSelectedSeeds(); 
-      updateSummaryUI();                       
+      await MiscService.deleteSelectedSeeds();
+      updateSummaryUI();
     };
 
-    const card = ui.card("🗑️ Seed deleter", { tone: "muted", align: "center" });
+    const card = ui.card("🌱 Seed deleter", { tone: "muted", align: "center" });
     card.root.style.maxWidth = "440px";
     card.body.append(grid);
     return card.root;
   })();
 
-  /* ===== Section: Decor deleter (same layout, stub logic) ===== */
+  /* ===== Section: Decor deleter ===== */
   const secDecor = (() => {
     const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
 
-    // Row: Selected
     const selLabel = ui.label("Selected");
     selLabel.style.fontSize = "13px";
     selLabel.style.margin = "0";
@@ -170,10 +233,9 @@ export async function renderMiscMenu(container: HTMLElement) {
     selValue.id = "misc.decorDeleter.summary";
     selValue.style.fontSize = "13px";
     selValue.style.opacity = "0.9";
-    selValue.textContent = "0 decor · 0 items";
+    selValue.textContent = "0 decor - 0 items";
     grid.append(selLabel, selValue);
 
-    // Row: Actions
     const actLabel = ui.label("Actions");
     actLabel.style.fontSize = "13px";
     actLabel.style.margin = "0";
@@ -189,7 +251,6 @@ export async function renderMiscMenu(container: HTMLElement) {
     actions.append(btnSelect, btnDelete, btnClear);
     grid.append(actLabel, actions);
 
-    // Helpers
     function readSelection() {
       const sel = MiscService.getCurrentDecorSelection?.() || [];
       const decorCount = sel.length;
@@ -199,13 +260,12 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
     function updateSummaryUI() {
       const { decorCount, totalQty } = readSelection();
-      selValue.textContent = `${decorCount} decor · ${formatNum(totalQty)} items`;
+      selValue.textContent = `${decorCount} decor - ${formatNum(totalQty)} items`;
       const has = decorCount > 0 && totalQty > 0;
       ui.setButtonEnabled(btnDelete, has);
       ui.setButtonEnabled(btnClear, has);
     }
 
-    // Events
     btnSelect.onclick = async () => {
       await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
       updateSummaryUI();
@@ -219,22 +279,20 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
 
-    const card = ui.card("🗑️ Decor deleter", { tone: "muted", align: "center" });
+    const card = ui.card("🧱 Decor deleter", { tone: "muted", align: "center" });
     card.root.style.maxWidth = "440px";
     card.body.append(grid);
     return card.root;
   })();
 
-  // Layout principal (compact)
   const content = document.createElement("div");
   content.style.display = "grid";
   content.style.gap = "8px";
   content.style.justifyItems = "center";
-  content.append(secPlayer, secSeed, secDecor);
+  content.append(secAutoReco, secPlayer, secSeed, secDecor);
 
   view.appendChild(content);
 
-  // cleanup
   (view as any).__cleanup__ = () => {
     try { (secPlayer as any).__cleanup__?.(); } catch {}
     try { (secSeed as any).__cleanup__?.(); } catch {}

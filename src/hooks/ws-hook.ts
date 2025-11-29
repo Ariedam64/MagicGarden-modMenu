@@ -15,9 +15,97 @@ import {
 import { toastSimple } from "../ui/toast";
 import { getAtomByLabel, jGet, jSet } from "../store/jotai";
 import type { GardenState, PlantSlotTiming } from "../store/atoms";
+import { detectEnvironment } from "../utils/api";
+import { MiscService } from "../services/misc";
+
+type WsCloseListener = (ev: CloseEvent, ws: WebSocket) => void;
+
+const wsCloseListeners: WsCloseListener[] = [];
+let versionReloadScheduled = false;
+let autoRecoTimer: number | null = null;
+
+function onWebSocketClose(cb: WsCloseListener): () => void {
+  wsCloseListeners.push(cb);
+  return () => {
+    const idx = wsCloseListeners.indexOf(cb);
+    if (idx !== -1) wsCloseListeners.splice(idx, 1);
+  };
+}
+
+function notifyWebSocketClose(ev: CloseEvent, ws: WebSocket) {
+  for (const listener of [...wsCloseListeners]) {
+    try {
+      listener(ev, ws);
+    } catch {}
+  }
+}
+
+function isVersionExpiredClose(ev: CloseEvent): boolean {
+  return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
+}
+
+function startAutoReloadOnVersionExpired() {
+  onWebSocketClose((ev) => {
+    if (!isVersionExpiredClose(ev)) return;
+
+    const env = detectEnvironment();
+    if (env.surface === "discord" || env.isInIframe) return;
+    if (versionReloadScheduled) return;
+    versionReloadScheduled = true;
+
+    try {
+      console.warn("[MagicGarden] Version expired, reloading...");
+    } catch {}
+
+    try {
+      pageWindow.location.reload();
+    } catch {
+      try {
+        window.location.reload();
+      } catch {}
+    }
+  });
+}
+
+function isSupersededSessionClose(ev: CloseEvent): boolean {
+  if (ev?.code !== 4250) return false;
+  const reason = ev?.reason || "";
+  return /superseded/i.test(reason) || /newer user session/i.test(reason);
+}
+
+function startAutoReconnectOnSuperseded() {
+  onWebSocketClose((ev) => {
+    if (!isSupersededSessionClose(ev)) return;
+    if (!MiscService.readAutoRecoEnabled(false)) return;
+
+    const delayMs = MiscService.getAutoRecoDelayMs();
+
+    if (autoRecoTimer !== null) {
+      clearTimeout(autoRecoTimer);
+      autoRecoTimer = null;
+    }
+
+    autoRecoTimer = window.setTimeout(() => {
+      autoRecoTimer = null;
+      if (!MiscService.readAutoRecoEnabled(false)) return;
+      try {
+        const conn = (pageWindow as any).MagicCircle_RoomConnection;
+        const connect = conn?.connect;
+        if (typeof connect === "function") {
+          connect.call(conn);
+        }
+      } catch (error) {
+        console.warn("[MagicGarden] Auto reco failed:", error);
+      }
+    }, delayMs);
+  });
+}
 
 export function installPageWebSocketHook() {
   if (!pageWindow || !NativeWS) return;
+
+  startAutoReloadOnVersionExpired();
+  startAutoReconnectOnSuperseded();
 
   function WrappedWebSocket(this: any, url: string | URL, protocols?: string | string[]) {
     const ws: WebSocket =
@@ -41,6 +129,10 @@ export function installPageWebSocketHook() {
       ) {
         setQWS(ws, "message:" + (j.type || "state"));
       }
+    });
+
+    ws.addEventListener("close", (ev: CloseEvent) => {
+      notifyWebSocketClose(ev, ws);
     });
     return ws;
   }

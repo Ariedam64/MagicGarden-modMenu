@@ -12,6 +12,11 @@ import { toastSimple } from "../ui/toast";
 export const LS_GHOST_KEY = "qws:player:ghostMode";
 const LS_DELAY_KEY = "qws:ghost:delayMs";
 const DEFAULT_DELAY_MS = 50;
+const LS_AUTO_RECO_ENABLED = "qws:autoReco:onNewSession";
+const LS_AUTO_RECO_DELAY_MS = "qws:autoReco:delayMs";
+const AUTO_RECO_MIN_MS = 30_000;
+const AUTO_RECO_MAX_MS = 5 * 60_000;
+const AUTO_RECO_DEFAULT_MS = 60_000;
 
 export const readGhostEnabled = (def = false): boolean => {
   try { return localStorage.getItem(LS_GHOST_KEY) === "1"; } catch { return def; }
@@ -35,6 +40,28 @@ export const setGhostDelayMs = (n: number) => {
     localStorage.setItem(LS_DELAY_KEY, String(v));
   } catch (err) {
   }
+};
+
+const clampAutoRecoDelay = (ms: number) =>
+  Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
+
+export const readAutoRecoEnabled = (def = false): boolean => {
+  try { return localStorage.getItem(LS_AUTO_RECO_ENABLED) === "1"; } catch { return def; }
+};
+export const writeAutoRecoEnabled = (on: boolean) => {
+  try { localStorage.setItem(LS_AUTO_RECO_ENABLED, on ? "1" : "0"); } catch {}
+};
+
+export const getAutoRecoDelayMs = (): number => {
+  try {
+    const raw = Number(localStorage.getItem(LS_AUTO_RECO_DELAY_MS));
+    if (Number.isFinite(raw)) return clampAutoRecoDelay(raw);
+  } catch {}
+  return AUTO_RECO_DEFAULT_MS;
+};
+export const setAutoRecoDelayMs = (ms: number) => {
+  const v = clampAutoRecoDelay(ms);
+  try { localStorage.setItem(LS_AUTO_RECO_DELAY_MS, String(v)); } catch {}
 };
 
 /* ========================================================================== */
@@ -1348,6 +1375,10 @@ export const MiscService = {
   getGhostDelayMs,
   setGhostDelayMs,
   createGhostController,
+  readAutoRecoEnabled,
+  writeAutoRecoEnabled,
+  getAutoRecoDelayMs,
+  setAutoRecoDelayMs,
 
   // seeds
   getMySeedInventory,
