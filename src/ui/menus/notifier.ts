@@ -2557,7 +2557,7 @@ export function renderNotifierMenu(root: HTMLElement) {
   ui.addTab("shops", "🛒 Shops", (view) => renderShopTab(view, ui));
   ui.addTab("weather", "🌦 Weather", (view) => renderWeatherTab(view, ui));
   ui.addTab("pets", "🐾 Pets", (view) => renderPetAlertsTab(view, ui));
-  ui.addTab("settings", "⚙️ General settings", (view) => renderSettingsTab(view, ui));
+  ui.addTab("settings", "⚙️ Settings", (view) => renderSettingsTab(view, ui));
   ui.mount(root);
 }
 

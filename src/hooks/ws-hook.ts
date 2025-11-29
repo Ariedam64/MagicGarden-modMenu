@@ -6,6 +6,14 @@ import { Atoms } from "../store/atoms";
 import { lockerService } from "../services/locker";
 import { plantCatalog } from "../data/hardcoded-data.clean";
 import { StatsService } from "../services/stats";
+import {
+  friendBonusPercentFromMultiplier,
+  friendBonusPercentFromPlayers,
+  lockerRestrictionsService,
+  percentToRequiredFriendCount,
+} from "../services/lockerRestrictions";
+import { toastSimple } from "../ui/toast";
+import { getAtomByLabel, jGet, jSet } from "../store/jotai";
 import type { GardenState, PlantSlotTiming } from "../store/atoms";
 
 export function installPageWebSocketHook() {
@@ -224,6 +232,9 @@ function installHarvestCropInterceptor() {
   if (readSharedGlobal<boolean>("__tmHarvestHookInstalled")) return;
 
   let latestGardenState: GardenState | null = null;
+  let friendBonusPercent: number | null = null;
+  let friendBonusFromPlayers: number | null = null;
+  let latestEggId: string | null = null;
 
   void (async () => {
     try {
@@ -234,7 +245,40 @@ function installHarvestCropInterceptor() {
         latestGardenState = (next as GardenState | null) ?? null;
       });
     } catch {}
+    try {
+      const initialObj = await Atoms.data.myCurrentGardenObject.get();
+      latestEggId = extractEggId(initialObj);
+    } catch {}
+    try {
+      await Atoms.data.myCurrentGardenObject.onChange((next) => {
+        latestEggId = extractEggId(next);
+      });
+    } catch {}
   })();
+
+  void (async () => {
+    try {
+      const initial = await Atoms.server.friendBonusMultiplier.get();
+      friendBonusPercent = friendBonusPercentFromMultiplier(initial);
+    } catch {}
+    try {
+      await Atoms.server.friendBonusMultiplier.onChange((next) => {
+        friendBonusPercent = friendBonusPercentFromMultiplier(next);
+      });
+    } catch {}
+    try {
+      const initialPlayers = await Atoms.server.numPlayers.get();
+      friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+    } catch {}
+    try {
+      await Atoms.server.numPlayers.onChange((next) => {
+        friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
+      });
+    } catch {}
+  })();
+
+  const resolveFriendBonusPercent = (): number | null =>
+    friendBonusPercent ?? friendBonusFromPlayers ?? null;
 
   registerMessageInterceptor("HarvestCrop", (message) => {
     const slot = message.slot;
@@ -347,6 +391,17 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("HatchEgg", () => {
+    const locked = lockerRestrictionsService.isEggLocked(latestEggId);
+    if (locked) {
+      console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
+      void (async () => {
+        try {
+          await dedupeEggLockToast(latestEggId);
+        } catch {}
+      })();
+      return { kind: "drop" };
+    }
+
     void (async () => {
       const previousPets = await readInventoryPetSnapshots();
       const previousMap = buildPetMap(previousPets);
@@ -367,6 +422,33 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("SellAllCrops", (message) => {
+    const restrictionState = lockerRestrictionsService.getState();
+    const requiredPct = lockerRestrictionsService.getRequiredPercent();
+    const requiredPlayers = restrictionState.minRequiredPlayers;
+    const currentBonusPct = resolveFriendBonusPercent();
+    const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
+
+    if (!allowed) {
+      const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
+      console.log("[SellAllCrops] Blocked by friend bonus restriction", {
+        requiredPct,
+        requiredPlayers,
+        currentBonusPct,
+        currentPlayers,
+      });
+      void (async () => {
+        try {
+          await toastSimple(
+            "Friend bonus locker",
+            `Require at least ${requiredPct}% friend bonus`,
+            "error"
+          );
+        } catch {}
+        void removeSellSuccessToast();
+      })();
+      return { kind: "drop" };
+    }
+
     void (async () => {
       try {
         const items = await Atoms.inventory.myCropItemsToSell.get();
@@ -608,6 +690,39 @@ function extractNewPets(
   return pets.filter(pet => !previous.has(pet.id));
 }
 
+function extractEggId(obj: any): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  if (obj.objectType !== "egg") return null;
+  const eggId = (obj as any).eggId;
+  return typeof eggId === "string" && eggId ? eggId : null;
+}
+
+async function dedupeEggLockToast(latestEggId: string | null) {
+  const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+  const description = latestEggId
+    ? `Hatching locked for ${latestEggId}`
+    : "Hatching locked by egg locker";
+
+  if (!toastsAtom) {
+    await toastSimple("Egg hatch locker", description, "error");
+    return;
+  }
+
+  const list = await jGet<any[]>(toastsAtom).catch(() => []) as any[];
+  const filtered = Array.isArray(list)
+    ? list.filter((t) => !(t?.title === "Egg hatch locker"))
+    : [];
+  filtered.push({
+    isClosable: true,
+    duration: 3500,
+    title: "Egg hatch locker",
+    description,
+    variant: "error",
+    id: "quinoa-game-toast",
+  });
+  await jSet(toastsAtom, filtered);
+}
+
 function inferPetRarity(mutations: string[]): "normal" | "gold" | "rainbow" {
   if (!Array.isArray(mutations) || mutations.length === 0) {
     return "normal";
@@ -701,4 +816,27 @@ function resolveSendMessage(Conn: ConnectionCtor): ResolvedSendMessage {
   }
 
   return null;
+}
+
+async function removeSellSuccessToast(): Promise<void> {
+  try {
+    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+    if (!toastsAtom) return;
+    const list = await jGet<any[]>(toastsAtom).catch(() => []) as any[];
+    const filtered = Array.isArray(list)
+      ? list.filter((t) => {
+          if (!t || typeof t !== "object") return true;
+          if (t.variant !== "success") return true;
+          const icon = (t as any).icon;
+          const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
+          const hasCropText = !!(t as any)?.description?.props?.values?.cropText;
+          return !(isTileSell || hasCropText);
+        })
+      : list;
+    if (filtered.length !== list.length) {
+      await jSet(toastsAtom, filtered);
+    }
+  } catch {
+    /* ignore cleanup errors */
+  }
 }

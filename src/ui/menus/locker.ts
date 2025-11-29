@@ -14,6 +14,16 @@ import {
   type LockerLockMode,
   type LockerStatePersisted,
 } from "../../services/locker";
+import {
+  FRIEND_BONUS_MAX,
+  FRIEND_BONUS_STEP,
+  friendBonusPercentFromMultiplier,
+  friendBonusPercentFromPlayers,
+  lockerRestrictionsService,
+  percentToRequiredFriendCount,
+} from "../../services/lockerRestrictions";
+import { Atoms } from "../../store/atoms";
+import { createShopSprite } from "../../utils/shopSprites";
 
 // Reuse tag definitions from garden menu for consistency
 type VisualTag = "Gold" | "Rainbow";
@@ -2011,6 +2021,311 @@ type LockerTabRenderer = {
   destroy: () => void;
 };
 
+function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
+  let state = lockerRestrictionsService.getState();
+  let bonusFromMultiplier: number | null = null;
+  let bonusFromPlayers: number | null = friendBonusPercentFromPlayers(1);
+  let eggOptions: Array<{ id: string; name: string }> = [];
+  const disposables: Array<() => void> = [];
+  let subsAttached = false;
+
+  const clampPercent = (value: number) =>
+    Math.max(0, Math.min(FRIEND_BONUS_MAX, Math.round(value / FRIEND_BONUS_STEP) * FRIEND_BONUS_STEP));
+
+  const resolveCurrentBonus = (): number | null =>
+    bonusFromMultiplier ?? bonusFromPlayers ?? 0;
+
+  const layout = applyStyles(document.createElement("div"), {
+    display: "grid",
+    gap: "12px",
+    justifyItems: "center",
+    width: "100%",
+    maxWidth: "1100px",
+  });
+
+  const card = ui.card("Friend bonus locker", {
+    align: "stretch",
+  });
+  card.root.style.width = "100%";
+  card.header.style.display = "flex";
+  card.header.style.alignItems = "center";
+  card.header.style.justifyContent = "space-between";
+
+  const sliderWrap = applyStyles(document.createElement("div"), {
+    display: "grid",
+    gap: "6px",
+  });
+
+  const sliderHeader = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
+  const sliderTitle = document.createElement("div");
+  sliderTitle.textContent = "Minimum friend bonus required‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ‎ ";
+  sliderTitle.style.fontWeight = "600";
+  const sliderValue = applyStyles(document.createElement("div"), {
+    fontWeight: "700",
+    color: "#ff7a1f",
+    textShadow: "0 1px 1px rgba(0, 0, 0, 0.5)",
+  });
+  sliderHeader.append(sliderTitle, sliderValue);
+
+  const initialRequiredPct = friendBonusPercentFromPlayers(state.minRequiredPlayers) ?? 0;
+  const slider = ui.slider(0, FRIEND_BONUS_MAX, FRIEND_BONUS_STEP, initialRequiredPct);
+  slider.style.width = "100%";
+
+  sliderWrap.append(sliderHeader, slider);
+
+  const statusBadge = applyStyles(document.createElement("div"), {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 10px",
+    borderRadius: "999px",
+    fontWeight: "700",
+    fontSize: "12px",
+    letterSpacing: "0.25px",
+  });
+  statusBadge.style.marginLeft = "auto";
+  card.header.appendChild(statusBadge);
+
+  const statusText = applyStyles(document.createElement("div"), {
+    fontSize: "12.5px",
+    lineHeight: "1.5",
+    opacity: "0.92",
+  });
+
+  card.body.append(sliderWrap, statusText);
+  layout.append(card.root);
+
+  /* Egg hatch locker */
+  const eggCard = ui.card("Egg hatch locker", { align: "stretch" });
+  eggCard.root.style.width = "100%";
+  const eggList = applyStyles(document.createElement("div"), {
+    display: "grid",
+    gap: "8px",
+    width: "100%",
+  });
+  eggCard.body.append(eggList);
+  layout.append(eggCard.root);
+
+  const renderEggList = () => {
+    eggList.innerHTML = "";
+    if (!eggOptions.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "No eggs detected in shop.";
+      empty.style.opacity = "0.7";
+      empty.style.fontSize = "12px";
+      eggList.appendChild(empty);
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    eggOptions.forEach(opt => {
+      const row = applyStyles(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "auto auto 1fr",
+        alignItems: "center",
+        gap: "10px",
+        padding: "8px 10px",
+        border: "1px solid #4445",
+        borderRadius: "10px",
+        background: "#0f1318",
+      });
+
+      const locked = !!state.eggLocks?.[opt.id];
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = locked ? "🔒" : "🔓";
+      toggle.style.border = "1px solid #4445";
+      toggle.style.borderRadius = "10px";
+      toggle.style.padding = "6px 10px";
+      toggle.style.fontSize = "14px";
+      toggle.style.fontWeight = "700";
+      toggle.style.background = locked ? "#331616" : "#12301d";
+      toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
+      toggle.onclick = () => {
+        const next = !locked;
+        state.eggLocks = { ...(state.eggLocks || {}), [opt.id]: next };
+        lockerRestrictionsService.setEggLock(opt.id, next);
+        renderEggList();
+      };
+
+      const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "🥚" });
+      sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
+
+      const name = document.createElement("div");
+      name.textContent = opt.name || opt.id;
+      name.style.fontWeight = "600";
+      name.style.color = "#e7eef7";
+
+      row.append(toggle, sprite, name);
+      fragment.appendChild(row);
+    });
+
+    eggList.appendChild(fragment);
+  };
+
+  const updateSliderValue = (pct: number) => {
+    slider.value = String(pct);
+    sliderValue.textContent = `+${pct}%`;
+  };
+
+  const setStatusTone = (tone: "success" | "warn" | "info") => {
+    const palette =
+      tone === "success"
+        ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" }
+        : tone === "warn"
+          ? { bg: "#321616", border: "#c74343", color: "#fca5a5" }
+          : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
+    statusBadge.style.background = palette.bg;
+    statusBadge.style.border = `1px solid ${palette.border}`;
+    statusBadge.style.color = palette.color;
+  };
+
+  const updateStatus = () => {
+    const requiredPct = clampPercent(friendBonusPercentFromPlayers(state.minRequiredPlayers) ?? 0);
+    const currentPct = resolveCurrentBonus();
+    const requiredPlayers = state.minRequiredPlayers;
+    const currentPlayers = currentPct != null ? percentToRequiredFriendCount(currentPct) : null;
+    const allowed = requiredPct <= 0 || (currentPct != null && currentPct + 0.0001 >= requiredPct);
+
+    if (requiredPct <= 0) {
+      statusBadge.textContent = "Unlocked";
+      setStatusTone("info");
+      statusText.textContent = currentPct != null
+        ? `Current friend bonus: ${currentPct}% (${currentPlayers} players).`
+        : "Current friend bonus not detected yet.";
+      return;
+    }
+
+    statusBadge.textContent = allowed ? "Sale allowed" : "Sale blocked";
+    setStatusTone(allowed ? "success" : "warn");
+    statusText.textContent = allowed
+      ? `Current bonus ${currentPct}% (${currentPlayers} players) meets the requirement (${requiredPct}%).`
+      : `Requires ${requiredPct}% (${requiredPlayers} players) or more`;
+  };
+
+  const handleSliderInput = (commit: boolean) => {
+    const raw = Number(slider.value);
+    const pct = clampPercent(Number.isFinite(raw) ? raw : 0);
+    updateSliderValue(pct);
+    state.minRequiredPlayers = percentToRequiredFriendCount(pct);
+    updateStatus();
+    if (commit) {
+      lockerRestrictionsService.setMinRequiredPlayers(state.minRequiredPlayers);
+    }
+  };
+
+  slider.addEventListener("input", () => handleSliderInput(false));
+  slider.addEventListener("change", () => handleSliderInput(true));
+
+  const syncFromService = (next: typeof state) => {
+    state = { ...next };
+    updateSliderValue(friendBonusPercentFromPlayers(state.minRequiredPlayers) ?? 0);
+    updateStatus();
+    renderEggList();
+  };
+
+  const attachSubscriptions = async () => {
+    if (subsAttached) return;
+    subsAttached = true;
+    try {
+      const initialBonus = await Atoms.server.friendBonusMultiplier.get();
+      bonusFromMultiplier = friendBonusPercentFromMultiplier(initialBonus);
+    } catch {}
+    try {
+      const unsub = await Atoms.server.friendBonusMultiplier.onChange(next => {
+        bonusFromMultiplier = friendBonusPercentFromMultiplier(next);
+        updateStatus();
+      });
+      if (typeof unsub === "function") disposables.push(unsub);
+    } catch {}
+
+    try {
+      const initialPlayers = await Atoms.server.numPlayers.get();
+      bonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+    } catch {}
+    try {
+      const unsubPlayers = await Atoms.server.numPlayers.onChange(next => {
+        bonusFromPlayers = friendBonusPercentFromPlayers(next);
+        updateStatus();
+      });
+      if (typeof unsubPlayers === "function") disposables.push(unsubPlayers);
+    } catch {}
+
+    const unsubService = lockerRestrictionsService.subscribe(syncFromService);
+    disposables.push(unsubService);
+
+    try {
+      const initialEggShop = await Atoms.shop.eggShop.get();
+      eggOptions = extractEggOptions(initialEggShop);
+      renderEggList();
+    } catch {}
+    try {
+      const unsubEggShop = await Atoms.shop.eggShop.onChange((next) => {
+        eggOptions = extractEggOptions(next);
+        renderEggList();
+      });
+      if (typeof unsubEggShop === "function") disposables.push(unsubEggShop);
+    } catch {}
+  };
+
+  const render = (view: HTMLElement) => {
+    view.innerHTML = "";
+    view.style.maxHeight = "54vh";
+    view.style.overflow = "auto";
+    view.append(layout);
+    syncFromService(lockerRestrictionsService.getState());
+    updateStatus();
+    void attachSubscriptions();
+  };
+
+  const destroy = () => {
+    while (disposables.length) {
+      const dispose = disposables.pop();
+      try {
+        dispose?.();
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  return { render, destroy };
+}
+
+type EggOption = { id: string; name: string };
+
+function extractEggOptions(raw: any): EggOption[] {
+  const seen = new Set<string>();
+  const options: EggOption[] = [];
+
+  const add = (id: unknown, name?: unknown) => {
+    if (typeof id !== "string" || !id) return;
+    if (seen.has(id)) return;
+    seen.add(id);
+    const label =
+      (typeof name === "string" && name) ||
+      (typeof (raw?.names?.[id]) === "string" && raw.names[id]) ||
+      id;
+    options.push({ id, name: label });
+  };
+
+  const walk = (node: any) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    const candidate = (node as any).eggId ?? (node as any).id ?? null;
+    add(candidate, (node as any).name);
+    for (const value of Object.values(node)) {
+      if (value && typeof value === "object") walk(value);
+    }
+  };
+
+  walk(raw);
+  return options;
+}
+
 function createGeneralTabRenderer(ui: Menu, store: LockerMenuStore): LockerTabRenderer {
   const viewRoot = applyStyles(document.createElement("div"), {
     display: "flex",
@@ -2411,18 +2726,21 @@ export async function renderLockerMenu(container: HTMLElement) {
   ui.mount(container);
 
   const store = new LockerMenuStore(lockerService.getState());
+  const restrictionsTab = createRestrictionsTabRenderer(ui);
   const generalTab = createGeneralTabRenderer(ui, store);
   const overridesTab = createOverridesTabRenderer(ui, store);
 
   ui.addTabs([
     { id: "locker-general", title: "General", render: view => generalTab.render(view) },
-    { id: "locker-overrides", title: "Overrides by species", render: view => overridesTab.render(view) },
+    { id: "locker-overrides", title: "Overrides", render: view => overridesTab.render(view) },
+    { id: "locker-restrictions", title: "Restrictions", render: view => restrictionsTab.render(view) },
   ]);
 
   ui.switchTo("locker-general");
 
   const disposables: Array<() => void> = [];
   disposables.push(lockerService.subscribe(event => store.syncFromService(event.state)));
+  disposables.push(() => restrictionsTab.destroy());
   disposables.push(() => generalTab.destroy());
   disposables.push(() => overridesTab.destroy());
 

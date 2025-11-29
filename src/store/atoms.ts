@@ -140,6 +140,8 @@ export const weather = makeAtom<string | null>("weatherAtom")
 export const activeModal = makeAtom<string | null>("activeModalAtom");
 export const avatarTriggerAnimationAtom = makeAtom<AvatarTriggerAnimation | null>("avatarTriggerAnimationAtom")
 
+export const friendBonusMultiplier = makeAtom<any>("friendBonusMultiplierAtom")
+
 /* ============================================================================
  * Derived views
  * ==========================================================================*/
@@ -307,7 +309,7 @@ export const myPetsAbilitiesTrigger = {
  * ==========================================================================*/
 export const Atoms = {
   ui: { activeModal },
-  server: { numPlayers },
+  server: { numPlayers, friendBonusMultiplier },
   player: { 
     position, 
     avatarTriggerAnimationAtom, 

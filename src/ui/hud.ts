@@ -24,6 +24,8 @@ import { startModalObserver } from "../utils/checkModal";
 import { startInventorySortingObserver } from "../utils/inventorySorting";
 import { startActivityLogHistoryWatcher } from "../services/activityLogHistory";
 import { startActivityLogFilter } from "../utils/activityLogFilter";
+import { startSellCropsLockWatcher } from "../utils/sellCropsLock";
+import { startEggHatchLockIndicator } from "../utils/eggHatchLockIndicator";
 
 // ========================
 // Types d’intégration
@@ -1035,8 +1037,10 @@ export function initWatchers(){
       await renderOverlay()
       setupBuyAll()
       startReorderObserver();
+      startSellCropsLockWatcher();
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
+      startEggHatchLockIndicator();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
       startInventorySortingObserver();
