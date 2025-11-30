@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.86
+// @version      2.6.87
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -9197,6 +9197,7 @@
   // src/hooks/ws-hook.ts
   var wsCloseListeners = [];
   var versionReloadScheduled = false;
+  var autoRecoTimer = null;
   function onWebSocketClose(cb) {
     wsCloseListeners.push(cb);
     return () => {
@@ -9236,9 +9237,39 @@
       }
     });
   }
+  function isSupersededSessionClose(ev) {
+    if (ev?.code !== 4250) return false;
+    const reason = ev?.reason || "";
+    return /superseded/i.test(reason) || /newer user session/i.test(reason);
+  }
+  function startAutoReconnectOnSuperseded() {
+    onWebSocketClose((ev) => {
+      if (!isSupersededSessionClose(ev)) return;
+      if (!MiscService.readAutoRecoEnabled(false)) return;
+      const delayMs = MiscService.getAutoRecoDelayMs();
+      if (autoRecoTimer !== null) {
+        clearTimeout(autoRecoTimer);
+        autoRecoTimer = null;
+      }
+      autoRecoTimer = window.setTimeout(() => {
+        autoRecoTimer = null;
+        if (!MiscService.readAutoRecoEnabled(false)) return;
+        try {
+          const conn = pageWindow.MagicCircle_RoomConnection;
+          const connect = conn?.connect;
+          if (typeof connect === "function") {
+            connect.call(conn);
+          }
+        } catch (error) {
+          console.warn("[MagicGarden] Auto reco failed:", error);
+        }
+      }, delayMs);
+    });
+  }
   function installPageWebSocketHook() {
     if (!pageWindow || !NativeWS) return;
     startAutoReloadOnVersionExpired();
+    startAutoReconnectOnSuperseded();
     function WrappedWebSocket(url, protocols) {
       const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
       sockets.push(ws);
