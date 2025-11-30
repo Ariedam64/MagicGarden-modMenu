@@ -7,7 +7,7 @@ import {
   decorCatalog,
 } from "../data/hardcoded-data.clean";
 
-export type ShopSpriteType = "Seed" | "Egg" | "Tool" | "Decor";
+export type ShopSpriteType = "Seed" | "Egg" | "Tool" | "Decor" | "Crop";
 
 export interface ShopSpriteOptions {
   size?: number;
@@ -34,12 +34,15 @@ let seedSheetBases: string[] | null = null;
 let eggSheetBases: string[] | null = null;
 let itemSheetBases: string[] | null = null;
 let decorSheetBases: string[] | null = null;
+let cropSheetBases: string[] | null = null;
+let tallCropSheetBases: string[] | null = null;
 
 const FALLBACK_BASES: Record<ShopSpriteType, string[]> = {
   Seed: ["seeds", "Seeds"],
   Egg: ["pets", "Pets", "eggs", "Eggs"],
   Tool: ["items", "Items"],
   Decor: ["decor", "Decor"],
+  Crop: ["plants", "Plants", "allplants", "AllPlants"],
 };
 
 function spriteKey(type: ShopSpriteType, id: string): SpriteKey {
@@ -61,7 +64,8 @@ function defaultFallback(type: ShopSpriteType): string {
     case "Seed": return "🌱";
     case "Egg": return "🥚";
     case "Tool": return "🧰";
-    default: return "🏠";
+    case "Decor": return "🏠";
+    case "Crop": return "🍎";
   }
 }
 
@@ -132,12 +136,47 @@ function getDecorSheetBases(): string[] {
   return decorSheetBases;
 }
 
-function getBases(type: ShopSpriteType): string[] {
+function getCropSheetBases(): string[] {
+  if (cropSheetBases) return cropSheetBases;
+  try {
+    if (typeof Sprites.listTilesByCategory === "function") {
+      const all = Sprites.listTilesByCategory(/plants|allplants/i);
+      const filtered = all.filter((u) => !/tallplants/i.test(u) && !/tall/i.test(u));
+      const source = filtered.length ? filtered : all;
+      cropSheetBases = uniqueBases(source, FALLBACK_BASES.Crop);
+      return cropSheetBases;
+    }
+  } catch { /* ignore */ }
+  cropSheetBases = [...FALLBACK_BASES.Crop];
+  return cropSheetBases;
+}
+
+function getTallCropSheetBases(): string[] {
+  if (tallCropSheetBases) return tallCropSheetBases;
+  try {
+    if (typeof Sprites.listTilesByCategory === "function") {
+      const all = Sprites.listTilesByCategory(/tallplants/i);
+      tallCropSheetBases = uniqueBases(all, ["tallplants", "TallPlants"]);
+      return tallCropSheetBases;
+    }
+  } catch { /* ignore */ }
+  tallCropSheetBases = ["tallplants", "TallPlants"];
+  return tallCropSheetBases;
+}
+
+const TALL_CROP_SPECIES = new Set<string>(["Cactus", "Bamboo"]);
+
+function getBases(type: ShopSpriteType, id?: string): string[] {
   switch (type) {
     case "Seed": return getSeedSheetBases();
     case "Egg": return getEggSheetBases();
     case "Tool": return getItemSheetBases();
     case "Decor": return getDecorSheetBases();
+    case "Crop":
+      if (id && TALL_CROP_SPECIES.has(id)) {
+        return [...getTallCropSheetBases(), ...getCropSheetBases()];
+      }
+      return getCropSheetBases();
   }
 }
 
@@ -157,6 +196,7 @@ function getTileRef(type: ShopSpriteType, id: string): unknown {
     case "Egg": return (eggCatalog as Record<string, any>)?.[id]?.tileRef ?? null;
     case "Tool": return (toolCatalog as Record<string, any>)?.[id]?.tileRef ?? null;
     case "Decor": return (decorCatalog as Record<string, any>)?.[id]?.tileRef ?? null;
+    case "Crop": return (plantCatalog as Record<string, any>)?.[id]?.crop?.tileRef ?? null;
   }
 }
 
@@ -233,6 +273,8 @@ function clearSheetCaches(): void {
   eggSheetBases = null;
   itemSheetBases = null;
   decorSheetBases = null;
+  cropSheetBases = null;
+  tallCropSheetBases = null;
 }
 
 async function fetchSprite(type: ShopSpriteType, id: string): Promise<string | null> {
@@ -245,7 +287,7 @@ async function fetchSprite(type: ShopSpriteType, id: string): Promise<string | n
   const index = toTileIndex(tileRef);
   if (index == null) return null;
 
-  const bases = getBases(type);
+  const bases = getBases(type, id);
   for (const base of bases) {
     try {
       const tile = await Sprites.getTile(base, index, "canvas");

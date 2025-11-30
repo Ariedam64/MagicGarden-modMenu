@@ -26,6 +26,7 @@ import { startActivityLogHistoryWatcher } from "../services/activityLogHistory";
 import { startActivityLogFilter } from "../utils/activityLogFilter";
 import { startSellCropsLockWatcher } from "../utils/sellCropsLock";
 import { startEggHatchLockIndicator } from "../utils/eggHatchLockIndicator";
+import { startDecorPickupLockIndicator } from "../utils/decorPickupLockIndicator";
 
 // ========================
 // Types d’intégration
@@ -1041,6 +1042,7 @@ export function initWatchers(){
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
       startEggHatchLockIndicator();
+      startDecorPickupLockIndicator();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
       startInventorySortingObserver();

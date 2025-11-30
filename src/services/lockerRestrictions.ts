@@ -4,6 +4,8 @@ export type LockerRestrictionsState = {
   minRequiredPlayers: number;
   /** Per-egg lock map: true means hatching is blocked. */
   eggLocks: Record<string, boolean>;
+  /** When true, decor pickup (PlaceDecor) is blocked. */
+  decorPickupLocked: boolean;
 };
 
 const LS_KEY = "qws:locker:restrictions.v1";
@@ -16,6 +18,7 @@ const roundToStep = (value: number, step: number): number =>
 const DEFAULT_STATE: LockerRestrictionsState = {
   minRequiredPlayers: 1,
   eggLocks: {},
+  decorPickupLocked: false,
 };
 
 export const FRIEND_BONUS_STEP = 10;
@@ -93,7 +96,8 @@ class LockerRestrictionsService {
       const parsed = JSON.parse(raw);
       const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
       const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
-      this.state = { minRequiredPlayers: players, eggLocks };
+      const decorPickupLocked = parsed?.decorPickupLocked === true;
+      this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked };
     } catch {
       this.state = { ...DEFAULT_STATE };
     }
@@ -138,6 +142,13 @@ class LockerRestrictionsService {
     this.emit();
   }
 
+  setDecorPickupLocked(locked: boolean): void {
+    if (!!locked === this.state.decorPickupLocked) return;
+    this.state = { ...this.state, decorPickupLocked: !!locked };
+    this.save();
+    this.emit();
+  }
+
   isEggLocked(eggId: string | null | undefined): boolean {
     if (!eggId) return false;
     return this.state.eggLocks?.[eggId] === true;
@@ -153,6 +164,10 @@ class LockerRestrictionsService {
 
   getRequiredPercent(): number {
     return requiredPercentFromPlayers(this.state.minRequiredPlayers);
+  }
+
+  isDecorPickupLocked(): boolean {
+    return this.state.decorPickupLocked === true;
   }
 
   subscribe(listener: (state: LockerRestrictionsState) => void): () => void {

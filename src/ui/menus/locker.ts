@@ -686,7 +686,7 @@ function createDefaultSettings(): LockerSettingsState {
     minScalePct: 50,
     maxScalePct: 100,
     scaleLockMode: "RANGE",
-    lockMode: "BLOCK",
+    lockMode: "LOCK",
     minInventory: 91,
     avoidNormal: false,
     visualMutations: new Set<VisualTag>(),
@@ -741,7 +741,7 @@ function hydrateSettingsFromPersisted(
   target.minScalePct = minScale;
   target.maxScalePct = maxScale;
   target.scaleLockMode = mode;
-  target.lockMode = src.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+  target.lockMode = src.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
   target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
   target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
   target.visualMutations.clear();
@@ -799,7 +799,7 @@ function serializeSettingsState(state: LockerSettingsState): LockerSettingsPersi
     minScalePct: minScale,
     maxScalePct: maxScale,
     scaleLockMode: mode,
-    lockMode: state.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
+    lockMode: state.lockMode === "ALLOW" ? "ALLOW" : "LOCK",
     minInventory: Math.max(0, Math.min(999, Math.round(state.minInventory || 91))),
     avoidNormal: !!state.avoidNormal,
     includeNormal: !state.avoidNormal,
@@ -1165,11 +1165,11 @@ function createLockerSettingsCard(
     return row;
   };
 
-  type LockModeValue = "block" | "allow";
+  type LockModeValue = "lock" | "allow";
   const toLockMode = (value: LockModeValue): LockerLockMode =>
-    value === "allow" ? "ALLOW" : "BLOCK";
+    value === "allow" ? "ALLOW" : "LOCK";
   const fromLockMode = (mode: LockerLockMode): LockModeValue =>
-    mode === "ALLOW" ? "allow" : "block";
+    mode === "ALLOW" ? "allow" : "lock";
 
   const lockModeRow = centerRow();
   lockModeRow.style.flexDirection = "column";
@@ -1184,7 +1184,7 @@ function createLockerSettingsCard(
   let isProgrammaticLockMode = false;
   const lockModeSegmented = ui.segmented<LockModeValue>(
     [
-      { value: "block", label: "Block" },
+      { value: "lock", label: "Lock" },
       { value: "allow", label: "Allow" },
     ],
     fromLockMode(state.lockMode),
@@ -2095,6 +2095,39 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   card.body.append(sliderWrap, statusText);
   layout.append(card.root);
 
+  /* Decor picker locker */
+  const decorCard = ui.card("Decor pick locker", { align: "stretch" });
+  decorCard.root.style.width = "100%";
+
+  const decorRow = applyStyles(document.createElement("div"), {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+  });
+
+  const decorText = applyStyles(document.createElement("div"), {
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  });
+  const decorSubtitle = document.createElement("div");
+  decorSubtitle.textContent = "Prevents placed decors from being picked up";
+  decorSubtitle.style.fontSize = "12.5px";
+  decorSubtitle.style.opacity = "0.85";
+  decorText.append(decorSubtitle);
+
+  const decorToggle = ui.switch(state.decorPickupLocked);
+  decorToggle.addEventListener("change", () => {
+    const locked = !!decorToggle.checked;
+    state.decorPickupLocked = locked;
+    lockerRestrictionsService.setDecorPickupLocked(locked);
+  });
+
+  decorRow.append(decorText, decorToggle);
+  decorCard.body.append(decorRow);
+  layout.append(decorCard.root);
+
   /* Egg hatch locker */
   const eggCard = ui.card("Egg hatch locker", { align: "stretch" });
   eggCard.root.style.width = "100%";
@@ -2196,7 +2229,7 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
       return;
     }
 
-    statusBadge.textContent = allowed ? "Sale allowed" : "Sale blocked";
+    statusBadge.textContent = allowed ? "Sale allowed" : "Sale locked";
     setStatusTone(allowed ? "success" : "warn");
     statusText.textContent = allowed
       ? `Current bonus ${currentPct}% (${currentPlayers} players) meets the requirement (${requiredPct}%).`
@@ -2219,6 +2252,7 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
 
   const syncFromService = (next: typeof state) => {
     state = { ...next };
+    setCheck(decorToggle, state.decorPickupLocked);
     updateSliderValue(friendBonusPercentFromPlayers(state.minRequiredPlayers) ?? 0);
     updateStatus();
     renderEggList();

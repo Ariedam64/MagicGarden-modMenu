@@ -105,7 +105,6 @@ export function installPageWebSocketHook() {
   if (!pageWindow || !NativeWS) return;
 
   startAutoReloadOnVersionExpired();
-  startAutoReconnectOnSuperseded();
 
   function WrappedWebSocket(this: any, url: string | URL, protocols?: string | string[]) {
     const ws: WebSocket =
@@ -480,6 +479,14 @@ function installHarvestCropInterceptor() {
 
   registerMessageInterceptor("PurchaseTool", (message) => {
     StatsService.incrementShopStat("toolsBought");
+  });
+
+  registerMessageInterceptor("PickupDecor", () => {
+    const decorLocked = lockerRestrictionsService.isDecorPickupLocked();
+    if (decorLocked) {
+      console.log("[PickupDecor] Blocked by decor picker");
+      return { kind: "drop" };
+    }
   });
 
   registerMessageInterceptor("HatchEgg", () => {

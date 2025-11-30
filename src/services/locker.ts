@@ -88,7 +88,7 @@ type VisualTag = "Gold" | "Rainbow";
 type WeatherTag = string;
 export type WeatherMode = "ANY" | "ALL" | "RECIPES";
 export type LockerScaleLockMode = "MINIMUM" | "MAXIMUM" | "RANGE" | "NONE";
-export type LockerLockMode = "BLOCK" | "ALLOW";
+export type LockerLockMode = "LOCK" | "ALLOW";
 
 export type LockerSettingsPersisted = {
   minScalePct: number;
@@ -621,7 +621,7 @@ function defaultSettings(): LockerSettingsPersisted {
     minScalePct: 50,
     maxScalePct: 100,
     scaleLockMode: "RANGE",
-    lockMode: "BLOCK",
+    lockMode: "LOCK",
     minInventory: 91,
     avoidNormal: false,
     includeNormal: true,
@@ -646,7 +646,7 @@ const clampNumber = (value: number, min: number, max: number) => Math.max(min, M
 
 function sanitizeSettings(raw: any): LockerSettingsPersisted {
   const base = defaultSettings();
-  base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+  base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
   const rawMode = raw?.scaleLockMode;
   const scaleMode: LockerScaleLockMode =
     rawMode === "MINIMUM" ? "MINIMUM"
@@ -744,7 +744,7 @@ function cloneSettings(settings: LockerSettingsPersisted): LockerSettingsPersist
     minScalePct: settings.minScalePct,
     maxScalePct: settings.maxScalePct,
     scaleLockMode: settings.scaleLockMode,
-    lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
+    lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK",
     minInventory: settings.minInventory,
     avoidNormal: settings.avoidNormal,
     includeNormal: settings.includeNormal,
@@ -1260,7 +1260,7 @@ export class LockerService {
     }
 
     const { size, color, weather, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
-    const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+    const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
     const blocked = lockMode === "ALLOW"
       ? ((size.hasCriteria && !size.matched) ||
         (color.hasCriteria && !color.matched) ||

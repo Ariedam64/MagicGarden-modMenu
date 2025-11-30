@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.6.85
+// @version      2.6.86
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5999,7 +5999,7 @@
       minScalePct: 50,
       maxScalePct: 100,
       scaleLockMode: "RANGE",
-      lockMode: "BLOCK",
+      lockMode: "LOCK",
       minInventory: 91,
       avoidNormal: false,
       includeNormal: true,
@@ -6020,7 +6020,7 @@
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
     const base = defaultSettings();
-    base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+    base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
     const rawMode = raw?.scaleLockMode;
     const scaleMode = rawMode === "MINIMUM" ? "MINIMUM" : rawMode === "MAXIMUM" ? "MAXIMUM" : rawMode === "NONE" ? "NONE" : "RANGE";
     base.scaleLockMode = scaleMode;
@@ -6084,7 +6084,7 @@
       minScalePct: settings.minScalePct,
       maxScalePct: settings.maxScalePct,
       scaleLockMode: settings.scaleLockMode,
-      lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
+      lockMode: settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK",
       minInventory: settings.minInventory,
       avoidNormal: settings.avoidNormal,
       includeNormal: settings.includeNormal,
@@ -6516,7 +6516,7 @@
         return true;
       }
       const { size, color, weather: weather2, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
-      const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+      const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
       const blocked = lockMode === "ALLOW" ? size.hasCriteria && !size.matched || color.hasCriteria && !color.matched || weather2.hasCriteria && !weather2.matched : matchAny;
       return !blocked;
     }
@@ -6854,7 +6854,8 @@
   var roundToStep = (value, step) => Math.round(value / step) * step;
   var DEFAULT_STATE = {
     minRequiredPlayers: 1,
-    eggLocks: {}
+    eggLocks: {},
+    decorPickupLocked: false
   };
   var FRIEND_BONUS_STEP = 10;
   var FRIEND_BONUS_MAX = 50;
@@ -6916,7 +6917,8 @@
         const parsed = JSON.parse(raw);
         const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
         const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
-        this.state = { minRequiredPlayers: players, eggLocks };
+        const decorPickupLocked = parsed?.decorPickupLocked === true;
+        this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked };
       } catch {
         this.state = { ...DEFAULT_STATE };
       }
@@ -6953,6 +6955,12 @@
       this.save();
       this.emit();
     }
+    setDecorPickupLocked(locked) {
+      if (!!locked === this.state.decorPickupLocked) return;
+      this.state = { ...this.state, decorPickupLocked: !!locked };
+      this.save();
+      this.emit();
+    }
     isEggLocked(eggId) {
       if (!eggId) return false;
       return this.state.eggLocks?.[eggId] === true;
@@ -6966,6 +6974,9 @@
     }
     getRequiredPercent() {
       return requiredPercentFromPlayers(this.state.minRequiredPlayers);
+    }
+    isDecorPickupLocked() {
+      return this.state.decorPickupLocked === true;
     }
     subscribe(listener) {
       this.listeners.add(listener);
@@ -9186,7 +9197,6 @@
   // src/hooks/ws-hook.ts
   var wsCloseListeners = [];
   var versionReloadScheduled = false;
-  var autoRecoTimer = null;
   function onWebSocketClose(cb) {
     wsCloseListeners.push(cb);
     return () => {
@@ -9226,39 +9236,9 @@
       }
     });
   }
-  function isSupersededSessionClose(ev) {
-    if (ev?.code !== 4250) return false;
-    const reason = ev?.reason || "";
-    return /superseded/i.test(reason) || /newer user session/i.test(reason);
-  }
-  function startAutoReconnectOnSuperseded() {
-    onWebSocketClose((ev) => {
-      if (!isSupersededSessionClose(ev)) return;
-      if (!MiscService.readAutoRecoEnabled(false)) return;
-      const delayMs = MiscService.getAutoRecoDelayMs();
-      if (autoRecoTimer !== null) {
-        clearTimeout(autoRecoTimer);
-        autoRecoTimer = null;
-      }
-      autoRecoTimer = window.setTimeout(() => {
-        autoRecoTimer = null;
-        if (!MiscService.readAutoRecoEnabled(false)) return;
-        try {
-          const conn = pageWindow.MagicCircle_RoomConnection;
-          const connect = conn?.connect;
-          if (typeof connect === "function") {
-            connect.call(conn);
-          }
-        } catch (error) {
-          console.warn("[MagicGarden] Auto reco failed:", error);
-        }
-      }, delayMs);
-    });
-  }
   function installPageWebSocketHook() {
     if (!pageWindow || !NativeWS) return;
     startAutoReloadOnVersionExpired();
-    startAutoReconnectOnSuperseded();
     function WrappedWebSocket(url, protocols) {
       const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
       sockets.push(ws);
@@ -9553,6 +9533,13 @@
     });
     registerMessageInterceptor("PurchaseTool", (message) => {
       StatsService.incrementShopStat("toolsBought");
+    });
+    registerMessageInterceptor("PickupDecor", () => {
+      const decorLocked = lockerRestrictionsService.isDecorPickupLocked();
+      if (decorLocked) {
+        console.log("[PickupDecor] Blocked by decor picker");
+        return { kind: "drop" };
+      }
     });
     registerMessageInterceptor("HatchEgg", () => {
       const locked = lockerRestrictionsService.isEggLocked(latestEggId);
@@ -19059,11 +19046,14 @@ try{importScripts("${abs}")}catch(e){}
   var eggSheetBases = null;
   var itemSheetBases = null;
   var decorSheetBases = null;
+  var cropSheetBases = null;
+  var tallCropSheetBases = null;
   var FALLBACK_BASES = {
     Seed: ["seeds", "Seeds"],
     Egg: ["pets", "Pets", "eggs", "Eggs"],
     Tool: ["items", "Items"],
-    Decor: ["decor", "Decor"]
+    Decor: ["decor", "Decor"],
+    Crop: ["plants", "Plants", "allplants", "AllPlants"]
   };
   function spriteKey(type, id) {
     return `${type}::${id}`;
@@ -19085,8 +19075,10 @@ try{importScripts("${abs}")}catch(e){}
         return "\u{1F95A}";
       case "Tool":
         return "\u{1F9F0}";
-      default:
+      case "Decor":
         return "\u{1F3E0}";
+      case "Crop":
+        return "\u{1F34E}";
     }
   }
   function normalizeBase(url) {
@@ -19154,7 +19146,36 @@ try{importScripts("${abs}")}catch(e){}
     decorSheetBases = [...FALLBACK_BASES.Decor];
     return decorSheetBases;
   }
-  function getBases(type) {
+  function getCropSheetBases() {
+    if (cropSheetBases) return cropSheetBases;
+    try {
+      if (typeof Sprites.listTilesByCategory === "function") {
+        const all = Sprites.listTilesByCategory(/plants|allplants/i);
+        const filtered = all.filter((u) => !/tallplants/i.test(u) && !/tall/i.test(u));
+        const source = filtered.length ? filtered : all;
+        cropSheetBases = uniqueBases(source, FALLBACK_BASES.Crop);
+        return cropSheetBases;
+      }
+    } catch {
+    }
+    cropSheetBases = [...FALLBACK_BASES.Crop];
+    return cropSheetBases;
+  }
+  function getTallCropSheetBases() {
+    if (tallCropSheetBases) return tallCropSheetBases;
+    try {
+      if (typeof Sprites.listTilesByCategory === "function") {
+        const all = Sprites.listTilesByCategory(/tallplants/i);
+        tallCropSheetBases = uniqueBases(all, ["tallplants", "TallPlants"]);
+        return tallCropSheetBases;
+      }
+    } catch {
+    }
+    tallCropSheetBases = ["tallplants", "TallPlants"];
+    return tallCropSheetBases;
+  }
+  var TALL_CROP_SPECIES = /* @__PURE__ */ new Set(["Cactus", "Bamboo"]);
+  function getBases(type, id) {
     switch (type) {
       case "Seed":
         return getSeedSheetBases();
@@ -19164,6 +19185,11 @@ try{importScripts("${abs}")}catch(e){}
         return getItemSheetBases();
       case "Decor":
         return getDecorSheetBases();
+      case "Crop":
+        if (id && TALL_CROP_SPECIES.has(id)) {
+          return [...getTallCropSheetBases(), ...getCropSheetBases()];
+        }
+        return getCropSheetBases();
     }
   }
   function toTileIndex2(tileRef) {
@@ -19183,6 +19209,8 @@ try{importScripts("${abs}")}catch(e){}
         return toolCatalog?.[id]?.tileRef ?? null;
       case "Decor":
         return decorCatalog?.[id]?.tileRef ?? null;
+      case "Crop":
+        return plantCatalog?.[id]?.crop?.tileRef ?? null;
     }
   }
   function subscribeSprite2(key2, el2) {
@@ -19252,6 +19280,8 @@ try{importScripts("${abs}")}catch(e){}
     eggSheetBases = null;
     itemSheetBases = null;
     decorSheetBases = null;
+    cropSheetBases = null;
+    tallCropSheetBases = null;
   }
   async function fetchSprite2(type, id) {
     await ensureSpritesReady();
@@ -19260,7 +19290,7 @@ try{importScripts("${abs}")}catch(e){}
     const tileRef = getTileRef(type, id);
     const index = toTileIndex2(tileRef);
     if (index == null) return null;
-    const bases = getBases(type);
+    const bases = getBases(type, id);
     for (const base of bases) {
       try {
         const tile = await Sprites.getTile(base, index, "canvas");
@@ -25939,6 +25969,143 @@ try{importScripts("${abs}")}catch(e){}
     return typeof eggId === "string" && eggId ? eggId : null;
   }
 
+  // src/utils/decorPickupLockIndicator.ts
+  var CONTAINER_SELECTOR3 = ".css-502lyi";
+  var LOCK_CLASS2 = "tm-decor-lock";
+  var BORDER_COLOR2 = "rgb(188, 53, 215)";
+  var DATA_BORDER3 = "tmDecorLockBorder";
+  var DATA_RADIUS3 = "tmDecorLockRadius";
+  var DATA_POSITION3 = "tmDecorLockPosition";
+  var DATA_OVERFLOW3 = "tmDecorLockOverflow";
+  var DECOR_LABELS = (() => {
+    const labels = /* @__PURE__ */ new Set();
+    try {
+      Object.entries(decorCatalog).forEach(([decorId, entry]) => {
+        if (decorId) labels.add(decorId.toLowerCase());
+        const name = entry?.name;
+        if (typeof name === "string" && name) {
+          labels.add(name.toLowerCase());
+        }
+      });
+    } catch {
+    }
+    return Array.from(labels).filter(Boolean);
+  })();
+  function startDecorPickupLockIndicator() {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      return { stop() {
+      } };
+    }
+    let running = true;
+    const disposables = [];
+    const isLocked = () => lockerRestrictionsService.isDecorPickupLocked();
+    const applyLockState = () => {
+      if (!running) return;
+      const locked = isLocked();
+      const containers = Array.from(document.querySelectorAll(CONTAINER_SELECTOR3));
+      containers.forEach((el2) => {
+        if (!looksLikeDecorItem(el2)) {
+          restore2(el2);
+          return;
+        }
+        setLocked2(el2, locked);
+      });
+    };
+    const observeDom = () => {
+      const mo = new MutationObserver(() => applyLockState());
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+      disposables.push(() => mo.disconnect());
+    };
+    const subscribeLocker = () => {
+      const unsub = lockerRestrictionsService.subscribe(() => applyLockState());
+      disposables.push(unsub);
+    };
+    observeDom();
+    subscribeLocker();
+    applyLockState();
+    return {
+      stop() {
+        running = false;
+        disposables.splice(0).forEach((fn) => {
+          try {
+            fn();
+          } catch {
+          }
+        });
+        const containers = Array.from(document.querySelectorAll(CONTAINER_SELECTOR3));
+        containers.forEach(restore2);
+      }
+    };
+  }
+  function looksLikeDecorItem(el2) {
+    const text = (el2.textContent || "").toLowerCase();
+    if (!text) return false;
+    if (!el2.querySelector("canvas")) return false;
+    return DECOR_LABELS.some((label2) => label2 && text.includes(label2));
+  }
+  function setLocked2(el2, locked) {
+    if (!locked) {
+      restore2(el2);
+      return;
+    }
+    storeStyle2(el2, DATA_BORDER3, "border");
+    storeStyle2(el2, DATA_RADIUS3, "borderRadius");
+    storeStyle2(el2, DATA_POSITION3, "position");
+    storeStyle2(el2, DATA_OVERFLOW3, "overflow");
+    el2.style.border = `3px solid ${BORDER_COLOR2}`;
+    el2.style.borderRadius = "16px";
+    el2.style.overflow = "visible";
+    const pos = window.getComputedStyle(el2).position;
+    if (pos === "static") {
+      el2.style.position = "relative";
+    }
+    ensureLockIcon4(el2);
+  }
+  function restore2(el2) {
+    restoreStyle3(el2, DATA_BORDER3, "border");
+    restoreStyle3(el2, DATA_RADIUS3, "borderRadius");
+    restoreStyle3(el2, DATA_POSITION3, "position");
+    restoreStyle3(el2, DATA_OVERFLOW3, "overflow");
+    removeLockIcon4(el2);
+  }
+  function storeStyle2(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] !== void 0) return;
+    data[key2] = el2.style[cssProperty];
+  }
+  function restoreStyle3(el2, key2, cssProperty) {
+    const data = el2.dataset;
+    if (data[key2] === void 0) return;
+    const value = data[key2];
+    if (value) {
+      el2.style.setProperty(camelToKebab3(cssProperty), value);
+    } else {
+      el2.style.removeProperty(camelToKebab3(cssProperty));
+    }
+    delete data[key2];
+  }
+  function camelToKebab3(str) {
+    return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+  }
+  function ensureLockIcon4(el2) {
+    const existing = el2.querySelector(`span.${LOCK_CLASS2}`);
+    if (existing) return;
+    const icon = document.createElement("span");
+    icon.className = LOCK_CLASS2;
+    icon.textContent = "\u{1F512}";
+    icon.style.position = "absolute";
+    icon.style.top = "-8px";
+    icon.style.right = "-8px";
+    icon.style.fontSize = "16px";
+    icon.style.pointerEvents = "none";
+    icon.style.userSelect = "none";
+    icon.style.zIndex = "2";
+    el2.appendChild(icon);
+  }
+  function removeLockIcon4(el2) {
+    el2.querySelectorAll(`span.${LOCK_CLASS2}`).forEach((node) => node.remove());
+  }
+
   // src/ui/hud.ts
   function mountHUD(opts) {
     const LS_POS = "qws:pos";
@@ -26846,6 +27013,7 @@ try{importScripts("${abs}")}catch(e){}
       startCropValuesObserverFromGardenAtom();
       startInjectSellAllPets();
       startEggHatchLockIndicator();
+      startDecorPickupLockIndicator();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
       startInventorySortingObserver();
@@ -29738,7 +29906,7 @@ next: ${next}`;
       minScalePct: 50,
       maxScalePct: 100,
       scaleLockMode: "RANGE",
-      lockMode: "BLOCK",
+      lockMode: "LOCK",
       minInventory: 91,
       avoidNormal: false,
       visualMutations: /* @__PURE__ */ new Set(),
@@ -29785,7 +29953,7 @@ next: ${next}`;
     target.minScalePct = minScale;
     target.maxScalePct = maxScale;
     target.scaleLockMode = mode;
-    target.lockMode = src.lockMode === "ALLOW" ? "ALLOW" : "BLOCK";
+    target.lockMode = src.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
     target.minInventory = Math.max(0, Math.min(999, Math.round(src.minInventory ?? 91)));
     target.avoidNormal = src.avoidNormal === true || src.includeNormal === false;
     target.visualMutations.clear();
@@ -29839,7 +30007,7 @@ next: ${next}`;
       minScalePct: minScale,
       maxScalePct: maxScale,
       scaleLockMode: mode,
-      lockMode: state2.lockMode === "ALLOW" ? "ALLOW" : "BLOCK",
+      lockMode: state2.lockMode === "ALLOW" ? "ALLOW" : "LOCK",
       minInventory: Math.max(0, Math.min(999, Math.round(state2.minInventory || 91))),
       avoidNormal: !!state2.avoidNormal,
       includeNormal: !state2.avoidNormal,
@@ -30135,8 +30303,8 @@ next: ${next}`;
       row.style.gap = "8px";
       return row;
     };
-    const toLockMode = (value) => value === "allow" ? "ALLOW" : "BLOCK";
-    const fromLockMode = (mode) => mode === "ALLOW" ? "allow" : "block";
+    const toLockMode = (value) => value === "allow" ? "ALLOW" : "LOCK";
+    const fromLockMode = (mode) => mode === "ALLOW" ? "allow" : "lock";
     const lockModeRow = centerRow();
     lockModeRow.style.flexDirection = "column";
     lockModeRow.style.alignItems = "center";
@@ -30148,7 +30316,7 @@ next: ${next}`;
     let isProgrammaticLockMode = false;
     const lockModeSegmented = ui.segmented(
       [
-        { value: "block", label: "Block" },
+        { value: "lock", label: "Lock" },
         { value: "allow", label: "Allow" }
       ],
       fromLockMode(state2.lockMode),
@@ -30935,6 +31103,33 @@ next: ${next}`;
     });
     card.body.append(sliderWrap, statusText);
     layout.append(card.root);
+    const decorCard = ui.card("Decor pick locker", { align: "stretch" });
+    decorCard.root.style.width = "100%";
+    const decorRow = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px"
+    });
+    const decorText = applyStyles(document.createElement("div"), {
+      display: "flex",
+      flexDirection: "column",
+      gap: "4px"
+    });
+    const decorSubtitle = document.createElement("div");
+    decorSubtitle.textContent = "Prevents placed decors from being picked up";
+    decorSubtitle.style.fontSize = "12.5px";
+    decorSubtitle.style.opacity = "0.85";
+    decorText.append(decorSubtitle);
+    const decorToggle = ui.switch(state2.decorPickupLocked);
+    decorToggle.addEventListener("change", () => {
+      const locked = !!decorToggle.checked;
+      state2.decorPickupLocked = locked;
+      lockerRestrictionsService.setDecorPickupLocked(locked);
+    });
+    decorRow.append(decorText, decorToggle);
+    decorCard.body.append(decorRow);
+    layout.append(decorCard.root);
     const eggCard = ui.card("Egg hatch locker", { align: "stretch" });
     eggCard.root.style.width = "100%";
     const eggList = applyStyles(document.createElement("div"), {
@@ -31016,7 +31211,7 @@ next: ${next}`;
         statusText.textContent = currentPct != null ? `Current friend bonus: ${currentPct}% (${currentPlayers} players).` : "Current friend bonus not detected yet.";
         return;
       }
-      statusBadge.textContent = allowed ? "Sale allowed" : "Sale blocked";
+      statusBadge.textContent = allowed ? "Sale allowed" : "Sale locked";
       setStatusTone(allowed ? "success" : "warn");
       statusText.textContent = allowed ? `Current bonus ${currentPct}% (${currentPlayers} players) meets the requirement (${requiredPct}%).` : `Requires ${requiredPct}% (${requiredPlayers} players) or more`;
     };
@@ -31034,6 +31229,7 @@ next: ${next}`;
     slider.addEventListener("change", () => handleSliderInput(true));
     const syncFromService = (next) => {
       state2 = { ...next };
+      setCheck(decorToggle, state2.decorPickupLocked);
       updateSliderValue(friendBonusPercentFromPlayers(state2.minRequiredPlayers) ?? 0);
       updateStatus();
       renderEggList();
