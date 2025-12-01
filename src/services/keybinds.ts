@@ -19,6 +19,8 @@ export type KeybindId =
   | "game.move-down"
   | "game.move-left"
   | "game.move-right"
+  | "editor.place-remove"
+  | "editor.toggle-overlays"
   | `pets.team.${string}`
   | "pets.team.next"
   | "pets.team.prev";
@@ -190,6 +192,26 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
         label: "🐾 All pets",
         hint: "Sell every non-favorited pet in your inventory.",
         defaultHotkey: null,
+      },
+    ],
+  },
+  {
+    id: "editor",
+    title: "Editor",
+    icon: "📝",
+    description: "Shortcuts for placing/removing items and toggling editor overlays.",
+    actions: [
+      {
+        id: "editor.place-remove",
+        label: "Place / Remove item",
+        hint: "Place selected item on empty tile, or remove the item under your feet.",
+        defaultHotkey: { code: "Space" },
+      },
+      {
+        id: "editor.toggle-overlays",
+        label: "Toggle editor overlays",
+        hint: "Show or hide the editor panels.",
+        defaultHotkey: { code: "KeyU" },
       },
     ],
   },

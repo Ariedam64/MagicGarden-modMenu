@@ -11,6 +11,14 @@ export type GardenState = {
   boardwalkTileObjects: Record<string, any>;
 };
 
+export type GardenWithBackfill = {
+  garden?: GardenState | null;
+  slotIndex?: number;
+  [key: string]: any;
+};
+
+export type GardensWithBackfillsState = GardenWithBackfill[] | null;
+
 export type PlantSlotTiming = {
   species: string;
   startTime: number;
@@ -101,6 +109,7 @@ export const action = makeAtom<any | null>("actionAtom")
 
 export const myData = makeAtom<any>("myDataAtom");
 export const myInventory = makeAtom<any>("myInventoryAtom");
+export const gardensWithBackfills = makeAtom<GardensWithBackfillsState>("gardensWithBackfillsAtom");
 
 export const myCropInventory = makeAtom<CropInventoryState>("myCropInventoryAtom");
 export const mySeedInventory = makeAtom<SeedInventoryState>("mySeedInventoryAtom");
@@ -134,6 +143,7 @@ export const myCurrentGrowSlotIndex = makeAtom<number | null>("myCurrentGrowSlot
 export const myOwnCurrentGardenObject = makeAtom<any>("myOwnCurrentGardenObjectAtom")
 export const isCurrentGrowSlotMature = makeAtom<any>("isCurrentGrowSlotMatureAtom")
 export const myOwnCurrentDirtTileIndex = makeAtom<any>("myOwnCurrentDirtTileIndexAtom")
+export const mySelectedItemRotation = makeAtom<any>("mySelectedItemRotationAtom")
 
 export const weather = makeAtom<string | null>("weatherAtom")
 
@@ -328,13 +338,14 @@ export const Atoms = {
   data: {
     myData,
     garden,
+    gardensWithBackfills,
     gardenTileObjects,
     myCurrentGardenObject,
     myCurrentSortedGrowSlotIndices,
     myCurrentGrowSlotIndex,
     weather
   },
-  inventory: {
+    inventory: {
     myInventory,
     myCropInventory,
     mySeedInventory,
@@ -343,11 +354,13 @@ export const Atoms = {
     myDecorInventory,
     favoriteIds,
     mySelectedItemName,
+    mySelectedItemRotation,
     myPossiblyNoLongerValidSelectedItemIndex,
     myValidatedSelectedItemIndex,
     setSelectedIndexToEnd,
     myCropItemsToSell
   },
+
   pets: {
     myPetInfos,
     myPetSlotInfos,

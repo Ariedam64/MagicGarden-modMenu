@@ -44,6 +44,7 @@ export function mountHUD(opts?: HUDOptions) {
   const LS_COLL = "qws:collapsed";
   const LS_HIDDEN = "qws:hidden";
   const MARGIN = 8;
+  const Z_BASE = 2_000_000; // keep HUD/windows above editor overlays
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => mountHUD(opts), { once: true });
@@ -66,7 +67,7 @@ export function mountHUD(opts?: HUDOptions) {
 
   /* ---------- HUD floating box ---------- */
   .qws2{
-    position:fixed; right:16px; bottom:16px; z-index:999998;
+    position:fixed; right:16px; bottom:16px; z-index:${Z_BASE};
     font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     color:var(--qws-text);
     background:var(--qws-panel);
@@ -136,7 +137,7 @@ export function mountHUD(opts?: HUDOptions) {
 
   /* ---------- Windows ---------- */
   .qws-win{
-    position:fixed; z-index:999999; min-width:260px; max-width:900px; max-height:90vh; overflow:auto;
+    position:fixed; z-index:${Z_BASE + 1}; min-width:260px; max-width:900px; max-height:90vh; overflow:auto;
     background:var(--qws-panel); color:var(--qws-text);
     border:1px solid var(--qws-border); border-radius:12px;
     box-shadow:var(--qws-shadow); backdrop-filter:blur(var(--qws-blur));
@@ -628,9 +629,9 @@ export function mountHUD(opts?: HUDOptions) {
   }
 
   function bumpZ(el: HTMLElement) {
-    let maxZ = 999999;
+    let maxZ = Z_BASE + 1;
     windows.forEach(w => {
-      const z = parseInt(getComputedStyle(w.el).zIndex || '999999', 10);
+      const z = parseInt(getComputedStyle(w.el).zIndex || String(Z_BASE + 1), 10);
       if (z > maxZ) maxZ = z;
     });
     el.style.zIndex = String(maxZ + 1);

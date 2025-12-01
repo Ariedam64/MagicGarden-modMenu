@@ -11,6 +11,7 @@ import { renderPetsMenu } from "./ui/menus/pets";
 import { renderMiscMenu } from "./ui/menus/misc";
 import { renderNotifierMenu } from "./ui/menus/notifier";
 import { renderToolsMenu } from "./ui/menus/tools";
+import { renderEditorMenu } from "./ui/menus/editor";
 import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
 
@@ -18,6 +19,7 @@ import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
 import { initSprites, Sprites  } from "./core/sprite";
 import { ensureSpritesReady } from "./core/spriteBootstrap";
+import { EditorService } from "./services/editor";
 
 (async function () {
   "use strict";
@@ -39,6 +41,8 @@ import { ensureSpritesReady } from "./core/spriteBootstrap";
 
   await ensureSpritesReady();
 
+  EditorService.init();
+
   mountHUD({
     onRegister(register) {
       register('players', '👥 Players', renderPlayersMenu);
@@ -47,6 +51,7 @@ import { ensureSpritesReady } from "./core/spriteBootstrap";
       register('locker', '🔒 Locker', renderLockerMenu);
       register('alerts',  '🔔 Alerts', renderNotifierMenu)
       register('calculator', '🤓 Calculator', renderCalculatorMenu);
+      register('editor', '📝 Editor', renderEditorMenu);
       register('stats', '📊 Stats', renderStatsMenu);
       register('misc', '🧩 Misc', renderMiscMenu);
       register('keybinds', '⌨️ Keybinds', renderKeybindsMenu);

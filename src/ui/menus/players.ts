@@ -12,6 +12,8 @@ import {
   waitJournalModalClosed,
   waitStatsModalClosed,
 } from "../../services/fakeModal";
+import { EditorService } from "../../services/editor";
+import { pageWindow } from "../../utils/page-context";
 
 /* ---------------- Lecture/state ---------------- */
 
@@ -176,6 +178,38 @@ export async function renderPlayersMenu(root: HTMLElement) {
     const infoCard = ui.card("🌱 Crops values", { tone: "muted", align: "center" });
     infoCard.body.append(infoWrap);
     col.appendChild(infoCard.root);
+
+    // ===== Editor =====
+    const editorCard = ui.card("📝 Editor", { tone: "muted", align: "center" });
+    editorCard.body.style.display = "grid";
+    editorCard.body.style.gap = "8px";
+
+    const savePlayerBtn = ui.btn("Save player garden", {
+      fullWidth: true,
+      onClick: async () => {
+        try {
+          const saveFn =
+            (window as any).qwsEditorSaveGarden ||
+            (pageWindow as any)?.qwsEditorSaveGarden;
+          if (typeof saveFn !== "function") {
+            await toastSimple("Save garden", "Editor save unavailable", "error");
+            return;
+          }
+          const name = `${p.name || p.id || "Player"}'s garden`;
+          const saved = await saveFn(name);
+          if (!saved) {
+            await toastSimple("Save garden", "Save failed (no garden state)", "error");
+            return;
+          }
+          await toastSimple(`Saved "${saved.name}".`, "success");
+        } catch {
+          await toastSimple(`Save failed`, "error");
+        }
+      },
+    });
+
+    editorCard.body.append(savePlayerBtn);
+    col.appendChild(editorCard.root);
 
     // ===== Teleport =====
     const teleRow = ui.flexRow({ justify: "center" });
