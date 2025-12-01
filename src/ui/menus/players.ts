@@ -189,14 +189,14 @@ export async function renderPlayersMenu(root: HTMLElement) {
       onClick: async () => {
         try {
           const saveFn =
-            (window as any).qwsEditorSaveGarden ||
-            (pageWindow as any)?.qwsEditorSaveGarden;
+            (window as any).qwsEditorSaveGardenForPlayer ||
+            (pageWindow as any)?.qwsEditorSaveGardenForPlayer;
           if (typeof saveFn !== "function") {
             await toastSimple("Save garden", "Editor save unavailable", "error");
             return;
           }
           const name = `${p.name || p.id || "Player"}'s garden`;
-          const saved = await saveFn(name);
+          const saved = await saveFn(p.id, name);
           if (!saved) {
             await toastSimple("Save garden", "Save failed (no garden state)", "error");
             return;

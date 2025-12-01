@@ -2547,9 +2547,18 @@ async function getCurrentGarden(): Promise<GardenState | null> {
   try {
     const pid = await getPlayerId();
     if (!pid) return null;
+    return await getGardenForPlayer(pid);
+  } catch {
+    return null;
+  }
+}
+
+async function getGardenForPlayer(playerId: string): Promise<GardenState | null> {
+  try {
+    if (!playerId) return null;
     const cur = (stateFrozenValue ?? (await Atoms.root.state.get())) as any;
     const slots = cur?.child?.data?.userSlots;
-    const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+    const slotMatch = findPlayerSlot(slots, playerId, { sortObject: true });
     if (!slotMatch || !slotMatch.matchSlot) return null;
     const g = slotMatch.matchSlot?.data?.garden;
     return sanitizeGarden(g || {});
@@ -2592,8 +2601,10 @@ function listSavedGardens(): SavedGarden[] {
   return readSavedGardens();
 }
 
-async function saveCurrentGarden(name: string): Promise<SavedGarden | null> {
-  const garden = await getCurrentGarden();
+async function saveCurrentGarden(name: string, playerId?: string | null): Promise<SavedGarden | null> {
+  const pid = playerId || (await getPlayerId());
+  if (!pid) return null;
+  const garden = await getGardenForPlayer(pid);
   if (!garden) return null;
   const now = Date.now();
   const all = readSavedGardens();
@@ -3546,6 +3557,10 @@ shareGlobal("qwsEditorClearGarden", async () => {
 
 shareGlobal("qwsEditorLoadGarden", async (id: string) => {
   return await loadSavedGarden(id);
+});
+
+shareGlobal("qwsEditorSaveGardenForPlayer", async (playerId: string, name?: string) => {
+  return await saveCurrentGarden(name || "Untitled", playerId);
 });
 
 shareGlobal("qwsEditorDeleteGarden", (id: string) => {
