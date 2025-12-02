@@ -9,6 +9,7 @@ import { ensureSpritesReady } from "../core/spriteBootstrap";
 import { shareGlobal } from "../utils/page-context";
 import { eventMatchesKeybind } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
+import { audioPlayer } from "../core/audioPlayer";
 
 type Listener = (enabled: boolean) => void;
 
@@ -46,6 +47,35 @@ let currentItemApplyAll = false;
 const currentItemSlotModes: Record<string, Record<number, SlotScaleMode>> = {};
 let editorKeybindsInstalled = false;
 let overlaysVisible = true;
+const EDITOR_PLACE_REMOVE_FIRST_DELAY_MS = 200;
+const EDITOR_PLACE_REMOVE_REPEAT_MS = 100;
+let lastEditorPlaceRemoveTs = 0;
+let lastEditorPressStartTs = 0;
+let lastEditorFirstFired = false;
+let lastEditorTileKey: string | null = null;
+let lastEditorTileType: string | undefined;
+let lastEditorFirstActionTs = 0;
+let editorActionHeld = false;
+
+async function triggerEditorAnimation(animation: "dig" | "dropObject"): Promise<void> {
+  try {
+    const playerId = await getPlayerId();
+    if (!playerId) return;
+    await Atoms.player.avatarTriggerAnimationAtom.set({ playerId, animation });
+    if (animation === "dig") {
+      void audioPlayer.playBy("Break_Dirt_01");
+    } else if (animation === "dropObject") {
+      void (
+        audioPlayer.playGroup("plant") ||
+        audioPlayer.playGroup("hit_dirt") ||
+        audioPlayer.playGroup("hit") ||
+        audioPlayer.playBy(/Hit_Dirt/i)
+      );
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 type StatePatch = {
   atom: any;
@@ -3754,7 +3784,9 @@ function installEditorKeybindsOnce() {
       if (eventMatchesKeybind("editor.place-remove", ev)) {
         ev.preventDefault();
         ev.stopPropagation();
-        void handleEditorPlaceRemove();
+        const alreadyHeld = editorActionHeld;
+        editorActionHeld = true;
+        void handleEditorPlaceRemove(ev, alreadyHeld);
         return;
       }
 
@@ -3766,19 +3798,107 @@ function installEditorKeybindsOnce() {
     },
     true
   );
+
+  window.addEventListener(
+    "keyup",
+    (ev) => {
+      const isSyntheticRF = (ev as any)?.__inGameHotkeysRapidSynthetic__ === true;
+      if (isSyntheticRF) return; // ne pas r��initialiser pour les keyup du rapid-fire
+      if (!currentEnabled) return;
+      if (eventMatchesKeybind("editor.place-remove", ev)) {
+        editorActionHeld = false;
+        lastEditorPressStartTs = 0;
+        lastEditorPlaceRemoveTs = 0;
+        lastEditorFirstFired = false;
+        lastEditorTileKey = null;
+        lastEditorTileType = undefined;
+        lastEditorFirstActionTs = 0;
+      }
+    },
+    true
+  );
 }
 
-async function handleEditorPlaceRemove() {
-  const { tileObject } = await readCurrentTileContext();
-  if (tileObject?.objectType === "plant") {
-    await removeItemFromGardenAtCurrentTile();
-    return;
+async function hasSelectedInventoryItem(): Promise<boolean> {
+  try {
+    const inv = await Atoms.inventory.myInventory.get();
+    const idx = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+    const items = Array.isArray(inv?.items) ? inv.items : [];
+    return typeof idx === "number" && !!items[idx];
+  } catch {
+    return false;
   }
-  if (tileObject?.objectType === "decor") {
-    await removeDecorFromGardenAtCurrentTile();
-    return;
+}
+
+async function handleEditorPlaceRemove(ev?: KeyboardEvent, isHeld = false) {
+  const now =
+    typeof performance !== "undefined" && typeof performance.now === "function"
+      ? performance.now()
+      : Date.now();
+
+  if (!isHeld || lastEditorPressStartTs === 0) {
+    lastEditorPressStartTs = now;
+    lastEditorPlaceRemoveTs = 0;
+    lastEditorFirstFired = false;
+    lastEditorTileKey = null;
+    lastEditorTileType = undefined;
+    lastEditorFirstActionTs = 0;
+  }
+
+  const { tileObject, tileKey, tileType } = await readCurrentTileContext();
+
+  const hasSelection = await hasSelectedInventoryItem();
+
+  // Determine intended action
+  const wantsRemove = !!tileObject;
+  const wantsPlace = !tileObject && hasSelection;
+  if (!wantsRemove && !wantsPlace) return;
+
+  // Throttle per tile: first trigger is immediate, then wait 150ms before rapid fire at 80ms
+  const tileKeyStr = `${tileType ?? "?"}|${tileKey ?? "none"}`;
+  const sameTile = tileKeyStr === `${lastEditorTileType ?? "?"}|${lastEditorTileKey ?? "none"}`;
+  if (!sameTile) {
+    lastEditorTileKey = tileKey ?? null;
+    lastEditorTileType = tileType;
+    lastEditorFirstFired = false;
+    lastEditorPlaceRemoveTs = 0;
+    lastEditorPressStartTs = now;
+    lastEditorFirstActionTs = 0;
+  }
+
+  const elapsedSincePress = now - lastEditorPressStartTs;
+  if (!lastEditorFirstFired) {
+    lastEditorFirstFired = true;
+    lastEditorPlaceRemoveTs = now;
+    lastEditorFirstActionTs = now;
+  } else {
+    const sinceFirstAction = lastEditorFirstActionTs > 0 ? now - lastEditorFirstActionTs : elapsedSincePress;
+    const gateMs =
+      sinceFirstAction < EDITOR_PLACE_REMOVE_FIRST_DELAY_MS
+        ? EDITOR_PLACE_REMOVE_FIRST_DELAY_MS
+        : EDITOR_PLACE_REMOVE_REPEAT_MS;
+    if (now - lastEditorPlaceRemoveTs < gateMs) {
+      return;
+    }
+    lastEditorPlaceRemoveTs = now;
   }
 
   // empty tile -> place selected item if any
-  await placeSelectedItemInGardenAtCurrentTile();
+  if (wantsRemove) {
+    if (tileObject?.objectType === "plant") {
+      await removeItemFromGardenAtCurrentTile();
+      void triggerEditorAnimation("dig");
+      return;
+    }
+    if (tileObject?.objectType === "decor") {
+      await removeDecorFromGardenAtCurrentTile();
+      void triggerEditorAnimation("dig");
+      return;
+    }
+  }
+
+  if (wantsPlace) {
+    await placeSelectedItemInGardenAtCurrentTile();
+    void triggerEditorAnimation("dropObject");
+  }
 }
