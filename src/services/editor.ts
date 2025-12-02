@@ -586,6 +586,10 @@ function renderCurrentItemOverlay() {
     header.append(sprite, nameEl);
     content.appendChild(header);
 
+    if (tileObject.objectType === "plant") {
+      renderCurrentPlantEditor(content, tileObject, tileKey || "");
+    }
+
     const addBtn = document.createElement("button");
     addBtn.type = "button";
     addBtn.textContent = "Copy to inventory";
@@ -604,10 +608,6 @@ function renderCurrentItemOverlay() {
     };
 
     content.appendChild(addBtn);
-
-    if (tileObject.objectType === "plant") {
-      renderCurrentPlantEditor(content, tileObject, tileKey || "");
-    }
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
