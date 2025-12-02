@@ -34,7 +34,7 @@ export function renderEditorMenu(container: HTMLElement) {
   card.body.append(row);
 
   const hint = document.createElement("div");
- hint.textContent = "Sandbox garden editor with every plants and decors unlocked. Build, experiment, and customize without limits";
+  hint.textContent = "Sandbox garden editor with every plants and decors unlocked. Build, experiment, and customize without limits";
   hint.style.fontSize = "12px";
   hint.style.opacity = "0.7";
   hint.style.textAlign = "left";
@@ -42,23 +42,32 @@ export function renderEditorMenu(container: HTMLElement) {
   hint.style.width = "100%";
   card.body.append(hint);
 
-  const kbHint = document.createElement("div");
-  kbHint.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
-  kbHint.style.fontSize = "11px";
-  kbHint.style.opacity = "0.65";
-  kbHint.style.textAlign = "center";
-  kbHint.style.lineHeight = "1.3";
-  kbHint.style.width = "100%";
-  card.body.append(kbHint);
+  const hintPlaceRemove = document.createElement("div");
+  hintPlaceRemove.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
+  hintPlaceRemove.style.fontSize = "11px";
+  hintPlaceRemove.style.opacity = "0.65";
+  hintPlaceRemove.style.textAlign = "center";
+  hintPlaceRemove.style.lineHeight = "1.3";
+  hintPlaceRemove.style.width = "100%";
+  card.body.append(hintPlaceRemove);
 
-  const kbHint2 = document.createElement("div");
-  kbHint2.textContent = "Keys are editable in Keybinds > Editor.";
-  kbHint2.style.fontSize = "11px";
-  kbHint2.style.opacity = "0.65";
-  kbHint2.style.textAlign = "center";
-  kbHint2.style.lineHeight = "1.3";
-  kbHint2.style.width = "100%";
-  card.body.append(kbHint2);
+  const hintDelete = document.createElement("div");
+  hintDelete.textContent = "Remove selected item from inventory with Delete.";
+  hintDelete.style.fontSize = "11px";
+  hintDelete.style.opacity = "0.65";
+  hintDelete.style.textAlign = "center";
+  hintDelete.style.lineHeight = "1.3";
+  hintDelete.style.width = "100%";
+  card.body.append(hintDelete);
+
+  const hintKeybinds = document.createElement("div");
+  hintKeybinds.textContent = "Keys are editable in Keybinds > Editor.";
+  hintKeybinds.style.fontSize = "11px";
+  hintKeybinds.style.opacity = "0.65";
+  hintKeybinds.style.textAlign = "center";
+  hintKeybinds.style.lineHeight = "1.3";
+  hintKeybinds.style.width = "100%";
+  card.body.append(hintKeybinds);
 
   const cleanup = EditorService.onChange((enabled) => {
     toggle.checked = enabled;

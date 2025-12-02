@@ -21,6 +21,7 @@ export type KeybindId =
   | "game.move-right"
   | "editor.place-remove"
   | "editor.toggle-overlays"
+  | "editor.delete-inventory"
   | `pets.team.${string}`
   | "pets.team.next"
   | "pets.team.prev";
@@ -212,6 +213,12 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
         label: "Toggle editor overlays",
         hint: "Show or hide the editor panels.",
         defaultHotkey: { code: "KeyU" },
+      },
+      {
+        id: "editor.delete-inventory",
+        label: "Remove selected item from inventory",
+        hint: "Remove the currently selected inventory item.",
+        defaultHotkey: { code: "Delete" },
       },
     ],
   },

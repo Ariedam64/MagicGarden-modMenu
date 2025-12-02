@@ -586,6 +586,25 @@ function renderCurrentItemOverlay() {
     header.append(sprite, nameEl);
     content.appendChild(header);
 
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = "Copy to inventory";
+    Object.assign(addBtn.style, {
+      width: "100%",
+      padding: "8px 10px",
+      borderRadius: "8px",
+      border: "1px solid #2b3441",
+      background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
+      color: "#e7eef7",
+      fontWeight: "700",
+      cursor: "pointer",
+    } as Partial<CSSStyleDeclaration>);
+    addBtn.onclick = () => {
+      void addTileObjectToInventory(tileObject);
+    };
+
+    content.appendChild(addBtn);
+
     if (tileObject.objectType === "plant") {
       renderCurrentPlantEditor(content, tileObject, tileKey || "");
     }
@@ -2204,6 +2223,135 @@ async function addSelectedItemToInventory() {
   }
 }
 
+async function removeSelectedInventoryItem(): Promise<boolean> {
+  try {
+    const pid = await getPlayerId();
+    if (!pid) return false;
+
+    const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+    const inventoryVal = await Atoms.inventory.myInventory.get();
+    const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items.slice() : [];
+    if (
+      selectedIndex == null ||
+      typeof selectedIndex !== "number" ||
+      selectedIndex < 0 ||
+      selectedIndex >= items.length
+    ) {
+      return false;
+    }
+
+    items.splice(selectedIndex, 1);
+
+    const cur = (stateFrozenValue ?? (await Atoms.root.state.get())) as any;
+    const slots = cur?.child?.data?.userSlots;
+    const slotMatch = findPlayerSlot(slots, pid);
+    if (!slotMatch) return false;
+
+    const slotData = (slotMatch.matchSlot as any)?.data || {};
+    const slotInv = slotData.inventory || {};
+    const favorited = Array.isArray(slotInv.favoritedItemIds)
+      ? slotInv.favoritedItemIds.filter((id: any) => items.some((it: any) => it?.id === id))
+      : undefined;
+
+    const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+      const data = slot?.data || {};
+      return {
+        ...(slot || {}),
+        data: {
+          ...data,
+          inventory: {
+            ...(slotInv || {}),
+            items,
+            ...(favorited ? { favoritedItemIds: favorited } : {}),
+          },
+        },
+      };
+    });
+
+    const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+    stateFrozenValue = nextState;
+    stateOriginalValue = nextState;
+    await setStateAtom(nextState);
+
+    const newIdx = Math.max(0, Math.min(items.length - 1, selectedIndex));
+    try {
+      await Atoms.inventory.myValidatedSelectedItemIndex.set(newIdx);
+    } catch {
+      /* ignore */
+    }
+
+    return true;
+  } catch (err) {
+    console.log("[EditorService] removeSelectedInventoryItem failed", err);
+    return false;
+  }
+}
+
+async function addTileObjectToInventory(tileObject: any): Promise<boolean> {
+  try {
+    const pid = await getPlayerId();
+    if (!pid || !tileObject) return false;
+
+    const cur = (stateFrozenValue ?? (await Atoms.root.state.get())) as any;
+    const slots = cur?.child?.data?.userSlots;
+    const slotMatch = findPlayerSlot(slots, pid);
+    if (!slotMatch) return false;
+
+    const slotData = (slotMatch.matchSlot as any)?.data || {};
+    const inv = slotData.inventory;
+    const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
+
+    if (tileObject.objectType === "plant") {
+      const plantItem = {
+        itemType: "Plant",
+        species: tileObject.species,
+        id: tileObject.id,
+        slots: Array.isArray(tileObject.slots) ? JSON.parse(JSON.stringify(tileObject.slots)) : [],
+        plantedAt: tileObject.plantedAt,
+        maturedAt: tileObject.maturedAt,
+      };
+      items.push(plantItem);
+    } else if (tileObject.objectType === "decor") {
+      items.push({
+        itemType: "Decor",
+        decorId: tileObject.decorId,
+        quantity: 1,
+        rotation: typeof tileObject.rotation === "number" ? tileObject.rotation : 0,
+      });
+    } else {
+      return false;
+    }
+
+    const slotInv = slotData.inventory || {};
+    const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+      const data = slot?.data || {};
+      return {
+        ...(slot || {}),
+        data: {
+          ...data,
+          inventory: { ...(slotInv || {}), items },
+        },
+      };
+    });
+
+    const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+    stateFrozenValue = nextState;
+    stateOriginalValue = nextState;
+    await setStateAtom(nextState);
+
+    try {
+      await Atoms.inventory.myValidatedSelectedItemIndex.set(items.length - 1);
+    } catch {
+      /* ignore */
+    }
+
+    return true;
+  } catch (err) {
+    console.log("[EditorService] addTileObjectToInventory failed", err);
+    return false;
+  }
+}
+
 async function addDecorToInventory(decorId: string) {
   try {
     console.log("[EditorService] addDecorToInventory", decorId);
@@ -3607,6 +3755,13 @@ function installEditorKeybindsOnce() {
         ev.preventDefault();
         ev.stopPropagation();
         void handleEditorPlaceRemove();
+        return;
+      }
+
+      if (eventMatchesKeybind("editor.delete-inventory", ev)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void removeSelectedInventoryItem();
       }
     },
     true
