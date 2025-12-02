@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.1
+// @version      2.7.15
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12908,6 +12908,12 @@
           label: "Toggle editor overlays",
           hint: "Show or hide the editor panels.",
           defaultHotkey: { code: "KeyU" }
+        },
+        {
+          id: "editor.delete-inventory",
+          label: "Remove selected item from inventory",
+          hint: "Remove the currently selected inventory item.",
+          defaultHotkey: { code: "Delete" }
         }
       ]
     }
@@ -40244,6 +40250,23 @@ next: ${next}`;
       nameEl.style.textAlign = "center";
       header.append(sprite, nameEl);
       content.appendChild(header);
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.textContent = "Copy to inventory";
+      Object.assign(addBtn.style, {
+        width: "100%",
+        padding: "8px 10px",
+        borderRadius: "8px",
+        border: "1px solid #2b3441",
+        background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
+        color: "#e7eef7",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      addBtn.onclick = () => {
+        void addTileObjectToInventory(tileObject);
+      };
+      content.appendChild(addBtn);
       if (tileObject.objectType === "plant") {
         renderCurrentPlantEditor(content, tileObject, tileKey || "");
       }
@@ -41594,6 +41617,109 @@ next: ${next}`;
       await addPlantToInventory(selId);
     }
   }
+  async function removeSelectedInventoryItem() {
+    try {
+      const pid = await getPlayerId();
+      if (!pid) return false;
+      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+      const inventoryVal = await Atoms.inventory.myInventory.get();
+      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items.slice() : [];
+      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
+        return false;
+      }
+      items.splice(selectedIndex, 1);
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) return false;
+      const slotData = slotMatch.matchSlot?.data || {};
+      const slotInv = slotData.inventory || {};
+      const favorited = Array.isArray(slotInv.favoritedItemIds) ? slotInv.favoritedItemIds.filter((id) => items.some((it) => it?.id === id)) : void 0;
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const data = slot?.data || {};
+        return {
+          ...slot || {},
+          data: {
+            ...data,
+            inventory: {
+              ...slotInv || {},
+              items,
+              ...favorited ? { favoritedItemIds: favorited } : {}
+            }
+          }
+        };
+      });
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      const newIdx = Math.max(0, Math.min(items.length - 1, selectedIndex));
+      try {
+        await Atoms.inventory.myValidatedSelectedItemIndex.set(newIdx);
+      } catch {
+      }
+      return true;
+    } catch (err) {
+      console.log("[EditorService] removeSelectedInventoryItem failed", err);
+      return false;
+    }
+  }
+  async function addTileObjectToInventory(tileObject) {
+    try {
+      const pid = await getPlayerId();
+      if (!pid || !tileObject) return false;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) return false;
+      const slotData = slotMatch.matchSlot?.data || {};
+      const inv = slotData.inventory;
+      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
+      if (tileObject.objectType === "plant") {
+        const plantItem = {
+          itemType: "Plant",
+          species: tileObject.species,
+          id: tileObject.id,
+          slots: Array.isArray(tileObject.slots) ? JSON.parse(JSON.stringify(tileObject.slots)) : [],
+          plantedAt: tileObject.plantedAt,
+          maturedAt: tileObject.maturedAt
+        };
+        items.push(plantItem);
+      } else if (tileObject.objectType === "decor") {
+        items.push({
+          itemType: "Decor",
+          decorId: tileObject.decorId,
+          quantity: 1,
+          rotation: typeof tileObject.rotation === "number" ? tileObject.rotation : 0
+        });
+      } else {
+        return false;
+      }
+      const slotInv = slotData.inventory || {};
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const data = slot?.data || {};
+        return {
+          ...slot || {},
+          data: {
+            ...data,
+            inventory: { ...slotInv || {}, items }
+          }
+        };
+      });
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      try {
+        await Atoms.inventory.myValidatedSelectedItemIndex.set(items.length - 1);
+      } catch {
+      }
+      return true;
+    } catch (err) {
+      console.log("[EditorService] addTileObjectToInventory failed", err);
+      return false;
+    }
+  }
   async function addDecorToInventory(decorId) {
     try {
       console.log("[EditorService] addDecorToInventory", decorId);
@@ -42596,6 +42722,12 @@ next: ${next}`;
           ev.preventDefault();
           ev.stopPropagation();
           void handleEditorPlaceRemove();
+          return;
+        }
+        if (eventMatchesKeybind("editor.delete-inventory", ev)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          void removeSelectedInventoryItem();
         }
       },
       true
@@ -42647,22 +42779,30 @@ next: ${next}`;
     hint.style.lineHeight = "1.4";
     hint.style.width = "100%";
     card.body.append(hint);
-    const kbHint = document.createElement("div");
-    kbHint.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
-    kbHint.style.fontSize = "11px";
-    kbHint.style.opacity = "0.65";
-    kbHint.style.textAlign = "center";
-    kbHint.style.lineHeight = "1.3";
-    kbHint.style.width = "100%";
-    card.body.append(kbHint);
-    const kbHint2 = document.createElement("div");
-    kbHint2.textContent = "Keys are editable in Keybinds > Editor.";
-    kbHint2.style.fontSize = "11px";
-    kbHint2.style.opacity = "0.65";
-    kbHint2.style.textAlign = "center";
-    kbHint2.style.lineHeight = "1.3";
-    kbHint2.style.width = "100%";
-    card.body.append(kbHint2);
+    const hintPlaceRemove = document.createElement("div");
+    hintPlaceRemove.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
+    hintPlaceRemove.style.fontSize = "11px";
+    hintPlaceRemove.style.opacity = "0.65";
+    hintPlaceRemove.style.textAlign = "center";
+    hintPlaceRemove.style.lineHeight = "1.3";
+    hintPlaceRemove.style.width = "100%";
+    card.body.append(hintPlaceRemove);
+    const hintDelete = document.createElement("div");
+    hintDelete.textContent = "Remove selected item from inventory with Delete.";
+    hintDelete.style.fontSize = "11px";
+    hintDelete.style.opacity = "0.65";
+    hintDelete.style.textAlign = "center";
+    hintDelete.style.lineHeight = "1.3";
+    hintDelete.style.width = "100%";
+    card.body.append(hintDelete);
+    const hintKeybinds = document.createElement("div");
+    hintKeybinds.textContent = "Keys are editable in Keybinds > Editor.";
+    hintKeybinds.style.fontSize = "11px";
+    hintKeybinds.style.opacity = "0.65";
+    hintKeybinds.style.textAlign = "center";
+    hintKeybinds.style.lineHeight = "1.3";
+    hintKeybinds.style.width = "100%";
+    card.body.append(hintKeybinds);
     const cleanup2 = EditorService.onChange((enabled) => {
       toggle.checked = enabled;
       renderSavedList();
