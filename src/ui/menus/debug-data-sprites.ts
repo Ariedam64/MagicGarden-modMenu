@@ -37,6 +37,88 @@ function deriveAssetCategory(family: string, url: string): string {
   return base;
 }
 
+const COSMETICS_EXPRESSION_CATEGORY = "expression";
+const COSMETICS_EXPRESSION_BASE_REGEX = /\/cosmetics\/mid_defaultblack\.png(?:$|\?)/i;
+
+function isExpressionCategoryName(name: string | null | undefined): boolean {
+  return (name ?? "").toLowerCase() === COSMETICS_EXPRESSION_CATEGORY;
+}
+
+function findExpressionBaseUrl(urls: string[]): string | null {
+  return urls.find((url) => COSMETICS_EXPRESSION_BASE_REGEX.test(url.split(/[?#]/)[0])) ?? null;
+}
+
+function formatExpressionDisplayName(url: string): string {
+  const raw = debugAssetName(url);
+  const cleaned = raw.replace(/^Mid_DefaultBlack[_-]?/i, "").replace(/_/g, " ").trim();
+  return cleaned || raw;
+}
+
+async function loadImageElement(url: string): Promise<HTMLImageElement> {
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) {
+    throw new Error(`Failed to load image ${url}: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = (error) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(error);
+      };
+      img.src = objectUrl;
+    });
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+function imageToCanvas(img: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get 2D context for expression canvas");
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0);
+  return canvas;
+}
+
+async function loadCanvasFromUrl(url: string): Promise<HTMLCanvasElement | null> {
+  try {
+    const img = await loadImageElement(url);
+    return imageToCanvas(img);
+  } catch (error) {
+    console.error("[Sprites] Failed to load canvas for expression asset", { url, error });
+    return null;
+  }
+}
+
+function blendBaseAndOverlay(
+  baseCanvas: HTMLCanvasElement | null,
+  overlayCanvas: HTMLCanvasElement | null,
+): HTMLCanvasElement {
+  const width = baseCanvas?.width ?? overlayCanvas?.width ?? 1;
+  const height = baseCanvas?.height ?? overlayCanvas?.height ?? 1;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get 2D context when blending canvases");
+  ctx.imageSmoothingEnabled = false;
+  if (baseCanvas) ctx.drawImage(baseCanvas, 0, 0, width, height);
+  else if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
+  if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
+  return canvas;
+}
+
 export function renderSpritesTab(view: HTMLElement, ui: Menu) {
   view.innerHTML = "";
   view.classList.add("dd-debug-view");
@@ -229,6 +311,78 @@ const LIGHTING_DEFINITIONS: { id: MutationName; key: string; label: string }[] =
       }, "image/png");
     });
     triggerDownload(blob, filename);
+  }
+
+  async function renderCosmeticsExpressionPreview(options: {
+    previewArea: HTMLElement;
+    expressionUrls: string[];
+    baseUrl: string | null;
+    baseCanvas: HTMLCanvasElement | null;
+  }): Promise<void> {
+    const { previewArea, expressionUrls, baseUrl, baseCanvas } = options;
+    previewArea.innerHTML = "";
+    previewArea.classList.remove("dd-sprite-grid--tiles");
+
+    if (!expressionUrls.length) {
+      const empty = document.createElement("div");
+      empty.className = "dd-sprite-grid__empty";
+      empty.textContent = "No expression assets recorded yet.";
+      previewArea.appendChild(empty);
+      return;
+    }
+
+    const overlays = await Promise.all(expressionUrls.map(async (url) => ({
+      url,
+      overlayCanvas: await loadCanvasFromUrl(url),
+    })));
+
+    for (const { url, overlayCanvas } of overlays) {
+      const displayName = formatExpressionDisplayName(url);
+      if (!overlayCanvas) {
+        const failItem = document.createElement("div");
+        failItem.className = "dd-sprite-grid__item";
+        const failLabel = document.createElement("span");
+        failLabel.className = "dd-sprite-grid__name";
+        failLabel.textContent = `${displayName} (failed to render)`;
+        const failMeta = document.createElement("span");
+        failMeta.className = "dd-sprite-grid__meta";
+        failMeta.textContent = url;
+        failItem.append(failLabel, failMeta);
+        previewArea.appendChild(failItem);
+        continue;
+      }
+
+      const combined = blendBaseAndOverlay(baseCanvas, overlayCanvas);
+      const item = document.createElement("a");
+      item.className = "dd-sprite-grid__item";
+      item.href = url;
+      item.target = "_blank";
+      item.rel = "noopener noreferrer";
+
+      const img = document.createElement("img");
+      img.className = "dd-sprite-grid__img";
+      img.src = combined.toDataURL();
+      img.alt = displayName;
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "dd-sprite-grid__name";
+      nameEl.textContent = displayName;
+
+      const meta = document.createElement("span");
+      meta.className = "dd-sprite-grid__meta";
+      meta.textContent = url;
+
+      item.append(img, nameEl, meta);
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const downloadCanvas = overlayCanvas ?? combined;
+        void downloadCanvasAsPng(downloadCanvas, `${debugAssetName(url)}.png`);
+      });
+      previewArea.appendChild(item);
+    }
   }
 
   async function downloadUrlAsset(url: string): Promise<void> {
@@ -426,6 +580,26 @@ const LIGHTING_DEFINITIONS: { id: MutationName; key: string; label: string }[] =
     currentTilesheetUrl = null;
     currentTiles = [];
     tileSheetActive = isTileSheetView;
+    const isCosmeticsExpressionCategory =
+      selectedFamily === "cosmetics" && isExpressionCategoryName(selectedCategory);
+    if (isCosmeticsExpressionCategory) {
+      const expressionBaseUrl = findExpressionBaseUrl(familyAssets);
+      const expressionBaseCanvas = expressionBaseUrl ? await loadCanvasFromUrl(expressionBaseUrl) : null;
+      tileSheetActive = false;
+      currentTilesheetUrl = null;
+      currentTiles = [];
+      previewArea.classList.remove("dd-sprite-grid--tiles");
+      await renderCosmeticsExpressionPreview({
+        previewArea,
+        expressionUrls: assets,
+        baseUrl: expressionBaseUrl,
+        baseCanvas: expressionBaseCanvas,
+      });
+      const baseLabel = expressionBaseUrl ? debugAssetName(expressionBaseUrl) : "Mid Default Black";
+      stats.textContent = `${assets.length} expression overlays on ${baseLabel}`;
+      updateExportStatusText();
+      return;
+    }
     if (isTileSheetView) {
       const sheetUrl = assets[0];
       const base = normalizeSheetBase(sheetUrl);

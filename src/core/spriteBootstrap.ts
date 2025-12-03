@@ -1,5 +1,4 @@
 import { pageWindow } from "../utils/page-context";
-import { showSpriteLoadingOverlay, hideSpriteLoadingOverlay } from "../utils/spriteLoadingOverlay";
 import { Sprites } from "./sprite";
 
 const INITIAL_TIMEOUT_MS = 12_000;
@@ -87,28 +86,6 @@ async function runBootstrap(reason: string): Promise<void> {
   }
 
   if (!tasks.length) return;
-
-  const spinnerDelayMs = 180;
-  let spinnerTimer: number | undefined;
-  spinnerTimer = pageWindow.setTimeout(() => {
-    spinnerTimer = undefined;
-    showSpriteLoadingOverlay();
-  }, spinnerDelayMs);
-
-  try {
-    const results = await Promise.allSettled(tasks);
-    results.forEach((result) => {
-      if (result.status === "rejected") {
-        console.warn(LOG_PREFIX, "preload task failed", { reason, error: result.reason });
-      }
-    });
-  } finally {
-    if (spinnerTimer !== undefined) {
-      pageWindow.clearTimeout(spinnerTimer);
-      spinnerTimer = undefined;
-    }
-    hideSpriteLoadingOverlay();
-  }
 }
 
 function hasTileSources(): boolean {

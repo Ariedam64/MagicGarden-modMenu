@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.21
+// @version      2.7.22
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -8937,8 +8937,8 @@
     const { kinds, qty } = totalDecorSelected();
     const el2 = document.getElementById(SUMMARY_DECOR_ID);
     if (el2) el2.textContent = `Selected: ${kinds} decor \xB7 ${formatNum(qty)} items`;
-    const overlay2 = document.getElementById(OVERLAY_DECOR_ID);
-    const btn = overlay2?.__btnConfirm;
+    const overlay = document.getElementById(OVERLAY_DECOR_ID);
+    const btn = overlay?.__btnConfirm;
     if (btn) {
       btn.textContent = "Confirm";
       btn.disabled = qty <= 0;
@@ -15936,8 +15936,8 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID4 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID4)) return;
+    const STYLE_ID3 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID3)) return;
     const css = `
 .${injectedClass}{
   font-synthesis: none;
@@ -15992,7 +15992,7 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID4;
+    s.id = STYLE_ID3;
     s.textContent = css;
     document.head.appendChild(s);
   }
@@ -17876,106 +17876,6 @@
   }
   shareGlobal("initSprites", initSprites);
 
-  // src/utils/spriteLoadingOverlay.ts
-  var STYLE_ID = "mg-sprite-loading-overlay-style";
-  var STYLE_CONTENT = `
-.mg-sprite-loading-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(7, 9, 16, 0.5);
-  z-index: 1200;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.mg-sprite-loading-overlay--visible {
-  pointer-events: auto;
-  opacity: 1;
-}
-.mg-sprite-loading-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 24px;
-  border-radius: 14px;
-  background: rgba(15, 20, 35, 0.95);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
-}
-.mg-sprite-loading-spinner {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  border: 4px solid rgba(255, 255, 255, 0.25);
-  border-top-color: #f7f7ff;
-  animation: mg-sprite-spin 1s linear infinite;
-}
-.mg-sprite-loading-label {
-  color: #f7f7ff;
-  font-size: 14px;
-  text-align: center;
-  max-width: 260px;
-}
-@keyframes mg-sprite-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-`;
-  var DEFAULT_MESSAGE = "Sprites preloading...";
-  var overlay = null;
-  var messageEl = null;
-  var counter = 0;
-  function ensureStyle2() {
-    const doc = pageWindow.document;
-    if (doc.getElementById(STYLE_ID)) return;
-    const style2 = doc.createElement("style");
-    style2.id = STYLE_ID;
-    style2.textContent = STYLE_CONTENT;
-    const head = doc.head ?? doc.documentElement;
-    head?.appendChild(style2);
-  }
-  function ensureOverlay() {
-    if (overlay) return overlay;
-    const doc = pageWindow.document;
-    if (!doc.body && !doc.documentElement) return null;
-    ensureStyle2();
-    overlay = doc.createElement("div");
-    overlay.className = "mg-sprite-loading-overlay";
-    const inner = doc.createElement("div");
-    inner.className = "mg-sprite-loading-inner";
-    const spinner = doc.createElement("div");
-    spinner.className = "mg-sprite-loading-spinner";
-    messageEl = doc.createElement("div");
-    messageEl.className = "mg-sprite-loading-label";
-    messageEl.textContent = DEFAULT_MESSAGE;
-    inner.appendChild(spinner);
-    inner.appendChild(messageEl);
-    overlay.appendChild(inner);
-    const container = doc.body ?? doc.documentElement;
-    container?.appendChild(overlay);
-    return overlay;
-  }
-  function showSpriteLoadingOverlay(message) {
-    const el2 = ensureOverlay();
-    if (!el2) return;
-    if (messageEl) {
-      messageEl.textContent = message ?? DEFAULT_MESSAGE;
-    }
-    counter += 1;
-    el2.classList.add("mg-sprite-loading-overlay--visible");
-  }
-  function hideSpriteLoadingOverlay() {
-    if (!overlay) return;
-    counter = Math.max(0, counter - 1);
-    if (counter === 0) {
-      overlay.classList.remove("mg-sprite-loading-overlay--visible");
-    }
-  }
-
   // src/core/spriteBootstrap.ts
   var INITIAL_TIMEOUT_MS = 12e3;
   var POLL_INTERVAL_MS = 100;
@@ -18041,26 +17941,6 @@
       console.warn(LOG_PREFIX, "loadUI threw synchronously", { reason, error });
     }
     if (!tasks.length) return;
-    const spinnerDelayMs = 180;
-    let spinnerTimer;
-    spinnerTimer = pageWindow.setTimeout(() => {
-      spinnerTimer = void 0;
-      showSpriteLoadingOverlay();
-    }, spinnerDelayMs);
-    try {
-      const results = await Promise.allSettled(tasks);
-      results.forEach((result) => {
-        if (result.status === "rejected") {
-          console.warn(LOG_PREFIX, "preload task failed", { reason, error: result.reason });
-        }
-      });
-    } finally {
-      if (spinnerTimer !== void 0) {
-        pageWindow.clearTimeout(spinnerTimer);
-        spinnerTimer = void 0;
-      }
-      hideSpriteLoadingOverlay();
-    }
   }
   function hasTileSources() {
     try {
@@ -20785,11 +20665,11 @@
     }
   };
   async function renderOverlay() {
-    const overlay2 = new OverlayBarebone();
-    const unsubPurch = await NotifierService.onPurchasesChangeNow((p) => overlay2.setPurchases(p));
-    const unsubShops = await NotifierService.onShopsChangeNow((s) => overlay2.setShops(s));
-    const unsubState = await NotifierService.onChangeNow(() => overlay2.notifyStateUpdated());
-    const unsubRules = await NotifierService.onRulesChangeNow((rules) => overlay2.setRules(rules));
+    const overlay = new OverlayBarebone();
+    const unsubPurch = await NotifierService.onPurchasesChangeNow((p) => overlay.setPurchases(p));
+    const unsubShops = await NotifierService.onShopsChangeNow((s) => overlay.setShops(s));
+    const unsubState = await NotifierService.onChangeNow(() => overlay.notifyStateUpdated());
+    const unsubRules = await NotifierService.onRulesChangeNow((rules) => overlay.setRules(rules));
     window.__qws_cleanup_notifier = () => {
       try {
         unsubShops();
@@ -20808,7 +20688,7 @@
       } catch {
       }
       try {
-        overlay2.destroy();
+        overlay.destroy();
       } catch {
       }
     };
@@ -20817,7 +20697,7 @@
   // src/utils/shopUtility.ts
   var SHOP_TYPES = ["plant", "egg", "tool", "decor"];
   var BTN_CLASS = "romann-buyall-btn";
-  var STYLE_ID2 = "tm-buyall-css";
+  var STYLE_ID = "tm-buyall-css";
   var ITEM_SELECTOR = "div.McFlex.css-1kkwxjt";
   var LIST_SELECTOR = "div.McFlex.css-1lfov12";
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
@@ -21099,7 +20979,7 @@
     return any ?? null;
   }
   function ensureGlobalStyles() {
-    if (document.getElementById(STYLE_ID2)) return;
+    if (document.getElementById(STYLE_ID)) return;
     const css = `
     .${BTN_CLASS}{
       background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
@@ -21147,7 +21027,7 @@
     }
   `.trim();
     const style2 = document.createElement("style");
-    style2.id = STYLE_ID2;
+    style2.id = STYLE_ID;
     style2.textContent = css;
     document.head.appendChild(style2);
   }
@@ -25931,7 +25811,7 @@
 
   // src/utils/activityLogFilter.ts
   var FILTER_STORAGE_KEY = "qws:activityLog:filter";
-  var STYLE_ID3 = "mg-activity-log-filter-style";
+  var STYLE_ID2 = "mg-activity-log-filter-style";
   var ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
   var WRAPPER_CLASS = "mg-activity-log-filter";
   var BUTTON_CLASS = "mg-activity-log-filter-btn";
@@ -26210,7 +26090,7 @@
     }
   }
   function ensureStyles() {
-    if (document.getElementById(STYLE_ID3)) return;
+    if (document.getElementById(STYLE_ID2)) return;
     const css = `
 .${WRAPPER_CLASS}{
   display:flex;
@@ -26264,7 +26144,7 @@
 }
 `;
     const s = addStyle(css);
-    s.id = STYLE_ID3;
+    s.id = STYLE_ID2;
   }
 
   // src/utils/sellCropsLock.ts
@@ -29021,6 +28901,77 @@ next: ${next}`;
     }
     return base;
   }
+  var COSMETICS_EXPRESSION_CATEGORY = "expression";
+  var COSMETICS_EXPRESSION_BASE_REGEX = /\/cosmetics\/mid_defaultblack\.png(?:$|\?)/i;
+  function isExpressionCategoryName(name) {
+    return (name ?? "").toLowerCase() === COSMETICS_EXPRESSION_CATEGORY;
+  }
+  function findExpressionBaseUrl(urls) {
+    return urls.find((url) => COSMETICS_EXPRESSION_BASE_REGEX.test(url.split(/[?#]/)[0])) ?? null;
+  }
+  function formatExpressionDisplayName(url) {
+    const raw = debugAssetName(url);
+    const cleaned = raw.replace(/^Mid_DefaultBlack[_-]?/i, "").replace(/_/g, " ").trim();
+    return cleaned || raw;
+  }
+  async function loadImageElement(url) {
+    const response = await fetch(url, { credentials: "include" });
+    if (!response.ok) {
+      throw new Error(`Failed to load image ${url}: ${response.status}`);
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      return await new Promise((resolve2, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          resolve2(img);
+        };
+        img.onerror = (error) => {
+          URL.revokeObjectURL(objectUrl);
+          reject(error);
+        };
+        img.src = objectUrl;
+      });
+    } catch (error) {
+      URL.revokeObjectURL(objectUrl);
+      throw error;
+    }
+  }
+  function imageToCanvas(img) {
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Failed to get 2D context for expression canvas");
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0);
+    return canvas;
+  }
+  async function loadCanvasFromUrl(url) {
+    try {
+      const img = await loadImageElement(url);
+      return imageToCanvas(img);
+    } catch (error) {
+      console.error("[Sprites] Failed to load canvas for expression asset", { url, error });
+      return null;
+    }
+  }
+  function blendBaseAndOverlay(baseCanvas, overlayCanvas) {
+    const width = baseCanvas?.width ?? overlayCanvas?.width ?? 1;
+    const height = baseCanvas?.height ?? overlayCanvas?.height ?? 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Failed to get 2D context when blending canvases");
+    ctx.imageSmoothingEnabled = false;
+    if (baseCanvas) ctx.drawImage(baseCanvas, 0, 0, width, height);
+    else if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
+    if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
+    return canvas;
+  }
   function renderSpritesTab(view, ui) {
     view.innerHTML = "";
     view.classList.add("dd-debug-view");
@@ -29182,6 +29133,64 @@ next: ${next}`;
         }, "image/png");
       });
       triggerDownload(blob, filename);
+    }
+    async function renderCosmeticsExpressionPreview(options) {
+      const { previewArea: previewArea2, expressionUrls, baseUrl, baseCanvas } = options;
+      previewArea2.innerHTML = "";
+      previewArea2.classList.remove("dd-sprite-grid--tiles");
+      if (!expressionUrls.length) {
+        const empty = document.createElement("div");
+        empty.className = "dd-sprite-grid__empty";
+        empty.textContent = "No expression assets recorded yet.";
+        previewArea2.appendChild(empty);
+        return;
+      }
+      const overlays = await Promise.all(expressionUrls.map(async (url) => ({
+        url,
+        overlayCanvas: await loadCanvasFromUrl(url)
+      })));
+      for (const { url, overlayCanvas } of overlays) {
+        const displayName = formatExpressionDisplayName(url);
+        if (!overlayCanvas) {
+          const failItem = document.createElement("div");
+          failItem.className = "dd-sprite-grid__item";
+          const failLabel = document.createElement("span");
+          failLabel.className = "dd-sprite-grid__name";
+          failLabel.textContent = `${displayName} (failed to render)`;
+          const failMeta = document.createElement("span");
+          failMeta.className = "dd-sprite-grid__meta";
+          failMeta.textContent = url;
+          failItem.append(failLabel, failMeta);
+          previewArea2.appendChild(failItem);
+          continue;
+        }
+        const combined = blendBaseAndOverlay(baseCanvas, overlayCanvas);
+        const item = document.createElement("a");
+        item.className = "dd-sprite-grid__item";
+        item.href = url;
+        item.target = "_blank";
+        item.rel = "noopener noreferrer";
+        const img = document.createElement("img");
+        img.className = "dd-sprite-grid__img";
+        img.src = combined.toDataURL();
+        img.alt = displayName;
+        img.loading = "lazy";
+        img.referrerPolicy = "no-referrer";
+        const nameEl = document.createElement("span");
+        nameEl.className = "dd-sprite-grid__name";
+        nameEl.textContent = displayName;
+        const meta = document.createElement("span");
+        meta.className = "dd-sprite-grid__meta";
+        meta.textContent = url;
+        item.append(img, nameEl, meta);
+        item.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const downloadCanvas = overlayCanvas ?? combined;
+          void downloadCanvasAsPng(downloadCanvas, `${debugAssetName(url)}.png`);
+        });
+        previewArea2.appendChild(item);
+      }
     }
     async function downloadUrlAsset(url) {
       try {
@@ -29360,6 +29369,25 @@ next: ${next}`;
       currentTilesheetUrl = null;
       currentTiles = [];
       tileSheetActive = isTileSheetView;
+      const isCosmeticsExpressionCategory = selectedFamily === "cosmetics" && isExpressionCategoryName(selectedCategory);
+      if (isCosmeticsExpressionCategory) {
+        const expressionBaseUrl = findExpressionBaseUrl(familyAssets);
+        const expressionBaseCanvas = expressionBaseUrl ? await loadCanvasFromUrl(expressionBaseUrl) : null;
+        tileSheetActive = false;
+        currentTilesheetUrl = null;
+        currentTiles = [];
+        previewArea.classList.remove("dd-sprite-grid--tiles");
+        await renderCosmeticsExpressionPreview({
+          previewArea,
+          expressionUrls: assets,
+          baseUrl: expressionBaseUrl,
+          baseCanvas: expressionBaseCanvas
+        });
+        const baseLabel = expressionBaseUrl ? debugAssetName(expressionBaseUrl) : "Mid Default Black";
+        stats.textContent = `${assets.length} expression overlays on ${baseLabel}`;
+        updateExportStatusText();
+        return;
+      }
       if (isTileSheetView) {
         const sheetUrl = assets[0];
         const base = normalizeSheetBase(sheetUrl);
@@ -40634,7 +40662,7 @@ next: ${next}`;
   var stateOriginalValue = null;
   function persist(enabled) {
   }
-  function ensureOverlay2() {
+  function ensureOverlay() {
     if (overlayEl && document.contains(overlayEl)) return overlayEl;
     const el2 = document.createElement("div");
     el2.id = "qws-editor-overlay";
@@ -40660,7 +40688,7 @@ next: ${next}`;
     return el2;
   }
   function showOverlay() {
-    ensureOverlay2();
+    ensureOverlay();
   }
   function hideOverlay() {
     if (overlayEl) {
