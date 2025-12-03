@@ -105,7 +105,6 @@ export const spriteFilters: Record<string, SpriteFilterConfig> = {
     colors: ["#FF1744", "#FF9100", "#FFEA00", "#00E676", "#2979FF", "#D500F9"],
     gradientAngle: 130,
     masked: true,
-    reverse: true,
   },
   Wet: {
     blendMode: "source-atop",
