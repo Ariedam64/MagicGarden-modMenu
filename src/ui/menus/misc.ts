@@ -1,6 +1,6 @@
 // src/ui/menus/misc.ts
 import { Menu } from "../menu";
-import { MiscService } from "../../services/misc";
+import { MiscService, DEFAULT_SEED_DELETE_DELAY_MS, DEFAULT_DECOR_DELETE_DELAY_MS } from "../../services/misc";
 
 /* ---------------- helpers ---------------- */
 const formatShortDuration = (seconds: number) => {
@@ -15,6 +15,26 @@ const formatShortDuration = (seconds: number) => {
 /* ---------------- number formatting (US) ---------------- */
 const NF_US = new Intl.NumberFormat("en-US");
 const formatNum = (n: number) => NF_US.format(Math.max(0, Math.floor(n || 0)));
+
+const formatDurationShort = (ms: number): string => {
+  if (ms < 1000) return `${ms} ms`;
+  const seconds = ms / 1000;
+  if (seconds < 10) return `${seconds.toFixed(1)} s`;
+  return `${Math.round(seconds)} s`;
+};
+
+const formatFinishTime = (timestamp: number): string =>
+  new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+const EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS = 10;
+
+const buildEstimateSentence = (count: number, delayMs: number, finishTimestamp: number | null): string => {
+  if (count <= 0 || delayMs <= 0) return "";
+  const durationMs = count * (delayMs + EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS);
+  const durationText = formatDurationShort(durationMs);
+  if (!finishTimestamp) return ` · Estimated time ${durationText}`;
+  return ` · Estimated time ${durationText} (${formatFinishTime(finishTimestamp)})`;
+};
 
 /* ---------------- entry ---------------- */
 
@@ -158,33 +178,145 @@ export async function renderMiscMenu(container: HTMLElement) {
   /* ===== Section: Seed deleter ===== */
   const secSeed = (() => {
     const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
+    grid.style.gridTemplateColumns = "1fr";
+
+    const selRow = document.createElement("div");
+    selRow.style.display = "flex";
+    selRow.style.alignItems = "center";
+    selRow.style.justifyContent = "flex-start";
+    selRow.style.gap = "8px";
+    selRow.style.gridColumn = "1 / -1";
 
     const selLabel = ui.label("Selected");
     selLabel.style.fontSize = "13px";
     selLabel.style.margin = "0";
-    selLabel.style.justifySelf = "start";
 
     const selValue = document.createElement("div");
     selValue.id = "misc.seedDeleter.summary";
     selValue.style.fontSize = "13px";
     selValue.style.opacity = "0.9";
     selValue.textContent = "0 species - 0 seeds";
-    grid.append(selLabel, selValue);
+
+    selRow.append(selLabel, selValue);
+    grid.append(selRow);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.style.display = "flex";
+    actionsRow.style.alignItems = "center";
+    actionsRow.style.gap = "8px";
+    actionsRow.style.justifyContent = "flex-start";
+    actionsRow.style.gridColumn = "1 / -1";
 
     const actLabel = ui.label("Actions");
     actLabel.style.fontSize = "13px";
     actLabel.style.margin = "0";
-    actLabel.style.justifySelf = "start";
 
     const actions = ui.flexRow({ gap: 6 });
-    actions.style.justifyContent = "flex-start";
-
     const btnSelect = ui.btn("Select seeds", { variant: "primary", size: "sm" });
     const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
     const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
 
     actions.append(btnSelect, btnDelete, btnClear);
-    grid.append(actLabel, actions);
+    actionsRow.append(actLabel, actions);
+    grid.append(actionsRow);
+
+    const statusLabel = ui.label("Status");
+    statusLabel.style.fontSize = "13px";
+    statusLabel.style.margin = "0";
+    statusLabel.style.justifySelf = "start";
+
+    const statusLine = document.createElement("div");
+    statusLine.style.fontSize = "13px";
+    statusLine.style.fontWeight = "600";
+    statusLine.style.color = "#f9f9f9";
+    statusLine.style.whiteSpace = "nowrap";
+    statusLine.textContent = "Idle";
+
+    const controlRow = ui.flexRow({ gap: 6 });
+    const btnPause = ui.btn("Pause", { size: "sm" });
+    const btnPlay = ui.btn("Play", { size: "sm" });
+    const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
+    btnPause.onclick = () => { MiscService.pauseSeedDeletion(); updateSeedControlState(); };
+    btnPlay.onclick = () => { MiscService.resumeSeedDeletion(); updateSeedControlState(); };
+    btnStop.onclick = () => { MiscService.cancelSeedDeletion(); updateSeedControlState(); };
+    controlRow.append(btnPause, btnPlay, btnStop);
+
+    const seedStatus = { species: "—", done: 0, total: 0, remaining: 0 };
+    const describeSeedStatus = () => {
+      const running = MiscService.isSeedDeletionRunning();
+      const paused = MiscService.isSeedDeletionPaused();
+      const target = seedStatus.species || "—";
+      const base = `${target} (${seedStatus.done}/${seedStatus.total})`;
+      if (!running) return "Idle";
+      return paused ? `Paused · ${base}` : base;
+    };
+    const updateSeedStatusUI = () => {
+      statusLine.textContent = describeSeedStatus();
+    };
+    const updateSeedControlState = () => {
+      const running = MiscService.isSeedDeletionRunning();
+      const paused = MiscService.isSeedDeletionPaused();
+      btnPause.disabled = !running || paused;
+      btnPlay.disabled = !running || !paused;
+      btnStop.disabled = !running;
+      updateSeedStatusUI();
+    };
+
+    let seedEstimatedFinish: number | null = null;
+    let seedSummaryTimer: number | null = null;
+    const clearSeedSummaryTimer = () => {
+      if (seedSummaryTimer !== null) {
+        clearTimeout(seedSummaryTimer);
+        seedSummaryTimer = null;
+      }
+    };
+    const scheduleSeedSummaryRefresh = () => {
+      clearSeedSummaryTimer();
+      seedSummaryTimer = window.setTimeout(() => updateSummaryUI(), 1000);
+    };
+
+    const onSeedProgress = (event: CustomEvent) => {
+      const detail = event.detail;
+      seedStatus.species = detail.species;
+      seedStatus.done = detail.done;
+      seedStatus.total = detail.total;
+      seedStatus.remaining = detail.remainingForSpecies;
+      updateSeedStatusUI();
+      updateSeedControlState();
+    };
+    const onSeedComplete = () => {
+      seedStatus.species = "—";
+      seedStatus.done = 0;
+      seedStatus.total = 0;
+      seedStatus.remaining = 0;
+      updateSeedStatusUI();
+      updateSeedControlState();
+    };
+    const onSeedPaused = () => updateSeedControlState();
+    const onSeedResumed = () => updateSeedControlState();
+    window.addEventListener("qws:seeddeleter:progress", onSeedProgress as EventListener);
+    window.addEventListener("qws:seeddeleter:done", onSeedComplete as EventListener);
+    window.addEventListener("qws:seeddeleter:error", onSeedComplete as EventListener);
+    window.addEventListener("qws:seeddeleter:paused", onSeedPaused as EventListener);
+    window.addEventListener("qws:seeddeleter:resumed", onSeedResumed as EventListener);
+    const cleanupSeedListeners = () => {
+      window.removeEventListener("qws:seeddeleter:progress", onSeedProgress as EventListener);
+      window.removeEventListener("qws:seeddeleter:done", onSeedComplete as EventListener);
+      window.removeEventListener("qws:seeddeleter:error", onSeedComplete as EventListener);
+      window.removeEventListener("qws:seeddeleter:paused", onSeedPaused as EventListener);
+      window.removeEventListener("qws:seeddeleter:resumed", onSeedResumed as EventListener);
+    };
+
+    updateSeedStatusUI();
+    updateSeedControlState();
+
+    const statusRow = document.createElement("div");
+    statusRow.style.display = "flex";
+    statusRow.style.alignItems = "center";
+    statusRow.style.gap = "8px";
+    statusRow.style.gridColumn = "1 / -1";
+    statusRow.append(statusLabel, controlRow, statusLine);
+    grid.append(statusRow);
 
     function readSelection() {
       const sel = MiscService.getCurrentSeedSelection?.() || [];
@@ -195,10 +327,24 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
     function updateSummaryUI() {
       const { speciesCount, totalQty } = readSelection();
-      selValue.textContent = `${speciesCount} species - ${formatNum(totalQty)} seeds`;
+      const seedDelayMs = DEFAULT_SEED_DELETE_DELAY_MS;
+      const estimateMs = totalQty * (seedDelayMs + EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS);
+      const isRunning = MiscService.isSeedDeletionRunning();
+      const finishTimestamp = isRunning
+        ? seedEstimatedFinish
+        : estimateMs > 0
+          ? Date.now() + estimateMs
+          : null;
+      const estimateText = buildEstimateSentence(totalQty, seedDelayMs, finishTimestamp);
+      selValue.textContent = `${speciesCount} species - ${formatNum(totalQty)} seeds${estimateText}`;
       const has = speciesCount > 0 && totalQty > 0;
       ui.setButtonEnabled(btnDelete, has);
       ui.setButtonEnabled(btnClear, has);
+      if (!isRunning && totalQty > 0) {
+        scheduleSeedSummaryRefresh();
+      } else {
+        clearSeedSummaryTimer();
+      }
     }
 
     btnSelect.onclick = async () => {
@@ -210,46 +356,170 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
     btnDelete.onclick = async () => {
-      await MiscService.deleteSelectedSeeds();
+      const { totalQty } = readSelection();
+      const seedDelayMs = DEFAULT_SEED_DELETE_DELAY_MS;
+      const estimateMs = totalQty * (seedDelayMs + EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS);
+      seedEstimatedFinish = estimateMs > 0 ? Date.now() + estimateMs : null;
+      clearSeedSummaryTimer();
+      const deletionPromise = MiscService.deleteSelectedSeeds({ delayMs: seedDelayMs });
+      updateSummaryUI();
+      await deletionPromise;
+      seedEstimatedFinish = null;
       updateSummaryUI();
     };
 
-    const card = ui.card("🌱 Seed deleter", { tone: "muted", align: "center" });
+    const card = ui.card("Seed deleter", { tone: "muted", align: "center" });
     card.root.style.maxWidth = "440px";
     card.body.append(grid);
+    (card.root as any).__cleanup__ = () => {
+      clearSeedSummaryTimer();
+      cleanupSeedListeners();
+    };
     return card.root;
   })();
-
   /* ===== Section: Decor deleter ===== */
   const secDecor = (() => {
     const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
+    grid.style.gridTemplateColumns = "1fr";
+
+    const selRow = document.createElement("div");
+    selRow.style.display = "flex";
+    selRow.style.alignItems = "center";
+    selRow.style.justifyContent = "flex-start";
+    selRow.style.gap = "8px";
+    selRow.style.gridColumn = "1 / -1";
 
     const selLabel = ui.label("Selected");
     selLabel.style.fontSize = "13px";
     selLabel.style.margin = "0";
-    selLabel.style.justifySelf = "start";
 
     const selValue = document.createElement("div");
     selValue.id = "misc.decorDeleter.summary";
     selValue.style.fontSize = "13px";
     selValue.style.opacity = "0.9";
     selValue.textContent = "0 decor - 0 items";
-    grid.append(selLabel, selValue);
+
+    selRow.append(selLabel, selValue);
+    grid.append(selRow);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.style.display = "flex";
+    actionsRow.style.alignItems = "center";
+    actionsRow.style.gap = "8px";
+    actionsRow.style.justifyContent = "flex-start";
+    actionsRow.style.gridColumn = "1 / -1";
 
     const actLabel = ui.label("Actions");
     actLabel.style.fontSize = "13px";
     actLabel.style.margin = "0";
-    actLabel.style.justifySelf = "start";
 
     const actions = ui.flexRow({ gap: 6 });
-    actions.style.justifyContent = "flex-start";
-
     const btnSelect = ui.btn("Select decor", { variant: "primary", size: "sm" });
     const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
     const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
 
     actions.append(btnSelect, btnDelete, btnClear);
-    grid.append(actLabel, actions);
+    actionsRow.append(actLabel, actions);
+    grid.append(actionsRow);
+
+
+    const statusLabel = ui.label("Status");
+    statusLabel.style.fontSize = "13px";
+    statusLabel.style.margin = "0";
+    statusLabel.style.justifySelf = "start";
+
+    const statusLine = document.createElement("div");
+    statusLine.style.fontSize = "13px";
+    statusLine.style.fontWeight = "600";
+    statusLine.style.color = "#f9f9f9";
+    statusLine.style.whiteSpace = "nowrap";
+    statusLine.textContent = "Idle";
+
+    const controlRow = ui.flexRow({ gap: 6 });
+    const btnPause = ui.btn("Pause", { size: "sm" });
+    const btnPlay = ui.btn("Play", { size: "sm" });
+    const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
+    btnPause.onclick = () => { MiscService.pauseDecorDeletion(); updateDecorControlState(); };
+    btnPlay.onclick = () => { MiscService.resumeDecorDeletion(); updateDecorControlState(); };
+    btnStop.onclick = () => { MiscService.cancelDecorDeletion(); updateDecorControlState(); };
+    controlRow.append(btnPause, btnPlay, btnStop);
+
+    const decorStatus = { name: "—", done: 0, total: 0, remaining: 0 };
+    const describeDecorStatus = () => {
+      const running = MiscService.isDecorDeletionRunning();
+      const paused = MiscService.isDecorDeletionPaused();
+      const target = decorStatus.name || "—";
+      const base = `${target} (${decorStatus.done}/${decorStatus.total})`;
+      if (!running) return "Idle";
+      return paused ? `Paused · ${base}` : base;
+    };
+    const updateDecorStatusUI = () => {
+      statusLine.textContent = describeDecorStatus();
+    };
+    const updateDecorControlState = () => {
+      const running = MiscService.isDecorDeletionRunning();
+      const paused = MiscService.isDecorDeletionPaused();
+      btnPause.disabled = !running || paused;
+      btnPlay.disabled = !running || !paused;
+      btnStop.disabled = !running;
+      updateDecorStatusUI();
+    };
+
+    const onDecorProgress = (event: CustomEvent) => {
+      const detail = event.detail;
+      decorStatus.name = detail.decorId;
+      decorStatus.done = detail.done;
+      decorStatus.total = detail.total;
+      decorStatus.remaining = detail.remainingForDecor;
+      updateDecorStatusUI();
+      updateDecorControlState();
+    };
+    const onDecorComplete = () => {
+      decorStatus.name = "—";
+      decorStatus.done = 0;
+      decorStatus.total = 0;
+      decorStatus.remaining = 0;
+      updateDecorStatusUI();
+      updateDecorControlState();
+    };
+    const onDecorPaused = () => updateDecorControlState();
+    const onDecorResumed = () => updateDecorControlState();
+    window.addEventListener("qws:decordeleter:progress", onDecorProgress as EventListener);
+    window.addEventListener("qws:decordeleter:done", onDecorComplete as EventListener);
+    window.addEventListener("qws:decordeleter:error", onDecorComplete as EventListener);
+    window.addEventListener("qws:decordeleter:paused", onDecorPaused as EventListener);
+    window.addEventListener("qws:decordeleter:resumed", onDecorResumed as EventListener);
+    const cleanupDecorListeners = () => {
+      window.removeEventListener("qws:decordeleter:progress", onDecorProgress as EventListener);
+      window.removeEventListener("qws:decordeleter:done", onDecorComplete as EventListener);
+      window.removeEventListener("qws:decordeleter:error", onDecorComplete as EventListener);
+      window.removeEventListener("qws:decordeleter:paused", onDecorPaused as EventListener);
+      window.removeEventListener("qws:decordeleter:resumed", onDecorResumed as EventListener);
+    };
+
+    updateDecorStatusUI();
+    updateDecorControlState();
+
+    let decorEstimatedFinish: number | null = null;
+    let decorSummaryTimer: number | null = null;
+    const clearDecorSummaryTimer = () => {
+      if (decorSummaryTimer !== null) {
+        clearTimeout(decorSummaryTimer);
+        decorSummaryTimer = null;
+      }
+    };
+    const scheduleDecorSummaryRefresh = () => {
+      clearDecorSummaryTimer();
+      decorSummaryTimer = window.setTimeout(() => updateSummaryUI(), 1000);
+    };
+
+    const statusRow = document.createElement("div");
+    statusRow.style.display = "flex";
+    statusRow.style.alignItems = "center";
+    statusRow.style.gap = "8px";
+    statusRow.style.gridColumn = "1 / -1";
+    statusRow.append(statusLabel, controlRow, statusLine);
+    grid.append(statusRow);
 
     function readSelection() {
       const sel = MiscService.getCurrentDecorSelection?.() || [];
@@ -260,10 +530,24 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
     function updateSummaryUI() {
       const { decorCount, totalQty } = readSelection();
-      selValue.textContent = `${decorCount} decor - ${formatNum(totalQty)} items`;
+      const decorDelayMs = DEFAULT_DECOR_DELETE_DELAY_MS * 2;
+      const estimateMs = totalQty * (decorDelayMs + EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS);
+      const isRunning = MiscService.isDecorDeletionRunning();
+      const finishTimestamp = isRunning
+        ? decorEstimatedFinish
+        : estimateMs > 0
+          ? Date.now() + estimateMs
+          : null;
+      const estimateText = buildEstimateSentence(totalQty, decorDelayMs, finishTimestamp);
+      selValue.textContent = decorCount + " decor - " + formatNum(totalQty) + " items" + estimateText;
       const has = decorCount > 0 && totalQty > 0;
       ui.setButtonEnabled(btnDelete, has);
       ui.setButtonEnabled(btnClear, has);
+      if (!isRunning && totalQty > 0) {
+        scheduleDecorSummaryRefresh();
+      } else {
+        clearDecorSummaryTimer();
+      }
     }
 
     btnSelect.onclick = async () => {
@@ -271,7 +555,15 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
     btnDelete.onclick = async () => {
-      await MiscService.deleteSelectedDecor?.();
+      const { totalQty } = readSelection();
+      const decorDelayMs = DEFAULT_DECOR_DELETE_DELAY_MS * 2;
+      const estimateMs = totalQty * (decorDelayMs + EXTRA_ESTIMATE_BUFFER_PER_DELETE_MS);
+      decorEstimatedFinish = estimateMs > 0 ? Date.now() + estimateMs : null;
+      clearDecorSummaryTimer();
+      const deletionPromise = MiscService.deleteSelectedDecor?.({ delayMs: DEFAULT_DECOR_DELETE_DELAY_MS });
+      updateSummaryUI();
+      if (deletionPromise) await deletionPromise;
+      decorEstimatedFinish = null;
       updateSummaryUI();
     };
     btnClear.onclick = () => {
@@ -279,12 +571,15 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
 
-    const card = ui.card("🧱 Decor deleter", { tone: "muted", align: "center" });
+    const card = ui.card("Decor deleter", { tone: "muted", align: "center" });
     card.root.style.maxWidth = "440px";
     card.body.append(grid);
+    (card.root as any).__cleanup__ = () => {
+      clearDecorSummaryTimer();
+      cleanupDecorListeners();
+    };
     return card.root;
   })();
-
   const content = document.createElement("div");
   content.style.display = "grid";
   content.style.gap = "8px";
@@ -296,5 +591,6 @@ export async function renderMiscMenu(container: HTMLElement) {
   (view as any).__cleanup__ = () => {
     try { (secPlayer as any).__cleanup__?.(); } catch {}
     try { (secSeed as any).__cleanup__?.(); } catch {}
+    try { (secDecor as any).__cleanup__?.(); } catch {}
   };
 }

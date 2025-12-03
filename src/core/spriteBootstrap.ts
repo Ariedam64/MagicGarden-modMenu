@@ -1,3 +1,5 @@
+import { pageWindow } from "../utils/page-context";
+import { showSpriteLoadingOverlay, hideSpriteLoadingOverlay } from "../utils/spriteLoadingOverlay";
 import { Sprites } from "./sprite";
 
 const INITIAL_TIMEOUT_MS = 12_000;
@@ -67,9 +69,15 @@ async function runBootstrap(reason: string): Promise<void> {
 
   const tasks: Promise<unknown>[] = [];
   try {
-    tasks.push(Sprites.loadTiles({ mode: "canvas" }));
+    tasks.push(
+      Sprites.preloadTilesGradually({
+        mode: "canvas",
+        batchSize: 1,
+        delayMs: 30,
+      }),
+    );
   } catch (error) {
-    console.warn(LOG_PREFIX, "loadTiles threw synchronously", { reason, error });
+    console.warn(LOG_PREFIX, "preloadTilesGradually threw synchronously", { reason, error });
   }
 
   try {
@@ -80,12 +88,27 @@ async function runBootstrap(reason: string): Promise<void> {
 
   if (!tasks.length) return;
 
-  const results = await Promise.allSettled(tasks);
-  results.forEach((result) => {
-    if (result.status === "rejected") {
-      console.warn(LOG_PREFIX, "preload task failed", { reason, error: result.reason });
+  const spinnerDelayMs = 180;
+  let spinnerTimer: number | undefined;
+  spinnerTimer = pageWindow.setTimeout(() => {
+    spinnerTimer = undefined;
+    showSpriteLoadingOverlay();
+  }, spinnerDelayMs);
+
+  try {
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result) => {
+      if (result.status === "rejected") {
+        console.warn(LOG_PREFIX, "preload task failed", { reason, error: result.reason });
+      }
+    });
+  } finally {
+    if (spinnerTimer !== undefined) {
+      pageWindow.clearTimeout(spinnerTimer);
+      spinnerTimer = undefined;
     }
-  });
+    hideSpriteLoadingOverlay();
+  }
 }
 
 function hasTileSources(): boolean {

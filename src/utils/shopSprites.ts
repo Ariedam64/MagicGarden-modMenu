@@ -1,5 +1,6 @@
 import { Sprites } from "../core/sprite";
-import { ensureSpritesReady } from "../core/spriteBootstrap";
+import { loadTileSheet, uniqueBases, clearTileSheetCache } from "./tileSheet"
+import { ensureSpritesReady } from "../services/assetManifest";
 import {
   plantCatalog,
   eggCatalog,
@@ -27,6 +28,34 @@ const spriteConfig = new WeakMap<HTMLSpanElement, SpriteConfig>();
 const spriteSubscribers = new Map<SpriteKey, Set<HTMLSpanElement>>();
 const spriteCache = new Map<SpriteKey, string | null>();
 const spritePromises = new Map<SpriteKey, Promise<string | null>>();
+
+const MAX_CONCURRENT_SPRITE_LOADS = 4;
+let activeSpriteLoads = 0;
+const pendingSpriteLoads: Array<() => void> = [];
+
+function enqueueSpriteLoad(task: () => Promise<string | null>): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const runner = () => {
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          activeSpriteLoads--;
+          const next = pendingSpriteLoads.shift();
+          if (next) {
+            activeSpriteLoads++;
+            next();
+          }
+        });
+    };
+
+    if (activeSpriteLoads < MAX_CONCURRENT_SPRITE_LOADS) {
+      activeSpriteLoads++;
+      runner();
+    } else {
+      pendingSpriteLoads.push(runner);
+    }
+  });
+}
 
 let listenerAttached = false;
 
@@ -67,25 +96,6 @@ function defaultFallback(type: ShopSpriteType): string {
     case "Decor": return "🏠";
     case "Crop": return "🍎";
   }
-}
-
-function normalizeBase(url: string): string {
-  const clean = url.split(/[?#]/)[0] ?? url;
-  const file = clean.split("/").pop() ?? clean;
-  return file.replace(/\.[^.]+$/, "");
-}
-
-function uniqueBases(urls: Iterable<string>, fallback: string[]): string[] {
-  const set = new Set<string>();
-  for (const url of urls) {
-    if (typeof url === "string" && url.length) {
-      set.add(normalizeBase(url));
-    }
-  }
-  if (set.size === 0) {
-    for (const base of fallback) set.add(base);
-  }
-  return [...set];
 }
 
 function getSeedSheetBases(): string[] {
@@ -275,6 +285,7 @@ function clearSheetCaches(): void {
   decorSheetBases = null;
   cropSheetBases = null;
   tallCropSheetBases = null;
+  clearTileSheetCache();
 }
 
 async function fetchSprite(type: ShopSpriteType, id: string): Promise<string | null> {
@@ -290,7 +301,8 @@ async function fetchSprite(type: ShopSpriteType, id: string): Promise<string | n
   const bases = getBases(type, id);
   for (const base of bases) {
     try {
-      const tile = await Sprites.getTile(base, index, "canvas");
+      const tiles = await loadTileSheet(base);
+      const tile = tiles.find((t) => t.index === index);
       const canvas = tile?.data as HTMLCanvasElement | undefined;
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
       const copy = document.createElement("canvas");
@@ -341,7 +353,7 @@ function loadSprite(type: ShopSpriteType, id: string, key: SpriteKey = spriteKey
   const inflight = spritePromises.get(key);
   if (inflight) return inflight;
 
-  const promise = fetchSprite(type, id)
+  const promise = enqueueSpriteLoad(() => fetchSprite(type, id))
     .then((src) => {
       spriteCache.set(key, src);
       spritePromises.delete(key);
@@ -355,6 +367,10 @@ function loadSprite(type: ShopSpriteType, id: string, key: SpriteKey = spriteKey
 
   spritePromises.set(key, promise);
   return promise;
+}
+
+export function prefetchShopSprite(type: ShopSpriteType, id: string): Promise<string | null> {
+  return loadSprite(type, id);
 }
 
 export function createShopSprite(type: ShopSpriteType, id: string, options: ShopSpriteOptions = {}): HTMLSpanElement {

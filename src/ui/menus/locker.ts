@@ -1,12 +1,13 @@
 // src/ui/menus/locker.ts
 import { Menu } from "../menu";
 import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../core/spriteBootstrap";
+import { ensureSpritesReady } from "../../services/assetManifest";
 import {
   plantCatalog,
   tileRefsMutations,
   tileRefsMutationLabels,
 } from "../../data/hardcoded-data.clean";
+import { loadTileSheet } from "../../utils/tileSheet";
 import {
   lockerService,
   type LockerSettingsPersisted,
@@ -399,8 +400,10 @@ async function fetchPlantSprite(seedKey: string): Promise<string | null> {
 
   for (const base of bases) {
     try {
-      const tile = await Sprites.getTile(base, index, "canvas");
-      const canvas = tile?.data as HTMLCanvasElement | undefined;
+      const tiles = await loadTileSheet(base);
+      const tile = tiles.find(t => t.index === index);
+      if (!tile) continue;
+      const canvas = Sprites.toCanvas(tile);
       if (canvas && canvas.width > 0 && canvas.height > 0) {
         const copy = document.createElement("canvas");
         copy.width = canvas.width;
@@ -569,8 +572,10 @@ async function fetchMutationSprite(tag: WeatherTag): Promise<string | null> {
   if (index == null || !base) return null;
 
   try {
-    const tile = await Sprites.getTile(base, index, "canvas");
-    const canvas = tile?.data as HTMLCanvasElement | undefined;
+    const tiles = await loadTileSheet(base);
+    const tile = tiles.find(t => t.index === index);
+    if (!tile) return null;
+    const canvas = Sprites.toCanvas(tile);
     if (canvas && canvas.width > 0 && canvas.height > 0) {
       const copy = document.createElement("canvas");
       copy.width = canvas.width;

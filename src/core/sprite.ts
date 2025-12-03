@@ -5,6 +5,7 @@
 */
 
 import { pageWindow, shareGlobal } from "../utils/page-context";
+import { MutationName } from "../utils/calculators";
 import JSZip from "jszip";
 
 type SpriteMode = "bitmap" | "canvas" | "dataURL";
@@ -21,8 +22,7 @@ export interface TileInfo<T = ImageBitmap | HTMLCanvasElement | string> {
 
 export interface Lists {
   all: string[];
-  ui: string[];
-  tiles: string[];
+  [family: string]: string[];
 }
 
 export interface LoadTilesOptions {
@@ -30,6 +30,12 @@ export interface LoadTilesOptions {
   includeBlanks?: boolean;    // garder les tuiles vides/noires (defaut false)
   forceSize?: 256 | 512;      // imposer une taille globale
   onlySheets?: RegExp;        // charger uniquement les feuilles dont l'URL matche
+}
+
+export interface PreloadTilesOptions extends LoadTilesOptions {
+  batchSize?: number; // nombre de feuilles traitées avant de céder la main
+  delayMs?: number;   // délai (ms) entre deux batches
+  onProgress?: (processed: number, total: number) => void;
 }
 
 export interface Config {
@@ -43,7 +49,14 @@ export interface InitOptions {
   /** Merge dans this.cfg (optionnel) */
   config?: Partial<Config>;
   /** Callback à chaque nouvel asset détecté */
-  onAsset?: (url: string, kind: "ui" | "tiles") => void;
+  onAsset?: (url: string, kind: string) => void;
+}
+
+export interface MutationIconTile {
+  tile: TileInfo;
+  offsetX?: number;
+  offsetY?: number;
+  scale?: number;
 }
 
 function isImageUrl(u: string): boolean {
@@ -62,15 +75,96 @@ function fileBase(url: string): string {
   return name.replace(/\.[a-z0-9]+$/i, "");
 }
 
-function isTilesUrl(u: string): boolean {
-  return (
-    /\/assets\/tiles\//i.test(u) ||
-    /(map|plants|allplants|items|seeds|pets|animations|mutations)\.(png|webp)$/i.test(u)
-  );
+function guessFamiliesFromUrl(u: string): string[] {
+  const families: string[] = [];
+  const normalized = u.replace(/^\/+/, "").toLowerCase();
+  if (/(^|\/)ui\//.test(normalized)) families.push("ui");
+  if (/(^|\/)tiles\//.test(normalized) || /(map|plants|allplants|items|seeds|pets|animations|mutations)\.(png|webp)$/i.test(normalized)) {
+    families.push("tiles");
+  }
+  return families;
 }
-function isUiUrl(u: string): boolean {
-  return /\/assets\/ui\//i.test(u);
+
+export interface SpriteFilterConfig {
+  blendMode: GlobalCompositeOperation;
+  colors: string[];
+  alpha?: number;
+  gradientAngle?: number;
+  masked?: boolean;
+  reverse?: boolean;
 }
+
+export const spriteFilters: Record<string, SpriteFilterConfig> = {
+  Gold: {
+    blendMode: "source-atop",
+    colors: ["rgb(255, 215, 0)"],
+    alpha: 0.7,
+  },
+  Rainbow: {
+    blendMode: "color",
+    colors: ["#FF1744", "#FF9100", "#FFEA00", "#00E676", "#2979FF", "#D500F9"],
+    gradientAngle: 130,
+    masked: true,
+    reverse: true,
+  },
+  Wet: {
+    blendMode: "source-atop",
+    colors: ["rgb(128, 128, 255)"],
+    alpha: 0.2,
+  },
+  Chilled: {
+    blendMode: "source-atop",
+    colors: ["rgb(183, 183, 236)"],
+    alpha: 0.5,
+  },
+  Frozen: {
+    blendMode: "source-atop",
+    colors: ["rgb(128, 128, 255)"],
+    alpha: 0.6,
+  },
+  Dawnlit: {
+    blendMode: "source-atop",
+    colors: ["rgb(120, 100, 180)"],
+    alpha: 0.4,
+  },
+  Ambershine: {
+    blendMode: "source-atop",
+    colors: ["rgb(255, 140, 26)", "rgb(230, 92, 26)", "rgb(178, 58, 26)"],
+    alpha: 0.5,
+  },
+  Dawncharged: {
+    blendMode: "source-atop",
+    colors: ["rgb(100, 80, 160)", "rgb(110, 90, 170)", "rgb(120, 100, 180)"],
+    alpha: 0.5,
+  },
+  Ambercharged: {
+    blendMode: "source-atop",
+    colors: ["rgb(167, 50, 30)", "rgb(177, 60, 40)", "rgb(187, 70, 50)"],
+    alpha: 0.5,
+  },
+};
+
+const MUTATION_PRIORITY: MutationName[] = [
+  "Gold",
+  "Rainbow",
+  "Wet",
+  "Chilled",
+  "Frozen",
+  "Dawnlit",
+  "Ambershine",
+  "Dawncharged",
+  "Ambercharged",
+  "Dawnbound",
+  "Amberlit",
+  "Amberbound",
+];
+
+const HIGH_MUTATIONS = new Set([
+  "Dawnlit",
+  "Ambershine",
+  "Dawncharged",
+  "Ambercharged",
+]);
 
 export class SpritesCore {
   /** Configuration (ajuste à la volée si besoin) */
@@ -78,17 +172,17 @@ export class SpritesCore {
     skipAlphaBelow: 1,
     blackBelow: 8,
     tolerance: 0.005,
-    ruleAllplants512: /allplants/i,
+    ruleAllplants512: /allplants|mutation-overlays/i,
   };
 
   private initialized = false;
-  private onAssetCb?: (url: string, kind: "ui" | "tiles") => void;
+  private onAssetCb?: (url: string, kind: string) => void;
   private onMessageListener?: (e: MessageEvent) => void;
 
   // URLs récoltées
-  private ui = new Set<string>();
-  private tiles = new Set<string>();
   private all = new Set<string>();
+  private familyAssets = new Map<string, Set<string>>();
+  private assetFamilies = new Map<string, string[]>();
 
   // Caches de sprites découpés par feuille et par mode
   private tileCacheBitmap = new Map<string, TileInfo<ImageBitmap>[]>();
@@ -96,6 +190,19 @@ export class SpritesCore {
   private tileCacheDataURL = new Map<string, TileInfo<string>[]>();
   // Images UI chargées
   private uiCache = new Map<string, HTMLImageElement>();
+
+  private normalizeFamilies(families?: string[] | null): string[] {
+    const set = new Set<string>();
+    for (const raw of families ?? []) {
+      const normalized = raw?.trim().toLowerCase();
+      if (normalized) set.add(normalized);
+    }
+    return Array.from(set);
+  }
+
+  private familySet(name: string): Set<string> {
+    return this.familyAssets.get(name) ?? new Set();
+  }
 
   // Hooks / sniffers
   private observers: PerformanceObserver[] = [];
@@ -119,8 +226,8 @@ export class SpritesCore {
     console.debug("[Sprites] SpritesCore déjà initialisé", {
       totals: {
         all: this.all.size,
-        ui: this.ui.size,
-        tiles: this.tiles.size,
+        ui: this.familySet("ui").size,
+        tiles: this.familySet("tiles").size,
       },
     });
     return this;
@@ -130,9 +237,8 @@ export class SpritesCore {
     config: this.cfg,
   });
 
-  this.installMainSniffers();
-  this.installWorkerHooks();
-
+    // main sniffers and worker hooks removed; sprite data managed via manifest.
+ 
   this.onMessageListener = (e: MessageEvent) => {
     const d: any = e.data;
     if (d && d.__awc && d.url) this.add(d.url, "worker");
@@ -198,12 +304,38 @@ public destroy(): void {
 
   /** URLs collectées */
   public lists(): Lists {
-    return { all: [...this.all], ui: [...this.ui], tiles: [...this.tiles] };
+    const result: Lists = { all: [...this.all] };
+    for (const [family, assets] of this.familyAssets) {
+      result[family] = [...assets];
+    }
+    const ensureFamily = (name: string) => {
+      if (!result[name]) {
+        result[name] = [...this.familySet(name)];
+      }
+    };
+    ensureFamily("tiles");
+    ensureFamily("ui");
+    return result;
+  }
+
+  public listFamilies(): string[] {
+    return [...this.familyAssets.keys()];
+  }
+
+  public listAssetsForFamily(family: string): string[] {
+    const normalized = family?.trim().toLowerCase();
+    if (!normalized) return [];
+    return [...this.familySet(normalized)];
+  }
+
+  /** Ajout manuel d'un asset connu (ex: manifest) */
+  public registerKnownAsset(url: string, families: string[] = ["tiles"]): boolean {
+    return this.addAsset(url, families);
   }
 
   /** Liste des tilesheets par catégorie de nom (regex sur l'URL) */
   public listTilesByCategory(re: RegExp): string[] {
-    return [...this.tiles].filter(u => re.test(u));
+    return [...this.familySet("tiles")].filter(u => re.test(u));
   }
   public listPlants(): string[] {
     const urls = new Set(this.listTilesByCategory(/plants/i));
@@ -219,7 +351,7 @@ public destroy(): void {
   /** Charge toutes les images UI (retourne Map<basename, HTMLImageElement>) */
   public async loadUI(): Promise<Map<string, HTMLImageElement>> {
     const out = new Map<string, HTMLImageElement>();
-    for (const u of this.ui) {
+    for (const u of this.familySet("ui")) {
       if (!this.uiCache.has(u)) {
         const im = await this.loadImage(u);
         this.uiCache.set(u, im);
@@ -239,26 +371,44 @@ public destroy(): void {
     } = options;
 
     const out = new Map<string, TileInfo<any>[]>();
-    const list = onlySheets ? [...this.tiles].filter(u => onlySheets.test(u)) : [...this.tiles];
+    const tiles = [...this.familySet("tiles")];
+    const list = onlySheets ? tiles.filter(u => onlySheets.test(u)) : tiles;
 
     for (const u of list) {
-      const base = fileBase(u);
-      let cached: TileInfo<any>[] | undefined;
-
-      if (mode === "bitmap") cached = this.tileCacheBitmap.get(u);
-      else if (mode === "canvas") cached = this.tileCacheCanvas.get(u);
-      else cached = this.tileCacheDataURL.get(u);
-
-      if (!cached) {
-        const tiles = await this.sliceOne(u, { mode, includeBlanks, forceSize });
-        if (mode === "bitmap") this.tileCacheBitmap.set(u, tiles as any);
-        else if (mode === "canvas") this.tileCacheCanvas.set(u, tiles as any);
-        else this.tileCacheDataURL.set(u, tiles as any);
-        cached = tiles as any;
-      }
-      out.set(base, cached!);
+      const tiles = await this.ensureTilesForUrl(u, { mode, includeBlanks, forceSize });
+      out.set(fileBase(u), tiles);
     }
     return out;
+  }
+
+  public async preloadTilesGradually(options: PreloadTilesOptions = {}): Promise<void> {
+    const {
+      mode = "bitmap",
+      includeBlanks = false,
+      forceSize,
+      onlySheets,
+      batchSize = 1,
+      delayMs = 40,
+      onProgress,
+    } = options;
+
+    const tiles = [...this.familySet("tiles")];
+    const list = onlySheets ? tiles.filter(u => onlySheets.test(u)) : tiles;
+    const total = list.length;
+    if (!total) return;
+
+    const throttleBatch = Math.max(1, batchSize);
+    const throttleDelay = Math.max(0, delayMs);
+    let processed = 0;
+
+    for (const url of list) {
+      await this.ensureTilesForUrl(url, { mode, includeBlanks, forceSize });
+      processed += 1;
+      onProgress?.(processed, total);
+      if (throttleDelay > 0 && processed < total && processed % throttleBatch === 0) {
+        await this.delay(throttleDelay);
+      }
+    }
   }
 
   /** Raccourcis pratiques */
@@ -272,9 +422,34 @@ public destroy(): void {
     return this.loadTiles({ mode: "bitmap", forceSize: 512 });
   }
 
+  private getCacheForMode(mode: SpriteMode): Map<string, TileInfo<any>[]> {
+    if (mode === "canvas") return this.tileCacheCanvas as Map<string, TileInfo<any>[]>;
+    if (mode === "dataURL") return this.tileCacheDataURL as Map<string, TileInfo<any>[]>;
+    return this.tileCacheBitmap as Map<string, TileInfo<any>[]>;
+  }
+
+  private async ensureTilesForUrl(
+    url: string,
+    opts: { mode: SpriteMode; includeBlanks: boolean; forceSize?: 256 | 512 },
+  ): Promise<TileInfo<any>[]> {
+    const cache = this.getCacheForMode(opts.mode);
+    let cached = cache.get(url);
+    if (cached) return cached;
+    const tiles = await this.sliceOne(url, opts);
+    cache.set(url, tiles as any);
+    return tiles as any;
+  }
+
+  private async delay(ms: number): Promise<void> {
+    if (ms <= 0) return;
+    await new Promise<void>((resolve) => {
+      pageWindow.setTimeout(resolve, ms);
+    });
+  }
+
   /** Récupère un sprite précis (par feuille + index) */
   public async getTile(sheetBase: string, index: number, mode: SpriteMode = "bitmap"): Promise<TileInfo | null> {
-    const url = [...this.tiles].find(u => fileBase(u) === sheetBase);
+    const url = [...this.familySet("tiles")].find(u => fileBase(u) === sheetBase);
     if (!url) return null;
     const map = await this.loadTiles({ mode, onlySheets: new RegExp(sheetBase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\.(png|webp)$", "i") });
     const tiles = map.get(sheetBase) || [];
@@ -294,7 +469,7 @@ public destroy(): void {
   /** Exporte les UI en ZIP (brut, sans découpe) */
   public async zipUI(name = "ui_assets.zip"): Promise<void> {
     const zip = new JSZip();
-    const list = [...this.ui];
+    const list = [...this.familySet("ui")];
     let i = 0;
     for (const u of list) {
       try {
@@ -326,7 +501,7 @@ public destroy(): void {
     const uiFolder = zip.folder("ui");
 
     if (tilesFolder) {
-      for (const url of this.tiles) {
+      for (const url of this.familySet("tiles")) {
         try {
           const tiles = await this.sliceOne(url, {
             mode: "canvas",
@@ -340,34 +515,21 @@ public destroy(): void {
 
           for (const tile of tiles) {
             const canvas = tile.data as HTMLCanvasElement;
-            const tileIndex = ++index;
-            const baseName = `tile_${String(tileIndex).padStart(4, "0")}`;
-
-            const exportVariant = async (
-              suffix: string,
-              label: string,
-              factory: () => HTMLCanvasElement,
-            ): Promise<void> => {
-              try {
-                const variantCanvas = factory();
-                const blob = await new Promise<Blob>((resolve, reject) => {
-                  variantCanvas.toBlob((b) => {
-                    if (!b) {
-                      reject(new Error("toBlob returned null"));
-                      return;
-                    }
-                    resolve(b);
-                  }, "image/png");
-                });
-                sheetFolder.file(`${baseName}${suffix}.png`, blob);
-              } catch (error) {
-                console.warn("[Sprites] Failed to export tile", { url, label, error });
-              }
-            };
-
-            await exportVariant("", "base", () => canvas);
-            await exportVariant("_gold", "gold", () => this.effectGold(tile));
-            await exportVariant("_rainbow", "rainbow", () => this.effectRainbow(tile));
+            const baseName = `tile_${String(++index).padStart(4, "0")}`;
+            try {
+              const blob = await new Promise<Blob>((resolve, reject) => {
+                canvas.toBlob((b) => {
+                  if (!b) {
+                    reject(new Error("toBlob returned null"));
+                    return;
+                  }
+                  resolve(b);
+                }, "image/png");
+              });
+              sheetFolder.file(`${baseName}.png`, blob);
+            } catch (error) {
+              console.warn("[Sprites] Failed to export tile", { url, error });
+            }
           }
         } catch (error) {
           console.warn("[Sprites] Failed to export sheet", { url, error });
@@ -377,7 +539,7 @@ public destroy(): void {
 
     if (uiFolder) {
       let fallbackIndex = 0;
-      for (const url of this.ui) {
+      for (const url of this.familySet("ui")) {
         try {
           const blob = await this.fetchBlob(url);
           const base = decodeURIComponent(url.split("/").pop() || "").replace(/\?.*$/, "");
@@ -392,7 +554,75 @@ public destroy(): void {
     await this.saveZip(zip, name);
   }
 
-  /** Vide les caches */
+  /** Exporte une sélection de tiles avec les filtres (si fournis). */
+  public async exportFilteredTileset(opts: {
+    tiles: TileInfo[];
+    filters?: string[];
+    baseName: string;
+    filename?: string;
+    onProgress?: (processed: number, total: number) => void;
+  }): Promise<void> {
+    const { tiles, filters = [], baseName, filename = `${baseName}_tiles.zip` } = opts;
+    const zip = new JSZip();
+    let index = 0;
+
+    for (const tile of tiles) {
+      const baseCanvas = this.tileToCanvas(tile);
+      let canvas = baseCanvas;
+
+      for (const filterName of filters) {
+        const filtered = this.applyCanvasFilter(canvas, filterName);
+        if (filtered) canvas = filtered;
+      }
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (!b) {
+            reject(new Error("canvas.toBlob returned null"));
+            return;
+          }
+          resolve(b);
+        }, "image/png");
+      });
+
+      zip.file(`${baseName}/tile_${String(++index).padStart(4, "0")}.png`, blob);
+      opts.onProgress?.(index, tiles.length);
+    }
+
+    await this.saveZip(zip, filename);
+  }
+
+  public async exportAssets(opts: {
+    urls: string[];
+    baseName: string;
+    filename?: string;
+    onProgress?: (processed: number, total: number) => void;
+  }): Promise<void> {
+    const { urls, baseName, filename = `${baseName}_assets.zip` } = opts;
+    if (!urls.length) return;
+    const zip = new JSZip();
+    const folder = zip.folder(baseName) ?? zip;
+    let index = 0;
+
+    for (const url of urls) {
+      index++;
+      try {
+        const blob = await this.fetchBlob(url);
+        let name = decodeURIComponent(url.split("/").pop() ?? "");
+        name = name.replace(/\?.*$/, "");
+        if (!name) name = `asset_${String(index).padStart(4, "0")}.png`;
+        folder.file(name, blob);
+      } catch (error) {
+        console.warn("[Sprites] Failed to fetch asset", { url, error });
+      } finally {
+        opts.onProgress?.(index, urls.length);
+      }
+    }
+
+    await this.saveZip(zip, filename);
+  }
+
+/** Vide les caches */
   public clearCaches(): void {
     // Fermer proprement les ImageBitmap
     this.tileCacheBitmap.forEach(arr => arr.forEach(t => (t.data as ImageBitmap).close?.()));
@@ -402,106 +632,230 @@ public destroy(): void {
     this.uiCache.clear();
   }
 
-  /** Applique l’effet Gold sur une tuile — retourne un NOUVEAU canvas. */
-public effectGold(
-    tile: TileInfo<ImageBitmap | HTMLCanvasElement | string>,
-    opts?: { alpha?: number; color?: string }
-    ): HTMLCanvasElement {
-    const srcCan = this.tileToCanvas(tile);
-    const w = srcCan.width, h = srcCan.height;
-
-    const out = document.createElement("canvas");
-    out.width = w; out.height = h;
-    const ctx = out.getContext("2d")!;
-    ctx.imageSmoothingEnabled = false;
-
-    // Dessine le sprite de base
-    ctx.drawImage(srcCan, 0, 0);
-
-    // Applique le tint or (même réglages que ton SMUT)
-    const alpha = opts?.alpha ?? 0.7;
-    const color = opts?.color ?? "rgb(255, 215, 0)";
-
-    ctx.save();
-    ctx.globalCompositeOperation = "source-atop";
-    ctx.globalAlpha = alpha;
-
-    // Dans le jeu ils font un gradient vertical même à 1 couleur → équiv. à un fill plein
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
-
-    return out;
+  public toCanvas(tile: TileInfo<ImageBitmap | HTMLCanvasElement | string>): HTMLCanvasElement {
+    return this.tileToCanvas(tile);
   }
 
-    /** Applique l’effet Rainbow (dégradé masqué + blend 'color' si dispo, sinon 'source-atop') */
-  /** Rainbow identique au jeu (masked + blend 'color' + angle 130°). */
-  public effectRainbow(
-    tile: TileInfo<ImageBitmap | HTMLCanvasElement | string>,
-    opts?: { angle?: number; colors?: string[] }
-    ): HTMLCanvasElement {
-    const srcCan = this.tileToCanvas(tile);
-    const w = srcCan.width, h = srcCan.height;
+  public applyCanvasFilter(canvas: HTMLCanvasElement, filterName: string): HTMLCanvasElement | null {
+    const cfg = spriteFilters[filterName];
+    if (!cfg) return null;
+    const w = canvas.width;
+    const h = canvas.height;
 
     const out = document.createElement("canvas");
-    out.width = w; out.height = h;
+    out.width = w;
+    out.height = h;
     const ctx = out.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(canvas, 0, 0);
 
-    // Sprite de base
-    ctx.drawImage(srcCan, 0, 0);
+    ctx.save();
+    ctx.globalCompositeOperation = cfg.blendMode;
+    if (cfg.alpha != null) ctx.globalAlpha = cfg.alpha;
 
-    // Paramètres strictement identiques à ton script
-    const angle = opts?.angle ?? 130;
-    const colors = opts?.colors ?? ["#FF1744","#FF9100","#FFEA00","#00E676","#2979FF","#D500F9"];
-
-    // 1) Dégradé temporaire (géométrie "angle-90", rayon size/2)
-    const tmp = document.createElement("canvas");
-    tmp.width = w; tmp.height = h;
-    const tctx = tmp.getContext("2d")!;
-    tctx.imageSmoothingEnabled = false;
-
-    const size = w; // dans le jeu/ton script c'est 'size' (tu passais out.width) → tiles carrées
-    const rad = (angle - 90) * Math.PI / 180;
-    const cx = w / 2, cy = h / 2;
-    const x1 = cx - Math.cos(rad) * (size / 2);
-    const y1 = cy - Math.sin(rad) * (size / 2);
-    const x2 = cx + Math.cos(rad) * (size / 2);
-    const y2 = cy + Math.sin(rad) * (size / 2);
-
-    const grad = tctx.createLinearGradient(x1, y1, x2, y2);
-    if (colors.length <= 1) {
-        const c0 = colors[0] ?? "#ffffff";
-        grad.addColorStop(0, c0); grad.addColorStop(1, c0);
+    if (cfg.masked) {
+      const mask = document.createElement("canvas");
+      mask.width = w;
+      mask.height = h;
+      const mctx = mask.getContext("2d")!;
+      this.drawGradient(mctx, w, h, cfg);
+      mctx.globalCompositeOperation = "destination-in";
+      mctx.drawImage(canvas, 0, 0);
+      mctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(mask, 0, 0);
     } else {
-        colors.forEach((c, i) => grad.addColorStop(i / (colors.length - 1), c));
+      this.drawGradient(ctx, w, h, cfg);
     }
-    tctx.fillStyle = grad;
-    tctx.fillRect(0, 0, w, h);
 
-    // 2) Masque: on garde le dégradé là où le sprite est opaque
-    tctx.globalCompositeOperation = "destination-in";
-    tctx.drawImage(srcCan, 0, 0);
-    tctx.globalCompositeOperation = "source-over";
-
-    // 3) Composition finale avec blend 'color' (comme le jeu)
-    ctx.save();
-    ctx.globalCompositeOperation = "color" as GlobalCompositeOperation;
-    ctx.drawImage(tmp, 0, 0);
     ctx.restore();
-
     return out;
   }
 
-
-    /** Helper générique: applique "Gold" ou "Rainbow" selon le nom */
-  public effectApply(
-    name: "Gold" | "Rainbow",
+  public applySpriteFilter(
     tile: TileInfo<ImageBitmap | HTMLCanvasElement | string>,
-    opts?: any
-    ): HTMLCanvasElement {
-    return name === "Gold" ? this.effectGold(tile, opts) : this.effectRainbow(tile, opts);
+    filterName: string,
+  ): HTMLCanvasElement | null {
+    const canvas = this.tileToCanvas(tile);
+    return this.applyCanvasFilter(canvas, filterName);
   }
+
+  public renderPlantWithMutationsNonTall(opts: {
+    baseTile: TileInfo<ImageBitmap | HTMLCanvasElement | string>;
+    mutations: string[];
+    mutationIcons: Record<string, MutationIconTile>;
+  }): HTMLCanvasElement {
+      const { baseTile, mutations, mutationIcons } = opts;
+
+  // 1) Canvas de base
+  let canvas = this.tileToCanvas(baseTile);
+  const size = canvas.width;
+  let ctx = canvas.getContext("2d")!;
+  ctx.imageSmoothingEnabled = false;
+
+  // 2) Mutations triées
+  const ordered = this.sortMutations(mutations);
+
+  // Séparation : celles qui affectent la couleur vs le reste
+  // Séparation : celles qui affectent la couleur vs le reste
+const colorMutations = ordered.filter(
+  (m) =>
+    m === "Gold" ||
+    m === "Rainbow" ||
+    m === "Wet" ||
+    m === "Chilled" ||
+    m === "Frozen" ||
+    m === "Dawnlit" ||
+    m === "Ambershine" ||
+    m === "Dawncharged" ||
+    m === "Ambercharged",
+) as MutationName[];
+
+
+  const iconMutations = ordered.filter(
+    (m) => m !== "Gold" && m !== "Rainbow",   // Gold / Rainbow = que couleur
+  ) as MutationName[];
+
+  // 3) Filtres de couleur : Gold > Rainbow > reste
+  if (colorMutations.length) {
+    canvas = this.applyColorMutations(canvas, colorMutations);
+    ctx = canvas.getContext("2d")!;
+  }
+
+  // 4) Icônes : on dessine avec la liste complète (sans Gold/Rainbow)
+  if (iconMutations.length) {
+    this.drawMutationIconsNonTall(ctx, iconMutations, size, mutationIcons);
+  }
+
+  return canvas;
+}
+
+  private sortMutations(mutations: string[]): MutationName[] {
+    const seen = new Set<MutationName>();
+    for (const raw of mutations) {
+      const key = raw as MutationName;
+      if (MUTATION_PRIORITY.includes(key) && !seen.has(key)) {
+        seen.add(key);
+      }
+    }
+    return Array.from(seen).sort(
+      (a, b) => MUTATION_PRIORITY.indexOf(a) - MUTATION_PRIORITY.indexOf(b),
+    );
+  }
+
+  private applyColorMutations(
+  input: HTMLCanvasElement,
+  mutations: MutationName[],
+): HTMLCanvasElement {
+  if (!mutations.length) return input;
+
+  if (mutations.includes("Gold")) {
+    return this.applyFilterChain(input, ["Gold"]);
+  }
+  if (mutations.includes("Rainbow")) {
+    return this.applyFilterChain(input, ["Rainbow"]);
+  }
+
+  const others = mutations.filter((m) => m !== "Gold" && m !== "Rainbow");
+  return this.applyFilterChain(input, others);
+}
+
+
+  private applyFilterChain(
+    input: HTMLCanvasElement,
+    filters: MutationName[],
+  ): HTMLCanvasElement {
+    let current = input;
+    for (const f of filters) {
+      const next = this.applyCanvasFilter(current, f);
+      if (next) current = next;
+    }
+    return current;
+  }
+
+  private drawMutationIconsNonTall(
+    ctx: CanvasRenderingContext2D,
+    mutations: MutationName[],
+    tileSize: number,
+    mutationIcons: Record<string, MutationIconTile>,
+  ): void {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+
+    for (const m of mutations) {
+      const conf = mutationIcons[m];
+      if (!conf) continue;
+
+      const iconCanvas = this.tileToCanvas(conf.tile);
+      const srcW = iconCanvas.width;
+      const srcH = iconCanvas.height;
+
+      const scale = conf.scale ?? 1;
+      const dstW = tileSize * scale;
+      const dstH = tileSize * scale;
+
+      const baseOffsetY = HIGH_MUTATIONS.has(m) ? -tileSize * 0.25 : 0;
+      const offsetX = (conf.offsetX ?? 0) * tileSize;
+      const offsetY = (conf.offsetY ?? 0) * tileSize + baseOffsetY;
+
+      ctx.drawImage(
+        iconCanvas,
+        0,
+        0,
+        srcW,
+        srcH,
+        offsetX,
+        offsetY,
+        dstW,
+        dstH,
+      );
+    }
+
+    ctx.restore();
+  }
+
+  private drawGradient(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  cfg: SpriteFilterConfig
+): void {
+  const baseColors = cfg.colors.length ? cfg.colors : ["#ffffff"];
+  const colors = cfg.reverse ? [...baseColors].reverse() : baseColors;
+
+  if (cfg.gradientAngle != null) {
+    // Cas Rainbow & co : gradient angulaire
+    const grad = this.makeAngleGradient(ctx, w, h, cfg.gradientAngle);
+
+    if (colors.length === 1) {
+      grad.addColorStop(0, colors[0]);
+      grad.addColorStop(1, colors[0]);
+    } else {
+      colors.forEach((color, idx) => {
+        grad.addColorStop(idx / (colors.length - 1), color);
+      });
+    }
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    return;
+  }
+
+  // Cas normal (Wet, Chilled, etc.) : gradient vertical simple
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  if (colors.length === 1) {
+    grad.addColorStop(0, colors[0]);
+    grad.addColorStop(1, colors[0]);
+  } else {
+    colors.forEach((color, idx) => {
+      grad.addColorStop(idx / (colors.length - 1), color);
+    });
+  }
+
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+}
+
+
 
 
   /* ===================== INTERNE: chargement/découpe ===================== */
@@ -603,7 +957,7 @@ public effectGold(
 
   private async zipTiles(opts: { name: string; mode: SpriteMode; forceSize?: 256 | 512 }): Promise<void> {
     const zip = new JSZip();
-    for (const u of this.tiles) {
+    for (const u of this.familySet("tiles")) {
       const tiles = await this.sliceOne(u, { mode: "canvas", includeBlanks: false, forceSize: opts.forceSize });
       const base = fileBase(u);
       let k = 0;
@@ -614,20 +968,6 @@ public effectGold(
       }
     }
     await this.saveZip(zip, opts.name);
-  }
-
-  /** Teste si un mode de blend est supporté par le Canvas 2D */
-  private supportsBlend(op: GlobalCompositeOperation): boolean {
-    try {
-        const c = document.createElement("canvas");
-        c.width = c.height = 1;
-        const g = c.getContext("2d")!;
-        const before = g.globalCompositeOperation;
-        g.globalCompositeOperation = op as any;
-        const ok = g.globalCompositeOperation === op;
-        g.globalCompositeOperation = before;
-        return ok;
-    } catch { return false; }
   }
 
     /** Convertit tile.data -> Canvas (ImageBitmap/Canvas). Refuse dataURL (string). */
@@ -657,215 +997,51 @@ public effectGold(
 
     /** Crée un gradient linéaire à un angle (deg) couvrant tout le canvas */
   private makeAngleGradient(ctx: CanvasRenderingContext2D, w: number, h: number, angleDeg: number): CanvasGradient {
-    const rad = (angleDeg * Math.PI) / 180;
-    const cx = w / 2, cy = h / 2;
-    const R = Math.hypot(w, h);
-    const x0 = cx - Math.cos(rad) * R, y0 = cy - Math.sin(rad) * R;
-    const x1 = cx + Math.cos(rad) * R, y1 = cy + Math.sin(rad) * R;
-    return ctx.createLinearGradient(x0, y0, x1, y1);
-  }
+  // Comme dans le jeu : angle - 90°, rayon = min(w,h)/2
+  const rad = (angleDeg - 90) * Math.PI / 180;
+  const cx = w / 2;
+  const cy = h / 2;
+  const R = Math.min(w, h) / 2; // et pas hypot(w,h)
+
+  const x0 = cx - Math.cos(rad) * R;
+  const y0 = cy - Math.sin(rad) * R;
+  const x1 = cx + Math.cos(rad) * R;
+  const y1 = cy + Math.sin(rad) * R;
+
+  return ctx.createLinearGradient(x0, y0, x1, y1);
+}
 
 
   /* ===================== SNIFFERS (UI + Tiles) ===================== */
 
-    private add(url: string, _why = ""): void {
+  private add(url: string, _why = ""): void {
+      const families = guessFamiliesFromUrl(url);
+      if (!families.length) return;
+      this.addAsset(url, families);
+    }
+
+  private addAsset(url: string, families: string[] = ["tiles"]): boolean {
     const abs = toAbs(url);
-    if (!isImageUrl(abs) || this.all.has(abs)) return;
+    if (!isImageUrl(abs) || this.all.has(abs)) return false;
 
-    if (isUiUrl(abs)) {
-        this.ui.add(abs); this.all.add(abs);
-        console.debug("[Sprites] Asset UI détecté", { url: abs, totals: this.ui.size });
-        this.onAssetCb?.(abs, "ui");
-    } else if (isTilesUrl(abs)) {
-        this.tiles.add(abs); this.all.add(abs);
-        console.debug("[Sprites] Tilesheet détecté", { url: abs, totals: this.tiles.size });
-        this.onAssetCb?.(abs, "tiles");
-    }
-    }
+    const normalized = this.normalizeFamilies(families);
+    if (!normalized.length) return false;
 
-private installMainSniffers(): void {
-  // <img src=...>
-  try {
-    const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
-    if (desc && !this.patched.imgDesc) {
-      this.patched.imgDesc = desc;
-      Object.defineProperty(HTMLImageElement.prototype, "src", {
-        set: function (this: HTMLImageElement, v: string) {
-          // ⚠ ici on ne touche pas à 'this' (c'est bien l'img)
-          (pageWindow as any).Sprites?.add?.(v, "img");
-          return (desc.set as any).call(this, v);
-        },
-        get: desc.get as any,
-        configurable: true,
-        enumerable: desc.enumerable!,
-      });
+    this.all.add(abs);
+    this.assetFamilies.set(abs, normalized);
 
-      // ---- setAttribute hook (fix) ----
-      const proto = HTMLImageElement.prototype as any;
-      const nativeSetAttr = proto.setAttribute;
-      this.patched.setAttr = nativeSetAttr;
-
-      const self = this;
-      proto.setAttribute = function (this: HTMLImageElement, name: any, value: any) {
-        try {
-          if (String(name).toLowerCase() === "src" && typeof value === "string") {
-            self.add(value, "img-attr");
-          }
-        } catch {}
-        // IMPORTANT : appeler le natif avec le bon 'this'
-        return nativeSetAttr.call(this, name, value);
-      };
-    }
-  } catch {}
-
-  // PerformanceObserver…
-  try {
-    if ("PerformanceObserver" in pageWindow) {
-      const po = new PerformanceObserver((list) => {
-        list.getEntries().forEach((e: PerformanceEntry) => this.add((e as any).name, "po"));
-      });
-      po.observe({ entryTypes: ["resource"] });
-      this.observers.push(po);
-    }
-  } catch {}
-}
-
-
-  private workerPreludeSource(): string {
-    return `
-      (function(){
-        const IMG=/\\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|ktx2|basis)$/i;
-        const isImg=(u)=>{ try{return IMG.test(u)&&!String(u).startsWith('blob:')}catch{return false} };
-        const post=(o)=>{ try{ self.postMessage(Object.assign({__awc:1}, o)); }catch{} };
-
-        const F=self.fetch;
-        if(F){
-          self.fetch=async function(...a){
-            let u=a[0]; try{ u=typeof u==='string'?u:(u&&u.url)||u; }catch{}
-            const r=await F.apply(this,a);
-            try{
-              const ct=(r.headers&&r.headers.get&&r.headers.get('content-type'))||'';
-              if((u&&isImg(u)) || /^image\\//i.test(ct)) post({ url:(typeof u==='string'?u:(u&&u.url)||String(u)), src:'worker:fetch', ct });
-            }catch{}
-            return r;
-          };
-        }
-
-        const CIB=self.createImageBitmap;
-        if(CIB){
-          self.createImageBitmap=async function(b,...rest){
-            try{ if(b&&/^image\\//i.test(b.type)) post({ url:'blob://imagebitmap', src:'worker:cib', ct:b.type }); }catch{}
-            return CIB.call(this,b,...rest);
-          };
-        }
-
-        const IS=self.importScripts;
-        if(IS){
-          self.importScripts=function(...urls){
-            try{ urls.forEach(u=>post({ url:u, src:'worker:importScripts' })); }catch{}
-            return IS.apply(this,urls);
-          };
-        }
-      })();
-    `;
-  }
-
-  private installWorkerHooks(): void {
-    const pageGlobal = pageWindow as any;
-    const sandboxGlobal = pageWindow as any;
-    const isIsolated = pageWindow !== pageWindow;
-
-    const NativeWorker = pageGlobal.Worker as typeof Worker | undefined;
-    const NativeBlob = pageGlobal.Blob as (typeof Blob) | undefined;
-    const pageURL = (pageGlobal.URL ?? URL) as typeof URL;
-    const NativeCreate = pageURL.createObjectURL.bind(pageURL);
-    if (!NativeBlob || !NativeWorker) return;
-
-    if (!this.patched.Blob) {
-      this.patched.Blob = NativeBlob;
-      const OriginalBlob = this.patched.Blob;
-      const self = this;
-
-      const PatchedBlob = function (parts: any[] = [], opts: BlobPropertyBag = {}): Blob {
-        const b = new OriginalBlob!(parts, opts);
-        const type = (opts && opts.type) || "";
-        if (/javascript|ecmascript/i.test(type)) {
-          let ok = true, txt = "";
-          for (const p of parts) { if (typeof p === "string") txt += p; else { ok = false; break; } }
-          if (ok) self.blobText.set(b, txt);
-        }
-        return b;
-      } as any;
-
-      pageGlobal.Blob = PatchedBlob;
-      if (isIsolated) sandboxGlobal.Blob = PatchedBlob;
-
-      // garder au moins le prototype d’instance
-      pageGlobal.Blob.prototype = OriginalBlob!.prototype;
-      if (isIsolated) sandboxGlobal.Blob.prototype = OriginalBlob!.prototype;
+    for (const family of normalized) {
+      let bucket = this.familyAssets.get(family);
+      if (!bucket) {
+        bucket = new Set();
+        this.familyAssets.set(family, bucket);
+      }
+      bucket.add(abs);
     }
 
-    // 2) Patch createObjectURL pour injecter le préambule dans les blob workers
-    if (!this.patched.createObjectURL) {
-      this.patched.createObjectURL = pageURL.createObjectURL;
-      const prelude = this.workerPreludeSource();
-      const self = this;
-      const patchedCreateObjectURL = function (obj: any): string {
-        if (obj instanceof pageGlobal.Blob || obj instanceof Blob) {
-          const type = (obj.type || "").toLowerCase();
-          const txt = self.blobText.get(obj) || "";
-          const looksWorkerJS = /javascript/.test(type) || /onmessage|fetch\(|importScripts/.test(txt);
-          if (looksWorkerJS && txt) {
-            const patched = new NativeBlob([prelude + "\n" + txt + "\n//# sourceURL=sprites-blob.js"], { type: type || "application/javascript" });
-            return NativeCreate(patched);
-          }
-        }
-        return NativeCreate(obj);
-      } as typeof URL.createObjectURL;
-
-      pageURL.createObjectURL = patchedCreateObjectURL;
-      if (isIsolated) URL.createObjectURL = patchedCreateObjectURL;
-    }
-
-    // 3) Wrap Worker(URL) pour injecter le préambule avant import
-    if (!this.patched.Worker) {
-      this.patched.Worker = pageGlobal.Worker;
-      const prelude = this.workerPreludeSource();
-      const self = this;
-      const PatchedWorker = function (url: string | URL, opts?: WorkerOptions): Worker {
-        try {
-          const abs = new URL(String(url), location.href).href;
-          if (!abs.startsWith("blob:")) {
-            const isModule = opts && (opts as WorkerOptions).type === "module";
-            const src = isModule
-              ? `${prelude}\nimport "${abs}";\n//# sourceURL=sprites-wrapper-module.js`
-              : `${prelude}\ntry{importScripts("${abs}")}catch(e){}\n//# sourceURL=sprites-wrapper-classic.js`;
-            const blob = new NativeBlob([src], { type: "text/javascript" });
-            const u = NativeCreate(blob);
-            const w = new (self.patched.Worker as any)(u, isModule ? { type: "module" } : {});
-            self.attachWorkerListener(w);
-            return w;
-          }
-        } catch { /* fallthrough */ }
-        const w = new (self.patched.Worker as any)(url, opts);
-        self.attachWorkerListener(w);
-        return w;
-      } as any;
-
-      pageGlobal.Worker = PatchedWorker;
-      if (isIsolated) sandboxGlobal.Worker = PatchedWorker;
-      (pageGlobal.Worker as any).toString = () => (this.patched.Worker as any).toString();
-      if (isIsolated) (sandboxGlobal.Worker as any).toString = () => (this.patched.Worker as any).toString();
-    }
-  }
-
-  private attachWorkerListener(w: Worker): void {
-    try {
-      w.addEventListener("message", (e: MessageEvent) => {
-        const d: any = e.data;
-        if (d && d.__awc && d.url) this.add(d.url, d.src || "worker");
-      });
-    } catch { /* ignore */ }
+    const kind = normalized[0] ?? "unknown";
+    this.onAssetCb?.(abs, kind);
+    return true;
   }
 
   /* ===================== Utils ZIP ===================== */
@@ -907,12 +1083,5 @@ export function initSprites(options?: InitOptions): SpritesCore {
 
 // Pour pouvoir l'appeler même sans import (depuis console/Tampermonkey)
 shareGlobal("initSprites", initSprites);
-
-/* ------- (Option bundler) -------
-- Si tu construis côté bundler (Vite/Webpack), importe JSZip au lieu du declare :
-    import JSZip from "jszip";
-  et exporte juste:
-    export const Sprites = new SpritesCore();
----------------------------------- */
 
 export default Sprites;

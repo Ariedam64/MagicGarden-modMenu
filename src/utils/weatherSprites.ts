@@ -1,6 +1,6 @@
 import { Sprites } from "../core/sprite";
-import { ensureSpritesReady } from "../core/spriteBootstrap";
 import { tileRefsAnimations } from "../data/hardcoded-data.clean";
+import { ensureSpritesReady } from "../core/spriteBootstrap";
 
 export type WeatherSpriteOptions = {
   size?: number;

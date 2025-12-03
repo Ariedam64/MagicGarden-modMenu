@@ -1,6 +1,7 @@
-import { Sprites, type TileInfo } from "../core/sprite";
-import { ensureSpritesReady } from "../core/spriteBootstrap";
+import { Sprites } from "../core/sprite";
+import { ensureSpritesReady } from "../services/assetManifest";
 import { petCatalog } from "../data/hardcoded-data.clean.js";
+import { loadTileSheet, clearTileSheetCache, normalizeSheetBase } from "./tileSheet.js";
 
 export type PetSpriteVariant = "normal" | "gold" | "rainbow";
 
@@ -44,11 +45,7 @@ function getPetSheetBases(): string[] {
     /* ignore */
   }
 
-  const bases = Array.from(urls, (url) => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  });
+  const bases = Array.from(urls, (url) => normalizeSheetBase(url));
 
   petSheetBasesCache = bases;
   return bases;
@@ -58,6 +55,7 @@ function resetCaches(): void {
   spriteCache.clear();
   spritePromises.clear();
   petSheetBasesCache = null;
+  clearTileSheetCache();
 }
 
 function ensureListener(): void {
@@ -107,29 +105,10 @@ async function fetchPetSprite(species: string, variant: PetSpriteVariant): Promi
 
   for (const base of baseCandidates) {
     try {
-      const tile = await Sprites.getTile(base, index, "canvas") as TileInfo<HTMLCanvasElement> | null;
+      const tiles = await loadTileSheet(base);
+      const tile = tiles.find((t) => t.index === index);
       if (!tile) continue;
-      const data = tile.data;
-      if (!(data instanceof HTMLCanvasElement) || data.width === 0 || data.height === 0) {
-        continue;
-      }
-
-      let canvas: HTMLCanvasElement | null = null;
-      if (variant === "gold" && typeof Sprites.effectGold === "function") {
-        canvas = Sprites.effectGold(tile);
-      } else if (variant === "rainbow" && typeof Sprites.effectRainbow === "function") {
-        canvas = Sprites.effectRainbow(tile);
-      } else {
-        const copy = document.createElement("canvas");
-        copy.width = data.width;
-        copy.height = data.height;
-        const ctx = copy.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(data, 0, 0);
-        canvas = copy;
-      }
-
+      const canvas = Sprites.toCanvas(tile);
       if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
       return canvas.toDataURL();
     } catch {

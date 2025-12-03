@@ -208,6 +208,8 @@ let decorStockByName = new Map<string, number>();           // display name -> q
 let decorSourceCache: DecorItem[] = [];                     // snapshot des decors au lancement
 let _decorDeleteAbort: AbortController | null = null;
 let _decorDeleteBusy = false;
+let _decorDeletePaused = false;
+let _decorDeletePauseResolver: (() => void) | null = null;
 
 // ------ US number formatting ------
 const NF_US = new Intl.NumberFormat("en-US");
@@ -297,14 +299,26 @@ function allocateForRequestedName(
 
 let _seedDeleteAbort: AbortController | null = null;
 let _seedDeleteBusy = false;
+let _seedDeletePaused = false;
+let _seedDeletePauseResolver: (() => void) | null = null;
+
+export const DEFAULT_SEED_DELETE_DELAY_MS = 35;
 
 type DeleteOpts = {
   selection?: { name: string; qty: number }[]; // sinon on lit selectedMap
-  batchSize?: number;                           // par défaut 25
-  delayMs?: number;                             // par défaut 16ms
+  delayMs?: number;                             // par défaut 35ms
   keepSelection?: boolean;                      // false => on clear à la fin
   onProgress?: (info: { done: number; total: number; species: string; remainingForSpecies: number }) => void;
 };
+
+async function waitSeedPause() {
+  while (_seedDeletePaused) {
+    await new Promise<void>((resolve) => {
+      _seedDeletePauseResolver = resolve;
+    });
+    _seedDeletePauseResolver = null;
+  }
+}
 
 /** Supprime les graines sélectionnées en appelant PlayerService.wish(species) autant de fois que qty. */
 export async function deleteSelectedSeeds(opts: DeleteOpts = {}) {
@@ -313,8 +327,7 @@ export async function deleteSelectedSeeds(opts: DeleteOpts = {}) {
     return;
   }
 
-  const batchSize = Math.max(1, Math.floor(opts.batchSize ?? 25));
-  const delayMs   = Math.max(0, Math.floor(opts.delayMs ?? 16));
+  const delayMs   = Math.max(0, Math.floor(opts.delayMs ?? DEFAULT_SEED_DELETE_DELAY_MS));
 
   // 1) Lire la sélection (ou utiliser celle passée en param)
   const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedMap.values()))
@@ -374,22 +387,24 @@ export async function deleteSelectedSeeds(opts: DeleteOpts = {}) {
     await toastSimple("Seed deleter", `Deleting ${formatNum(total)} seeds across ${tasks.length} species...`, "info");
 
     let done = 0;
+    let successfulDeletes = 0;
     for (const t of tasks) {
       let remaining = t.qty;
       while (remaining > 0) {
         if (abort.signal.aborted) throw new Error("Deletion cancelled.");
+        await waitDecorPause();
+        await waitSeedPause();
 
-        const n = Math.min(batchSize, remaining);
-        // on séquence (évite de flood)
-        for (let i = 0; i < n; i++) {
-          try {
-            await PlayerService.wish(t.species);
-          } catch (err) {
-          }
+        let attemptSucceeded = false;
+        try {
+          await PlayerService.wish(t.species);
+          attemptSucceeded = true;
+        } catch (err) {
         }
 
-        done += n;
-        remaining -= n;
+        if (attemptSucceeded) successfulDeletes += 1;
+        done += 1;
+        remaining -= 1;
 
         try {
           opts.onProgress?.({ done, total, species: t.species, remainingForSpecies: remaining });
@@ -399,6 +414,7 @@ export async function deleteSelectedSeeds(opts: DeleteOpts = {}) {
         } catch {}
 
         if (delayMs > 0 && remaining > 0) await sleep(delayMs);
+
       }
     }
 
@@ -408,19 +424,29 @@ export async function deleteSelectedSeeds(opts: DeleteOpts = {}) {
       window.dispatchEvent(new CustomEvent("qws:seeddeleter:done", { detail: { total, speciesCount: tasks.length } }));
     } catch {}
 
-    await toastSimple("Seed deleter", `Deleted ${formatNum(total)} seeds (${tasks.length} species).`, "success");
+    if (successfulDeletes > 0) {
+      await toastSimple("Seed deleter", `Deleted ${formatNum(successfulDeletes)} seeds (${tasks.length} species).`, "success");
+    } else {
+      await toastSimple("Seed deleter", "No seeds were deleted (requests failed).", "info");
+    }
   } catch (e: any) {
     const msg = e?.message || "Deletion failed.";
     try { window.dispatchEvent(new CustomEvent("qws:seeddeleter:error", { detail: { message: msg } })); } catch {}
     await toastSimple("Seed deleter", msg, "error");
   } finally {
     _seedDeleteBusy = false;
+    _seedDeletePaused = false;
     _seedDeleteAbort = null;
+    _seedDeletePauseResolver?.();
+    _seedDeletePauseResolver = null;
   }
 }
 
 export function cancelSeedDeletion() {
   try {
+    _seedDeletePaused = false;
+    _seedDeletePauseResolver?.();
+    _seedDeletePauseResolver = null;
     _seedDeleteAbort?.abort();
   } catch (err) {
   }
@@ -428,13 +454,32 @@ export function cancelSeedDeletion() {
 export function isSeedDeletionRunning() {
   return _seedDeleteBusy;
 }
+export function pauseSeedDeletion() {
+  if (!_seedDeleteBusy || _seedDeletePaused) return;
+  _seedDeletePaused = true;
+  try {
+    window.dispatchEvent(new CustomEvent("qws:seeddeleter:paused"));
+  } catch {}
+}
+export function resumeSeedDeletion() {
+  if (!_seedDeletePaused) return;
+  _seedDeletePaused = false;
+  _seedDeletePauseResolver?.();
+  _seedDeletePauseResolver = null;
+  try {
+    window.dispatchEvent(new CustomEvent("qws:seeddeleter:resumed"));
+  } catch {}
+}
+export function isSeedDeletionPaused() {
+  return _seedDeletePaused;
+}
 
 /* Bridge : si ton UI envoie déjà `qws:seeddeleter:apply`, on déclenche la suppression. */
 try {
   window.addEventListener("qws:seeddeleter:apply", async (e: any) => {
     try {
       const selection = Array.isArray(e?.detail?.selection) ? e.detail.selection : undefined;
-      await deleteSelectedSeeds({ selection, batchSize: 25, delayMs: 16, keepSelection: false });
+      await deleteSelectedSeeds({ selection, delayMs: 35, keepSelection: false });
     } catch {}
   });
 } catch {}
@@ -1230,12 +1275,23 @@ async function findFirstEmptySlot(): Promise<{ tileType: "Dirt" | "Boardwalk"; i
   return null;
 }
 
+export const DEFAULT_DECOR_DELETE_DELAY_MS = 35;
+
 type DecorDeleteOpts = {
   selection?: DecorSelection[];
-  delayMs?: number;
+  delayMs?: number; // par défaut 35ms
   keepSelection?: boolean;
   onProgress?: (info: { done: number; total: number; decorId: string; remainingForDecor: number }) => void;
 };
+
+async function waitDecorPause() {
+  while (_decorDeletePaused) {
+    await new Promise<void>((resolve) => {
+      _decorDeletePauseResolver = resolve;
+    });
+    _decorDeletePauseResolver = null;
+  }
+}
 
 export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
   if (_decorDeleteBusy) {
@@ -1243,7 +1299,7 @@ export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
     return;
   }
 
-  const delayMs = Math.max(0, Math.floor(opts.delayMs ?? 25));
+  const delayMs = Math.max(0, Math.floor(opts.delayMs ?? DEFAULT_DECOR_DELETE_DELAY_MS));
 
   const selection = (opts.selection && Array.isArray(opts.selection) ? opts.selection : Array.from(selectedDecorMap.values()))
     .map(s => ({ name: s.name, decorId: s.decorId, qty: Math.max(0, Math.floor(s.qty || 0)) }))
@@ -1293,7 +1349,9 @@ export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
         if (abort.signal.aborted) throw new Error("Deletion cancelled.");
 
         try { await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0); } catch {}
+        if (delayMs > 0) await sleep(delayMs);
         try { await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType); } catch {}
+        if (delayMs > 0) await sleep(delayMs);
 
         done += 1;
         remaining -= 1;
@@ -1305,7 +1363,6 @@ export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
           }));
         } catch {}
 
-        if (delayMs > 0 && remaining > 0) await sleep(delayMs);
       }
     }
 
@@ -1322,15 +1379,42 @@ export async function deleteSelectedDecor(opts: DecorDeleteOpts = {}) {
     await toastSimple("Decor deleter", msg, "error");
   } finally {
     _decorDeleteBusy = false;
+    _decorDeletePaused = false;
     _decorDeleteAbort = null;
+    _decorDeletePauseResolver?.();
+    _decorDeletePauseResolver = null;
   }
 }
 
 export function cancelDecorDeletion() {
-  try { _decorDeleteAbort?.abort(); } catch {}
+  try {
+    _decorDeletePaused = false;
+    _decorDeletePauseResolver?.();
+    _decorDeletePauseResolver = null;
+    _decorDeleteAbort?.abort();
+  } catch {}
 }
 export function isDecorDeletionRunning() {
   return _decorDeleteBusy;
+}
+export function pauseDecorDeletion() {
+  if (!_decorDeleteBusy || _decorDeletePaused) return;
+  _decorDeletePaused = true;
+  try {
+    window.dispatchEvent(new CustomEvent("qws:decordeleter:paused"));
+  } catch {}
+}
+export function resumeDecorDeletion() {
+  if (!_decorDeletePaused) return;
+  _decorDeletePaused = false;
+  _decorDeletePauseResolver?.();
+  _decorDeletePauseResolver = null;
+  try {
+    window.dispatchEvent(new CustomEvent("qws:decordeleter:resumed"));
+  } catch {}
+}
+export function isDecorDeletionPaused() {
+  return _decorDeletePaused;
 }
 
 export async function openDecorSelectorFlow(setWindowVisible?: (v: boolean) => void) {
@@ -1389,6 +1473,9 @@ export const MiscService = {
   deleteSelectedSeeds,
   cancelSeedDeletion,
   isSeedDeletionRunning,
+  pauseSeedDeletion,
+  resumeSeedDeletion,
+  isSeedDeletionPaused,
 
   getCurrentSeedSelection(): SeedSelection[] {
     return Array.from(selectedMap.values());
@@ -1403,6 +1490,9 @@ export const MiscService = {
   deleteSelectedDecor,
   cancelDecorDeletion,
   isDecorDeletionRunning,
+  pauseDecorDeletion,
+  resumeDecorDeletion,
+  isDecorDeletionPaused,
 
   getCurrentDecorSelection(): DecorSelection[] {
     return Array.from(selectedDecorMap.values());

@@ -8,7 +8,8 @@ import {
   weatherCatalog,
 } from "../../data/hardcoded-data.clean";
 import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../core/spriteBootstrap";
+import { ensureSpritesReady } from "../../services/assetManifest";
+import { loadTileSheet } from "../../utils/tileSheet";
 import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/weatherSprites";
 import { formatPrice } from "../../utils/format";
 import { StatsService } from "../../services/stats";
@@ -28,17 +29,27 @@ const formatInt = (value: number) => NF_INT.format(Math.max(0, Math.floor(value 
 
 const DURATION_ABILITIES = new Set([
   "egggrowthboost",
+  "egggrowthboostii_new",
   "egggrowthboostii",
-  "egggrowthboostiii",
   "plantgrowthboost",
   "plantgrowthboostii",
 ]);
 
-const XP_ABILITIES = new Set(["petxpboost", "petxpboostii"]);
+const XP_ABILITIES = new Set([
+  "petxpboost",
+  "petxpboostii",
+  "petageboost",
+  "petageboostii",
+]);
 
 const STRENGTH_ABILITIES = new Set(["pethatchsizeboost", "pethatchsizeboostii"]);
 
-const HUNGER_ABILITIES = new Set(["hungerrestore", "hungerrestoreii"]);
+const HUNGER_ABILITIES = new Set([
+  "hungerrestore",
+  "hungerrestoreii",
+  "hungerboost",
+  "hungerboostii",
+]);
 
 type GardenStatsShape = StatsSnapshot["garden"];
 type ShopStatsShape = StatsSnapshot["shops"];
@@ -940,8 +951,10 @@ async function fetchPetSprite(species: string): Promise<string | null> {
 
   for (const base of baseCandidates) {
     try {
-      const tile = await Sprites.getTile(base, index, "canvas");
-      const canvas = tile?.data as HTMLCanvasElement | undefined;
+      const tiles = await loadTileSheet(base);
+      const tile = tiles.find((t) => t.index === index);
+      if (!tile) continue;
+      const canvas = Sprites.toCanvas(tile);
       if (canvas && canvas.width > 0 && canvas.height > 0) {
         const copy = document.createElement("canvas");
         copy.width = canvas.width;

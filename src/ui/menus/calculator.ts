@@ -1,13 +1,14 @@
 // src/ui/menus/calculator.ts
 import { addStyle } from "../../core/dom";
 import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../core/spriteBootstrap";
+import { ensureSpritesReady } from "../../services/assetManifest";
 import {
   coin,
   mutationCatalog,
   plantCatalog,
   tileRefsMutationLabels,
 } from "../../data/hardcoded-data.clean";
+import { loadTileSheet } from "../../utils/tileSheet";
 import { DefaultPricing, estimateProduceValue } from "../../utils/calculators";
 import {
   createPlantSprite,
@@ -709,8 +710,10 @@ async function fetchPlantSpriteCanvas(seedKey: string): Promise<HTMLCanvasElemen
 
   for (const base of bases) {
     try {
-      const tile = await Sprites.getTile(base, index, "canvas");
-      const canvas = tile?.data as HTMLCanvasElement | undefined;
+      const tiles = await loadTileSheet(base);
+      const tile = tiles.find((t) => t.index === index);
+      if (!tile) continue;
+      const canvas = Sprites.toCanvas(tile);
       if (canvas && canvas.width > 0 && canvas.height > 0) {
         const copy = document.createElement("canvas");
         copy.width = canvas.width;
@@ -769,7 +772,7 @@ async function loadPlantSpriteCanvasForVariant(
     size: canvas.width,
     data: canvas,
   } as const;
-  return variant === "gold" ? Sprites.effectGold(tileInfo) : Sprites.effectRainbow(tileInfo);
+  return Sprites.toCanvas(tileInfo);
 }
 
 function loadPlantSpriteVariant(seedKey: string, variant: ColorVariant): Promise<string | null> {
@@ -821,8 +824,10 @@ function loadMutationSprite(mutation: NormalizedMutation): Promise<string | null
     const index = tileRef > 0 ? tileRef - 1 : tileRef;
     for (const base of bases) {
       try {
-        const tile = await Sprites.getTile(base, index, "canvas");
-        const canvas = tile?.data as HTMLCanvasElement | undefined;
+        const tiles = await loadTileSheet(base);
+        const tile = tiles.find((t) => t.index === index);
+        if (!tile) continue;
+        const canvas = Sprites.toCanvas(tile);
         if (canvas && canvas.width > 0 && canvas.height > 0) {
           const copy = document.createElement("canvas");
           copy.width = canvas.width;

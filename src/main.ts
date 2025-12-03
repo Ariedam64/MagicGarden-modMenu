@@ -15,16 +15,22 @@ import { renderEditorMenu } from "./ui/menus/editor";
 import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
 
+import { ensureSpritesReady } from "./services/assetManifest";
+import { prefetchManifest, recordAssetUrlHint } from "./services/assetManifest";
+
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
-import { initSprites, Sprites  } from "./core/sprite";
-import { ensureSpritesReady } from "./core/spriteBootstrap";
+import { initSprites  } from "./core/sprite";
 import { EditorService } from "./services/editor";
+
+import { initGameVersion } from "./utils/gameVersion";
 
 (async function () {
   "use strict";
 
   installPageWebSocketHook();
+  initGameVersion();
+  void prefetchManifest({ registerSprites: true, waitForVersionMs: 3_000 });
 
   initSprites({
     config: {
@@ -32,10 +38,9 @@ import { EditorService } from "./services/editor";
       skipAlphaBelow: 1,
       tolerance: 0.005,
     },
-    onAsset: (url, kind) => {
-      window.dispatchEvent(new CustomEvent("mg:sprite-detected", { detail: { url, kind } }));
-      // ex: logger / store
-      // console.log(`[Sprites] ${kind}:`, url);
+    onAsset: (url) => {
+      recordAssetUrlHint(url);
+      void prefetchManifest({ registerSprites: true });
     },
   });
 
@@ -70,3 +75,4 @@ import { EditorService } from "./services/editor";
   antiAfk.start();
 
 })();
+
