@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.22
+// @version      2.7.23
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19199,7 +19199,7 @@
     }
   };
 
-  // src/utils/tileSheet.ts
+  // src/utils/tileSheets.ts
   var sheetCache = /* @__PURE__ */ new Map();
   var escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   function clearTileSheetCache() {
@@ -28876,6 +28876,29 @@ next: ${next}`;
     return null;
   }
 
+  // src/utils/tileSheet.ts
+  var sheetCache2 = /* @__PURE__ */ new Map();
+  var escapeRegExp2 = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function normalizeSheetBase2(urlOrBase) {
+    const clean = urlOrBase.split(/[?#]/)[0] ?? urlOrBase;
+    const file = clean.split("/").pop() ?? clean;
+    return file.replace(/\.[^.]+$/, "");
+  }
+  async function loadTileSheet2(base) {
+    const key2 = base.toLowerCase();
+    if (sheetCache2.has(key2)) return sheetCache2.get(key2);
+    const regex = new RegExp(`${escapeRegExp2(base)}\\.(png|webp)$`, "i");
+    const promise = Sprites.loadTiles({ mode: "canvas", onlySheets: regex }).then((map2) => {
+      for (const [sheetBase, tiles] of map2.entries()) {
+        if (sheetBase.toLowerCase() === key2) return tiles ?? [];
+      }
+      const direct = map2.get(base);
+      return direct ?? [];
+    }).catch(() => []);
+    sheetCache2.set(key2, promise);
+    return promise;
+  }
+
   // src/ui/menus/debug-data-sprites.ts
   var COLOR_FILTERS = ["None", "Gold", "Rainbow"];
   var CONDITION_MUTATION_KEYS = ["None", "Wet", "Chilled", "Frozen"];
@@ -29219,7 +29242,7 @@ next: ${next}`;
       exportStatus.textContent = "Preparing export...";
       try {
         if (hasTiles) {
-          const base = normalizeSheetBase(currentTilesheetUrl);
+          const base = normalizeSheetBase2(currentTilesheetUrl);
           const filters = buildFilterQueue();
           await Sprites.exportFilteredTileset({
             tiles: currentTiles,
@@ -29390,8 +29413,8 @@ next: ${next}`;
       }
       if (isTileSheetView) {
         const sheetUrl = assets[0];
-        const base = normalizeSheetBase(sheetUrl);
-        const tiles = await loadTileSheet(base);
+        const base = normalizeSheetBase2(sheetUrl);
+        const tiles = await loadTileSheet2(base);
         currentTilesheetUrl = sheetUrl;
         currentTiles = tiles;
         tileCount = tiles.length;
@@ -29533,7 +29556,7 @@ next: ${next}`;
   }
   async function loadMutationIcons() {
     const icons = {};
-    const tiles = await loadTileSheet("mutations");
+    const tiles = await loadTileSheet2("mutations");
     const TILE_REF_TO_MUTATION_NAME = {
       Wet: "Wet",
       Chilled: "Chilled",
@@ -30283,7 +30306,7 @@ next: ${next}`;
     if (index == null) return null;
     for (const base of bases) {
       try {
-        const tiles = await loadTileSheet(base);
+        const tiles = await loadTileSheet2(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
@@ -30430,7 +30453,7 @@ next: ${next}`;
     const index = toTileIndex3(entry.tileRef, base ? [base] : []);
     if (index == null || !base) return null;
     try {
-      const tiles = await loadTileSheet(base);
+      const tiles = await loadTileSheet2(base);
       const tile = tiles.find((t) => t.index === index);
       if (!tile) return null;
       const canvas = Sprites.toCanvas(tile);
@@ -33903,7 +33926,7 @@ next: ${next}`;
     if (index == null) return null;
     for (const base of bases) {
       try {
-        const tiles = await loadTileSheet(base);
+        const tiles = await loadTileSheet2(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
@@ -33992,7 +34015,7 @@ next: ${next}`;
       const index = tileRef > 0 ? tileRef - 1 : tileRef;
       for (const base of bases) {
         try {
-          const tiles = await loadTileSheet(base);
+          const tiles = await loadTileSheet2(base);
           const tile = tiles.find((t) => t.index === index);
           if (!tile) continue;
           const canvas = Sprites.toCanvas(tile);
@@ -38126,7 +38149,7 @@ next: ${next}`;
     }
     for (const base of baseCandidates) {
       try {
-        const tiles = await loadTileSheet(base);
+        const tiles = await loadTileSheet2(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
