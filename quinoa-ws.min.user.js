@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.23
+// @version      2.7.25
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17069,8 +17069,7 @@
       blendMode: "color",
       colors: ["#FF1744", "#FF9100", "#FFEA00", "#00E676", "#2979FF", "#D500F9"],
       gradientAngle: 130,
-      masked: true,
-      reverse: true
+      masked: true
     },
     Wet: {
       blendMode: "source-atop",
