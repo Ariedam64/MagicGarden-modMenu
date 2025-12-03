@@ -1,5 +1,5 @@
 import { Sprites } from "../core/sprite";
-import { loadTileSheet, uniqueBases, clearTileSheetCache } from "./tileSheet"
+import { loadTileSheet, uniqueBases, clearTileSheetCache } from "./tileSheets";
 import { ensureSpritesReady } from "../services/assetManifest";
 import {
   plantCatalog,
