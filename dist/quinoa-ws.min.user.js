@@ -22740,12 +22740,12 @@
   function getActionButton() {
     if (typeof document === "undefined") return null;
     const primaryButton = document.querySelector(
-      "button.chakra-button.css-1f6o5y1"
+      "button.chakra-button.css-w004xu"
     );
     if (primaryButton) return primaryButton;
     const growButtons = Array.from(
       document.querySelectorAll(
-        "button.chakra-button.css-h3d7a8"
+        "button.chakra-button.css-35ruvm"
       )
     );
     return growButtons.find(
@@ -22871,11 +22871,6 @@
     }
     const qty = extractQuantity(currentIndex);
     if (!force && qty === lastLoggedQuantity) return;
-    if (qty == null) {
-      console.log(`[InventorySelection] Quantit\xE9 inconnue pour l'index ${currentIndex}.`);
-    } else {
-      console.log(`[InventorySelection] Quantit\xE9 de l'item s\xE9lectionn\xE9 (${currentIndex}) : ${qty}`);
-    }
     updateButtonQuantity(qty);
     lastLoggedQuantity = qty;
   }
@@ -22883,7 +22878,6 @@
     try {
       return await Atoms.inventory.myInventory.get();
     } catch (error) {
-      console.warn("[InventorySelection] Impossible de r\xE9cup\xE9rer l'inventaire", error);
       return null;
     }
   }
@@ -22892,7 +22886,6 @@
       const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
       return typeof value === "number" ? value : null;
     } catch (error) {
-      console.warn("[InventorySelection] Impossible de r\xE9cup\xE9rer l'index s\xE9lectionn\xE9", error);
       return null;
     }
   }
@@ -22908,7 +22901,6 @@
         logQuantity();
       });
     } catch (error) {
-      console.warn("[InventorySelection] \xC9chec de l'abonnement \xE0 myInventory", error);
     }
     try {
       await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.onChange((next) => {
@@ -22921,7 +22913,6 @@
         logQuantity(true);
       });
     } catch (error) {
-      console.warn("[InventorySelection] \xC9chec de l'abonnement \xE0 myPossiblyNoLongerValidSelectedItemIndex", error);
     }
   }
 
