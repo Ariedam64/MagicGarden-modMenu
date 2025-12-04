@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.30
+// @version      2.7.32
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5479,6 +5479,445 @@
     img64: "data:image/png;base64,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"
   };
 
+  // src/utils/localStorage.ts
+  var ARIES_STORAGE_KEY = "aries_mod";
+  var ARIES_STORAGE_VERSION = 1;
+  var DEFAULT_ARIES_STORAGE = {
+    version: ARIES_STORAGE_VERSION
+  };
+  var LEGACY_STATIC_KEYS = [
+    "aries_storage",
+    "qws:stats:v1",
+    "mg.customRooms",
+    "qws:pets:overrides:v1",
+    "qws:pets:ui:v1",
+    "qws:pets:teams:v1",
+    "qws:pets:teamSearch:v1",
+    "qws:petAlerts:v1",
+    "qws:pets:abilityLogs:v1",
+    "qws:shop:notifs:v1",
+    "qws:shop:notifs:rules.v1",
+    "qws:weather:notifs:v1",
+    "qws:notifier:loopDefaults.v1",
+    "qws:player:ghostMode",
+    "qws:ghost:delayMs",
+    "qws:autoReco:onNewSession",
+    "qws:autoReco:delayMs",
+    "qws:locker:restrictions.v1",
+    "garden.locker.state.v2",
+    "qws:editor:saved-gardens",
+    "qws:editor:enabled",
+    "qws:activityLogs:history:v1",
+    "qws:activityLog:filter",
+    "qws:alerts:audio:settings:v1",
+    "qws:alerts:audio:library:v1",
+    "soundEffectsVolumeAtom",
+    "qws:pos",
+    "qws:collapsed",
+    "qws:hidden",
+    "mg-mod.inventory.sortKey",
+    "mg-mod.inventory.sortDirection",
+    "mg-mod.inventory.showValues"
+  ];
+  var LEGACY_PREFIXES = [
+    "qws:keybind:",
+    "qws:keybind-hold:",
+    "qws:hk:petteam:use:",
+    "qws:win:",
+    "menu:"
+  ];
+  var STATIC_LEGACY_KEYS = [
+    {
+      legacyKey: "qws:stats:v1",
+      apply: (raw, r) => {
+        const flat = unwrapNestedSnapshot(parseSafe(raw));
+        r.stats = flat;
+      }
+    },
+    { legacyKey: "mg.customRooms", apply: (raw, r) => r.room = mergeSection(r.room, { customRooms: parseSafe(raw) }) },
+    { legacyKey: "qws:pets:overrides:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { overrides: parseSafe(raw) }) },
+    { legacyKey: "qws:pets:ui:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { ui: parseSafe(raw) }) },
+    { legacyKey: "qws:pets:teams:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { teams: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:pets:teamSearch:v1",
+      apply: (raw, r) => r.pets = mergeSection(r.pets, { teamSearch: parseSafe(raw) })
+    },
+    { legacyKey: "qws:petAlerts:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { alerts: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:pets:abilityLogs:v1",
+      apply: (raw, r) => r.pets = mergeSection(r.pets, { abilityLogs: parseSafe(raw) })
+    },
+    { legacyKey: "qws:shop:notifs:v1", apply: (raw, r) => r.notifier = mergeSection(r.notifier, { prefs: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:shop:notifs:rules.v1",
+      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { rules: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:weather:notifs:v1",
+      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { weatherPrefs: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:notifier:loopDefaults.v1",
+      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { loopDefaults: parseSafe(raw) })
+    },
+    { legacyKey: "qws:player:ghostMode", apply: (raw, r) => r.misc = mergeSection(r.misc, { ghostMode: parseSafe(raw) }) },
+    { legacyKey: "qws:ghost:delayMs", apply: (raw, r) => r.misc = mergeSection(r.misc, { ghostDelayMs: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:autoReco:onNewSession",
+      apply: (raw, r) => r.misc = mergeSection(r.misc, { autoRecoEnabled: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:autoReco:delayMs",
+      apply: (raw, r) => r.misc = mergeSection(r.misc, { autoRecoDelayMs: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:locker:restrictions.v1",
+      apply: (raw, r) => r.locker = mergeSection(r.locker, { restrictions: parseSafe(raw) })
+    },
+    { legacyKey: "garden.locker.state.v2", apply: (raw, r) => r.locker = mergeSection(r.locker, { state: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:editor:saved-gardens",
+      apply: (raw, r) => r.editor = mergeSection(r.editor, { savedGardens: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:editor:enabled",
+      apply: (raw, r) => r.editor = mergeSection(r.editor, { enabled: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:activityLogs:history:v1",
+      apply: (raw, r) => r.activityLog = mergeSection(r.activityLog, { history: parseSafe(raw) })
+    },
+    { legacyKey: "qws:activityLog:filter", apply: (raw, r) => r.activityLog = mergeSection(r.activityLog, { filter: parseSafe(raw) }) },
+    {
+      legacyKey: "qws:alerts:audio:settings:v1",
+      apply: (raw, r) => r.audio = mergeSection(r.audio, { settings: parseSafe(raw) })
+    },
+    {
+      legacyKey: "qws:alerts:audio:library:v1",
+      apply: (raw, r) => r.audio = mergeSection(r.audio, { library: parseSafe(raw) })
+    },
+    {
+      legacyKey: "soundEffectsVolumeAtom",
+      apply: (raw, r) => r.audio = mergeSection(r.audio, { sfxVolumeAtom: parseSafe(raw) })
+    },
+    { legacyKey: "qws:pos", apply: (raw, r) => r.hud = mergeSection(r.hud, { pos: parseSafe(raw) }) },
+    { legacyKey: "qws:collapsed", apply: (raw, r) => r.hud = mergeSection(r.hud, { collapsed: parseSafe(raw) }) },
+    { legacyKey: "qws:hidden", apply: (raw, r) => r.hud = mergeSection(r.hud, { hidden: parseSafe(raw) }) },
+    {
+      legacyKey: "mg-mod.inventory.sortKey",
+      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { sortKey: parseSafe(raw) })
+    },
+    {
+      legacyKey: "mg-mod.inventory.sortDirection",
+      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { sortDirection: parseSafe(raw) })
+    },
+    {
+      legacyKey: "mg-mod.inventory.showValues",
+      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { showValues: parseSafe(raw) })
+    }
+  ];
+  function getHostStorage() {
+    if (typeof window === "undefined") return null;
+    try {
+      if (typeof window.localStorage === "undefined") return null;
+      return window.localStorage;
+    } catch {
+      return null;
+    }
+  }
+  function parseSafe(raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+  function mergeSection(existing, next) {
+    const base = { ...existing ?? {} };
+    for (const [k, v] of Object.entries(next)) {
+      if (base[k] === void 0) {
+        base[k] = v;
+      }
+    }
+    return base;
+  }
+  function collectByPrefix(storage, prefix, transform) {
+    const out = {};
+    for (let i = 0; i < storage.length; i++) {
+      const key2 = storage.key(i);
+      if (!key2 || !key2.startsWith(prefix)) continue;
+      const raw = storage.getItem(key2);
+      if (raw == null) continue;
+      if (transform) {
+        const entry = transform(key2, raw);
+        if (entry) out[entry[0]] = entry[1];
+      } else {
+        out[key2.slice(prefix.length)] = parseSafe(raw);
+      }
+    }
+    return out;
+  }
+  function unwrapNestedSnapshot(raw) {
+    let cur = raw;
+    let guard = 0;
+    while (guard++ < 10 && cur && typeof cur === "object" && "snapshot" in cur && typeof cur.snapshot === "object") {
+      cur = cur.snapshot;
+    }
+    return cur ?? raw;
+  }
+  function coerceLegacyAggregate(raw) {
+    const out = { ...DEFAULT_ARIES_STORAGE };
+    if (!raw || typeof raw !== "object") return out;
+    const data = raw;
+    if (typeof data.version === "number") out.version = data.version;
+    if (typeof data.migratedAt === "number") out.migratedAt = data.migratedAt;
+    if ("stats" in data) out.stats = unwrapNestedSnapshot(data.stats);
+    if ("customRooms" in data) out.room = mergeSection(out.room, { customRooms: data.customRooms });
+    if ("pets" in data && typeof data.pets === "object") {
+      out.pets = mergeSection(out.pets, data.pets);
+    }
+    if ("petsOverrides" in data) out.pets = mergeSection(out.pets, { overrides: data.petsOverrides });
+    if ("petsUI" in data) out.pets = mergeSection(out.pets, { ui: data.petsUI });
+    if ("petTeams" in data) out.pets = mergeSection(out.pets, { teams: data.petTeams });
+    if ("petTeamSearch" in data) out.pets = mergeSection(out.pets, { teamSearch: data.petTeamSearch });
+    if ("petTeamHotkeys" in data) out.pets = mergeSection(out.pets, { hotkeys: data.petTeamHotkeys });
+    if ("petAlerts" in data) out.pets = mergeSection(out.pets, { alerts: data.petAlerts });
+    if ("notifier" in data && typeof data.notifier === "object") {
+      out.notifier = mergeSection(out.notifier, data.notifier);
+    }
+    if ("notifierPrefs" in data) out.notifier = mergeSection(out.notifier, { prefs: data.notifierPrefs });
+    if ("notifierRules" in data) out.notifier = mergeSection(out.notifier, { rules: data.notifierRules });
+    if ("weatherNotifierPrefs" in data) out.notifier = mergeSection(out.notifier, { weatherPrefs: data.weatherNotifierPrefs });
+    if ("notifierLoopDefaults" in data) out.notifier = mergeSection(out.notifier, { loopDefaults: data.notifierLoopDefaults });
+    if ("misc" in data && typeof data.misc === "object") {
+      out.misc = mergeSection(out.misc, data.misc);
+    }
+    if ("ghostMode" in data) out.misc = mergeSection(out.misc, { ghostMode: data.ghostMode });
+    if ("ghostDelayMs" in data) out.misc = mergeSection(out.misc, { ghostDelayMs: data.ghostDelayMs });
+    if ("autoRecoEnabled" in data) out.misc = mergeSection(out.misc, { autoRecoEnabled: data.autoRecoEnabled });
+    if ("autoRecoDelayMs" in data) out.misc = mergeSection(out.misc, { autoRecoDelayMs: data.autoRecoDelayMs });
+    if ("locker" in data && typeof data.locker === "object") {
+      out.locker = mergeSection(out.locker, data.locker);
+    }
+    if ("lockerRestrictions" in data) out.locker = mergeSection(out.locker, { restrictions: data.lockerRestrictions });
+    if ("lockerState" in data) out.locker = mergeSection(out.locker, { state: data.lockerState });
+    if ("keybinds" in data && typeof data.keybinds === "object") {
+      out.keybinds = mergeSection(out.keybinds, data.keybinds);
+    }
+    if ("editorSavedGardens" in data) out.editor = mergeSection(out.editor, { savedGardens: data.editorSavedGardens });
+    if ("editor" in data && typeof data.editor === "object") {
+      out.editor = mergeSection(out.editor, data.editor);
+    }
+    if ("activityLog" in data && typeof data.activityLog === "object") {
+      out.activityLog = mergeSection(out.activityLog, data.activityLog);
+    }
+    if ("activityLogHistory" in data) out.activityLog = mergeSection(out.activityLog, { history: data.activityLogHistory });
+    if ("activityLogFilter" in data) out.activityLog = mergeSection(out.activityLog, { filter: data.activityLogFilter });
+    if ("hud" in data && typeof data.hud === "object") {
+      out.hud = mergeSection(out.hud, data.hud);
+    }
+    if ("menu" in data && typeof data.menu === "object") {
+      out.menu = mergeSection(out.menu, data.menu);
+    }
+    if ("inventory" in data && typeof data.inventory === "object") {
+      out.inventory = mergeSection(out.inventory, data.inventory);
+    }
+    if ("audio" in data && typeof data.audio === "object") {
+      out.audio = mergeSection(out.audio, data.audio);
+    }
+    if ("audioSettings" in data) out.audio = mergeSection(out.audio, { settings: data.audioSettings });
+    if ("audioLibrary" in data) out.audio = mergeSection(out.audio, { library: data.audioLibrary });
+    if ("soundEffectsVolumeAtom" in data) out.audio = mergeSection(out.audio, { sfxVolumeAtom: data.soundEffectsVolumeAtom });
+    return out;
+  }
+  function loadAriesStorage() {
+    const storage = getHostStorage();
+    if (!storage) return { ...DEFAULT_ARIES_STORAGE };
+    const raw = storage.getItem(ARIES_STORAGE_KEY);
+    if (raw) {
+      const parsed = parseSafe(raw);
+      if (parsed && typeof parsed === "object") {
+        return coerceLegacyAggregate(parsed);
+      }
+    }
+    return { ...DEFAULT_ARIES_STORAGE };
+  }
+  function persistAriesStorage(data) {
+    const storage = getHostStorage();
+    if (!storage) return;
+    try {
+      storage.setItem(ARIES_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+    }
+  }
+  function getValueAtPath(obj, path) {
+    let cur = obj;
+    for (const segment of path) {
+      if (!cur || typeof cur !== "object") return void 0;
+      cur = cur[segment];
+    }
+    return cur;
+  }
+  function setValueAtPath(obj, path, value) {
+    if (!path.length) return;
+    let cur = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+      const key2 = path[i];
+      if (!cur[key2] || typeof cur[key2] !== "object") {
+        cur[key2] = {};
+      }
+      cur = cur[key2];
+    }
+    const last = path[path.length - 1];
+    if (value === void 0) {
+      if (cur && typeof cur === "object") {
+        delete cur[last];
+      }
+    } else {
+      cur[last] = value;
+    }
+  }
+  function hasLegacyData(storage) {
+    for (const key2 of LEGACY_STATIC_KEYS) {
+      if (storage.getItem(key2) != null) return true;
+    }
+    for (let i = 0; i < storage.length; i++) {
+      const key2 = storage.key(i) || "";
+      if (LEGACY_PREFIXES.some((p) => key2.startsWith(p))) return true;
+    }
+    return false;
+  }
+  function cleanupLegacyData(storage) {
+    for (const key2 of LEGACY_STATIC_KEYS) {
+      try {
+        storage.removeItem(key2);
+      } catch {
+      }
+    }
+    for (let i = storage.length - 1; i >= 0; i--) {
+      const key2 = storage.key(i);
+      if (!key2) continue;
+      if (LEGACY_PREFIXES.some((p) => key2.startsWith(p))) {
+        try {
+          storage.removeItem(key2);
+        } catch {
+        }
+      }
+    }
+  }
+  function migrateLocalStorageToAries() {
+    const storage = getHostStorage();
+    if (!storage) return loadAriesStorage();
+    const current = loadAriesStorage();
+    const shouldMigrate = hasLegacyData(storage);
+    const result = { ...DEFAULT_ARIES_STORAGE, ...current };
+    if (!shouldMigrate) {
+      return result;
+    }
+    for (const entry of STATIC_LEGACY_KEYS) {
+      const { legacyKey, apply } = entry;
+      const raw = storage.getItem(legacyKey);
+      if (raw == null) continue;
+      apply(raw, result);
+    }
+    const bindings = collectByPrefix(storage, "qws:keybind:", (key2, raw) => [
+      key2.replace("qws:keybind:", ""),
+      raw
+    ]);
+    const holds = collectByPrefix(storage, "qws:keybind-hold:", (key2, raw) => [
+      key2.replace("qws:keybind-hold:", ""),
+      raw === "1" || raw === "true"
+    ]);
+    if ((Object.keys(bindings).length || Object.keys(holds).length) && !result.keybinds) {
+      result.keybinds = {};
+    }
+    if (Object.keys(bindings).length) {
+      result.keybinds = {
+        ...result.keybinds ?? {},
+        bindings: { ...result.keybinds?.bindings ?? {}, ...bindings }
+      };
+    }
+    if (Object.keys(holds).length) {
+      result.keybinds = {
+        ...result.keybinds ?? {},
+        hold: { ...result.keybinds?.hold ?? {}, ...holds }
+      };
+    }
+    const teamHotkeys = collectByPrefix(storage, "qws:hk:petteam:use:", (key2, raw) => [
+      key2.replace("qws:hk:petteam:use:", ""),
+      raw
+    ]);
+    if (Object.keys(teamHotkeys).length) {
+      result.pets = {
+        ...result.pets ?? {},
+        hotkeys: { ...result.pets?.hotkeys ?? {}, ...teamHotkeys }
+      };
+    }
+    const hudWindows = collectByPrefix(storage, "qws:win:", (key2, raw) => {
+      const match = key2.match(/^qws:win:(.+):pos$/);
+      if (!match || !match[1]) return null;
+      return [match[1], parseSafe(raw)];
+    });
+    if (Object.keys(hudWindows).length) {
+      result.hud = {
+        ...result.hud ?? {},
+        windows: { ...result.hud?.windows ?? {}, ...hudWindows }
+      };
+    }
+    const menuTabs = collectByPrefix(storage, "menu:", (key2, raw) => {
+      const match = key2.match(/^menu:(.+):activeTab$/);
+      if (!match || !match[1]) return null;
+      return [match[1], parseSafe(raw)];
+    });
+    if (Object.keys(menuTabs).length) {
+      const activeTabs = {};
+      for (const [k, v] of Object.entries(menuTabs)) {
+        if (typeof v === "string") activeTabs[k] = v;
+      }
+      if (Object.keys(activeTabs).length) {
+        result.menu = {
+          ...result.menu ?? {},
+          activeTabs: { ...result.menu?.activeTabs ?? {}, ...activeTabs }
+        };
+      }
+    }
+    if (result.stats && typeof result.stats === "object") {
+      const flat = unwrapNestedSnapshot(result.stats);
+      result.stats = flat;
+    }
+    result.version = ARIES_STORAGE_VERSION;
+    if (!result.migratedAt) result.migratedAt = Date.now();
+    persistAriesStorage(result);
+    cleanupLegacyData(storage);
+    return result;
+  }
+  function updateAriesStorage(mutator) {
+    const current = loadAriesStorage();
+    mutator(current);
+    current.version = ARIES_STORAGE_VERSION;
+    persistAriesStorage(current);
+    return current;
+  }
+  function readAriesPath(path, fallback) {
+    const parts = path.split(".").filter(Boolean);
+    const value = getValueAtPath(loadAriesStorage(), parts);
+    if (value === void 0) return fallback;
+    return value;
+  }
+  function writeAriesPath(path, value) {
+    return updateAriesStorage((state2) => {
+      setValueAtPath(state2, path.split(".").filter(Boolean), value);
+    });
+  }
+  function updateAriesPath(path, updater) {
+    return updateAriesStorage((state2) => {
+      const parts = path.split(".").filter(Boolean);
+      const currentValue = getValueAtPath(state2, parts);
+      const next = updater(currentValue);
+      setValueAtPath(state2, parts, next);
+    });
+  }
+
   // src/services/locker.ts
   var VISUAL_MUTATIONS = /* @__PURE__ */ new Set(["Gold", "Rainbow"]);
   var LOCKER_NO_WEATHER_TAG = "NoWeatherEffect";
@@ -5953,7 +6392,7 @@
       overrides: {}
     };
   }
-  var LS_KEY = "garden.locker.state.v2";
+  var ARIES_LOCKER_STATE_PATH = "locker.state";
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
     const base = defaultSettings();
@@ -6087,26 +6526,21 @@
       this.updateSlotWatcher();
     }
     load() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      if (typeof window === "undefined") {
         this.state = defaultState();
         return;
       }
       try {
-        const raw = localStorage.getItem(LS_KEY);
-        if (!raw) {
-          this.state = defaultState();
-          return;
-        }
-        const parsed = JSON.parse(raw);
+        const parsed = readAriesPath(ARIES_LOCKER_STATE_PATH);
         this.state = sanitizeState(parsed);
       } catch {
         this.state = defaultState();
       }
     }
     save() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+      if (typeof window === "undefined") return;
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify(this.state));
+        writeAriesPath(ARIES_LOCKER_STATE_PATH, this.state);
       } catch {
       }
     }
@@ -6478,7 +6912,6 @@
   var lockerService = new LockerService();
 
   // src/services/stats.ts
-  var LS_STATS_KEY = "qws:stats:v1";
   var GARDEN_INT_KEYS = {
     totalPlanted: true,
     totalHarvested: true,
@@ -6540,15 +6973,14 @@
       Object.entries(stats.weather).map(([key2, value]) => [key2, { ...value }])
     )
   });
-  function getStorage() {
-    if (typeof window === "undefined") return null;
-    try {
-      if (typeof window.localStorage === "undefined") return null;
-      return window.localStorage;
-    } catch {
-      return null;
+  var unwrapMaybeNestedSnapshot = (raw) => {
+    let cur = raw;
+    let guard = 0;
+    while (guard++ < 10 && isRecord(cur) && "snapshot" in cur && isRecord(cur.snapshot)) {
+      cur = cur.snapshot;
     }
-  }
+    return cur;
+  };
   function createDefaultStats(createdAt = Date.now()) {
     const hatchedByType = {};
     for (const species of Object.keys(petCatalog)) {
@@ -6652,27 +7084,21 @@
     return base;
   }
   function readFromStorage() {
-    const storage = getStorage();
-    if (!storage) {
-      if (!memoryStore) memoryStore = createDefaultStats();
-      return cloneStats(memoryStore);
-    }
-    try {
-      const raw = storage.getItem(LS_STATS_KEY);
-      if (!raw) {
-        const fresh = createDefaultStats();
-        memoryStore = cloneStats(fresh);
-        return fresh;
-      }
-      const parsed = JSON.parse(raw);
-      const normalized = normalizeStats(parsed);
-      memoryStore = cloneStats(normalized);
-      return normalized;
-    } catch {
+    if (memoryStore) return cloneStats(memoryStore);
+    const rawWrapped = readAriesPath("stats");
+    const raw = unwrapMaybeNestedSnapshot(rawWrapped);
+    if (!raw) {
       const fresh = createDefaultStats();
       memoryStore = cloneStats(fresh);
+      writeAriesPath("stats", memoryStore);
       return fresh;
     }
+    const normalized = normalizeStats(raw);
+    memoryStore = cloneStats(normalized);
+    if (rawWrapped !== raw) {
+      writeAriesPath("stats", memoryStore);
+    }
+    return normalized;
   }
   function emitUpdate(stats) {
     const snapshot = cloneStats(stats);
@@ -6686,14 +7112,8 @@
   }
   function writeToStorage(stats) {
     const snapshot = cloneStats(stats);
-    const storage = getStorage();
     memoryStore = snapshot;
-    if (storage) {
-      try {
-        storage.setItem(LS_STATS_KEY, JSON.stringify(snapshot));
-      } catch {
-      }
-    }
+    writeAriesPath("stats", snapshot);
     return snapshot;
   }
   function adjustValue(current, delta, integer) {
@@ -6705,9 +7125,12 @@
     return integer ? Math.floor(clamped) : clamped;
   }
   function updateStats(mutator) {
-    const stats = readFromStorage();
-    const draft = cloneStats(stats);
+    const current = readFromStorage();
+    const before = JSON.stringify(current);
+    const draft = cloneStats(current);
     mutator(draft);
+    const after = JSON.stringify(draft);
+    if (before === after) return current;
     const stored = writeToStorage(draft);
     emitUpdate(stored);
     return stored;
@@ -6733,12 +7156,12 @@
     return stats.pets.hatchedByType[key2];
   }
   var StatsService = {
-    storageKey: LS_STATS_KEY,
+    storageKey: "stats",
     getSnapshot() {
       return readFromStorage();
     },
     setSnapshot(snapshot) {
-      const normalized = normalizeStats(snapshot);
+      const normalized = normalizeStats(unwrapMaybeNestedSnapshot(snapshot));
       const stored = writeToStorage(normalized);
       emitUpdate(stored);
       return stored;
@@ -6803,7 +7226,7 @@
   };
 
   // src/services/lockerRestrictions.ts
-  var LS_KEY2 = "qws:locker:restrictions.v1";
+  var ARIES_LOCKER_RESTRICTIONS_PATH = "locker.restrictions";
   var clampPercent2 = (value) => Math.max(0, Math.min(50, Math.round(value)));
   var roundToStep = (value, step) => Math.round(value / step) * step;
   var DEFAULT_STATE = {
@@ -6858,17 +7281,12 @@
       this.load();
     }
     load() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      if (typeof window === "undefined") {
         this.state = { ...DEFAULT_STATE };
         return;
       }
       try {
-        const raw = localStorage.getItem(LS_KEY2);
-        if (!raw) {
-          this.state = { ...DEFAULT_STATE };
-          return;
-        }
-        const parsed = JSON.parse(raw);
+        const parsed = readAriesPath(ARIES_LOCKER_RESTRICTIONS_PATH) ?? {};
         const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
         const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
         const decorPickupLocked = parsed?.decorPickupLocked === true;
@@ -6878,9 +7296,9 @@
       }
     }
     save() {
-      if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+      if (typeof window === "undefined") return;
       try {
-        localStorage.setItem(LS_KEY2, JSON.stringify(this.state));
+        writeAriesPath(ARIES_LOCKER_RESTRICTIONS_PATH, this.state);
       } catch {
       }
     }
@@ -7951,30 +8369,35 @@
   }
 
   // src/services/misc.ts
-  var LS_GHOST_KEY = "qws:player:ghostMode";
-  var LS_DELAY_KEY = "qws:ghost:delayMs";
+  var PATH_GHOST_MODE = "misc.ghostMode";
+  var PATH_GHOST_DELAY = "misc.ghostDelayMs";
   var DEFAULT_DELAY_MS = 50;
-  var LS_AUTO_RECO_ENABLED = "qws:autoReco:onNewSession";
-  var LS_AUTO_RECO_DELAY_MS = "qws:autoReco:delayMs";
+  var PATH_AUTO_RECO_ENABLED = "misc.autoRecoEnabled";
+  var PATH_AUTO_RECO_DELAY = "misc.autoRecoDelayMs";
   var AUTO_RECO_MIN_MS = 3e4;
   var AUTO_RECO_MAX_MS = 5 * 6e4;
   var AUTO_RECO_DEFAULT_MS = 6e4;
   var readGhostEnabled = (def = false) => {
     try {
-      return localStorage.getItem(LS_GHOST_KEY) === "1";
+      const stored = readAriesPath(PATH_GHOST_MODE);
+      if (typeof stored === "boolean") return stored;
+      if (stored === "1" || stored === 1) return true;
+      if (stored === "0" || stored === 0) return false;
+      return !!stored;
     } catch {
       return def;
     }
   };
   var writeGhostEnabled = (v) => {
     try {
-      localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
+      writeAriesPath(PATH_GHOST_MODE, !!v);
     } catch (err) {
     }
   };
   var getGhostDelayMs = () => {
     try {
-      const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
+      const stored = readAriesPath(PATH_GHOST_DELAY);
+      const n = Math.floor(Number(stored || DEFAULT_DELAY_MS));
       return Math.max(5, n);
     } catch {
       return DEFAULT_DELAY_MS;
@@ -7983,27 +8406,31 @@
   var setGhostDelayMs = (n) => {
     const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
     try {
-      localStorage.setItem(LS_DELAY_KEY, String(v));
+      writeAriesPath(PATH_GHOST_DELAY, v);
     } catch (err) {
     }
   };
   var clampAutoRecoDelay = (ms) => Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
   var readAutoRecoEnabled = (def = false) => {
     try {
-      return localStorage.getItem(LS_AUTO_RECO_ENABLED) === "1";
+      const stored = readAriesPath(PATH_AUTO_RECO_ENABLED);
+      if (typeof stored === "boolean") return stored;
+      if (stored === "1" || stored === 1) return true;
+      if (stored === "0" || stored === 0) return false;
+      return !!stored;
     } catch {
       return def;
     }
   };
   var writeAutoRecoEnabled = (on) => {
     try {
-      localStorage.setItem(LS_AUTO_RECO_ENABLED, on ? "1" : "0");
+      writeAriesPath(PATH_AUTO_RECO_ENABLED, !!on);
     } catch {
     }
   };
   var getAutoRecoDelayMs = () => {
     try {
-      const raw = Number(localStorage.getItem(LS_AUTO_RECO_DELAY_MS));
+      const raw = Number(readAriesPath(PATH_AUTO_RECO_DELAY));
       if (Number.isFinite(raw)) return clampAutoRecoDelay(raw);
     } catch {
     }
@@ -8012,7 +8439,7 @@
   var setAutoRecoDelayMs = (ms) => {
     const v = clampAutoRecoDelay(ms);
     try {
-      localStorage.setItem(LS_AUTO_RECO_DELAY_MS, String(v));
+      writeAriesPath(PATH_AUTO_RECO_DELAY, v);
     } catch {
     }
   };
@@ -10001,6 +10428,7 @@
       __publicField(this, "events", /* @__PURE__ */ new Map());
       __publicField(this, "currentId", null);
       __publicField(this, "lsKeyActive");
+      __publicField(this, "menuId");
       __publicField(this, "_altDown", false);
       __publicField(this, "_insertDown", false);
       __publicField(this, "_hovering", false);
@@ -10027,7 +10455,8 @@
         this._hovering = false;
         this._updateAltCursor();
       });
-      this.lsKeyActive = `menu:${opts.id || "default"}:activeTab`;
+      this.menuId = this.opts.id || "default";
+      this.lsKeyActive = `menu:${this.menuId}:activeTab`;
     }
     /** Monte le menu dans un conteneur */
     mount(container) {
@@ -11011,15 +11440,26 @@
     persistActive() {
       if (!this.currentId) return;
       try {
-        localStorage.setItem(this.lsKeyActive, this.currentId);
+        writeAriesPath(`menu.activeTabs.${this.menuId}`, this.currentId);
+        try {
+          localStorage.removeItem(this.lsKeyActive);
+        } catch {
+        }
       } catch {
       }
     }
     restoreActive() {
       let id = null;
       try {
-        id = localStorage.getItem(this.lsKeyActive);
+        const stored = readAriesPath(`menu.activeTabs.${this.menuId}`);
+        if (typeof stored === "string" && stored) id = stored;
       } catch {
+      }
+      if (!id) {
+        try {
+          id = localStorage.getItem(this.lsKeyActive);
+        } catch {
+        }
       }
       if (id && this.tabs.has(id)) this.switchTo(id);
       else if (this.tabs.size) this.switchTo(this.firstTabId());
@@ -12957,8 +13397,9 @@
       ]
     }
   ];
-  var STORAGE_PREFIX = "qws:keybind:";
-  var HOLD_STORAGE_PREFIX = "qws:keybind-hold:";
+  var KEYBINDS_BINDINGS_PATH = "keybinds.bindings";
+  var KEYBINDS_HOLD_PATH = "keybinds.hold";
+  var ARIES_ROOT_KEY = "aries_mod";
   var STORED_NONE = "__none__";
   var actionMap = /* @__PURE__ */ new Map();
   var defaultMap = /* @__PURE__ */ new Map();
@@ -13268,60 +13709,53 @@
     if (!a || !b) return false;
     return hotkeyToString(a) === hotkeyToString(b);
   }
-  function storageKey(id) {
-    return `${STORAGE_PREFIX}${id}`;
-  }
-  function holdStorageKey(id) {
-    return `${HOLD_STORAGE_PREFIX}${id}`;
-  }
   function readStored(id) {
     if (typeof window === "undefined") return void 0;
-    let raw = null;
-    try {
-      raw = window.localStorage.getItem(storageKey(id));
-    } catch {
-      return void 0;
-    }
+    const map2 = readAriesPath(KEYBINDS_BINDINGS_PATH);
+    const raw = map2?.[id];
     if (raw == null) return void 0;
     if (raw === STORED_NONE) return null;
+    if (typeof raw !== "string") return null;
     const parsed = stringToHotkey(raw);
     return parsed ?? null;
   }
   function writeStored(id, hk) {
     if (typeof window === "undefined") return;
-    try {
+    updateAriesPath(KEYBINDS_BINDINGS_PATH, (current) => {
+      const base = current && typeof current === "object" ? { ...current } : {};
       if (hk) {
-        window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+        base[id] = hotkeyToString(hk);
       } else {
-        window.localStorage.setItem(storageKey(id), STORED_NONE);
+        base[id] = STORED_NONE;
       }
-    } catch {
-    }
+      return base;
+    });
   }
   function removeStored(id) {
     if (typeof window === "undefined") return;
-    try {
-      window.localStorage.removeItem(storageKey(id));
-    } catch {
-    }
+    updateAriesPath(KEYBINDS_BINDINGS_PATH, (current) => {
+      const base = current && typeof current === "object" ? { ...current } : {};
+      delete base[id];
+      return base;
+    });
   }
   function readHoldStored(id) {
     if (typeof window === "undefined") return void 0;
-    let raw = null;
-    try {
-      raw = window.localStorage.getItem(holdStorageKey(id));
-    } catch {
-      return void 0;
-    }
+    const map2 = readAriesPath(KEYBINDS_HOLD_PATH);
+    const raw = map2?.[id];
     if (raw == null) return void 0;
-    return raw === "1";
+    if (typeof raw === "string") return raw === "1";
+    if (typeof raw === "number") return raw === 1;
+    if (typeof raw === "boolean") return raw;
+    return void 0;
   }
   function writeHoldStored(id, enabled) {
     if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(holdStorageKey(id), enabled ? "1" : "0");
-    } catch {
-    }
+    updateAriesPath(KEYBINDS_HOLD_PATH, (current) => {
+      const base = current && typeof current === "object" ? { ...current } : {};
+      base[id] = !!enabled;
+      return base;
+    });
   }
   function emitHoldChange(id) {
     const set2 = holdListeners.get(id);
@@ -13449,18 +13883,11 @@
   }
   if (typeof window !== "undefined") {
     window.addEventListener("storage", (event) => {
-      if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
-      const id = event.key.slice(STORAGE_PREFIX.length);
-      if (!actionMap.has(id)) return;
-      cache.delete(id);
-      emitChange(id);
-    });
-    window.addEventListener("storage", (event) => {
-      if (!event.key || !event.key.startsWith(HOLD_STORAGE_PREFIX)) return;
-      const id = event.key.slice(HOLD_STORAGE_PREFIX.length);
-      if (!holdDefaultMap.has(id)) return;
-      holdCache.delete(id);
-      emitHoldChange(id);
+      if (event.key !== ARIES_ROOT_KEY) return;
+      cache.clear();
+      holdCache.clear();
+      for (const id of actionMap.keys()) emitChange(id);
+      for (const id of holdDefaultMap.keys()) emitHoldChange(id);
     });
   }
 
@@ -13472,11 +13899,12 @@
   }
 
   // src/services/pets.ts
-  var LS_OVERRIDES_KEY = "qws:pets:overrides:v1";
-  var LS_UI_KEY = "qws:pets:ui:v1";
-  var LS_TEAMS_KEY = "qws:pets:teams:v1";
-  var LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
-  var LS_TEAM_HK_PREFIX = "qws:hk:petteam:use:";
+  var PATH_PETS_OVERRIDES = "pets.overrides";
+  var PATH_PETS_UI = "pets.ui";
+  var PATH_PETS_TEAMS = "pets.teams";
+  var PATH_PETS_TEAM_SEARCH = "pets.teamSearch";
+  var PATH_PETS_HOTKEYS = "pets.hotkeys";
+  var PATH_PETS_ABILITY_LOGS = "pets.abilityLogs";
   var TEAM_HK_MAP = /* @__PURE__ */ new Map();
   var TEAM_HK_UNSUBS = /* @__PURE__ */ new Map();
   var hkNextTeam = null;
@@ -13485,7 +13913,6 @@
   var unsubPrevHotkey = null;
   var orderedTeamIds = [];
   var lastUsedTeamId = null;
-  var legacyKeyForTeam = (id) => `${LS_TEAM_HK_PREFIX}${id}`;
   function syncTeamHotkey(teamId) {
     const hk = getKeybind(getPetTeamActionId(teamId));
     if (hk) TEAM_HK_MAP.set(teamId, hk);
@@ -13498,21 +13925,20 @@
     hkPrevTeam = getKeybind(PET_TEAM_PREV_ID);
   }
   function ensureLegacyTeamHotkeyMigration(teamId) {
-    if (typeof window === "undefined") return;
-    try {
-      const legacy = localStorage.getItem(legacyKeyForTeam(teamId));
-      if (!legacy) return;
-      const actionId = getPetTeamActionId(teamId);
-      const existing = getKeybind(actionId);
-      if (!existing) {
-        const hk = stringToHotkey(legacy);
-        if (hk) {
-          setKeybind(actionId, hk);
-        }
+    const hotkeys = readAriesPath(PATH_PETS_HOTKEYS) ?? {};
+    const legacy = hotkeys[teamId];
+    if (!legacy) return;
+    const actionId = getPetTeamActionId(teamId);
+    const existing = getKeybind(actionId);
+    if (!existing) {
+      const hk = stringToHotkey(legacy);
+      if (hk) {
+        setKeybind(actionId, hk);
       }
-      localStorage.removeItem(legacyKeyForTeam(teamId));
-    } catch {
     }
+    const clone = { ...hotkeys };
+    delete clone[teamId];
+    writeAriesPath(PATH_PETS_HOTKEYS, clone);
   }
   function normalizeTeamList(teams) {
     if (!Array.isArray(teams)) return [];
@@ -13680,25 +14106,16 @@
     };
   }
   function loadTeams() {
-    try {
-      const raw = localStorage.getItem(LS_TEAMS_KEY);
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      if (!Array.isArray(arr)) return [];
-      return arr.map((t) => ({
-        id: String(t?.id || ""),
-        name: String(t?.name || "Team"),
-        slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
-      })).filter((t) => t.id);
-    } catch {
-      return [];
-    }
+    const arr = readAriesPath(PATH_PETS_TEAMS) ?? [];
+    if (!Array.isArray(arr)) return [];
+    return arr.map((t) => ({
+      id: String(t?.id || ""),
+      name: String(t?.name || "Team"),
+      slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
+    })).filter((t) => t.id);
   }
   function saveTeams(arr) {
-    try {
-      localStorage.setItem(LS_TEAMS_KEY, JSON.stringify(arr));
-    } catch {
-    }
+    writeAriesPath(PATH_PETS_TEAMS, arr);
   }
   function _uid() {
     try {
@@ -13708,19 +14125,11 @@
     }
   }
   function _loadTeamSearchMap() {
-    try {
-      const raw = localStorage.getItem(LS_TEAM_SEARCH_KEY);
-      const obj = raw ? JSON.parse(raw) : {};
-      return obj && typeof obj === "object" ? obj : {};
-    } catch {
-      return {};
-    }
+    const obj = readAriesPath(PATH_PETS_TEAM_SEARCH);
+    return obj && typeof obj === "object" ? obj : {};
   }
   function _saveTeamSearchMap(map2) {
-    try {
-      localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map2));
-    } catch {
-    }
+    writeAriesPath(PATH_PETS_TEAM_SEARCH, map2);
   }
   var _teams = loadTeams();
   var _teamSearch = _loadTeamSearchMap();
@@ -13952,38 +14361,19 @@
   var _currentPets = [];
   var _userTriggerCb = null;
   function saveOverrides(map2) {
-    try {
-      localStorage.setItem(LS_OVERRIDES_KEY, JSON.stringify(map2));
-    } catch (err) {
-    }
+    writeAriesPath(PATH_PETS_OVERRIDES, map2);
   }
   function loadOverrides() {
-    try {
-      const raw = localStorage.getItem(LS_OVERRIDES_KEY);
-      if (!raw) return {};
-      const obj = JSON.parse(raw);
-      const out = obj && typeof obj === "object" ? obj : {};
-      return out;
-    } catch (err) {
-      return {};
-    }
+    const obj = readAriesPath(PATH_PETS_OVERRIDES);
+    return obj && typeof obj === "object" ? obj : {};
   }
   function saveUIState(next) {
-    try {
-      localStorage.setItem(LS_UI_KEY, JSON.stringify(next));
-    } catch (err) {
-    }
+    writeAriesPath(PATH_PETS_UI, next);
   }
   function loadUIState() {
-    try {
-      const raw = localStorage.getItem(LS_UI_KEY);
-      if (!raw) return { ...DEFAULT_UI };
-      const obj = JSON.parse(raw);
-      const merged = { ...DEFAULT_UI, ...obj || {} };
-      return merged;
-    } catch (err) {
-      return { ...DEFAULT_UI };
-    }
+    const obj = readAriesPath(PATH_PETS_UI);
+    const merged = { ...DEFAULT_UI, ...obj || {} };
+    return merged;
   }
   function cloneOverride(o) {
     const src = o ?? DEFAULT_OVERRIDE;
@@ -14599,7 +14989,7 @@
     _logSubs: /* @__PURE__ */ new Set(),
     _logsCutoffMs: 0,
     _logsCutoffSkewMs: 1500,
-    _logsStorageKey: "qws:pets:abilityLogs:v1",
+    _logsStorageKey: PATH_PETS_ABILITY_LOGS,
     _logsSessionStart: Date.now(),
     _extractAbilityValue(abilityId, rawData) {
       const num = (value) => {
@@ -14783,18 +15173,7 @@
       this._notifyLogSubs();
       this._persistAbilityLogs();
     },
-    _getLogsStorage() {
-      if (typeof window === "undefined") return null;
-      try {
-        if (typeof window.localStorage === "undefined") return null;
-        return window.localStorage;
-      } catch {
-        return null;
-      }
-    },
     _persistAbilityLogs() {
-      const storage = this._getLogsStorage();
-      if (!storage) return;
       try {
         const payload = {
           version: 1,
@@ -14810,17 +15189,13 @@
             time12: entry.time12
           }))
         };
-        storage.setItem(this._logsStorageKey, JSON.stringify(payload));
+        writeAriesPath(PATH_PETS_ABILITY_LOGS, payload);
       } catch {
       }
     },
     _restoreAbilityLogsFromStorage() {
-      const storage = this._getLogsStorage();
-      if (!storage) return;
       try {
-        const raw = storage.getItem(this._logsStorageKey);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
+        const parsed = readAriesPath(PATH_PETS_ABILITY_LOGS);
         if (!parsed || typeof parsed !== "object") return;
         const logsRaw = Array.isArray(parsed.logs) ? parsed.logs : [];
         const restored = [];
@@ -16076,8 +16451,8 @@
     if (looksLikeDataURL(s)) return s;
     return `data:${mime};base64,${s}`;
   }
-  var LS_SETTINGS_KEY = "qws:alerts:audio:settings:v1";
-  var LS_LIBRARY_KEY = "qws:alerts:audio:library:v1";
+  var AUDIO_SETTINGS_PATH = "audio.settings";
+  var AUDIO_LIBRARY_PATH = "audio.library";
   var AudioNotifier = class {
     constructor(opts) {
       // ===== Core state
@@ -16209,7 +16584,7 @@
             }
           }
         };
-        localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(payload));
+        writeAriesPath(AUDIO_SETTINGS_PATH, payload);
       } catch {
       }
     }
@@ -16221,7 +16596,7 @@
           if (this.builtinDefault && name === this.builtinDefault.name) continue;
           entries.push({ name, data });
         }
-        localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries));
+        writeAriesPath(AUDIO_LIBRARY_PATH, entries);
       } catch {
       }
     }
@@ -16229,162 +16604,156 @@
       this.suppressPersist++;
       try {
         try {
-          const raw = localStorage.getItem(LS_LIBRARY_KEY);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              this.library.clear();
-              this.ensureBuiltinPresent();
-              for (const entry of parsed) {
-                const name = String(entry && entry.name || "").trim();
-                const data = String(entry && entry.data || "").trim();
-                if (!name || !data) continue;
-                if (this.builtinDefault && name === this.builtinDefault.name) continue;
-                this.library.set(name, looksLikeDataURL(data) ? data : toDataUrl(data));
-              }
+          const parsed = readAriesPath(AUDIO_LIBRARY_PATH);
+          if (Array.isArray(parsed)) {
+            this.library.clear();
+            this.ensureBuiltinPresent();
+            for (const entry of parsed) {
+              const name = String(entry && entry.name || "").trim();
+              const data = String(entry && entry.data || "").trim();
+              if (!name || !data) continue;
+              if (this.builtinDefault && name === this.builtinDefault.name) continue;
+              this.library.set(name, looksLikeDataURL(data) ? data : toDataUrl(data));
             }
           }
-        } catch {
+        } catch (err) {
         }
         try {
-          const raw = localStorage.getItem(LS_SETTINGS_KEY);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === "object") {
-              if (typeof parsed.enabled === "boolean") this.enabled = parsed.enabled;
-              if (typeof parsed.minPlayGapMs === "number") this.minPlayGapMs = Math.max(0, parsed.minPlayGapMs | 0);
-              if (typeof parsed.volume === "number") this.volume = clamp01(parsed.volume);
-              if (parsed.mode === "loop" || parsed.mode === "oneshot") this.mode = parsed.mode;
-              if (parsed.stop && typeof parsed.stop === "object") {
-                const stopMode = parsed.stop.mode;
-                if (stopMode === "purchase") {
-                  this.stopConf = { mode: "purchase" };
-                } else if (stopMode === "manual") {
-                  this.stopConf = { mode: "manual" };
-                } else if (stopMode === "repeat") {
-                  this.stopConf = { mode: "manual" };
-                }
+          const parsed = readAriesPath(AUDIO_SETTINGS_PATH);
+          if (parsed && typeof parsed === "object") {
+            if (typeof parsed.enabled === "boolean") this.enabled = parsed.enabled;
+            if (typeof parsed.minPlayGapMs === "number") this.minPlayGapMs = Math.max(0, parsed.minPlayGapMs | 0);
+            if (typeof parsed.volume === "number") this.volume = clamp01(parsed.volume);
+            if (parsed.mode === "loop" || parsed.mode === "oneshot") this.mode = parsed.mode;
+            if (parsed.stop && typeof parsed.stop === "object") {
+              const stopMode = parsed.stop.mode;
+              if (stopMode === "purchase") {
+                this.stopConf = { mode: "purchase" };
+              } else if (stopMode === "manual") {
+                this.stopConf = { mode: "manual" };
+              } else if (stopMode === "repeat") {
+                this.stopConf = { mode: "manual" };
               }
-              if (typeof parsed.loopIntervalMs === "number") this.loopIntervalMs = Math.max(150, parsed.loopIntervalMs | 0);
-              if (typeof parsed.defaultSoundName === "string") {
-                const nm = parsed.defaultSoundName.trim();
-                this.defaultSoundName = nm ? nm : null;
-              }
-              let weatherVolumeLoaded = false;
-              let weatherModeLoaded = false;
-              let weatherStopLoaded = false;
-              let weatherLoopLoaded = false;
-              let weatherDefaultLoaded = false;
-              let petVolumeLoaded = false;
-              let petModeLoaded = false;
-              let petStopLoaded = false;
-              let petLoopLoaded = false;
-              let petDefaultLoaded = false;
-              const applyContext = (ctx, conf) => {
-                if (!conf || typeof conf !== "object") return;
-                const applyVolume = (value) => {
-                  if (typeof value !== "number") return;
-                  const normalized = clamp01(value);
-                  if (ctx === "weather") {
-                    this.weatherVolume = normalized;
-                    weatherVolumeLoaded = true;
-                  } else if (ctx === "pets") {
-                    this.petVolume = normalized;
-                    petVolumeLoaded = true;
-                  } else this.volume = normalized;
-                };
-                const applyMode = (value) => {
-                  if (value === "loop" || value === "oneshot") {
-                    if (ctx === "weather") {
-                      this.weatherMode = value;
-                      weatherModeLoaded = true;
-                    } else if (ctx === "pets") {
-                      this.petMode = value;
-                      petModeLoaded = true;
-                    } else this.mode = value;
-                  }
-                };
-                const applyStop = (value) => {
-                  if (!value || typeof value !== "object") return;
-                  const mode = value.mode;
-                  if (mode === "purchase") {
-                    if (ctx === "weather") {
-                      this.weatherStopConf = { mode: "purchase" };
-                      weatherStopLoaded = true;
-                    } else if (ctx === "pets") {
-                      this.petStopConf = { mode: "purchase" };
-                      petStopLoaded = true;
-                    } else this.stopConf = { mode: "purchase" };
-                  } else if (mode === "manual") {
-                    if (ctx === "weather") {
-                      this.weatherStopConf = { mode: "manual" };
-                      weatherStopLoaded = true;
-                    } else if (ctx === "pets") {
-                      this.petStopConf = { mode: "manual" };
-                      petStopLoaded = true;
-                    } else this.stopConf = { mode: "manual" };
-                  } else if (mode === "repeat") {
-                    if (ctx === "weather") {
-                      this.weatherStopConf = { mode: "manual" };
-                      weatherStopLoaded = true;
-                    } else if (ctx === "pets") {
-                      this.petStopConf = { mode: "manual" };
-                      petStopLoaded = true;
-                    } else {
-                      this.stopConf = { mode: "manual" };
-                    }
-                  }
-                };
-                const applyLoop = (value) => {
-                  if (typeof value !== "number" || !Number.isFinite(value)) return;
-                  const normalized = Math.max(150, Math.floor(value));
-                  if (ctx === "weather") {
-                    this.weatherLoopIntervalMs = normalized;
-                    weatherLoopLoaded = true;
-                  } else if (ctx === "pets") {
-                    this.petLoopIntervalMs = normalized;
-                    petLoopLoaded = true;
-                  } else this.loopIntervalMs = normalized;
-                };
-                const applyDefault = (value) => {
-                  if (typeof value !== "string") return;
-                  const nm = value.trim();
-                  if (ctx === "weather") {
-                    this.weatherDefaultSoundName = nm ? nm : null;
-                    weatherDefaultLoaded = true;
-                  } else if (ctx === "pets") {
-                    this.petDefaultSoundName = nm ? nm : null;
-                    petDefaultLoaded = true;
-                  } else this.defaultSoundName = nm ? nm : null;
-                };
-                applyVolume(conf.volume);
-                applyMode(conf.mode);
-                applyStop(conf.stop);
-                applyLoop(conf.loopIntervalMs);
-                applyDefault(conf.defaultSoundName);
-              };
-              if (parsed.contexts && typeof parsed.contexts === "object") {
-                applyContext("shops", parsed.contexts.shops);
-                applyContext("weather", parsed.contexts.weather);
-                applyContext("pets", parsed.contexts.pets);
-              }
-              if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
-              if (!weatherModeLoaded) this.weatherMode = this.mode;
-              if (!weatherStopLoaded) {
-                this.weatherStopConf = this.stopConf.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
-              }
-              if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
-              if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
-              if (!petVolumeLoaded) this.petVolume = this.volume;
-              if (!petModeLoaded) this.petMode = this.mode;
-              if (!petStopLoaded) {
-                this.petStopConf = this.stopConf.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
-              }
-              if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
-              if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
             }
+            if (typeof parsed.loopIntervalMs === "number") this.loopIntervalMs = Math.max(150, parsed.loopIntervalMs | 0);
+            if (typeof parsed.defaultSoundName === "string") {
+              const nm = parsed.defaultSoundName.trim();
+              this.defaultSoundName = nm ? nm : null;
+            }
+            let weatherVolumeLoaded = false;
+            let weatherModeLoaded = false;
+            let weatherStopLoaded = false;
+            let weatherLoopLoaded = false;
+            let weatherDefaultLoaded = false;
+            let petVolumeLoaded = false;
+            let petModeLoaded = false;
+            let petStopLoaded = false;
+            let petLoopLoaded = false;
+            let petDefaultLoaded = false;
+            const applyContext = (ctx, conf) => {
+              if (!conf || typeof conf !== "object") return;
+              const applyVolume = (value) => {
+                if (typeof value !== "number") return;
+                const normalized = clamp01(value);
+                if (ctx === "weather") {
+                  this.weatherVolume = normalized;
+                  weatherVolumeLoaded = true;
+                } else if (ctx === "pets") {
+                  this.petVolume = normalized;
+                  petVolumeLoaded = true;
+                } else this.volume = normalized;
+              };
+              const applyMode = (value) => {
+                if (value === "loop" || value === "oneshot") {
+                  if (ctx === "weather") {
+                    this.weatherMode = value;
+                    weatherModeLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petMode = value;
+                    petModeLoaded = true;
+                  } else this.mode = value;
+                }
+              };
+              const applyStop = (value) => {
+                if (!value || typeof value !== "object") return;
+                const mode = value.mode;
+                if (mode === "purchase") {
+                  if (ctx === "weather") {
+                    this.weatherStopConf = { mode: "purchase" };
+                    weatherStopLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petStopConf = { mode: "purchase" };
+                    petStopLoaded = true;
+                  } else this.stopConf = { mode: "purchase" };
+                } else if (mode === "manual") {
+                  if (ctx === "weather") {
+                    this.weatherStopConf = { mode: "manual" };
+                    weatherStopLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petStopConf = { mode: "manual" };
+                    petStopLoaded = true;
+                  } else this.stopConf = { mode: "manual" };
+                } else if (mode === "repeat") {
+                  if (ctx === "weather") {
+                    this.weatherStopConf = { mode: "manual" };
+                    weatherStopLoaded = true;
+                  } else if (ctx === "pets") {
+                    this.petStopConf = { mode: "manual" };
+                    petStopLoaded = true;
+                  } else {
+                    this.stopConf = { mode: "manual" };
+                  }
+                }
+              };
+              const applyLoop = (value) => {
+                if (typeof value !== "number" || !Number.isFinite(value)) return;
+                const normalized = Math.max(150, Math.floor(value));
+                if (ctx === "weather") {
+                  this.weatherLoopIntervalMs = normalized;
+                  weatherLoopLoaded = true;
+                } else if (ctx === "pets") {
+                  this.petLoopIntervalMs = normalized;
+                  petLoopLoaded = true;
+                } else this.loopIntervalMs = normalized;
+              };
+              const applyDefault = (value) => {
+                if (typeof value !== "string") return;
+                const nm = value.trim();
+                if (ctx === "weather") {
+                  this.weatherDefaultSoundName = nm ? nm : null;
+                  weatherDefaultLoaded = true;
+                } else if (ctx === "pets") {
+                  this.petDefaultSoundName = nm ? nm : null;
+                  petDefaultLoaded = true;
+                } else this.defaultSoundName = nm ? nm : null;
+              };
+              applyVolume(conf.volume);
+              applyMode(conf.mode);
+              applyStop(conf.stop);
+              applyLoop(conf.loopIntervalMs);
+              applyDefault(conf.defaultSoundName);
+            };
+            if (parsed.contexts && typeof parsed.contexts === "object") {
+              applyContext("shops", parsed.contexts.shops);
+              applyContext("weather", parsed.contexts.weather);
+              applyContext("pets", parsed.contexts.pets);
+            }
+            if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
+            if (!weatherModeLoaded) this.weatherMode = this.mode;
+            if (!weatherStopLoaded) {
+              this.weatherStopConf = this.stopConf.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
+            }
+            if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
+            if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
+            if (!petVolumeLoaded) this.petVolume = this.volume;
+            if (!petModeLoaded) this.petMode = this.mode;
+            if (!petStopLoaded) {
+              this.petStopConf = this.stopConf.mode === "purchase" ? { mode: "purchase" } : { mode: "manual" };
+            }
+            if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
+            if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
           }
-        } catch {
+        } catch (err) {
         }
       } finally {
         this.suppressPersist--;
@@ -18818,6 +19187,11 @@
     const promise = loadWeatherSprite(key2);
     return el2;
   }
+  var PET_VARIANT_COLOR_FILTER = {
+    normal: null,
+    gold: "Gold",
+    rainbow: "Rainbow"
+  };
   var petSpriteCache = /* @__PURE__ */ new Map();
   var petSpritePromises = /* @__PURE__ */ new Map();
   var petSheetBasesCache = null;
@@ -18897,7 +19271,13 @@
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
         if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-        return canvas.toDataURL();
+        let finalCanvas = canvas;
+        const filterName = PET_VARIANT_COLOR_FILTER[variant];
+        if (filterName) {
+          const filtered = Sprites.applyCanvasFilter(finalCanvas, filterName);
+          if (filtered) finalCanvas = filtered;
+        }
+        return finalCanvas.toDataURL();
       } catch {
       }
     }
@@ -18973,10 +19353,10 @@
   }
 
   // src/services/notifier.ts
-  var LS_PREFS_KEY = "qws:shop:notifs:v1";
-  var LS_RULES_KEY = "qws:shop:notifs:rules.v1";
-  var LS_WEATHER_PREFS_KEY = "qws:weather:notifs:v1";
-  var LS_CONTEXT_DEFAULTS_KEY = "qws:notifier:loopDefaults.v1";
+  var PATH_NOTIFIER_PREFS = "notifier.prefs";
+  var PATH_NOTIFIER_RULES = "notifier.rules";
+  var PATH_NOTIFIER_WEATHER = "notifier.weatherPrefs";
+  var PATH_NOTIFIER_DEFAULTS = "notifier.loopDefaults";
   var DISPLAY_RARITY = {
     [rarity.Common]: "Common",
     [rarity.Uncommon]: "Uncommon",
@@ -19182,8 +19562,7 @@
     _rulesLoaded = true;
     _rules = /* @__PURE__ */ new Map();
     try {
-      const raw = localStorage.getItem(LS_RULES_KEY);
-      const obj = raw ? JSON.parse(raw) : null;
+      const obj = readAriesPath(PATH_NOTIFIER_RULES);
       if (obj && typeof obj === "object") {
         for (const [id, value] of Object.entries(obj)) {
           const norm3 = _normalizeRule(value);
@@ -19210,7 +19589,7 @@
       for (const [id, rule] of _rules.entries()) {
         obj[id] = { ...rule };
       }
-      localStorage.setItem(LS_RULES_KEY, JSON.stringify(obj));
+      writeAriesPath(PATH_NOTIFIER_RULES, obj);
     } catch {
     }
   }
@@ -19219,9 +19598,7 @@
     _weatherPrefsLoaded = true;
     _weatherPrefs = /* @__PURE__ */ new Map();
     try {
-      const raw = localStorage.getItem(LS_WEATHER_PREFS_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
+      const obj = readAriesPath(PATH_NOTIFIER_WEATHER);
       if (obj && typeof obj === "object") {
         for (const [id, value] of Object.entries(obj)) {
           if (!id) continue;
@@ -19247,7 +19624,7 @@
         if (typeof pref.lastSeen === "number" && Number.isFinite(pref.lastSeen)) entry.lastSeen = pref.lastSeen;
         if (entry.notify || entry.lastSeen != null) obj[id] = entry;
       }
-      localStorage.setItem(LS_WEATHER_PREFS_KEY, JSON.stringify(obj));
+      writeAriesPath(PATH_NOTIFIER_WEATHER, obj);
     } catch {
     }
   }
@@ -19264,9 +19641,7 @@
     _contextDefaultsLoaded = true;
     _contextDefaults = {};
     try {
-      const raw = localStorage.getItem(LS_CONTEXT_DEFAULTS_KEY);
-      if (!raw) return;
-      const obj = JSON.parse(raw);
+      const obj = readAriesPath(PATH_NOTIFIER_DEFAULTS);
       if (obj && typeof obj === "object") {
         for (const [context, value] of Object.entries(obj)) {
           const ctx = context;
@@ -19300,7 +19675,7 @@
           loopIntervalMs
         };
       }
-      localStorage.setItem(LS_CONTEXT_DEFAULTS_KEY, JSON.stringify(obj));
+      writeAriesPath(PATH_NOTIFIER_DEFAULTS, obj);
     } catch {
     }
   }
@@ -19489,8 +19864,7 @@
   }
   function _loadPrefs() {
     try {
-      const raw = localStorage.getItem(LS_PREFS_KEY);
-      const obj = raw ? JSON.parse(raw) : {};
+      const obj = readAriesPath(PATH_NOTIFIER_PREFS) ?? {};
       const m = /* @__PURE__ */ new Map();
       if (obj && typeof obj === "object") {
         for (const [k, v] of Object.entries(obj)) {
@@ -19508,7 +19882,7 @@
     try {
       const obj = {};
       for (const [k, v] of _prefs) obj[k] = v & 1;
-      localStorage.setItem(LS_PREFS_KEY, JSON.stringify(obj));
+      writeAriesPath(PATH_NOTIFIER_PREFS, obj);
     } catch {
     }
   }
@@ -25714,16 +26088,8 @@
   }
 
   // src/services/activityLogHistory.ts
-  var HISTORY_STORAGE_KEY = "qws:activityLogs:history:v1";
+  var HISTORY_STORAGE_KEY = "activityLog.history";
   var HISTORY_LIMIT = 500;
-  function getStorage2() {
-    if (typeof window === "undefined") return null;
-    try {
-      return window.localStorage ?? null;
-    } catch {
-      return null;
-    }
-  }
   function normalizeEntry(raw) {
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
@@ -25808,12 +26174,8 @@
     return stableStringify(a) === stableStringify(b);
   }
   function loadHistory() {
-    const storage = getStorage2();
-    if (!storage) return [];
     try {
-      const raw = storage.getItem(HISTORY_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
+      const parsed = readAriesPath(HISTORY_STORAGE_KEY);
       if (!Array.isArray(parsed)) return [];
       const out = [];
       for (const item of parsed) {
@@ -25826,14 +26188,12 @@
     }
   }
   function saveHistory(entries) {
-    const storage = getStorage2();
-    if (!storage) return;
     const sorted = entries.slice().sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
     if (sorted.length > HISTORY_LIMIT) {
       sorted.splice(0, sorted.length - HISTORY_LIMIT);
     }
     try {
-      storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sorted));
+      writeAriesPath(HISTORY_STORAGE_KEY, sorted);
     } catch {
     }
   }
@@ -25952,7 +26312,7 @@
   }
 
   // src/utils/activityLogFilter.ts
-  var FILTER_STORAGE_KEY = "qws:activityLog:filter";
+  var FILTER_STORAGE_KEY = "activityLog.filter";
   var STYLE_ID2 = "mg-activity-log-filter-style";
   var ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
   var WRAPPER_CLASS = "mg-activity-log-filter";
@@ -26216,18 +26576,16 @@
     return ACTION_LABELS[action2] ?? action2.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
   }
   function loadPersistedFilter() {
-    if (typeof window === "undefined") return null;
     try {
-      const stored = window.localStorage?.getItem(FILTER_STORAGE_KEY);
+      const stored = readAriesPath(FILTER_STORAGE_KEY);
       return stored || null;
     } catch {
       return null;
     }
   }
   function persistFilter(value) {
-    if (typeof window === "undefined") return;
     try {
-      window.localStorage?.setItem(FILTER_STORAGE_KEY, String(value));
+      writeAriesPath(FILTER_STORAGE_KEY, String(value));
     } catch {
     }
   }
@@ -26738,9 +27096,10 @@
 
   // src/ui/hud.ts
   function mountHUD(opts) {
-    const LS_POS = "qws:pos";
-    const LS_COLL = "qws:collapsed";
-    const LS_HIDDEN = "qws:hidden";
+    const HUD_POS_PATH = "hud.pos";
+    const HUD_COLLAPSED_PATH = "hud.collapsed";
+    const HUD_HIDDEN_PATH = "hud.hidden";
+    const HUD_WIN_PATH = (id) => `hud.windows.${id}`;
     const MARGIN = 8;
     const Z_BASE = 2e6;
     if (document.readyState === "loading") {
@@ -26888,7 +27247,7 @@
     const setHUDHidden = (hidden) => {
       box.classList.toggle("hidden", hidden);
       try {
-        localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0");
+        writeAriesPath(HUD_HIDDEN_PATH, hidden);
       } catch {
       }
       return hidden;
@@ -27057,22 +27416,24 @@
       try {
         const r = parseFloat(box.style.right) || 16;
         const b = parseFloat(box.style.bottom) || 16;
-        localStorage.setItem(LS_POS, JSON.stringify({ r, b }));
+        writeAriesPath(HUD_POS_PATH, { r, b });
       } catch {
       }
     }
     try {
-      const pos = JSON.parse(localStorage.getItem(LS_POS) || "null");
+      const pos = readAriesPath(HUD_POS_PATH);
       if (pos && typeof pos.r === "number" && typeof pos.b === "number") {
         box.style.right = pos.r + "px";
         box.style.bottom = pos.b + "px";
       }
-      if (localStorage.getItem(LS_COLL) === "1") {
+      const collapsed = readAriesPath(HUD_COLLAPSED_PATH);
+      if (collapsed === true || collapsed === "1" || collapsed === 1) {
         box.classList.add("min");
         const btnMin0 = box.querySelector("#qws2-min");
         if (btnMin0) btnMin0.textContent = "+";
       }
-      if (localStorage.getItem(LS_HIDDEN) === "1") box.classList.add("hidden");
+      const hidden = readAriesPath(HUD_HIDDEN_PATH);
+      if (hidden === true || hidden === "1" || hidden === 1) box.classList.add("hidden");
       requestAnimationFrame(() => clampRect(box));
       window.addEventListener("resize", () => clampRect(box));
     } catch {
@@ -27143,9 +27504,9 @@
     btnMin.onclick = () => {
       withTopLocked(box, () => {
         box.classList.toggle("min");
-        btnMin.textContent = box.classList.contains("min") ? "+" : "\u2013";
+        btnMin.textContent = box.classList.contains("min") ? "+" : "-";
         try {
-          localStorage.setItem(LS_COLL, box.classList.contains("min") ? "1" : "0");
+          writeAriesPath(HUD_COLLAPSED_PATH, box.classList.contains("min"));
         } catch {
         }
       });
@@ -27307,17 +27668,15 @@
       try {
         const r = parseFloat(el2.style.right) || 16;
         const b = parseFloat(el2.style.bottom) || 16;
-        localStorage.setItem(`qws:win:${id}:pos`, JSON.stringify({ r, b }));
+        writeAriesPath(HUD_WIN_PATH(id), { r, b });
       } catch {
       }
     }
     function restoreWinPos(id, el2) {
       try {
-        const raw = localStorage.getItem(`qws:win:${id}:pos`);
-        if (!raw) return;
-        const pos = JSON.parse(raw);
-        if (typeof pos.r === "number") el2.style.right = pos.r + "px";
-        if (typeof pos.b === "number") el2.style.bottom = pos.b + "px";
+        const pos = readAriesPath(HUD_WIN_PATH(id));
+        if (pos && typeof pos.r === "number") el2.style.right = pos.r + "px";
+        if (pos && typeof pos.b === "number") el2.style.bottom = pos.b + "px";
         ensureOnScreen(el2);
       } catch {
       }
@@ -35081,7 +35440,6 @@ next: ${next}`;
   }
 
   // src/services/pet-alerts.ts
-  var LS_KEY3 = "qws:petAlerts:v1";
   var clampPct2 = (v) => Math.max(1, Math.min(100, Math.round(v)));
   var prefs = {
     globalEnabled: true,
@@ -35095,9 +35453,7 @@ next: ${next}`;
   var seenBelow = /* @__PURE__ */ new Map();
   function loadPrefs() {
     try {
-      const raw = localStorage.getItem(LS_KEY3);
-      if (!raw) return prefs;
-      const parsed = JSON.parse(raw);
+      const parsed = readAriesPath("pets.alerts");
       if (parsed && typeof parsed === "object") {
         prefs = {
           globalEnabled: parsed.globalEnabled !== false,
@@ -35112,7 +35468,7 @@ next: ${next}`;
   }
   function savePrefs() {
     try {
-      localStorage.setItem(LS_KEY3, JSON.stringify(prefs));
+      writeAriesPath("pets.alerts", prefs);
     } catch {
     }
   }
@@ -40683,8 +41039,7 @@ next: ${next}`;
   }
 
   // src/services/editor.ts
-  var EVENT_NAME = "qws:editor-mode";
-  var LS_SAVED_GARDENS = "qws:editor:saved-gardens";
+  var ARIES_SAVED_GARDENS_PATH = "editor.savedGardens";
   var FIXED_SLOT_START = 1760866288723;
   var FIXED_SLOT_END = 1760867858782;
   var mutationColorMap = {
@@ -42807,10 +43162,6 @@ next: ${next}`;
       } catch {
       }
     });
-    try {
-      window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { enabled } }));
-    } catch {
-    }
   }
   function applyState(enabled, opts = {}) {
     const next = !!enabled;
@@ -42866,11 +43217,9 @@ next: ${next}`;
   }
   function readSavedGardens() {
     try {
-      const raw = localStorage.getItem(LS_SAVED_GARDENS);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.map((g) => ({
+      const parsed = readAriesPath(ARIES_SAVED_GARDENS_PATH);
+      const arr = Array.isArray(parsed) ? parsed : [];
+      return arr.map((g) => ({
         id: String(g?.id || ""),
         name: String(g?.name || "Untitled"),
         createdAt: Number(g?.createdAt) || Date.now(),
@@ -42882,7 +43231,7 @@ next: ${next}`;
   }
   function writeSavedGardens(list) {
     try {
-      localStorage.setItem(LS_SAVED_GARDENS, JSON.stringify(list || []));
+      writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
     } catch {
     }
   }
@@ -44196,15 +44545,6 @@ next: ${next}`;
       await promise;
     }
   }
-  var CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
-  function getStorage3() {
-    if (typeof window === "undefined") return null;
-    try {
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  }
   function sanitizeRoomDefinition(room) {
     if (!room) return null;
     const name = typeof room.name === "string" ? room.name.trim() : "";
@@ -44217,36 +44557,21 @@ next: ${next}`;
     };
   }
   function loadStoredCustomRooms() {
-    const storage = getStorage3();
-    if (!storage) return [];
-    try {
-      const raw = storage.getItem(CUSTOM_ROOMS_STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      const result = [];
-      for (const entry of parsed) {
-        const sanitized = sanitizeRoomDefinition(entry);
-        if (sanitized) {
-          result.push(sanitized);
-        }
-      }
-      return result;
-    } catch {
-      return [];
+    const parsed = readAriesPath("room.customRooms") ?? [];
+    if (!Array.isArray(parsed)) return [];
+    const result = [];
+    for (const entry of parsed) {
+      const sanitized = sanitizeRoomDefinition(entry);
+      if (sanitized) result.push(sanitized);
     }
+    return result;
   }
   function persistCustomRooms(rooms) {
-    const storage = getStorage3();
-    if (!storage) return;
-    try {
-      const payload = rooms.map((room) => ({
-        name: room.name,
-        idRoom: room.idRoom
-      }));
-      storage.setItem(CUSTOM_ROOMS_STORAGE_KEY, JSON.stringify(payload));
-    } catch {
-    }
+    const payload = rooms.map((room) => ({
+      name: room.name,
+      idRoom: room.idRoom
+    }));
+    writeAriesPath("room.customRooms", payload);
   }
   var customRoomsCache = null;
   function getCustomRoomsCache() {
@@ -46395,7 +46720,35 @@ next: ${next}`;
     };
   }
 
+  // src/utils/ariesModApi.ts
+  var pageContext = pageWindow;
+  function buildDefaultServices() {
+    return {
+      PlayerService,
+      EditorService,
+      PetsService,
+      StatsService,
+      lockerService,
+      MiscService,
+      NotifierService,
+      RoomService
+    };
+  }
+  function createAriesModApi(services) {
+    return {
+      readyAt: Date.now(),
+      services: services ?? buildDefaultServices()
+    };
+  }
+  function installAriesModApi(api) {
+    const resolved = api ?? createAriesModApi();
+    pageContext.AriesMod = resolved;
+    shareGlobal("AriesMod", resolved);
+    return resolved;
+  }
+
   // src/main.ts
+  var ariesMod = installAriesModApi();
   var TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"];
   async function preloadAllTiles() {
     const tasks = TILE_SHEETS_TO_PRELOAD.map(async (base) => {
@@ -46406,6 +46759,7 @@ next: ${next}`;
   }
   (async function() {
     "use strict";
+    migrateLocalStorageToAries();
     installPageWebSocketHook();
     initGameVersion();
     void prefetchManifest({ registerSprites: true, waitForVersionMs: 3e3 });
@@ -46445,6 +46799,7 @@ next: ${next}`;
       getPosition: () => PlayerService.getPosition(),
       move: (x, y) => PlayerService.move(x, y)
     });
+    ariesMod.antiAfkController = antiAfk;
     antiAfk.start();
   })();
 })();
