@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.35
+// @version      2.7.36
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -47359,7 +47359,6 @@ next: ${next}`;
         register("editor", "\u{1F4DD} Editor", renderEditorMenu);
         register("stats", "\u{1F4CA} Stats", renderStatsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
-        register("settings", "Settings", renderSettingsMenu);
         register("keybinds", "\u2328\uFE0F Keybinds", renderKeybindsMenu);
         register("tools", "\u{1F6E0}\uFE0F Tools", renderToolsMenu);
         register("settings", "\u2699\uFE0F Settings", renderSettingsMenu);
