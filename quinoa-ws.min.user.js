@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.26
+// @version      2.7.30
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17897,130 +17897,748 @@
   }
   shareGlobal("initSprites", initSprites);
 
-  // src/core/spriteBootstrap.ts
-  var INITIAL_TIMEOUT_MS = 12e3;
-  var POLL_INTERVAL_MS = 100;
-  var LOG_PREFIX = "[SpritesBootstrap]";
-  var bootPromise = null;
-  var listening = false;
-  var refreshScheduled = false;
-  var ready = false;
-  function ensureSpritesReady() {
-    if (typeof window === "undefined") {
-      return Promise.resolve();
-    }
-    startListening();
-    if (!bootPromise) {
-      enqueueBootstrap("initial");
-    }
-    return bootPromise;
+  // src/utils/tileSheet.ts
+  var sheetCache = /* @__PURE__ */ new Map();
+  var escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  function clearTileSheetCache() {
+    sheetCache.clear();
   }
-  function startListening() {
-    if (listening || typeof window === "undefined") return;
-    listening = true;
-    window.addEventListener("mg:sprite-detected", handleSpriteDetected);
+  function normalizeSheetBase(urlOrBase) {
+    const clean = urlOrBase.split(/[?#]/)[0] ?? urlOrBase;
+    const file = clean.split("/").pop() ?? clean;
+    return file.replace(/\.[^.]+$/, "");
   }
-  function handleSpriteDetected() {
-    if (refreshScheduled || typeof window === "undefined") return;
-    refreshScheduled = true;
-    window.setTimeout(() => {
-      refreshScheduled = false;
-      enqueueBootstrap("update");
-    }, 150);
-  }
-  function enqueueBootstrap(reason) {
-    const previous = bootPromise ?? Promise.resolve();
-    bootPromise = previous.then(() => runBootstrap(reason)).then(
-      () => {
-        ready = true;
-      },
-      (error) => {
-        console.warn(LOG_PREFIX, "preload failed", { reason, error });
+  function uniqueBases(urls, fallback) {
+    const set2 = /* @__PURE__ */ new Set();
+    for (const url of urls) {
+      if (typeof url === "string" && url.length) {
+        set2.add(normalizeSheetBase(url));
       }
-    );
-  }
-  async function runBootstrap(reason) {
-    if (typeof window === "undefined") return;
-    await waitForTileSources(INITIAL_TIMEOUT_MS);
-    if (!hasTileSources()) return;
-    console.debug(LOG_PREFIX, "loading sprite caches", { reason });
-    const tasks = [];
-    try {
-      tasks.push(
-        Sprites.preloadTilesGradually({
-          mode: "canvas",
-          batchSize: 1,
-          delayMs: 30
-        })
-      );
-    } catch (error) {
-      console.warn(LOG_PREFIX, "preloadTilesGradually threw synchronously", { reason, error });
     }
-    try {
-      tasks.push(Sprites.loadUI());
-    } catch (error) {
-      console.warn(LOG_PREFIX, "loadUI threw synchronously", { reason, error });
+    if (set2.size === 0) {
+      for (const base of fallback) set2.add(base);
     }
-    if (!tasks.length) return;
+    return [...set2];
   }
-  function hasTileSources() {
-    try {
-      const lists = Sprites.lists();
-      return lists.tiles.length > 0 || lists.ui.length > 0;
-    } catch {
-      return false;
-    }
-  }
-  async function waitForTileSources(timeoutMs) {
-    if (typeof window === "undefined") return;
-    const deadline = Date.now() + timeoutMs;
-    while (!hasTileSources() && Date.now() < deadline) {
-      await delay3(POLL_INTERVAL_MS);
-    }
-  }
-  function delay3(ms) {
-    return new Promise((resolve2) => {
-      if (typeof window === "undefined") {
-        setTimeout(resolve2, ms);
-      } else {
-        window.setTimeout(resolve2, ms);
+  async function loadTileSheet(base) {
+    const key2 = base.toLowerCase();
+    if (sheetCache.has(key2)) return sheetCache.get(key2);
+    const regex = new RegExp(`${escapeRegExp(base)}\\.(png|webp)$`, "i");
+    const promise = Sprites.loadTiles({ mode: "canvas", onlySheets: regex }).then((map2) => {
+      for (const [sheetBase, tiles] of map2.entries()) {
+        if (sheetBase.toLowerCase() === key2) return tiles ?? [];
       }
-    });
+      const direct = map2.get(base);
+      return direct ?? [];
+    }).catch(() => []);
+    sheetCache.set(key2, promise);
+    return promise;
   }
 
-  // src/utils/weatherSprites.ts
+  // src/utils/gameVersion.ts
+  var gameVersion = null;
+  function initGameVersion(doc) {
+    if (gameVersion !== null) {
+      return;
+    }
+    const d = doc ?? (typeof document !== "undefined" ? document : null);
+    if (!d) {
+      return;
+    }
+    const scripts = d.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts.item(i);
+      if (!script) continue;
+      const src = script.src;
+      if (!src) continue;
+      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (match && match[1]) {
+        gameVersion = match[1];
+        return;
+      }
+    }
+  }
+
+  // src/services/assetManifest.ts
+  var LOG_PREFIX = "[AssetManifest]";
+  var ASSET_BASE_RE = /(https?:\/\/[^/]+\/(?:version\/[^/]+\/)?assets\/)/i;
+  var VERSION_RE = /\/version\/([^/]+)\//i;
+  var VERSION_PATH_RE = /\/version\/([^/]+)\//i;
+  var manifestCache = null;
+  var manifestPromise = null;
+  var resolvedAssets = [];
+  var aliasIndex = /* @__PURE__ */ new Map();
+  var manifestFamilyIndex = /* @__PURE__ */ new Map();
+  var assetBaseUrl = null;
+  var assetVersion = null;
+  var autoLoadScheduled = false;
+  var manifestBaseUsed = null;
+  function normalizeManifest(manifest) {
+    if (!manifest || typeof manifest !== "object") return null;
+    if (!Array.isArray(manifest.bundles)) {
+      return { bundles: [] };
+    }
+    const bundles = manifest.bundles.map((b) => ({
+      name: typeof b.name === "string" && b.name ? b.name : "default",
+      assets: Array.isArray(b.assets) ? b.assets : []
+    })).filter((b) => b.assets.length > 0);
+    return { bundles };
+  }
+  function normalizeFamilyName(name) {
+    if (!name) return null;
+    const normalized = name.trim().toLowerCase();
+    return normalized ? normalized : null;
+  }
+  function extractFamilyFromPath(path) {
+    if (!path) return null;
+    const cleaned = path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/[\?#].*$/, "");
+    const slashIndex = cleaned.indexOf("/");
+    if (slashIndex <= 0) return null;
+    return normalizeFamilyName(cleaned.slice(0, slashIndex));
+  }
+  function deriveAssetFamilies(src, aliases, bundleName) {
+    const families = /* @__PURE__ */ new Set();
+    const add = (path) => {
+      const family = extractFamilyFromPath(path);
+      if (family) families.add(family);
+    };
+    add(src);
+    for (const alias of aliases) {
+      add(alias);
+    }
+    if (!families.size) {
+      const fallback = normalizeFamilyName(bundleName);
+      if (fallback) families.add(fallback);
+    }
+    return Array.from(families);
+  }
+  function toAbsoluteUrl(base, rel) {
+    if (/^https?:\/\//i.test(rel)) return rel;
+    const cleanBase = base.endsWith("/") ? base : `${base}/`;
+    return `${cleanBase}${rel.replace(/^\/+/, "")}`;
+  }
+  function inferAssetBase(url) {
+    try {
+      const href = new URL(url, location.href).href;
+      const m = href.match(ASSET_BASE_RE);
+      if (m && m[1]) {
+        return m[1];
+      }
+    } catch {
+    }
+    return null;
+  }
+  function setAssetBase(url) {
+    if (!url) return;
+    const base = inferAssetBase(url);
+    if (!base) return;
+    if (assetBaseUrl && assetBaseUrl === base) return;
+    assetBaseUrl = base;
+    const match = base.match(VERSION_RE);
+    assetVersion = match?.[1] ?? assetVersion;
+  }
+  function getManifestUrl(custom) {
+    if (custom) return custom;
+    if (assetBaseUrl) return `${assetBaseUrl}manifest.json`;
+    return null;
+  }
+  function inferBaseFromLocation() {
+    try {
+      const href = location.href;
+      const match = href.match(VERSION_PATH_RE);
+      if (match?.[1]) {
+        return `${location.origin}/version/${match[1]}/assets/`;
+      }
+    } catch {
+    }
+    return null;
+  }
+  function baseFromGameVersion() {
+    if (!gameVersion) return null;
+    try {
+      return `${location.origin}/version/${gameVersion}/assets/`;
+    } catch {
+      return null;
+    }
+  }
+  function sleep2(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  function indexResolvedAssets(list) {
+    resolvedAssets = list;
+    aliasIndex = /* @__PURE__ */ new Map();
+    manifestFamilyIndex = /* @__PURE__ */ new Map();
+    for (const asset of list) {
+      aliasIndex.set(asset.src, asset);
+      aliasIndex.set(asset.url, asset);
+      for (const alias of asset.aliases) {
+        aliasIndex.set(alias, asset);
+      }
+      for (const family of asset.families) {
+        const bucket = manifestFamilyIndex.get(family);
+        if (bucket) {
+          bucket.push(asset);
+        } else {
+          manifestFamilyIndex.set(family, [asset]);
+        }
+      }
+    }
+  }
+  function resolveManifest(manifest, base) {
+    const out = [];
+    for (const bundle of manifest.bundles ?? []) {
+      const bundleName = bundle.name ?? "default";
+      for (const asset of bundle.assets ?? []) {
+        const aliases = Array.isArray(asset.alias) ? asset.alias.filter(Boolean) : [];
+        for (const src of asset.src ?? []) {
+          const url = base ? toAbsoluteUrl(base, src) : src;
+          const families = deriveAssetFamilies(src, aliases, bundleName);
+          const primaryFamily = families[0] ?? null;
+          out.push({
+            bundle: bundleName,
+            aliases,
+            src,
+            url,
+            tags: asset.data?.tags ?? {},
+            families,
+            primaryFamily
+          });
+        }
+      }
+    }
+    return out;
+  }
+  function registerSpritesFromResolved(list) {
+    let added = 0;
+    for (const asset of list) {
+      const wasNew = Sprites.registerKnownAsset(asset.url, asset.families);
+      if (wasNew && (asset.families.includes("tiles") || asset.families.includes("ui"))) {
+        added += 1;
+      }
+    }
+    if (added > 0) {
+      try {
+        pageWindow.dispatchEvent(new CustomEvent("mg:sprite-detected", { detail: { source: "manifest" } }));
+      } catch {
+      }
+    }
+    return added;
+  }
+  async function fetchManifest(manifestUrl) {
+    try {
+      const res = await fetch(manifestUrl, { cache: "no-store", credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      return normalizeManifest(json);
+    } catch (error) {
+      console.warn(LOG_PREFIX, "unable to fetch remote manifest", { manifestUrl, error });
+      return null;
+    }
+  }
+  function recordAssetUrlHint(url) {
+    const previousBase = assetBaseUrl;
+    setAssetBase(url);
+    if (assetBaseUrl && assetBaseUrl !== previousBase) {
+      scheduleAutoLoad();
+    }
+  }
+  function scheduleAutoLoad() {
+    if (autoLoadScheduled) return;
+    autoLoadScheduled = true;
+    setTimeout(() => {
+      autoLoadScheduled = false;
+      void prefetchManifest({ registerSprites: true }).catch(() => {
+      });
+    }, 100);
+  }
+  async function prefetchManifest(options = {}) {
+    const desiredBase = assetBaseUrl ?? null;
+    if (!options.force && manifestCache) {
+      if (!desiredBase || manifestBaseUsed === desiredBase) {
+        return manifestCache;
+      }
+    }
+    if (!options.force && manifestPromise) return manifestPromise;
+    if (!assetBaseUrl) {
+      const hintedVersionBase = baseFromGameVersion();
+      if (hintedVersionBase) {
+        setAssetBase(hintedVersionBase);
+      } else {
+        const hintedBase = inferBaseFromLocation();
+        if (hintedBase) setAssetBase(hintedBase);
+      }
+    }
+    if (!assetBaseUrl && options.waitForVersionMs) {
+      const deadline = Date.now() + options.waitForVersionMs;
+      while (!assetBaseUrl && !gameVersion && Date.now() < deadline) {
+        await sleep2(50);
+      }
+      if (!assetBaseUrl && gameVersion) {
+        const hintedVersionBase = baseFromGameVersion();
+        if (hintedVersionBase) setAssetBase(hintedVersionBase);
+      }
+    }
+    const manifestUrl = getManifestUrl(options.url);
+    if (!manifestUrl) {
+      console.warn(LOG_PREFIX, "no manifest URL could be resolved");
+      return null;
+    }
+    manifestPromise = (async () => {
+      const manifest = manifestUrl ? await fetchManifest(manifestUrl) : null;
+      if (!manifest) return null;
+      if (manifestUrl) {
+        setAssetBase(manifestUrl);
+      }
+      const baseForResolution = assetBaseUrl ?? (manifestUrl ? inferAssetBase(manifestUrl) : null);
+      const resolved = resolveManifest(manifest, baseForResolution);
+      indexResolvedAssets(resolved);
+      manifestBaseUsed = baseForResolution ?? manifestBaseUsed;
+      if (options.registerSprites !== false && baseForResolution) {
+        registerSpritesFromResolved(resolved);
+      }
+      manifestCache = manifest;
+      return manifest;
+    })();
+    try {
+      return await manifestPromise;
+    } finally {
+      manifestPromise = null;
+    }
+  }
+  var spritesReadyPromise = null;
+  function ensureSpritesReady() {
+    if (spritesReadyPromise) return spritesReadyPromise;
+    spritesReadyPromise = (async () => {
+      await prefetchManifest({ registerSprites: true, waitForVersionMs: 4e3 });
+    })();
+    return spritesReadyPromise;
+  }
+
+  // src/utils/sprites.ts
   var spriteConfig = /* @__PURE__ */ new WeakMap();
   var spriteSubscribers = /* @__PURE__ */ new Map();
   var spriteCache = /* @__PURE__ */ new Map();
   var spritePromises = /* @__PURE__ */ new Map();
-  var listenerAttached = false;
+  var nowMs = () => typeof performance !== "undefined" ? performance.now() : Date.now();
+  var plantCatalogLookup = plantCatalog;
+  var FALLBACK_BASES = {
+    Seed: ["seeds"],
+    Egg: ["pets"],
+    Tool: ["items"],
+    Decor: ["decor"],
+    Crop: ["plants"]
+  };
+  var baseCache = {};
+  var tallCropSheetBases = null;
+  var computeBases = (provider, fallback) => {
+    try {
+      const list = provider() ?? [];
+      return uniqueBases(list, fallback);
+    } catch {
+      return [...fallback];
+    }
+  };
+  var LIST_PROVIDERS = {
+    Seed: () => typeof Sprites.listSeeds === "function" ? Sprites.listSeeds() : [],
+    Egg: () => typeof Sprites.listPets === "function" ? Sprites.listPets() : [],
+    Tool: () => typeof Sprites.listItems === "function" ? Sprites.listItems() : [],
+    Decor: () => typeof Sprites.listTilesByCategory === "function" ? Sprites.listTilesByCategory(/decor/i) : []
+  };
+  var TALL_CROP_SPECIES = /* @__PURE__ */ new Set(["Cactus", "Bamboo"]);
+  var SHOP_SPRITE_ID_BUILDERS = {
+    Seed: () => Object.keys(plantCatalogLookup).filter((id) => Boolean(plantCatalogLookup[id]?.seed?.tileRef)),
+    Crop: () => Object.keys(plantCatalogLookup).filter((id) => Boolean(plantCatalogLookup[id]?.crop?.tileRef)),
+    Egg: () => Object.keys(eggCatalog),
+    Tool: () => Object.keys(toolCatalog),
+    Decor: () => Object.keys(decorCatalog)
+  };
+  var warmupIdCache = {};
+  function getShopSpriteWarmupIds(type) {
+    const cached = warmupIdCache[type];
+    if (cached) return cached;
+    const builder = SHOP_SPRITE_ID_BUILDERS[type];
+    if (!builder) return [];
+    const ids = builder().filter((id) => typeof id === "string" && id.length > 0);
+    warmupIdCache[type] = ids;
+    return ids;
+  }
+  function spriteKey(type, id) {
+    return `${type}::${id}`;
+  }
+  function defaultFallback(type) {
+    switch (type) {
+      case "Seed":
+        return "\u{1F331}";
+      case "Egg":
+        return "\u{1F95A}";
+      case "Tool":
+        return "\u{1F9F0}";
+      case "Decor":
+        return "\u{1F3E0}";
+      case "Crop":
+        return "\u{1F34E}";
+    }
+  }
+  function getCropBases() {
+    if (baseCache.Crop) return baseCache.Crop;
+    const provider = () => {
+      if (typeof Sprites.listTilesByCategory !== "function") return [];
+      const all = Sprites.listTilesByCategory(/plants|allplants/i);
+      const filtered = all.filter((u) => !/tallplants/i.test(u) && !/tall/i.test(u));
+      return filtered.length ? filtered : all;
+    };
+    const bases = computeBases(provider, FALLBACK_BASES.Crop);
+    baseCache.Crop = bases;
+    return bases;
+  }
+  function getTallCropBases() {
+    if (tallCropSheetBases) return tallCropSheetBases;
+    const provider = () => {
+      if (typeof Sprites.listTilesByCategory !== "function") return [];
+      return Sprites.listTilesByCategory(/tallplants/i);
+    };
+    tallCropSheetBases = computeBases(provider, ["tallplants", "TallPlants"]);
+    return tallCropSheetBases;
+  }
+  function getBases(type, id) {
+    if (type === "Crop") {
+      const bases2 = getCropBases();
+      if (id && TALL_CROP_SPECIES.has(id)) {
+        return [...getTallCropBases(), ...bases2];
+      }
+      return bases2;
+    }
+    if (baseCache[type]) return baseCache[type];
+    const builder = LIST_PROVIDERS[type];
+    const fallback = FALLBACK_BASES[type];
+    const bases = builder ? computeBases(builder, fallback) : [...fallback];
+    baseCache[type] = bases;
+    return bases;
+  }
+  function toTileIndex(tileRef) {
+    if (tileRef == null) return null;
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    return value - 1;
+  }
+  function getTileRef(type, id) {
+    switch (type) {
+      case "Seed":
+        return plantCatalog?.[id]?.seed?.tileRef ?? null;
+      case "Egg":
+        return eggCatalog?.[id]?.tileRef ?? null;
+      case "Tool":
+        return toolCatalog?.[id]?.tileRef ?? null;
+      case "Decor":
+        return decorCatalog?.[id]?.tileRef ?? null;
+      case "Crop":
+        return plantCatalog?.[id]?.crop?.tileRef ?? null;
+    }
+  }
+  function subscribeSprite(key2, el2) {
+    let subs = spriteSubscribers.get(key2);
+    if (!subs) {
+      subs = /* @__PURE__ */ new Set();
+      spriteSubscribers.set(key2, subs);
+    }
+    subs.add(el2);
+  }
+  function unsubscribeIfDisconnected(key2, el2) {
+    const subs = spriteSubscribers.get(key2);
+    if (!subs) return;
+    if (!el2.isConnected) {
+      subs.delete(el2);
+      spriteConfig.delete(el2);
+    }
+    if (subs.size === 0) {
+      spriteSubscribers.delete(key2);
+    }
+  }
+  function applySprite(el2, src) {
+    const cfg = spriteConfig.get(el2);
+    if (!cfg) return;
+    const { size, fallback, alt } = cfg;
+    el2.innerHTML = "";
+    el2.style.display = "inline-flex";
+    el2.style.alignItems = "center";
+    el2.style.justifyContent = "center";
+    el2.style.width = `${size}px`;
+    el2.style.height = `${size}px`;
+    el2.style.flexShrink = "0";
+    el2.style.position = "relative";
+    el2.setAttribute("role", "img");
+    if (src) {
+      el2.removeAttribute("aria-label");
+      el2.style.fontSize = "";
+      const img = document.createElement("img");
+      img.src = src;
+      img.alt = alt;
+      img.decoding = "async";
+      img.loading = "lazy";
+      img.draggable = false;
+      img.style.width = "100%";
+      img.style.height = "100%";
+      img.style.objectFit = "contain";
+      el2.appendChild(img);
+    } else {
+      el2.textContent = fallback;
+      el2.style.fontSize = `${Math.max(10, Math.round(size * 0.72))}px`;
+      el2.setAttribute("aria-label", alt || fallback);
+    }
+  }
+  function notifySpriteSubscribers(key2, src) {
+    const subs = spriteSubscribers.get(key2);
+    if (!subs) return;
+    subs.forEach((el2) => {
+      if (!el2.isConnected) {
+        unsubscribeIfDisconnected(key2, el2);
+        return;
+      }
+      applySprite(el2, src);
+    });
+  }
+  async function fetchSprite(type, id) {
+    await ensureSpritesReady();
+    if (typeof pageWindow === "undefined") return null;
+    if (typeof Sprites?.getTile !== "function") return null;
+    const tileRef = getTileRef(type, id);
+    const index = toTileIndex(tileRef);
+    if (index == null) return null;
+    const bases = getBases(type, id);
+    for (const base of bases) {
+      try {
+        const tiles = await loadTileSheet(base);
+        const tile = tiles.find((t) => t.index === index);
+        const canvas = tile?.data;
+        if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
+        const dataUrl = canvas.toDataURL();
+        return dataUrl;
+      } catch (error) {
+      }
+    }
+    return null;
+  }
+  function loadSprite(type, id, key2 = spriteKey(type, id)) {
+    if (typeof pageWindow === "undefined") {
+      spriteCache.set(key2, { payload: null, createdAt: nowMs() });
+      notifySpriteSubscribers(key2, null);
+      return Promise.resolve(null);
+    }
+    const cached = spriteCache.get(key2);
+    if (cached !== void 0) {
+      notifySpriteSubscribers(key2, cached.payload);
+      return Promise.resolve(cached.payload);
+    }
+    const inflight = spritePromises.get(key2);
+    if (inflight) return inflight;
+    const promise = fetchSprite(type, id).then((src) => {
+      spriteCache.set(key2, { payload: src, createdAt: nowMs() });
+      spritePromises.delete(key2);
+      return src;
+    }).catch(() => {
+      spritePromises.delete(key2);
+      return null;
+    });
+    spritePromises.set(key2, promise);
+    return promise;
+  }
+  function prefetchShopSprite(type, id) {
+    const key2 = spriteKey(type, id);
+    return loadSprite(type, id, key2);
+  }
+  var SHOP_SPRITE_WARMUP_TYPES = ["Seed", "Egg", "Tool", "Decor", "Crop"];
+  var DEFAULT_SHOP_SPRITE_WARMUP_LIMITS = {
+    Seed: 18,
+    Egg: 6,
+    Tool: 6,
+    Decor: 24,
+    Crop: 10
+  };
+  var waitMs = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  function resolveWarmupLimit(type, options) {
+    const limitConfig = options.limit;
+    if (typeof limitConfig === "number") {
+      return limitConfig;
+    }
+    if (limitConfig && typeof limitConfig === "object" && limitConfig[type] != null) {
+      return limitConfig[type];
+    }
+    return DEFAULT_SHOP_SPRITE_WARMUP_LIMITS[type] ?? Infinity;
+  }
+  async function warmUpShopSprites(options = {}) {
+    if (typeof pageWindow === "undefined") return;
+    const delay4 = Math.max(0, options.delayMs ?? 0);
+    const step = Math.max(0, options.stepMs ?? 0);
+    const types = options.types ?? SHOP_SPRITE_WARMUP_TYPES;
+    if (delay4 > 0) {
+      await waitMs(delay4);
+    }
+    for (const type of types) {
+      const ids = getShopSpriteWarmupIds(type);
+      if (ids.length === 0) continue;
+      const limit = resolveWarmupLimit(type, options);
+      if (limit <= 0) {
+        continue;
+      }
+      const selected = limit < ids.length ? ids.slice(0, limit) : ids;
+      for (const id of selected) {
+        try {
+          await prefetchShopSprite(type, id);
+        } catch {
+        }
+        if (step > 0) {
+          await waitMs(step);
+        }
+      }
+    }
+  }
+  var SHOP_SPRITE_BATCH_SIZE = 12;
+  var SHOP_SPRITE_BATCH_DELAY_MS = 0;
+  var SHOP_SPRITE_BATCH_THRESHOLD = 10;
+  var shopSpriteBatchConfig = {
+    enabled: true,
+    batchSize: SHOP_SPRITE_BATCH_SIZE,
+    delayMs: SHOP_SPRITE_BATCH_DELAY_MS,
+    threshold: SHOP_SPRITE_BATCH_THRESHOLD
+  };
+  var shopSpriteBatchQueue = [];
+  var shopSpriteBatchScheduled = false;
+  var shopSpriteBurstCount = 0;
+  var shopSpriteBurstResetToken = null;
+  var resetShopSpriteBurst = () => {
+    shopSpriteBurstCount = 0;
+    shopSpriteBurstResetToken = null;
+  };
+  var trackShopSpriteBurst = () => {
+    shopSpriteBurstCount += 1;
+    if (shopSpriteBurstResetToken != null) return shopSpriteBurstCount;
+    if (typeof requestAnimationFrame === "function") {
+      shopSpriteBurstResetToken = requestAnimationFrame(resetShopSpriteBurst);
+    } else if (typeof window !== "undefined") {
+      shopSpriteBurstResetToken = window.setTimeout(resetShopSpriteBurst, 16);
+    } else {
+      resetShopSpriteBurst();
+    }
+    return shopSpriteBurstCount;
+  };
+  var resolveShopSpriteBatchConfig = (batchOptions) => ({
+    enabled: batchOptions?.enabled ?? shopSpriteBatchConfig.enabled,
+    batchSize: Math.max(1, Math.floor(batchOptions?.batchSize ?? shopSpriteBatchConfig.batchSize)),
+    delayMs: Math.max(0, Math.floor(batchOptions?.delayMs ?? shopSpriteBatchConfig.delayMs)),
+    threshold: Math.max(1, Math.floor(batchOptions?.threshold ?? shopSpriteBatchConfig.threshold))
+  });
+  var shouldBatchShopSprite = (resolved, batchOptions) => {
+    if (!resolved.enabled) return false;
+    if (batchOptions?.force === true) return true;
+    if (batchOptions?.force === false) return false;
+    if (typeof window === "undefined") return false;
+    const burst = trackShopSpriteBurst();
+    return burst >= resolved.threshold;
+  };
+  var normalizeShopSpriteOptions = (type, options) => {
+    const size = Math.max(12, options.size ?? 36);
+    const fallback = String(options.fallback ?? defaultFallback(type));
+    const alt = typeof options.alt === "string" ? options.alt : "";
+    return { size, fallback, alt };
+  };
+  var createShopSpriteImmediate = (type, id, options) => {
+    const { size, fallback, alt } = options;
+    const el2 = document.createElement("span");
+    spriteConfig.set(el2, { size, fallback, alt });
+    if (typeof pageWindow === "undefined") {
+      applySprite(el2, null);
+      return el2;
+    }
+    const key2 = spriteKey(type, id);
+    subscribeSprite(key2, el2);
+    applySprite(el2, spriteCache.get(key2)?.payload ?? null);
+    const promise = loadSprite(type, id, key2);
+    return el2;
+  };
+  function flushShopSpriteBatch() {
+    shopSpriteBatchScheduled = false;
+    if (!shopSpriteBatchQueue.length) return;
+    const batchSize = Math.max(1, shopSpriteBatchQueue[0]?.batchSize ?? SHOP_SPRITE_BATCH_SIZE);
+    const tasks = shopSpriteBatchQueue.splice(0, batchSize);
+    tasks.forEach((task) => {
+      const { placeholder } = task;
+      if (!placeholder.isConnected) return;
+      const sprite = createShopSpriteImmediate(task.type, task.id, task.options);
+      try {
+        placeholder.replaceWith(sprite);
+      } catch {
+      }
+    });
+    if (shopSpriteBatchQueue.length) {
+      scheduleShopSpriteBatch();
+    }
+  }
+  function scheduleShopSpriteBatch() {
+    if (shopSpriteBatchScheduled) return;
+    shopSpriteBatchScheduled = true;
+    const delayMs = Math.max(0, shopSpriteBatchQueue[0]?.delayMs ?? SHOP_SPRITE_BATCH_DELAY_MS);
+    const run = () => {
+      if (delayMs > 0) {
+        setTimeout(flushShopSpriteBatch, delayMs);
+      } else {
+        flushShopSpriteBatch();
+      }
+    };
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(run);
+    } else {
+      setTimeout(run, delayMs);
+    }
+  }
+  var enqueueShopSpriteBatch = (type, id, options, batchOptions) => {
+    const placeholder = document.createElement("span");
+    spriteConfig.set(placeholder, options);
+    applySprite(placeholder, null);
+    shopSpriteBatchQueue.push({
+      type,
+      id,
+      options,
+      placeholder,
+      batchSize: batchOptions.batchSize,
+      delayMs: batchOptions.delayMs
+    });
+    scheduleShopSpriteBatch();
+    return placeholder;
+  };
+  function createShopSprite(type, id, options = {}, batchOptions) {
+    const normalizedOptions = normalizeShopSpriteOptions(type, options);
+    const resolvedBatch = resolveShopSpriteBatchConfig(batchOptions);
+    if (shouldBatchShopSprite(resolvedBatch, batchOptions)) {
+      return enqueueShopSpriteBatch(type, id, normalizedOptions, resolvedBatch);
+    }
+    return createShopSpriteImmediate(type, id, normalizedOptions);
+  }
+  var weatherSpriteConfig = /* @__PURE__ */ new WeakMap();
+  var weatherSpriteSubscribers = /* @__PURE__ */ new Map();
+  var weatherSpriteCache = /* @__PURE__ */ new Map();
+  var weatherSpritePromises = /* @__PURE__ */ new Map();
+  var weatherListenerAttached = false;
   var animationBases = null;
   var weatherTileIndices = (() => {
     const map2 = /* @__PURE__ */ new Map();
     for (const [rawKey, rawValue] of Object.entries(tileRefsAnimations ?? {})) {
-      const key2 = normalizeRawKey(rawKey);
-      const index = toTileIndex(rawValue);
+      const key2 = normalizeWeatherRawKey(rawKey);
+      const index = toAnimationTileIndex(rawValue);
       if (key2 && index != null) {
         map2.set(key2, index);
       }
     }
     return map2;
   })();
-  function normalizeRawKey(raw) {
+  function normalizeWeatherRawKey(raw) {
     const str = typeof raw === "string" ? raw : String(raw ?? "");
     return str.trim().replace(/^Weather:/i, "").replace(/[^a-z0-9]+/gi, "").toLowerCase();
   }
-  function toTileIndex(value) {
+  function toAnimationTileIndex(value) {
     const num = typeof value === "number" ? value : Number(value);
     if (!Number.isFinite(num)) return null;
     return num > 0 ? Math.trunc(num) - 1 : Math.trunc(num);
-  }
-  function resolveSpriteKey(raw) {
-    if (raw == null) return null;
-    const normalized = normalizeRawKey(raw);
-    if (!normalized) return null;
-    if (weatherTileIndices.has(normalized)) return normalized;
-    return null;
   }
   function getAnimationBases() {
     if (animationBases) return animationBases;
@@ -18038,50 +18656,51 @@
     } catch {
     }
     if (bases.size === 0) {
-      ["animations", "Animations", "animation", "Animation"].forEach((base) => bases.add(base));
+      bases.add("animations");
     }
     animationBases = [...bases];
     return animationBases;
   }
-  function subscribeSprite(key2, el2, config) {
-    let subs = spriteSubscribers.get(key2);
+  function subscribeWeatherSprite(key2, el2, config) {
+    let subs = weatherSpriteSubscribers.get(key2);
     if (!subs) {
       subs = /* @__PURE__ */ new Set();
-      spriteSubscribers.set(key2, subs);
+      weatherSpriteSubscribers.set(key2, subs);
     }
     subs.add(el2);
-    spriteConfig.set(el2, config);
+    weatherSpriteConfig.set(el2, config);
   }
-  function notifySpriteSubscribers(key2, src) {
-    const subs = spriteSubscribers.get(key2);
+  function notifyWeatherSpriteSubscribers(key2, src) {
+    const subs = weatherSpriteSubscribers.get(key2);
     if (!subs) return;
     subs.forEach((el2) => {
       if (!el2.isConnected) {
         subs.delete(el2);
-        spriteConfig.delete(el2);
+        weatherSpriteConfig.delete(el2);
         return;
       }
-      applySprite(el2, src);
+      applyWeatherSprite(el2, src);
     });
     if (subs.size === 0) {
-      spriteSubscribers.delete(key2);
+      weatherSpriteSubscribers.delete(key2);
     }
   }
-  function ensureSpriteListener() {
-    if (listenerAttached || typeof window === "undefined") return;
-    listenerAttached = true;
+  function ensureWeatherSpriteListener() {
+    if (weatherListenerAttached || typeof window === "undefined") return;
+    weatherListenerAttached = true;
     window.addEventListener("mg:sprite-detected", () => {
-      spriteCache.clear();
-      spritePromises.clear();
+      weatherSpriteCache.clear();
+      weatherSpritePromises.clear();
       animationBases = null;
-      const keys = Array.from(spriteSubscribers.keys());
+      clearTileSheetCache();
+      const keys = Array.from(weatherSpriteSubscribers.keys());
       keys.forEach((key2) => {
-        void loadSprite(key2);
+        void loadWeatherSprite(key2);
       });
     });
   }
-  function applySprite(el2, src) {
-    const cfg = spriteConfig.get(el2);
+  function applyWeatherSprite(el2, src) {
+    const cfg = weatherSpriteConfig.get(el2);
     if (!cfg) return;
     const { size, fallback, alt } = cfg;
     el2.innerHTML = "";
@@ -18113,77 +18732,244 @@
       else el2.removeAttribute("aria-label");
     }
   }
-  async function fetchSprite(key2) {
+  async function fetchWeatherSprite(key2) {
     await ensureSpritesReady();
     const index = weatherTileIndices.get(key2);
     if (index == null) return null;
     const bases = getAnimationBases();
     for (const base of bases) {
       try {
-        const tile = await Sprites.getTile(base, index, "canvas");
-        const canvas = tile?.data;
+        const tiles = await loadTileSheet(base);
+        const tile = tiles.find((t) => t.index === index);
+        if (!tile) continue;
+        const canvas = Sprites.toCanvas(tile);
         if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-        const copy2 = document.createElement("canvas");
-        copy2.width = canvas.width;
-        copy2.height = canvas.height;
-        const ctx = copy2.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy2.toDataURL();
+        return canvas.toDataURL();
       } catch {
       }
     }
     return null;
   }
-  function loadSprite(key2) {
+  function loadWeatherSprite(key2) {
     if (typeof window === "undefined") {
-      spriteCache.set(key2, null);
-      notifySpriteSubscribers(key2, null);
+      weatherSpriteCache.set(key2, null);
+      notifyWeatherSpriteSubscribers(key2, null);
       return Promise.resolve(null);
     }
-    const cached = spriteCache.get(key2);
+    const cached = weatherSpriteCache.get(key2);
     if (cached !== void 0) {
-      notifySpriteSubscribers(key2, cached);
+      notifyWeatherSpriteSubscribers(key2, cached);
       return Promise.resolve(cached);
     }
-    const inflight = spritePromises.get(key2);
+    const inflight = weatherSpritePromises.get(key2);
     if (inflight) return inflight;
-    const promise = fetchSprite(key2).then((src) => {
-      spriteCache.set(key2, src);
-      spritePromises.delete(key2);
-      notifySpriteSubscribers(key2, src);
+    const promise = fetchWeatherSprite(key2).then((src) => {
+      weatherSpriteCache.set(key2, src);
+      weatherSpritePromises.delete(key2);
+      notifyWeatherSpriteSubscribers(key2, src);
       return src;
     }).catch(() => {
-      spritePromises.delete(key2);
+      weatherSpritePromises.delete(key2);
       return null;
     });
-    spritePromises.set(key2, promise);
+    weatherSpritePromises.set(key2, promise);
     return promise;
   }
+  async function prefetchWeatherSprites(options = {}) {
+    const { keys, limit = 20, delayMs = 40 } = options;
+    const sourceKeys = (keys ?? Array.from(weatherTileIndices.keys())).map((value) => normalizeWeatherRawKey(value)).map((value) => getWeatherSpriteKey(value)).filter((value) => Boolean(value));
+    const max = limit && limit > 0 ? Math.min(limit, sourceKeys.length) : sourceKeys.length;
+    for (let i = 0; i < max; i += 1) {
+      const key2 = sourceKeys[i];
+      try {
+        await loadWeatherSprite(key2);
+      } catch {
+      }
+      if (delayMs > 0 && i < max - 1) {
+        await waitMs(delayMs);
+      }
+    }
+  }
   function getWeatherSpriteKey(raw) {
-    return resolveSpriteKey(raw);
+    if (raw == null) return null;
+    const normalized = normalizeWeatherRawKey(raw);
+    if (!normalized) return null;
+    if (weatherTileIndices.has(normalized)) return normalized;
+    return null;
   }
   function createWeatherSprite(rawKey, options = {}) {
     const size = Math.max(12, options.size ?? 36);
-    const fallback = String(options.fallback ?? "\u{1F326}");
+    const fallback = String(options.fallback ?? "\u011EYO\u0130");
     const alt = typeof options.alt === "string" ? options.alt : "";
     const el2 = document.createElement("span");
-    spriteConfig.set(el2, { size, fallback, alt });
+    weatherSpriteConfig.set(el2, { size, fallback, alt });
     if (typeof window === "undefined") {
-      applySprite(el2, null);
+      applyWeatherSprite(el2, null);
       return el2;
     }
-    ensureSpriteListener();
-    const key2 = resolveSpriteKey(rawKey);
+    ensureWeatherSpriteListener();
+    const key2 = getWeatherSpriteKey(rawKey);
     if (!key2) {
-      applySprite(el2, null);
+      applyWeatherSprite(el2, null);
       return el2;
     }
-    subscribeSprite(key2, el2, { size, fallback, alt });
-    applySprite(el2, spriteCache.get(key2) ?? null);
-    void loadSprite(key2);
+    subscribeWeatherSprite(key2, el2, { size, fallback, alt });
+    applyWeatherSprite(el2, weatherSpriteCache.get(key2) ?? null);
+    const promise = loadWeatherSprite(key2);
     return el2;
+  }
+  var petSpriteCache = /* @__PURE__ */ new Map();
+  var petSpritePromises = /* @__PURE__ */ new Map();
+  var petSheetBasesCache = null;
+  var petListenerAttached = false;
+  function canonicalSpecies(raw) {
+    if (!raw) return raw;
+    if (petCatalog[raw]) return raw;
+    const pretty = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    return petCatalog[pretty] ? pretty : raw;
+  }
+  function toPetTileIndex(tileRef) {
+    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
+    if (!Number.isFinite(value)) return null;
+    if (value <= 0) return value;
+    return value - 1;
+  }
+  function getPetSheetBases() {
+    if (petSheetBasesCache) return petSheetBasesCache;
+    const urls = /* @__PURE__ */ new Set();
+    try {
+      const list = typeof Sprites.listPets === "function" ? Sprites.listPets() : [];
+      for (const url of list) {
+        if (typeof url === "string" && url.length) {
+          urls.add(url);
+        }
+      }
+    } catch {
+    }
+    const bases = Array.from(urls, (url) => normalizeSheetBase(url));
+    petSheetBasesCache = bases;
+    return bases;
+  }
+  function resetPetCaches() {
+    petSpriteCache.clear();
+    petSpritePromises.clear();
+    petSheetBasesCache = null;
+    clearTileSheetCache();
+  }
+  function ensurePetListener() {
+    if (petListenerAttached || typeof window === "undefined") return;
+    petListenerAttached = true;
+    window.addEventListener("mg:sprite-detected", () => {
+      resetPetCaches();
+    });
+  }
+  function keyForPet(species, variant) {
+    return `${species.toLowerCase()}::${variant}`;
+  }
+  function hasMutation(target, mutations) {
+    if (!mutations) return false;
+    const list = Array.isArray(mutations) ? mutations : [mutations];
+    return list.map((value) => String(value ?? "").toLowerCase()).some((value) => value.includes(target));
+  }
+  function determinePetSpriteVariant(mutations) {
+    if (hasMutation("rainbow", mutations)) return "rainbow";
+    if (hasMutation("gold", mutations)) return "gold";
+    return "normal";
+  }
+  async function fetchPetSprite(species, variant) {
+    await ensureSpritesReady();
+    if (typeof window === "undefined") return null;
+    if (typeof Sprites.getTile !== "function") return null;
+    const entry = petCatalog[species];
+    const tileRef = entry?.tileRef;
+    if (tileRef == null) return null;
+    const index = toPetTileIndex(tileRef);
+    if (index == null) return null;
+    const baseCandidates = new Set(getPetSheetBases());
+    if (baseCandidates.size === 0) {
+      baseCandidates.add("pets");
+      baseCandidates.add("Pets");
+    }
+    for (const base of baseCandidates) {
+      try {
+        const tiles = await loadTileSheet(base);
+        const tile = tiles.find((t) => t.index === index);
+        if (!tile) continue;
+        const canvas = Sprites.toCanvas(tile);
+        if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
+        return canvas.toDataURL();
+      } catch {
+      }
+    }
+    return null;
+  }
+  function loadPetSprite(speciesRaw, variant = "normal") {
+    if (typeof window === "undefined") {
+      return Promise.resolve(null);
+    }
+    const species = canonicalSpecies(String(speciesRaw ?? "").trim());
+    if (!species) return Promise.resolve(null);
+    ensurePetListener();
+    const key2 = keyForPet(species, variant);
+    const cached = petSpriteCache.get(key2);
+    if (cached !== void 0) {
+      return Promise.resolve(cached);
+    }
+    const inflight = petSpritePromises.get(key2);
+    if (inflight) return inflight;
+    const promise = fetchPetSprite(species, variant).then((src) => {
+      petSpriteCache.set(key2, src);
+      petSpritePromises.delete(key2);
+      return src;
+    }).catch(() => {
+      petSpritePromises.delete(key2);
+      return null;
+    });
+    petSpritePromises.set(key2, promise);
+    return promise;
+  }
+  function loadPetSpriteFromMutations(species, mutations) {
+    const variant = determinePetSpriteVariant(mutations);
+    return loadPetSprite(species, variant);
+  }
+  async function prefetchPetSprites(options = {}) {
+    const { species, variants = ["normal", "gold", "rainbow"], delayMs = 10, limit } = options;
+    const allSpecies = (species ?? Object.keys(petCatalog)).map((value) => canonicalSpecies(value)).filter((value) => Boolean(value));
+    const combos = [];
+    for (const entry of allSpecies) {
+      for (const variant of variants) {
+        combos.push({ species: entry, variant });
+      }
+    }
+    const max = typeof limit === "number" && limit > 0 ? Math.min(limit, combos.length) : combos.length;
+    for (let i = 0; i < max; i += 1) {
+      const combo = combos[i];
+      try {
+        await loadPetSprite(combo.species, combo.variant);
+      } catch {
+      }
+      if (delayMs > 0 && i < max - 1) {
+        await waitMs(delayMs);
+      }
+    }
+  }
+  var FULL_SHOP_WARMUP_LIMIT = {
+    Seed: Infinity,
+    Egg: Infinity,
+    Tool: Infinity,
+    Decor: Infinity,
+    Crop: Infinity
+  };
+  async function warmUpAllSprites(options = {}) {
+    const shopOptions = {
+      delayMs: options.shop?.delayMs,
+      stepMs: options.shop?.stepMs,
+      types: options.shop?.types,
+      limit: options.shop?.limit ?? FULL_SHOP_WARMUP_LIMIT
+    };
+    await warmUpShopSprites(shopOptions);
+    await prefetchWeatherSprites(options.weather ?? { delayMs: 5, limit: 0 });
+    await prefetchPetSprites(options.pet ?? { delayMs: 5 });
   }
 
   // src/services/notifier.ts
@@ -19220,662 +20006,6 @@
     }
   };
 
-  // src/utils/tileSheet.ts
-  var sheetCache = /* @__PURE__ */ new Map();
-  var escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function clearTileSheetCache() {
-    sheetCache.clear();
-  }
-  function normalizeSheetBase(urlOrBase) {
-    const clean = urlOrBase.split(/[?#]/)[0] ?? urlOrBase;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  }
-  function uniqueBases(urls, fallback) {
-    const set2 = /* @__PURE__ */ new Set();
-    for (const url of urls) {
-      if (typeof url === "string" && url.length) {
-        set2.add(normalizeSheetBase(url));
-      }
-    }
-    if (set2.size === 0) {
-      for (const base of fallback) set2.add(base);
-    }
-    return [...set2];
-  }
-  async function loadTileSheet(base) {
-    const key2 = base.toLowerCase();
-    if (sheetCache.has(key2)) return sheetCache.get(key2);
-    const regex = new RegExp(`${escapeRegExp(base)}\\.(png|webp)$`, "i");
-    const promise = Sprites.loadTiles({ mode: "canvas", onlySheets: regex }).then((map2) => {
-      for (const [sheetBase, tiles] of map2.entries()) {
-        if (sheetBase.toLowerCase() === key2) return tiles ?? [];
-      }
-      const direct = map2.get(base);
-      return direct ?? [];
-    }).catch(() => []);
-    sheetCache.set(key2, promise);
-    return promise;
-  }
-
-  // src/utils/gameVersion.ts
-  var gameVersion = null;
-  function initGameVersion(doc) {
-    if (gameVersion !== null) {
-      return;
-    }
-    const d = doc ?? (typeof document !== "undefined" ? document : null);
-    if (!d) {
-      return;
-    }
-    const scripts = d.scripts;
-    for (let i = 0; i < scripts.length; i++) {
-      const script = scripts.item(i);
-      if (!script) continue;
-      const src = script.src;
-      if (!src) continue;
-      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
-      if (match && match[1]) {
-        gameVersion = match[1];
-        return;
-      }
-    }
-  }
-
-  // src/services/assetManifest.ts
-  var LOG_PREFIX2 = "[AssetManifest]";
-  var ASSET_BASE_RE = /(https?:\/\/[^/]+\/(?:version\/[^/]+\/)?assets\/)/i;
-  var VERSION_RE = /\/version\/([^/]+)\//i;
-  var VERSION_PATH_RE = /\/version\/([^/]+)\//i;
-  var manifestCache = null;
-  var manifestPromise = null;
-  var resolvedAssets = [];
-  var aliasIndex = /* @__PURE__ */ new Map();
-  var manifestFamilyIndex = /* @__PURE__ */ new Map();
-  var assetBaseUrl = null;
-  var assetVersion = null;
-  var autoLoadScheduled = false;
-  var manifestBaseUsed = null;
-  function normalizeManifest(manifest) {
-    if (!manifest || typeof manifest !== "object") return null;
-    if (!Array.isArray(manifest.bundles)) {
-      return { bundles: [] };
-    }
-    const bundles = manifest.bundles.map((b) => ({
-      name: typeof b.name === "string" && b.name ? b.name : "default",
-      assets: Array.isArray(b.assets) ? b.assets : []
-    })).filter((b) => b.assets.length > 0);
-    return { bundles };
-  }
-  function normalizeFamilyName(name) {
-    if (!name) return null;
-    const normalized = name.trim().toLowerCase();
-    return normalized ? normalized : null;
-  }
-  function extractFamilyFromPath(path) {
-    if (!path) return null;
-    const cleaned = path.replace(/^\/+/, "").replace(/\\/g, "/").replace(/[\?#].*$/, "");
-    const slashIndex = cleaned.indexOf("/");
-    if (slashIndex <= 0) return null;
-    return normalizeFamilyName(cleaned.slice(0, slashIndex));
-  }
-  function deriveAssetFamilies(src, aliases, bundleName) {
-    const families = /* @__PURE__ */ new Set();
-    const add = (path) => {
-      const family = extractFamilyFromPath(path);
-      if (family) families.add(family);
-    };
-    add(src);
-    for (const alias of aliases) {
-      add(alias);
-    }
-    if (!families.size) {
-      const fallback = normalizeFamilyName(bundleName);
-      if (fallback) families.add(fallback);
-    }
-    return Array.from(families);
-  }
-  function toAbsoluteUrl(base, rel) {
-    if (/^https?:\/\//i.test(rel)) return rel;
-    const cleanBase = base.endsWith("/") ? base : `${base}/`;
-    return `${cleanBase}${rel.replace(/^\/+/, "")}`;
-  }
-  function inferAssetBase(url) {
-    try {
-      const href = new URL(url, location.href).href;
-      const m = href.match(ASSET_BASE_RE);
-      if (m && m[1]) {
-        return m[1];
-      }
-    } catch {
-    }
-    return null;
-  }
-  function setAssetBase(url) {
-    if (!url) return;
-    const base = inferAssetBase(url);
-    if (!base) return;
-    if (assetBaseUrl && assetBaseUrl === base) return;
-    assetBaseUrl = base;
-    const match = base.match(VERSION_RE);
-    assetVersion = match?.[1] ?? assetVersion;
-  }
-  function getManifestUrl(custom) {
-    if (custom) return custom;
-    if (assetBaseUrl) return `${assetBaseUrl}manifest.json`;
-    return null;
-  }
-  function inferBaseFromLocation() {
-    try {
-      const href = location.href;
-      const match = href.match(VERSION_PATH_RE);
-      if (match?.[1]) {
-        return `${location.origin}/version/${match[1]}/assets/`;
-      }
-    } catch {
-    }
-    return null;
-  }
-  function baseFromGameVersion() {
-    if (!gameVersion) return null;
-    try {
-      return `${location.origin}/version/${gameVersion}/assets/`;
-    } catch {
-      return null;
-    }
-  }
-  function sleep2(ms) {
-    return new Promise((resolve2) => setTimeout(resolve2, ms));
-  }
-  function indexResolvedAssets(list) {
-    resolvedAssets = list;
-    aliasIndex = /* @__PURE__ */ new Map();
-    manifestFamilyIndex = /* @__PURE__ */ new Map();
-    for (const asset of list) {
-      aliasIndex.set(asset.src, asset);
-      aliasIndex.set(asset.url, asset);
-      for (const alias of asset.aliases) {
-        aliasIndex.set(alias, asset);
-      }
-      for (const family of asset.families) {
-        const bucket = manifestFamilyIndex.get(family);
-        if (bucket) {
-          bucket.push(asset);
-        } else {
-          manifestFamilyIndex.set(family, [asset]);
-        }
-      }
-    }
-  }
-  function resolveManifest(manifest, base) {
-    const out = [];
-    for (const bundle of manifest.bundles ?? []) {
-      const bundleName = bundle.name ?? "default";
-      for (const asset of bundle.assets ?? []) {
-        const aliases = Array.isArray(asset.alias) ? asset.alias.filter(Boolean) : [];
-        for (const src of asset.src ?? []) {
-          const url = base ? toAbsoluteUrl(base, src) : src;
-          const families = deriveAssetFamilies(src, aliases, bundleName);
-          const primaryFamily = families[0] ?? null;
-          out.push({
-            bundle: bundleName,
-            aliases,
-            src,
-            url,
-            tags: asset.data?.tags ?? {},
-            families,
-            primaryFamily
-          });
-        }
-      }
-    }
-    return out;
-  }
-  function registerSpritesFromResolved(list) {
-    let added = 0;
-    for (const asset of list) {
-      const wasNew = Sprites.registerKnownAsset(asset.url, asset.families);
-      if (wasNew && (asset.families.includes("tiles") || asset.families.includes("ui"))) {
-        added += 1;
-      }
-    }
-    if (added > 0) {
-      try {
-        pageWindow.dispatchEvent(new CustomEvent("mg:sprite-detected", { detail: { source: "manifest" } }));
-      } catch {
-      }
-    }
-    return added;
-  }
-  async function fetchManifest(manifestUrl) {
-    try {
-      const res = await fetch(manifestUrl, { cache: "no-store", credentials: "include" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      return normalizeManifest(json);
-    } catch (error) {
-      console.warn(LOG_PREFIX2, "unable to fetch remote manifest", { manifestUrl, error });
-      return null;
-    }
-  }
-  function recordAssetUrlHint(url) {
-    const previousBase = assetBaseUrl;
-    setAssetBase(url);
-    if (assetBaseUrl && assetBaseUrl !== previousBase) {
-      scheduleAutoLoad();
-    }
-  }
-  function scheduleAutoLoad() {
-    if (autoLoadScheduled) return;
-    autoLoadScheduled = true;
-    setTimeout(() => {
-      autoLoadScheduled = false;
-      void prefetchManifest({ registerSprites: true }).catch(() => {
-      });
-    }, 100);
-  }
-  async function prefetchManifest(options = {}) {
-    const desiredBase = assetBaseUrl ?? null;
-    if (!options.force && manifestCache) {
-      if (!desiredBase || manifestBaseUsed === desiredBase) {
-        return manifestCache;
-      }
-    }
-    if (!options.force && manifestPromise) return manifestPromise;
-    if (!assetBaseUrl) {
-      const hintedVersionBase = baseFromGameVersion();
-      if (hintedVersionBase) {
-        setAssetBase(hintedVersionBase);
-      } else {
-        const hintedBase = inferBaseFromLocation();
-        if (hintedBase) setAssetBase(hintedBase);
-      }
-    }
-    if (!assetBaseUrl && options.waitForVersionMs) {
-      const deadline = Date.now() + options.waitForVersionMs;
-      while (!assetBaseUrl && !gameVersion && Date.now() < deadline) {
-        await sleep2(50);
-      }
-      if (!assetBaseUrl && gameVersion) {
-        const hintedVersionBase = baseFromGameVersion();
-        if (hintedVersionBase) setAssetBase(hintedVersionBase);
-      }
-    }
-    const manifestUrl = getManifestUrl(options.url);
-    if (!manifestUrl) {
-      console.warn(LOG_PREFIX2, "no manifest URL could be resolved");
-      return null;
-    }
-    manifestPromise = (async () => {
-      const manifest = manifestUrl ? await fetchManifest(manifestUrl) : null;
-      if (!manifest) return null;
-      if (manifestUrl) {
-        setAssetBase(manifestUrl);
-      }
-      const baseForResolution = assetBaseUrl ?? (manifestUrl ? inferAssetBase(manifestUrl) : null);
-      const resolved = resolveManifest(manifest, baseForResolution);
-      indexResolvedAssets(resolved);
-      manifestBaseUsed = baseForResolution ?? manifestBaseUsed;
-      if (options.registerSprites !== false && baseForResolution) {
-        registerSpritesFromResolved(resolved);
-      }
-      manifestCache = manifest;
-      return manifest;
-    })();
-    try {
-      return await manifestPromise;
-    } finally {
-      manifestPromise = null;
-    }
-  }
-  var spritesReadyPromise = null;
-  function ensureSpritesReady2() {
-    if (spritesReadyPromise) return spritesReadyPromise;
-    spritesReadyPromise = (async () => {
-      await prefetchManifest({ registerSprites: true, waitForVersionMs: 4e3 });
-    })();
-    return spritesReadyPromise;
-  }
-
-  // src/utils/shopSprites.ts
-  var spriteConfig2 = /* @__PURE__ */ new WeakMap();
-  var spriteSubscribers2 = /* @__PURE__ */ new Map();
-  var spriteCache2 = /* @__PURE__ */ new Map();
-  var spritePromises2 = /* @__PURE__ */ new Map();
-  var MAX_CONCURRENT_SPRITE_LOADS = 4;
-  var activeSpriteLoads = 0;
-  var pendingSpriteLoads = [];
-  function enqueueSpriteLoad(task) {
-    return new Promise((resolve2, reject) => {
-      const runner = () => {
-        task().then(resolve2, reject).finally(() => {
-          activeSpriteLoads--;
-          const next = pendingSpriteLoads.shift();
-          if (next) {
-            activeSpriteLoads++;
-            next();
-          }
-        });
-      };
-      if (activeSpriteLoads < MAX_CONCURRENT_SPRITE_LOADS) {
-        activeSpriteLoads++;
-        runner();
-      } else {
-        pendingSpriteLoads.push(runner);
-      }
-    });
-  }
-  var listenerAttached2 = false;
-  var seedSheetBases = null;
-  var eggSheetBases = null;
-  var itemSheetBases = null;
-  var decorSheetBases = null;
-  var cropSheetBases = null;
-  var tallCropSheetBases = null;
-  var FALLBACK_BASES = {
-    Seed: ["seeds", "Seeds"],
-    Egg: ["pets", "Pets", "eggs", "Eggs"],
-    Tool: ["items", "Items"],
-    Decor: ["decor", "Decor"],
-    Crop: ["plants", "Plants", "allplants", "AllPlants"]
-  };
-  function spriteKey(type, id) {
-    return `${type}::${id}`;
-  }
-  function parseSpriteKey(key2) {
-    const idx = key2.indexOf("::");
-    if (idx <= 0) return null;
-    const type = key2.slice(0, idx);
-    const id = key2.slice(idx + 2);
-    if (!id) return null;
-    if (type !== "Seed" && type !== "Egg" && type !== "Tool" && type !== "Decor") return null;
-    return { type, id };
-  }
-  function defaultFallback(type) {
-    switch (type) {
-      case "Seed":
-        return "\u{1F331}";
-      case "Egg":
-        return "\u{1F95A}";
-      case "Tool":
-        return "\u{1F9F0}";
-      case "Decor":
-        return "\u{1F3E0}";
-      case "Crop":
-        return "\u{1F34E}";
-    }
-  }
-  function getSeedSheetBases() {
-    if (seedSheetBases) return seedSheetBases;
-    try {
-      if (typeof Sprites.listSeeds === "function") {
-        seedSheetBases = uniqueBases(Sprites.listSeeds(), FALLBACK_BASES.Seed);
-        return seedSheetBases;
-      }
-    } catch {
-    }
-    seedSheetBases = [...FALLBACK_BASES.Seed];
-    return seedSheetBases;
-  }
-  function getEggSheetBases() {
-    if (eggSheetBases) return eggSheetBases;
-    try {
-      if (typeof Sprites.listPets === "function") {
-        eggSheetBases = uniqueBases(Sprites.listPets(), FALLBACK_BASES.Egg);
-        return eggSheetBases;
-      }
-    } catch {
-    }
-    eggSheetBases = [...FALLBACK_BASES.Egg];
-    return eggSheetBases;
-  }
-  function getItemSheetBases() {
-    if (itemSheetBases) return itemSheetBases;
-    try {
-      if (typeof Sprites.listItems === "function") {
-        itemSheetBases = uniqueBases(Sprites.listItems(), FALLBACK_BASES.Tool);
-        return itemSheetBases;
-      }
-    } catch {
-    }
-    itemSheetBases = [...FALLBACK_BASES.Tool];
-    return itemSheetBases;
-  }
-  function getDecorSheetBases() {
-    if (decorSheetBases) return decorSheetBases;
-    try {
-      if (typeof Sprites.listTilesByCategory === "function") {
-        decorSheetBases = uniqueBases(Sprites.listTilesByCategory(/decor/i), FALLBACK_BASES.Decor);
-        return decorSheetBases;
-      }
-    } catch {
-    }
-    decorSheetBases = [...FALLBACK_BASES.Decor];
-    return decorSheetBases;
-  }
-  function getCropSheetBases() {
-    if (cropSheetBases) return cropSheetBases;
-    try {
-      if (typeof Sprites.listTilesByCategory === "function") {
-        const all = Sprites.listTilesByCategory(/plants|allplants/i);
-        const filtered = all.filter((u) => !/tallplants/i.test(u) && !/tall/i.test(u));
-        const source = filtered.length ? filtered : all;
-        cropSheetBases = uniqueBases(source, FALLBACK_BASES.Crop);
-        return cropSheetBases;
-      }
-    } catch {
-    }
-    cropSheetBases = [...FALLBACK_BASES.Crop];
-    return cropSheetBases;
-  }
-  function getTallCropSheetBases() {
-    if (tallCropSheetBases) return tallCropSheetBases;
-    try {
-      if (typeof Sprites.listTilesByCategory === "function") {
-        const all = Sprites.listTilesByCategory(/tallplants/i);
-        tallCropSheetBases = uniqueBases(all, ["tallplants", "TallPlants"]);
-        return tallCropSheetBases;
-      }
-    } catch {
-    }
-    tallCropSheetBases = ["tallplants", "TallPlants"];
-    return tallCropSheetBases;
-  }
-  var TALL_CROP_SPECIES = /* @__PURE__ */ new Set(["Cactus", "Bamboo"]);
-  function getBases(type, id) {
-    switch (type) {
-      case "Seed":
-        return getSeedSheetBases();
-      case "Egg":
-        return getEggSheetBases();
-      case "Tool":
-        return getItemSheetBases();
-      case "Decor":
-        return getDecorSheetBases();
-      case "Crop":
-        if (id && TALL_CROP_SPECIES.has(id)) {
-          return [...getTallCropSheetBases(), ...getCropSheetBases()];
-        }
-        return getCropSheetBases();
-    }
-  }
-  function toTileIndex2(tileRef) {
-    if (tileRef == null) return null;
-    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
-    if (!Number.isFinite(value)) return null;
-    if (value <= 0) return value;
-    return value - 1;
-  }
-  function getTileRef(type, id) {
-    switch (type) {
-      case "Seed":
-        return plantCatalog?.[id]?.seed?.tileRef ?? null;
-      case "Egg":
-        return eggCatalog?.[id]?.tileRef ?? null;
-      case "Tool":
-        return toolCatalog?.[id]?.tileRef ?? null;
-      case "Decor":
-        return decorCatalog?.[id]?.tileRef ?? null;
-      case "Crop":
-        return plantCatalog?.[id]?.crop?.tileRef ?? null;
-    }
-  }
-  function subscribeSprite2(key2, el2) {
-    let subs = spriteSubscribers2.get(key2);
-    if (!subs) {
-      subs = /* @__PURE__ */ new Set();
-      spriteSubscribers2.set(key2, subs);
-    }
-    subs.add(el2);
-  }
-  function unsubscribeIfDisconnected(key2, el2) {
-    const subs = spriteSubscribers2.get(key2);
-    if (!subs) return;
-    if (!el2.isConnected) {
-      subs.delete(el2);
-      spriteConfig2.delete(el2);
-    }
-    if (subs.size === 0) {
-      spriteSubscribers2.delete(key2);
-    }
-  }
-  function applySprite2(el2, src) {
-    const cfg = spriteConfig2.get(el2);
-    if (!cfg) return;
-    const { size, fallback, alt } = cfg;
-    el2.innerHTML = "";
-    el2.style.display = "inline-flex";
-    el2.style.alignItems = "center";
-    el2.style.justifyContent = "center";
-    el2.style.width = `${size}px`;
-    el2.style.height = `${size}px`;
-    el2.style.flexShrink = "0";
-    el2.style.position = "relative";
-    el2.setAttribute("role", "img");
-    if (src) {
-      el2.removeAttribute("aria-label");
-      el2.style.fontSize = "";
-      const img = document.createElement("img");
-      img.src = src;
-      img.alt = alt;
-      img.decoding = "async";
-      img.loading = "lazy";
-      img.draggable = false;
-      img.style.width = "100%";
-      img.style.height = "100%";
-      img.style.objectFit = "contain";
-      el2.appendChild(img);
-    } else {
-      el2.textContent = fallback;
-      el2.style.fontSize = `${Math.max(10, Math.round(size * 0.72))}px`;
-      el2.setAttribute("aria-label", alt || fallback);
-    }
-  }
-  function notifySpriteSubscribers2(key2, src) {
-    const subs = spriteSubscribers2.get(key2);
-    if (!subs) return;
-    subs.forEach((el2) => {
-      if (!el2.isConnected) {
-        unsubscribeIfDisconnected(key2, el2);
-        return;
-      }
-      applySprite2(el2, src);
-    });
-  }
-  function clearSheetCaches() {
-    seedSheetBases = null;
-    eggSheetBases = null;
-    itemSheetBases = null;
-    decorSheetBases = null;
-    cropSheetBases = null;
-    tallCropSheetBases = null;
-    clearTileSheetCache();
-  }
-  async function fetchSprite2(type, id) {
-    await ensureSpritesReady2();
-    if (typeof window === "undefined") return null;
-    if (typeof Sprites?.getTile !== "function") return null;
-    const tileRef = getTileRef(type, id);
-    const index = toTileIndex2(tileRef);
-    if (index == null) return null;
-    const bases = getBases(type, id);
-    for (const base of bases) {
-      try {
-        const tiles = await loadTileSheet(base);
-        const tile = tiles.find((t) => t.index === index);
-        const canvas = tile?.data;
-        if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-        const copy2 = document.createElement("canvas");
-        copy2.width = canvas.width;
-        copy2.height = canvas.height;
-        const ctx = copy2.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy2.toDataURL();
-      } catch {
-      }
-    }
-    return null;
-  }
-  function ensureSpriteListener2() {
-    if (listenerAttached2 || typeof window === "undefined") return;
-    listenerAttached2 = true;
-    window.addEventListener("mg:sprite-detected", () => {
-      spriteCache2.clear();
-      spritePromises2.clear();
-      clearSheetCaches();
-      const keys = Array.from(spriteSubscribers2.keys());
-      keys.forEach((key2) => {
-        const parsed = parseSpriteKey(key2);
-        if (!parsed) return;
-        void loadSprite2(parsed.type, parsed.id, key2);
-      });
-    });
-  }
-  function loadSprite2(type, id, key2 = spriteKey(type, id)) {
-    if (typeof window === "undefined") {
-      spriteCache2.set(key2, null);
-      notifySpriteSubscribers2(key2, null);
-      return Promise.resolve(null);
-    }
-    const cached = spriteCache2.get(key2);
-    if (cached !== void 0) {
-      notifySpriteSubscribers2(key2, cached);
-      return Promise.resolve(cached);
-    }
-    const inflight = spritePromises2.get(key2);
-    if (inflight) return inflight;
-    const promise = enqueueSpriteLoad(() => fetchSprite2(type, id)).then((src) => {
-      spriteCache2.set(key2, src);
-      spritePromises2.delete(key2);
-      notifySpriteSubscribers2(key2, src);
-      return src;
-    }).catch(() => {
-      spritePromises2.delete(key2);
-      return null;
-    });
-    spritePromises2.set(key2, promise);
-    return promise;
-  }
-  function createShopSprite(type, id, options = {}) {
-    const size = Math.max(12, options.size ?? 36);
-    const fallback = String(options.fallback ?? defaultFallback(type));
-    const alt = typeof options.alt === "string" ? options.alt : "";
-    const el2 = document.createElement("span");
-    spriteConfig2.set(el2, { size, fallback, alt });
-    if (typeof window === "undefined") {
-      applySprite2(el2, null);
-      return el2;
-    }
-    const key2 = spriteKey(type, id);
-    subscribeSprite2(key2, el2);
-    applySprite2(el2, spriteCache2.get(key2) ?? null);
-    ensureSpriteListener2();
-    void loadSprite2(type, id, key2);
-    return el2;
-  }
-
   // src/utils/catalogIndex.ts
   function seedNameFromSpecies(species, cat = plantCatalog) {
     const e = cat?.[species];
@@ -20163,9 +20293,9 @@
       const overlayIds = new Set(out.map((r) => r.id));
       this.currentOverlayIds = overlayIds;
       const shopEmpty = (this.lastShops.seed?.inventory?.length ?? 0) + (this.lastShops.tool?.inventory?.length ?? 0) + (this.lastShops.egg?.inventory?.length ?? 0) + (this.lastShops.decor?.inventory?.length ?? 0) === 0;
-      const ready3 = this.shopUpdates >= 3 && this.purchasesUpdates >= 2 && !shopEmpty;
+      const ready2 = this.shopUpdates >= 3 && this.purchasesUpdates >= 2 && !shopEmpty;
       if (!this.bootArmed) {
-        if (!ready3) {
+        if (!ready2) {
           this.prevOverlayIds = overlayIds;
           return;
         }
@@ -22136,7 +22266,7 @@
   }
 
   // src/core/dom.ts
-  var ready2 = new Promise((res) => {
+  var ready = new Promise((res) => {
     if (document.readyState !== "loading") res();
     else addEventListener("DOMContentLoaded", () => res(), { once: true });
   });
@@ -22554,7 +22684,7 @@
   async function waitForHungerIncrease(petId, previousPct, options = {}) {
     const { initialDelay = 0, timeout = HUNGER_TIMEOUT_MS, interval = HUNGER_POLL_INTERVAL_MS } = options;
     if (initialDelay > 0) {
-      await delay4(initialDelay);
+      await delay3(initialDelay);
     }
     const start = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
     let lastResult = null;
@@ -22571,11 +22701,11 @@
         return lastResult;
       }
       if (interval > 0) {
-        await delay4(interval);
+        await delay3(interval);
       }
     }
   }
-  function delay4(ms) {
+  function delay3(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function waitForFakeInventorySelection(timeoutMs = 2e4) {
@@ -30199,7 +30329,7 @@ next: ${next}`;
   var plantSpriteCache = /* @__PURE__ */ new Map();
   var plantSpritePromises = /* @__PURE__ */ new Map();
   var plantSpriteSubscribers = /* @__PURE__ */ new Map();
-  var spriteConfig3 = /* @__PURE__ */ new WeakMap();
+  var spriteConfig2 = /* @__PURE__ */ new WeakMap();
   var plantSpriteListenerAttached = false;
   var lockerSpritesPreloaded = false;
   var lockerSpritesLoading = false;
@@ -30220,7 +30350,7 @@ next: ${next}`;
     }
     return false;
   }
-  function scheduleLockerSpritePreload(delay5 = 0) {
+  function scheduleLockerSpritePreload(delay4 = 0) {
     if (lockerSpritesPreloaded || typeof window === "undefined") {
       return;
     }
@@ -30230,7 +30360,7 @@ next: ${next}`;
     lockerSpritePreloadTimer = window.setTimeout(() => {
       lockerSpritePreloadTimer = null;
       preloadLockerSprites();
-    }, Math.max(0, delay5));
+    }, Math.max(0, delay4));
   }
   function ensurePlantSpriteListener() {
     if (plantSpriteListenerAttached) return;
@@ -30251,7 +30381,7 @@ next: ${next}`;
       plantSpriteSubscribers.set(seedKey, subs);
     }
     subs.add(el2);
-    spriteConfig3.set(el2, config);
+    spriteConfig2.set(el2, config);
   }
   function notifyPlantSpriteSubscribers(seedKey, src) {
     const subs = plantSpriteSubscribers.get(seedKey);
@@ -30259,10 +30389,10 @@ next: ${next}`;
     subs.forEach((el2) => {
       if (!el2.isConnected) {
         subs.delete(el2);
-        spriteConfig3.delete(el2);
+        spriteConfig2.delete(el2);
         return;
       }
-      applySprite3(el2, src);
+      applySprite2(el2, src);
     });
     if (subs.size === 0) {
       plantSpriteSubscribers.delete(seedKey);
@@ -30300,7 +30430,7 @@ next: ${next}`;
     }
     return bases;
   }
-  function toTileIndex3(tileRef, bases = []) {
+  function toTileIndex2(tileRef, bases = []) {
     const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
     if (!Number.isFinite(value)) return null;
     if (value <= 0) return value;
@@ -30314,12 +30444,12 @@ next: ${next}`;
     return value - 1;
   }
   async function fetchPlantSprite(seedKey) {
-    await ensureSpritesReady2();
+    await ensureSpritesReady();
     const entry = plantCatalog[seedKey];
     if (!entry) return null;
     const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
     const bases = plantSheetBases(seedKey);
-    const index = toTileIndex3(tileRef, bases);
+    const index = toTileIndex2(tileRef, bases);
     if (index == null) return null;
     for (const base of bases) {
       try {
@@ -30342,8 +30472,8 @@ next: ${next}`;
     }
     return null;
   }
-  function applySprite3(el2, src) {
-    const cfg = spriteConfig3.get(el2);
+  function applySprite2(el2, src) {
+    const cfg = spriteConfig2.get(el2);
     if (!cfg) return;
     const { size, fallback } = cfg;
     el2.innerHTML = "";
@@ -30398,7 +30528,7 @@ next: ${next}`;
     const el2 = document.createElement("span");
     subscribePlantSprite(seedKey, el2, { size, fallback });
     const cached = plantSpriteCache.get(seedKey);
-    applySprite3(el2, cached ?? null);
+    applySprite2(el2, cached ?? null);
     loadPlantSprite(seedKey);
     return el2;
   }
@@ -30445,7 +30575,7 @@ next: ${next}`;
       mutationSpriteSubscribers.set(tag, subs);
     }
     subs.add(el2);
-    spriteConfig3.set(el2, config);
+    spriteConfig2.set(el2, config);
   }
   function notifyMutationSpriteSubscribers(tag, src) {
     const subs = mutationSpriteSubscribers.get(tag);
@@ -30453,21 +30583,21 @@ next: ${next}`;
     subs.forEach((el2) => {
       if (!el2.isConnected) {
         subs.delete(el2);
-        spriteConfig3.delete(el2);
+        spriteConfig2.delete(el2);
         return;
       }
-      applySprite3(el2, src);
+      applySprite2(el2, src);
     });
     if (subs.size === 0) {
       mutationSpriteSubscribers.delete(tag);
     }
   }
   async function fetchMutationSprite(tag) {
-    await ensureSpritesReady2();
+    await ensureSpritesReady();
     const entry = WEATHER_MUTATIONS.find((info) => info.key === tag);
     if (!entry || entry.tileRef == null) return null;
     const [base] = mutationSheetBases();
-    const index = toTileIndex3(entry.tileRef, base ? [base] : []);
+    const index = toTileIndex2(entry.tileRef, base ? [base] : []);
     if (index == null || !base) return null;
     try {
       const tiles = await loadTileSheet(base);
@@ -30515,7 +30645,7 @@ next: ${next}`;
     const el2 = document.createElement("span");
     subscribeMutationSprite(tag, el2, { size, fallback });
     const cached = mutationSpriteCache.get(tag);
-    applySprite3(el2, cached ?? null);
+    applySprite2(el2, cached ?? null);
     loadMutationSprite(tag);
     return el2;
   }
@@ -30526,7 +30656,7 @@ next: ${next}`;
     lockerSpritesLoading = true;
     (async () => {
       try {
-        await ensureSpritesReady2();
+        await ensureSpritesReady();
         if (!hasLockerSpriteSources()) {
           scheduleLockerSpritePreload(200);
           return;
@@ -33968,13 +34098,13 @@ next: ${next}`;
     return bases.length ? bases : ["mutations"];
   }
   async function fetchPlantSpriteCanvas(seedKey) {
-    await ensureSpritesReady2();
+    await ensureSpritesReady();
     if (typeof window === "undefined") return null;
     const entry = plantCatalog[seedKey];
     if (!entry) return null;
     const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
     const bases = plantSheetBases2(seedKey);
-    const index = toTileIndex4(tileRef, bases);
+    const index = toTileIndex3(tileRef, bases);
     if (index == null) return null;
     for (const base of bases) {
       try {
@@ -34062,7 +34192,7 @@ next: ${next}`;
     const inFlight = mutationSpritePromises2.get(cacheKey);
     if (inFlight) return inFlight;
     const promise = (async () => {
-      await ensureSpritesReady2();
+      await ensureSpritesReady();
       const bases = getMutationSheetBases();
       const index = tileRef > 0 ? tileRef - 1 : tileRef;
       for (const base of bases) {
@@ -34128,7 +34258,7 @@ next: ${next}`;
     }
     return bases.length ? bases : ["plants"];
   }
-  function toTileIndex4(tileRef, bases = []) {
+  function toTileIndex3(tileRef, bases = []) {
     const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
     if (!Number.isFinite(value)) return null;
     if (value <= 0) return value;
@@ -35133,122 +35263,6 @@ next: ${next}`;
       await evaluateAll();
     }
   };
-
-  // src/utils/petSprites.ts
-  var spriteCache3 = /* @__PURE__ */ new Map();
-  var spritePromises3 = /* @__PURE__ */ new Map();
-  var petSheetBasesCache = null;
-  var listenerAttached3 = false;
-  function canonicalSpecies(raw) {
-    if (!raw) return raw;
-    if (petCatalog[raw]) return raw;
-    const pretty = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-    return petCatalog[pretty] ? pretty : raw;
-  }
-  function toPetTileIndex(tileRef) {
-    const value = typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
-    if (!Number.isFinite(value)) return null;
-    if (value <= 0) return value;
-    return value - 1;
-  }
-  function getPetSheetBases() {
-    if (petSheetBasesCache) return petSheetBasesCache;
-    const urls = /* @__PURE__ */ new Set();
-    try {
-      const list = typeof Sprites.listPets === "function" ? Sprites.listPets() : [];
-      for (const url of list) {
-        if (typeof url === "string" && url.length) {
-          urls.add(url);
-        }
-      }
-    } catch {
-    }
-    const bases = Array.from(urls, (url) => normalizeSheetBase(url));
-    petSheetBasesCache = bases;
-    return bases;
-  }
-  function resetCaches() {
-    spriteCache3.clear();
-    spritePromises3.clear();
-    petSheetBasesCache = null;
-    clearTileSheetCache();
-  }
-  function ensureListener() {
-    if (listenerAttached3 || typeof window === "undefined") return;
-    listenerAttached3 = true;
-    window.addEventListener("mg:sprite-detected", () => {
-      resetCaches();
-    });
-  }
-  function keyFor(species, variant) {
-    return `${species.toLowerCase()}::${variant}`;
-  }
-  function hasMutation(target, mutations) {
-    if (!mutations) return false;
-    const list = Array.isArray(mutations) ? mutations : [mutations];
-    return list.map((value) => String(value ?? "").toLowerCase()).some((value) => value.includes(target));
-  }
-  function determinePetSpriteVariant(mutations) {
-    if (hasMutation("rainbow", mutations)) return "rainbow";
-    if (hasMutation("gold", mutations)) return "gold";
-    return "normal";
-  }
-  async function fetchPetSprite(species, variant) {
-    await ensureSpritesReady2();
-    if (typeof window === "undefined") return null;
-    if (typeof Sprites.getTile !== "function") return null;
-    const entry = petCatalog[species];
-    const tileRef = entry?.tileRef;
-    if (tileRef == null) return null;
-    const index = toPetTileIndex(tileRef);
-    if (index == null) return null;
-    const baseCandidates = new Set(getPetSheetBases());
-    if (baseCandidates.size === 0) {
-      baseCandidates.add("pets");
-      baseCandidates.add("Pets");
-    }
-    for (const base of baseCandidates) {
-      try {
-        const tiles = await loadTileSheet(base);
-        const tile = tiles.find((t) => t.index === index);
-        if (!tile) continue;
-        const canvas = Sprites.toCanvas(tile);
-        if (!canvas || canvas.width === 0 || canvas.height === 0) continue;
-        return canvas.toDataURL();
-      } catch {
-      }
-    }
-    return null;
-  }
-  function loadPetSprite(speciesRaw, variant = "normal") {
-    if (typeof window === "undefined") {
-      return Promise.resolve(null);
-    }
-    const species = canonicalSpecies(String(speciesRaw ?? "").trim());
-    if (!species) return Promise.resolve(null);
-    ensureListener();
-    const key2 = keyFor(species, variant);
-    const cached = spriteCache3.get(key2);
-    if (cached !== void 0) {
-      return Promise.resolve(cached);
-    }
-    const inflight = spritePromises3.get(key2);
-    if (inflight) return inflight;
-    const promise = fetchPetSprite(species, variant).then((src) => {
-      spriteCache3.set(key2, src);
-      spritePromises3.delete(key2);
-      return src;
-    }).catch(() => {
-      spritePromises3.delete(key2);
-      return null;
-    });
-    spritePromises3.set(key2, promise);
-    return promise;
-  }
-  function loadPetSpriteFromMutations(species, mutations) {
-    const variant = determinePetSpriteVariant(mutations);
-    return loadPetSprite(species, variant);
-  }
 
   // src/ui/menus/notifier.ts
   var rulePopover = null;
@@ -38157,8 +38171,8 @@ next: ${next}`;
     }
     return map2;
   }
-  var petSpriteCache = /* @__PURE__ */ new Map();
-  var petSpritePromises = /* @__PURE__ */ new Map();
+  var petSpriteCache2 = /* @__PURE__ */ new Map();
+  var petSpritePromises2 = /* @__PURE__ */ new Map();
   var petSpriteSubscribers = /* @__PURE__ */ new Map();
   var petSpriteConfig = /* @__PURE__ */ new WeakMap();
   var petSpriteListenerAttached = false;
@@ -38188,7 +38202,7 @@ next: ${next}`;
     return value - 1;
   }
   async function fetchPetSprite2(species) {
-    await ensureSpritesReady2();
+    await ensureSpritesReady();
     const entry = petCatalog[species];
     const tileRef = entry?.tileRef;
     if (tileRef == null) return null;
@@ -38269,31 +38283,31 @@ next: ${next}`;
     if (typeof window === "undefined") {
       return Promise.resolve(null);
     }
-    const cached = petSpriteCache.get(species);
+    const cached = petSpriteCache2.get(species);
     if (cached !== void 0) {
       notifyPetSpriteSubscribers(species, cached);
       return Promise.resolve(cached);
     }
-    const inflight = petSpritePromises.get(species);
+    const inflight = petSpritePromises2.get(species);
     if (inflight) return inflight;
     const promise = fetchPetSprite2(species).then((src) => {
-      petSpriteCache.set(species, src);
-      petSpritePromises.delete(species);
+      petSpriteCache2.set(species, src);
+      petSpritePromises2.delete(species);
       notifyPetSpriteSubscribers(species, src);
       return src;
     }).catch(() => {
-      petSpritePromises.delete(species);
+      petSpritePromises2.delete(species);
       return null;
     });
-    petSpritePromises.set(species, promise);
+    petSpritePromises2.set(species, promise);
     return promise;
   }
   function ensurePetSpriteListener() {
     if (petSpriteListenerAttached || typeof window === "undefined") return;
     petSpriteListenerAttached = true;
     window.addEventListener("mg:sprite-detected", () => {
-      petSpriteCache.clear();
-      petSpritePromises.clear();
+      petSpriteCache2.clear();
+      petSpritePromises2.clear();
       resetPetSheetBases();
       const keys = Array.from(petSpriteSubscribers.keys());
       keys.forEach((key2) => {
@@ -38316,7 +38330,7 @@ next: ${next}`;
     }
     ensurePetSpriteListener();
     subscribePetSprite(species, el2, { size, fallback });
-    const cached = petSpriteCache.get(species);
+    const cached = petSpriteCache2.get(species);
     applyPetSprite(el2, cached ?? null);
     void loadPetSprite2(species);
     return el2;
@@ -40806,7 +40820,7 @@ next: ${next}`;
   }
   function ensureSideOverlay() {
     if (sideOverlayEl && document.contains(sideOverlayEl)) return sideOverlayEl;
-    void ensureSpritesReady2().catch(() => {
+    void ensureSpritesReady().catch(() => {
     });
     const root = document.createElement("div");
     root.id = "qws-editor-side";
@@ -46391,6 +46405,14 @@ next: ${next}`;
   }
 
   // src/main.ts
+  var TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"];
+  async function preloadAllTiles() {
+    const tasks = TILE_SHEETS_TO_PRELOAD.map(async (base) => {
+      const result = await loadTileSheet(base);
+      return result;
+    });
+    await Promise.all(tasks);
+  }
   (async function() {
     "use strict";
     installPageWebSocketHook();
@@ -46407,7 +46429,9 @@ next: ${next}`;
         void prefetchManifest({ registerSprites: true });
       }
     });
-    await ensureSpritesReady2();
+    await ensureSpritesReady();
+    await preloadAllTiles();
+    await warmUpAllSprites();
     EditorService.init();
     mountHUD({
       onRegister(register) {
