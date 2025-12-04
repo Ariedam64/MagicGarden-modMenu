@@ -323,6 +323,26 @@ const LIGHTING_DEFINITIONS: { id: MutationName; key: string; label: string }[] =
     previewArea.innerHTML = "";
     previewArea.classList.remove("dd-sprite-grid--tiles");
 
+    const baseItem = document.createElement("div");
+    baseItem.className = "dd-sprite-grid__item";
+    if (baseCanvas || baseUrl) {
+      const baseImg = document.createElement("img");
+      baseImg.className = "dd-sprite-grid__img";
+      baseImg.alt = "Mid Default Black base";
+      baseImg.loading = "lazy";
+      baseImg.referrerPolicy = "no-referrer";
+      baseImg.src = baseCanvas ? baseCanvas.toDataURL() : baseUrl!;
+      baseItem.appendChild(baseImg);
+    }
+    const baseName = document.createElement("span");
+    baseName.className = "dd-sprite-grid__name";
+    baseName.textContent = "Mid Default Black (base)";
+    const baseMeta = document.createElement("span");
+    baseMeta.className = "dd-sprite-grid__meta";
+    baseMeta.textContent = baseUrl ?? "Base asset missing (Mid_DefaultBlack)";
+    baseItem.append(baseName, baseMeta);
+    previewArea.appendChild(baseItem);
+
     if (!expressionUrls.length) {
       const empty = document.createElement("div");
       empty.className = "dd-sprite-grid__empty";

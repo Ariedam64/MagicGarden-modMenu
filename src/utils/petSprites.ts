@@ -1,7 +1,7 @@
 import { Sprites } from "../core/sprite";
 import { ensureSpritesReady } from "../services/assetManifest";
 import { petCatalog } from "../data/hardcoded-data.clean.js";
-import { loadTileSheet, clearTileSheetCache, normalizeSheetBase } from "./tileSheets";
+import { loadTileSheet, clearTileSheetCache, normalizeSheetBase } from "./tileSheet";
 
 export type PetSpriteVariant = "normal" | "gold" | "rainbow";
 

@@ -1138,6 +1138,14 @@ function createLockerSettingsCard(
   card.style.minHeight = "0";
   card.style.width = "min(760px, 100%)";
 
+  let recipesTitleElement: HTMLDivElement | null = null;
+
+  const updateRecipeTitleText = () => {
+    if (!recipesTitleElement) return;
+    const prefix = state.lockMode === "ALLOW" ? "Allow" : "Lock";
+    recipesTitleElement.textContent = `${prefix} when any recipe row matches (OR between rows)`;
+  };
+
   const makeSection = (titleText: string, content: HTMLElement) => {
     const section = document.createElement("div");
     section.style.display = "grid";
@@ -1218,6 +1226,7 @@ function createLockerSettingsCard(
       value === "allow"
         ? "Harvest only when every active filter category matches"
         : "Harvest is locked whenever any active filter matches";
+    updateRecipeTitleText();
   };
 
   const scaleRow = centerRow();
@@ -1621,7 +1630,8 @@ function createLockerSettingsCard(
   recipesHeader.style.width = "100%";
   recipesHeader.style.justifyContent = "space-between";
   const recipesTitle = document.createElement("div");
-  recipesTitle.textContent = "Lock when any recipe row matches (OR between rows)";
+  recipesTitleElement = recipesTitle;
+  updateRecipeTitleText();
   recipesTitle.style.fontWeight = "600";
   recipesTitle.style.opacity = "0.9";
   const btnAddRecipe = document.createElement("button");
@@ -2144,59 +2154,101 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   eggCard.body.append(eggList);
   layout.append(eggCard.root);
 
-  const renderEggList = () => {
+  const LOCKED_ICON = "🔒";
+  const UNLOCKED_ICON = "🔓";
+  const eggRowCache = new Map<
+    string,
+    {
+      row: HTMLDivElement;
+      toggle: HTMLButtonElement;
+      name: HTMLDivElement;
+    }
+  >();
+  const emptyEggPlaceholder = applyStyles(document.createElement("div"), {
+    opacity: "0.7",
+    fontSize: "12px",
+  });
+  emptyEggPlaceholder.textContent = "No eggs detected in shop.";
+
+  const updateEggToggleAppearance = (toggle: HTMLButtonElement, locked: boolean): void => {
+    toggle.textContent = locked ? LOCKED_ICON : UNLOCKED_ICON;
+    toggle.style.background = locked ? "#331616" : "#12301d";
+    toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
+  };
+
+  let renderEggList: () => void;
+
+  const createEggRow = (opt: { id: string; name: string }): {
+    row: HTMLDivElement;
+    toggle: HTMLButtonElement;
+    name: HTMLDivElement;
+  } => {
+    const row = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "auto auto 1fr",
+      alignItems: "center",
+      gap: "10px",
+      padding: "8px 10px",
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      background: "#0f1318",
+    });
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.style.border = "1px solid #4445";
+    toggle.style.borderRadius = "10px";
+    toggle.style.padding = "6px 10px";
+    toggle.style.fontSize = "14px";
+    toggle.style.fontWeight = "700";
+    toggle.addEventListener("click", () => {
+      const next = !Boolean(state.eggLocks?.[opt.id]);
+      state.eggLocks = { ...(state.eggLocks || {}), [opt.id]: next };
+      lockerRestrictionsService.setEggLock(opt.id, next);
+      renderEggList();
+    });
+
+    const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "🥚" });
+    sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
+
+    const name = document.createElement("div");
+    name.style.fontWeight = "600";
+    name.style.color = "#e7eef7";
+    row.append(toggle, sprite, name);
+
+    return { row, toggle, name };
+  };
+
+  renderEggList = () => {
     eggList.innerHTML = "";
     if (!eggOptions.length) {
-      const empty = document.createElement("div");
-      empty.textContent = "No eggs detected in shop.";
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "12px";
-      eggList.appendChild(empty);
+      eggList.appendChild(emptyEggPlaceholder);
       return;
     }
 
     const fragment = document.createDocumentFragment();
+    const seen = new Set<string>();
     eggOptions.forEach(opt => {
-      const row = applyStyles(document.createElement("div"), {
-        display: "grid",
-        gridTemplateColumns: "auto auto 1fr",
-        alignItems: "center",
-        gap: "10px",
-        padding: "8px 10px",
-        border: "1px solid #4445",
-        borderRadius: "10px",
-        background: "#0f1318",
-      });
-
-      const locked = !!state.eggLocks?.[opt.id];
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.textContent = locked ? "🔒" : "🔓";
-      toggle.style.border = "1px solid #4445";
-      toggle.style.borderRadius = "10px";
-      toggle.style.padding = "6px 10px";
-      toggle.style.fontSize = "14px";
-      toggle.style.fontWeight = "700";
-      toggle.style.background = locked ? "#331616" : "#12301d";
-      toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
-      toggle.onclick = () => {
-        const next = !locked;
-        state.eggLocks = { ...(state.eggLocks || {}), [opt.id]: next };
-        lockerRestrictionsService.setEggLock(opt.id, next);
-        renderEggList();
-      };
-
-      const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "🥚" });
-      sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
-
-      const name = document.createElement("div");
-      name.textContent = opt.name || opt.id;
-      name.style.fontWeight = "600";
-      name.style.color = "#e7eef7";
-
-      row.append(toggle, sprite, name);
-      fragment.appendChild(row);
+      const id = opt.id;
+      seen.add(id);
+      let entry = eggRowCache.get(id);
+      if (!entry) {
+        entry = createEggRow(opt);
+        eggRowCache.set(id, entry);
+      }
+      entry.name.textContent = opt.name || id;
+      const locked = !!state.eggLocks?.[id];
+      updateEggToggleAppearance(entry.toggle, locked);
+      fragment.appendChild(entry.row);
     });
+
+    for (const id of Array.from(eggRowCache.keys())) {
+      if (seen.has(id)) continue;
+      const entry = eggRowCache.get(id);
+      if (entry) {
+        entry.row.remove();
+      }
+      eggRowCache.delete(id);
+    }
 
     eggList.appendChild(fragment);
   };

@@ -45,6 +45,12 @@ const normalizeMutationTag = (value: unknown): string => {
   }
 };
 
+const canonicalizeWeatherTag = (value: unknown): string | null => {
+  if (value === LOCKER_NO_WEATHER_TAG) return LOCKER_NO_WEATHER_TAG;
+  const normalized = normalizeMutationTag(value);
+  return normalized || null;
+};
+
 const normalizeMutationsList = (raw: unknown): string[] => {
   if (!Array.isArray(raw)) return [];
   const out: string[] = [];
@@ -991,11 +997,12 @@ export class LockerService {
         computedSizePercent = extractSizePercent(nextInfo.slot);
       }
       try {
-        harvestAllowed = this.allowsHarvest({
+        const assessment = this.assessHarvest({
           seedKey: nextInfo.seedKey ?? null,
           sizePercent: computedSizePercent ?? 0,
           mutations: normalizedMutations,
         });
+        harvestAllowed = assessment.allowed;
       } catch {
         harvestAllowed = null;
       }
@@ -1082,6 +1089,26 @@ export class LockerService {
     return { enabled: true, settings: this.state.settings };
   }
 
+  private assessHarvest(args: HarvestCheckArgs): {
+    effective: LockerEffectiveSettings;
+    filters: ReturnType<LockerService["evaluateLockFilters"]>;
+    lockMode: LockerLockMode;
+    allowed: boolean;
+  } {
+    const effective = this.effectiveSettings(args.seedKey);
+    const filters = this.evaluateLockFilters(effective.settings, args);
+    const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
+    if (!effective.enabled) {
+      return { effective, filters, lockMode, allowed: true };
+    }
+    const blocked = lockMode === "ALLOW"
+      ? ((filters.size.hasCriteria && !filters.size.matched) ||
+        (filters.color.hasCriteria && !filters.color.matched) ||
+        (filters.weather.hasCriteria && !filters.weather.matched))
+      : filters.matchAny;
+    return { effective, filters, lockMode, allowed: !blocked };
+  }
+
   private evaluateLockFilters(
     settings: LockerSettingsPersisted,
     args: HarvestCheckArgs,
@@ -1161,29 +1188,33 @@ export class LockerService {
       if (recipes.length) {
         weatherInfo.hasCriteria = true;
         let recipeMatch = false;
-        for (let i = 0; i < recipes.length; i++) {
-          const recipe = recipes[i];
+        for (const recipe of recipes) {
           if (!Array.isArray(recipe) || recipe.length === 0) continue;
           let matches = true;
           for (let j = 0; j < recipe.length; j++) {
-            const required = recipe[j]!;
-            if (required === LOCKER_NO_WEATHER_TAG) {
+            const rawTag = recipe[j];
+            const normalizedRequired = canonicalizeWeatherTag(rawTag);
+            if (!normalizedRequired) {
+              matches = false;
+              break;
+            }
+            if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
               if (weather.length !== 0) {
                 matches = false;
                 break;
               }
               continue;
             }
-            if (!weather.includes(required)) {
+            if (!weather.includes(normalizedRequired)) {
               matches = false;
               break;
             }
+          }
+          if (matches) {
+            recipeMatch = true;
+            break;
+          }
         }
-        if (matches) {
-          recipeMatch = true;
-          break;
-        }
-      }
         weatherInfo.matched = recipeMatch;
       }
       const matchAny = size.matched || color.matched || weatherInfo.matched;
@@ -1195,37 +1226,46 @@ export class LockerService {
       if (mode === "ALL") {
         let allMatch = true;
         for (let i = 0; i < selected.length; i++) {
-          const required = selected[i]!;
-          if (required === LOCKER_NO_WEATHER_TAG) {
+          const requiredRaw = selected[i]!;
+          const normalizedRequired = canonicalizeWeatherTag(requiredRaw);
+          if (!normalizedRequired) {
+            allMatch = false;
+            break;
+          }
+          if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
             if (weather.length !== 0) {
               allMatch = false;
               break;
             }
             continue;
           }
-        if (!weather.includes(required)) {
-          allMatch = false;
-          break;
+          if (!weather.includes(normalizedRequired)) {
+            allMatch = false;
+            break;
+          }
         }
-      }
         weatherInfo.matched = allMatch;
-    } else {
-      // ANY
-      let anyMatch = false;
-      for (let i = 0; i < selected.length; i++) {
-        const required = selected[i]!;
-        if (required === LOCKER_NO_WEATHER_TAG) {
-          if (weather.length === 0) {
+      } else {
+        // ANY
+        let anyMatch = false;
+        for (let i = 0; i < selected.length; i++) {
+          const requiredRaw = selected[i]!;
+          const normalizedRequired = canonicalizeWeatherTag(requiredRaw);
+          if (!normalizedRequired) {
+            continue;
+          }
+          if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
+            if (weather.length === 0) {
+              anyMatch = true;
+              break;
+            }
+            continue;
+          }
+          if (weather.includes(normalizedRequired)) {
             anyMatch = true;
             break;
           }
-          continue;
         }
-        if (weather.includes(required)) {
-          anyMatch = true;
-          break;
-        }
-      }
         weatherInfo.matched = anyMatch;
       }
     }
@@ -1254,20 +1294,7 @@ export class LockerService {
   }
 
   allowsHarvest(args: HarvestCheckArgs): boolean {
-    const effective = this.effectiveSettings(args.seedKey);
-    if (!effective.enabled) {
-      return true;
-    }
-
-    const { size, color, weather, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
-    const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
-    const blocked = lockMode === "ALLOW"
-      ? ((size.hasCriteria && !size.matched) ||
-        (color.hasCriteria && !color.matched) ||
-        (weather.hasCriteria && !weather.matched))
-      : matchAny;
-
-    return !blocked;
+    return this.assessHarvest(args).allowed;
   }
 }
 
