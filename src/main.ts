@@ -82,7 +82,6 @@ async function preloadAllTiles(): Promise<void> {
       register('editor', '📝 Editor', renderEditorMenu);
       register('stats', '📊 Stats', renderStatsMenu);
       register('misc', '🧩 Misc', renderMiscMenu);
-      register('settings', 'Settings', renderSettingsMenu);
       register('keybinds', '⌨️ Keybinds', renderKeybindsMenu);
       register('tools', '🛠️ Tools', renderToolsMenu);
       register('settings', '⚙️ Settings', renderSettingsMenu);
