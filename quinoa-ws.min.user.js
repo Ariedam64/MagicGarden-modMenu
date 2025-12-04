@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.25
+// @version      2.7.26
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5519,6 +5519,11 @@
         return trimmed;
     }
   };
+  var canonicalizeWeatherTag = (value) => {
+    if (value === LOCKER_NO_WEATHER_TAG) return LOCKER_NO_WEATHER_TAG;
+    const normalized = normalizeMutationTag(value);
+    return normalized || null;
+  };
   var normalizeMutationsList = (raw) => {
     if (!Array.isArray(raw)) return [];
     const out = [];
@@ -6231,11 +6236,12 @@
           computedSizePercent = extractSizePercent(nextInfo.slot);
         }
         try {
-          harvestAllowed = this.allowsHarvest({
+          const assessment = this.assessHarvest({
             seedKey: nextInfo.seedKey ?? null,
             sizePercent: computedSizePercent ?? 0,
             mutations: normalizedMutations
           });
+          harvestAllowed = assessment.allowed;
         } catch {
           harvestAllowed = null;
         }
@@ -6307,6 +6313,16 @@
       }
       return { enabled: true, settings: this.state.settings };
     }
+    assessHarvest(args) {
+      const effective = this.effectiveSettings(args.seedKey);
+      const filters = this.evaluateLockFilters(effective.settings, args);
+      const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
+      if (!effective.enabled) {
+        return { effective, filters, lockMode, allowed: true };
+      }
+      const blocked = lockMode === "ALLOW" ? filters.size.hasCriteria && !filters.size.matched || filters.color.hasCriteria && !filters.color.matched || filters.weather.hasCriteria && !filters.weather.matched : filters.matchAny;
+      return { effective, filters, lockMode, allowed: !blocked };
+    }
     evaluateLockFilters(settings, args) {
       const size = { hasCriteria: false, matched: false };
       const color = { hasCriteria: false, matched: false };
@@ -6356,20 +6372,24 @@
         if (recipes.length) {
           weatherInfo.hasCriteria = true;
           let recipeMatch = false;
-          for (let i = 0; i < recipes.length; i++) {
-            const recipe = recipes[i];
+          for (const recipe of recipes) {
             if (!Array.isArray(recipe) || recipe.length === 0) continue;
             let matches = true;
             for (let j = 0; j < recipe.length; j++) {
-              const required = recipe[j];
-              if (required === LOCKER_NO_WEATHER_TAG) {
+              const rawTag = recipe[j];
+              const normalizedRequired = canonicalizeWeatherTag(rawTag);
+              if (!normalizedRequired) {
+                matches = false;
+                break;
+              }
+              if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
                 if (weather2.length !== 0) {
                   matches = false;
                   break;
                 }
                 continue;
               }
-              if (!weather2.includes(required)) {
+              if (!weather2.includes(normalizedRequired)) {
                 matches = false;
                 break;
               }
@@ -6389,15 +6409,20 @@
         if (mode === "ALL") {
           let allMatch = true;
           for (let i = 0; i < selected.length; i++) {
-            const required = selected[i];
-            if (required === LOCKER_NO_WEATHER_TAG) {
+            const requiredRaw = selected[i];
+            const normalizedRequired = canonicalizeWeatherTag(requiredRaw);
+            if (!normalizedRequired) {
+              allMatch = false;
+              break;
+            }
+            if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
               if (weather2.length !== 0) {
                 allMatch = false;
                 break;
               }
               continue;
             }
-            if (!weather2.includes(required)) {
+            if (!weather2.includes(normalizedRequired)) {
               allMatch = false;
               break;
             }
@@ -6406,15 +6431,19 @@
         } else {
           let anyMatch = false;
           for (let i = 0; i < selected.length; i++) {
-            const required = selected[i];
-            if (required === LOCKER_NO_WEATHER_TAG) {
+            const requiredRaw = selected[i];
+            const normalizedRequired = canonicalizeWeatherTag(requiredRaw);
+            if (!normalizedRequired) {
+              continue;
+            }
+            if (normalizedRequired === LOCKER_NO_WEATHER_TAG) {
               if (weather2.length === 0) {
                 anyMatch = true;
                 break;
               }
               continue;
             }
-            if (weather2.includes(required)) {
+            if (weather2.includes(normalizedRequired)) {
               anyMatch = true;
               break;
             }
@@ -6443,14 +6472,7 @@
       }
     }
     allowsHarvest(args) {
-      const effective = this.effectiveSettings(args.seedKey);
-      if (!effective.enabled) {
-        return true;
-      }
-      const { size, color, weather: weather2, matchAny, sizeMin, sizeMax, scaleMode } = this.evaluateLockFilters(effective.settings, args);
-      const lockMode = effective.settings.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
-      const blocked = lockMode === "ALLOW" ? size.hasCriteria && !size.matched || color.hasCriteria && !color.matched || weather2.hasCriteria && !weather2.matched : matchAny;
-      return !blocked;
+      return this.assessHarvest(args).allowed;
     }
   };
   var lockerService = new LockerService();
@@ -19198,7 +19220,7 @@
     }
   };
 
-  // src/utils/tileSheets.ts
+  // src/utils/tileSheet.ts
   var sheetCache = /* @__PURE__ */ new Map();
   var escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   function clearTileSheetCache() {
@@ -28875,29 +28897,6 @@ next: ${next}`;
     return null;
   }
 
-  // src/utils/tileSheet.ts
-  var sheetCache2 = /* @__PURE__ */ new Map();
-  var escapeRegExp2 = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function normalizeSheetBase2(urlOrBase) {
-    const clean = urlOrBase.split(/[?#]/)[0] ?? urlOrBase;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  }
-  async function loadTileSheet2(base) {
-    const key2 = base.toLowerCase();
-    if (sheetCache2.has(key2)) return sheetCache2.get(key2);
-    const regex = new RegExp(`${escapeRegExp2(base)}\\.(png|webp)$`, "i");
-    const promise = Sprites.loadTiles({ mode: "canvas", onlySheets: regex }).then((map2) => {
-      for (const [sheetBase, tiles] of map2.entries()) {
-        if (sheetBase.toLowerCase() === key2) return tiles ?? [];
-      }
-      const direct = map2.get(base);
-      return direct ?? [];
-    }).catch(() => []);
-    sheetCache2.set(key2, promise);
-    return promise;
-  }
-
   // src/ui/menus/debug-data-sprites.ts
   var COLOR_FILTERS = ["None", "Gold", "Rainbow"];
   var CONDITION_MUTATION_KEYS = ["None", "Wet", "Chilled", "Frozen"];
@@ -29160,6 +29159,25 @@ next: ${next}`;
       const { previewArea: previewArea2, expressionUrls, baseUrl, baseCanvas } = options;
       previewArea2.innerHTML = "";
       previewArea2.classList.remove("dd-sprite-grid--tiles");
+      const baseItem = document.createElement("div");
+      baseItem.className = "dd-sprite-grid__item";
+      if (baseCanvas || baseUrl) {
+        const baseImg = document.createElement("img");
+        baseImg.className = "dd-sprite-grid__img";
+        baseImg.alt = "Mid Default Black base";
+        baseImg.loading = "lazy";
+        baseImg.referrerPolicy = "no-referrer";
+        baseImg.src = baseCanvas ? baseCanvas.toDataURL() : baseUrl;
+        baseItem.appendChild(baseImg);
+      }
+      const baseName = document.createElement("span");
+      baseName.className = "dd-sprite-grid__name";
+      baseName.textContent = "Mid Default Black (base)";
+      const baseMeta = document.createElement("span");
+      baseMeta.className = "dd-sprite-grid__meta";
+      baseMeta.textContent = baseUrl ?? "Base asset missing (Mid_DefaultBlack)";
+      baseItem.append(baseName, baseMeta);
+      previewArea2.appendChild(baseItem);
       if (!expressionUrls.length) {
         const empty = document.createElement("div");
         empty.className = "dd-sprite-grid__empty";
@@ -29241,7 +29259,7 @@ next: ${next}`;
       exportStatus.textContent = "Preparing export...";
       try {
         if (hasTiles) {
-          const base = normalizeSheetBase2(currentTilesheetUrl);
+          const base = normalizeSheetBase(currentTilesheetUrl);
           const filters = buildFilterQueue();
           await Sprites.exportFilteredTileset({
             tiles: currentTiles,
@@ -29412,8 +29430,8 @@ next: ${next}`;
       }
       if (isTileSheetView) {
         const sheetUrl = assets[0];
-        const base = normalizeSheetBase2(sheetUrl);
-        const tiles = await loadTileSheet2(base);
+        const base = normalizeSheetBase(sheetUrl);
+        const tiles = await loadTileSheet(base);
         currentTilesheetUrl = sheetUrl;
         currentTiles = tiles;
         tileCount = tiles.length;
@@ -29555,7 +29573,7 @@ next: ${next}`;
   }
   async function loadMutationIcons() {
     const icons = {};
-    const tiles = await loadTileSheet2("mutations");
+    const tiles = await loadTileSheet("mutations");
     const TILE_REF_TO_MUTATION_NAME = {
       Wet: "Wet",
       Chilled: "Chilled",
@@ -30305,7 +30323,7 @@ next: ${next}`;
     if (index == null) return null;
     for (const base of bases) {
       try {
-        const tiles = await loadTileSheet2(base);
+        const tiles = await loadTileSheet(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
@@ -30452,7 +30470,7 @@ next: ${next}`;
     const index = toTileIndex3(entry.tileRef, base ? [base] : []);
     if (index == null || !base) return null;
     try {
-      const tiles = await loadTileSheet2(base);
+      const tiles = await loadTileSheet(base);
       const tile = tiles.find((t) => t.index === index);
       if (!tile) return null;
       const canvas = Sprites.toCanvas(tile);
@@ -30920,6 +30938,12 @@ next: ${next}`;
     card.style.overflow = "auto";
     card.style.minHeight = "0";
     card.style.width = "min(760px, 100%)";
+    let recipesTitleElement = null;
+    const updateRecipeTitleText = () => {
+      if (!recipesTitleElement) return;
+      const prefix = state2.lockMode === "ALLOW" ? "Allow" : "Lock";
+      recipesTitleElement.textContent = `${prefix} when any recipe row matches (OR between rows)`;
+    };
     const makeSection = (titleText, content) => {
       const section = document.createElement("div");
       section.style.display = "grid";
@@ -30986,6 +31010,7 @@ next: ${next}`;
         }
       }
       lockModeHint.textContent = value === "allow" ? "Harvest only when every active filter category matches" : "Harvest is locked whenever any active filter matches";
+      updateRecipeTitleText();
     };
     const scaleRow = centerRow();
     scaleRow.style.flexDirection = "column";
@@ -31353,7 +31378,8 @@ next: ${next}`;
     recipesHeader.style.width = "100%";
     recipesHeader.style.justifyContent = "space-between";
     const recipesTitle = document.createElement("div");
-    recipesTitle.textContent = "Lock when any recipe row matches (OR between rows)";
+    recipesTitleElement = recipesTitle;
+    updateRecipeTitleText();
     recipesTitle.style.fontWeight = "600";
     recipesTitle.style.opacity = "0.9";
     const btnAddRecipe = document.createElement("button");
@@ -31784,54 +31810,81 @@ next: ${next}`;
     });
     eggCard.body.append(eggList);
     layout.append(eggCard.root);
-    const renderEggList = () => {
+    const LOCKED_ICON = "\u{1F512}";
+    const UNLOCKED_ICON = "\u{1F513}";
+    const eggRowCache = /* @__PURE__ */ new Map();
+    const emptyEggPlaceholder = applyStyles(document.createElement("div"), {
+      opacity: "0.7",
+      fontSize: "12px"
+    });
+    emptyEggPlaceholder.textContent = "No eggs detected in shop.";
+    const updateEggToggleAppearance = (toggle, locked) => {
+      toggle.textContent = locked ? LOCKED_ICON : UNLOCKED_ICON;
+      toggle.style.background = locked ? "#331616" : "#12301d";
+      toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
+    };
+    let renderEggList;
+    const createEggRow = (opt) => {
+      const row = applyStyles(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "auto auto 1fr",
+        alignItems: "center",
+        gap: "10px",
+        padding: "8px 10px",
+        border: "1px solid #4445",
+        borderRadius: "10px",
+        background: "#0f1318"
+      });
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.style.border = "1px solid #4445";
+      toggle.style.borderRadius = "10px";
+      toggle.style.padding = "6px 10px";
+      toggle.style.fontSize = "14px";
+      toggle.style.fontWeight = "700";
+      toggle.addEventListener("click", () => {
+        const next = !Boolean(state2.eggLocks?.[opt.id]);
+        state2.eggLocks = { ...state2.eggLocks || {}, [opt.id]: next };
+        lockerRestrictionsService.setEggLock(opt.id, next);
+        renderEggList();
+      });
+      const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "\u{1F95A}" });
+      sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
+      const name = document.createElement("div");
+      name.style.fontWeight = "600";
+      name.style.color = "#e7eef7";
+      row.append(toggle, sprite, name);
+      return { row, toggle, name };
+    };
+    renderEggList = () => {
       eggList.innerHTML = "";
       if (!eggOptions.length) {
-        const empty = document.createElement("div");
-        empty.textContent = "No eggs detected in shop.";
-        empty.style.opacity = "0.7";
-        empty.style.fontSize = "12px";
-        eggList.appendChild(empty);
+        eggList.appendChild(emptyEggPlaceholder);
         return;
       }
       const fragment = document.createDocumentFragment();
+      const seen = /* @__PURE__ */ new Set();
       eggOptions.forEach((opt) => {
-        const row = applyStyles(document.createElement("div"), {
-          display: "grid",
-          gridTemplateColumns: "auto auto 1fr",
-          alignItems: "center",
-          gap: "10px",
-          padding: "8px 10px",
-          border: "1px solid #4445",
-          borderRadius: "10px",
-          background: "#0f1318"
-        });
-        const locked = !!state2.eggLocks?.[opt.id];
-        const toggle = document.createElement("button");
-        toggle.type = "button";
-        toggle.textContent = locked ? "\u{1F512}" : "\u{1F513}";
-        toggle.style.border = "1px solid #4445";
-        toggle.style.borderRadius = "10px";
-        toggle.style.padding = "6px 10px";
-        toggle.style.fontSize = "14px";
-        toggle.style.fontWeight = "700";
-        toggle.style.background = locked ? "#331616" : "#12301d";
-        toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
-        toggle.onclick = () => {
-          const next = !locked;
-          state2.eggLocks = { ...state2.eggLocks || {}, [opt.id]: next };
-          lockerRestrictionsService.setEggLock(opt.id, next);
-          renderEggList();
-        };
-        const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "\u{1F95A}" });
-        sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
-        const name = document.createElement("div");
-        name.textContent = opt.name || opt.id;
-        name.style.fontWeight = "600";
-        name.style.color = "#e7eef7";
-        row.append(toggle, sprite, name);
-        fragment.appendChild(row);
+        const id = opt.id;
+        seen.add(id);
+        let entry = eggRowCache.get(id);
+        if (!entry) {
+          entry = createEggRow(opt);
+          eggRowCache.set(id, entry);
+        }
+        entry.name.textContent = opt.name || id;
+        const locked = !!state2.eggLocks?.[id];
+        updateEggToggleAppearance(entry.toggle, locked);
+        fragment.appendChild(entry.row);
       });
+      for (const id of Array.from(eggRowCache.keys())) {
+        if (seen.has(id)) continue;
+        const entry = eggRowCache.get(id);
+        if (entry) {
+          entry.row.remove();
+        }
+        eggRowCache.delete(id);
+      }
       eggList.appendChild(fragment);
     };
     const updateSliderValue = (pct) => {
@@ -33925,7 +33978,7 @@ next: ${next}`;
     if (index == null) return null;
     for (const base of bases) {
       try {
-        const tiles = await loadTileSheet2(base);
+        const tiles = await loadTileSheet(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
@@ -34014,7 +34067,7 @@ next: ${next}`;
       const index = tileRef > 0 ? tileRef - 1 : tileRef;
       for (const base of bases) {
         try {
-          const tiles = await loadTileSheet2(base);
+          const tiles = await loadTileSheet(base);
           const tile = tiles.find((t) => t.index === index);
           if (!tile) continue;
           const canvas = Sprites.toCanvas(tile);
@@ -38148,7 +38201,7 @@ next: ${next}`;
     }
     for (const base of baseCandidates) {
       try {
-        const tiles = await loadTileSheet2(base);
+        const tiles = await loadTileSheet(base);
         const tile = tiles.find((t) => t.index === index);
         if (!tile) continue;
         const canvas = Sprites.toCanvas(tile);
@@ -40753,7 +40806,7 @@ next: ${next}`;
   }
   function ensureSideOverlay() {
     if (sideOverlayEl && document.contains(sideOverlayEl)) return sideOverlayEl;
-    void ensureSpritesReady().catch(() => {
+    void ensureSpritesReady2().catch(() => {
     });
     const root = document.createElement("div");
     root.id = "qws-editor-side";
