@@ -9,6 +9,7 @@ import { renderCalculatorMenu } from "./ui/menus/calculator";
 import { renderStatsMenu } from "./ui/menus/stats";
 import { renderPetsMenu } from "./ui/menus/pets";
 import { renderMiscMenu } from "./ui/menus/misc";
+import { renderSettingsMenu } from "./ui/menus/settings";
 import { renderNotifierMenu } from "./ui/menus/notifier";
 import { renderToolsMenu } from "./ui/menus/tools";
 import { renderEditorMenu } from "./ui/menus/editor";
@@ -81,9 +82,11 @@ async function preloadAllTiles(): Promise<void> {
       register('editor', '📝 Editor', renderEditorMenu);
       register('stats', '📊 Stats', renderStatsMenu);
       register('misc', '🧩 Misc', renderMiscMenu);
+      register('settings', 'Settings', renderSettingsMenu);
       register('keybinds', '⌨️ Keybinds', renderKeybindsMenu);
       register('tools', '🛠️ Tools', renderToolsMenu);
-      register('debug-data', '🔧 Debug', renderDebugDataMenu);
+      register('settings', '⚙️ Settings', renderSettingsMenu);
+      register('debug-data', '🐞 Debug', renderDebugDataMenu);
     }
   });
 

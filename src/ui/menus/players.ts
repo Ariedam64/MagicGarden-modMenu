@@ -12,7 +12,6 @@ import {
   waitJournalModalClosed,
   waitStatsModalClosed,
 } from "../../services/fakeModal";
-import { EditorService } from "../../services/editor";
 import { pageWindow } from "../../utils/page-context";
 
 /* ---------------- Lecture/state ---------------- */
