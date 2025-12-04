@@ -10,7 +10,7 @@ import {
 import { Sprites } from "../../core/sprite";
 import { ensureSpritesReady } from "../../services/assetManifest";
 import { loadTileSheet } from "../../utils/tileSheet";
-import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/weatherSprites";
+import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/sprites";
 import { formatPrice } from "../../utils/format";
 import { StatsService } from "../../services/stats";
 import type { StatsSnapshot } from "../../services/stats";

@@ -2,7 +2,7 @@
 import { NotifierService, type NotifierRule } from "../../services/notifier";
 import { ShopsService, type Kind as ShopKind } from "../../services/shops";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../../utils/audio"; // ← utilise le singleton unifié
-import { createShopSprite, type ShopSpriteType } from "../../utils/shopSprites";
+import { createShopSprite, type ShopSpriteType } from "../../utils/sprites";
 import {
   eggNameFromId,          // NEW
   toolNameFromId,         // NEW

@@ -24,7 +24,7 @@ import {
   percentToRequiredFriendCount,
 } from "../../services/lockerRestrictions";
 import { Atoms } from "../../store/atoms";
-import { createShopSprite } from "../../utils/shopSprites";
+import { createShopSprite } from "../../utils/sprites";
 
 // Reuse tag definitions from garden menu for consistency
 type VisualTag = "Gold" | "Rainbow";

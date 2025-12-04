@@ -16,14 +16,12 @@ import {
   type ContextStopDefaults,
 } from "../../services/notifier";
 
-import { createShopSprite } from "../../utils/shopSprites";
-import { createWeatherSprite } from "../../utils/weatherSprites";
+import { createShopSprite, createWeatherSprite, loadPetSpriteFromMutations } from "../../utils/sprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
 import { PetAlertService } from "../../services/pet-alerts";
 import { PetsService } from "../../services/pets";
 import type { PetInfo } from "../../services/player";
-import { loadPetSpriteFromMutations } from "../../utils/petSprites";
 
 type RuleEditorRow = {
   id: string;

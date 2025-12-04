@@ -4,7 +4,7 @@
 import { Atoms, type GardenState } from "../store/atoms";
 import { plantCatalog, decorCatalog, mutationCatalog } from "../data/hardcoded-data.clean";
 import { ensureStore, getAtomByLabel } from "../store/jotai";
-import { createShopSprite } from "../utils/shopSprites";
+import { createShopSprite } from "../utils/sprites";
 import { ensureSpritesReady } from "../services/assetManifest";
 import { shareGlobal } from "../utils/page-context";
 import { eventMatchesKeybind } from "./keybinds";

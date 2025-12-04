@@ -16,7 +16,7 @@ import {
   weatherCatalog,
 } from "../data/hardcoded-data.clean";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../utils/audio";
-import { getWeatherSpriteKey } from "../utils/weatherSprites";
+import { getWeatherSpriteKey } from "../utils/sprites";
 import { StatsService } from "./stats";
 
 export type SectionType = "Seed" | "Egg" | "Tool" | "Decor";

@@ -24,6 +24,19 @@ import { initSprites  } from "./core/sprite";
 import { EditorService } from "./services/editor";
 
 import { initGameVersion } from "./utils/gameVersion";
+import { warmUpAllSprites } from "./utils/sprites";
+import { loadTileSheet } from "./utils/tileSheet";
+
+const TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"] as const;
+
+async function preloadAllTiles(): Promise<void> {
+  const tasks = TILE_SHEETS_TO_PRELOAD.map(async (base) => {
+    const result = await loadTileSheet(base);
+    return result;
+  });
+
+  await Promise.all(tasks);
+}
 
 (async function () {
   "use strict";
@@ -45,6 +58,8 @@ import { initGameVersion } from "./utils/gameVersion";
   });
 
   await ensureSpritesReady();
+  await preloadAllTiles();
+  await warmUpAllSprites();
 
   EditorService.init();
 

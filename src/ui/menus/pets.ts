@@ -9,7 +9,7 @@ import { PetsService,
   } from "../../services/pets";
 import type { PetTeam } from "../../services/pets";
 import { onActivePetsStructuralChangeNow } from "../../store/atoms";
-import { loadPetSpriteFromMutations } from "../../utils/petSprites";
+import { loadPetSpriteFromMutations } from "../../utils/sprites";
 
 /* ================== petits helpers UI (mêmes vibes que garden) ================== */
 

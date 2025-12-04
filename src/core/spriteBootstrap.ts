@@ -6,17 +6,12 @@ const POLL_INTERVAL_MS = 100;
 const LOG_PREFIX = "[SpritesBootstrap]";
 
 let bootPromise: Promise<void> | null = null;
-let listening = false;
-let refreshScheduled = false;
 let ready = false;
 
 export function ensureSpritesReady(): Promise<void> {
   if (typeof window === "undefined") {
     return Promise.resolve();
   }
-
-  startListening();
-
   if (!bootPromise) {
     enqueueBootstrap("initial");
   }
@@ -26,21 +21,6 @@ export function ensureSpritesReady(): Promise<void> {
 
 export function areSpritesReady(): boolean {
   return ready;
-}
-
-function startListening(): void {
-  if (listening || typeof window === "undefined") return;
-  listening = true;
-  window.addEventListener("mg:sprite-detected", handleSpriteDetected);
-}
-
-function handleSpriteDetected(): void {
-  if (refreshScheduled || typeof window === "undefined") return;
-  refreshScheduled = true;
-  window.setTimeout(() => {
-    refreshScheduled = false;
-    enqueueBootstrap("update");
-  }, 150);
 }
 
 function enqueueBootstrap(reason: string): void {
