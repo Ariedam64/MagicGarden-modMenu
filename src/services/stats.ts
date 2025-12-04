@@ -7,8 +7,7 @@ import {
   rarity,
   weatherCatalog,
 } from "../data/hardcoded-data.clean.js";
-
-const LS_STATS_KEY = "qws:stats:v1";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 type GardenStats = {
   totalPlanted: number;
@@ -129,15 +128,14 @@ const cloneStats = (stats: StatsSnapshot): StatsSnapshot => ({
   ),
 });
 
-function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    if (typeof window.localStorage === "undefined") return null;
-    return window.localStorage;
-  } catch {
-    return null;
+const unwrapMaybeNestedSnapshot = (raw: unknown): unknown => {
+  let cur: unknown = raw;
+  let guard = 0;
+  while (guard++ < 10 && isRecord(cur) && "snapshot" in cur && isRecord((cur as any).snapshot)) {
+    cur = (cur as any).snapshot;
   }
-}
+  return cur;
+};
 
 function createDefaultStats(createdAt = Date.now()): StatsSnapshot {
   const hatchedByType: Record<string, HatchedCounts> = {};
@@ -255,28 +253,23 @@ function normalizeStats(raw: unknown): StatsSnapshot {
 }
 
 function readFromStorage(): StatsSnapshot {
-  const storage = getStorage();
-  if (!storage) {
-    if (!memoryStore) memoryStore = createDefaultStats();
-    return cloneStats(memoryStore);
-  }
+  if (memoryStore) return cloneStats(memoryStore);
 
-  try {
-    const raw = storage.getItem(LS_STATS_KEY);
-    if (!raw) {
-      const fresh = createDefaultStats();
-      memoryStore = cloneStats(fresh);
-      return fresh;
-    }
-    const parsed = JSON.parse(raw);
-    const normalized = normalizeStats(parsed);
-    memoryStore = cloneStats(normalized);
-    return normalized;
-  } catch {
+  const rawWrapped = readAriesPath<unknown>("stats");
+  const raw = unwrapMaybeNestedSnapshot(rawWrapped);
+  if (!raw) {
     const fresh = createDefaultStats();
     memoryStore = cloneStats(fresh);
+    writeAriesPath("stats", memoryStore);
     return fresh;
   }
+  const normalized = normalizeStats(raw);
+  memoryStore = cloneStats(normalized);
+  if (rawWrapped !== raw) {
+    // Clean up legacy nested { snapshot: { ... } } structure by persisting the flattened payload.
+    writeAriesPath("stats", memoryStore);
+  }
+  return normalized;
 }
 
 function emitUpdate(stats: StatsSnapshot) {
@@ -292,15 +285,8 @@ function emitUpdate(stats: StatsSnapshot) {
 
 function writeToStorage(stats: StatsSnapshot): StatsSnapshot {
   const snapshot = cloneStats(stats);
-  const storage = getStorage();
   memoryStore = snapshot;
-  if (storage) {
-    try {
-      storage.setItem(LS_STATS_KEY, JSON.stringify(snapshot));
-    } catch {
-      // ignore write errors (quota, private mode, ...)
-    }
-  }
+  writeAriesPath("stats", snapshot);
   return snapshot;
 }
 
@@ -314,9 +300,12 @@ function adjustValue(current: number, delta: number, integer: boolean): number {
 }
 
 function updateStats(mutator: (draft: StatsSnapshot) => void): StatsSnapshot {
-  const stats = readFromStorage();
-  const draft = cloneStats(stats);
+  const current = readFromStorage();
+  const before = JSON.stringify(current);
+  const draft = cloneStats(current);
   mutator(draft);
+  const after = JSON.stringify(draft);
+  if (before === after) return current;
   const stored = writeToStorage(draft);
   emitUpdate(stored);
   return stored;
@@ -346,14 +335,14 @@ function requirePetEntry(stats: StatsSnapshot, species: string): HatchedCounts {
 }
 
 export const StatsService = {
-  storageKey: LS_STATS_KEY,
+  storageKey: "stats",
 
   getSnapshot(): StatsSnapshot {
     return readFromStorage();
   },
 
   setSnapshot(snapshot: StatsSnapshot): StatsSnapshot {
-    const normalized = normalizeStats(snapshot);
+    const normalized = normalizeStats(unwrapMaybeNestedSnapshot(snapshot));
     const stored = writeToStorage(normalized);
     emitUpdate(stored);
     return stored;

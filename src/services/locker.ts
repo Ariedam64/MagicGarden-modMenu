@@ -12,6 +12,7 @@ import {
   type PlantSlotTiming,
 } from "../store/atoms";
 import { plantCatalog } from "../data/hardcoded-data.clean";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 /** Référence des mutations visuelles reconnues par le locker. */
 const VISUAL_MUTATIONS = new Set(["Gold", "Rainbow"] as const);
@@ -646,7 +647,7 @@ function defaultState(): LockerStatePersisted {
   };
 }
 
-const LS_KEY = "garden.locker.state.v2";
+const ARIES_LOCKER_STATE_PATH = "locker.state";
 
 const clampNumber = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -824,18 +825,13 @@ export class LockerService {
   }
 
   private load(): void {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    if (typeof window === "undefined") {
       this.state = defaultState();
       return;
     }
 
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) {
-        this.state = defaultState();
-        return;
-      }
-      const parsed = JSON.parse(raw);
+      const parsed = readAriesPath<unknown>(ARIES_LOCKER_STATE_PATH);
       this.state = sanitizeState(parsed);
     } catch {
       this.state = defaultState();
@@ -843,9 +839,9 @@ export class LockerService {
   }
 
   private save(): void {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(this.state));
+      writeAriesPath(ARIES_LOCKER_STATE_PATH, this.state);
     } catch {
       /* ignore */
     }

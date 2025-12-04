@@ -2,6 +2,7 @@
 import { PetsService } from "./pets";
 import type { PetInfo } from "./player";
 import { audio } from "../utils/audio";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 type PetAlertPref = {
   enabled?: boolean;
@@ -15,7 +16,6 @@ type PetAlertState = {
   pets: Record<string, PetAlertPref>;
 };
 
-const LS_KEY = "qws:petAlerts:v1";
 const clampPct = (v: number) => Math.max(1, Math.min(100, Math.round(v)));
 
 let prefs: PetAlertState = {
@@ -32,9 +32,7 @@ const seenBelow = new Map<string, boolean>();
 
 function loadPrefs(): PetAlertState {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return prefs;
-    const parsed = JSON.parse(raw);
+    const parsed = readAriesPath<PetAlertState>("pets.alerts");
     if (parsed && typeof parsed === "object") {
       prefs = {
         globalEnabled: parsed.globalEnabled !== false,
@@ -51,7 +49,7 @@ function loadPrefs(): PetAlertState {
 
 function savePrefs() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(prefs));
+    writeAriesPath("pets.alerts", prefs);
   } catch {
     /* ignore persist errors */
   }

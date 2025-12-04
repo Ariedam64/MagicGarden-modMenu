@@ -26,6 +26,11 @@ import { EditorService } from "./services/editor";
 import { initGameVersion } from "./utils/gameVersion";
 import { warmUpAllSprites } from "./utils/sprites";
 import { loadTileSheet } from "./utils/tileSheet";
+import { migrateLocalStorageToAries } from "./utils/localStorage";
+import type { AriesModApi } from "./utils/ariesModApi";
+import { installAriesModApi } from "./utils/ariesModApi";
+
+const ariesMod: AriesModApi = installAriesModApi();
 
 const TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"] as const;
 
@@ -40,6 +45,8 @@ async function preloadAllTiles(): Promise<void> {
 
 (async function () {
   "use strict";
+
+  migrateLocalStorageToAries();
 
   installPageWebSocketHook();
   initGameVersion();
@@ -87,7 +94,8 @@ async function preloadAllTiles(): Promise<void> {
     move: (x, y) => PlayerService.move(x, y),
   });
 
+  ariesMod.antiAfkController = antiAfk;
+
   antiAfk.start();
 
 })();
-

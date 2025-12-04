@@ -22,6 +22,7 @@ import {
 } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
 import { StatsService } from "./stats";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 /* ----------------------------- Types & constants ----------------------------- */
 
@@ -69,11 +70,12 @@ export type PetsUIState = {
 type PetImgEntry = { img64?: { normal?: string; gold?: string; rainbow?: string } };
 type PetCatalogLoose = Record<string, PetImgEntry>;
 
-const LS_OVERRIDES_KEY   = "qws:pets:overrides:v1";
-const LS_UI_KEY          = "qws:pets:ui:v1";
-const LS_TEAMS_KEY       = "qws:pets:teams:v1";
-const LS_TEAM_SEARCH_KEY = "qws:pets:teamSearch:v1";
-const LS_TEAM_HK_PREFIX  = "qws:hk:petteam:use:";
+const PATH_PETS_OVERRIDES = "pets.overrides";
+const PATH_PETS_UI = "pets.ui";
+const PATH_PETS_TEAMS = "pets.teams";
+const PATH_PETS_TEAM_SEARCH = "pets.teamSearch";
+const PATH_PETS_HOTKEYS = "pets.hotkeys";
+const PATH_PETS_ABILITY_LOGS = "pets.abilityLogs";
 
 /* -------------------------------- HOTKEYS ----------------------------------- */
 
@@ -85,8 +87,6 @@ let unsubNextHotkey: (() => void) | null = null;
 let unsubPrevHotkey: (() => void) | null = null;
 let orderedTeamIds: string[] = [];
 let lastUsedTeamId: string | null = null;
-
-const legacyKeyForTeam = (id: string) => `${LS_TEAM_HK_PREFIX}${id}`;
 
 export type TeamLite = { id: string; name?: string | null };
 
@@ -105,20 +105,20 @@ function syncPrevTeamHotkey(): void {
 }
 
 function ensureLegacyTeamHotkeyMigration(teamId: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    const legacy = localStorage.getItem(legacyKeyForTeam(teamId));
-    if (!legacy) return;
-    const actionId = getPetTeamActionId(teamId);
-    const existing = getKeybind(actionId);
-    if (!existing) {
-      const hk = stringToHotkey(legacy);
-      if (hk) {
-        setKeybind(actionId, hk);
-      }
+  const hotkeys = readAriesPath<Record<string, string>>(PATH_PETS_HOTKEYS) ?? {};
+  const legacy = hotkeys[teamId];
+  if (!legacy) return;
+  const actionId = getPetTeamActionId(teamId);
+  const existing = getKeybind(actionId);
+  if (!existing) {
+    const hk = stringToHotkey(legacy);
+    if (hk) {
+      setKeybind(actionId, hk);
     }
-    localStorage.removeItem(legacyKeyForTeam(teamId));
-  } catch {}
+  }
+  const clone = { ...hotkeys };
+  delete clone[teamId];
+  writeAriesPath(PATH_PETS_HOTKEYS, clone);
 }
 
 function normalizeTeamList(teams: TeamLite[]): TeamLite[] {
@@ -343,26 +343,20 @@ function _invPetToRawItem(p: InventoryPet): any {
 /* ----------------------------- LS helpers (teams & UI) ----------------------------- */
 
 function loadTeams(): PetTeam[] {
-  try {
-    const raw = localStorage.getItem(LS_TEAMS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((t) => ({
-        id: String(t?.id || ""),
-        name: String(t?.name || "Team"),
-        slots: Array.isArray(t?.slots)
-          ? (t.slots.slice(0, 3).map((x: unknown) => (x ? String(x) : null)) as (string | null)[])
-          : [null, null, null],
-      }))
-      .filter(t => t.id);
-  } catch {
-    return [];
-  }
+  const arr = readAriesPath<PetTeam[]>(PATH_PETS_TEAMS) ?? [];
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .map((t) => ({
+      id: String(t?.id || ""),
+      name: String(t?.name || "Team"),
+      slots: Array.isArray(t?.slots)
+        ? (t.slots.slice(0, 3).map((x: unknown) => (x ? String(x) : null)) as (string | null)[])
+        : [null, null, null],
+    }))
+    .filter(t => t.id);
 }
 function saveTeams(arr: PetTeam[]) {
-  try { localStorage.setItem(LS_TEAMS_KEY, JSON.stringify(arr)); } catch {}
+  writeAriesPath(PATH_PETS_TEAMS, arr);
 }
 function _uid() {
   try { return crypto.randomUUID(); } catch {
@@ -370,14 +364,11 @@ function _uid() {
   }
 }
 function _loadTeamSearchMap(): Record<string, string> {
-  try {
-    const raw = localStorage.getItem(LS_TEAM_SEARCH_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    return obj && typeof obj === "object" ? obj : {};
-  } catch { return {}; }
+  const obj = readAriesPath<Record<string, string>>(PATH_PETS_TEAM_SEARCH);
+  return obj && typeof obj === "object" ? obj : {};
 }
 function _saveTeamSearchMap(map: Record<string, string>) {
-  try { localStorage.setItem(LS_TEAM_SEARCH_KEY, JSON.stringify(map)); } catch {}
+  writeAriesPath(PATH_PETS_TEAM_SEARCH, map);
 }
 
 /* ----------------------------- Teams state interne ----------------------------- */
@@ -606,38 +597,19 @@ let _currentPets: PetInfo[] = [];
 let _userTriggerCb: ((t: AutofeedTrigger) => void) | null = null;
 
 function saveOverrides(map: PetOverridesMap) {
-  try {
-    localStorage.setItem(LS_OVERRIDES_KEY, JSON.stringify(map));
-  } catch (err) {
-  }
+  writeAriesPath(PATH_PETS_OVERRIDES, map);
 }
 function loadOverrides(): PetOverridesMap {
-  try {
-    const raw = localStorage.getItem(LS_OVERRIDES_KEY);
-    if (!raw) return {};
-    const obj = JSON.parse(raw);
-    const out = obj && typeof obj === "object" ? (obj as PetOverridesMap) : {};
-    return out;
-  } catch (err) {
-    return {};
-  }
+  const obj = readAriesPath<PetOverridesMap>(PATH_PETS_OVERRIDES);
+  return obj && typeof obj === "object" ? obj : {};
 }
 function saveUIState(next: PetsUIState) {
-  try {
-    localStorage.setItem(LS_UI_KEY, JSON.stringify(next));
-  } catch (err) {
-  }
+  writeAriesPath(PATH_PETS_UI, next);
 }
 function loadUIState(): PetsUIState {
-  try {
-    const raw = localStorage.getItem(LS_UI_KEY);
-    if (!raw) return { ...DEFAULT_UI };
-    const obj = JSON.parse(raw);
-    const merged = { ...DEFAULT_UI, ...(obj || {}) } as PetsUIState;
-    return merged;
-  } catch (err) {
-    return { ...DEFAULT_UI };
-  }
+  const obj = readAriesPath<PetsUIState>(PATH_PETS_UI);
+  const merged = { ...DEFAULT_UI, ...(obj || {}) } as PetsUIState;
+  return merged;
 }
 function cloneOverride(o?: PetOverride): PetOverride {
   const src = o ?? DEFAULT_OVERRIDE;
@@ -1253,7 +1225,7 @@ export const PetsService = {
   _logSubs: new Set<(all: AbilityLogEntry[]) => void>(),
   _logsCutoffMs: 0,
   _logsCutoffSkewMs: 1500,
-  _logsStorageKey: "qws:pets:abilityLogs:v1",
+  _logsStorageKey: PATH_PETS_ABILITY_LOGS,
   _logsSessionStart: Date.now(),
 
   _extractAbilityValue(abilityId: string, rawData: any): number {
@@ -1459,18 +1431,7 @@ export const PetsService = {
     this._notifyLogSubs();
     this._persistAbilityLogs();
   },
-  _getLogsStorage(): Storage | null {
-    if (typeof window === "undefined") return null;
-    try {
-      if (typeof window.localStorage === "undefined") return null;
-      return window.localStorage;
-    } catch {
-      return null;
-    }
-  },
   _persistAbilityLogs() {
-    const storage = this._getLogsStorage();
-    if (!storage) return;
     try {
       const payload = {
         version: 1,
@@ -1486,16 +1447,12 @@ export const PetsService = {
           time12: entry.time12,
         })),
       };
-      storage.setItem(this._logsStorageKey, JSON.stringify(payload));
+      writeAriesPath(PATH_PETS_ABILITY_LOGS, payload);
     } catch {}
   },
   _restoreAbilityLogsFromStorage() {
-    const storage = this._getLogsStorage();
-    if (!storage) return;
     try {
-      const raw = storage.getItem(this._logsStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
+      const parsed = readAriesPath<any>(PATH_PETS_ABILITY_LOGS);
       if (!parsed || typeof parsed !== "object") return;
       const logsRaw = Array.isArray((parsed as any).logs) ? (parsed as any).logs : [];
       const restored: AbilityLogEntry[] = [];

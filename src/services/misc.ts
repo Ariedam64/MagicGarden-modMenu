@@ -4,40 +4,48 @@ import { decorCatalog, plantCatalog } from "../data/hardcoded-data.clean";
 import { Atoms } from "../store/atoms";
 import { fakeInventoryShow, isInventoryPanelOpen, waitInventoryPanelClosed, fakeInventoryHide } from "./fakeModal";
 import { toastSimple } from "../ui/toast";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 /* ========================================================================== */
 /*                               GHOST HELPERS                                */
 /* ========================================================================== */
 
-export const LS_GHOST_KEY = "qws:player:ghostMode";
-const LS_DELAY_KEY = "qws:ghost:delayMs";
+const PATH_GHOST_MODE = "misc.ghostMode";
+const PATH_GHOST_DELAY = "misc.ghostDelayMs";
 const DEFAULT_DELAY_MS = 50;
-const LS_AUTO_RECO_ENABLED = "qws:autoReco:onNewSession";
-const LS_AUTO_RECO_DELAY_MS = "qws:autoReco:delayMs";
+const PATH_AUTO_RECO_ENABLED = "misc.autoRecoEnabled";
+const PATH_AUTO_RECO_DELAY = "misc.autoRecoDelayMs";
 const AUTO_RECO_MIN_MS = 30_000;
 const AUTO_RECO_MAX_MS = 5 * 60_000;
 const AUTO_RECO_DEFAULT_MS = 60_000;
 
 export const readGhostEnabled = (def = false): boolean => {
-  try { return localStorage.getItem(LS_GHOST_KEY) === "1"; } catch { return def; }
+  try {
+    const stored = readAriesPath<unknown>(PATH_GHOST_MODE);
+    if (typeof stored === "boolean") return stored;
+    if (stored === "1" || stored === 1) return true;
+    if (stored === "0" || stored === 0) return false;
+    return !!stored;
+  } catch { return def; }
 };
 export const writeGhostEnabled = (v: boolean) => {
   try {
-    localStorage.setItem(LS_GHOST_KEY, v ? "1" : "0");
+    writeAriesPath(PATH_GHOST_MODE, !!v);
   } catch (err) {
   }
 };
 
 export const getGhostDelayMs = (): number => {
   try {
-    const n = Math.floor(Number(localStorage.getItem(LS_DELAY_KEY)) || DEFAULT_DELAY_MS);
+    const stored = readAriesPath<unknown>(PATH_GHOST_DELAY);
+    const n = Math.floor(Number(stored || DEFAULT_DELAY_MS));
     return Math.max(5, n);
   } catch { return DEFAULT_DELAY_MS; }
 };
 export const setGhostDelayMs = (n: number) => {
   const v = Math.max(5, Math.floor(n || DEFAULT_DELAY_MS));
   try {
-    localStorage.setItem(LS_DELAY_KEY, String(v));
+    writeAriesPath(PATH_GHOST_DELAY, v);
   } catch (err) {
   }
 };
@@ -46,22 +54,28 @@ const clampAutoRecoDelay = (ms: number) =>
   Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
 
 export const readAutoRecoEnabled = (def = false): boolean => {
-  try { return localStorage.getItem(LS_AUTO_RECO_ENABLED) === "1"; } catch { return def; }
+  try {
+    const stored = readAriesPath<unknown>(PATH_AUTO_RECO_ENABLED);
+    if (typeof stored === "boolean") return stored;
+    if (stored === "1" || stored === 1) return true;
+    if (stored === "0" || stored === 0) return false;
+    return !!stored;
+  } catch { return def; }
 };
 export const writeAutoRecoEnabled = (on: boolean) => {
-  try { localStorage.setItem(LS_AUTO_RECO_ENABLED, on ? "1" : "0"); } catch {}
+  try { writeAriesPath(PATH_AUTO_RECO_ENABLED, !!on); } catch {}
 };
 
 export const getAutoRecoDelayMs = (): number => {
   try {
-    const raw = Number(localStorage.getItem(LS_AUTO_RECO_DELAY_MS));
+    const raw = Number(readAriesPath<unknown>(PATH_AUTO_RECO_DELAY));
     if (Number.isFinite(raw)) return clampAutoRecoDelay(raw);
   } catch {}
   return AUTO_RECO_DEFAULT_MS;
 };
 export const setAutoRecoDelayMs = (ms: number) => {
   const v = clampAutoRecoDelay(ms);
-  try { localStorage.setItem(LS_AUTO_RECO_DELAY_MS, String(v)); } catch {}
+  try { writeAriesPath(PATH_AUTO_RECO_DELAY, v); } catch {}
 };
 
 /* ========================================================================== */

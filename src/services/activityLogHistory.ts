@@ -1,6 +1,7 @@
 // src/services/activityLogHistory.ts
 import { ACTIVITY_LOG_MODAL_ID, fakeActivityLogShow } from "./fakeModal";
 import { Atoms, myActivityLog } from "../store/atoms";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 type ActivityLogEntry = {
   timestamp: number;
@@ -9,17 +10,8 @@ type ActivityLogEntry = {
   [key: string]: any;
 };
 
-const HISTORY_STORAGE_KEY = "qws:activityLogs:history:v1";
+const HISTORY_STORAGE_KEY = "activityLog.history";
 const HISTORY_LIMIT = 500;
-
-function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage ?? null;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeEntry(raw: any): ActivityLogEntry | null {
   if (!raw || typeof raw !== "object") return null;
@@ -116,12 +108,8 @@ function entriesEqual(a: ActivityLogEntry, b: ActivityLogEntry): boolean {
 }
 
 function loadHistory(): ActivityLogEntry[] {
-  const storage = getStorage();
-  if (!storage) return [];
   try {
-    const raw = storage.getItem(HISTORY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
+    const parsed = readAriesPath<any>(HISTORY_STORAGE_KEY);
     if (!Array.isArray(parsed)) return [];
     const out: ActivityLogEntry[] = [];
     for (const item of parsed) {
@@ -135,8 +123,6 @@ function loadHistory(): ActivityLogEntry[] {
 }
 
 function saveHistory(entries: ActivityLogEntry[]) {
-  const storage = getStorage();
-  if (!storage) return;
   const sorted = entries
     .slice()
     .sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
@@ -144,7 +130,7 @@ function saveHistory(entries: ActivityLogEntry[]) {
     sorted.splice(0, sorted.length - HISTORY_LIMIT);
   }
   try {
-    storage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sorted));
+    writeAriesPath(HISTORY_STORAGE_KEY, sorted);
   } catch {
   }
 }

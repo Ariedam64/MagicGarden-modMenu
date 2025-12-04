@@ -18,6 +18,7 @@ import {
 import { audio, type PlaybackMode, type TriggerOverrides } from "../utils/audio";
 import { getWeatherSpriteKey } from "../utils/sprites";
 import { StatsService } from "./stats";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 export type SectionType = "Seed" | "Egg" | "Tool" | "Decor";
 
@@ -112,11 +113,10 @@ export type PurchasesSnapshot = {
 
 export type ToolInvItem = { toolId: string; itemType: "Tool"; quantity: number };
 
-// Conserve la même clé pour compat (on n'utilise plus que le bit 1 = popup)
-const LS_PREFS_KEY = "qws:shop:notifs:v1"; // { [id]: number } bitmask: 1=popup
-const LS_RULES_KEY = "qws:shop:notifs:rules.v1";
-const LS_WEATHER_PREFS_KEY = "qws:weather:notifs:v1";
-const LS_CONTEXT_DEFAULTS_KEY = "qws:notifier:loopDefaults.v1";
+const PATH_NOTIFIER_PREFS = "notifier.prefs";
+const PATH_NOTIFIER_RULES = "notifier.rules";
+const PATH_NOTIFIER_WEATHER = "notifier.weatherPrefs";
+const PATH_NOTIFIER_DEFAULTS = "notifier.loopDefaults";
 
 // ---------- Rarity mapping (clean English labels) ----------
 const DISPLAY_RARITY: Record<string, string> = {
@@ -513,8 +513,7 @@ function _ensureRulesLoaded() {
   _rulesLoaded = true;
   _rules = new Map();
   try {
-    const raw = localStorage.getItem(LS_RULES_KEY);
-    const obj = raw ? JSON.parse(raw) : null;
+    const obj = readAriesPath<Record<string, any>>(PATH_NOTIFIER_RULES);
     if (obj && typeof obj === "object") {
       for (const [id, value] of Object.entries(obj)) {
         const norm = _normalizeRule(value as any);
@@ -543,7 +542,7 @@ function _saveRules() {
     for (const [id, rule] of _rules.entries()) {
       obj[id] = { ...rule };
     }
-    localStorage.setItem(LS_RULES_KEY, JSON.stringify(obj));
+    writeAriesPath(PATH_NOTIFIER_RULES, obj);
   } catch {}
 }
 
@@ -552,9 +551,7 @@ function _ensureWeatherPrefsLoaded() {
   _weatherPrefsLoaded = true;
   _weatherPrefs = new Map();
   try {
-    const raw = localStorage.getItem(LS_WEATHER_PREFS_KEY);
-    if (!raw) return;
-    const obj = JSON.parse(raw);
+    const obj = readAriesPath<Record<string, any>>(PATH_NOTIFIER_WEATHER);
     if (obj && typeof obj === "object") {
       for (const [id, value] of Object.entries(obj as Record<string, any>)) {
         if (!id) continue;
@@ -581,7 +578,7 @@ function _saveWeatherPrefs() {
       if (typeof pref.lastSeen === "number" && Number.isFinite(pref.lastSeen)) entry.lastSeen = pref.lastSeen;
       if (entry.notify || entry.lastSeen != null) obj[id] = entry;
     }
-    localStorage.setItem(LS_WEATHER_PREFS_KEY, JSON.stringify(obj));
+    writeAriesPath(PATH_NOTIFIER_WEATHER, obj);
   } catch {}
 }
 
@@ -599,9 +596,7 @@ function _ensureContextDefaultsLoaded() {
   _contextDefaultsLoaded = true;
   _contextDefaults = {};
   try {
-    const raw = localStorage.getItem(LS_CONTEXT_DEFAULTS_KEY);
-    if (!raw) return;
-    const obj = JSON.parse(raw);
+    const obj = readAriesPath<Record<string, any>>(PATH_NOTIFIER_DEFAULTS);
     if (obj && typeof obj === "object") {
       for (const [context, value] of Object.entries(obj as Record<string, any>)) {
         const ctx = context as NotifierContext;
@@ -638,7 +633,7 @@ function _saveContextDefaults() {
         loopIntervalMs,
       };
     }
-    localStorage.setItem(LS_CONTEXT_DEFAULTS_KEY, JSON.stringify(obj));
+    writeAriesPath(PATH_NOTIFIER_DEFAULTS, obj);
   } catch {}
 }
 
@@ -858,8 +853,7 @@ function _emitRules() {
 }
 function _loadPrefs() {
   try {
-    const raw = localStorage.getItem(LS_PREFS_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
+    const obj = readAriesPath<Record<string, number>>(PATH_NOTIFIER_PREFS) ?? {};
     const m = new Map<string, number>();
     if (obj && typeof obj === "object") {
       for (const [k, v] of Object.entries(obj)) {
@@ -878,7 +872,7 @@ function _savePrefs() {
   try {
     const obj: Record<string, number> = {};
     for (const [k, v] of _prefs) obj[k] = v & 1; // n'enregistrer que le bit popup
-    localStorage.setItem(LS_PREFS_KEY, JSON.stringify(obj));
+    writeAriesPath(PATH_NOTIFIER_PREFS, obj);
   } catch {}
 }
 const _getPrefBits = (id: string) => (_prefs.get(id) ?? 0) & 1;

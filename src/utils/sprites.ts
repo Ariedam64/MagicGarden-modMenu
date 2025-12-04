@@ -833,6 +833,12 @@ export function createWeatherSprite(rawKey: string | null | undefined, options: 
 
 export type PetSpriteVariant = "normal" | "gold" | "rainbow";
 
+const PET_VARIANT_COLOR_FILTER: Record<PetSpriteVariant, string | null> = {
+  normal: null,
+  gold: "Gold",
+  rainbow: "Rainbow",
+};
+
 type MutationInput = string | string[] | null | undefined;
 
 type PetCatalogEntry = {
@@ -930,7 +936,13 @@ async function fetchPetSprite(species: string, variant: PetSpriteVariant): Promi
       if (!tile) continue;
       const canvas = Sprites.toCanvas(tile);
       if (!canvas || canvas.width <= 0 || canvas.height <= 0) continue;
-      return canvas.toDataURL();
+      let finalCanvas = canvas;
+      const filterName = PET_VARIANT_COLOR_FILTER[variant];
+      if (filterName) {
+        const filtered = Sprites.applyCanvasFilter(finalCanvas, filterName);
+        if (filtered) finalCanvas = filtered;
+      }
+      return finalCanvas.toDataURL();
     } catch {
       /* ignore */
     }

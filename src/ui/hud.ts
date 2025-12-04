@@ -27,6 +27,7 @@ import { startActivityLogFilter } from "../utils/activityLogFilter";
 import { startSellCropsLockWatcher } from "../utils/sellCropsLock";
 import { startEggHatchLockIndicator } from "../utils/eggHatchLockIndicator";
 import { startDecorPickupLockIndicator } from "../utils/decorPickupLockIndicator";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 // ========================
 // Types d’intégration
@@ -40,9 +41,10 @@ export interface HUDOptions {
 // HUD principal
 // ========================
 export function mountHUD(opts?: HUDOptions) {
-  const LS_POS = "qws:pos";
-  const LS_COLL = "qws:collapsed";
-  const LS_HIDDEN = "qws:hidden";
+  const HUD_POS_PATH = "hud.pos";
+  const HUD_COLLAPSED_PATH = "hud.collapsed";
+  const HUD_HIDDEN_PATH = "hud.hidden";
+  const HUD_WIN_PATH = (id: string) => `hud.windows.${id}`;
   const MARGIN = 8;
   const Z_BASE = 2_000_000; // keep HUD/windows above editor overlays
 
@@ -196,7 +198,7 @@ export function mountHUD(opts?: HUDOptions) {
 
   const setHUDHidden = (hidden: boolean) => {
     box.classList.toggle("hidden", hidden);
-    try { localStorage.setItem(LS_HIDDEN, hidden ? "1" : "0"); } catch {}
+    try { writeAriesPath(HUD_HIDDEN_PATH, hidden); } catch {}
     return hidden;
   };
 
@@ -376,23 +378,25 @@ export function mountHUD(opts?: HUDOptions) {
     try {
       const r = parseFloat(box.style.right) || 16;
       const b = parseFloat(box.style.bottom) || 16;
-      localStorage.setItem(LS_POS, JSON.stringify({ r, b }));
+      writeAriesPath(HUD_POS_PATH, { r, b });
     } catch {}
   }
 
   // ---------- Restore HUD ----------
   try {
-    const pos = JSON.parse(localStorage.getItem(LS_POS)||"null");
+    const pos = readAriesPath<{ r?: number; b?: number }>(HUD_POS_PATH);
     if (pos && typeof pos.r==='number' && typeof pos.b==='number') {
       box.style.right = pos.r + "px";
       box.style.bottom = pos.b + "px";
     }
-    if (localStorage.getItem(LS_COLL)==="1") {
+    const collapsed = readAriesPath<boolean | string | number>(HUD_COLLAPSED_PATH);
+    if (collapsed === true || collapsed === "1" || collapsed === 1) {
       box.classList.add("min");
       const btnMin0 = box.querySelector("#qws2-min") as HTMLButtonElement | null;
       if (btnMin0) btnMin0.textContent = "+";
     }
-    if (localStorage.getItem(LS_HIDDEN)==="1") box.classList.add("hidden");
+    const hidden = readAriesPath<boolean | string | number>(HUD_HIDDEN_PATH);
+    if (hidden === true || hidden === "1" || hidden === 1) box.classList.add("hidden");
     requestAnimationFrame(() => clampRect(box));
     window.addEventListener("resize", () => clampRect(box));
   } catch {}
@@ -466,8 +470,8 @@ export function mountHUD(opts?: HUDOptions) {
   btnMin.onclick = () => {
     withTopLocked(box, () => {
       box.classList.toggle('min');
-      btnMin.textContent = box.classList.contains('min') ? '+' : '–';
-      try { localStorage.setItem(LS_COLL, box.classList.contains('min')?'1':'0'); } catch {}
+      btnMin.textContent = box.classList.contains('min') ? '+' : '-';
+      try { writeAriesPath(HUD_COLLAPSED_PATH, box.classList.contains('min')); } catch {}
     });
   };
   btnHide.onclick = () => {
@@ -641,16 +645,14 @@ export function mountHUD(opts?: HUDOptions) {
     try {
       const r = parseFloat(el.style.right) || 16;
       const b = parseFloat(el.style.bottom) || 16;
-      localStorage.setItem(`qws:win:${id}:pos`, JSON.stringify({ r, b }));
+      writeAriesPath(HUD_WIN_PATH(id), { r, b });
     } catch {}
   }
   function restoreWinPos(id: string, el: HTMLElement) {
     try {
-      const raw = localStorage.getItem(`qws:win:${id}:pos`);
-      if (!raw) return;
-      const pos = JSON.parse(raw);
-      if (typeof pos.r === "number") el.style.right = pos.r + "px";
-      if (typeof pos.b === "number") el.style.bottom = pos.b + "px";
+      const pos = readAriesPath<{ r?: number; b?: number }>(HUD_WIN_PATH(id));
+      if (pos && typeof pos.r === "number") el.style.right = pos.r + "px";
+      if (pos && typeof pos.b === "number") el.style.bottom = pos.b + "px";
       ensureOnScreen(el);
     } catch {}
   }

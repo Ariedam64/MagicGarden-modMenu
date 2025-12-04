@@ -1,6 +1,7 @@
 // src/services/keybinds.ts
 import { inGameHotkeys } from "../core/ingameHotkeys";
 import { hotkeyToPretty, hotkeyToString, matchHotkey, stringToHotkey, type Hotkey } from "../ui/menu";
+import { readAriesPath, updateAriesPath } from "../utils/localStorage";
 
 export type { Hotkey } from "../ui/menu";
 
@@ -224,8 +225,9 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
   },
 ];
 
-const STORAGE_PREFIX = "qws:keybind:";
-const HOLD_STORAGE_PREFIX = "qws:keybind-hold:";
+const KEYBINDS_BINDINGS_PATH = "keybinds.bindings";
+const KEYBINDS_HOLD_PATH = "keybinds.hold";
+const ARIES_ROOT_KEY = "aries_mod";
 const STORED_NONE = "__none__";
 
 const actionMap = new Map<KeybindId, KeybindAction>();
@@ -720,69 +722,57 @@ function hotkeysEqual(a: Hotkey | null, b: Hotkey | null): boolean {
   return hotkeyToString(a) === hotkeyToString(b);
 }
 
-function storageKey(id: KeybindId): string {
-  return `${STORAGE_PREFIX}${id}`;
-}
-
-function holdStorageKey(id: KeybindId): string {
-  return `${HOLD_STORAGE_PREFIX}${id}`;
-}
-
 function readStored(id: KeybindId): Hotkey | null | undefined {
   if (typeof window === "undefined") return undefined;
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(storageKey(id));
-  } catch {
-    return undefined;
-  }
+  const map = readAriesPath<Record<string, unknown>>(KEYBINDS_BINDINGS_PATH);
+  const raw = map?.[id];
   if (raw == null) return undefined;
   if (raw === STORED_NONE) return null;
+  if (typeof raw !== "string") return null;
   const parsed = stringToHotkey(raw);
   return parsed ?? null;
 }
 
 function writeStored(id: KeybindId, hk: Hotkey | null): void {
   if (typeof window === "undefined") return;
-  try {
+  updateAriesPath<Record<string, unknown>>(KEYBINDS_BINDINGS_PATH, (current) => {
+    const base = current && typeof current === "object" ? { ...current } : {};
     if (hk) {
-      window.localStorage.setItem(storageKey(id), hotkeyToString(hk));
+      base[id] = hotkeyToString(hk);
     } else {
-      window.localStorage.setItem(storageKey(id), STORED_NONE);
+      base[id] = STORED_NONE;
     }
-  } catch {
-    /* ignore */
-  }
+    return base;
+  });
 }
 
 function removeStored(id: KeybindId): void {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(storageKey(id));
-  } catch {
-    /* ignore */
-  }
+  updateAriesPath<Record<string, unknown>>(KEYBINDS_BINDINGS_PATH, (current) => {
+    const base = current && typeof current === "object" ? { ...current } : {};
+    delete base[id];
+    return base;
+  });
 }
 
 function readHoldStored(id: KeybindId): boolean | undefined {
   if (typeof window === "undefined") return undefined;
-  let raw: string | null = null;
-  try {
-    raw = window.localStorage.getItem(holdStorageKey(id));
-  } catch {
-    return undefined;
-  }
+  const map = readAriesPath<Record<string, unknown>>(KEYBINDS_HOLD_PATH);
+  const raw = map?.[id];
   if (raw == null) return undefined;
-  return raw === "1";
+  if (typeof raw === "string") return raw === "1";
+  if (typeof raw === "number") return raw === 1;
+  if (typeof raw === "boolean") return raw;
+  return undefined;
 }
 
 function writeHoldStored(id: KeybindId, enabled: boolean): void {
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(holdStorageKey(id), enabled ? "1" : "0");
-  } catch {
-    /* ignore */
-  }
+  updateAriesPath<Record<string, unknown>>(KEYBINDS_HOLD_PATH, (current) => {
+    const base = current && typeof current === "object" ? { ...current } : {};
+    base[id] = !!enabled;
+    return base;
+  });
 }
 
 function emitHoldChange(id: KeybindId): void {
@@ -947,17 +937,10 @@ export function getKeybindSections(): KeybindSection[] {
 
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
-    if (!event.key || !event.key.startsWith(STORAGE_PREFIX)) return;
-    const id = event.key.slice(STORAGE_PREFIX.length) as KeybindId;
-    if (!actionMap.has(id)) return;
-    cache.delete(id);
-    emitChange(id);
-  });
-  window.addEventListener("storage", (event) => {
-    if (!event.key || !event.key.startsWith(HOLD_STORAGE_PREFIX)) return;
-    const id = event.key.slice(HOLD_STORAGE_PREFIX.length) as KeybindId;
-    if (!holdDefaultMap.has(id)) return;
-    holdCache.delete(id);
-    emitHoldChange(id);
+    if (event.key !== ARIES_ROOT_KEY) return;
+    cache.clear();
+    holdCache.clear();
+    for (const id of actionMap.keys()) emitChange(id);
+    for (const id of holdDefaultMap.keys()) emitHoldChange(id as KeybindId);
   });
 }

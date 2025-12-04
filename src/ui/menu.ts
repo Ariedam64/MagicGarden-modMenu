@@ -2,6 +2,8 @@
 // Menu générique à onglets, compact, avec helpers UI + persistance LS.
 // + Helpers réutilisables : split2 (layout 2 colonnes) et VTabs (tabs verticaux)
 
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
+
 type TabRender = (root: HTMLElement, api: Menu) => void;
 type Handler = (...args: any[]) => void;
 
@@ -168,9 +170,11 @@ export class Menu {
   private events: Map<string, Set<Handler>> = new Map();
   private currentId: string | null = null;
   private lsKeyActive: string;
+  private menuId: string;
 
   constructor(private opts: MenuOptions = {}) {
-    this.lsKeyActive = `menu:${opts.id || 'default'}:activeTab`;
+    this.menuId = this.opts.id || "default";
+    this.lsKeyActive = `menu:${this.menuId}:activeTab`;
   }
 
   /** Monte le menu dans un conteneur */
@@ -1347,11 +1351,20 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 
   private persistActive() {
     if (!this.currentId) return;
-    try { localStorage.setItem(this.lsKeyActive, this.currentId); } catch {}
+    try {
+      writeAriesPath(`menu.activeTabs.${this.menuId}`, this.currentId);
+      try { localStorage.removeItem(this.lsKeyActive); } catch {}
+    } catch {}
   }
   private restoreActive() {
     let id: string | null = null;
-    try { id = localStorage.getItem(this.lsKeyActive); } catch {}
+    try {
+      const stored = readAriesPath<string>(`menu.activeTabs.${this.menuId}`);
+      if (typeof stored === "string" && stored) id = stored;
+    } catch {}
+    if (!id) {
+      try { id = localStorage.getItem(this.lsKeyActive); } catch {}
+    }
     if (id && this.tabs.has(id)) this.switchTo(id);
     else if (this.tabs.size) this.switchTo(this.firstTabId());
   }

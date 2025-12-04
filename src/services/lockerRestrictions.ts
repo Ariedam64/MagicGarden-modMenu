@@ -8,7 +8,9 @@ export type LockerRestrictionsState = {
   decorPickupLocked: boolean;
 };
 
-const LS_KEY = "qws:locker:restrictions.v1";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
+
+const ARIES_LOCKER_RESTRICTIONS_PATH = "locker.restrictions";
 
 const clampPercent = (value: number): number => Math.max(0, Math.min(50, Math.round(value)));
 
@@ -82,18 +84,13 @@ class LockerRestrictionsService {
   }
 
   private load(): void {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    if (typeof window === "undefined") {
       this.state = { ...DEFAULT_STATE };
       return;
     }
 
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (!raw) {
-        this.state = { ...DEFAULT_STATE };
-        return;
-      }
-      const parsed = JSON.parse(raw);
+      const parsed = readAriesPath<any>(ARIES_LOCKER_RESTRICTIONS_PATH) ?? {};
       const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
       const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
       const decorPickupLocked = parsed?.decorPickupLocked === true;
@@ -104,9 +101,9 @@ class LockerRestrictionsService {
   }
 
   private save(): void {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(this.state));
+      writeAriesPath(ARIES_LOCKER_RESTRICTIONS_PATH, this.state);
     } catch {
       /* ignore */
     }

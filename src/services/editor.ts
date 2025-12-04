@@ -10,12 +10,11 @@ import { shareGlobal } from "../utils/page-context";
 import { eventMatchesKeybind } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
 import { audioPlayer } from "../core/audioPlayer";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 type Listener = (enabled: boolean) => void;
 
-const LS_KEY = "qws:editor:enabled";
-const EVENT_NAME = "qws:editor-mode";
-const LS_SAVED_GARDENS = "qws:editor:saved-gardens";
+const ARIES_SAVED_GARDENS_PATH = "editor.savedGardens";
 const FIXED_SLOT_START = 1760866288723;
 const FIXED_SLOT_END = 1760867858782;
 
@@ -2581,11 +2580,6 @@ function notify(enabled: boolean) {
       /* ignore */
     }
   });
-  try {
-    window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: { enabled } }));
-  } catch {
-    /* ignore */
-  }
 }
 
 function applyState(enabled: boolean, opts: { persist?: boolean; emit?: boolean } = {}) {
@@ -2696,11 +2690,9 @@ function rewriteGardenSlotTimes(garden: GardenState, startTime: number, endTime:
 
 function readSavedGardens(): SavedGarden[] {
   try {
-    const raw = localStorage.getItem(LS_SAVED_GARDENS);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
+    const parsed = readAriesPath<unknown>(ARIES_SAVED_GARDENS_PATH);
+    const arr = Array.isArray(parsed) ? parsed : [];
+    return arr
       .map((g) => ({
         id: String((g as any)?.id || ""),
         name: String((g as any)?.name || "Untitled"),
@@ -2715,7 +2707,7 @@ function readSavedGardens(): SavedGarden[] {
 
 function writeSavedGardens(list: SavedGarden[]) {
   try {
-    localStorage.setItem(LS_SAVED_GARDENS, JSON.stringify(list || []));
+    writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
   } catch {
     /* ignore */
   }

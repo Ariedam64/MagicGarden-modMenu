@@ -9,6 +9,7 @@ import {
   type RoomInfoPayload,
 } from "../utils/api";
 import { fetchRemoteRooms, type RemoteRoomsPayload } from "../utils/publicRooms";
+import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 const MAX_PLAYERS = 6;
 
@@ -197,20 +198,9 @@ async function ensureRemoteRoomsLoaded(): Promise<void> {
   }
 }
 
-const CUSTOM_ROOMS_STORAGE_KEY = "mg.customRooms";
-
 interface StoredCustomRoomDefinition {
   name: string;
   idRoom: string;
-}
-
-function getStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
 }
 
 function sanitizeRoomDefinition(room: StoredCustomRoomDefinition): PublicRoomDefinition | null {
@@ -226,38 +216,22 @@ function sanitizeRoomDefinition(room: StoredCustomRoomDefinition): PublicRoomDef
 }
 
 function loadStoredCustomRooms(): PublicRoomDefinition[] {
-  const storage = getStorage();
-  if (!storage) return [];
-  try {
-    const raw = storage.getItem(CUSTOM_ROOMS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as StoredCustomRoomDefinition[];
-    if (!Array.isArray(parsed)) return [];
-    const result: PublicRoomDefinition[] = [];
-    for (const entry of parsed) {
-      const sanitized = sanitizeRoomDefinition(entry);
-      if (sanitized) {
-        result.push(sanitized);
-      }
-    }
-    return result;
-  } catch {
-    return [];
+  const parsed = readAriesPath<StoredCustomRoomDefinition[]>("room.customRooms") ?? [];
+  if (!Array.isArray(parsed)) return [];
+  const result: PublicRoomDefinition[] = [];
+  for (const entry of parsed) {
+    const sanitized = sanitizeRoomDefinition(entry);
+    if (sanitized) result.push(sanitized);
   }
+  return result;
 }
 
 function persistCustomRooms(rooms: PublicRoomDefinition[]): void {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    const payload: StoredCustomRoomDefinition[] = rooms.map((room) => ({
-      name: room.name,
-      idRoom: room.idRoom,
-    }));
-    storage.setItem(CUSTOM_ROOMS_STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // Ignored: persistence failure should not crash the UI.
-  }
+  const payload: StoredCustomRoomDefinition[] = rooms.map((room) => ({
+    name: room.name,
+    idRoom: room.idRoom,
+  }));
+  writeAriesPath("room.customRooms", payload);
 }
 
 let customRoomsCache: PublicRoomDefinition[] | null = null;

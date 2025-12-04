@@ -1,4 +1,5 @@
 import { addStyle, onAdded } from "../core/dom";
+import { readAriesPath, writeAriesPath } from "./localStorage";
 
 type ActionKey =
   | "all"
@@ -15,7 +16,7 @@ type ActionKey =
   | "other"
   | string;
 
-const FILTER_STORAGE_KEY = "qws:activityLog:filter";
+const FILTER_STORAGE_KEY = "activityLog.filter";
 const STYLE_ID = "mg-activity-log-filter-style";
 const ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
 const WRAPPER_CLASS = "mg-activity-log-filter";
@@ -319,9 +320,8 @@ function getActionLabel(action: ActionKey): string {
 }
 
 function loadPersistedFilter(): ActionKey | null {
-  if (typeof window === "undefined") return null;
   try {
-    const stored = window.localStorage?.getItem(FILTER_STORAGE_KEY);
+    const stored = readAriesPath<string>(FILTER_STORAGE_KEY);
     return stored || null;
   } catch {
     return null;
@@ -329,9 +329,8 @@ function loadPersistedFilter(): ActionKey | null {
 }
 
 function persistFilter(value: ActionKey): void {
-  if (typeof window === "undefined") return;
   try {
-    window.localStorage?.setItem(FILTER_STORAGE_KEY, String(value));
+    writeAriesPath(FILTER_STORAGE_KEY, String(value));
   } catch {
   }
 }

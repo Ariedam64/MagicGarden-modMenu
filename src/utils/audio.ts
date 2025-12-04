@@ -3,6 +3,7 @@
 // =====================================================================
 
 import { toastSimple } from "../ui/toast";
+import { readAriesPath, writeAriesPath } from "./localStorage";
 
 export type PlaybackMode = "oneshot" | "loop";
 export type StopConfig =
@@ -68,8 +69,8 @@ function toDataUrl(dataOrBase64: string, mime = "audio/mpeg") {
   return `data:${mime};base64,${s}`;
 }
 
-const LS_SETTINGS_KEY = "qws:alerts:audio:settings:v1";
-const LS_LIBRARY_KEY = "qws:alerts:audio:library:v1";
+const AUDIO_SETTINGS_PATH = "audio.settings";
+const AUDIO_LIBRARY_PATH = "audio.library";
 
 export type AudioContextKey = "shops" | "weather" | "pets";
 
@@ -243,7 +244,7 @@ export class AudioNotifier {
           },
         },
       };
-      localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(payload));
+      writeAriesPath(AUDIO_SETTINGS_PATH, payload);
     } catch {}
   }
 
@@ -255,7 +256,7 @@ export class AudioNotifier {
         if (this.builtinDefault && name === this.builtinDefault.name) continue;
         entries.push({ name, data });
       }
-      localStorage.setItem(LS_LIBRARY_KEY, JSON.stringify(entries));
+      writeAriesPath(AUDIO_LIBRARY_PATH, entries);
     } catch {}
   }
 
@@ -264,150 +265,146 @@ export class AudioNotifier {
     try {
       // Library
       try {
-        const raw = localStorage.getItem(LS_LIBRARY_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            this.library.clear();
-            this.ensureBuiltinPresent();
-            for (const entry of parsed) {
-              const name = String((entry && (entry as any).name) || "").trim();
-              const data = String((entry && (entry as any).data) || "").trim();
-              if (!name || !data) continue;
-              if (this.builtinDefault && name === this.builtinDefault.name) continue;
-              this.library.set(name, looksLikeDataURL(data) ? data : toDataUrl(data));
-            }
+        const parsed = readAriesPath<unknown>(AUDIO_LIBRARY_PATH);
+        if (Array.isArray(parsed)) {
+          this.library.clear();
+          this.ensureBuiltinPresent();
+          for (const entry of parsed) {
+            const name = String((entry && (entry as any).name) || "").trim();
+            const data = String((entry && (entry as any).data) || "").trim();
+            if (!name || !data) continue;
+            if (this.builtinDefault && name === this.builtinDefault.name) continue;
+            this.library.set(name, looksLikeDataURL(data) ? data : toDataUrl(data));
           }
         }
-      } catch {}
+      } catch (err) {
+      }
 
       // Settings
       try {
-        const raw = localStorage.getItem(LS_SETTINGS_KEY);
-        if (raw) {
-          const parsed: StoredAudioSettings = JSON.parse(raw);
-          if (parsed && typeof parsed === "object") {
-            if (typeof parsed.enabled === "boolean") this.enabled = parsed.enabled;
-            if (typeof parsed.minPlayGapMs === "number") this.minPlayGapMs = Math.max(0, parsed.minPlayGapMs | 0);
+        const parsed: StoredAudioSettings | unknown = readAriesPath<unknown>(AUDIO_SETTINGS_PATH);
+        if (parsed && typeof parsed === "object") {
+          if (typeof (parsed as any).enabled === "boolean") this.enabled = (parsed as any).enabled;
+          if (typeof (parsed as any).minPlayGapMs === "number") this.minPlayGapMs = Math.max(0, (parsed as any).minPlayGapMs | 0);
 
-            if (typeof parsed.volume === "number") this.volume = clamp01(parsed.volume);
-            if (parsed.mode === "loop" || parsed.mode === "oneshot") this.mode = parsed.mode;
-            if (parsed.stop && typeof parsed.stop === "object") {
-              const stopMode = (parsed.stop as any).mode;
-              if (stopMode === "purchase") {
-                this.stopConf = { mode: "purchase" };
-              } else if (stopMode === "manual") {
-                this.stopConf = { mode: "manual" };
-              } else if (stopMode === "repeat") {
-                this.stopConf = { mode: "manual" };
+          if (typeof (parsed as any).volume === "number") this.volume = clamp01((parsed as any).volume);
+          if ((parsed as any).mode === "loop" || (parsed as any).mode === "oneshot") this.mode = (parsed as any).mode;
+          if ((parsed as any).stop && typeof (parsed as any).stop === "object") {
+            const stopMode = ((parsed as any).stop as any).mode;
+            if (stopMode === "purchase") {
+              this.stopConf = { mode: "purchase" };
+            } else if (stopMode === "manual") {
+              this.stopConf = { mode: "manual" };
+            } else if (stopMode === "repeat") {
+              this.stopConf = { mode: "manual" };
+            }
+          }
+          if (typeof (parsed as any).loopIntervalMs === "number") this.loopIntervalMs = Math.max(150, (parsed as any).loopIntervalMs | 0);
+          if (typeof (parsed as any).defaultSoundName === "string") {
+            const nm = (parsed as any).defaultSoundName.trim();
+            this.defaultSoundName = nm ? nm : null;
+          }
+
+          let weatherVolumeLoaded = false;
+          let weatherModeLoaded = false;
+          let weatherStopLoaded = false;
+          let weatherLoopLoaded = false;
+          let weatherDefaultLoaded = false;
+          let petVolumeLoaded = false;
+          let petModeLoaded = false;
+          let petStopLoaded = false;
+          let petLoopLoaded = false;
+          let petDefaultLoaded = false;
+
+          const applyContext = (ctx: AudioContextKey, conf?: StoredContextSettings | null) => {
+            if (!conf || typeof conf !== "object") return;
+            const applyVolume = (value: unknown) => {
+              if (typeof value !== "number") return;
+              const normalized = clamp01(value);
+              if (ctx === "weather") { this.weatherVolume = normalized; weatherVolumeLoaded = true; }
+              else if (ctx === "pets") { this.petVolume = normalized; petVolumeLoaded = true; }
+              else this.volume = normalized;
+            };
+            const applyMode = (value: unknown) => {
+              if (value === "loop" || value === "oneshot") {
+                if (ctx === "weather") { this.weatherMode = value; weatherModeLoaded = true; }
+                else if (ctx === "pets") { this.petMode = value; petModeLoaded = true; }
+                else this.mode = value;
               }
-            }
-            if (typeof parsed.loopIntervalMs === "number") this.loopIntervalMs = Math.max(150, parsed.loopIntervalMs | 0);
-            if (typeof parsed.defaultSoundName === "string") {
-              const nm = parsed.defaultSoundName.trim();
-              this.defaultSoundName = nm ? nm : null;
-            }
-
-            let weatherVolumeLoaded = false;
-            let weatherModeLoaded = false;
-            let weatherStopLoaded = false;
-            let weatherLoopLoaded = false;
-            let weatherDefaultLoaded = false;
-            let petVolumeLoaded = false;
-            let petModeLoaded = false;
-            let petStopLoaded = false;
-            let petLoopLoaded = false;
-            let petDefaultLoaded = false;
-
-            const applyContext = (ctx: AudioContextKey, conf?: StoredContextSettings | null) => {
-              if (!conf || typeof conf !== "object") return;
-              const applyVolume = (value: unknown) => {
-                if (typeof value !== "number") return;
-                const normalized = clamp01(value);
-                if (ctx === "weather") { this.weatherVolume = normalized; weatherVolumeLoaded = true; }
-                else if (ctx === "pets") { this.petVolume = normalized; petVolumeLoaded = true; }
-                else this.volume = normalized;
-              };
-              const applyMode = (value: unknown) => {
-                if (value === "loop" || value === "oneshot") {
-                  if (ctx === "weather") { this.weatherMode = value; weatherModeLoaded = true; }
-                  else if (ctx === "pets") { this.petMode = value; petModeLoaded = true; }
-                  else this.mode = value;
+            };
+            const applyStop = (value: unknown) => {
+              if (!value || typeof value !== "object") return;
+              const mode = (value as any).mode;
+              if (mode === "purchase") {
+                if (ctx === "weather") { this.weatherStopConf = { mode: "purchase" }; weatherStopLoaded = true; }
+                else if (ctx === "pets") { this.petStopConf = { mode: "purchase" }; petStopLoaded = true; }
+                else this.stopConf = { mode: "purchase" };
+              } else if (mode === "manual") {
+                if (ctx === "weather") { this.weatherStopConf = { mode: "manual" }; weatherStopLoaded = true; }
+                else if (ctx === "pets") { this.petStopConf = { mode: "manual" }; petStopLoaded = true; }
+                else this.stopConf = { mode: "manual" };
+              } else if (mode === "repeat") {
+                if (ctx === "weather") {
+                  this.weatherStopConf = { mode: "manual" };
+                  weatherStopLoaded = true;
+                } else if (ctx === "pets") {
+                  this.petStopConf = { mode: "manual" };
+                  petStopLoaded = true;
+                } else {
+                  this.stopConf = { mode: "manual" };
                 }
-              };
-              const applyStop = (value: unknown) => {
-                if (!value || typeof value !== "object") return;
-                const mode = (value as any).mode;
-                if (mode === "purchase") {
-                  if (ctx === "weather") { this.weatherStopConf = { mode: "purchase" }; weatherStopLoaded = true; }
-                  else if (ctx === "pets") { this.petStopConf = { mode: "purchase" }; petStopLoaded = true; }
-                  else this.stopConf = { mode: "purchase" };
-                } else if (mode === "manual") {
-                  if (ctx === "weather") { this.weatherStopConf = { mode: "manual" }; weatherStopLoaded = true; }
-                  else if (ctx === "pets") { this.petStopConf = { mode: "manual" }; petStopLoaded = true; }
-                  else this.stopConf = { mode: "manual" };
-                } else if (mode === "repeat") {
-                  if (ctx === "weather") {
-                    this.weatherStopConf = { mode: "manual" };
-                    weatherStopLoaded = true;
-                  } else if (ctx === "pets") {
-                    this.petStopConf = { mode: "manual" };
-                    petStopLoaded = true;
-                  } else {
-                    this.stopConf = { mode: "manual" };
-                  }
-                }
-              };
-              const applyLoop = (value: unknown) => {
-                if (typeof value !== "number" || !Number.isFinite(value)) return;
-                const normalized = Math.max(150, Math.floor(value));
-                if (ctx === "weather") { this.weatherLoopIntervalMs = normalized; weatherLoopLoaded = true; }
-                else if (ctx === "pets") { this.petLoopIntervalMs = normalized; petLoopLoaded = true; }
-                else this.loopIntervalMs = normalized;
-              };
-              const applyDefault = (value: unknown) => {
-                if (typeof value !== "string") return;
-                const nm = value.trim();
-                if (ctx === "weather") { this.weatherDefaultSoundName = nm ? nm : null; weatherDefaultLoaded = true; }
-                else if (ctx === "pets") { this.petDefaultSoundName = nm ? nm : null; petDefaultLoaded = true; }
-                else this.defaultSoundName = nm ? nm : null;
-              };
-
-              applyVolume(conf.volume);
-              applyMode(conf.mode);
-              applyStop(conf.stop);
-              applyLoop(conf.loopIntervalMs);
-              applyDefault(conf.defaultSoundName);
+              }
+            };
+            const applyLoop = (value: unknown) => {
+              if (typeof value !== "number" || !Number.isFinite(value)) return;
+              const normalized = Math.max(150, Math.floor(value));
+              if (ctx === "weather") { this.weatherLoopIntervalMs = normalized; weatherLoopLoaded = true; }
+              else if (ctx === "pets") { this.petLoopIntervalMs = normalized; petLoopLoaded = true; }
+              else this.loopIntervalMs = normalized;
+            };
+            const applyDefault = (value: unknown) => {
+              if (typeof value !== "string") return;
+              const nm = value.trim();
+              if (ctx === "weather") { this.weatherDefaultSoundName = nm ? nm : null; weatherDefaultLoaded = true; }
+              else if (ctx === "pets") { this.petDefaultSoundName = nm ? nm : null; petDefaultLoaded = true; }
+              else this.defaultSoundName = nm ? nm : null;
             };
 
-            if (parsed.contexts && typeof parsed.contexts === "object") {
-              applyContext("shops", (parsed.contexts as any).shops);
-              applyContext("weather", (parsed.contexts as any).weather);
-              applyContext("pets", (parsed.contexts as any).pets);
-            }
+            applyVolume(conf.volume);
+            applyMode(conf.mode);
+            applyStop(conf.stop);
+            applyLoop(conf.loopIntervalMs);
+            applyDefault(conf.defaultSoundName);
+          };
 
-            if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
-            if (!weatherModeLoaded) this.weatherMode = this.mode;
-            if (!weatherStopLoaded) {
-              this.weatherStopConf = this.stopConf.mode === "purchase"
-                ? { mode: "purchase" }
-                : { mode: "manual" };
-            }
-            if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
-            if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
-
-            if (!petVolumeLoaded) this.petVolume = this.volume;
-            if (!petModeLoaded) this.petMode = this.mode;
-            if (!petStopLoaded) {
-              this.petStopConf = this.stopConf.mode === "purchase"
-                ? { mode: "purchase" }
-                : { mode: "manual" };
-            }
-            if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
-            if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
+          if ((parsed as any).contexts && typeof (parsed as any).contexts === "object") {
+            applyContext("shops", (parsed as any).contexts.shops);
+            applyContext("weather", (parsed as any).contexts.weather);
+            applyContext("pets", (parsed as any).contexts.pets);
           }
+
+          if (!weatherVolumeLoaded) this.weatherVolume = this.volume;
+          if (!weatherModeLoaded) this.weatherMode = this.mode;
+          if (!weatherStopLoaded) {
+            this.weatherStopConf = this.stopConf.mode === "purchase"
+              ? { mode: "purchase" }
+              : { mode: "manual" };
+          }
+          if (!weatherLoopLoaded) this.weatherLoopIntervalMs = this.loopIntervalMs;
+          if (!weatherDefaultLoaded) this.weatherDefaultSoundName = this.defaultSoundName;
+
+          if (!petVolumeLoaded) this.petVolume = this.volume;
+          if (!petModeLoaded) this.petMode = this.mode;
+          if (!petStopLoaded) {
+            this.petStopConf = this.stopConf.mode === "purchase"
+              ? { mode: "purchase" }
+              : { mode: "manual" };
+          }
+          if (!petLoopLoaded) this.petLoopIntervalMs = this.loopIntervalMs;
+          if (!petDefaultLoaded) this.petDefaultSoundName = this.defaultSoundName;
         }
-      } catch {}
+      } catch (err) {
+      }
     } finally {
       this.suppressPersist--;
     }
