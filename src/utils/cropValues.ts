@@ -2,6 +2,20 @@
 import { startCropPriceWatcherViaGardenObject } from "./cropPrice";
 import { coin } from "../data/hardcoded-data.clean";
 import { lockerService } from "../services/locker";
+import { readSharedGlobal } from "./page-context";
+
+type QpmGlobal = any;
+
+function getQpmGlobal(): QpmGlobal | undefined {
+  return readSharedGlobal<QpmGlobal>("QPM");
+}
+
+function getQpmSizeSpan(inner: Element): HTMLElement | null {
+  const QPM = getQpmGlobal();
+  if (!QPM) return null;
+  // On sait que QPM utilise un span.qpm-crop-size pour la taille
+  return inner.querySelector<HTMLElement>("span.qpm-crop-size");
+}
 
 export interface AppendOptions {
   rootSelector?: string;   // default: '.McFlex.css-fsggty'
@@ -43,127 +57,238 @@ const DATASET_KEY_OVERFLOW = "tmLockerOriginalOverflow";
 
 const LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
 
+const PRICE_FALLBACK = "—";
+const nfUS = new Intl.NumberFormat("en-US");
+const formatCoins = (value: number | null) =>
+  value == null ? PRICE_FALLBACK : nfUS.format(Math.max(0, Math.round(value)));
+
+const hasDOM = typeof window !== "undefined" && typeof document !== "undefined";
+
+type PanelSelectors = {
+  rootSelector: string;
+  innerSelector: string;
+};
+
+type LockerEvent = { harvestAllowed?: boolean | null };
+
+function queryAll(root: ParentNode, sel: string): Element[] {
+  return Array.from(root.querySelectorAll(sel));
+}
+
+function createLogger(option?: AppendOptions["log"]) {
+  if (typeof option === "function") return option;
+  if (option) return (...args: unknown[]) => console.debug("[AppendCropPrice/GO]", ...args);
+  return () => {};
+}
+
+function forEachInner(
+  root: ParentNode,
+  selectors: PanelSelectors,
+  callback: (inner: Element) => void
+): void {
+  queryAll(root, selectors.rootSelector).forEach((rootEl) => {
+    queryAll(rootEl, selectors.innerSelector).forEach(callback);
+  });
+}
+
+function updatePanels(
+  root: ParentNode,
+  selectors: PanelSelectors,
+  markerClass: string,
+  text: string,
+  locked: boolean
+): void {
+  forEachInner(root, selectors, (inner) => {
+    if (shouldSkipInner(inner, markerClass)) {
+      removeMarker(inner, markerClass);
+      updateLockEmoji(inner, false);
+      return;
+    }
+    updateLockEmoji(inner, locked);
+    ensureSpanAtEnd(inner, text, markerClass);
+  });
+}
+
+function getLockerHarvestAllowed(): boolean | null {
+  try {
+    return lockerService.getCurrentSlotSnapshot().harvestAllowed ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function subscribeLocker(handler: (event: LockerEvent) => void): (() => void) | null {
+  try {
+    return lockerService.onSlotInfoChange(handler);
+  } catch {
+    return null;
+  }
+}
+
 export function startCropValuesObserverFromGardenAtom(options: AppendOptions = {}): AppendController {
-  if (typeof window === "undefined" || typeof document === "undefined") {
+  if (!hasDOM) {
     return { stop() {}, runOnce() {}, isRunning: () => false };
   }
 
-  const ROOT_SEL = options.rootSelector ?? DEFAULTS.rootSelector;
-  const INNER_SEL = options.innerSelector ?? DEFAULTS.innerSelector;
-  const MARKER   = options.markerClass ?? DEFAULTS.markerClass;
-  const ROOT: ParentNode = options.root ?? document;
-
-  const logger: (...args: unknown[]) => void =
-    typeof options.log === "function" ? options.log
-    : options.log ? (...a: unknown[]) => console.debug("[AppendCropPrice/GO]", ...a)
-    : () => {};
-
-  const nfUS = new Intl.NumberFormat("en-US");
-  const fmtCoins = (n: number) => nfUS.format(Math.max(0, Math.round(n)));
+  const selectors: PanelSelectors = {
+    rootSelector: options.rootSelector ?? DEFAULTS.rootSelector,
+    innerSelector: options.innerSelector ?? DEFAULTS.innerSelector,
+  };
+  const markerClass = options.markerClass ?? DEFAULTS.markerClass;
+  const root: ParentNode = options.root ?? document;
+  const logger = createLogger(options.log);
+  const priceWatcher = startCropPriceWatcherViaGardenObject();
+  const shouldWaitForLocker = lockerService.getState().enabled;
 
   let running = true;
-  const priceWatcher = startCropPriceWatcherViaGardenObject();
-  let lockerHarvestAllowed: boolean | null = null;
-  let lockerOff: (() => void) | null = null;
+  let lockerHarvestAllowed = getLockerHarvestAllowed();
+  let lockerReady = !shouldWaitForLocker;
+  let lastRenderedValue: number | null | undefined = undefined;
+  let lastRenderedLocked: boolean | null | undefined = undefined;
+  let needsRepositionRender = false;
+  let qpmObserver: MutationObserver | null = null;
 
-  try {
-    lockerHarvestAllowed = lockerService.getCurrentSlotSnapshot().harvestAllowed ?? null;
-  } catch {
-    lockerHarvestAllowed = null;
+  const render = () => {
+    if (!running) return;
+    if (!lockerReady) return;
+
+    const value = priceWatcher.get();
+    const locked = lockerHarvestAllowed === false;
+    if (
+      value === lastRenderedValue &&
+      locked === lastRenderedLocked &&
+      !needsRepositionRender
+    ) {
+      return;
+    }
+    lastRenderedValue = value;
+    lastRenderedLocked = locked;
+    needsRepositionRender = false;
+    updatePanels(root, selectors, markerClass, formatCoins(value), locked);
+    logger("render", { value, locked });
+  };
+
+  let lockerReadyTimeout: ReturnType<typeof setTimeout> | null = null;
+  const clearLockerReadyTimeout = () => {
+    if (lockerReadyTimeout == null) return;
+    if (typeof globalThis !== "undefined" && typeof globalThis.clearTimeout === "function") {
+      globalThis.clearTimeout(lockerReadyTimeout);
+    }
+    lockerReadyTimeout = null;
+  };
+
+  const startLockerReadyTimeout = () => {
+    if (!shouldWaitForLocker || lockerReady || lockerReadyTimeout != null) return;
+    if (typeof globalThis === "undefined" || typeof globalThis.setTimeout !== "function") return;
+    lockerReadyTimeout = globalThis.setTimeout(() => {
+      lockerReadyTimeout = null;
+      if (!lockerReady) {
+        lockerReady = true;
+        render();
+      }
+    }, 500);
+  };
+
+  startLockerReadyTimeout();
+
+  const startQpmObserver = () => {
+    if (qpmObserver) return;
+    if (typeof MutationObserver === "undefined") return;
+    const target = document.body ?? document.documentElement ?? document;
+    if (!target) return;
+
+    qpmObserver = new MutationObserver((mutations) => {
+      let found = false;
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (!(node instanceof Element)) continue;
+          if (node.classList.contains("qpm-crop-size")) {
+            found = true;
+            break;
+          }
+          if (node.querySelector(".qpm-crop-size")) {
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (found) {
+        needsRepositionRender = true;
+        render();
+      }
+    });
+    qpmObserver.observe(target, { childList: true, subtree: true });
+  };
+
+  const stopQpmObserver = () => {
+    if (!qpmObserver) return;
+    try {
+      qpmObserver.disconnect();
+    } catch {}
+    qpmObserver = null;
+  };
+
+  startQpmObserver();
+
+  const lockerOff = subscribeLocker((event) => {
+    lockerHarvestAllowed = event.harvestAllowed ?? null;
+    clearLockerReadyTimeout();
+    if (!lockerReady && shouldWaitForLocker) {
+      lockerReady = true;
+    }
+    render();
+  });
+
+  if (shouldWaitForLocker && lockerOff == null) {
+    clearLockerReadyTimeout();
+    lockerReady = true;
   }
 
-  const writePriceOnce = () => {
-    if (!running) return;
-    const v = priceWatcher.get();
-    const text = v == null ? "—" : fmtCoins(v);
-
-    queryAll(ROOT, ROOT_SEL).forEach(rootEl => {
-      queryAll(rootEl, INNER_SEL).forEach(inner => {
-        if (shouldSkipInner(inner, MARKER)) {
-          removeMarker(inner, MARKER);
-          updateLockEmoji(inner, false);
-          return;
-        }
-        const locked = lockerHarvestAllowed === false;
-        updateLockEmoji(inner, locked);
-        ensureSpanAtEnd(inner, text, MARKER);
-      });
-    });
-
-    logger("render", { value: v });
-  };
-
-  const subscribeLocker = () => {
-    try {
-      lockerOff = lockerService.onSlotInfoChange((event) => {
-        lockerHarvestAllowed = event.harvestAllowed ?? null;
-        writePriceOnce();
-      });
-    } catch {
-      lockerOff = null;
-    }
-  };
-
-  subscribeLocker();
-
-  writePriceOnce();
-  const off = priceWatcher.onChange(() => writePriceOnce());
+  render();
+  const off = priceWatcher.onChange(render);
 
   return {
     stop() {
       if (!running) return;
       running = false;
+      clearLockerReadyTimeout();
+      stopQpmObserver();
       off?.();
       if (typeof lockerOff === "function") {
-        try { lockerOff(); } catch {}
+        try {
+          lockerOff();
+        } catch {}
       }
       priceWatcher.stop();
       logger("stopped");
     },
-    runOnce() { writePriceOnce(); },
-    isRunning() { return running; },
+    runOnce() {
+      render();
+    },
+    isRunning() {
+      return running;
+    },
   };
 }
 
 export function appendSpanToAll(opts: Omit<AppendOptions, "log"> = {}): void {
-  if (typeof window === "undefined" || typeof document === "undefined") return;
+  if (!hasDOM) return;
 
-  const ROOT_SEL = opts.rootSelector ?? DEFAULTS.rootSelector;
-  const INNER_SEL = opts.innerSelector ?? DEFAULTS.innerSelector;
-  const MARKER   = opts.markerClass ?? DEFAULTS.markerClass;
-  const ROOT: ParentNode = opts.root ?? document;
-
+  const selectors: PanelSelectors = {
+    rootSelector: opts.rootSelector ?? DEFAULTS.rootSelector,
+    innerSelector: opts.innerSelector ?? DEFAULTS.innerSelector,
+  };
+  const markerClass = opts.markerClass ?? DEFAULTS.markerClass;
+  const root: ParentNode = opts.root ?? document;
   const watcher = __singletonPriceWatcherGO();
-  const nfUS = new Intl.NumberFormat("en-US");
-  const fmtCoins = (n: number) => nfUS.format(Math.max(0, Math.round(n)));
-  const v = watcher.get();
-  const text = v == null ? "—" : fmtCoins(v);
-  const locked = (() => {
-    try {
-      return lockerService.getCurrentSlotSnapshot().harvestAllowed === false;
-    } catch {
-      return false;
-    }
-  })();
+  const text = formatCoins(watcher.get());
+  const locked = getLockerHarvestAllowed() === false;
 
-  queryAll(ROOT, ROOT_SEL).forEach(rootEl => {
-    queryAll(rootEl, INNER_SEL).forEach(inner => {
-      if (shouldSkipInner(inner, MARKER)) {
-        removeMarker(inner, MARKER);
-        updateLockEmoji(inner, false);
-        return;
-      }
-      updateLockEmoji(inner, locked);
-      ensureSpanAtEnd(inner, text, MARKER);
-    });
-  });
+  updatePanels(root, selectors, markerClass, text, locked);
 }
 
 /* ================= helpers ================= */
-
-function queryAll(root: ParentNode, sel: string): Element[] {
-  return Array.from(root.querySelectorAll(sel));
-}
 
 /** true si inner est un bloc cible avec **exactement 1** enfant élément réel (hors span marqueur) */
 function shouldSkipInner(inner: Element, markerClass: string): boolean {
@@ -416,8 +541,6 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
   ) as HTMLSpanElement[];
 
   let span: HTMLSpanElement | null = spans[0] ?? null;
-
-  // Supprime les doublons éventuels
   for (let i = 1; i < spans.length; i++) spans[i].remove();
 
   if (!span) {
@@ -432,13 +555,13 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
   span.style.color = "#FFD84D";
   span.style.fontSize = "14px";
 
-  // Icône (img) + label interne séparé
-  let icon = span.querySelector<HTMLImageElement>(`:scope > img.${ICON_CLASS}`);
+  // Icône (span en background) + label interne séparé
+  let icon = span.querySelector<HTMLElement>(`:scope > span.${ICON_CLASS}`);
   if (!icon) {
-    icon = document.createElement("img");
+    icon = document.createElement("span");
     icon.className = ICON_CLASS;
-    icon.alt = "";
     icon.setAttribute("aria-hidden", "true");
+
     icon.style.width = "18px";
     icon.style.height = "18px";
     icon.style.display = "inline-block";
@@ -446,9 +569,19 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
     icon.style.marginRight = "6px";
     icon.style.userSelect = "none";
     icon.style.pointerEvents = "none";
+
+    // important pour afficher correctement l'image
+    icon.style.backgroundSize = "contain";
+    icon.style.backgroundRepeat = "no-repeat";
+    icon.style.backgroundPosition = "center";
+
     span.insertBefore(icon, span.firstChild);
   }
-  if (icon.src !== coin.img64) icon.src = coin.img64;
+
+  const bg = `url("${coin.img64}")`;
+  if (icon.style.backgroundImage !== bg) {
+    icon.style.backgroundImage = bg;
+  }
 
   let label = span.querySelector<HTMLSpanElement>(`:scope > span.${LABEL_CLASS}`);
   if (!label) {
@@ -457,10 +590,31 @@ function ensureSpanAtEnd(inner: Element, text: string, markerClass: string): voi
     label.style.display = "inline";
     span.appendChild(label);
   }
-  if (label.textContent !== text) label.textContent = text;
+  if (label.textContent !== text) {
+    label.textContent = text;
+  }
 
-  if (inner.lastElementChild !== span) inner.appendChild(span);
+  // ==========================
+  // Compat QPM : prix APRÈS la size
+  // ==========================
+  const sizeSpan = getQpmSizeSpan(inner);
+
+  if (sizeSpan) {
+    const next = sizeSpan.nextElementSibling;
+    if (next !== span) {
+      inner.insertBefore(span, next); // insertBefore(nextSibling) == après
+    }
+    return; // on ne retouche plus la position après ça
+  }
+
+  // ==========================
+  // Fallback : QPM pas là
+  // ==========================
+  if (inner.lastElementChild !== span) {
+    inner.appendChild(span);
+  }
 }
+
 
 // singleton pour appendSpanToAll()
 let __goWatcher: ReturnType<typeof startCropPriceWatcherViaGardenObject> | null = null;
