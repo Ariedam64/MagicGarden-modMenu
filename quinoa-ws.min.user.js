@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.36
+// @version      2.7.37
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -22204,6 +22204,14 @@
   }
 
   // src/utils/cropValues.ts
+  function getQpmGlobal() {
+    return readSharedGlobal("QPM");
+  }
+  function getQpmSizeSpan(inner) {
+    const QPM = getQpmGlobal();
+    if (!QPM) return null;
+    return inner.querySelector("span.qpm-crop-size");
+  }
   var DEFAULTS3 = {
     rootSelector: ".McFlex.css-fsggty",
     innerSelector: ".McFlex.css-1l3zq7, .McFlex.css-11dqzw",
@@ -22227,64 +22235,162 @@
   var DATASET_KEY_POSITION = "tmLockerOriginalPosition";
   var DATASET_KEY_OVERFLOW = "tmLockerOriginalOverflow";
   var LOCK_PREFIX_REGEX = new RegExp(`^${LOCK_EMOJI}(?:\\u00A0|\\s|&nbsp;)*`);
+  var PRICE_FALLBACK = "\u2014";
+  var nfUS = new Intl.NumberFormat("en-US");
+  var formatCoins = (value) => value == null ? PRICE_FALLBACK : nfUS.format(Math.max(0, Math.round(value)));
+  var hasDOM = typeof window !== "undefined" && typeof document !== "undefined";
+  function queryAll2(root, sel) {
+    return Array.from(root.querySelectorAll(sel));
+  }
+  function createLogger(option) {
+    if (typeof option === "function") return option;
+    if (option) return (...args) => console.debug("[AppendCropPrice/GO]", ...args);
+    return () => {
+    };
+  }
+  function forEachInner(root, selectors, callback) {
+    queryAll2(root, selectors.rootSelector).forEach((rootEl) => {
+      queryAll2(rootEl, selectors.innerSelector).forEach(callback);
+    });
+  }
+  function updatePanels(root, selectors, markerClass, text, locked) {
+    forEachInner(root, selectors, (inner) => {
+      if (shouldSkipInner(inner, markerClass)) {
+        removeMarker(inner, markerClass);
+        updateLockEmoji(inner, false);
+        return;
+      }
+      updateLockEmoji(inner, locked);
+      ensureSpanAtEnd(inner, text, markerClass);
+    });
+  }
+  function getLockerHarvestAllowed() {
+    try {
+      return lockerService.getCurrentSlotSnapshot().harvestAllowed ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function subscribeLocker(handler) {
+    try {
+      return lockerService.onSlotInfoChange(handler);
+    } catch {
+      return null;
+    }
+  }
   function startCropValuesObserverFromGardenAtom(options = {}) {
-    if (typeof window === "undefined" || typeof document === "undefined") {
+    if (!hasDOM) {
       return { stop() {
       }, runOnce() {
       }, isRunning: () => false };
     }
-    const ROOT_SEL = options.rootSelector ?? DEFAULTS3.rootSelector;
-    const INNER_SEL = options.innerSelector ?? DEFAULTS3.innerSelector;
-    const MARKER = options.markerClass ?? DEFAULTS3.markerClass;
-    const ROOT = options.root ?? document;
-    const logger = typeof options.log === "function" ? options.log : options.log ? (...a) => console.debug("[AppendCropPrice/GO]", ...a) : () => {
+    const selectors = {
+      rootSelector: options.rootSelector ?? DEFAULTS3.rootSelector,
+      innerSelector: options.innerSelector ?? DEFAULTS3.innerSelector
     };
-    const nfUS = new Intl.NumberFormat("en-US");
-    const fmtCoins = (n) => nfUS.format(Math.max(0, Math.round(n)));
-    let running = true;
+    const markerClass = options.markerClass ?? DEFAULTS3.markerClass;
+    const root = options.root ?? document;
+    const logger = createLogger(options.log);
     const priceWatcher = startCropPriceWatcherViaGardenObject();
-    let lockerHarvestAllowed = null;
-    let lockerOff = null;
-    try {
-      lockerHarvestAllowed = lockerService.getCurrentSlotSnapshot().harvestAllowed ?? null;
-    } catch {
-      lockerHarvestAllowed = null;
-    }
-    const writePriceOnce = () => {
+    const shouldWaitForLocker = lockerService.getState().enabled;
+    let running = true;
+    let lockerHarvestAllowed = getLockerHarvestAllowed();
+    let lockerReady = !shouldWaitForLocker;
+    let lastRenderedValue = void 0;
+    let lastRenderedLocked = void 0;
+    let needsRepositionRender = false;
+    let qpmObserver = null;
+    const render = () => {
       if (!running) return;
-      const v = priceWatcher.get();
-      const text = v == null ? "\u2014" : fmtCoins(v);
-      queryAll2(ROOT, ROOT_SEL).forEach((rootEl) => {
-        queryAll2(rootEl, INNER_SEL).forEach((inner) => {
-          if (shouldSkipInner(inner, MARKER)) {
-            removeMarker(inner, MARKER);
-            updateLockEmoji(inner, false);
-            return;
-          }
-          const locked = lockerHarvestAllowed === false;
-          updateLockEmoji(inner, locked);
-          ensureSpanAtEnd(inner, text, MARKER);
-        });
-      });
-      logger("render", { value: v });
-    };
-    const subscribeLocker = () => {
-      try {
-        lockerOff = lockerService.onSlotInfoChange((event) => {
-          lockerHarvestAllowed = event.harvestAllowed ?? null;
-          writePriceOnce();
-        });
-      } catch {
-        lockerOff = null;
+      if (!lockerReady) return;
+      const value = priceWatcher.get();
+      const locked = lockerHarvestAllowed === false;
+      if (value === lastRenderedValue && locked === lastRenderedLocked && !needsRepositionRender) {
+        return;
       }
+      lastRenderedValue = value;
+      lastRenderedLocked = locked;
+      needsRepositionRender = false;
+      updatePanels(root, selectors, markerClass, formatCoins(value), locked);
+      logger("render", { value, locked });
     };
-    subscribeLocker();
-    writePriceOnce();
-    const off = priceWatcher.onChange(() => writePriceOnce());
+    let lockerReadyTimeout = null;
+    const clearLockerReadyTimeout = () => {
+      if (lockerReadyTimeout == null) return;
+      if (typeof globalThis !== "undefined" && typeof globalThis.clearTimeout === "function") {
+        globalThis.clearTimeout(lockerReadyTimeout);
+      }
+      lockerReadyTimeout = null;
+    };
+    const startLockerReadyTimeout = () => {
+      if (!shouldWaitForLocker || lockerReady || lockerReadyTimeout != null) return;
+      if (typeof globalThis === "undefined" || typeof globalThis.setTimeout !== "function") return;
+      lockerReadyTimeout = globalThis.setTimeout(() => {
+        lockerReadyTimeout = null;
+        if (!lockerReady) {
+          lockerReady = true;
+          render();
+        }
+      }, 500);
+    };
+    startLockerReadyTimeout();
+    const startQpmObserver = () => {
+      if (qpmObserver) return;
+      if (typeof MutationObserver === "undefined") return;
+      const target = document.body ?? document.documentElement ?? document;
+      if (!target) return;
+      qpmObserver = new MutationObserver((mutations) => {
+        let found = false;
+        for (const mutation of mutations) {
+          for (const node of Array.from(mutation.addedNodes)) {
+            if (!(node instanceof Element)) continue;
+            if (node.classList.contains("qpm-crop-size")) {
+              found = true;
+              break;
+            }
+            if (node.querySelector(".qpm-crop-size")) {
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) {
+          needsRepositionRender = true;
+          render();
+        }
+      });
+      qpmObserver.observe(target, { childList: true, subtree: true });
+    };
+    const stopQpmObserver = () => {
+      if (!qpmObserver) return;
+      try {
+        qpmObserver.disconnect();
+      } catch {
+      }
+      qpmObserver = null;
+    };
+    startQpmObserver();
+    const lockerOff = subscribeLocker((event) => {
+      lockerHarvestAllowed = event.harvestAllowed ?? null;
+      clearLockerReadyTimeout();
+      if (!lockerReady && shouldWaitForLocker) {
+        lockerReady = true;
+      }
+      render();
+    });
+    if (shouldWaitForLocker && lockerOff == null) {
+      clearLockerReadyTimeout();
+      lockerReady = true;
+    }
+    render();
+    const off = priceWatcher.onChange(render);
     return {
       stop() {
         if (!running) return;
         running = false;
+        clearLockerReadyTimeout();
+        stopQpmObserver();
         off?.();
         if (typeof lockerOff === "function") {
           try {
@@ -22296,15 +22402,12 @@
         logger("stopped");
       },
       runOnce() {
-        writePriceOnce();
+        render();
       },
       isRunning() {
         return running;
       }
     };
-  }
-  function queryAll2(root, sel) {
-    return Array.from(root.querySelectorAll(sel));
   }
   function shouldSkipInner(inner, markerClass) {
     if (!(inner instanceof Element)) return false;
@@ -22511,11 +22614,10 @@
     span.style.fontWeight = "700";
     span.style.color = "#FFD84D";
     span.style.fontSize = "14px";
-    let icon = span.querySelector(`:scope > img.${ICON_CLASS}`);
+    let icon = span.querySelector(`:scope > span.${ICON_CLASS}`);
     if (!icon) {
-      icon = document.createElement("img");
+      icon = document.createElement("span");
       icon.className = ICON_CLASS;
-      icon.alt = "";
       icon.setAttribute("aria-hidden", "true");
       icon.style.width = "18px";
       icon.style.height = "18px";
@@ -22524,9 +22626,15 @@
       icon.style.marginRight = "6px";
       icon.style.userSelect = "none";
       icon.style.pointerEvents = "none";
+      icon.style.backgroundSize = "contain";
+      icon.style.backgroundRepeat = "no-repeat";
+      icon.style.backgroundPosition = "center";
       span.insertBefore(icon, span.firstChild);
     }
-    if (icon.src !== coin.img64) icon.src = coin.img64;
+    const bg = `url("${coin.img64}")`;
+    if (icon.style.backgroundImage !== bg) {
+      icon.style.backgroundImage = bg;
+    }
     let label2 = span.querySelector(`:scope > span.${LABEL_CLASS}`);
     if (!label2) {
       label2 = document.createElement("span");
@@ -22534,8 +22642,20 @@
       label2.style.display = "inline";
       span.appendChild(label2);
     }
-    if (label2.textContent !== text) label2.textContent = text;
-    if (inner.lastElementChild !== span) inner.appendChild(span);
+    if (label2.textContent !== text) {
+      label2.textContent = text;
+    }
+    const sizeSpan = getQpmSizeSpan(inner);
+    if (sizeSpan) {
+      const next = sizeSpan.nextElementSibling;
+      if (next !== span) {
+        inner.insertBefore(span, next);
+      }
+      return;
+    }
+    if (inner.lastElementChild !== span) {
+      inner.appendChild(span);
+    }
   }
 
   // src/utils/version.ts
@@ -27013,12 +27133,12 @@
       mo.observe(document.documentElement, { childList: true, subtree: true });
       disposables.push(() => mo.disconnect());
     };
-    const subscribeLocker = () => {
+    const subscribeLocker2 = () => {
       const unsub = lockerRestrictionsService.subscribe(() => applyLockState());
       disposables.push(unsub);
     };
     observeDom();
-    subscribeLocker();
+    subscribeLocker2();
     applyLockState();
     return {
       stop() {
