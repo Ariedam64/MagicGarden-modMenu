@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.8.0
+// @version      2.8.11
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17,7 +17,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_download
-// @connect      *.supabase.co/*
+// @connect      supabase.co
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -48480,7 +48480,6 @@ next: ${next}`;
   }
   async function logPlayerStatePayload(options) {
     const payload = await buildPlayerStatePayload(options);
-    console.log("[PlayerPayload] Player state payload:", payload);
     return payload;
   }
   shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
@@ -48609,7 +48608,6 @@ next: ${next}`;
     isPayloadReporting = true;
     try {
       const payload = await buildPlayerStatePayload();
-      console.log("payload: ", payload);
       if (payload) {
         await sendPlayerState(payload);
       }
@@ -48620,7 +48618,6 @@ next: ${next}`;
     }
   }
   function startPlayerStateReporting(intervalMs = 6e4) {
-    console.log("start reporting");
     if (payloadReportingTimer !== null) return;
     const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
     void buildAndSendPlayerState();

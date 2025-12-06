@@ -362,7 +362,6 @@ export async function logPlayerStatePayload(
   options?: BuildPlayerStatePayloadOptions
 ): Promise<PlayerStatePayload | null> {
   const payload = await buildPlayerStatePayload(options);
-  console.log("[PlayerPayload] Player state payload:", payload);
   return payload;
 }
 
@@ -519,7 +518,6 @@ async function buildAndSendPlayerState(): Promise<void> {
   isPayloadReporting = true;
   try {
     const payload = await buildPlayerStatePayload();
-    console.log("payload: ", payload)
     if (payload) {
       await sendPlayerState(payload);
     }
@@ -531,7 +529,6 @@ async function buildAndSendPlayerState(): Promise<void> {
 }
 
 export function startPlayerStateReporting(intervalMs = 60_000): void {
-  console.log("start reporting")
   if (payloadReportingTimer !== null) return;
   const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60_000;
   void buildAndSendPlayerState();
