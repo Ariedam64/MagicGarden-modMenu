@@ -159,6 +159,7 @@ export const garden = makeView<any, GardenState | null>("myDataAtom", { path: "g
 export const gardenTileObjects = makeView<any, Record<string, any>>("myDataAtom", { path: "garden.tileObjects" });
 export const favoriteIds = makeView<any, string[]>("myInventoryAtom", { path: "favoritedItemIds" });
 export const playerId = makeView<any, string | null>("playerAtom", { path: "id" });
+export const playerDatabaseUserId = makeView<any, string | null>("playerAtom", { path: "databaseUserId" });
 export const myOwnCurrentGardenObjectType = makeView<any, string | null>("myOwnCurrentGardenObjectAtom", { path: "objectType" });
 
 /* stateAtom sub-views (optionnel) */

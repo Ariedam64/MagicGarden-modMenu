@@ -1,7 +1,21 @@
 // src/ui/menus/room.ts
 // Affichage des rooms publiques avec rafraîchissement lors de l'ouverture du menu.
 
-import { Menu } from "../menu";
+import { Menu, VTabItem } from "../menu";
+import { toastSimple } from "../toast";
+import { PlayersService, type Player } from "../../services/players";
+import {
+  isActivityLogModalOpenAsync,
+  isInventoryPanelOpen,
+  isJournalModalOpen,
+  isStatsModalOpenAsync,
+  waitActivityLogModalClosed,
+  waitInventoryPanelClosed,
+  waitJournalModalClosed,
+  waitStatsModalClosed,
+} from "../../services/fakeModal";
+import { pageWindow } from "../../utils/page-context";
+import { fetchAvailableRooms, searchRoomsByPlayerName, type Room as SupabaseRoom } from "../../utils/supabase";
 import {
   RoomService,
   type PublicRoomDefinition,
@@ -26,7 +40,8 @@ function ensureRoomMenuStyles(): void {
 }
 
 .qmm.qmm-room-menu .qmm-tab[data-id="public-rooms"],
-.qmm.qmm-room-menu .qmm-tab[data-id="search-player"] {
+.qmm.qmm-room-menu .qmm-tab[data-id="search-player"],
+.qmm.qmm-room-menu .qmm-tab[data-id="players"] {
   flex: 0 1 auto;
   min-width: 160px;
 }
@@ -37,6 +52,7 @@ function ensureRoomMenuStyles(): void {
 const TAB_ID = "public-rooms";
 const CUSTOM_TAB_ID = "custom-rooms";
 const SEARCH_TAB_ID = "search-player";
+const PLAYERS_TAB_ID = "players";
 type PlayerFilter = "any" | "empty" | "few" | "crowded" | "full";
 
 export async function renderRoomMenu(root: HTMLElement) {
@@ -46,9 +62,11 @@ export async function renderRoomMenu(root: HTMLElement) {
     windowSelector: ".qws-win",
     classes: "qmm-room-menu",
   });
-  ui.addTab(TAB_ID, "🌐 Public Rooms", (view) => renderPublicRoomsTab(view, ui));
-  ui.addTab(CUSTOM_TAB_ID, "⭐ Custom Rooms", (view) => renderCustomRoomsTab(view, ui));
-  ui.addTab(SEARCH_TAB_ID, "🔍 Search Player", (view) => renderSearchPlayerTab(view, ui));
+  ui.addTab(TAB_ID, "Public Rooms", (view) => renderPublicRoomsTab(view, ui));
+  ui.addTab(SEARCH_TAB_ID, "Search Player", (view) => renderSearchPlayerTab(view, ui));
+  ui.addTab(PLAYERS_TAB_ID, "Players", (view) => {
+    void renderPlayersTab(view).catch(() => {});
+  });
   ui.mount(root);
 }
 
@@ -79,7 +97,6 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   heading.textContent = "Select a public room to quickly join a game.";
   heading.style.fontSize = "14px";
   heading.style.opacity = "0.9";
-  container.appendChild(heading);
 
   if (RoomService.isDiscordActivity()) {
     const discordWarning = document.createElement("div");
@@ -95,14 +112,14 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     container.appendChild(discordWarning);
   }
 
-  const filterBar = document.createElement("div");
-  filterBar.style.display = "flex";
-  filterBar.style.flexWrap = "wrap";
-  filterBar.style.alignItems = "center";
-  filterBar.style.gap = "8px";
-  filterBar.style.margin = "12px 0 6px";
-  filterBar.style.width = "100%";
-  container.appendChild(filterBar);
+  const headerRow = document.createElement("div");
+  headerRow.style.display = "flex";
+  headerRow.style.alignItems = "center";
+  headerRow.style.gap = "12px";
+  headerRow.style.width = "100%";
+  headerRow.style.margin = "12px 0 6px";
+  headerRow.appendChild(heading);
+  container.appendChild(headerRow);
 
   const listWrapper = document.createElement("div");
   listWrapper.style.height = "54vh";
@@ -196,30 +213,12 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   let requestCounter = 0;
   let firstLoad = true;
 
-  let selectedCategory: string | null = null;
   let selectedPlayerFilter: PlayerFilter = "any";
   let currentRooms: PublicRoomStatus[] = [];
-
-  const filterButtons = new Map<string | null, HTMLButtonElement>();
-  let lastRenderedCategories: string[] = [];
-
-  const categoryButtonContainer = document.createElement("div");
-  categoryButtonContainer.style.display = "flex";
-  categoryButtonContainer.style.flexWrap = "wrap";
-  categoryButtonContainer.style.alignItems = "center";
-  categoryButtonContainer.style.gap = "8px";
-  filterBar.appendChild(categoryButtonContainer);
 
   const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "🔄" });
   refreshButton.style.flexShrink = "0";
   refreshButton.setAttribute("aria-label", "Refresh public rooms list");
-
-  const filterActions = document.createElement("div");
-  filterActions.style.display = "flex";
-  filterActions.style.alignItems = "center";
-  filterActions.style.gap = "8px";
-  filterActions.style.marginLeft = "auto";
-  filterBar.appendChild(filterActions);
 
   const statusBar = document.createElement("div");
   statusBar.style.fontSize = "12px";
@@ -245,15 +244,6 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
   };
 
-  const updateFilterButtonStyles = () => {
-    for (const [category, button] of filterButtons) {
-      const isActive = category === selectedCategory;
-      button.dataset.active = isActive ? "true" : "false";
-      button.setAttribute("aria-pressed", isActive ? "true" : "false");
-      button.style.opacity = isActive ? "1" : "0.7";
-    }
-  };
-
   const matchesPlayerFilter = (room: PublicRoomStatus) => {
     switch (selectedPlayerFilter) {
       case "any":
@@ -271,123 +261,11 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     }
   };
 
-  const setCategoryFilter = (category: string | null) => {
-    if (selectedCategory === category) return;
-    selectedCategory = category;
-    savedScrollTop = 0;
-    updateFilterButtonStyles();
-    renderRooms(currentRooms);
-  };
-
-  function createFilterButton(label: string, category: string | null): HTMLButtonElement {
-    const button = ui.btn(label, { size: "sm", variant: "ghost" });
-    button.addEventListener("click", () => {
-      if (category === null) {
-        setCategoryFilter(null);
-      } else if (selectedCategory === category) {
-        setCategoryFilter(null);
-      } else {
-        setCategoryFilter(category);
-      }
-    });
-    return button;
-  }
-
-  function collectCategories(rooms?: Array<{ category: string }>): string[] {
-    if (!rooms) return [];
-    const seen = new Set<string>();
-    const categories: string[] = [];
-    for (const room of rooms) {
-      if (!room || typeof room.category !== "string") continue;
-      const category = room.category.trim();
-      if (!category || seen.has(category)) continue;
-      seen.add(category);
-      categories.push(category);
-    }
-    return categories;
-  }
-
-  function sortCategories(categories: string[]): string[] {
-    if (!categories.length) return [];
-    const preferred = RoomService.getPublicRoomsCategoryOrder();
-    if (!preferred.length) {
-      return [...categories];
-    }
-
-    const available = new Set(categories);
-    const ordered: string[] = [];
-    const used = new Set<string>();
-
-    for (const name of preferred) {
-      if (available.has(name) && !used.has(name)) {
-        ordered.push(name);
-        used.add(name);
-      }
-    }
-
-    for (const name of categories) {
-      if (!used.has(name)) {
-        ordered.push(name);
-        used.add(name);
-      }
-    }
-
-    return ordered;
-  }
-
-  function updateCategoryButtons(rooms?: PublicRoomStatus[]): void {
-    const categoriesFromRooms = collectCategories(rooms);
-    const sourceCategories = categoriesFromRooms.length
-      ? categoriesFromRooms
-      : collectCategories(RoomService.getPublicRooms());
-    const sortedCategories = sortCategories(sourceCategories);
-
-    const changed =
-      filterButtons.size === 0 ||
-      sortedCategories.length !== lastRenderedCategories.length ||
-      sortedCategories.some((category, index) => category !== lastRenderedCategories[index]);
-
-    if (changed) {
-      if (selectedCategory && !sortedCategories.includes(selectedCategory)) {
-        selectedCategory = null;
-        savedScrollTop = 0;
-      }
-
-      categoryButtonContainer.innerHTML = "";
-      filterButtons.clear();
-
-      const allButton = createFilterButton("All", null);
-      filterButtons.set(null, allButton);
-      categoryButtonContainer.appendChild(allButton);
-
-      for (const category of sortedCategories) {
-        const button = createFilterButton(category, category);
-        filterButtons.set(category, button);
-        categoryButtonContainer.appendChild(button);
-      }
-
-      lastRenderedCategories = [...sortedCategories];
-    }
-
-    updateFilterButtonStyles();
-  }
-
-  updateCategoryButtons();
-
   const renderRooms = (rooms: PublicRoomStatus[]) => {
     currentRooms = rooms;
-    updateCategoryButtons(rooms);
     list.innerHTML = "";
 
-    const visibleRooms = rooms.filter((room) => {
-      if (selectedCategory !== null && room.category !== selectedCategory) {
-        return false;
-      }
-      if (!matchesPlayerFilter(room)) {
-        return false;
-      }
-      return true;
-    });
+    const visibleRooms = rooms.filter((room) => matchesPlayerFilter(room));
 
     if (!visibleRooms.length) {
       const empty = document.createElement("div");
@@ -443,8 +321,8 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   const playerFilters: { value: PlayerFilter; label: string }[] = [
     { value: "any", label: "Any players" },
     { value: "empty", label: "Empty rooms" },
-    { value: "few", label: "1 – 3 players" },
-    { value: "crowded", label: "4 – 5 players" },
+    { value: "few", label: "1 - 3 players" },
+    { value: "crowded", label: "4 - 5 players" },
     { value: "full", label: "Full rooms" },
   ];
 
@@ -463,7 +341,8 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
   });
 
   playerFilterContainer.appendChild(playerFilterSelect);
-  filterActions.appendChild(playerFilterContainer);
+  playerFilterContainer.style.marginLeft = "auto";
+  headerRow.appendChild(playerFilterContainer);
 
   const refreshRooms = async () => {
     if (destroyed) return;
@@ -471,12 +350,23 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     isRefreshing = true;
     updateRefreshButtonState();
     setLoadingState(true);
-    statusBar.textContent = firstLoad ? "Loading rooms…" : "Refreshing rooms…";
+    statusBar.textContent = firstLoad ? "Loading rooms..." : "Refreshing rooms...";
 
     try {
-      const rooms = await RoomService.fetchPublicRoomsStatus();
+      const available = await fetchAvailableRooms(100);
       if (destroyed || currentRequest !== requestCounter) return;
-      renderRooms(rooms);
+
+      const publicRooms = available
+        .filter((room) => !room.isPrivate)
+        .map(transformSupabaseRoom)
+        .sort((a, b) => {
+          if (b.players === a.players) {
+            return b.lastUpdatedAt - a.lastUpdatedAt;
+          }
+          return b.players - a.players;
+        });
+
+      renderRooms(publicRooms);
       const time = new Date().toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
@@ -533,6 +423,40 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
         previousCleanup.call(view);
       } catch {}
     }
+  };
+}
+
+const DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
+const SUPABASE_ROOM_CATEGORY = "Supabase";
+
+function transformSupabaseRoom(room: SupabaseRoom): PublicRoomStatus {
+  const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
+  const players = Math.max(0, rawCount);
+  const capacity = DEFAULT_SUPABASE_ROOM_CAPACITY;
+  const parsedTimestamp = Number.isFinite(Date.parse(room.lastUpdatedAt))
+    ? Date.parse(room.lastUpdatedAt)
+    : Date.now();
+
+  const playerDetails: PublicRoomPlayer[] = (room.userSlots ?? []).map((slot, index) => {
+    const name = slot?.name?.trim();
+    return {
+      name: name && name.length ? name : "Unknown player",
+      isConnected: true,
+      discordAvatarUrl: slot?.avatarUrl ?? undefined,
+      isHost: index === 0,
+    };
+  });
+
+  return {
+    name: room.id,
+    idRoom: room.id,
+    category: SUPABASE_ROOM_CATEGORY,
+    players: Math.min(players, capacity),
+    capacity,
+    isFull: players >= capacity,
+    lastUpdatedAt: parsedTimestamp,
+    hostPlayerId: room.lastUpdatedByPlayerId ?? undefined,
+    playerDetails,
   };
 }
 
@@ -1123,7 +1047,7 @@ function renderSearchPlayerTab(view: HTMLElement, ui: Menu) {
   searchInput.style.boxShadow = "0 6px 16px rgba(15, 23, 42, 0.45)";
   form.appendChild(searchInput);
 
-  const searchButton = ui.btn("Search", { size: "sm", icon: "🔍", variant: "primary" });
+  const searchButton = ui.btn("Search", { size: "sm", icon: "search", variant: "primary" });
   searchButton.type = "submit";
   searchButton.style.flexShrink = "0";
   searchButton.title = "Search for a player across rooms";
@@ -1300,66 +1224,53 @@ function renderSearchPlayerTab(view: HTMLElement, ui: Menu) {
     isLoading = true;
     updateSearchButtonState();
     setLoadingState(true);
-    statusMessage.textContent = "Searching players…";
+    statusMessage.textContent = "Searching players...";
 
     try {
-      const [publicRooms, customRooms] = await Promise.all([
-        RoomService.fetchPublicRoomsStatus(),
-        RoomService.fetchCustomRoomsStatus().catch(() => []),
-      ]);
+      const results = await searchRoomsByPlayerName(trimmedQuery, {
+        limitRooms: 200,
+        minQueryLength: 3,
+      });
 
       if (destroyed || currentRequest !== requestCounter) return;
 
-      const allRooms = [...publicRooms, ...customRooms];
-      const matchMap = new Map<string, SearchMatch>();
-
-      for (const room of allRooms) {
-        const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
-        if (!playerDetails.length) continue;
-
-        const matchedPlayers = playerDetails.filter((player) =>
-          normalizeSearchText(player.name).includes(normalizedQuery),
-        );
-
-        if (matchedPlayers.length) {
-          const existing = matchMap.get(room.idRoom);
-          if (existing) {
-            for (const player of matchedPlayers) {
-              const alreadyPresent = existing.players.some((candidate) => {
-                if (player.id && candidate.id && player.id === candidate.id) return true;
-                if (
-                  player.databaseUserId &&
-                  candidate.databaseUserId &&
-                  player.databaseUserId === candidate.databaseUserId
-                ) {
-                  return true;
-                }
-                return normalizeSearchText(candidate.name) === normalizeSearchText(player.name);
-              });
-              if (!alreadyPresent) {
-                existing.players.push(player);
-              }
-            }
-          } else {
-            matchMap.set(room.idRoom, { room, players: [...matchedPlayers] });
-          }
-        }
+      if (!results.length) {
+        statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
+        renderEmptyState("No rooms contain a player with this name.");
+        lastQueryLabel = trimmedQuery;
+        return;
       }
 
-      const matches = Array.from(matchMap.values());
+      const matches = results
+        .map((result) => {
+          const baseRoom = transformSupabaseRoom(result.room);
+          const matchedPlayers: PublicRoomPlayer[] = result.matchedSlots?.map((slot) => ({
+            name: slot.name?.trim() || "Unknown player",
+            isConnected: true,
+            isHost: false,
+            discordAvatarUrl: slot.avatarUrl ?? undefined,
+          })) ?? [];
+
+          return {
+            room: baseRoom,
+            players: matchedPlayers,
+          } satisfies SearchMatch;
+        })
+        .filter((match) => match.players.length > 0);
 
       if (!matches.length) {
-        statusMessage.textContent = `No player found matching “${trimmedQuery}”.`;
+        statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
         renderEmptyState("No rooms contain a player with this name.");
         lastQueryLabel = trimmedQuery;
         return;
       }
 
       matches.sort((a, b) => {
-        const onlineInA = a.players.filter((player) => player.isConnected).length;
-        const onlineInB = b.players.filter((player) => player.isConnected).length;
-        if (onlineInA !== onlineInB) return onlineInB - onlineInA;
-        if (a.players.length !== b.players.length) return b.players.length - a.players.length;
+        const diffPlayers = b.room.players - a.room.players;
+        if (diffPlayers !== 0) return diffPlayers;
+        if (b.players.length !== a.players.length) {
+          return b.players.length - a.players.length;
+        }
         return a.room.name.localeCompare(b.room.name);
       });
 
@@ -1542,21 +1453,6 @@ function createRoomEntry(
       playerName.style.fontSize = "14px";
       playerName.style.color = "#f8fafc";
       nameRow.appendChild(playerName);
-
-      if (player.isHost) {
-        const hostBadge = document.createElement("span");
-        hostBadge.textContent = "Host";
-        hostBadge.style.fontSize = "10px";
-        hostBadge.style.letterSpacing = "0.06em";
-        hostBadge.style.textTransform = "uppercase";
-        hostBadge.style.padding = "2px 6px";
-        hostBadge.style.borderRadius = "999px";
-        hostBadge.style.fontWeight = "600";
-        hostBadge.style.color = "#facc15";
-        hostBadge.style.background = "rgba(250, 204, 21, 0.18)";
-        hostBadge.style.border = "1px solid rgba(250, 204, 21, 0.32)";
-        nameRow.appendChild(hostBadge);
-      }
 
       const statusRow = document.createElement("div");
       statusRow.style.display = "flex";
@@ -1848,3 +1744,417 @@ function createRoomEntry(
 
   return wrapper;
 }
+
+/* ---------------- Lecture/state ---------------- */
+
+async function readPlayers(): Promise<Player[]> { return PlayersService.list(); }
+
+const NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+function truncateLabel(s: string, max = 22) {
+  if (!s) return "";
+  return s.length <= max ? s : s.slice(0, max - 1) + "…";
+}
+
+const vItem = (p: Player): VTabItem => ({
+  id: p.id,
+  title: truncateLabel(p.name || p.id, 9),
+  subtitle: p.isConnected ? "Online" : "Offline",
+  avatarUrl: p.discordAvatarUrl || "",
+  statusColor: p.isConnected ? "#48d170" : "#999a",
+});
+
+/* ---------------- Menu ---------------- */
+
+async function renderPlayersTab(root: HTMLElement) {
+  const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win"});
+  ui.mount(root);
+
+  const panel = ui.root.querySelector(".qmm-views") as HTMLElement;
+
+  const { root: split, left, right } = ui.split2("260px");
+  panel.appendChild(split);
+
+  // left/right: layout flex & overflow corrects
+  split.style.height = "100%";
+  split.style.minHeight = "0";
+
+  left.style.display = "flex";
+  left.style.flexDirection = "column";
+  left.style.minHeight = "0"; // cl├® pour autoriser le overflow interne
+
+  right.style.minHeight = "0";
+  right.style.overflow = "auto";
+
+  const vt = ui.vtabs({
+    filterPlaceholder: "Find player…",
+    onSelect: (_id, item) => renderRight(item?.id || null),
+    fillAvailableHeight: true,
+  });
+
+  // vtabs en colonne, occupe tout l'espace du panneau gauche
+  vt.root.style.display = "flex";
+  vt.root.style.flexDirection = "column";
+  vt.root.style.flex = "1 1 auto";
+  vt.root.style.minHeight = "0";
+
+  left.appendChild(vt.root);
+
+  // --- petites retouches de la barre de filtre (input + ic├┤ne)
+  const filter = vt.root.querySelector(".filter") as HTMLElement | null;
+  if (filter) {
+    filter.remove();
+  }
+
+  async function renderRight(playerId: string | null) {
+    right.innerHTML = "";
+    const p = playerId ? players.find(x => x.id === playerId) || null : null;
+    if (!p) {
+      const empty = document.createElement("div");
+      empty.style.opacity = "0.75";
+      empty.textContent = "Select a player on the left.";
+      right.appendChild(empty);
+      return;
+    }
+
+    // Conteneur (grid) pour empiler les sections
+    const col = document.createElement("div");
+    col.style.display = "grid";
+    col.style.gridAutoRows = "min-content";
+    col.style.justifyItems = "center";
+    col.style.gap = "10px";
+    col.style.overflow = "auto";
+    right.appendChild(col);
+
+    // ===== Profile =====
+    const prof = document.createElement("div");
+    prof.style.display = "grid";
+    prof.style.gap = "8px";
+    prof.style.justifyItems = "center";
+
+    const head = document.createElement("div");
+    head.style.display = "flex";
+    head.style.alignItems = "center";
+    head.style.gap = "12px";
+
+    const avatar = document.createElement("img");
+    avatar.src = p.discordAvatarUrl || "";
+    avatar.alt = p.name;
+    avatar.width = 48; avatar.height = 48;
+    avatar.style.borderRadius = "50%";
+    avatar.style.objectFit = "cover";
+    avatar.style.border = "1px solid #4446";
+
+    const title = document.createElement("div");
+    const nameEl = document.createElement("div");
+    nameEl.textContent = p.name || p.id;
+    nameEl.style.fontWeight = "600";
+    nameEl.style.fontSize = "16px";
+    const sub = document.createElement("div");
+    sub.style.opacity = "0.8";
+    sub.style.fontSize = "12px";
+    sub.textContent = p.isConnected ? "Online" : "Offline";
+    title.append(nameEl, sub);
+
+    head.append(avatar, title);
+
+    const info = document.createElement("div");
+    info.style.opacity = "0.9";
+
+    prof.append(head, info);
+    col.appendChild(prof);
+
+         // ===== Informations =====
+    const infoWrap = document.createElement("div");
+    infoWrap.style.display = "grid";
+    infoWrap.style.gap = "6px";
+    infoWrap.style.justifySelf = "stretch";
+    infoWrap.style.width = "100%";
+
+    // lignes align├®es ├á gauche
+    const invValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
+    const invLabel = document.createElement("div");
+    invLabel.textContent = "Inventory: ";
+    invLabel.style.fontSize = "14px";
+    invLabel.style.opacity = "0.85";
+    const invValue = document.createElement("div");
+    invValue.textContent = "…";
+    invValue.style.fontSize = "15px";
+    invValue.style.fontWeight = "700";
+    invValue.style.color = "#FFD84D";
+    invValueRow.append(invLabel, invValue);
+
+    const gardenValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
+    const gardenLabel = document.createElement("div");
+    gardenLabel.textContent = "Garden: ";
+    gardenLabel.style.fontSize = "14px";
+    gardenLabel.style.opacity = "0.85";
+    const gardenValue = document.createElement("div");
+    gardenValue.textContent = "…";
+    gardenValue.style.fontWeight = "700";
+    gardenValue.style.fontSize = "15px";
+    gardenValue.style.color = "#FFD84D";
+    gardenValueRow.append(gardenLabel, gardenValue);
+
+    // injecte dans la section
+    infoWrap.append(invValueRow, gardenValueRow);
+    const infoCard = ui.card("🌱 Crops values", { tone: "muted", align: "center" });
+    infoCard.body.append(infoWrap);
+    col.appendChild(infoCard.root);
+
+    // ===== Editor =====
+    const editorCard = ui.card("✏️ Editor", { tone: "muted", align: "center" });
+    editorCard.body.style.display = "grid";
+    editorCard.body.style.gap = "8px";
+
+    const savePlayerBtn = ui.btn("Save player garden", {
+      fullWidth: true,
+      onClick: async () => {
+        try {
+          const saveFn =
+            (window as any).qwsEditorSaveGardenForPlayer ||
+            (pageWindow as any)?.qwsEditorSaveGardenForPlayer;
+          if (typeof saveFn !== "function") {
+            await toastSimple("Save garden", "Editor save unavailable", "error");
+            return;
+          }
+          const name = `${p.name || p.id || "Player"}'s garden`;
+          const saved = await saveFn(p.id, name);
+          if (!saved) {
+            await toastSimple("Save garden", "Save failed (no garden state)", "error");
+            return;
+          }
+          await toastSimple(`Saved "${saved.name}".`, "success");
+        } catch {
+          await toastSimple(`Save failed`, "error");
+        }
+      },
+    });
+
+    editorCard.body.append(savePlayerBtn);
+    col.appendChild(editorCard.root);
+
+    // ===== Teleport =====
+    const teleRow = ui.flexRow({ justify: "center" });
+    const btnToPlayer = ui.btn("To player", { size: "sm" });
+    btnToPlayer.style.minWidth = "120px";
+    const btnToGarden = ui.btn("To garden", { size: "sm" });
+    btnToGarden.style.minWidth = "120px";
+
+    btnToPlayer.onclick = async () => {
+      try {
+        const fn = (PlayersService as any).teleportToPlayer ?? (PlayersService as any).teleportTo;
+        await fn.call(PlayersService, p.id);
+      } catch (e: any) {
+        await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+      }
+    };
+    btnToGarden.onclick = async () => {
+      try {
+        const fn = (PlayersService as any).teleportToGarden ?? (PlayersService as any).tptogarden;
+        await fn.call(PlayersService, p.id);
+      } catch (e: any) {
+        await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+      }
+    };
+
+    teleRow.append(btnToPlayer, btnToGarden);
+    const teleportCard = ui.card("🌌 Teleport", { tone: "muted", align: "center" });
+    teleportCard.body.append(teleRow);
+    col.appendChild(teleportCard.root);
+
+    // ===== Inspect (ex-Inventory) =====
+    const invRow = ui.flexRow({ justify: "center" });
+    const btnInv = ui.btn("Inventory", { size: "sm" });
+    btnInv.style.minWidth = "120px";
+    const btnJournal = ui.btn("Journal", { size: "sm" });
+    btnJournal.style.minWidth = "120px";
+    const btnStats = ui.btn("Stats", { size: "sm" });
+    btnStats.style.minWidth = "120px";
+    const btnActivityLog = ui.btn("Activity log", { size: "sm" });
+    btnActivityLog.style.minWidth = "120px";
+
+    // Conserve la logique existante pour ouvrir l’aperçu d’inventaire
+    btnInv.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openInventoryPreview(p.id, p.name);
+        if (await isInventoryPanelOpen()) {
+          await waitInventoryPanelClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    btnJournal.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openJournalLog(p.id, p.name);
+        if (await isJournalModalOpen()) {
+          await waitJournalModalClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    btnStats.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openStatsModal(p.id, p.name);
+        if (await isStatsModalOpenAsync()) {
+          await waitStatsModalClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    btnActivityLog.onclick = async () => {
+      try {
+        ui.setWindowVisible(false);
+        await PlayersService.openActivityLogModal(p.id, p.name);
+        if (await isActivityLogModalOpenAsync()) {
+          await waitActivityLogModalClosed();
+        }
+      } finally {
+        ui.setWindowVisible(true);
+      }
+    };
+
+    const inspectGrid = document.createElement("div");
+    inspectGrid.style.display = "grid";
+    inspectGrid.style.gap = "6px";
+
+    const activityRow = ui.flexRow({ justify: "center" });
+
+    invRow.append(btnInv, btnJournal);
+    activityRow.append(btnStats, btnActivityLog);
+
+    inspectGrid.append(invRow, activityRow);
+    const inspectCard = ui.card("🔍 Inspect", { tone: "muted", align: "center" });
+    inspectCard.body.append(inspectGrid);
+    col.appendChild(inspectCard.root);
+
+    // ===== Fun =====
+    const funWrap = document.createElement("div");
+    funWrap.style.display = "grid";
+    funWrap.style.gap = "10px";
+
+    const followRow = ui.flexRow({ justify: "center" });
+    followRow.style.gap = "16px";
+
+    const playerFollowGroup = document.createElement("div");
+    playerFollowGroup.style.display = "flex";
+    playerFollowGroup.style.alignItems = "center";
+    playerFollowGroup.style.gap = "8px";
+
+    const label = document.createElement("div");
+    label.textContent = "Follow player";
+    label.style.fontSize = "14px";
+    label.style.opacity = "0.85";
+    const sw = ui.switch(PlayersService.isFollowing(p.id));
+    (sw as HTMLInputElement).addEventListener("change", async () => {
+      try {
+        if ((sw as HTMLInputElement).checked) {
+          await PlayersService.startFollowing(p.id);
+          await toastSimple("Follow", "Enabled.", "success");
+        } else {
+          PlayersService.stopFollowing();
+          await toastSimple("Follow", "Disable.", "info");
+        }
+      } catch (e: any) {
+        await toastSimple("Follow", e?.message || "Error", "error");
+        (sw as HTMLInputElement).checked = !(sw as HTMLInputElement).checked;
+      }
+    });
+    playerFollowGroup.append(label, sw as HTMLElement);
+
+    const petFollowGroup = document.createElement("div");
+    petFollowGroup.style.display = "flex";
+    petFollowGroup.style.alignItems = "center";
+    petFollowGroup.style.gap = "4px";
+
+    const petsLabel = document.createElement("div");
+    petsLabel.textContent = "Pet follow";
+    petsLabel.style.fontSize = "14px";
+    petsLabel.style.opacity = "0.85";
+    const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
+    (petsSwitch as HTMLInputElement).addEventListener("change", async () => {
+      try {
+        if ((petsSwitch as HTMLInputElement).checked) {
+          await PlayersService.startPetFollowing(p.id);
+        } else {
+          await PlayersService.stopPetFollowing();
+        }
+      } catch (e: any) {
+        await toastSimple("Pet follow", e?.message || "Error", "error");
+        (petsSwitch as HTMLInputElement).checked = !(petsSwitch as HTMLInputElement).checked;
+      }
+    });
+    petFollowGroup.append(petsLabel, petsSwitch as HTMLElement);
+
+    followRow.append(playerFollowGroup, petFollowGroup);
+
+    funWrap.append(followRow);
+    const funCard = ui.card("🎉 Fun", { tone: "muted", align: "center" });
+    funCard.body.append(funWrap);
+    col.appendChild(funCard.root);
+
+    // Remplissage asynchrone depuis le service
+    (async () => {
+      try {
+        const total = await PlayersService.getInventoryValue(p.id);
+        invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
+        invValue.title = "Total inventory value";
+      } catch {
+        invValue.textContent = "—";
+      }
+      try {
+        const total = await PlayersService.getGardenValue(p.id);
+        gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
+        gardenValue.title = "Total garden value";
+      } catch {
+        gardenValue.textContent = "—";
+      }
+    })();
+  }
+  
+
+  let players: Player[] = [];
+
+  /** ------- DIFF MINIMAL (inclut gardenPosition) ------- **/
+  let lastSig = "";
+  function signature(ps: Player[]) {
+    return ps.map(p =>
+      `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
+    ).join(";");
+  }
+
+  async function refreshAll(keepSelection = true) {
+    const prevSel = vt.getSelected()?.id ?? null;
+
+    const next = await readPlayers();
+    const sig = signature(next);
+    if (sig === lastSig) {
+      return;
+    }
+    lastSig = sig;
+
+    players = next;
+    vt.setItems(players.map(vItem));
+
+    const sel = (keepSelection && prevSel && players.some(p => p.id === prevSel))
+      ? prevSel
+      : (players[0]?.id ?? null);
+    if (sel !== null) vt.select(sel); else renderRight(null);
+  }
+  /** ----- FIN DIFF MINIMAL ----- **/
+
+  await PlayersService.onChange(() => { refreshAll(true).catch(() => {}); });
+
+  await refreshAll(true);
+}
+
+

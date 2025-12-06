@@ -3,7 +3,10 @@
 // - Migrates all legacy keys (qws:..., mg-..., etc.) into nested sections.
 // - Does not delete legacy keys to avoid data loss on downgrade.
 
-const ARIES_STORAGE_KEY = "aries_mod";
+import type { FriendSettings } from "./friendSettingsSchema";
+import { DEFAULT_FRIEND_SETTINGS } from "./friendSettingsSchema";
+
+export const ARIES_STORAGE_KEY = "aries_mod";
 const ARIES_STORAGE_VERSION = 1;
 
 export type AriesStorage = {
@@ -30,10 +33,16 @@ export type AriesStorage = {
   editor?: { savedGardens?: unknown; enabled?: unknown };
   activityLog?: { history?: unknown; filter?: unknown };
   audio?: { settings?: unknown; library?: unknown; sfxVolumeAtom?: unknown };
+  friends?: {
+    settings?: FriendSettings;
+  };
 };
 
 const DEFAULT_ARIES_STORAGE: AriesStorage = {
   version: ARIES_STORAGE_VERSION,
+  friends: {
+    settings: DEFAULT_FRIEND_SETTINGS,
+  },
 };
 
 const LEGACY_STATIC_KEYS = [
@@ -307,6 +316,13 @@ function coerceLegacyAggregate(raw: unknown): AriesStorage {
   if ("audioSettings" in data) out.audio = mergeSection(out.audio, { settings: (data as any).audioSettings });
   if ("audioLibrary" in data) out.audio = mergeSection(out.audio, { library: (data as any).audioLibrary });
   if ("soundEffectsVolumeAtom" in data) out.audio = mergeSection(out.audio, { sfxVolumeAtom: (data as any).soundEffectsVolumeAtom });
+
+  if ("friends" in data && typeof (data as any).friends === "object") {
+    out.friends = {
+      ...(out.friends ?? {}),
+      ...(data.friends as Record<string, unknown>),
+    };
+  }
 
   return out;
 }

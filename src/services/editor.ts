@@ -87,6 +87,7 @@ type StatePatch = {
 let stateFrozenValue: any = null;
 let statePatch: StatePatch | null = null;
 let stateOriginalValue: any = null;
+let friendGardenPreviewActive = false;
 
 /* -------------------------------------------------------------------------- */
 /* Overlay + toggle state                                                     */
@@ -2202,7 +2203,6 @@ function buildStateWithUserSlots(cur: any, userSlots: any) {
   };
 }
 
-
 /* -------------------------------------------------------------------------- */
 /* Helpers for writing while atoms are patched                                */
 /* -------------------------------------------------------------------------- */
@@ -2763,6 +2763,52 @@ async function setCurrentGarden(nextGarden: GardenState): Promise<boolean> {
     return true;
   } catch (err) {
     console.log("[EditorService] setCurrentGarden failed", err);
+    return false;
+  }
+}
+
+async function applyFriendGardenPreview(garden: GardenState | null): Promise<boolean> {
+  if (!garden || typeof garden !== "object") return false;
+  try {
+    await freezeStateAtom();
+    const pid = await getPlayerId();
+    if (!pid) return false;
+    const cur = (stateFrozenValue ?? (await Atoms.root.state.get())) as any;
+    if (!cur) return false;
+    const slots = cur?.child?.data?.userSlots;
+    const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+    if (!slotMatch || !slotMatch.matchSlot) return false;
+
+    const updatedSlot = {
+      ...(slotMatch.matchSlot as any),
+      data: {
+        ...(slotMatch.matchSlot?.data || {}),
+        garden: sanitizeGarden(garden),
+      },
+    };
+
+    const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+    const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+
+    await setStateAtom(nextState);
+    stateFrozenValue = nextState;
+    friendGardenPreviewActive = true;
+    return true;
+  } catch (error) {
+    console.error("[EditorService] applyFriendGardenPreview failed", error);
+    friendGardenPreviewActive = false;
+    return false;
+  }
+}
+
+async function clearFriendGardenPreview(): Promise<boolean> {
+  if (!friendGardenPreviewActive) return false;
+  friendGardenPreviewActive = false;
+  try {
+    await unfreezeStateAtom();
+    return true;
+  } catch (error) {
+    console.error("[EditorService] clearFriendGardenPreview failed", error);
     return false;
   }
 }
@@ -3743,6 +3789,14 @@ shareGlobal("qwsEditorExportGarden", (id: string) => {
 
 shareGlobal("qwsEditorImportGarden", async (name: string, raw: string) => {
   return await importGarden(name, raw);
+});
+
+shareGlobal("qwsEditorPreviewFriendGarden", async (garden: GardenState | null) => {
+  return await applyFriendGardenPreview(garden);
+});
+
+shareGlobal("qwsEditorClearFriendGardenPreview", async () => {
+  return await clearFriendGardenPreview();
 });
 
 function installEditorKeybindsOnce() {

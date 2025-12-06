@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.7.36
+// @version      2.8.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17,6 +17,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_download
+// @connect      *.supabase.co/*
+
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // ==/UserScript==
@@ -2875,6 +2877,7 @@
   var gardenTileObjects = makeView("myDataAtom", { path: "garden.tileObjects" });
   var favoriteIds = makeView("myInventoryAtom", { path: "favoritedItemIds" });
   var playerId = makeView("playerAtom", { path: "id" });
+  var playerDatabaseUserId = makeView("playerAtom", { path: "databaseUserId" });
   var myOwnCurrentGardenObjectType = makeView("myOwnCurrentGardenObjectAtom", { path: "objectType" });
   var stateChild = makeView("stateAtom", { path: "child" });
   var stateChildData = makeView("stateAtom", { path: "child.data" });
@@ -5482,11 +5485,28 @@
     img64: "data:image/png;base64,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"
   };
 
+  // src/utils/friendSettingsSchema.ts
+  var FRIEND_SETTINGS_PATH = "friends.settings";
+  var DEFAULT_FRIEND_SETTINGS = {
+    showOnlineFriendsOnly: false,
+    autoAcceptIncomingRequests: false,
+    hideRoomFromPublicList: false,
+    showGarden: true,
+    showInventory: true,
+    showCoins: true,
+    showActivityLog: true,
+    showJournal: true,
+    showStats: true
+  };
+
   // src/utils/localStorage.ts
   var ARIES_STORAGE_KEY = "aries_mod";
   var ARIES_STORAGE_VERSION = 1;
   var DEFAULT_ARIES_STORAGE = {
-    version: ARIES_STORAGE_VERSION
+    version: ARIES_STORAGE_VERSION,
+    friends: {
+      settings: DEFAULT_FRIEND_SETTINGS
+    }
   };
   var LEGACY_STATIC_KEYS = [
     "aries_storage",
@@ -5731,6 +5751,12 @@
     if ("audioSettings" in data) out.audio = mergeSection(out.audio, { settings: data.audioSettings });
     if ("audioLibrary" in data) out.audio = mergeSection(out.audio, { library: data.audioLibrary });
     if ("soundEffectsVolumeAtom" in data) out.audio = mergeSection(out.audio, { sfxVolumeAtom: data.soundEffectsVolumeAtom });
+    if ("friends" in data && typeof data.friends === "object") {
+      out.friends = {
+        ...out.friends ?? {},
+        ...data.friends
+      };
+    }
     return out;
   }
   function loadAriesStorage() {
@@ -32987,1018 +33013,6 @@ next: ${next}`;
     ui.on("unmounted", cleanup2);
   }
 
-  // src/services/players.ts
-  function findPlayersDeep(state2) {
-    if (!state2 || typeof state2 !== "object") return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    const stack = [state2];
-    while (stack.length) {
-      const cur = stack.pop();
-      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-      seen.add(cur);
-      for (const k of Object.keys(cur)) {
-        const v = cur[k];
-        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
-          const looks = v.some((p) => "id" in p && "name" in p);
-          if (looks && /player/i.test(k)) out.push(...v);
-        }
-        if (v && typeof v === "object") stack.push(v);
-      }
-    }
-    const byId = /* @__PURE__ */ new Map();
-    for (const p of out) if (p?.id) byId.set(String(p.id), p);
-    return [...byId.values()];
-  }
-  function getPlayersArray(st) {
-    const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep(st);
-  }
-  function getSlotsArray(st) {
-    const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
-    if (Array.isArray(raw)) return raw;
-    if (raw && typeof raw === "object") {
-      const entries = Object.entries(raw);
-      entries.sort((a, b) => {
-        const ai = Number(a[0]);
-        const bi = Number(b[0]);
-        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
-        return a[0].localeCompare(b[0]);
-      });
-      return entries.map(([, v]) => v);
-    }
-    return [];
-  }
-  function extractPosFromSlot(slot) {
-    const pos = slot?.data?.position ?? slot?.position ?? slot?.data?.coords ?? slot?.coords;
-    const x = Number(pos?.x);
-    const y = Number(pos?.y);
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-  }
-  function extractInventoryFromSlot(slot) {
-    const inv = slot?.data?.inventory;
-    if (!inv || typeof inv !== "object") return null;
-    const items = Array.isArray(inv.items) ? inv.items : [];
-    const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
-    return { items, favoritedItemIds };
-  }
-  function extractJournalFromSlot(slot) {
-    const j = slot?.data?.journal ?? slot?.journal;
-    if (!j || typeof j !== "object") return null;
-    const produce = j.produce && typeof j.produce === "object" ? j.produce : void 0;
-    const pets = j.pets && typeof j.pets === "object" ? j.pets : void 0;
-    const normProduce = produce ? Object.fromEntries(Object.entries(produce).map(([k, v]) => [
-      String(k),
-      { variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [] }
-    ])) : void 0;
-    const normPets = pets ? Object.fromEntries(Object.entries(pets).map(([k, v]) => [
-      String(k),
-      {
-        variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [],
-        abilitiesLogged: Array.isArray(v?.abilitiesLogged) ? v.abilitiesLogged : []
-      }
-    ])) : void 0;
-    return { produce: normProduce, pets: normPets };
-  }
-  function extractStatsFromSlot(slot) {
-    const stats = slot?.data?.stats ?? slot?.stats;
-    if (!stats || typeof stats !== "object") return null;
-    return stats;
-  }
-  function extractActivityLogsFromSlot(slot) {
-    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
-    if (!Array.isArray(logs)) return null;
-    return logs;
-  }
-  function extractGardenFromSlot(slot) {
-    const g = slot?.data?.garden ?? slot?.garden;
-    if (!g || typeof g !== "object") return null;
-    const to = g.tileObjects;
-    const bto = g.boardwalkTileObjects;
-    const tileObjects = to && typeof to === "object" ? to : {};
-    const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
-    return { tileObjects, boardwalkTileObjects };
-  }
-  function getSlotByPlayerId(st, playerId2) {
-    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
-    return null;
-  }
-  function enrichPlayersWithSlots(players, st) {
-    const byPid = /* @__PURE__ */ new Map();
-    for (const slot of getSlotsArray(st)) {
-      if (!slot || typeof slot !== "object") continue;
-      const pid = slot.playerId != null ? String(slot.playerId) : "";
-      if (!pid) continue;
-      const pos = extractPosFromSlot(slot);
-      const inv = extractInventoryFromSlot(slot);
-      byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
-    }
-    return players.map((p) => {
-      const extra = byPid.get(String(p.id));
-      return extra ? { ...p, ...extra } : { ...p, inventory: null };
-    });
-  }
-  function orderPlayersBySlots(players, st) {
-    const slots = getSlotsArray(st);
-    const mapById = /* @__PURE__ */ new Map();
-    for (const p of players) mapById.set(String(p.id), p);
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const s of slots) {
-      const pid = s?.playerId != null ? String(s.playerId) : "";
-      if (!pid || seen.has(pid)) continue;
-      const p = mapById.get(pid);
-      if (p) {
-        out.push(p);
-        seen.add(pid);
-      }
-    }
-    for (const p of players) {
-      const pid = String(p.id);
-      if (!seen.has(pid)) {
-        out.push(p);
-        seen.add(pid);
-      }
-    }
-    return out;
-  }
-  function clampPlayers(n) {
-    const v = Math.floor(Number(n));
-    if (!Number.isFinite(v)) return 1;
-    return Math.max(1, Math.min(6, v));
-  }
-  async function getPlayersInRoom() {
-    try {
-      const raw = await Atoms.server.numPlayers.get();
-      return clampPlayers(raw);
-    } catch {
-      return 1;
-    }
-  }
-  var __cachedSpawnTiles = null;
-  var __spawnLoadPromise = null;
-  async function getSpawnTilesSorted() {
-    if (Array.isArray(__cachedSpawnTiles)) return __cachedSpawnTiles;
-    if (__spawnLoadPromise) return __spawnLoadPromise;
-    __spawnLoadPromise = (async () => {
-      try {
-        const map2 = await Atoms.root.map.get();
-        const arr = map2?.spawnTiles;
-        if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
-          __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
-          return __cachedSpawnTiles;
-        }
-      } catch {
-      }
-      try {
-        const st = await Atoms.root.state.get();
-        const seen = /* @__PURE__ */ new Set();
-        const stack = [st];
-        while (stack.length) {
-          const cur = stack.pop();
-          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-          seen.add(cur);
-          const arr = cur?.spawnTiles;
-          if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
-            __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
-            return __cachedSpawnTiles;
-          }
-          for (const k of Object.keys(cur)) {
-            const v = cur[k];
-            if (v && typeof v === "object") stack.push(v);
-          }
-        }
-      } catch {
-      }
-      __cachedSpawnTiles = [];
-      return __cachedSpawnTiles;
-    })();
-    const res = await __spawnLoadPromise;
-    __spawnLoadPromise = null;
-    return res;
-  }
-  async function getMapCols() {
-    try {
-      const map2 = await Atoms.root.map.get();
-      const cols = Number(map2?.cols);
-      if (Number.isFinite(cols) && cols > 0) return cols;
-    } catch {
-    }
-    try {
-      const st = await Atoms.root.state.get();
-      const maybeCols = Number(
-        st?.map?.cols ?? st?.child?.data?.map?.cols ?? st?.fullState?.map?.cols
-      );
-      if (Number.isFinite(maybeCols) && maybeCols > 0) return maybeCols;
-    } catch {
-    }
-    return 81;
-  }
-  function assignGardenPositions(players, spawnTilesSorted) {
-    if (!players.length || !spawnTilesSorted.length) {
-      return players.map((p) => ({ ...p, gardenPosition: null }));
-    }
-    const out = [];
-    for (let i = 0; i < players.length; i++) {
-      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
-    }
-    return out;
-  }
-  function nowTs() {
-    return Date.now();
-  }
-  function normJournal(j) {
-    if (!j || typeof j !== "object") return {};
-    const out = {};
-    if (j.produce && typeof j.produce === "object") out.produce = j.produce;
-    if (j.pets && typeof j.pets === "object") out.pets = j.pets;
-    return out;
-  }
-  function hasJournalData(j) {
-    if (!j) return false;
-    const hasProduce = !!j.produce && Object.values(j.produce).some((s) => (s.variantsLogged?.length ?? 0) > 0);
-    const hasPets = !!j.pets && Object.values(j.pets).some((s) => (s.variantsLogged?.length ?? 0) > 0 || (s.abilitiesLogged?.length ?? 0) > 0);
-    return hasProduce || hasPets;
-  }
-  var followingState = {
-    currentTargetId: null,
-    unsub: null,
-    lastPos: null,
-    prevPos: null,
-    steps: 0
-  };
-  var PET_FOLLOW_INTERVAL_MS = 20;
-  var PET_HISTORY_FACTOR = 3;
-  var PET_SPACING_STEPS = 1;
-  var petFollowState = {
-    targetId: null,
-    unsub: null,
-    timer: null,
-    pets: [],
-    history: [],
-    historyCap: 0
-  };
-  function clearPetFollowTimer() {
-    if (petFollowState.timer) {
-      clearInterval(petFollowState.timer);
-      petFollowState.timer = null;
-    }
-  }
-  async function resetPetFollowState() {
-    if (petFollowState.unsub) {
-      const fn = petFollowState.unsub;
-      petFollowState.unsub = null;
-      try {
-        await fn();
-      } catch {
-      }
-    } else {
-      petFollowState.unsub = null;
-    }
-    clearPetFollowTimer();
-    petFollowState.targetId = null;
-    petFollowState.pets = [];
-    petFollowState.history = [];
-    petFollowState.historyCap = 0;
-  }
-  function recordPetHistory(pos, force = false) {
-    const top = petFollowState.history[0];
-    if (!force && top && top.x === pos.x && top.y === pos.y) return;
-    petFollowState.history.unshift({ x: pos.x, y: pos.y });
-    const cap = petFollowState.historyCap || petFollowState.history.length;
-    if (petFollowState.history.length > cap) {
-      petFollowState.history.length = cap;
-    }
-  }
-  var PlayersService = {
-    async list() {
-      const st = await Atoms.root.state.get();
-      if (!st) return [];
-      const base = enrichPlayersWithSlots(getPlayersArray(st), st);
-      const ordered = orderPlayersBySlots(base, st);
-      const spawns = await getSpawnTilesSorted();
-      const players = assignGardenPositions(ordered, spawns);
-      return players;
-    },
-    async onChange(cb) {
-      return Atoms.root.state.onChange(async () => {
-        try {
-          cb(await this.list());
-        } catch {
-        }
-      });
-    },
-    async getPosition(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const pos = extractPosFromSlot(slot);
-      return pos;
-    },
-    async getInventory(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const inv = extractInventoryFromSlot(slot);
-      return inv;
-    },
-    async getJournal(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const j = extractJournalFromSlot(slot);
-      const journal = j ? normJournal(j) : null;
-      return journal;
-    },
-    async getGarden(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractGardenFromSlot(slot);
-    },
-    async getGardenPosition(playerId2) {
-      const list = await this.list();
-      const p = list.find((x) => String(x.id) === String(playerId2));
-      return p?.gardenPosition ?? null;
-    },
-    async getPlayerNameById(playerId2) {
-      try {
-        const st = await Atoms.root.state.get();
-        if (st) {
-          const arr = getPlayersArray(st);
-          const p = arr.find((x) => String(x?.id) === String(playerId2));
-          if (p && typeof p.name === "string" && p.name) return p.name;
-        }
-      } catch {
-      }
-      try {
-        const list = await this.list();
-        const p = list.find((x) => String(x.id) === String(playerId2));
-        return p?.name ?? null;
-      } catch {
-        return null;
-      }
-    },
-    async teleportToPlayer(playerId2) {
-      const pos = await this.getPosition(playerId2);
-      if (!pos) throw new Error("Unknown position for this player");
-      PlayerService.teleport(pos.x, pos.y);
-      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}`, "success");
-    },
-    async teleportToGarden(playerId2) {
-      const tileId = await this.getGardenPosition(playerId2);
-      if (tileId == null) {
-        await toastSimple("Teleport", "No garden position for this player.", "error");
-        return;
-      }
-      const cols = await getMapCols();
-      const x = tileId % cols, y = Math.floor(tileId / cols);
-      await PlayerService.teleport(x, y);
-      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}'s garden`, "success");
-    },
-    async getInventoryValue(playerId2, opts) {
-      try {
-        const playersInRoom = await getPlayersInRoom();
-        const inv = await this.getInventory(playerId2);
-        const items = Array.isArray(inv?.items) ? inv.items : [];
-        if (!items.length) return 0;
-        const value = sumInventoryValue(items, opts, playersInRoom);
-        return value;
-      } catch {
-        return 0;
-      }
-    },
-    async getGardenValue(playerId2, opts) {
-      try {
-        const playersInRoom = await getPlayersInRoom();
-        const garden2 = await this.getGarden(playerId2);
-        if (!garden2) return 0;
-        const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
-        return value;
-      } catch {
-        return 0;
-      }
-    },
-    /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
-    async openInventoryPreview(playerId2, playerName) {
-      try {
-        const inv = await this.getInventory(playerId2);
-        if (!inv) {
-          await toastSimple("Inventory", "No inventory object found for this player.", "error");
-          return;
-        }
-        const items = Array.isArray(inv.items) ? inv.items : [];
-        if (items.length === 0) {
-          await toastSimple("Inventory", "Inventory is empty for this player.", "info");
-          return;
-        }
-        try {
-          await fakeInventoryShow({ ...inv, items }, { open: true });
-        } catch (err) {
-          await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
-          return;
-        }
-        if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
-      }
-    },
-    /** Ouvre le Journal (produce + pets) avec garde + toasts. */
-    async openJournalLog(playerId2, playerName) {
-      try {
-        const journal = await this.getJournal(playerId2);
-        if (!hasJournalData(journal)) {
-          await toastSimple("Journal", "No journal data for this player.", "error");
-          return;
-        }
-        const safe = journal ?? {};
-        try {
-          await fakeJournalShow(safe, { open: true });
-        } catch (err) {
-          await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
-          return;
-        }
-        if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
-      }
-    },
-    async getStats(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractStatsFromSlot(slot);
-    },
-    async getActivityLogs(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractActivityLogsFromSlot(slot);
-    },
-    async openStatsModal(playerId2, playerName) {
-      try {
-        const stats = await this.getStats(playerId2);
-        if (!stats) {
-          await toastSimple("Stats", "No stats found for this player.", "error");
-          return;
-        }
-        await fakeStatsShow(stats, { open: true });
-        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
-      }
-    },
-    async openActivityLogModal(playerId2, playerName) {
-      try {
-        const logs = await this.getActivityLogs(playerId2);
-        if (!logs || logs.length === 0) {
-          await toastSimple("Activity log", "No activity logs for this player.", "info");
-          return;
-        }
-        await fakeActivityLogShow(logs, { open: true });
-        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
-      }
-    },
-    /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
-    async addProduceVariant(playerId2, species, variant, createdAt = nowTs()) {
-      if (!species || !variant) {
-        await toastSimple("Journal", "Missing species or variant.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          produce: {
-            [String(species)]: {
-              variantsLogged: [{ variant: String(variant), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
-      }
-    },
-    async addPetVariant(playerId2, petSpecies, variant, createdAt = nowTs()) {
-      if (!petSpecies || !variant) {
-        await toastSimple("Journal", "Missing pet species or variant.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          pets: {
-            [String(petSpecies)]: {
-              variantsLogged: [{ variant: String(variant), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
-      }
-    },
-    async addPetAbility(playerId2, petSpecies, ability, createdAt = nowTs()) {
-      if (!petSpecies || !ability) {
-        await toastSimple("Journal", "Missing pet species or ability.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          pets: {
-            [String(petSpecies)]: {
-              abilitiesLogged: [{ ability: String(ability), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
-      }
-    },
-    /* ---------------- Follow ---------------- */
-    async stopFollowing() {
-      if (followingState.unsub) {
-        try {
-          await followingState.unsub();
-        } catch {
-        }
-      }
-      followingState.unsub = null;
-      followingState.currentTargetId = null;
-      followingState.lastPos = null;
-      followingState.prevPos = null;
-      followingState.steps = 0;
-    },
-    isFollowing(playerId2) {
-      return followingState.currentTargetId === playerId2;
-    },
-    async startFollowing(playerId2) {
-      if (followingState.unsub) {
-        try {
-          await followingState.unsub();
-        } catch {
-        }
-        followingState.unsub = null;
-      }
-      followingState.currentTargetId = playerId2;
-      followingState.lastPos = null;
-      followingState.prevPos = null;
-      followingState.steps = 0;
-      const pos = await this.getPosition(playerId2);
-      if (!pos) {
-        await toastSimple("Follow", "Unable to retrieve player position.", "error");
-        followingState.currentTargetId = null;
-        return;
-      }
-      await PlayerService.teleport(pos.x, pos.y);
-      followingState.lastPos = { x: pos.x, y: pos.y };
-      followingState.prevPos = null;
-      followingState.steps = 0;
-      followingState.unsub = await this.onChange(async (players) => {
-        if (followingState.currentTargetId !== playerId2) return;
-        const target = players.find((p) => p.id === playerId2);
-        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
-          await this.stopFollowing();
-          await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
-          return;
-        }
-        const cur = { x: target.x, y: target.y };
-        const last = followingState.lastPos;
-        if (!last) {
-          followingState.lastPos = cur;
-          return;
-        }
-        if (cur.x !== last.x || cur.y !== last.y) {
-          followingState.steps += 1;
-          if (followingState.steps >= 2) {
-            if (last) {
-              PlayerService.move(last.x, last.y);
-            }
-          }
-          followingState.prevPos = followingState.lastPos;
-          followingState.lastPos = cur;
-        }
-      });
-      await toastSimple("Follow", "Follow enabled", "success");
-    },
-    /* ---------------- Pet Follow ---------------- */
-    async stopPetFollowing(opts) {
-      await resetPetFollowState();
-      if (!opts?.silent) {
-        await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
-      }
-    },
-    isPetFollowing(playerId2) {
-      return petFollowState.targetId === playerId2;
-    },
-    async startPetFollowing(playerId2) {
-      await this.stopPetFollowing({ silent: true });
-      const petsRaw = await Atoms.pets.myPetInfos.get();
-      const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
-      if (!petIds.length) {
-        await toastSimple("Pet follow", "You don't have any active pets.", "error");
-        return;
-      }
-      const pos = await this.getPosition(playerId2);
-      if (!pos) {
-        await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
-        return;
-      }
-      petFollowState.targetId = playerId2;
-      petFollowState.pets = petIds;
-      petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
-      petFollowState.history = [];
-      for (let i = 0; i < petFollowState.historyCap; i += 1) {
-        recordPetHistory(pos, true);
-      }
-      const sendPositions = async () => {
-        if (petFollowState.targetId !== playerId2) return;
-        if (!petFollowState.pets.length || !petFollowState.history.length) return;
-        const payload = {};
-        for (let i = 0; i < petFollowState.pets.length; i += 1) {
-          const petId = petFollowState.pets[i];
-          const historyIndex = Math.min(
-            petFollowState.history.length - 1,
-            (i + 1) * PET_SPACING_STEPS
-          );
-          const targetPos = petFollowState.history[historyIndex] ?? petFollowState.history[petFollowState.history.length - 1];
-          if (targetPos) {
-            payload[petId] = { x: targetPos.x, y: targetPos.y };
-          }
-        }
-        if (Object.keys(payload).length === 0) return;
-        try {
-          await PlayerService.petPositions(payload);
-        } catch (err) {
-        }
-      };
-      petFollowState.timer = setInterval(() => {
-        sendPositions().catch(() => {
-        });
-      }, PET_FOLLOW_INTERVAL_MS);
-      const initialSend = sendPositions();
-      petFollowState.unsub = await this.onChange(async (players) => {
-        if (petFollowState.targetId !== playerId2) return;
-        const target = players.find((p) => p.id === playerId2);
-        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
-          await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
-          return;
-        }
-        recordPetHistory({ x: target.x, y: target.y });
-      });
-      await initialSend;
-      await toastSimple("Pet follow", "Pets are now following the target.", "success");
-    }
-  };
-
-  // src/ui/menus/players.ts
-  async function readPlayers() {
-    return PlayersService.list();
-  }
-  var NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-  function truncateLabel(s, max = 22) {
-    if (!s) return "";
-    return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
-  }
-  var vItem = (p) => ({
-    id: p.id,
-    title: truncateLabel(p.name || p.id, 9),
-    subtitle: p.isConnected ? "Online" : "Offline",
-    avatarUrl: p.discordAvatarUrl || "",
-    statusColor: p.isConnected ? "#48d170" : "#999a"
-  });
-  async function renderPlayersMenu(root) {
-    const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
-    ui.mount(root);
-    const panel = ui.root.querySelector(".qmm-views");
-    const { root: split, left, right } = ui.split2("260px");
-    panel.appendChild(split);
-    split.style.height = "100%";
-    split.style.minHeight = "0";
-    left.style.display = "flex";
-    left.style.flexDirection = "column";
-    left.style.minHeight = "0";
-    right.style.minHeight = "0";
-    right.style.overflow = "auto";
-    const vt = ui.vtabs({
-      filterPlaceholder: "Find player\u2026",
-      onSelect: (_id, item) => renderRight(item?.id || null),
-      fillAvailableHeight: true
-    });
-    vt.root.style.display = "flex";
-    vt.root.style.flexDirection = "column";
-    vt.root.style.flex = "1 1 auto";
-    vt.root.style.minHeight = "0";
-    left.appendChild(vt.root);
-    const filter = vt.root.querySelector(".filter");
-    if (filter) {
-      filter.style.display = "flex";
-      filter.style.alignItems = "center";
-      filter.style.gap = "8px";
-      const input = filter.querySelector("input");
-      if (input) {
-        input.style.flex = "1 1 auto";
-        input.style.minWidth = "0";
-      }
-    }
-    async function renderRight(playerId2) {
-      right.innerHTML = "";
-      const p = playerId2 ? players.find((x) => x.id === playerId2) || null : null;
-      if (!p) {
-        const empty = document.createElement("div");
-        empty.style.opacity = "0.75";
-        empty.textContent = "Select a player on the left.";
-        right.appendChild(empty);
-        return;
-      }
-      const col = document.createElement("div");
-      col.style.display = "grid";
-      col.style.gridAutoRows = "min-content";
-      col.style.justifyItems = "center";
-      col.style.gap = "10px";
-      col.style.overflow = "auto";
-      right.appendChild(col);
-      const prof = document.createElement("div");
-      prof.style.display = "grid";
-      prof.style.gap = "8px";
-      prof.style.justifyItems = "center";
-      const head = document.createElement("div");
-      head.style.display = "flex";
-      head.style.alignItems = "center";
-      head.style.gap = "12px";
-      const avatar = document.createElement("img");
-      avatar.src = p.discordAvatarUrl || "";
-      avatar.alt = p.name;
-      avatar.width = 48;
-      avatar.height = 48;
-      avatar.style.borderRadius = "50%";
-      avatar.style.objectFit = "cover";
-      avatar.style.border = "1px solid #4446";
-      const title = document.createElement("div");
-      const nameEl = document.createElement("div");
-      nameEl.textContent = p.name || p.id;
-      nameEl.style.fontWeight = "600";
-      nameEl.style.fontSize = "16px";
-      const sub = document.createElement("div");
-      sub.style.opacity = "0.8";
-      sub.style.fontSize = "12px";
-      sub.textContent = p.isConnected ? "Online" : "Offline";
-      title.append(nameEl, sub);
-      head.append(avatar, title);
-      const info = document.createElement("div");
-      info.style.opacity = "0.9";
-      prof.append(head, info);
-      col.appendChild(prof);
-      const infoWrap = document.createElement("div");
-      infoWrap.style.display = "grid";
-      infoWrap.style.gap = "6px";
-      infoWrap.style.justifySelf = "stretch";
-      infoWrap.style.width = "100%";
-      const invValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const invLabel = document.createElement("div");
-      invLabel.textContent = "Inventory: ";
-      invLabel.style.fontSize = "14px";
-      invLabel.style.opacity = "0.85";
-      const invValue = document.createElement("div");
-      invValue.textContent = "\u2026";
-      invValue.style.fontSize = "15px";
-      invValue.style.fontWeight = "700";
-      invValue.style.color = "#FFD84D";
-      invValueRow.append(invLabel, invValue);
-      const gardenValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const gardenLabel = document.createElement("div");
-      gardenLabel.textContent = "Garden: ";
-      gardenLabel.style.fontSize = "14px";
-      gardenLabel.style.opacity = "0.85";
-      const gardenValue = document.createElement("div");
-      gardenValue.textContent = "\u2026";
-      gardenValue.style.fontWeight = "700";
-      gardenValue.style.fontSize = "15px";
-      gardenValue.style.color = "#FFD84D";
-      gardenValueRow.append(gardenLabel, gardenValue);
-      infoWrap.append(invValueRow, gardenValueRow);
-      const infoCard = ui.card("\u{1F331} Crops values", { tone: "muted", align: "center" });
-      infoCard.body.append(infoWrap);
-      col.appendChild(infoCard.root);
-      const editorCard = ui.card("\u{1F4DD} Editor", { tone: "muted", align: "center" });
-      editorCard.body.style.display = "grid";
-      editorCard.body.style.gap = "8px";
-      const savePlayerBtn = ui.btn("Save player garden", {
-        fullWidth: true,
-        onClick: async () => {
-          try {
-            const saveFn = window.qwsEditorSaveGardenForPlayer || pageWindow?.qwsEditorSaveGardenForPlayer;
-            if (typeof saveFn !== "function") {
-              await toastSimple("Save garden", "Editor save unavailable", "error");
-              return;
-            }
-            const name = `${p.name || p.id || "Player"}'s garden`;
-            const saved = await saveFn(p.id, name);
-            if (!saved) {
-              await toastSimple("Save garden", "Save failed (no garden state)", "error");
-              return;
-            }
-            await toastSimple(`Saved "${saved.name}".`, "success");
-          } catch {
-            await toastSimple(`Save failed`, "error");
-          }
-        }
-      });
-      editorCard.body.append(savePlayerBtn);
-      col.appendChild(editorCard.root);
-      const teleRow = ui.flexRow({ justify: "center" });
-      const btnToPlayer = ui.btn("To player", { size: "sm" });
-      btnToPlayer.style.minWidth = "120px";
-      const btnToGarden = ui.btn("To garden", { size: "sm" });
-      btnToGarden.style.minWidth = "120px";
-      btnToPlayer.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToPlayer ?? PlayersService.teleportTo;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      btnToGarden.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToGarden ?? PlayersService.tptogarden;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      teleRow.append(btnToPlayer, btnToGarden);
-      const teleportCard = ui.card("\u{1F300} Teleport", { tone: "muted", align: "center" });
-      teleportCard.body.append(teleRow);
-      col.appendChild(teleportCard.root);
-      const invRow = ui.flexRow({ justify: "center" });
-      const btnInv = ui.btn("Inventory", { size: "sm" });
-      btnInv.style.minWidth = "120px";
-      const btnJournal = ui.btn("Journal", { size: "sm" });
-      btnJournal.style.minWidth = "120px";
-      const btnStats = ui.btn("Stats", { size: "sm" });
-      btnStats.style.minWidth = "120px";
-      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
-      btnActivityLog.style.minWidth = "120px";
-      btnInv.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openInventoryPreview(p.id, p.name);
-          if (await isInventoryPanelOpen()) {
-            await waitInventoryPanelClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnJournal.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openJournalLog(p.id, p.name);
-          if (await isJournalModalOpen()) {
-            await waitJournalModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnStats.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openStatsModal(p.id, p.name);
-          if (await isStatsModalOpenAsync()) {
-            await waitStatsModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnActivityLog.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openActivityLogModal(p.id, p.name);
-          if (await isActivityLogModalOpenAsync()) {
-            await waitActivityLogModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      const inspectGrid = document.createElement("div");
-      inspectGrid.style.display = "grid";
-      inspectGrid.style.gap = "6px";
-      const activityRow = ui.flexRow({ justify: "center" });
-      invRow.append(btnInv, btnJournal);
-      activityRow.append(btnStats, btnActivityLog);
-      inspectGrid.append(invRow, activityRow);
-      const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
-      inspectCard.body.append(inspectGrid);
-      col.appendChild(inspectCard.root);
-      const funWrap = document.createElement("div");
-      funWrap.style.display = "grid";
-      funWrap.style.gap = "10px";
-      const followRow = ui.flexRow({ justify: "center" });
-      followRow.style.gap = "16px";
-      const playerFollowGroup = document.createElement("div");
-      playerFollowGroup.style.display = "flex";
-      playerFollowGroup.style.alignItems = "center";
-      playerFollowGroup.style.gap = "8px";
-      const label2 = document.createElement("div");
-      label2.textContent = "Follow player";
-      label2.style.fontSize = "14px";
-      label2.style.opacity = "0.85";
-      const sw = ui.switch(PlayersService.isFollowing(p.id));
-      sw.addEventListener("change", async () => {
-        try {
-          if (sw.checked) {
-            await PlayersService.startFollowing(p.id);
-            await toastSimple("Follow", "Enabled.", "success");
-          } else {
-            PlayersService.stopFollowing();
-            await toastSimple("Follow", "Disable.", "info");
-          }
-        } catch (e) {
-          await toastSimple("Follow", e?.message || "Error", "error");
-          sw.checked = !sw.checked;
-        }
-      });
-      playerFollowGroup.append(label2, sw);
-      const petFollowGroup = document.createElement("div");
-      petFollowGroup.style.display = "flex";
-      petFollowGroup.style.alignItems = "center";
-      petFollowGroup.style.gap = "4px";
-      const petsLabel = document.createElement("div");
-      petsLabel.textContent = "Pet follow";
-      petsLabel.style.fontSize = "14px";
-      petsLabel.style.opacity = "0.85";
-      const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
-      petsSwitch.addEventListener("change", async () => {
-        try {
-          if (petsSwitch.checked) {
-            await PlayersService.startPetFollowing(p.id);
-          } else {
-            await PlayersService.stopPetFollowing();
-          }
-        } catch (e) {
-          await toastSimple("Pet follow", e?.message || "Error", "error");
-          petsSwitch.checked = !petsSwitch.checked;
-        }
-      });
-      petFollowGroup.append(petsLabel, petsSwitch);
-      followRow.append(playerFollowGroup, petFollowGroup);
-      funWrap.append(followRow);
-      const funCard = ui.card("\u{1F389} Fun", { tone: "muted", align: "center" });
-      funCard.body.append(funWrap);
-      col.appendChild(funCard.root);
-      (async () => {
-        try {
-          const total = await PlayersService.getInventoryValue(p.id);
-          invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          invValue.title = "Total inventory value";
-        } catch {
-          invValue.textContent = "\u2014";
-        }
-        try {
-          const total = await PlayersService.getGardenValue(p.id);
-          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          gardenValue.title = "Total garden value";
-        } catch {
-          gardenValue.textContent = "\u2014";
-        }
-      })();
-    }
-    let players = [];
-    let lastSig = "";
-    function signature(ps) {
-      return ps.map(
-        (p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
-      ).join(";");
-    }
-    async function refreshAll(keepSelection = true) {
-      const prevSel = vt.getSelected()?.id ?? null;
-      const next = await readPlayers();
-      const sig = signature(next);
-      if (sig === lastSig) {
-        return;
-      }
-      lastSig = sig;
-      players = next;
-      vt.setItems(players.map(vItem));
-      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
-      if (sel !== null) vt.select(sel);
-      else renderRight(null);
-    }
-    await PlayersService.onChange(() => {
-      refreshAll(true).catch(() => {
-      });
-    });
-    await refreshAll(true);
-  }
-
   // src/ui/menus/calculator.ts
   var ROOT_CLASS = "mg-crop-simulation";
   var SIZE_MIN = 50;
@@ -41785,6 +40799,7 @@ next: ${next}`;
   var stateFrozenValue = null;
   var statePatch = null;
   var stateOriginalValue = null;
+  var friendGardenPreviewActive = false;
   function persist(enabled) {
   }
   function ensureOverlay() {
@@ -43964,6 +42979,47 @@ next: ${next}`;
       return false;
     }
   }
+  async function applyFriendGardenPreview(garden2) {
+    if (!garden2 || typeof garden2 !== "object") return false;
+    try {
+      await freezeStateAtom();
+      const pid = await getPlayerId();
+      if (!pid) return false;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      if (!cur) return false;
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+      if (!slotMatch || !slotMatch.matchSlot) return false;
+      const updatedSlot = {
+        ...slotMatch.matchSlot,
+        data: {
+          ...slotMatch.matchSlot?.data || {},
+          garden: sanitizeGarden(garden2)
+        }
+      };
+      const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      await setStateAtom(nextState);
+      stateFrozenValue = nextState;
+      friendGardenPreviewActive = true;
+      return true;
+    } catch (error) {
+      console.error("[EditorService] applyFriendGardenPreview failed", error);
+      friendGardenPreviewActive = false;
+      return false;
+    }
+  }
+  async function clearFriendGardenPreview() {
+    if (!friendGardenPreviewActive) return false;
+    friendGardenPreviewActive = false;
+    try {
+      await unfreezeStateAtom();
+      return true;
+    } catch (error) {
+      console.error("[EditorService] clearFriendGardenPreview failed", error);
+      return false;
+    }
+  }
   function listSavedGardens() {
     return readSavedGardens();
   }
@@ -44677,6 +43733,12 @@ next: ${next}`;
   shareGlobal("qwsEditorImportGarden", async (name, raw) => {
     return await importGarden(name, raw);
   });
+  shareGlobal("qwsEditorPreviewFriendGarden", async (garden2) => {
+    return await applyFriendGardenPreview(garden2);
+  });
+  shareGlobal("qwsEditorClearFriendGardenPreview", async () => {
+    return await clearFriendGardenPreview();
+  });
   function installEditorKeybindsOnce() {
     if (editorKeybindsInstalled || typeof window === "undefined") return;
     editorKeybindsInstalled = true;
@@ -45045,6 +44107,912 @@ next: ${next}`;
     const savedCard = sectionCard("\u{1F4BE} Saved gardens", listWrap);
     savedCard.body.append(status);
     view.append(card.root, currentCard.root, importCard.root, savedCard.root);
+  }
+
+  // src/services/players.ts
+  function findPlayersDeep(state2) {
+    if (!state2 || typeof state2 !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state2];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const k of Object.keys(cur)) {
+        const v = cur[k];
+        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
+          const looks = v.some((p) => "id" in p && "name" in p);
+          if (looks && /player/i.test(k)) out.push(...v);
+        }
+        if (v && typeof v === "object") stack.push(v);
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const p of out) if (p?.id) byId.set(String(p.id), p);
+    return [...byId.values()];
+  }
+  function getPlayersArray(st) {
+    const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep(st);
+  }
+  function getSlotsArray(st) {
+    const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object") {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
+        const ai = Number(a[0]);
+        const bi = Number(b[0]);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([, v]) => v);
+    }
+    return [];
+  }
+  function extractPosFromSlot(slot) {
+    const pos = slot?.data?.position ?? slot?.position ?? slot?.data?.coords ?? slot?.coords;
+    const x = Number(pos?.x);
+    const y = Number(pos?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+  function extractInventoryFromSlot(slot) {
+    const inv = slot?.data?.inventory;
+    if (!inv || typeof inv !== "object") return null;
+    const items = Array.isArray(inv.items) ? inv.items : [];
+    const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
+    return { items, favoritedItemIds };
+  }
+  function extractJournalFromSlot(slot) {
+    const j = slot?.data?.journal ?? slot?.journal;
+    if (!j || typeof j !== "object") return null;
+    const produce = j.produce && typeof j.produce === "object" ? j.produce : void 0;
+    const pets = j.pets && typeof j.pets === "object" ? j.pets : void 0;
+    const normProduce = produce ? Object.fromEntries(Object.entries(produce).map(([k, v]) => [
+      String(k),
+      { variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [] }
+    ])) : void 0;
+    const normPets = pets ? Object.fromEntries(Object.entries(pets).map(([k, v]) => [
+      String(k),
+      {
+        variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [],
+        abilitiesLogged: Array.isArray(v?.abilitiesLogged) ? v.abilitiesLogged : []
+      }
+    ])) : void 0;
+    return { produce: normProduce, pets: normPets };
+  }
+  function extractStatsFromSlot(slot) {
+    const stats = slot?.data?.stats ?? slot?.stats;
+    if (!stats || typeof stats !== "object") return null;
+    return stats;
+  }
+  function extractActivityLogsFromSlot(slot) {
+    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
+    if (!Array.isArray(logs)) return null;
+    return logs;
+  }
+  function extractGardenFromSlot(slot) {
+    const g = slot?.data?.garden ?? slot?.garden;
+    if (!g || typeof g !== "object") return null;
+    const to = g.tileObjects;
+    const bto = g.boardwalkTileObjects;
+    const tileObjects = to && typeof to === "object" ? to : {};
+    const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
+    return { tileObjects, boardwalkTileObjects };
+  }
+  function getSlotByPlayerId(st, playerId2) {
+    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
+    return null;
+  }
+  function enrichPlayersWithSlots(players, st) {
+    const byPid = /* @__PURE__ */ new Map();
+    for (const slot of getSlotsArray(st)) {
+      if (!slot || typeof slot !== "object") continue;
+      const pid = slot.playerId != null ? String(slot.playerId) : "";
+      if (!pid) continue;
+      const pos = extractPosFromSlot(slot);
+      const inv = extractInventoryFromSlot(slot);
+      byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
+    }
+    return players.map((p) => {
+      const extra = byPid.get(String(p.id));
+      return extra ? { ...p, ...extra } : { ...p, inventory: null };
+    });
+  }
+  function orderPlayersBySlots(players, st) {
+    const slots = getSlotsArray(st);
+    const mapById = /* @__PURE__ */ new Map();
+    for (const p of players) mapById.set(String(p.id), p);
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const s of slots) {
+      const pid = s?.playerId != null ? String(s.playerId) : "";
+      if (!pid || seen.has(pid)) continue;
+      const p = mapById.get(pid);
+      if (p) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    for (const p of players) {
+      const pid = String(p.id);
+      if (!seen.has(pid)) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    return out;
+  }
+  function clampPlayers(n) {
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v)) return 1;
+    return Math.max(1, Math.min(6, v));
+  }
+  async function getPlayersInRoom() {
+    try {
+      const raw = await Atoms.server.numPlayers.get();
+      return clampPlayers(raw);
+    } catch {
+      return 1;
+    }
+  }
+  var __cachedSpawnTiles = null;
+  var __spawnLoadPromise = null;
+  async function getSpawnTilesSorted() {
+    if (Array.isArray(__cachedSpawnTiles)) return __cachedSpawnTiles;
+    if (__spawnLoadPromise) return __spawnLoadPromise;
+    __spawnLoadPromise = (async () => {
+      try {
+        const map2 = await Atoms.root.map.get();
+        const arr = map2?.spawnTiles;
+        if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+          __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+          return __cachedSpawnTiles;
+        }
+      } catch {
+      }
+      try {
+        const st = await Atoms.root.state.get();
+        const seen = /* @__PURE__ */ new Set();
+        const stack = [st];
+        while (stack.length) {
+          const cur = stack.pop();
+          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+          seen.add(cur);
+          const arr = cur?.spawnTiles;
+          if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+            __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+            return __cachedSpawnTiles;
+          }
+          for (const k of Object.keys(cur)) {
+            const v = cur[k];
+            if (v && typeof v === "object") stack.push(v);
+          }
+        }
+      } catch {
+      }
+      __cachedSpawnTiles = [];
+      return __cachedSpawnTiles;
+    })();
+    const res = await __spawnLoadPromise;
+    __spawnLoadPromise = null;
+    return res;
+  }
+  async function getMapCols() {
+    try {
+      const map2 = await Atoms.root.map.get();
+      const cols = Number(map2?.cols);
+      if (Number.isFinite(cols) && cols > 0) return cols;
+    } catch {
+    }
+    try {
+      const st = await Atoms.root.state.get();
+      const maybeCols = Number(
+        st?.map?.cols ?? st?.child?.data?.map?.cols ?? st?.fullState?.map?.cols
+      );
+      if (Number.isFinite(maybeCols) && maybeCols > 0) return maybeCols;
+    } catch {
+    }
+    return 81;
+  }
+  function assignGardenPositions(players, spawnTilesSorted) {
+    if (!players.length || !spawnTilesSorted.length) {
+      return players.map((p) => ({ ...p, gardenPosition: null }));
+    }
+    const out = [];
+    for (let i = 0; i < players.length; i++) {
+      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
+    }
+    return out;
+  }
+  function nowTs() {
+    return Date.now();
+  }
+  function normJournal(j) {
+    if (!j || typeof j !== "object") return {};
+    const out = {};
+    if (j.produce && typeof j.produce === "object") out.produce = j.produce;
+    if (j.pets && typeof j.pets === "object") out.pets = j.pets;
+    return out;
+  }
+  function hasJournalData(j) {
+    if (!j) return false;
+    const hasProduce = !!j.produce && Object.values(j.produce).some((s) => (s.variantsLogged?.length ?? 0) > 0);
+    const hasPets = !!j.pets && Object.values(j.pets).some((s) => (s.variantsLogged?.length ?? 0) > 0 || (s.abilitiesLogged?.length ?? 0) > 0);
+    return hasProduce || hasPets;
+  }
+  var followingState = {
+    currentTargetId: null,
+    unsub: null,
+    lastPos: null,
+    prevPos: null,
+    steps: 0
+  };
+  var PET_FOLLOW_INTERVAL_MS = 20;
+  var PET_HISTORY_FACTOR = 3;
+  var PET_SPACING_STEPS = 1;
+  var petFollowState = {
+    targetId: null,
+    unsub: null,
+    timer: null,
+    pets: [],
+    history: [],
+    historyCap: 0
+  };
+  function clearPetFollowTimer() {
+    if (petFollowState.timer) {
+      clearInterval(petFollowState.timer);
+      petFollowState.timer = null;
+    }
+  }
+  async function resetPetFollowState() {
+    if (petFollowState.unsub) {
+      const fn = petFollowState.unsub;
+      petFollowState.unsub = null;
+      try {
+        await fn();
+      } catch {
+      }
+    } else {
+      petFollowState.unsub = null;
+    }
+    clearPetFollowTimer();
+    petFollowState.targetId = null;
+    petFollowState.pets = [];
+    petFollowState.history = [];
+    petFollowState.historyCap = 0;
+  }
+  function recordPetHistory(pos, force = false) {
+    const top = petFollowState.history[0];
+    if (!force && top && top.x === pos.x && top.y === pos.y) return;
+    petFollowState.history.unshift({ x: pos.x, y: pos.y });
+    const cap = petFollowState.historyCap || petFollowState.history.length;
+    if (petFollowState.history.length > cap) {
+      petFollowState.history.length = cap;
+    }
+  }
+  var PlayersService = {
+    async list() {
+      const st = await Atoms.root.state.get();
+      if (!st) return [];
+      const base = enrichPlayersWithSlots(getPlayersArray(st), st);
+      const ordered = orderPlayersBySlots(base, st);
+      const spawns = await getSpawnTilesSorted();
+      const players = assignGardenPositions(ordered, spawns);
+      return players;
+    },
+    async onChange(cb) {
+      return Atoms.root.state.onChange(async () => {
+        try {
+          cb(await this.list());
+        } catch {
+        }
+      });
+    },
+    async getPosition(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const pos = extractPosFromSlot(slot);
+      return pos;
+    },
+    async getInventory(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const inv = extractInventoryFromSlot(slot);
+      return inv;
+    },
+    async getJournal(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const j = extractJournalFromSlot(slot);
+      const journal = j ? normJournal(j) : null;
+      return journal;
+    },
+    async getGarden(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractGardenFromSlot(slot);
+    },
+    async getGardenPosition(playerId2) {
+      const list = await this.list();
+      const p = list.find((x) => String(x.id) === String(playerId2));
+      return p?.gardenPosition ?? null;
+    },
+    async getPlayerNameById(playerId2) {
+      try {
+        const st = await Atoms.root.state.get();
+        if (st) {
+          const arr = getPlayersArray(st);
+          const p = arr.find((x) => String(x?.id) === String(playerId2));
+          if (p && typeof p.name === "string" && p.name) return p.name;
+        }
+      } catch {
+      }
+      try {
+        const list = await this.list();
+        const p = list.find((x) => String(x.id) === String(playerId2));
+        return p?.name ?? null;
+      } catch {
+        return null;
+      }
+    },
+    async teleportToPlayer(playerId2) {
+      const pos = await this.getPosition(playerId2);
+      if (!pos) throw new Error("Unknown position for this player");
+      PlayerService.teleport(pos.x, pos.y);
+      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}`, "success");
+    },
+    async teleportToGarden(playerId2) {
+      const tileId = await this.getGardenPosition(playerId2);
+      if (tileId == null) {
+        await toastSimple("Teleport", "No garden position for this player.", "error");
+        return;
+      }
+      const cols = await getMapCols();
+      const x = tileId % cols, y = Math.floor(tileId / cols);
+      await PlayerService.teleport(x, y);
+      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}'s garden`, "success");
+    },
+    async getInventoryValue(playerId2, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const inv = await this.getInventory(playerId2);
+        const items = Array.isArray(inv?.items) ? inv.items : [];
+        if (!items.length) return 0;
+        const value = sumInventoryValue(items, opts, playersInRoom);
+        return value;
+      } catch {
+        return 0;
+      }
+    },
+    async getGardenValue(playerId2, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const garden2 = await this.getGarden(playerId2);
+        if (!garden2) return 0;
+        const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
+        return value;
+      } catch {
+        return 0;
+      }
+    },
+    /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
+    async openInventoryPreview(playerId2, playerName) {
+      try {
+        const inv = await this.getInventory(playerId2);
+        if (!inv) {
+          await toastSimple("Inventory", "No inventory object found for this player.", "error");
+          return;
+        }
+        const items = Array.isArray(inv.items) ? inv.items : [];
+        if (items.length === 0) {
+          await toastSimple("Inventory", "Inventory is empty for this player.", "info");
+          return;
+        }
+        try {
+          await fakeInventoryShow({ ...inv, items }, { open: true });
+        } catch (err) {
+          await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
+          return;
+        }
+        if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
+      }
+    },
+    /** Ouvre le Journal (produce + pets) avec garde + toasts. */
+    async openJournalLog(playerId2, playerName) {
+      try {
+        const journal = await this.getJournal(playerId2);
+        if (!hasJournalData(journal)) {
+          await toastSimple("Journal", "No journal data for this player.", "error");
+          return;
+        }
+        const safe = journal ?? {};
+        try {
+          await fakeJournalShow(safe, { open: true });
+        } catch (err) {
+          await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
+          return;
+        }
+        if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+      }
+    },
+    async getStats(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractStatsFromSlot(slot);
+    },
+    async getActivityLogs(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractActivityLogsFromSlot(slot);
+    },
+    async openStatsModal(playerId2, playerName) {
+      try {
+        const stats = await this.getStats(playerId2);
+        if (!stats) {
+          await toastSimple("Stats", "No stats found for this player.", "error");
+          return;
+        }
+        await fakeStatsShow(stats, { open: true });
+        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
+      }
+    },
+    async openActivityLogModal(playerId2, playerName) {
+      try {
+        const logs = await this.getActivityLogs(playerId2);
+        if (!logs || logs.length === 0) {
+          await toastSimple("Activity log", "No activity logs for this player.", "info");
+          return;
+        }
+        await fakeActivityLogShow(logs, { open: true });
+        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
+      }
+    },
+    /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
+    async addProduceVariant(playerId2, species, variant, createdAt = nowTs()) {
+      if (!species || !variant) {
+        await toastSimple("Journal", "Missing species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          produce: {
+            [String(species)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
+      }
+    },
+    async addPetVariant(playerId2, petSpecies, variant, createdAt = nowTs()) {
+      if (!petSpecies || !variant) {
+        await toastSimple("Journal", "Missing pet species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
+      }
+    },
+    async addPetAbility(playerId2, petSpecies, ability, createdAt = nowTs()) {
+      if (!petSpecies || !ability) {
+        await toastSimple("Journal", "Missing pet species or ability.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              abilitiesLogged: [{ ability: String(ability), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
+      }
+    },
+    /* ---------------- Follow ---------------- */
+    async stopFollowing() {
+      if (followingState.unsub) {
+        try {
+          await followingState.unsub();
+        } catch {
+        }
+      }
+      followingState.unsub = null;
+      followingState.currentTargetId = null;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+    },
+    isFollowing(playerId2) {
+      return followingState.currentTargetId === playerId2;
+    },
+    async startFollowing(playerId2) {
+      if (followingState.unsub) {
+        try {
+          await followingState.unsub();
+        } catch {
+        }
+        followingState.unsub = null;
+      }
+      followingState.currentTargetId = playerId2;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      const pos = await this.getPosition(playerId2);
+      if (!pos) {
+        await toastSimple("Follow", "Unable to retrieve player position.", "error");
+        followingState.currentTargetId = null;
+        return;
+      }
+      await PlayerService.teleport(pos.x, pos.y);
+      followingState.lastPos = { x: pos.x, y: pos.y };
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      followingState.unsub = await this.onChange(async (players) => {
+        if (followingState.currentTargetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          await this.stopFollowing();
+          await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
+          return;
+        }
+        const cur = { x: target.x, y: target.y };
+        const last = followingState.lastPos;
+        if (!last) {
+          followingState.lastPos = cur;
+          return;
+        }
+        if (cur.x !== last.x || cur.y !== last.y) {
+          followingState.steps += 1;
+          if (followingState.steps >= 2) {
+            if (last) {
+              PlayerService.move(last.x, last.y);
+            }
+          }
+          followingState.prevPos = followingState.lastPos;
+          followingState.lastPos = cur;
+        }
+      });
+      await toastSimple("Follow", "Follow enabled", "success");
+    },
+    /* ---------------- Pet Follow ---------------- */
+    async stopPetFollowing(opts) {
+      await resetPetFollowState();
+      if (!opts?.silent) {
+        await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
+      }
+    },
+    isPetFollowing(playerId2) {
+      return petFollowState.targetId === playerId2;
+    },
+    async startPetFollowing(playerId2) {
+      await this.stopPetFollowing({ silent: true });
+      const petsRaw = await Atoms.pets.myPetInfos.get();
+      const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
+      if (!petIds.length) {
+        await toastSimple("Pet follow", "You don't have any active pets.", "error");
+        return;
+      }
+      const pos = await this.getPosition(playerId2);
+      if (!pos) {
+        await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
+        return;
+      }
+      petFollowState.targetId = playerId2;
+      petFollowState.pets = petIds;
+      petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
+      petFollowState.history = [];
+      for (let i = 0; i < petFollowState.historyCap; i += 1) {
+        recordPetHistory(pos, true);
+      }
+      const sendPositions = async () => {
+        if (petFollowState.targetId !== playerId2) return;
+        if (!petFollowState.pets.length || !petFollowState.history.length) return;
+        const payload = {};
+        for (let i = 0; i < petFollowState.pets.length; i += 1) {
+          const petId = petFollowState.pets[i];
+          const historyIndex = Math.min(
+            petFollowState.history.length - 1,
+            (i + 1) * PET_SPACING_STEPS
+          );
+          const targetPos = petFollowState.history[historyIndex] ?? petFollowState.history[petFollowState.history.length - 1];
+          if (targetPos) {
+            payload[petId] = { x: targetPos.x, y: targetPos.y };
+          }
+        }
+        if (Object.keys(payload).length === 0) return;
+        try {
+          await PlayerService.petPositions(payload);
+        } catch (err) {
+        }
+      };
+      petFollowState.timer = setInterval(() => {
+        sendPositions().catch(() => {
+        });
+      }, PET_FOLLOW_INTERVAL_MS);
+      const initialSend = sendPositions();
+      petFollowState.unsub = await this.onChange(async (players) => {
+        if (petFollowState.targetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
+          return;
+        }
+        recordPetHistory({ x: target.x, y: target.y });
+      });
+      await initialSend;
+      await toastSimple("Pet follow", "Pets are now following the target.", "success");
+    }
+  };
+
+  // src/utils/supabase.ts
+  var SUPABASE_FUNCTION_BASE = "https://pquktqrngyxkvrgtfygp.supabase.co/functions/v1/";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdWt0cXJuZ3l4a3ZyZ3RmeWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2MTQzMDMsImV4cCI6MjA3NTE5MDMwM30.-d45t6qyEO54iz2SrjaoTUQjeNb6tngDx6pOQL7-Ubg";
+  var cachedFriendsView = null;
+  var cachedIncomingRequests = null;
+  function getCachedFriendsWithViews() {
+    return cachedFriendsView ? [...cachedFriendsView] : [];
+  }
+  function getCachedIncomingRequestsWithViews() {
+    return cachedIncomingRequests ? [...cachedIncomingRequests] : [];
+  }
+  function buildUrl(path, query) {
+    const url = new URL(path, SUPABASE_FUNCTION_BASE);
+    if (query) {
+      for (const [key2, value] of Object.entries(query)) {
+        if (value === void 0) continue;
+        url.searchParams.set(key2, String(value));
+      }
+    }
+    return url.toString();
+  }
+  function httpGet(path, query) {
+    return new Promise((resolve2) => {
+      const url = buildUrl(path, query);
+      GM_xmlhttpRequest({
+        method: "GET",
+        url,
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              console.error("[supabase] GET parse error:", e, res.responseText);
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            console.error("[supabase] GET error:", res.status, res.responseText);
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          console.error("[supabase] GET request failed:", err);
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  function httpPost(path, body) {
+    return new Promise((resolve2) => {
+      const url = buildUrl(path);
+      GM_xmlhttpRequest({
+        method: "POST",
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+        },
+        data: JSON.stringify(body),
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              console.error("[supabase] POST parse error:", e, res.responseText);
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            console.error(
+              "[supabase] POST error:",
+              res.status,
+              res.responseText
+            );
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          console.error("[supabase] POST request failed:", err);
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  async function sendPlayerState(payload) {
+    const { status } = await httpPost("collect-state", payload);
+    if (status === 204) return true;
+    if (status === 429) {
+      console.warn("[supabase] sendPlayerState rate-limited");
+    }
+    return false;
+  }
+  async function fetchAvailableRooms(limit = 50) {
+    const { data } = await httpGet("list-rooms", { limit });
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((r) => ({
+      id: r.id,
+      isPrivate: r.is_private,
+      playersCount: r.players_count,
+      lastUpdatedAt: r.last_updated_at,
+      lastUpdatedByPlayerId: r.last_updated_by_player_id,
+      userSlots: Array.isArray(r.user_slots) ? r.user_slots.map((slot) => ({
+        name: slot.name,
+        avatarUrl: slot.avatar_url ?? null
+      })) : void 0
+    }));
+  }
+  async function fetchPlayersView(playerIds, options) {
+    const ids = Array.from(
+      new Set(
+        (playerIds ?? []).map((x) => String(x).trim()).filter((x) => x.length >= 3)
+      )
+    );
+    if (ids.length === 0) return [];
+    const body = { playerIds: ids };
+    if (options?.sections) {
+      body.sections = Array.isArray(options.sections) ? options.sections : [options.sections];
+    }
+    const { status, data } = await httpPost(
+      "get-players-view",
+      body
+    );
+    if (status !== 200 || !Array.isArray(data)) return [];
+    return data;
+  }
+  async function sendFriendRequest(fromPlayerId, toPlayerId) {
+    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-request", {
+      fromPlayerId,
+      toPlayerId
+    });
+    if (status === 204) return true;
+    if (status === 409) {
+      console.warn("[supabase] friend-request conflict (already exists)");
+    }
+    return false;
+  }
+  async function respondFriendRequest(params) {
+    const { playerId: playerId2, otherPlayerId, action: action2 } = params;
+    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-respond", {
+      playerId: playerId2,
+      otherPlayerId,
+      action: action2
+    });
+    if (status === 204) return true;
+    return false;
+  }
+  async function fetchFriendsIds(playerId2) {
+    if (!playerId2) return [];
+    const { status, data } = await httpGet("list-friends", { playerId: playerId2 });
+    if (status !== 200 || !data || !Array.isArray(data.friends)) return [];
+    return data.friends;
+  }
+  async function fetchFriendsWithViews(playerId2) {
+    const friendIds = await fetchFriendsIds(playerId2);
+    if (friendIds.length === 0) {
+      cachedFriendsView = [];
+      return [];
+    }
+    const result = await fetchPlayersView(friendIds, { sections: ["profile", "room"] });
+    cachedFriendsView = result;
+    return [...result];
+  }
+  async function fetchFriendRequests(playerId2) {
+    if (!playerId2) {
+      return { playerId: "", incoming: [], outgoing: [] };
+    }
+    const { status, data } = await httpGet(
+      "list-friend-requests",
+      { playerId: playerId2 }
+    );
+    if (status !== 200 || !data) {
+      return { playerId: playerId2, incoming: [], outgoing: [] };
+    }
+    return {
+      playerId: data.playerId,
+      incoming: Array.isArray(data.incoming) ? data.incoming : [],
+      outgoing: Array.isArray(data.outgoing) ? data.outgoing : []
+    };
+  }
+  async function fetchIncomingRequestsWithViews(playerId2) {
+    const { incoming } = await fetchFriendRequests(playerId2);
+    const ids = incoming.map((r) => r.fromPlayerId);
+    if (ids.length === 0) {
+      cachedIncomingRequests = [];
+      return [];
+    }
+    const result = await fetchPlayersView(ids, { sections: ["profile"] });
+    cachedIncomingRequests = result;
+    return [...result];
+  }
+  async function removeFriend(playerId2, otherPlayerId) {
+    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-remove", {
+      playerId: playerId2,
+      otherPlayerId
+    });
+    return status === 204;
+  }
+  async function searchRoomsByPlayerName(rawQuery, options) {
+    const query = rawQuery.trim();
+    const minLen = options?.minQueryLength ?? 2;
+    if (query.length < minLen) {
+      return [];
+    }
+    const limitRooms = options?.limitRooms ?? 200;
+    const qLower = query.toLowerCase();
+    const rooms = await fetchAvailableRooms(limitRooms);
+    const results = [];
+    for (const room of rooms) {
+      if (!room.userSlots || room.userSlots.length === 0) continue;
+      const matchedSlots = room.userSlots.filter((slot) => {
+        if (!slot.name) return false;
+        return slot.name.toLowerCase().includes(qLower);
+      });
+      if (matchedSlots.length > 0) {
+        results.push({
+          room,
+          matchedSlots
+        });
+      }
+    }
+    console.log(results);
+    return results;
   }
 
   // src/utils/publicRooms.ts
@@ -45456,7 +45424,8 @@ next: ${next}`;
 }
 
 .qmm.qmm-room-menu .qmm-tab[data-id="public-rooms"],
-.qmm.qmm-room-menu .qmm-tab[data-id="search-player"] {
+.qmm.qmm-room-menu .qmm-tab[data-id="search-player"],
+.qmm.qmm-room-menu .qmm-tab[data-id="players"] {
   flex: 0 1 auto;
   min-width: 160px;
 }
@@ -45464,8 +45433,8 @@ next: ${next}`;
     document.head.appendChild(style2);
   }
   var TAB_ID = "public-rooms";
-  var CUSTOM_TAB_ID = "custom-rooms";
   var SEARCH_TAB_ID = "search-player";
+  var PLAYERS_TAB_ID = "players";
   async function renderRoomMenu(root) {
     const ui = new Menu({
       id: "room",
@@ -45473,9 +45442,12 @@ next: ${next}`;
       windowSelector: ".qws-win",
       classes: "qmm-room-menu"
     });
-    ui.addTab(TAB_ID, "\u{1F310} Public Rooms", (view) => renderPublicRoomsTab(view, ui));
-    ui.addTab(CUSTOM_TAB_ID, "\u2B50 Custom Rooms", (view) => renderCustomRoomsTab(view, ui));
-    ui.addTab(SEARCH_TAB_ID, "\u{1F50D} Search Player", (view) => renderSearchPlayerTab(view, ui));
+    ui.addTab(TAB_ID, "Public Rooms", (view) => renderPublicRoomsTab(view, ui));
+    ui.addTab(SEARCH_TAB_ID, "Search Player", (view) => renderSearchPlayerTab(view, ui));
+    ui.addTab(PLAYERS_TAB_ID, "Players", (view) => {
+      void renderPlayersTab(view).catch(() => {
+      });
+    });
     ui.mount(root);
   }
   function renderPublicRoomsTab(view, ui) {
@@ -45502,7 +45474,6 @@ next: ${next}`;
     heading.textContent = "Select a public room to quickly join a game.";
     heading.style.fontSize = "14px";
     heading.style.opacity = "0.9";
-    container.appendChild(heading);
     if (RoomService.isDiscordActivity()) {
       const discordWarning = document.createElement("div");
       discordWarning.textContent = "You are using Discord: direct join is disabled. Open the official website to join a room.";
@@ -45515,14 +45486,14 @@ next: ${next}`;
       discordWarning.style.border = "1px solid rgba(255, 140, 105, 0.35)";
       container.appendChild(discordWarning);
     }
-    const filterBar = document.createElement("div");
-    filterBar.style.display = "flex";
-    filterBar.style.flexWrap = "wrap";
-    filterBar.style.alignItems = "center";
-    filterBar.style.gap = "8px";
-    filterBar.style.margin = "12px 0 6px";
-    filterBar.style.width = "100%";
-    container.appendChild(filterBar);
+    const headerRow = document.createElement("div");
+    headerRow.style.display = "flex";
+    headerRow.style.alignItems = "center";
+    headerRow.style.gap = "12px";
+    headerRow.style.width = "100%";
+    headerRow.style.margin = "12px 0 6px";
+    headerRow.appendChild(heading);
+    container.appendChild(headerRow);
     const listWrapper = document.createElement("div");
     listWrapper.style.height = "54vh";
     listWrapper.style.maxHeight = "54vh";
@@ -45606,26 +45577,11 @@ next: ${next}`;
     let destroyed = false;
     let requestCounter = 0;
     let firstLoad = true;
-    let selectedCategory = null;
     let selectedPlayerFilter = "any";
     let currentRooms = [];
-    const filterButtons = /* @__PURE__ */ new Map();
-    let lastRenderedCategories = [];
-    const categoryButtonContainer = document.createElement("div");
-    categoryButtonContainer.style.display = "flex";
-    categoryButtonContainer.style.flexWrap = "wrap";
-    categoryButtonContainer.style.alignItems = "center";
-    categoryButtonContainer.style.gap = "8px";
-    filterBar.appendChild(categoryButtonContainer);
     const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
     refreshButton.style.flexShrink = "0";
     refreshButton.setAttribute("aria-label", "Refresh public rooms list");
-    const filterActions = document.createElement("div");
-    filterActions.style.display = "flex";
-    filterActions.style.alignItems = "center";
-    filterActions.style.gap = "8px";
-    filterActions.style.marginLeft = "auto";
-    filterBar.appendChild(filterActions);
     const statusBar = document.createElement("div");
     statusBar.style.fontSize = "12px";
     statusBar.style.opacity = "0.75";
@@ -45647,14 +45603,6 @@ next: ${next}`;
       ui.setButtonEnabled(refreshButton, enabled);
       refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
     };
-    const updateFilterButtonStyles = () => {
-      for (const [category, button] of filterButtons) {
-        const isActive = category === selectedCategory;
-        button.dataset.active = isActive ? "true" : "false";
-        button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        button.style.opacity = isActive ? "1" : "0.7";
-      }
-    };
     const matchesPlayerFilter = (room) => {
       switch (selectedPlayerFilter) {
         case "any":
@@ -45671,100 +45619,10 @@ next: ${next}`;
           return true;
       }
     };
-    const setCategoryFilter = (category) => {
-      if (selectedCategory === category) return;
-      selectedCategory = category;
-      savedScrollTop = 0;
-      updateFilterButtonStyles();
-      renderRooms(currentRooms);
-    };
-    function createFilterButton(label2, category) {
-      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
-      button.addEventListener("click", () => {
-        if (category === null) {
-          setCategoryFilter(null);
-        } else if (selectedCategory === category) {
-          setCategoryFilter(null);
-        } else {
-          setCategoryFilter(category);
-        }
-      });
-      return button;
-    }
-    function collectCategories(rooms) {
-      if (!rooms) return [];
-      const seen = /* @__PURE__ */ new Set();
-      const categories = [];
-      for (const room of rooms) {
-        if (!room || typeof room.category !== "string") continue;
-        const category = room.category.trim();
-        if (!category || seen.has(category)) continue;
-        seen.add(category);
-        categories.push(category);
-      }
-      return categories;
-    }
-    function sortCategories(categories) {
-      if (!categories.length) return [];
-      const preferred = RoomService.getPublicRoomsCategoryOrder();
-      if (!preferred.length) {
-        return [...categories];
-      }
-      const available = new Set(categories);
-      const ordered = [];
-      const used = /* @__PURE__ */ new Set();
-      for (const name of preferred) {
-        if (available.has(name) && !used.has(name)) {
-          ordered.push(name);
-          used.add(name);
-        }
-      }
-      for (const name of categories) {
-        if (!used.has(name)) {
-          ordered.push(name);
-          used.add(name);
-        }
-      }
-      return ordered;
-    }
-    function updateCategoryButtons(rooms) {
-      const categoriesFromRooms = collectCategories(rooms);
-      const sourceCategories = categoriesFromRooms.length ? categoriesFromRooms : collectCategories(RoomService.getPublicRooms());
-      const sortedCategories = sortCategories(sourceCategories);
-      const changed = filterButtons.size === 0 || sortedCategories.length !== lastRenderedCategories.length || sortedCategories.some((category, index) => category !== lastRenderedCategories[index]);
-      if (changed) {
-        if (selectedCategory && !sortedCategories.includes(selectedCategory)) {
-          selectedCategory = null;
-          savedScrollTop = 0;
-        }
-        categoryButtonContainer.innerHTML = "";
-        filterButtons.clear();
-        const allButton = createFilterButton("All", null);
-        filterButtons.set(null, allButton);
-        categoryButtonContainer.appendChild(allButton);
-        for (const category of sortedCategories) {
-          const button = createFilterButton(category, category);
-          filterButtons.set(category, button);
-          categoryButtonContainer.appendChild(button);
-        }
-        lastRenderedCategories = [...sortedCategories];
-      }
-      updateFilterButtonStyles();
-    }
-    updateCategoryButtons();
     const renderRooms = (rooms) => {
       currentRooms = rooms;
-      updateCategoryButtons(rooms);
       list.innerHTML = "";
-      const visibleRooms = rooms.filter((room) => {
-        if (selectedCategory !== null && room.category !== selectedCategory) {
-          return false;
-        }
-        if (!matchesPlayerFilter(room)) {
-          return false;
-        }
-        return true;
-      });
+      const visibleRooms = rooms.filter((room) => matchesPlayerFilter(room));
       if (!visibleRooms.length) {
         const empty = document.createElement("div");
         empty.textContent = rooms.length ? "No rooms match the selected filter." : "No public rooms available.";
@@ -45812,8 +45670,8 @@ next: ${next}`;
     const playerFilters = [
       { value: "any", label: "Any players" },
       { value: "empty", label: "Empty rooms" },
-      { value: "few", label: "1 \u2013 3 players" },
-      { value: "crowded", label: "4 \u2013 5 players" },
+      { value: "few", label: "1 - 3 players" },
+      { value: "crowded", label: "4 - 5 players" },
       { value: "full", label: "Full rooms" }
     ];
     for (const option of playerFilters) {
@@ -45829,18 +45687,25 @@ next: ${next}`;
       renderRooms(currentRooms);
     });
     playerFilterContainer.appendChild(playerFilterSelect);
-    filterActions.appendChild(playerFilterContainer);
+    playerFilterContainer.style.marginLeft = "auto";
+    headerRow.appendChild(playerFilterContainer);
     const refreshRooms = async () => {
       if (destroyed) return;
       const currentRequest = ++requestCounter;
       isRefreshing = true;
       updateRefreshButtonState();
       setLoadingState(true);
-      statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
+      statusBar.textContent = firstLoad ? "Loading rooms..." : "Refreshing rooms...";
       try {
-        const rooms = await RoomService.fetchPublicRoomsStatus();
+        const available = await fetchAvailableRooms(100);
         if (destroyed || currentRequest !== requestCounter) return;
-        renderRooms(rooms);
+        const publicRooms = available.filter((room) => !room.isPrivate).map(transformSupabaseRoom).sort((a, b) => {
+          if (b.players === a.players) {
+            return b.lastUpdatedAt - a.lastUpdatedAt;
+          }
+          return b.players - a.players;
+        });
+        renderRooms(publicRooms);
         const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
@@ -45894,470 +45759,32 @@ next: ${next}`;
       }
     };
   }
-  function renderCustomRoomsTab(view, ui) {
-    view.innerHTML = "";
-    ensureRoomMenuStyles();
-    const root = document.createElement("div");
-    root.style.display = "flex";
-    root.style.flexDirection = "column";
-    root.style.alignItems = "center";
-    root.style.padding = "12px";
-    root.style.boxSizing = "border-box";
-    root.style.height = "100%";
-    root.style.minHeight = "0";
-    view.appendChild(root);
-    const container = document.createElement("div");
-    container.style.display = "grid";
-    container.style.gap = "12px";
-    container.style.width = "100%";
-    container.style.maxWidth = "640px";
-    container.style.height = "100%";
-    container.style.maxHeight = "100%";
-    container.style.minHeight = "0";
-    container.style.gridTemplateRows = "max-content max-content max-content 1fr max-content";
-    root.appendChild(container);
-    const heading = document.createElement("div");
-    heading.textContent = "Save your favourite rooms and access them quickly.";
-    heading.style.fontSize = "14px";
-    heading.style.opacity = "0.9";
-    container.appendChild(heading);
-    const manageCard = document.createElement("div");
-    manageCard.style.display = "grid";
-    manageCard.style.gap = "10px";
-    manageCard.style.padding = "16px";
-    manageCard.style.borderRadius = "12px";
-    manageCard.style.background = "rgba(20, 22, 32, 0.95)";
-    manageCard.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
-    container.appendChild(manageCard);
-    const manageTitle = document.createElement("div");
-    manageTitle.textContent = "Add a custom room";
-    manageTitle.style.fontWeight = "600";
-    manageTitle.style.fontSize = "14px";
-    manageCard.appendChild(manageTitle);
-    const manageForm = document.createElement("form");
-    manageForm.style.display = "grid";
-    manageForm.style.gap = "10px";
-    manageCard.appendChild(manageForm);
-    const fieldsRow = document.createElement("div");
-    fieldsRow.style.display = "grid";
-    fieldsRow.style.gap = "10px";
-    fieldsRow.style.gridTemplateColumns = "minmax(180px, 1fr) minmax(160px, 1fr) auto";
-    fieldsRow.style.alignItems = "center";
-    manageForm.appendChild(fieldsRow);
-    const nameInput = document.createElement("input");
-    nameInput.type = "text";
-    nameInput.placeholder = "Room name";
-    nameInput.required = true;
-    nameInput.style.background = "rgba(15, 16, 24, 0.95)";
-    nameInput.style.border = "1px solid rgba(148, 163, 184, 0.25)";
-    nameInput.style.borderRadius = "10px";
-    nameInput.style.padding = "10px 12px";
-    nameInput.style.fontSize = "13px";
-    nameInput.style.color = "#f8fafc";
-    nameInput.style.width = "100%";
-    nameInput.autocomplete = "off";
-    fieldsRow.appendChild(nameInput);
-    const idInput = document.createElement("input");
-    idInput.type = "text";
-    idInput.placeholder = "Room code";
-    idInput.required = true;
-    idInput.style.background = "rgba(15, 16, 24, 0.95)";
-    idInput.style.border = "1px solid rgba(148, 163, 184, 0.25)";
-    idInput.style.borderRadius = "10px";
-    idInput.style.padding = "10px 12px";
-    idInput.style.fontSize = "13px";
-    idInput.style.color = "#f8fafc";
-    idInput.style.width = "100%";
-    idInput.autocomplete = "off";
-    fieldsRow.appendChild(idInput);
-    const addBtn = ui.btn("Add room", { size: "sm", variant: "primary" });
-    addBtn.type = "submit";
-    addBtn.style.whiteSpace = "nowrap";
-    fieldsRow.appendChild(addBtn);
-    const formFeedback = document.createElement("div");
-    formFeedback.style.fontSize = "12px";
-    formFeedback.style.opacity = "0.85";
-    formFeedback.style.minHeight = "16px";
-    manageForm.appendChild(formFeedback);
-    const hint = document.createElement("div");
-    hint.textContent = "Custom rooms are stored locally in your browser.";
-    hint.style.fontSize = "12px";
-    hint.style.opacity = "0.65";
-    manageCard.appendChild(hint);
-    if (RoomService.isDiscordActivity()) {
-      const discordWarning = document.createElement("div");
-      discordWarning.textContent = "You are using Discord: direct join is disabled. Open the official website to join a room.";
-      discordWarning.style.fontSize = "13px";
-      discordWarning.style.lineHeight = "1.4";
-      discordWarning.style.padding = "10px 12px";
-      discordWarning.style.borderRadius = "8px";
-      discordWarning.style.background = "#2e1f1f";
-      discordWarning.style.color = "#ffb4a2";
-      discordWarning.style.border = "1px solid rgba(255, 140, 105, 0.35)";
-      container.appendChild(discordWarning);
-    }
-    const filterBar = document.createElement("div");
-    filterBar.style.display = "flex";
-    filterBar.style.flexWrap = "wrap";
-    filterBar.style.alignItems = "center";
-    filterBar.style.gap = "8px";
-    filterBar.style.margin = "12px 0 6px";
-    filterBar.style.width = "100%";
-    container.appendChild(filterBar);
-    const listWrapper = document.createElement("div");
-    listWrapper.style.height = "36vh";
-    listWrapper.style.maxHeight = "36vh";
-    listWrapper.style.overflowY = "auto";
-    listWrapper.style.padding = "6px 2px";
-    listWrapper.style.borderRadius = "10px";
-    listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
-    listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
-    listWrapper.style.width = "100%";
-    listWrapper.style.boxSizing = "border-box";
-    listWrapper.style.position = "relative";
-    const floatingLoadingIndicator = document.createElement("div");
-    floatingLoadingIndicator.style.position = "absolute";
-    floatingLoadingIndicator.style.top = "14px";
-    floatingLoadingIndicator.style.right = "14px";
-    floatingLoadingIndicator.style.width = "28px";
-    floatingLoadingIndicator.style.height = "28px";
-    floatingLoadingIndicator.style.borderRadius = "999px";
-    floatingLoadingIndicator.style.display = "flex";
-    floatingLoadingIndicator.style.alignItems = "center";
-    floatingLoadingIndicator.style.justifyContent = "center";
-    floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
-    floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
-    floatingLoadingIndicator.style.opacity = "0";
-    floatingLoadingIndicator.style.visibility = "hidden";
-    floatingLoadingIndicator.style.pointerEvents = "none";
-    floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
-    floatingLoadingIndicator.style.zIndex = "3";
-    const floatingLoadingSpinner = document.createElement("div");
-    floatingLoadingSpinner.style.width = "16px";
-    floatingLoadingSpinner.style.height = "16px";
-    floatingLoadingSpinner.style.borderRadius = "999px";
-    floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
-    floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
-    floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
-    floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
-    const list = document.createElement("div");
-    list.style.display = "grid";
-    list.style.gap = "10px";
-    list.style.padding = "4px";
-    listWrapper.appendChild(list);
-    listWrapper.appendChild(floatingLoadingIndicator);
-    container.appendChild(listWrapper);
-    const updateFloatingLoadingIndicator = () => {
-      floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
-    };
-    let isFloatingIndicatorVisible = false;
-    const setLoadingState = (loading) => {
-      if (loading) {
-        isFloatingIndicatorVisible = true;
-        updateFloatingLoadingIndicator();
-        floatingLoadingIndicator.style.visibility = "visible";
-        floatingLoadingIndicator.style.opacity = "1";
-      } else {
-        isFloatingIndicatorVisible = false;
-        floatingLoadingIndicator.style.opacity = "0";
-        floatingLoadingIndicator.addEventListener(
-          "transitionend",
-          () => {
-            if (!isFloatingIndicatorVisible) {
-              floatingLoadingIndicator.style.visibility = "hidden";
-            }
-          },
-          { once: true }
-        );
-        window.setTimeout(() => {
-          if (!isFloatingIndicatorVisible) {
-            floatingLoadingIndicator.style.visibility = "hidden";
-          }
-        }, 220);
-      }
-    };
-    const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
-    refreshButton.style.flexShrink = "0";
-    refreshButton.setAttribute("aria-label", "Refresh custom rooms list");
-    const statusBar = document.createElement("div");
-    statusBar.style.fontSize = "12px";
-    statusBar.style.opacity = "0.75";
-    statusBar.textContent = "Add a custom room to get started.";
-    const footer = document.createElement("div");
-    footer.style.display = "flex";
-    footer.style.alignItems = "center";
-    footer.style.gap = "12px";
-    footer.style.marginTop = "8px";
-    footer.style.width = "100%";
-    footer.appendChild(refreshButton);
-    footer.appendChild(statusBar);
-    container.appendChild(footer);
-    let savedScrollTop = 0;
-    listWrapper.addEventListener("scroll", () => {
-      savedScrollTop = listWrapper.scrollTop;
-      if (isFloatingIndicatorVisible) {
-        updateFloatingLoadingIndicator();
-      }
+  var DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
+  var SUPABASE_ROOM_CATEGORY = "Supabase";
+  function transformSupabaseRoom(room) {
+    const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
+    const players = Math.max(0, rawCount);
+    const capacity = DEFAULT_SUPABASE_ROOM_CAPACITY;
+    const parsedTimestamp = Number.isFinite(Date.parse(room.lastUpdatedAt)) ? Date.parse(room.lastUpdatedAt) : Date.now();
+    const playerDetails = (room.userSlots ?? []).map((slot, index) => {
+      const name = slot?.name?.trim();
+      return {
+        name: name && name.length ? name : "Unknown player",
+        isConnected: true,
+        discordAvatarUrl: slot?.avatarUrl ?? void 0,
+        isHost: index === 0
+      };
     });
-    let destroyed = false;
-    let requestCounter = 0;
-    let firstLoad = true;
-    let selectedCategory = null;
-    let selectedPlayerFilter = "any";
-    let currentRooms = [];
-    const filterButtons = /* @__PURE__ */ new Map();
-    const categoryButtonContainer = document.createElement("div");
-    categoryButtonContainer.style.display = "flex";
-    categoryButtonContainer.style.flexWrap = "wrap";
-    categoryButtonContainer.style.alignItems = "center";
-    categoryButtonContainer.style.gap = "8px";
-    filterBar.appendChild(categoryButtonContainer);
-    const updateFilterButtonStyles = () => {
-      for (const [category, button] of filterButtons) {
-        const isActive = category === selectedCategory;
-        button.dataset.active = isActive ? "true" : "false";
-        button.setAttribute("aria-pressed", isActive ? "true" : "false");
-        button.style.opacity = isActive ? "1" : "0.7";
-      }
-    };
-    const createFilterButton = (label2, category) => {
-      const button = ui.btn(label2, { size: "sm", variant: "ghost" });
-      button.addEventListener("click", () => {
-        if (category === null) {
-          setCategoryFilter(null);
-        } else if (selectedCategory === category) {
-          setCategoryFilter(null);
-        } else {
-          setCategoryFilter(category);
-        }
-      });
-      filterButtons.set(category, button);
-      categoryButtonContainer.appendChild(button);
-    };
-    const applyCategoryButtons = (definitions) => {
-      const seen = /* @__PURE__ */ new Set();
-      for (const room of definitions) {
-        if (room.category) {
-          seen.add(room.category);
-        }
-      }
-      const categories = Array.from(seen);
-      const preferredOrder = RoomService.getPublicRoomsCategoryOrder();
-      if (preferredOrder.length) {
-        const indexMap = new Map(preferredOrder.map((name, index) => [name, index]));
-        categories.sort((a, b) => {
-          const indexA = indexMap.get(a);
-          const indexB = indexMap.get(b);
-          if (indexA === void 0 && indexB === void 0) return a.localeCompare(b);
-          if (indexA === void 0) return 1;
-          if (indexB === void 0) return -1;
-          return indexA - indexB;
-        });
-      } else {
-        categories.sort((a, b) => a.localeCompare(b));
-      }
-      filterButtons.clear();
-      categoryButtonContainer.innerHTML = "";
-      createFilterButton("All", null);
-      let selectedCategoryExists = selectedCategory === null;
-      for (const category of categories) {
-        createFilterButton(category, category);
-        if (category === selectedCategory) {
-          selectedCategoryExists = true;
-        }
-      }
-      if (!selectedCategoryExists) {
-        selectedCategory = null;
-      }
-      updateFilterButtonStyles();
-    };
-    const setCategoryFilter = (category) => {
-      if (selectedCategory === category) return;
-      selectedCategory = category;
-      savedScrollTop = 0;
-      updateFilterButtonStyles();
-      renderRooms(currentRooms);
-    };
-    const matchesPlayerFilter = (room) => {
-      switch (selectedPlayerFilter) {
-        case "any":
-          return true;
-        case "empty":
-          return room.players === 0;
-        case "few":
-          return room.players > 0 && room.players <= 3;
-        case "crowded":
-          return !room.isFull && room.players >= 4;
-        case "full":
-          return room.isFull;
-        default:
-          return true;
-      }
-    };
-    const renderRooms = (rooms) => {
-      currentRooms = rooms;
-      list.innerHTML = "";
-      const visibleRooms = rooms.filter((room) => {
-        if (selectedCategory !== null && room.category !== selectedCategory) {
-          return false;
-        }
-        if (!matchesPlayerFilter(room)) {
-          return false;
-        }
-        return true;
-      });
-      if (!visibleRooms.length) {
-        const empty = document.createElement("div");
-        const hasDefinitions = RoomService.getCustomRooms().length > 0;
-        empty.textContent = hasDefinitions ? "No rooms match the selected filter." : "No custom rooms yet. Add one above.";
-        empty.style.padding = "16px";
-        empty.style.textAlign = "center";
-        empty.style.opacity = "0.7";
-        list.appendChild(empty);
-      } else {
-        for (const room of visibleRooms) {
-          const entry = createRoomEntry(room, ui, {
-            onRemove: () => {
-              if (!RoomService.removeCustomRoom(room.idRoom)) return;
-              savedScrollTop = 0;
-              handleRoomsChanged();
-            }
-          });
-          list.appendChild(entry);
-        }
-      }
-      requestAnimationFrame(() => {
-        const maxScroll = Math.max(0, listWrapper.scrollHeight - listWrapper.clientHeight);
-        const nextScroll = Math.min(savedScrollTop, maxScroll);
-        listWrapper.scrollTop = nextScroll;
-        savedScrollTop = nextScroll;
-      });
-    };
-    const playerFilterContainer = document.createElement("div");
-    playerFilterContainer.style.display = "flex";
-    playerFilterContainer.style.alignItems = "center";
-    playerFilterContainer.style.gap = "6px";
-    playerFilterContainer.style.marginLeft = "auto";
-    playerFilterContainer.style.padding = "4px 6px";
-    playerFilterContainer.style.background = "rgba(24, 26, 36, 0.85)";
-    playerFilterContainer.style.borderRadius = "10px";
-    playerFilterContainer.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
-    const playerFilterLabel = document.createElement("span");
-    playerFilterLabel.textContent = "Players";
-    playerFilterLabel.style.fontSize = "12px";
-    playerFilterLabel.style.opacity = "0.75";
-    playerFilterLabel.style.paddingLeft = "2px";
-    playerFilterContainer.appendChild(playerFilterLabel);
-    const playerFilterSelect = document.createElement("select");
-    playerFilterSelect.style.background = "rgba(17, 18, 27, 0.95)";
-    playerFilterSelect.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    playerFilterSelect.style.color = "#f8fafc";
-    playerFilterSelect.style.borderRadius = "8px";
-    playerFilterSelect.style.padding = "4px 10px";
-    playerFilterSelect.style.fontSize = "12px";
-    playerFilterSelect.style.fontWeight = "500";
-    playerFilterSelect.style.outline = "none";
-    playerFilterSelect.style.cursor = "pointer";
-    playerFilterSelect.style.minWidth = "130px";
-    const playerFilters = [
-      { value: "any", label: "Any players" },
-      { value: "empty", label: "Empty rooms" },
-      { value: "few", label: "1 \u2013 3 players" },
-      { value: "crowded", label: "4 \u2013 5 players" },
-      { value: "full", label: "Full rooms" }
-    ];
-    for (const option of playerFilters) {
-      const opt = document.createElement("option");
-      opt.value = option.value;
-      opt.textContent = option.label;
-      playerFilterSelect.appendChild(opt);
-    }
-    playerFilterSelect.value = selectedPlayerFilter;
-    playerFilterSelect.addEventListener("change", () => {
-      selectedPlayerFilter = playerFilterSelect.value;
-      savedScrollTop = 0;
-      renderRooms(currentRooms);
-    });
-    playerFilterContainer.appendChild(playerFilterSelect);
-    filterBar.appendChild(playerFilterContainer);
-    let isRefreshing = false;
-    const updateRefreshButtonState = () => {
-      const enabled = !destroyed && !isRefreshing;
-      ui.setButtonEnabled(refreshButton, enabled);
-      refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
-    };
-    updateRefreshButtonState();
-    const handleRoomsChanged = () => {
-      applyCategoryButtons(RoomService.getCustomRooms());
-      refreshRooms();
-    };
-    const refreshRooms = async () => {
-      if (destroyed) return;
-      const definitions = RoomService.getCustomRooms();
-      applyCategoryButtons(definitions);
-      if (!definitions.length) {
-        setLoadingState(false);
-        currentRooms = [];
-        renderRooms([]);
-        statusBar.textContent = "Add a custom room to get started.";
-        isRefreshing = false;
-        updateRefreshButtonState();
-        firstLoad = false;
-        return;
-      }
-      const currentRequest = ++requestCounter;
-      isRefreshing = true;
-      updateRefreshButtonState();
-      setLoadingState(true);
-      statusBar.textContent = firstLoad ? "Loading rooms\u2026" : "Refreshing rooms\u2026";
-      try {
-        const rooms = await RoomService.fetchCustomRoomsStatus();
-        if (destroyed || currentRequest !== requestCounter) return;
-        renderRooms(rooms);
-        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true
-        });
-        statusBar.textContent = `Last update: ${time}`;
-      } catch (error) {
-        if (destroyed || currentRequest !== requestCounter) return;
-        statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
-      } finally {
-        if (!destroyed && currentRequest === requestCounter) {
-          setLoadingState(false);
-        }
-        if (currentRequest === requestCounter) {
-          isRefreshing = false;
-        }
-        updateRefreshButtonState();
-        firstLoad = false;
-      }
-    };
-    refreshButton.addEventListener("click", () => {
-      void refreshRooms();
-    });
-    manageForm.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const result = RoomService.addCustomRoom({ name: nameInput.value, idRoom: idInput.value });
-      if (!result.ok) {
-        formFeedback.textContent = result.error;
-        formFeedback.style.color = "#fda4af";
-        return;
-      }
-      formFeedback.textContent = `Added room \u201C${result.room.name}\u201D.`;
-      formFeedback.style.color = "#86efac";
-      nameInput.value = "";
-      idInput.value = "";
-      nameInput.focus();
-      handleRoomsChanged();
-    });
-    applyCategoryButtons(RoomService.getCustomRooms());
-    refreshRooms();
-    view.__cleanup__ = () => {
-      destroyed = true;
-      updateRefreshButtonState();
+    return {
+      name: room.id,
+      idRoom: room.id,
+      category: SUPABASE_ROOM_CATEGORY,
+      players: Math.min(players, capacity),
+      capacity,
+      isFull: players >= capacity,
+      lastUpdatedAt: parsedTimestamp,
+      hostPlayerId: room.lastUpdatedByPlayerId ?? void 0,
+      playerDetails
     };
   }
   function renderSearchPlayerTab(view, ui) {
@@ -46413,7 +45840,7 @@ next: ${next}`;
     searchInput.style.outline = "none";
     searchInput.style.boxShadow = "0 6px 16px rgba(15, 23, 42, 0.45)";
     form.appendChild(searchInput);
-    const searchButton = ui.btn("Search", { size: "sm", icon: "\u{1F50D}", variant: "primary" });
+    const searchButton = ui.btn("Search", { size: "sm", icon: "search", variant: "primary" });
     searchButton.type = "submit";
     searchButton.style.flexShrink = "0";
     searchButton.title = "Search for a player across rooms";
@@ -46565,53 +45992,44 @@ next: ${next}`;
       isLoading = true;
       updateSearchButtonState();
       setLoadingState(true);
-      statusMessage.textContent = "Searching players\u2026";
+      statusMessage.textContent = "Searching players...";
       try {
-        const [publicRooms, customRooms] = await Promise.all([
-          RoomService.fetchPublicRoomsStatus(),
-          RoomService.fetchCustomRoomsStatus().catch(() => [])
-        ]);
+        const results = await searchRoomsByPlayerName(trimmedQuery, {
+          limitRooms: 200,
+          minQueryLength: 3
+        });
         if (destroyed || currentRequest !== requestCounter) return;
-        const allRooms = [...publicRooms, ...customRooms];
-        const matchMap = /* @__PURE__ */ new Map();
-        for (const room of allRooms) {
-          const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
-          if (!playerDetails.length) continue;
-          const matchedPlayers = playerDetails.filter(
-            (player2) => normalizeSearchText(player2.name).includes(normalizedQuery)
-          );
-          if (matchedPlayers.length) {
-            const existing = matchMap.get(room.idRoom);
-            if (existing) {
-              for (const player2 of matchedPlayers) {
-                const alreadyPresent = existing.players.some((candidate) => {
-                  if (player2.id && candidate.id && player2.id === candidate.id) return true;
-                  if (player2.databaseUserId && candidate.databaseUserId && player2.databaseUserId === candidate.databaseUserId) {
-                    return true;
-                  }
-                  return normalizeSearchText(candidate.name) === normalizeSearchText(player2.name);
-                });
-                if (!alreadyPresent) {
-                  existing.players.push(player2);
-                }
-              }
-            } else {
-              matchMap.set(room.idRoom, { room, players: [...matchedPlayers] });
-            }
-          }
+        if (!results.length) {
+          statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
+          renderEmptyState("No rooms contain a player with this name.");
+          lastQueryLabel = trimmedQuery;
+          return;
         }
-        const matches = Array.from(matchMap.values());
+        const matches = results.map((result) => {
+          const baseRoom = transformSupabaseRoom(result.room);
+          const matchedPlayers = result.matchedSlots?.map((slot) => ({
+            name: slot.name?.trim() || "Unknown player",
+            isConnected: true,
+            isHost: false,
+            discordAvatarUrl: slot.avatarUrl ?? void 0
+          })) ?? [];
+          return {
+            room: baseRoom,
+            players: matchedPlayers
+          };
+        }).filter((match) => match.players.length > 0);
         if (!matches.length) {
-          statusMessage.textContent = `No player found matching \u201C${trimmedQuery}\u201D.`;
+          statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
           renderEmptyState("No rooms contain a player with this name.");
           lastQueryLabel = trimmedQuery;
           return;
         }
         matches.sort((a, b) => {
-          const onlineInA = a.players.filter((player2) => player2.isConnected).length;
-          const onlineInB = b.players.filter((player2) => player2.isConnected).length;
-          if (onlineInA !== onlineInB) return onlineInB - onlineInA;
-          if (a.players.length !== b.players.length) return b.players.length - a.players.length;
+          const diffPlayers = b.room.players - a.room.players;
+          if (diffPlayers !== 0) return diffPlayers;
+          if (b.players.length !== a.players.length) {
+            return b.players.length - a.players.length;
+          }
           return a.room.name.localeCompare(b.room.name);
         });
         const totalPlayers = matches.reduce((sum, match) => sum + match.players.length, 0);
@@ -46763,20 +46181,6 @@ next: ${next}`;
         playerName.style.fontSize = "14px";
         playerName.style.color = "#f8fafc";
         nameRow2.appendChild(playerName);
-        if (player2.isHost) {
-          const hostBadge = document.createElement("span");
-          hostBadge.textContent = "Host";
-          hostBadge.style.fontSize = "10px";
-          hostBadge.style.letterSpacing = "0.06em";
-          hostBadge.style.textTransform = "uppercase";
-          hostBadge.style.padding = "2px 6px";
-          hostBadge.style.borderRadius = "999px";
-          hostBadge.style.fontWeight = "600";
-          hostBadge.style.color = "#facc15";
-          hostBadge.style.background = "rgba(250, 204, 21, 0.18)";
-          hostBadge.style.border = "1px solid rgba(250, 204, 21, 0.32)";
-          nameRow2.appendChild(hostBadge);
-        }
         const statusRow = document.createElement("div");
         statusRow.style.display = "flex";
         statusRow.style.alignItems = "center";
@@ -47017,6 +46421,341 @@ next: ${next}`;
     }
     return wrapper;
   }
+  async function readPlayers() {
+    return PlayersService.list();
+  }
+  var NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+  function truncateLabel(s, max = 22) {
+    if (!s) return "";
+    return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
+  }
+  var vItem = (p) => ({
+    id: p.id,
+    title: truncateLabel(p.name || p.id, 9),
+    subtitle: p.isConnected ? "Online" : "Offline",
+    avatarUrl: p.discordAvatarUrl || "",
+    statusColor: p.isConnected ? "#48d170" : "#999a"
+  });
+  async function renderPlayersTab(root) {
+    const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
+    ui.mount(root);
+    const panel = ui.root.querySelector(".qmm-views");
+    const { root: split, left, right } = ui.split2("260px");
+    panel.appendChild(split);
+    split.style.height = "100%";
+    split.style.minHeight = "0";
+    left.style.display = "flex";
+    left.style.flexDirection = "column";
+    left.style.minHeight = "0";
+    right.style.minHeight = "0";
+    right.style.overflow = "auto";
+    const vt = ui.vtabs({
+      filterPlaceholder: "Find player\u2026",
+      onSelect: (_id, item) => renderRight(item?.id || null),
+      fillAvailableHeight: true
+    });
+    vt.root.style.display = "flex";
+    vt.root.style.flexDirection = "column";
+    vt.root.style.flex = "1 1 auto";
+    vt.root.style.minHeight = "0";
+    left.appendChild(vt.root);
+    const filter = vt.root.querySelector(".filter");
+    if (filter) {
+      filter.remove();
+    }
+    async function renderRight(playerId2) {
+      right.innerHTML = "";
+      const p = playerId2 ? players.find((x) => x.id === playerId2) || null : null;
+      if (!p) {
+        const empty = document.createElement("div");
+        empty.style.opacity = "0.75";
+        empty.textContent = "Select a player on the left.";
+        right.appendChild(empty);
+        return;
+      }
+      const col = document.createElement("div");
+      col.style.display = "grid";
+      col.style.gridAutoRows = "min-content";
+      col.style.justifyItems = "center";
+      col.style.gap = "10px";
+      col.style.overflow = "auto";
+      right.appendChild(col);
+      const prof = document.createElement("div");
+      prof.style.display = "grid";
+      prof.style.gap = "8px";
+      prof.style.justifyItems = "center";
+      const head = document.createElement("div");
+      head.style.display = "flex";
+      head.style.alignItems = "center";
+      head.style.gap = "12px";
+      const avatar = document.createElement("img");
+      avatar.src = p.discordAvatarUrl || "";
+      avatar.alt = p.name;
+      avatar.width = 48;
+      avatar.height = 48;
+      avatar.style.borderRadius = "50%";
+      avatar.style.objectFit = "cover";
+      avatar.style.border = "1px solid #4446";
+      const title = document.createElement("div");
+      const nameEl = document.createElement("div");
+      nameEl.textContent = p.name || p.id;
+      nameEl.style.fontWeight = "600";
+      nameEl.style.fontSize = "16px";
+      const sub = document.createElement("div");
+      sub.style.opacity = "0.8";
+      sub.style.fontSize = "12px";
+      sub.textContent = p.isConnected ? "Online" : "Offline";
+      title.append(nameEl, sub);
+      head.append(avatar, title);
+      const info = document.createElement("div");
+      info.style.opacity = "0.9";
+      prof.append(head, info);
+      col.appendChild(prof);
+      const infoWrap = document.createElement("div");
+      infoWrap.style.display = "grid";
+      infoWrap.style.gap = "6px";
+      infoWrap.style.justifySelf = "stretch";
+      infoWrap.style.width = "100%";
+      const invValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
+      const invLabel = document.createElement("div");
+      invLabel.textContent = "Inventory: ";
+      invLabel.style.fontSize = "14px";
+      invLabel.style.opacity = "0.85";
+      const invValue = document.createElement("div");
+      invValue.textContent = "\u2026";
+      invValue.style.fontSize = "15px";
+      invValue.style.fontWeight = "700";
+      invValue.style.color = "#FFD84D";
+      invValueRow.append(invLabel, invValue);
+      const gardenValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
+      const gardenLabel = document.createElement("div");
+      gardenLabel.textContent = "Garden: ";
+      gardenLabel.style.fontSize = "14px";
+      gardenLabel.style.opacity = "0.85";
+      const gardenValue = document.createElement("div");
+      gardenValue.textContent = "\u2026";
+      gardenValue.style.fontWeight = "700";
+      gardenValue.style.fontSize = "15px";
+      gardenValue.style.color = "#FFD84D";
+      gardenValueRow.append(gardenLabel, gardenValue);
+      infoWrap.append(invValueRow, gardenValueRow);
+      const infoCard = ui.card("\u{1F331} Crops values", { tone: "muted", align: "center" });
+      infoCard.body.append(infoWrap);
+      col.appendChild(infoCard.root);
+      const editorCard = ui.card("\u270F\uFE0F Editor", { tone: "muted", align: "center" });
+      editorCard.body.style.display = "grid";
+      editorCard.body.style.gap = "8px";
+      const savePlayerBtn = ui.btn("Save player garden", {
+        fullWidth: true,
+        onClick: async () => {
+          try {
+            const saveFn = window.qwsEditorSaveGardenForPlayer || pageWindow?.qwsEditorSaveGardenForPlayer;
+            if (typeof saveFn !== "function") {
+              await toastSimple("Save garden", "Editor save unavailable", "error");
+              return;
+            }
+            const name = `${p.name || p.id || "Player"}'s garden`;
+            const saved = await saveFn(p.id, name);
+            if (!saved) {
+              await toastSimple("Save garden", "Save failed (no garden state)", "error");
+              return;
+            }
+            await toastSimple(`Saved "${saved.name}".`, "success");
+          } catch {
+            await toastSimple(`Save failed`, "error");
+          }
+        }
+      });
+      editorCard.body.append(savePlayerBtn);
+      col.appendChild(editorCard.root);
+      const teleRow = ui.flexRow({ justify: "center" });
+      const btnToPlayer = ui.btn("To player", { size: "sm" });
+      btnToPlayer.style.minWidth = "120px";
+      const btnToGarden = ui.btn("To garden", { size: "sm" });
+      btnToGarden.style.minWidth = "120px";
+      btnToPlayer.onclick = async () => {
+        try {
+          const fn = PlayersService.teleportToPlayer ?? PlayersService.teleportTo;
+          await fn.call(PlayersService, p.id);
+        } catch (e) {
+          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+        }
+      };
+      btnToGarden.onclick = async () => {
+        try {
+          const fn = PlayersService.teleportToGarden ?? PlayersService.tptogarden;
+          await fn.call(PlayersService, p.id);
+        } catch (e) {
+          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
+        }
+      };
+      teleRow.append(btnToPlayer, btnToGarden);
+      const teleportCard = ui.card("\u{1F30C} Teleport", { tone: "muted", align: "center" });
+      teleportCard.body.append(teleRow);
+      col.appendChild(teleportCard.root);
+      const invRow = ui.flexRow({ justify: "center" });
+      const btnInv = ui.btn("Inventory", { size: "sm" });
+      btnInv.style.minWidth = "120px";
+      const btnJournal = ui.btn("Journal", { size: "sm" });
+      btnJournal.style.minWidth = "120px";
+      const btnStats = ui.btn("Stats", { size: "sm" });
+      btnStats.style.minWidth = "120px";
+      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
+      btnActivityLog.style.minWidth = "120px";
+      btnInv.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openInventoryPreview(p.id, p.name);
+          if (await isInventoryPanelOpen()) {
+            await waitInventoryPanelClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      btnJournal.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openJournalLog(p.id, p.name);
+          if (await isJournalModalOpen()) {
+            await waitJournalModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      btnStats.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openStatsModal(p.id, p.name);
+          if (await isStatsModalOpenAsync()) {
+            await waitStatsModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      btnActivityLog.onclick = async () => {
+        try {
+          ui.setWindowVisible(false);
+          await PlayersService.openActivityLogModal(p.id, p.name);
+          if (await isActivityLogModalOpenAsync()) {
+            await waitActivityLogModalClosed();
+          }
+        } finally {
+          ui.setWindowVisible(true);
+        }
+      };
+      const inspectGrid = document.createElement("div");
+      inspectGrid.style.display = "grid";
+      inspectGrid.style.gap = "6px";
+      const activityRow = ui.flexRow({ justify: "center" });
+      invRow.append(btnInv, btnJournal);
+      activityRow.append(btnStats, btnActivityLog);
+      inspectGrid.append(invRow, activityRow);
+      const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
+      inspectCard.body.append(inspectGrid);
+      col.appendChild(inspectCard.root);
+      const funWrap = document.createElement("div");
+      funWrap.style.display = "grid";
+      funWrap.style.gap = "10px";
+      const followRow = ui.flexRow({ justify: "center" });
+      followRow.style.gap = "16px";
+      const playerFollowGroup = document.createElement("div");
+      playerFollowGroup.style.display = "flex";
+      playerFollowGroup.style.alignItems = "center";
+      playerFollowGroup.style.gap = "8px";
+      const label2 = document.createElement("div");
+      label2.textContent = "Follow player";
+      label2.style.fontSize = "14px";
+      label2.style.opacity = "0.85";
+      const sw = ui.switch(PlayersService.isFollowing(p.id));
+      sw.addEventListener("change", async () => {
+        try {
+          if (sw.checked) {
+            await PlayersService.startFollowing(p.id);
+            await toastSimple("Follow", "Enabled.", "success");
+          } else {
+            PlayersService.stopFollowing();
+            await toastSimple("Follow", "Disable.", "info");
+          }
+        } catch (e) {
+          await toastSimple("Follow", e?.message || "Error", "error");
+          sw.checked = !sw.checked;
+        }
+      });
+      playerFollowGroup.append(label2, sw);
+      const petFollowGroup = document.createElement("div");
+      petFollowGroup.style.display = "flex";
+      petFollowGroup.style.alignItems = "center";
+      petFollowGroup.style.gap = "4px";
+      const petsLabel = document.createElement("div");
+      petsLabel.textContent = "Pet follow";
+      petsLabel.style.fontSize = "14px";
+      petsLabel.style.opacity = "0.85";
+      const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
+      petsSwitch.addEventListener("change", async () => {
+        try {
+          if (petsSwitch.checked) {
+            await PlayersService.startPetFollowing(p.id);
+          } else {
+            await PlayersService.stopPetFollowing();
+          }
+        } catch (e) {
+          await toastSimple("Pet follow", e?.message || "Error", "error");
+          petsSwitch.checked = !petsSwitch.checked;
+        }
+      });
+      petFollowGroup.append(petsLabel, petsSwitch);
+      followRow.append(playerFollowGroup, petFollowGroup);
+      funWrap.append(followRow);
+      const funCard = ui.card("\u{1F389} Fun", { tone: "muted", align: "center" });
+      funCard.body.append(funWrap);
+      col.appendChild(funCard.root);
+      (async () => {
+        try {
+          const total = await PlayersService.getInventoryValue(p.id);
+          invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
+          invValue.title = "Total inventory value";
+        } catch {
+          invValue.textContent = "\u2014";
+        }
+        try {
+          const total = await PlayersService.getGardenValue(p.id);
+          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
+          gardenValue.title = "Total garden value";
+        } catch {
+          gardenValue.textContent = "\u2014";
+        }
+      })();
+    }
+    let players = [];
+    let lastSig = "";
+    function signature(ps) {
+      return ps.map(
+        (p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
+      ).join(";");
+    }
+    async function refreshAll(keepSelection = true) {
+      const prevSel = vt.getSelected()?.id ?? null;
+      const next = await readPlayers();
+      const sig = signature(next);
+      if (sig === lastSig) {
+        return;
+      }
+      lastSig = sig;
+      players = next;
+      vt.setItems(players.map(vItem));
+      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
+      if (sel !== null) vt.select(sel);
+      else renderRight(null);
+    }
+    await PlayersService.onChange(() => {
+      refreshAll(true).catch(() => {
+      });
+    });
+    await refreshAll(true);
+  }
 
   // src/ui/menus/keybinds.ts
   function createKeybindRow(ui, action2) {
@@ -47252,6 +46991,1120 @@ next: ${next}`;
     view.appendChild(wrapper);
   }
 
+  // src/utils/friendSettings.ts
+  var subscribers = /* @__PURE__ */ new Set();
+  var currentSettings = null;
+  var initialized = false;
+  function persistSettings(settings) {
+    try {
+      writeAriesPath(FRIEND_SETTINGS_PATH, settings);
+    } catch {
+    }
+  }
+  function ensureSettingsInitialized() {
+    if (initialized && currentSettings) {
+      return currentSettings;
+    }
+    initialized = true;
+    const stored = readAriesPath(FRIEND_SETTINGS_PATH);
+    const next = buildSettings(stored);
+    currentSettings = next;
+    if (!stored) {
+      persistSettings(next);
+    }
+    return next;
+  }
+  function notifySubscribers(next) {
+    for (const cb of subscribers) {
+      try {
+        cb(next);
+      } catch (error) {
+        console.error("[FriendSettings] subscriber error", error);
+      }
+    }
+  }
+  function buildSettings(raw) {
+    return { ...DEFAULT_FRIEND_SETTINGS, ...raw ?? {} };
+  }
+  function getFriendSettings() {
+    return ensureSettingsInitialized();
+  }
+  function setFriendSettings(settings) {
+    ensureSettingsInitialized();
+    const next = buildSettings(settings);
+    currentSettings = next;
+    notifySubscribers(next);
+    persistSettings(next);
+    return next;
+  }
+  function patchFriendSettings(patch) {
+    const base = ensureSettingsInitialized();
+    return setFriendSettings({ ...base, ...patch });
+  }
+  function onFriendSettingsChange(cb) {
+    subscribers.add(cb);
+    return () => subscribers.delete(cb);
+  }
+
+  // src/ui/menus/friends.ts
+  var activeGardenPreview = null;
+  async function stopActiveGardenPreview(keepButton) {
+    if (!activeGardenPreview) return;
+    const clearFn = window.qwsEditorClearFriendGardenPreview;
+    if (typeof clearFn === "function") {
+      try {
+        await clearFn();
+      } catch (error) {
+        console.error("[FriendsMenu] clear garden preview", error);
+      }
+    }
+    const prevButton = activeGardenPreview.button;
+    if (!keepButton || keepButton !== prevButton) {
+      const defaultLabel = prevButton.dataset.gardenDefaultLabel ?? "Garden";
+      prevButton.textContent = defaultLabel;
+    }
+    activeGardenPreview = null;
+  }
+  var refreshAllFriends = null;
+  function formatLastSeen2(timestamp) {
+    if (!timestamp) return null;
+    const parsed = Date.parse(timestamp);
+    if (!Number.isFinite(parsed)) return null;
+    const deltaSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1e3));
+    if (deltaSeconds < 60) {
+      return deltaSeconds <= 15 ? "just now" : `${deltaSeconds}s`;
+    }
+    const minutes = Math.floor(deltaSeconds / 60);
+    if (minutes < 60) {
+      return `${minutes}min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  }
+  function formatCoinAmount(value) {
+    if (value == null || !Number.isFinite(value)) return null;
+    const abs = Math.abs(value);
+    const units = [
+      { threshold: 1e12, suffix: "T" },
+      { threshold: 1e9, suffix: "B" },
+      { threshold: 1e6, suffix: "M" },
+      { threshold: 1e3, suffix: "K" }
+    ];
+    for (const { threshold, suffix } of units) {
+      if (abs >= threshold) {
+        const normalized = value / threshold;
+        return `${normalized.toFixed(2)}${suffix}`;
+      }
+    }
+    return value.toLocaleString("en-US");
+  }
+  function createPrivacyBadge(label2, enabled) {
+    const badge = document.createElement("span");
+    badge.textContent = label2;
+    badge.style.fontSize = "16px";
+    badge.style.lineHeight = "1";
+    badge.style.opacity = enabled ? "1" : "0.3";
+    badge.style.display = "inline-flex";
+    badge.style.alignItems = "center";
+    badge.style.justifyContent = "center";
+    badge.style.width = "auto";
+    badge.style.height = "auto";
+    badge.style.fontWeight = "500";
+    return badge;
+  }
+  function createFriendRow(ui, friend) {
+    const card = document.createElement("div");
+    card.style.display = "grid";
+    card.style.gridTemplateColumns = "1fr";
+    card.style.alignItems = "stretch";
+    card.style.gap = "8px";
+    card.style.padding = "10px 12px";
+    card.style.borderRadius = "10px";
+    card.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    card.style.background = "rgba(255, 255, 255, 0.02)";
+    card.style.boxShadow = "0 1px 0 rgba(0, 0, 0, 0.35) inset";
+    card.style.cursor = "default";
+    const roomInfo = friend.room ?? {};
+    const joinRoomId = typeof roomInfo.id === "string" ? roomInfo.id.trim() : typeof roomInfo.roomId === "string" ? roomInfo.roomId.trim() : null;
+    const rawPlayerCount = roomInfo.playersCount ?? roomInfo.players_count ?? roomInfo.players ?? null;
+    const playersCount = Number.isFinite(Number(rawPlayerCount)) && rawPlayerCount !== null ? Math.floor(Number(rawPlayerCount)) : null;
+    const isDiscordTarget = RoomService.isDiscordActivity();
+    const ROOM_CAPACITY = 6;
+    const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY - playersCount) : null;
+    const canJoinRoom = Boolean(joinRoomId) && typeof playersCount === "number" && seatsLeft !== null && seatsLeft > 0 && !isDiscordTarget;
+    const joinButtonTitle = canJoinRoom ? "Join this room" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= 6 ? "Room is full" : "Unable to join this room";
+    const avatar = document.createElement("div");
+    avatar.style.width = "48px";
+    avatar.style.height = "48px";
+    avatar.style.display = "grid";
+    avatar.style.placeItems = "center";
+    avatar.style.borderRadius = "50%";
+    avatar.style.background = "rgba(255, 255, 255, 0.07)";
+    avatar.style.fontWeight = "600";
+    avatar.style.fontSize = "14px";
+    avatar.style.color = "#f8fafc";
+    avatar.style.overflow = "hidden";
+    if (friend.avatarUrl) {
+      const img = document.createElement("img");
+      img.src = friend.avatarUrl;
+      img.alt = friend.playerName ?? friend.playerId ?? "Friend avatar";
+      img.width = 48;
+      img.height = 48;
+      img.style.borderRadius = "50%";
+      img.style.objectFit = "cover";
+      avatar.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      const label2 = (friend.playerName ?? friend.playerId ?? "F").trim();
+      fallback.textContent = label2.charAt(0).toUpperCase();
+      fallback.style.fontSize = "15px";
+      avatar.appendChild(fallback);
+    }
+    const infoColumn = document.createElement("div");
+    infoColumn.style.display = "grid";
+    infoColumn.style.gridTemplateColumns = "52px 1fr";
+    infoColumn.style.alignItems = "center";
+    infoColumn.style.gap = "10px";
+    infoColumn.style.minWidth = "0";
+    const textGrid = document.createElement("div");
+    textGrid.style.display = "grid";
+    textGrid.style.gridTemplateColumns = "1fr auto";
+    textGrid.style.alignItems = "stretch";
+    textGrid.style.gap = "12px";
+    const textStack = document.createElement("div");
+    textStack.style.display = "grid";
+    textStack.style.gap = "4px";
+    textStack.style.minWidth = "0";
+    textStack.style.alignItems = "flex-start";
+    const nameEl = document.createElement("div");
+    nameEl.textContent = friend.playerName ?? friend.playerId ?? "Unknown friend";
+    nameEl.style.fontWeight = "600";
+    nameEl.style.fontSize = "13px";
+    nameEl.style.whiteSpace = "nowrap";
+    nameEl.style.overflow = "hidden";
+    nameEl.style.textOverflow = "ellipsis";
+    nameEl.style.flex = "1";
+    const statusRow = document.createElement("div");
+    statusRow.style.display = "flex";
+    statusRow.style.alignItems = "center";
+    statusRow.style.gap = "6px";
+    const statusIndicator = document.createElement("span");
+    const isOnline = Boolean(friend.isOnline);
+    statusIndicator.style.width = "10px";
+    statusIndicator.style.height = "10px";
+    statusIndicator.style.borderRadius = "50%";
+    statusIndicator.style.background = isOnline ? "#34d399" : "#f87171";
+    statusIndicator.style.display = "inline-block";
+    const statusText = document.createElement("span");
+    statusText.textContent = isOnline ? "Online" : "Offline";
+    statusText.style.fontSize = "11px";
+    statusText.style.opacity = "0.7";
+    statusRow.append(statusIndicator, statusText);
+    const metaColumn = document.createElement("div");
+    metaColumn.style.display = "flex";
+    metaColumn.style.flexDirection = "column";
+    metaColumn.style.alignItems = "flex-end";
+    metaColumn.style.justifyContent = "flex-start";
+    metaColumn.style.height = "100%";
+    metaColumn.style.minHeight = "38px";
+    metaColumn.style.alignSelf = "stretch";
+    metaColumn.style.gap = "4px";
+    const lastSeenText = formatLastSeen2(friend.lastEventAt);
+    let lastSeenEl = null;
+    if (lastSeenText) {
+      lastSeenEl = document.createElement("div");
+      lastSeenEl.style.fontSize = "11px";
+      lastSeenEl.style.opacity = "0.65";
+      lastSeenEl.style.whiteSpace = "nowrap";
+      lastSeenEl.textContent = `Last seen ${lastSeenText}`;
+    }
+    textStack.append(nameEl, statusRow);
+    if (lastSeenEl) {
+      textStack.append(lastSeenEl);
+    }
+    textGrid.append(textStack, metaColumn);
+    infoColumn.append(avatar, textGrid);
+    const actionBlock = document.createElement("div");
+    actionBlock.style.display = "grid";
+    actionBlock.style.justifyItems = "end";
+    actionBlock.style.alignItems = "end";
+    actionBlock.style.alignContent = "stretch";
+    actionBlock.style.gridAutoFlow = "row";
+    actionBlock.style.gridTemplateRows = "repeat(3, min-content)";
+    actionBlock.style.gap = "6px";
+    const chevron = document.createElement("span");
+    chevron.textContent = "\u25BE";
+    chevron.style.display = "inline-block";
+    chevron.style.transition = "transform 0.2s ease";
+    chevron.style.transform = "rotate(-90deg)";
+    const detailsBtn = ui.btn("Details", { size: "sm", variant: "ghost", icon: chevron });
+    detailsBtn.style.minWidth = "86px";
+    detailsBtn.style.justifyContent = "center";
+    detailsBtn.title = "Show friend privacy badges and coins information when available.";
+    const joinButton = ui.btn("Join", { size: "sm", variant: "primary" });
+    joinButton.style.minWidth = "86px";
+    joinButton.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
+    ui.setButtonEnabled(joinButton, canJoinRoom);
+    joinButton.title = joinButtonTitle;
+    joinButton.addEventListener("click", () => {
+      if (!canJoinRoom || !joinRoomId) return;
+      RoomService.joinPublicRoom({ idRoom: joinRoomId });
+    });
+    const joinControl = document.createElement("div");
+    joinControl.style.display = "grid";
+    joinControl.style.gap = "4px";
+    joinControl.style.justifyItems = "center";
+    joinControl.append(joinButton);
+    const seatsInfo = document.createElement("div");
+    seatsInfo.style.fontSize = "11px";
+    seatsInfo.style.opacity = "0.6";
+    seatsInfo.style.whiteSpace = "nowrap";
+    seatsInfo.style.textAlign = "center";
+    seatsInfo.style.margin = "0";
+    if (seatsLeft !== null) {
+      seatsInfo.textContent = seatsLeft > 0 ? `${seatsLeft} slot${seatsLeft === 1 ? "" : "s"} left` : "Room full";
+    } else {
+      seatsInfo.textContent = "Room size unknown";
+    }
+    joinControl.appendChild(seatsInfo);
+    actionBlock.append(detailsBtn, joinControl);
+    const rowHeader = document.createElement("div");
+    rowHeader.style.display = "grid";
+    rowHeader.style.gridTemplateColumns = "minmax(0, 1fr) auto";
+    rowHeader.style.alignItems = "stretch";
+    rowHeader.style.gap = "10px";
+    rowHeader.append(infoColumn, actionBlock);
+    const detailsContainer = document.createElement("div");
+    detailsContainer.style.overflow = "hidden";
+    detailsContainer.style.maxHeight = "0";
+    detailsContainer.style.opacity = "0";
+    detailsContainer.style.marginTop = "0";
+    detailsContainer.style.transition = "max-height 160ms ease, opacity 160ms ease, margin-top 160ms ease";
+    const coinsText = formatCoinAmount(friend.coins);
+    const detailsContent = document.createElement("div");
+    detailsContent.style.display = "grid";
+    detailsContent.style.gridTemplateColumns = "minmax(0, 1fr)";
+    detailsContent.style.alignItems = "stretch";
+    detailsContent.style.gap = "6px";
+    detailsContent.style.padding = "6px 0 0 0";
+    const badgesRow = document.createElement("div");
+    badgesRow.style.display = "flex";
+    badgesRow.style.alignItems = "center";
+    badgesRow.style.gap = "0";
+    badgesRow.style.flexWrap = "nowrap";
+    badgesRow.style.minHeight = "0";
+    badgesRow.style.justifyContent = "flex-start";
+    badgesRow.style.width = "auto";
+    [
+      { label: "\u{1F4B0}", enabled: Boolean(friend.privacy?.showCoins) },
+      { label: "\u{1F392}", enabled: Boolean(friend.privacy?.showInventory) },
+      { label: "\u{1F331}", enabled: Boolean(friend.privacy?.showGarden) },
+      { label: "\u{1F4CB}", enabled: Boolean(friend.privacy?.showActivityLog) },
+      { label: "\u{1F4F0}", enabled: Boolean(friend.privacy?.showJournal) },
+      { label: "\u{1F4CA}", enabled: Boolean(friend.privacy?.showStats) }
+    ].forEach(({ label: label2, enabled }) => {
+      badgesRow.append(createPrivacyBadge(label2, enabled));
+    });
+    if (coinsText) {
+      const coinsRow = document.createElement("div");
+      coinsRow.style.display = "flex";
+      coinsRow.style.justifyContent = "flex-end";
+      coinsRow.style.paddingRight = "16px";
+      const coinsEl = document.createElement("div");
+      coinsEl.textContent = `${coinsText} coins`;
+      coinsEl.style.fontSize = "12px";
+      coinsEl.style.opacity = "0.8";
+      coinsEl.style.whiteSpace = "nowrap";
+      coinsEl.style.justifySelf = "end";
+      coinsRow.append(coinsEl);
+      detailsContent.append(coinsRow);
+    }
+    const privacyRow = document.createElement("div");
+    privacyRow.style.display = "flex";
+    privacyRow.style.alignItems = "center";
+    privacyRow.style.gap = "8px";
+    const privacyLabel = document.createElement("span");
+    privacyLabel.textContent = "Privacy";
+    privacyLabel.style.fontSize = "12px";
+    privacyLabel.style.fontWeight = "600";
+    privacyLabel.style.opacity = "0.8";
+    privacyRow.append(privacyLabel, badgesRow);
+    detailsContent.append(privacyRow);
+    const styleDetailButton = (btn) => {
+      btn.style.textTransform = "none";
+      btn.style.padding = "6px 10px";
+      btn.style.background = "rgba(148, 163, 184, 0.12)";
+      btn.style.color = "#f8fafc";
+      btn.style.border = "1px solid rgba(248, 250, 252, 0.3)";
+      btn.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.2)";
+      btn.addEventListener("mouseenter", () => {
+        btn.style.background = "rgba(248, 250, 252, 0.12)";
+      });
+      btn.addEventListener("mouseleave", () => {
+        btn.style.background = "rgba(148, 163, 184, 0.12)";
+      });
+    };
+    let gardenToggleBtn = null;
+    const buttonRow = ui.flexRow({ gap: 6, align: "center" });
+    buttonRow.style.flexWrap = "wrap";
+    buttonRow.style.marginTop = "4px";
+    buttonRow.style.justifyContent = "flex-start";
+    buttonRow.style.alignSelf = "flex-start";
+    const detailButton = (label2, section, resolver, showModal) => {
+      const btn = ui.btn(label2, { size: "sm", variant: "ghost" });
+      styleDetailButton(btn);
+      btn.addEventListener("click", async () => {
+        if (!friend.playerId) return;
+        btn.disabled = true;
+        try {
+          const views = await fetchPlayersView([friend.playerId], { sections: [section] });
+          const view = views[0];
+          const payload = resolver(view);
+          if (!payload) {
+            await toastSimple(label2, `${label2} data unavailable.`, "info");
+            return;
+          }
+          await showModal(payload);
+        } catch (error) {
+          console.error(`[FriendsMenu] Failed to load ${label2.toLowerCase()}`, error);
+          await toastSimple(label2, `Unable to load ${label2.toLowerCase()}.`, "error");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+      return btn;
+    };
+    buttonRow.appendChild(
+      detailButton(
+        "Inventory",
+        "inventory",
+        (view) => view?.state?.inventory ?? null,
+        (payload) => fakeInventoryShow(payload, { open: true })
+      )
+    );
+    gardenToggleBtn = ui.btn("Garden", { size: "sm", variant: "ghost" });
+    styleDetailButton(gardenToggleBtn);
+    gardenToggleBtn.dataset.gardenDefaultLabel = "Garden";
+    const setGardenButtonLabel = (label2) => {
+      if (gardenToggleBtn) {
+        gardenToggleBtn.textContent = label2;
+      }
+    };
+    gardenToggleBtn.addEventListener("click", async () => {
+      if (!gardenToggleBtn) return;
+      const isActive = activeGardenPreview?.button === gardenToggleBtn;
+      gardenToggleBtn.disabled = true;
+      const resetLabel = () => setGardenButtonLabel("Garden");
+      if (isActive) {
+        try {
+          await stopActiveGardenPreview(gardenToggleBtn);
+        } finally {
+          gardenToggleBtn.disabled = false;
+          resetLabel();
+        }
+        return;
+      }
+      gardenToggleBtn.textContent = "Loading...";
+      await stopActiveGardenPreview();
+      try {
+        if (!friend.playerId) {
+          await toastSimple("Garden", "Player ID unavailable.", "error");
+          return;
+        }
+        const [view] = await fetchPlayersView([friend.playerId], { sections: ["garden"] });
+        const gardenData = view?.state?.garden ?? null;
+        if (!gardenData) {
+          await toastSimple("Garden", "Garden data unavailable.", "info");
+          return;
+        }
+        const previewFn = window.qwsEditorPreviewFriendGarden;
+        if (typeof previewFn !== "function") {
+          await toastSimple("Garden", "Garden preview unavailable.", "error");
+          return;
+        }
+        const applied = await previewFn(gardenData);
+        if (!applied) {
+          await toastSimple("Garden", "Unable to preview garden.", "error");
+          return;
+        }
+        activeGardenPreview = { button: gardenToggleBtn, playerId: friend.playerId };
+        setGardenButtonLabel("Stop garden");
+      } catch (error) {
+        console.error("[FriendsMenu] garden preview failed", error);
+        await stopActiveGardenPreview();
+        await toastSimple("Garden", "Unable to load garden.", "error");
+      } finally {
+        gardenToggleBtn.disabled = false;
+        if (activeGardenPreview?.button !== gardenToggleBtn) {
+          resetLabel();
+        }
+      }
+    });
+    buttonRow.appendChild(gardenToggleBtn);
+    buttonRow.appendChild(
+      detailButton(
+        "Activity Log",
+        "activityLog",
+        (view) => view?.state?.activityLog ?? view?.state?.activityLogs ?? null,
+        (payload) => fakeActivityLogShow(payload, { open: true })
+      )
+    );
+    buttonRow.appendChild(
+      detailButton(
+        "Stats",
+        "stats",
+        (view) => view?.state?.stats ?? null,
+        (payload) => fakeStatsShow(payload, { open: true })
+      )
+    );
+    buttonRow.appendChild(
+      detailButton(
+        "Journal",
+        "journal",
+        (view) => view?.state?.journal ?? null,
+        (payload) => fakeJournalShow(payload, { open: true })
+      )
+    );
+    detailsContent.append(buttonRow);
+    const removeFriendBtn = ui.btn("Remove friend", { size: "sm", variant: "danger" });
+    removeFriendBtn.style.textTransform = "none";
+    removeFriendBtn.style.padding = "6px 10px";
+    removeFriendBtn.style.alignSelf = "flex-start";
+    removeFriendBtn.addEventListener("click", async () => {
+      const targetId = friend.playerId;
+      if (!targetId) return;
+      const me = await playerDatabaseUserId.get();
+      if (!me) return;
+      const original = removeFriendBtn.textContent;
+      removeFriendBtn.disabled = true;
+      removeFriendBtn.textContent = "Removing...";
+      try {
+        const removed = await removeFriend(me, targetId);
+        if (removed) {
+          removeFriendBtn.textContent = "Removed";
+          void refreshAllFriends?.({ force: true });
+        } else {
+          removeFriendBtn.textContent = original;
+        }
+      } catch (error) {
+        console.error("[FriendsMenu] removeFriend", error);
+        removeFriendBtn.textContent = original;
+      } finally {
+        removeFriendBtn.disabled = false;
+      }
+    });
+    detailsContent.append(removeFriendBtn);
+    detailsContainer.append(detailsContent);
+    const labelSpan = detailsBtn.querySelector(".label");
+    let detailsExpanded = false;
+    const applyDetailsState = () => {
+      if (detailsExpanded) {
+        const targetHeight = `${detailsContent.scrollHeight}px`;
+        detailsContainer.style.maxHeight = targetHeight;
+        detailsContainer.style.opacity = "1";
+        detailsContainer.style.marginTop = "6px";
+        detailsBtn.setAttribute("aria-expanded", "true");
+        if (labelSpan) labelSpan.textContent = "Hide details";
+        chevron.style.transform = "rotate(0deg)";
+      } else {
+        detailsContainer.style.maxHeight = "0";
+        detailsContainer.style.opacity = "0";
+        detailsContainer.style.marginTop = "0";
+        detailsBtn.setAttribute("aria-expanded", "false");
+        if (labelSpan) labelSpan.textContent = "Details";
+        chevron.style.transform = "rotate(-90deg)";
+      }
+    };
+    detailsBtn.addEventListener("click", () => {
+      detailsExpanded = !detailsExpanded;
+      applyDetailsState();
+      if (!detailsExpanded && gardenToggleBtn) {
+        void (async () => {
+          await stopActiveGardenPreview(gardenToggleBtn);
+          setGardenButtonLabel("Garden");
+        })();
+      }
+    });
+    applyDetailsState();
+    card.append(rowHeader, detailsContainer);
+    return card;
+  }
+  function renderAllTab(view, ui) {
+    view.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gap = "10px";
+    const controls = ui.flexRow({ align: "center", gap: 8 });
+    const search = ui.inputText("Search for a friend...");
+    search.style.flex = "1";
+    search.style.minWidth = "0";
+    const refresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
+    refresh.style.background = "rgba(248, 250, 252, 0.08)";
+    refresh.style.color = "#f8fafc";
+    refresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
+    refresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+    controls.append(search, refresh);
+    const statusMessage = document.createElement("div");
+    statusMessage.style.fontSize = "12px";
+    statusMessage.style.opacity = "0.7";
+    statusMessage.textContent = "Loading friends...";
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "8px";
+    list.style.padding = "10px";
+    list.style.borderRadius = "10px";
+    list.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    list.style.background = "rgba(255, 255, 255, 0.02)";
+    list.style.maxHeight = "36vh";
+    list.style.overflow = "auto";
+    wrap.append(controls, statusMessage, list);
+    view.appendChild(wrap);
+    let friends = [];
+    let isLoading = false;
+    let destroyed = false;
+    const renderPlaceholder = (text) => {
+      list.innerHTML = "";
+      const placeholder = document.createElement("div");
+      placeholder.textContent = text;
+      placeholder.style.opacity = "0.6";
+      placeholder.style.fontSize = "12px";
+      placeholder.style.textAlign = "center";
+      list.appendChild(placeholder);
+    };
+    const normalizeQuery = (term) => term.trim().toLowerCase();
+    const renderList = () => {
+      if (destroyed) return;
+      list.innerHTML = "";
+      if (isLoading) {
+        renderPlaceholder("Loading friends...");
+        return;
+      }
+      const showOnlineOnly = getFriendSettings().showOnlineFriendsOnly;
+      const query = normalizeQuery(search.value);
+      const matching = friends.filter((friend) => {
+        const label2 = (friend.playerName ?? friend.playerId ?? "").toLowerCase();
+        return label2.includes(query);
+      });
+      const filtered = showOnlineOnly ? matching.filter((friend) => Boolean(friend.isOnline)) : matching;
+      if (!filtered.length) {
+        if (friends.length === 0) {
+          renderPlaceholder("You have no friends yet.");
+          statusMessage.textContent = "No friends available.";
+        } else if (query.length > 0) {
+          renderPlaceholder("No friends match that search.");
+          statusMessage.textContent = `${friends.length} friends loaded.`;
+        } else if (showOnlineOnly) {
+          renderPlaceholder("No online friends right now.");
+          statusMessage.textContent = `${friends.length} friends loaded (online filter).`;
+        } else {
+          renderPlaceholder("Nothing to show.");
+          statusMessage.textContent = `${friends.length} friends loaded.`;
+        }
+        return;
+      }
+      for (const friend of filtered) {
+        list.appendChild(createFriendRow(ui, friend));
+      }
+      if (showOnlineOnly) {
+        statusMessage.textContent = `${filtered.length} online friend${filtered.length !== 1 ? "s" : ""} shown.`;
+      } else {
+        statusMessage.textContent = `${friends.length} friends loaded.`;
+      }
+    };
+    const loadFriends = async (options) => {
+      if (destroyed) return;
+      isLoading = true;
+      statusMessage.textContent = "Loading friends...";
+      refresh.disabled = true;
+      renderList();
+      try {
+        const player2 = await playerDatabaseUserId.get();
+        if (!player2) {
+          friends = [];
+          statusMessage.textContent = "Player ID unavailable.";
+          renderPlaceholder("Unable to identify your player.");
+          return;
+        }
+        if (!options?.force) {
+          const cached = getCachedFriendsWithViews();
+          if (cached.length) {
+            friends = cached;
+            statusMessage.textContent = `${friends.length} friends loaded.`;
+            return;
+          }
+        }
+        friends = await fetchFriendsWithViews(player2);
+        statusMessage.textContent = friends.length ? `${friends.length} friends loaded.` : "You have no friends yet.";
+      } catch (error) {
+        console.error("[FriendsMenu] Failed to load friends", error);
+        friends = [];
+        statusMessage.textContent = "Failed to load friends.";
+        renderPlaceholder("Unable to load friends.");
+        return;
+      } finally {
+        isLoading = false;
+        refresh.disabled = false;
+        renderList();
+      }
+    };
+    search.addEventListener("input", () => {
+      renderList();
+    });
+    refresh.addEventListener("click", () => {
+      void loadFriends({ force: true });
+    });
+    const unsubscribeSettings = onFriendSettingsChange(() => {
+      if (!destroyed) {
+        renderList();
+      }
+    });
+    refreshAllFriends = loadFriends;
+    void loadFriends();
+    view.__cleanup__ = () => {
+      destroyed = true;
+      unsubscribeSettings();
+      if (refreshAllFriends === loadFriends) {
+        refreshAllFriends = null;
+      }
+    };
+  }
+  function renderAddFriendTab(view, ui) {
+    view.innerHTML = "";
+    const layout = document.createElement("div");
+    layout.style.display = "grid";
+    layout.style.gap = "12px";
+    const profileCard = ui.card("My profile");
+    profileCard.body.style.display = "grid";
+    profileCard.body.style.gap = "12px";
+    const profileHeader = document.createElement("div");
+    profileHeader.style.display = "flex";
+    profileHeader.style.alignItems = "center";
+    profileHeader.style.gap = "12px";
+    const avatarWrapper = document.createElement("div");
+    avatarWrapper.style.width = "48px";
+    avatarWrapper.style.height = "48px";
+    avatarWrapper.style.borderRadius = "50%";
+    avatarWrapper.style.background = "rgba(255, 255, 255, 0.04)";
+    avatarWrapper.style.display = "flex";
+    avatarWrapper.style.alignItems = "center";
+    avatarWrapper.style.justifyContent = "center";
+    avatarWrapper.style.overflow = "hidden";
+    avatarWrapper.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    const avatarImg = document.createElement("img");
+    avatarImg.alt = "Player avatar";
+    avatarImg.style.width = "100%";
+    avatarImg.style.height = "100%";
+    avatarImg.style.objectFit = "cover";
+    avatarImg.style.borderRadius = "50%";
+    avatarImg.style.display = "none";
+    const avatarFallback = document.createElement("span");
+    avatarFallback.style.fontSize = "18px";
+    avatarFallback.style.fontWeight = "600";
+    avatarFallback.style.color = "#f8fafc";
+    avatarFallback.style.display = "block";
+    avatarWrapper.append(avatarImg, avatarFallback);
+    const profileText = document.createElement("div");
+    profileText.style.display = "grid";
+    profileText.style.gap = "4px";
+    profileText.style.flex = "1";
+    const profileNameLabel = document.createElement("div");
+    profileNameLabel.textContent = "Loading profile...";
+    profileNameLabel.style.fontSize = "14px";
+    profileNameLabel.style.fontWeight = "600";
+    const profileIdLabel = document.createElement("div");
+    profileIdLabel.textContent = "Loading player ID...";
+    profileIdLabel.style.fontSize = "12px";
+    profileIdLabel.style.opacity = "0.8";
+    profileText.append(profileNameLabel, profileIdLabel);
+    profileHeader.append(avatarWrapper, profileText);
+    profileCard.body.appendChild(profileHeader);
+    const formCard = ui.card("Add friend");
+    formCard.body.style.display = "flex";
+    formCard.body.style.flexDirection = "column";
+    formCard.body.style.gap = "10px";
+    const input = ui.inputText("Player ID");
+    input.style.width = "100%";
+    const status = document.createElement("div");
+    status.style.fontSize = "12px";
+    status.style.opacity = "0.7";
+    status.style.minHeight = "18px";
+    const submit = ui.btn("Send request", { variant: "primary", fullWidth: true });
+    submit.disabled = true;
+    submit.title = "Waiting for profile info...";
+    formCard.body.append(input, status, submit);
+    layout.append(profileCard.root, formCard.root);
+    view.appendChild(layout);
+    let myId = null;
+    let isSending = false;
+    const updateSubmitState = () => {
+      const target = input.value.trim();
+      submit.disabled = isSending || !myId || !target;
+    };
+    input.addEventListener("input", updateSubmitState);
+    submit.addEventListener("click", async () => {
+      if (!myId) {
+        status.textContent = "Player ID missing.";
+        return;
+      }
+      const target = input.value.trim();
+      if (!target) {
+        status.textContent = "Enter a player ID or name.";
+        return;
+      }
+      isSending = true;
+      updateSubmitState();
+      status.textContent = "Sending request...";
+      try {
+        const sent = await sendFriendRequest(myId, target);
+        status.textContent = sent ? "Friend request sent." : "Unable to send request (maybe already friends).";
+        if (sent) {
+          input.value = "";
+        }
+      } catch (error) {
+        console.error("[FriendsMenu] sendFriendRequest failed", error);
+        status.textContent = "Failed to send request.";
+      } finally {
+        isSending = false;
+        updateSubmitState();
+      }
+    });
+    const updateProfileInfo = async () => {
+      const [resolved, playerInfo] = await Promise.all([
+        playerDatabaseUserId.get(),
+        player.get()
+      ]);
+      myId = resolved;
+      const displayName = (playerInfo?.name ?? "").trim();
+      profileNameLabel.textContent = displayName || "Your profile";
+      profileIdLabel.textContent = resolved ? `Player ID: ${resolved}` : "Player ID unavailable.";
+      const avatarUrl = (playerInfo?.discordAvatarUrl ?? "").trim();
+      if (avatarUrl) {
+        avatarImg.src = avatarUrl;
+        avatarImg.style.display = "";
+        avatarFallback.style.display = "none";
+      } else {
+        avatarImg.src = "";
+        avatarImg.style.display = "none";
+        const fallbackLabel = (displayName || resolved || "P").trim();
+        avatarFallback.textContent = fallbackLabel ? fallbackLabel.charAt(0).toUpperCase() : "P";
+        avatarFallback.style.display = "";
+      }
+      updateSubmitState();
+    };
+    void updateProfileInfo();
+  }
+  function renderFriendRequestsTab(view, ui) {
+    view.innerHTML = "";
+    const card = ui.card("Incoming requests");
+    card.body.style.display = "grid";
+    card.body.style.gap = "10px";
+    const controls = ui.flexRow({ justify: "end", align: "center" });
+    const requestsRefresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
+    requestsRefresh.style.background = "rgba(248, 250, 252, 0.08)";
+    requestsRefresh.style.color = "#f8fafc";
+    requestsRefresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
+    requestsRefresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+    requestsRefresh.title = "Reload friend requests";
+    requestsRefresh.addEventListener("click", () => {
+      void loadRequests({ force: true });
+    });
+    controls.appendChild(requestsRefresh);
+    card.body.appendChild(controls);
+    const requestsStatus = document.createElement("div");
+    requestsStatus.style.fontSize = "12px";
+    requestsStatus.style.opacity = "0.8";
+    requestsStatus.textContent = "";
+    card.body.appendChild(requestsStatus);
+    const requestsList = document.createElement("div");
+    requestsList.style.display = "grid";
+    requestsList.style.gap = "8px";
+    requestsList.style.maxHeight = "26vh";
+    requestsList.style.overflow = "auto";
+    card.body.appendChild(requestsList);
+    view.appendChild(card.root);
+    let myId = null;
+    let requests = [];
+    let loadingRequests = false;
+    let destroyedRequests = false;
+    const requestActionInProgress = /* @__PURE__ */ new Set();
+    const renderRequests = () => {
+      if (destroyedRequests) return;
+      requestsList.innerHTML = "";
+      if (loadingRequests) {
+        const placeholder = document.createElement("div");
+        placeholder.textContent = "Loading friend requests...";
+        placeholder.style.opacity = "0.6";
+        placeholder.style.fontSize = "12px";
+        placeholder.style.textAlign = "center";
+        requestsList.appendChild(placeholder);
+        requestsStatus.textContent = "";
+        return;
+      }
+      if (!requests.length) {
+        const placeholder = document.createElement("div");
+        placeholder.textContent = "No incoming friend requests.";
+        placeholder.style.opacity = "0.6";
+        placeholder.style.fontSize = "12px";
+        placeholder.style.textAlign = "center";
+        requestsList.appendChild(placeholder);
+        return;
+      }
+      for (const request of requests) {
+        const row = document.createElement("div");
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "40px 1fr auto";
+        row.style.alignItems = "center";
+        row.style.gap = "10px";
+        row.style.padding = "8px 12px";
+        row.style.borderRadius = "10px";
+        row.style.background = "rgba(255, 255, 255, 0.03)";
+        row.style.border = "1px solid rgba(255, 255, 255, 0.04)";
+        const avatar = document.createElement("div");
+        avatar.style.width = "36px";
+        avatar.style.height = "36px";
+        avatar.style.borderRadius = "50%";
+        avatar.style.display = "grid";
+        avatar.style.placeItems = "center";
+        avatar.style.background = "rgba(255, 255, 255, 0.05)";
+        if (request.avatarUrl) {
+          const img = document.createElement("img");
+          img.src = request.avatarUrl;
+          img.alt = request.playerName ?? request.playerId ?? "Friend request avatar";
+          img.width = 36;
+          img.height = 36;
+          img.style.borderRadius = "50%";
+          img.style.objectFit = "cover";
+          avatar.appendChild(img);
+        } else {
+          const fallback = document.createElement("span");
+          const label2 = (request.playerName ?? request.playerId ?? "F").trim();
+          fallback.textContent = label2.charAt(0).toUpperCase();
+          fallback.style.fontWeight = "600";
+          fallback.style.fontSize = "15px";
+          avatar.appendChild(fallback);
+        }
+        const info = document.createElement("div");
+        info.style.display = "flex";
+        info.style.flexDirection = "column";
+        info.style.gap = "2px";
+        const nameEl = document.createElement("div");
+        nameEl.textContent = request.playerName ?? request.playerId ?? "Unknown player";
+        nameEl.style.fontWeight = "600";
+        nameEl.style.fontSize = "13px";
+        const subEl = document.createElement("div");
+        subEl.textContent = request.room?.id ? `In room ${request.room.id}` : "No room information";
+        subEl.style.fontSize = "11px";
+        subEl.style.opacity = "0.7";
+        info.append(nameEl, subEl);
+        const actions = ui.flexRow({ gap: 4, align: "center" });
+        const reject = ui.btn("\u274C", { size: "sm" });
+        reject.title = "Reject request";
+        const accept = ui.btn("\u2705", { size: "sm" });
+        accept.title = "Accept request";
+        const applyAction = (action2) => {
+          return async () => {
+            if (!myId || !request.playerId) return;
+            if (requestActionInProgress.has(request.playerId)) return;
+            requestActionInProgress.add(request.playerId);
+            requestsStatus.textContent = `${action2 === "accept" ? "Accepting" : "Rejecting"} ${request.playerName ?? request.playerId}...`;
+            try {
+              await respondFriendRequest({
+                playerId: myId,
+                otherPlayerId: request.playerId,
+                action: action2
+              });
+            } catch (error) {
+              console.error("[FriendsMenu] respondFriendRequest", error);
+            } finally {
+              requestActionInProgress.delete(request.playerId);
+              await loadRequests({ force: true });
+              void refreshAllFriends?.({ force: true });
+            }
+          };
+        };
+        reject.addEventListener("click", applyAction("reject"));
+        accept.addEventListener("click", applyAction("accept"));
+        actions.append(reject, accept);
+        row.append(avatar, info, actions);
+        requestsList.appendChild(row);
+      }
+      requestsStatus.textContent = `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
+    };
+    async function loadRequests(options) {
+      if (destroyedRequests) return;
+      if (!myId) {
+        requestsStatus.textContent = "Waiting for player ID to load requests...";
+        requestsList.innerHTML = "";
+        const placeholder = document.createElement("div");
+        placeholder.textContent = "Waiting for player ID to load requests.";
+        placeholder.style.opacity = "0.6";
+        placeholder.style.fontSize = "12px";
+        placeholder.style.textAlign = "center";
+        requestsList.appendChild(placeholder);
+        return;
+      }
+      loadingRequests = true;
+      renderRequests();
+      try {
+        if (!options?.force) {
+          const cached = getCachedIncomingRequestsWithViews();
+          if (cached.length) {
+            requests = cached;
+            return;
+          }
+        }
+        requests = await fetchIncomingRequestsWithViews(myId);
+      } catch (error) {
+        console.error("[FriendsMenu] fetchIncomingRequestsWithViews", error);
+        requests = [];
+      } finally {
+        loadingRequests = false;
+        renderRequests();
+      }
+    }
+    const refreshPlayerId = async () => {
+      const resolved = await playerDatabaseUserId.get();
+      myId = resolved;
+      if (!resolved) {
+        requestsStatus.textContent = "Waiting for player ID to load requests...";
+        requestsList.innerHTML = "";
+        const placeholder = document.createElement("div");
+        placeholder.textContent = "Waiting for player ID to load requests.";
+        placeholder.style.opacity = "0.6";
+        placeholder.style.fontSize = "12px";
+        placeholder.style.textAlign = "center";
+        requestsList.appendChild(placeholder);
+        return;
+      }
+      await loadRequests();
+    };
+    void refreshPlayerId();
+    view.__cleanup__ = () => {
+      destroyedRequests = true;
+    };
+  }
+  function renderSettingsTab2(view, ui) {
+    view.innerHTML = "";
+    const settings = getFriendSettings();
+    const layout = document.createElement("div");
+    layout.style.display = "grid";
+    layout.style.gap = "12px";
+    const globalCard = ui.card("Global settings");
+    globalCard.body.style.display = "grid";
+    globalCard.body.style.gap = "12px";
+    const privacyCard = ui.card("Privacy");
+    privacyCard.body.style.display = "grid";
+    privacyCard.body.style.gap = "12px";
+    const applyPatch = (patch) => patchFriendSettings(patch);
+    const buildToggleRow = (label2, checked, description, onToggle) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "1fr auto";
+      row.style.alignItems = "center";
+      row.style.gap = "12px";
+      const text = document.createElement("div");
+      text.style.display = "grid";
+      text.style.gap = "2px";
+      const labelEl = document.createElement("div");
+      labelEl.textContent = label2;
+      labelEl.style.fontWeight = "600";
+      labelEl.style.fontSize = "13px";
+      if (description) {
+        const descriptionEl = document.createElement("div");
+        descriptionEl.textContent = description;
+        descriptionEl.style.fontSize = "12px";
+        descriptionEl.style.opacity = "0.7";
+        text.append(labelEl, descriptionEl);
+      } else {
+        text.append(labelEl);
+      }
+      const toggle = ui.switch(checked);
+      toggle.addEventListener("input", () => {
+        onToggle(toggle.checked);
+      });
+      row.append(text, toggle);
+      return row;
+    };
+    globalCard.body.append(
+      buildToggleRow(
+        "Show online friends only",
+        settings.showOnlineFriendsOnly,
+        void 0,
+        (next) => applyPatch({ showOnlineFriendsOnly: next })
+      ),
+      buildToggleRow(
+        "Auto-accept incoming requests",
+        settings.autoAcceptIncomingRequests,
+        void 0,
+        (next) => applyPatch({ autoAcceptIncomingRequests: next })
+      ),
+      buildToggleRow(
+        "Hide my room from the public list",
+        settings.hideRoomFromPublicList,
+        "If another player in your room keeps this option disabled, the room will still appear in the public list.",
+        (next) => applyPatch({ hideRoomFromPublicList: next })
+      )
+    );
+    privacyCard.body.append(
+      buildToggleRow(
+        "Friends can view my garden",
+        settings.showGarden,
+        void 0,
+        (next) => applyPatch({ showGarden: next })
+      ),
+      buildToggleRow(
+        "Friends can view my inventory",
+        settings.showInventory,
+        void 0,
+        (next) => applyPatch({ showInventory: next })
+      ),
+      buildToggleRow(
+        "Friends can see my coins",
+        settings.showCoins,
+        void 0,
+        (next) => applyPatch({ showCoins: next })
+      ),
+      buildToggleRow(
+        "Friends can see my activity log",
+        settings.showActivityLog,
+        void 0,
+        (next) => applyPatch({ showActivityLog: next })
+      ),
+      buildToggleRow(
+        "Friends can view my journal",
+        settings.showJournal,
+        void 0,
+        (next) => applyPatch({ showJournal: next })
+      ),
+      buildToggleRow(
+        "Friends can see my stats",
+        settings.showStats,
+        void 0,
+        (next) => applyPatch({ showStats: next })
+      )
+    );
+    layout.append(globalCard.root, privacyCard.root);
+    view.appendChild(layout);
+  }
+  function renderFriendsMenu(root) {
+    const ui = new Menu({ id: "friends", compact: true });
+    ui.mount(root);
+    ui.root.style.width = "420px";
+    ui.root.style.maxWidth = "420px";
+    ui.root.style.minWidth = "340px";
+    ui.addTabs([
+      { id: "friends-all", title: "Friend list", render: (view) => renderAllTab(view, ui) },
+      { id: "friends-add", title: "Add friend", render: (view) => renderAddFriendTab(view, ui) },
+      { id: "friends-requests", title: "Request", render: (view) => renderFriendRequestsTab(view, ui) },
+      { id: "friends-settings", title: "Settings", render: (view) => renderSettingsTab2(view, ui) }
+    ]);
+    ui.switchTo("friends-all");
+  }
+
   // src/utils/antiafk.ts
   function createAntiAfkController(deps) {
     const STOP_EVENTS = ["visibilitychange", "blur", "focus", "focusout", "pagehide", "freeze", "resume"];
@@ -47437,6 +48290,345 @@ next: ${next}`;
     return resolved;
   }
 
+  // src/utils/payload.ts
+  var DEFAULT_PRIVACY = {
+    showProfile: true,
+    showGarden: true,
+    showInventory: true,
+    showCoins: true,
+    showActivityLog: true,
+    showJournal: true,
+    hideRoomFromPublicList: false,
+    showStats: true
+  };
+  function clampPlayers2(n) {
+    const value = Math.floor(Number(n));
+    if (!Number.isFinite(value)) return 1;
+    return Math.max(1, Math.min(6, value));
+  }
+  function findPlayersDeep2(state2) {
+    if (!state2 || typeof state2 !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state2];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const key2 of Object.keys(cur)) {
+        const value = cur[key2];
+        if (Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === "object")) {
+          const looksLikePlayer = value.some(
+            (item) => "id" in item && "name" in item
+          );
+          if (looksLikePlayer && /player/i.test(key2)) {
+            out.push(...value);
+          }
+        }
+        if (value && typeof value === "object") {
+          stack.push(value);
+        }
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const entry of out) {
+      if (entry?.id) {
+        byId.set(String(entry.id), entry);
+      }
+    }
+    return [...byId.values()];
+  }
+  function getPlayersArray2(state2) {
+    const direct = state2?.fullState?.data?.players ?? state2?.data?.players ?? state2?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep2(state2);
+  }
+  function getSlotsArray2(state2) {
+    const raw = state2?.child?.data?.userSlots ?? state2?.fullState?.child?.data?.userSlots ?? state2?.data?.userSlots;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object") {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
+        const ai = Number(a[0]);
+        const bi = Number(b[0]);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([, value]) => value);
+    }
+    return [];
+  }
+  function selectSlot(slots, options) {
+    if (!Array.isArray(slots) || slots.length === 0) return null;
+    const { slotIndex, playerId: playerId2 } = options;
+    if (typeof slotIndex === "number" && Number.isInteger(slotIndex)) {
+      const candidate = slots[slotIndex];
+      if (candidate && typeof candidate === "object") return candidate;
+    }
+    const normalizedId = playerId2 != null ? String(playerId2) : null;
+    if (normalizedId) {
+      for (const slot of slots) {
+        if (!slot || typeof slot !== "object") continue;
+        if (String(
+          slot.databaseUserId ?? slot.playerId ?? slot.data?.databaseUserId ?? slot.data?.playerId ?? ""
+        ) === normalizedId) {
+          return slot;
+        }
+      }
+    }
+    for (const slot of slots) {
+      if (!slot || typeof slot !== "object") continue;
+      if (slot.playerId || slot.databaseUserId || slot.data) return slot;
+    }
+    return null;
+  }
+  function resolvePlayer(players, slot, options) {
+    const candidate = options.playerId ?? slot?.playerId ?? slot?.databaseUserId ?? slot?.data?.playerId ?? slot?.data?.databaseUserId ?? null;
+    const normalized = candidate != null ? String(candidate) : null;
+    if (normalized) {
+      for (const player2 of players) {
+        if (!player2 || typeof player2 !== "object") continue;
+        if (String(player2.id ?? "") === normalized) return player2;
+        if (String(player2.databaseUserId ?? "") === normalized) return player2;
+      }
+    }
+    return players[0] ?? null;
+  }
+  function normalizeActivityLog(slotData) {
+    const logs = slotData?.activityLog ?? slotData?.activityLogs ?? slotData?.activitylog;
+    return Array.isArray(logs) ? logs : null;
+  }
+  async function buildPlayerStatePayload(options = {}) {
+    try {
+      const state2 = await Atoms.root.state.get();
+      if (!state2 || typeof state2 !== "object") return null;
+      const settings = getFriendSettings();
+      const privacy = {
+        showProfile: DEFAULT_PRIVACY.showProfile,
+        showGarden: settings.showGarden,
+        showInventory: settings.showInventory,
+        showCoins: settings.showCoins,
+        showActivityLog: settings.showActivityLog,
+        showJournal: settings.showJournal,
+        showStats: settings.showStats,
+        hideRoomFromPublicList: settings.hideRoomFromPublicList
+      };
+      const players = getPlayersArray2(state2);
+      const normalizedPlayers = Array.isArray(players) ? players : [];
+      const slots = getSlotsArray2(state2).filter((slot2) => !!slot2);
+      const userSlots = slots.map((slot2, idx) => {
+        const slotData2 = slot2?.data ?? slot2;
+        const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? null;
+        const coinValue2 = Number(coinCandidate2);
+        const coins = Number.isFinite(coinValue2) ? coinValue2 : null;
+        const playerEntry = normalizedPlayers[idx] ?? null;
+        return {
+          name: typeof playerEntry?.name === "string" ? playerEntry.name : typeof slotData2?.name === "string" ? slotData2.name : null,
+          discordAvatarUrl: typeof playerEntry?.discordAvatarUrl === "string" ? playerEntry.discordAvatarUrl : typeof slotData2?.discordAvatarUrl === "string" ? slotData2.discordAvatarUrl : null,
+          playerId: slotData2?.databaseUserId ?? slot2?.databaseUserId ?? (slotData2?.playerId ?? null),
+          coins
+        };
+      });
+      const myDatabaseUserId = await playerDatabaseUserId.get();
+      if (slots.length === 0) return null;
+      const slot = selectSlot(slots, {
+        ...options,
+        playerId: options.playerId ?? myDatabaseUserId ?? void 0
+      });
+      if (!slot || typeof slot !== "object") return null;
+      const slotData = slot.data ?? slot;
+      if (!slotData || typeof slotData !== "object") return null;
+      const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
+      const playerId2 = slot.databaseUserId ?? resolvedPlayer?.databaseUserId ?? slot.playerId ?? (resolvedPlayer?.id ?? null);
+      const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
+      const avatarUrl = resolvedPlayer?.discordAvatarUrl ?? slotData?.discordAvatarUrl ?? slot?.discordAvatarUrl ?? null;
+      const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
+      const coinValue = Number(coinCandidate);
+      const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
+      const roomId = state2?.data?.roomId ?? state2?.fullState?.data?.roomId ?? state2?.roomId ?? null;
+      let playersCount = normalizedPlayers.length > 0 ? normalizedPlayers.length : slots.length;
+      try {
+        const atomValue = await Atoms.server.numPlayers.get();
+        playersCount = clampPlayers2(atomValue);
+      } catch {
+      }
+      const persistedActivityLog = readAriesPath("activityLog.history");
+      const activityLog = Array.isArray(persistedActivityLog) ? persistedActivityLog : normalizeActivityLog(slotData);
+      const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
+      return {
+        playerId: playerId2 != null ? String(playerId2) : null,
+        playerName: privacy.showProfile ? playerName : null,
+        avatarUrl: privacy.showProfile ? avatarUrl : null,
+        coins: privacy.showCoins ? coinsRaw : null,
+        room: {
+          id: roomId,
+          isPrivate: privacy.hideRoomFromPublicList ?? null,
+          playersCount,
+          userSlots
+        },
+        privacy,
+        state: {
+          garden: privacy.showGarden ? slotData?.garden ?? null : null,
+          inventory: privacy.showInventory ? slotData?.inventory ?? slot?.inventory ?? null : null,
+          stats: privacy.showStats && typeof slotData?.stats === "object" && slotData?.stats ? slotData.stats : null,
+          activityLog: privacy.showActivityLog ? activityLog : null,
+          journal: privacy.showJournal ? journalEntry : null
+        }
+      };
+    } catch {
+      return null;
+    }
+  }
+  async function logPlayerStatePayload(options) {
+    const payload = await buildPlayerStatePayload(options);
+    console.log("[PlayerPayload] Player state payload:", payload);
+    return payload;
+  }
+  shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
+  shareGlobal("logPlayerStatePayload", logPlayerStatePayload);
+  var gameReadyWatcherInitialized = false;
+  var gameReadyTriggered = false;
+  var preferredReportingIntervalMs;
+  var FRIEND_REFRESH_INTERVAL_MS = 6e4;
+  var AUTO_ACCEPT_INTERVAL_MS = 6e4;
+  var friendRefreshLoopStarted = false;
+  var autoAcceptedRequestIds = /* @__PURE__ */ new Set();
+  var autoAcceptTimer = null;
+  var autoAcceptWatcherInitialized = false;
+  var autoAcceptSettingsUnsubscribe = null;
+  async function warmSupabaseInitialFetch() {
+    try {
+      const dbId = await playerDatabaseUserId.get();
+      if (!dbId) return;
+      const requests = await fetchIncomingRequestsWithViews(dbId);
+      const acceptedCount = await maybeAutoAcceptIncomingRequests(dbId, requests);
+      if (acceptedCount > 0) {
+        await fetchIncomingRequestsWithViews(dbId);
+      }
+      await fetchFriendsWithViews(dbId);
+    } catch (error) {
+      console.error("[PlayerPayload] Failed to prefetch friends data", error);
+    }
+  }
+  async function maybeAutoAcceptIncomingRequests(playerId2, requests) {
+    if (!requests || !requests.length) return 0;
+    const { autoAcceptIncomingRequests } = getFriendSettings();
+    if (!autoAcceptIncomingRequests) return 0;
+    let acceptedCount = 0;
+    for (const request of requests) {
+      const otherId = request?.playerId;
+      if (!otherId) continue;
+      if (autoAcceptedRequestIds.has(otherId)) continue;
+      try {
+        const wasAccepted = await respondFriendRequest({
+          playerId: playerId2,
+          otherPlayerId: otherId,
+          action: "accept"
+        });
+        if (wasAccepted) {
+          autoAcceptedRequestIds.add(otherId);
+          acceptedCount += 1;
+          void toastSimple(
+            "Friends",
+            `Auto-accepted incoming request from ${request.playerName ?? otherId}.`,
+            "success"
+          );
+        }
+      } catch (error) {
+        console.error("[PlayerPayload] auto-accept request failed", error);
+      }
+    }
+    return acceptedCount;
+  }
+  function startFriendDataRefreshLoop(intervalMs = FRIEND_REFRESH_INTERVAL_MS) {
+    if (friendRefreshLoopStarted) return;
+    friendRefreshLoopStarted = true;
+    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : FRIEND_REFRESH_INTERVAL_MS;
+    void warmSupabaseInitialFetch();
+    setInterval(() => {
+      void warmSupabaseInitialFetch();
+    }, normalizedMs);
+  }
+  async function pollIncomingRequestsForAutoAccept() {
+    try {
+      const playerId2 = await playerDatabaseUserId.get();
+      if (!playerId2) return;
+      const requests = await fetchIncomingRequestsWithViews(playerId2);
+      await maybeAutoAcceptIncomingRequests(playerId2, requests);
+    } catch (error) {
+      console.error("[PlayerPayload] auto-accept poll failed", error);
+    }
+  }
+  function stopAutoAcceptLoop() {
+    if (autoAcceptTimer === null) return;
+    clearInterval(autoAcceptTimer);
+    autoAcceptTimer = null;
+  }
+  function startAutoAcceptLoopIfEnabled() {
+    const { autoAcceptIncomingRequests } = getFriendSettings();
+    if (!autoAcceptIncomingRequests) {
+      stopAutoAcceptLoop();
+      return;
+    }
+    if (autoAcceptTimer !== null) return;
+    void pollIncomingRequestsForAutoAccept();
+    autoAcceptTimer = setInterval(() => {
+      void pollIncomingRequestsForAutoAccept();
+    }, AUTO_ACCEPT_INTERVAL_MS);
+  }
+  function startAutoAcceptWatcher() {
+    if (autoAcceptWatcherInitialized) return;
+    autoAcceptWatcherInitialized = true;
+    startAutoAcceptLoopIfEnabled();
+    autoAcceptSettingsUnsubscribe = onFriendSettingsChange(() => {
+      startAutoAcceptLoopIfEnabled();
+    });
+  }
+  async function tryInitializeReporting(state2) {
+    if (gameReadyTriggered) return;
+    const snapshot = state2 ?? await Atoms.root.state.get();
+    const players = Array.isArray(snapshot?.data?.players) ? snapshot.data.players : [];
+    if (players.length === 0) return;
+    gameReadyTriggered = true;
+    startPlayerStateReporting(preferredReportingIntervalMs);
+    startFriendDataRefreshLoop();
+  }
+  function startPlayerStateReportingWhenGameReady(intervalMs) {
+    if (gameReadyWatcherInitialized) return;
+    gameReadyWatcherInitialized = true;
+    preferredReportingIntervalMs = intervalMs;
+    void tryInitializeReporting();
+    void Atoms.root.state.onChange((next) => {
+      void tryInitializeReporting(next);
+    });
+    startAutoAcceptWatcher();
+  }
+  var payloadReportingTimer = null;
+  var isPayloadReporting = false;
+  async function buildAndSendPlayerState() {
+    if (isPayloadReporting) return;
+    isPayloadReporting = true;
+    try {
+      const payload = await buildPlayerStatePayload();
+      console.log("payload: ", payload);
+      if (payload) {
+        await sendPlayerState(payload);
+      }
+    } catch (error) {
+      console.error("[PlayerPayload] Failed to send payload:", error);
+    } finally {
+      isPayloadReporting = false;
+    }
+  }
+  function startPlayerStateReporting(intervalMs = 6e4) {
+    console.log("start reporting");
+    if (payloadReportingTimer !== null) return;
+    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
+    void buildAndSendPlayerState();
+    payloadReportingTimer = setInterval(() => {
+      void buildAndSendPlayerState();
+    }, normalizedMs);
+  }
+
   // src/main.ts
   var ariesMod = installAriesModApi();
   var TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"];
@@ -47470,7 +48662,7 @@ next: ${next}`;
     EditorService.init();
     mountHUD({
       onRegister(register) {
-        register("players", "\u{1F465} Players", renderPlayersMenu);
+        register("players", "\u{1F465} Friends", renderFriendsMenu);
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
         register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
@@ -47492,5 +48684,6 @@ next: ${next}`;
     });
     ariesMod.antiAfkController = antiAfk;
     antiAfk.start();
+    startPlayerStateReportingWhenGameReady();
   })();
 })();
