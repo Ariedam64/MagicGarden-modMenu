@@ -296,6 +296,9 @@ const VALUE_SUMMARY_ICON_SRC = (() => {
   }
   return src.startsWith('data:') ? src : `data:image/png;base64,${src}`;
 })();
+const VALUE_SUMMARY_ICON_BACKGROUND = VALUE_SUMMARY_ICON_SRC
+  ? `url("${VALUE_SUMMARY_ICON_SRC}")`
+  : '';
 
 interface InventoryDomEntry {
   wrapper: HTMLElement;
@@ -947,24 +950,32 @@ const ensureValueSummaryContent = (summary: HTMLSpanElement): HTMLSpanElement =>
     summary.style.gap = '0.25rem';
   }
 
-  if (VALUE_SUMMARY_ICON_SRC) {
-    let iconEl = summary.querySelector<HTMLImageElement>(`.${VALUE_SUMMARY_ICON_CLASS}`);
-    if (!iconEl) {
-      iconEl = document.createElement('img');
-      iconEl.className = VALUE_SUMMARY_ICON_CLASS;
-      iconEl.alt = '';
-      iconEl.decoding = 'async';
-      iconEl.src = VALUE_SUMMARY_ICON_SRC;
-      Object.assign(iconEl.style, {
-        width: '1.2rem',
-        height: '1.2rem',
-        flexShrink: '0',
-        objectFit: 'contain',
-      } as CSSStyleDeclaration);
-      summary.insertBefore(iconEl, summary.firstChild);
-    } else if (iconEl.src !== VALUE_SUMMARY_ICON_SRC) {
-      iconEl.src = VALUE_SUMMARY_ICON_SRC;
+  if (VALUE_SUMMARY_ICON_BACKGROUND) {
+    let iconEl = summary.querySelector<HTMLElement>(`.${VALUE_SUMMARY_ICON_CLASS}`);
+    if (iconEl && iconEl.tagName !== 'SPAN') {
+      iconEl.remove();
+      iconEl = null;
     }
+    if (!iconEl) {
+      iconEl = document.createElement('span');
+      iconEl.className = VALUE_SUMMARY_ICON_CLASS;
+      iconEl.setAttribute('aria-hidden', 'true');
+      iconEl.style.width = '1.2rem';
+      iconEl.style.height = '1.2rem';
+      iconEl.style.flexShrink = '0';
+      iconEl.style.display = 'inline-block';
+      iconEl.style.backgroundSize = 'contain';
+      iconEl.style.backgroundRepeat = 'no-repeat';
+      iconEl.style.backgroundPosition = 'center';
+      iconEl.style.pointerEvents = 'none';
+      iconEl.style.userSelect = 'none';
+      summary.insertBefore(iconEl, summary.firstChild);
+    }
+    if (iconEl && iconEl.style.backgroundImage !== VALUE_SUMMARY_ICON_BACKGROUND) {
+      iconEl.style.backgroundImage = VALUE_SUMMARY_ICON_BACKGROUND;
+    }
+  } else {
+    summary.querySelector(`.${VALUE_SUMMARY_ICON_CLASS}`)?.remove();
   }
 
   let textEl = summary.querySelector<HTMLSpanElement>(`.${VALUE_SUMMARY_TEXT_CLASS}`);

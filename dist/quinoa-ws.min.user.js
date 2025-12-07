@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.8.11
+// @version      2.8.16
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -24188,6 +24188,7 @@
     }
     return src.startsWith("data:") ? src : `data:image/png;base64,${src}`;
   })();
+  var VALUE_SUMMARY_ICON_BACKGROUND = VALUE_SUMMARY_ICON_SRC ? `url("${VALUE_SUMMARY_ICON_SRC}")` : "";
   function createDomSnapshot(entries) {
     return entries.map((entry) => entry.wrapper);
   }
@@ -24670,24 +24671,32 @@
     if (!summary.style.gap) {
       summary.style.gap = "0.25rem";
     }
-    if (VALUE_SUMMARY_ICON_SRC) {
+    if (VALUE_SUMMARY_ICON_BACKGROUND) {
       let iconEl = summary.querySelector(`.${VALUE_SUMMARY_ICON_CLASS}`);
-      if (!iconEl) {
-        iconEl = document.createElement("img");
-        iconEl.className = VALUE_SUMMARY_ICON_CLASS;
-        iconEl.alt = "";
-        iconEl.decoding = "async";
-        iconEl.src = VALUE_SUMMARY_ICON_SRC;
-        Object.assign(iconEl.style, {
-          width: "1.2rem",
-          height: "1.2rem",
-          flexShrink: "0",
-          objectFit: "contain"
-        });
-        summary.insertBefore(iconEl, summary.firstChild);
-      } else if (iconEl.src !== VALUE_SUMMARY_ICON_SRC) {
-        iconEl.src = VALUE_SUMMARY_ICON_SRC;
+      if (iconEl && iconEl.tagName !== "SPAN") {
+        iconEl.remove();
+        iconEl = null;
       }
+      if (!iconEl) {
+        iconEl = document.createElement("span");
+        iconEl.className = VALUE_SUMMARY_ICON_CLASS;
+        iconEl.setAttribute("aria-hidden", "true");
+        iconEl.style.width = "1.2rem";
+        iconEl.style.height = "1.2rem";
+        iconEl.style.flexShrink = "0";
+        iconEl.style.display = "inline-block";
+        iconEl.style.backgroundSize = "contain";
+        iconEl.style.backgroundRepeat = "no-repeat";
+        iconEl.style.backgroundPosition = "center";
+        iconEl.style.pointerEvents = "none";
+        iconEl.style.userSelect = "none";
+        summary.insertBefore(iconEl, summary.firstChild);
+      }
+      if (iconEl && iconEl.style.backgroundImage !== VALUE_SUMMARY_ICON_BACKGROUND) {
+        iconEl.style.backgroundImage = VALUE_SUMMARY_ICON_BACKGROUND;
+      }
+    } else {
+      summary.querySelector(`.${VALUE_SUMMARY_ICON_CLASS}`)?.remove();
     }
     let textEl = summary.querySelector(`.${VALUE_SUMMARY_TEXT_CLASS}`);
     if (!textEl) {
@@ -39593,6 +39602,10 @@ next: ${next}`;
         }
       }
       btnSelect.onclick = async () => {
+        try {
+          await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+        } catch {
+        }
         await MiscService.openSeedSelectorFlow(ui.setWindowVisible.bind(ui));
         updateSummaryUI();
       };
@@ -39783,6 +39796,10 @@ next: ${next}`;
         }
       }
       btnSelect.onclick = async () => {
+        try {
+          await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+        } catch {
+        }
         await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
         updateSummaryUI();
       };
@@ -45760,7 +45777,10 @@ next: ${next}`;
     };
   }
   var DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
-  var SUPABASE_ROOM_CATEGORY = "Supabase";
+  var DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/;
+  function getPublicRoomCategory(roomId) {
+    return DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
+  }
   function transformSupabaseRoom(room) {
     const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
     const players = Math.max(0, rawCount);
@@ -45778,7 +45798,7 @@ next: ${next}`;
     return {
       name: room.id,
       idRoom: room.id,
-      category: SUPABASE_ROOM_CATEGORY,
+      category: getPublicRoomCategory(room.id),
       players: Math.min(players, capacity),
       capacity,
       isFull: players >= capacity,
@@ -46091,6 +46111,13 @@ next: ${next}`;
       return match[1];
     }
   }
+  var DISCORD_ROOM_DISPLAY_MAX_LENGTH = 12;
+  function formatRoomNameForDisplay(room) {
+    if (room.category === "Discord" && room.name.length > DISCORD_ROOM_DISPLAY_MAX_LENGTH) {
+      return `${room.name.slice(0, DISCORD_ROOM_DISPLAY_MAX_LENGTH)}\u2026`;
+    }
+    return room.name;
+  }
   function createRoomEntry(room, ui, options) {
     const isDiscord = RoomService.isDiscordActivity();
     const currentRoomCode = getCurrentRoomCode();
@@ -46249,7 +46276,8 @@ next: ${next}`;
     nameRow.style.alignItems = "center";
     nameRow.style.gap = "10px";
     const name = document.createElement("div");
-    name.textContent = room.name;
+    name.textContent = formatRoomNameForDisplay(room);
+    name.title = room.name;
     name.style.fontWeight = "600";
     name.style.fontSize = "16px";
     name.style.letterSpacing = "0.01em";
@@ -48415,16 +48443,25 @@ next: ${next}`;
       const players = getPlayersArray2(state2);
       const normalizedPlayers = Array.isArray(players) ? players : [];
       const slots = getSlotsArray2(state2).filter((slot2) => !!slot2);
-      const userSlots = slots.map((slot2, idx) => {
+      const coinsById = /* @__PURE__ */ new Map();
+      for (const slot2 of slots) {
         const slotData2 = slot2?.data ?? slot2;
-        const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? null;
+        const candidateId = slotData2?.databaseUserId ?? slot2?.databaseUserId ?? slotData2?.playerId ?? slot2?.playerId ?? null;
+        if (candidateId == null) continue;
+        const normalizedSlotId = String(candidateId);
+        const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? slotData2?.coins ?? slot2?.coins ?? null;
         const coinValue2 = Number(coinCandidate2);
-        const coins = Number.isFinite(coinValue2) ? coinValue2 : null;
-        const playerEntry = normalizedPlayers[idx] ?? null;
+        coinsById.set(normalizedSlotId, Number.isFinite(coinValue2) ? coinValue2 : null);
+      }
+      const userSlots = normalizedPlayers.map((player2) => {
+        const playerDatabaseId = player2?.databaseUserId ?? player2?.playerId ?? player2?.id ?? null;
+        const normalizedPlayerId = playerDatabaseId != null ? String(playerDatabaseId) : null;
+        const slotId = normalizedPlayerId ?? (typeof player2?.id === "string" || typeof player2?.id === "number" ? String(player2.id) : null);
+        const coins = slotId ? coinsById.get(slotId) ?? null : null;
         return {
-          name: typeof playerEntry?.name === "string" ? playerEntry.name : typeof slotData2?.name === "string" ? slotData2.name : null,
-          discordAvatarUrl: typeof playerEntry?.discordAvatarUrl === "string" ? playerEntry.discordAvatarUrl : typeof slotData2?.discordAvatarUrl === "string" ? slotData2.discordAvatarUrl : null,
-          playerId: slotData2?.databaseUserId ?? slot2?.databaseUserId ?? (slotData2?.playerId ?? null),
+          name: typeof player2?.name === "string" ? player2.name : null,
+          discordAvatarUrl: typeof player2?.discordAvatarUrl === "string" ? player2.discordAvatarUrl : null,
+          playerId: slotId,
           coins
         };
       });
@@ -48478,17 +48515,37 @@ next: ${next}`;
       return null;
     }
   }
+  function sanitizeActivityLogForCompare(log2) {
+    if (!Array.isArray(log2)) return null;
+    return log2.filter((entry) => entry?.action !== "feedPet");
+  }
+  function sanitizeStateForComparison(state2) {
+    const sanitizedActivityLog = sanitizeActivityLogForCompare(state2.activityLog ?? null);
+    if (sanitizedActivityLog === state2.activityLog) {
+      return state2;
+    }
+    return {
+      ...state2,
+      activityLog: sanitizedActivityLog
+    };
+  }
+  function snapshotPlayerState(state2) {
+    try {
+      const sanitized = sanitizeStateForComparison(state2);
+      return JSON.stringify(sanitized);
+    } catch (error) {
+      console.error("[PlayerPayload] Failed to snapshot player state", error);
+      return null;
+    }
+  }
   async function logPlayerStatePayload(options) {
-    const payload = await buildPlayerStatePayload(options);
-    return payload;
+    return buildPlayerStatePayload(options);
   }
   shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
   shareGlobal("logPlayerStatePayload", logPlayerStatePayload);
   var gameReadyWatcherInitialized = false;
   var gameReadyTriggered = false;
   var preferredReportingIntervalMs;
-  var FRIEND_REFRESH_INTERVAL_MS = 6e4;
-  var AUTO_ACCEPT_INTERVAL_MS = 6e4;
   var friendRefreshLoopStarted = false;
   var autoAcceptedRequestIds = /* @__PURE__ */ new Set();
   var autoAcceptTimer = null;
@@ -48538,14 +48595,10 @@ next: ${next}`;
     }
     return acceptedCount;
   }
-  function startFriendDataRefreshLoop(intervalMs = FRIEND_REFRESH_INTERVAL_MS) {
+  function startFriendDataRefreshLoop() {
     if (friendRefreshLoopStarted) return;
     friendRefreshLoopStarted = true;
-    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : FRIEND_REFRESH_INTERVAL_MS;
     void warmSupabaseInitialFetch();
-    setInterval(() => {
-      void warmSupabaseInitialFetch();
-    }, normalizedMs);
   }
   async function pollIncomingRequestsForAutoAccept() {
     try {
@@ -48572,7 +48625,7 @@ next: ${next}`;
     void pollIncomingRequestsForAutoAccept();
     autoAcceptTimer = setInterval(() => {
       void pollIncomingRequestsForAutoAccept();
-    }, AUTO_ACCEPT_INTERVAL_MS);
+    }, 6e4);
   }
   function startAutoAcceptWatcher() {
     if (autoAcceptWatcherInitialized) return;
@@ -48603,13 +48656,27 @@ next: ${next}`;
   }
   var payloadReportingTimer = null;
   var isPayloadReporting = false;
+  var firstPayloadStateSnapshot = null;
+  var lastSentStateSnapshot = null;
   async function buildAndSendPlayerState() {
     if (isPayloadReporting) return;
     isPayloadReporting = true;
     try {
       const payload = await buildPlayerStatePayload();
-      if (payload) {
-        await sendPlayerState(payload);
+      console.log(payload);
+      if (!payload) {
+        return;
+      }
+      const currentSnapshot2 = snapshotPlayerState(payload.state);
+      if (currentSnapshot2 !== null && !firstPayloadStateSnapshot) {
+        firstPayloadStateSnapshot = currentSnapshot2;
+      }
+      if (currentSnapshot2 !== null && lastSentStateSnapshot === currentSnapshot2) {
+        return;
+      }
+      await sendPlayerState(payload);
+      if (currentSnapshot2 !== null) {
+        lastSentStateSnapshot = currentSnapshot2;
       }
     } catch (error) {
       console.error("[PlayerPayload] Failed to send payload:", error);
@@ -48617,9 +48684,10 @@ next: ${next}`;
       isPayloadReporting = false;
     }
   }
-  function startPlayerStateReporting(intervalMs = 6e4) {
+  function startPlayerStateReporting(intervalMs = 3e5) {
+    console.log("start reporting");
     if (payloadReportingTimer !== null) return;
-    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
+    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 3e5;
     void buildAndSendPlayerState();
     payloadReportingTimer = setInterval(() => {
       void buildAndSendPlayerState();

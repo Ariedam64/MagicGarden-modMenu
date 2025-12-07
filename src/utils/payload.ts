@@ -233,34 +233,46 @@ export async function buildPlayerStatePayload(
     const players = getPlayersArray(state);
     const normalizedPlayers = Array.isArray(players) ? players : [];
     const slots = getSlotsArray(state).filter((slot) => !!slot);
-    const userSlots = slots.map((slot, idx) => {
+    const coinsById = new Map<string, number | null>();
+    for (const slot of slots) {
       const slotData = slot?.data ?? slot;
+      const candidateId =
+        slotData?.databaseUserId ??
+        slot?.databaseUserId ??
+        slotData?.playerId ??
+        slot?.playerId ??
+        null;
+      if (candidateId == null) continue;
+      const normalizedSlotId = String(candidateId);
       const coinCandidate =
         slotData?.coinsCount ??
         slotData?.data?.coinsCount ??
         slot?.coinsCount ??
         slot?.data?.coinsCount ??
+        slotData?.coins ??
+        slot?.coins ??
         null;
       const coinValue = Number(coinCandidate);
-      const coins = Number.isFinite(coinValue) ? coinValue : null;
-      const playerEntry = normalizedPlayers[idx] ?? null;
+      coinsById.set(normalizedSlotId, Number.isFinite(coinValue) ? coinValue : null);
+    }
+    const userSlots = normalizedPlayers.map((player) => {
+      const playerDatabaseId =
+        player?.databaseUserId ??
+        player?.playerId ??
+        player?.id ??
+        null;
+      const normalizedPlayerId = playerDatabaseId != null ? String(playerDatabaseId) : null;
+      const slotId =
+        normalizedPlayerId ??
+        (typeof player?.id === "string" || typeof player?.id === "number"
+          ? String(player.id)
+          : null);
+      const coins = slotId ? coinsById.get(slotId) ?? null : null;
       return {
-        name:
-          typeof playerEntry?.name === "string"
-            ? playerEntry.name
-            : typeof slotData?.name === "string"
-            ? slotData.name
-            : null,
+        name: typeof player?.name === "string" ? player.name : null,
         discordAvatarUrl:
-          typeof playerEntry?.discordAvatarUrl === "string"
-            ? playerEntry.discordAvatarUrl
-            : typeof slotData?.discordAvatarUrl === "string"
-            ? slotData.discordAvatarUrl
-            : null,
-        playerId:
-          slotData?.databaseUserId ??
-          slot?.databaseUserId ??
-          (slotData?.playerId ?? null),
+          typeof player?.discordAvatarUrl === "string" ? player.discordAvatarUrl : null,
+        playerId: slotId,
         coins,
       };
     });
@@ -358,11 +370,54 @@ export async function buildPlayerStatePayload(
   }
 }
 
+const STATE_KEYS: Array<keyof PlayerStatePayload["state"]> = [
+  "garden",
+  "inventory",
+  "stats",
+  "activityLog",
+  "journal",
+];
+
+function sanitizeActivityLogForCompare(
+  log: PlayerStatePayload["state"]["activityLog"] | undefined | null,
+): PlayerStatePayload["state"]["activityLog"] | null {
+  if (!Array.isArray(log)) return null;
+  return log.filter((entry) => entry?.action !== "feedPet");
+}
+
+function sanitizeStateForComparison(state: PlayerStatePayload["state"]): PlayerStatePayload["state"] {
+  const sanitizedActivityLog = sanitizeActivityLogForCompare(state.activityLog ?? null);
+  if (sanitizedActivityLog === state.activityLog) {
+    return state;
+  }
+  return {
+    ...state,
+    activityLog: sanitizedActivityLog,
+  };
+}
+
+function snapshotPlayerState(state: PlayerStatePayload["state"]): string | null {
+  try {
+    const sanitized = sanitizeStateForComparison(state);
+    return JSON.stringify(sanitized);
+  } catch (error) {
+    console.error("[PlayerPayload] Failed to snapshot player state", error);
+    return null;
+  }
+}
+
+function tryStringifyValue(value: unknown): string | null {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
 export async function logPlayerStatePayload(
   options?: BuildPlayerStatePayloadOptions
 ): Promise<PlayerStatePayload | null> {
-  const payload = await buildPlayerStatePayload(options);
-  return payload;
+  return buildPlayerStatePayload(options);
 }
 
 shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
@@ -371,8 +426,6 @@ shareGlobal("logPlayerStatePayload", logPlayerStatePayload);
 let gameReadyWatcherInitialized = false;
 let gameReadyTriggered = false;
 let preferredReportingIntervalMs: number | undefined;
-const FRIEND_REFRESH_INTERVAL_MS = 60_000;
-const AUTO_ACCEPT_INTERVAL_MS = 60_000;
 let friendRefreshLoopStarted = false;
 const autoAcceptedRequestIds = new Set<string>();
 let autoAcceptTimer: ReturnType<typeof setInterval> | null = null;
@@ -429,17 +482,10 @@ async function maybeAutoAcceptIncomingRequests(
   return acceptedCount;
 }
 
-function startFriendDataRefreshLoop(intervalMs = FRIEND_REFRESH_INTERVAL_MS): void {
+function startFriendDataRefreshLoop(): void {
   if (friendRefreshLoopStarted) return;
   friendRefreshLoopStarted = true;
-  const normalizedMs =
-    Number.isFinite(intervalMs) && intervalMs > 0
-      ? intervalMs
-      : FRIEND_REFRESH_INTERVAL_MS;
   void warmSupabaseInitialFetch();
-  setInterval(() => {
-    void warmSupabaseInitialFetch();
-  }, normalizedMs);
 }
 
 async function pollIncomingRequestsForAutoAccept(): Promise<void> {
@@ -469,7 +515,7 @@ function startAutoAcceptLoopIfEnabled(): void {
   void pollIncomingRequestsForAutoAccept();
   autoAcceptTimer = setInterval(() => {
     void pollIncomingRequestsForAutoAccept();
-  }, AUTO_ACCEPT_INTERVAL_MS);
+  }, 60_000);
 }
 
 function startAutoAcceptWatcher(): void {
@@ -512,14 +558,31 @@ export function startPlayerStateReportingWhenGameReady(intervalMs?: number): voi
 
 let payloadReportingTimer: ReturnType<typeof setInterval> | null = null;
 let isPayloadReporting = false;
+let firstPayloadStateSnapshot: string | null = null;
+let lastSentStateSnapshot: string | null = null;
 
 async function buildAndSendPlayerState(): Promise<void> {
   if (isPayloadReporting) return;
   isPayloadReporting = true;
   try {
     const payload = await buildPlayerStatePayload();
-    if (payload) {
-      await sendPlayerState(payload);
+    console.log(payload)
+    if (!payload) {
+      return;
+    }
+
+    const currentSnapshot = snapshotPlayerState(payload.state);
+    if (currentSnapshot !== null && !firstPayloadStateSnapshot) {
+      firstPayloadStateSnapshot = currentSnapshot;
+    }
+
+    if (currentSnapshot !== null && lastSentStateSnapshot === currentSnapshot) {
+      return;
+    }
+
+    await sendPlayerState(payload);
+    if (currentSnapshot !== null) {
+      lastSentStateSnapshot = currentSnapshot;
     }
   } catch (error) {
     console.error("[PlayerPayload] Failed to send payload:", error);
@@ -528,9 +591,10 @@ async function buildAndSendPlayerState(): Promise<void> {
   }
 }
 
-export function startPlayerStateReporting(intervalMs = 60_000): void {
+export function startPlayerStateReporting(intervalMs = 300000): void {
+  console.log("start reporting")
   if (payloadReportingTimer !== null) return;
-  const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60_000;
+  const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 300000;
   void buildAndSendPlayerState();
   payloadReportingTimer = setInterval(() => {
     void buildAndSendPlayerState();

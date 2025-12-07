@@ -427,7 +427,12 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
 }
 
 const DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
-const SUPABASE_ROOM_CATEGORY = "Supabase";
+// Discord room IDs follow the shape `I-<19 digits>-<type>-<18+ digits>[-<18+ digits>]`.
+const DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/;
+
+function getPublicRoomCategory(roomId: string): "Discord" | "Web" {
+  return DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
+}
 
 function transformSupabaseRoom(room: SupabaseRoom): PublicRoomStatus {
   const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
@@ -450,7 +455,7 @@ function transformSupabaseRoom(room: SupabaseRoom): PublicRoomStatus {
   return {
     name: room.id,
     idRoom: room.id,
-    category: SUPABASE_ROOM_CATEGORY,
+    category: getPublicRoomCategory(room.id),
     players: Math.min(players, capacity),
     capacity,
     isFull: players >= capacity,
@@ -1341,6 +1346,15 @@ function getCurrentRoomCode(): string | null {
   }
 }
 
+const DISCORD_ROOM_DISPLAY_MAX_LENGTH = 12;
+
+function formatRoomNameForDisplay(room: PublicRoomStatus): string {
+  if (room.category === "Discord" && room.name.length > DISCORD_ROOM_DISPLAY_MAX_LENGTH) {
+    return `${room.name.slice(0, DISCORD_ROOM_DISPLAY_MAX_LENGTH)}\u2026`;
+  }
+  return room.name;
+}
+
 function createRoomEntry(
   room: PublicRoomStatus,
   ui: Menu,
@@ -1538,7 +1552,8 @@ function createRoomEntry(
   nameRow.style.gap = "10px";
 
   const name = document.createElement("div");
-  name.textContent = room.name;
+  name.textContent = formatRoomNameForDisplay(room);
+  name.title = room.name;
   name.style.fontWeight = "600";
   name.style.fontSize = "16px";
   name.style.letterSpacing = "0.01em";

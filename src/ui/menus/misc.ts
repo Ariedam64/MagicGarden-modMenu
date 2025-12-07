@@ -1,6 +1,7 @@
 // src/ui/menus/misc.ts
 import { Menu } from "../menu";
 import { MiscService, DEFAULT_SEED_DELETE_DELAY_MS, DEFAULT_DECOR_DELETE_DELAY_MS } from "../../services/misc";
+import { Atoms } from "../../store/atoms";
 
 /* ---------------- helpers ---------------- */
 const formatShortDuration = (seconds: number) => {
@@ -348,6 +349,9 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
 
     btnSelect.onclick = async () => {
+      try {
+        await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+      } catch {}
       await MiscService.openSeedSelectorFlow(ui.setWindowVisible.bind(ui));
       updateSummaryUI();
     };
@@ -551,6 +555,9 @@ export async function renderMiscMenu(container: HTMLElement) {
     }
 
     btnSelect.onclick = async () => {
+      try {
+        await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+      } catch {}
       await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
       updateSummaryUI();
     };
