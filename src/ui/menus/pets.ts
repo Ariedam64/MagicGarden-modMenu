@@ -21,54 +21,156 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
     .replace(/[\s\-_]+/g, "")
     .toLowerCase();
 
-  const is = (prefix: string) => key.startsWith(prefix) || base === prefix.toLowerCase();
+  const is = (prefix: string) =>
+    key.startsWith(prefix) || base === prefix.toLowerCase();
 
-  if (is("ProduceScaleBoost"))   return { bg: "rgba(34,139,34,0.9)",  hover: "rgba(34,139,34,1)" };
-  if (is("PlantGrowthBoost"))    return { bg: "rgba(0,128,128,0.9)",  hover: "rgba(0,128,128,1)" };
-  if (is("EggGrowthBoost"))      return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
-  if (is("PetAgeBoost"))         return { bg: "rgba(147,112,219,0.9)",hover: "rgba(147,112,219,1)" };
-  if (is("PetHatchSizeBoost"))   return { bg: "rgba(128,0,128,0.9)",  hover: "rgba(128,0,128,1)" };
-  if (is("PetXpBoost"))          return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
-  if (is("HungerBoost"))         return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
-  if (is("SellBoost"))           return { bg: "rgba(220,20,60,0.9)",  hover: "rgba(220,20,60,1)" };
-  if (is("CoinFinder"))          return { bg: "rgba(180,150,0,0.9)",  hover: "rgba(180,150,0,1)" };
-  if (is("ProduceMutationBoost"))return { bg: "rgba(138,43,226,0.9)", hover: "rgba(138,43,226,1)" };
-  if (is("DoubleHarvest"))       return { bg: "rgba(0,120,180,0.9)",  hover: "rgba(0,120,180,1)" };
-  if (is("ProduceEater"))        return { bg: "rgba(255,69,0,0.9)",   hover: "rgba(255,69,0,1)" };
-  if (is("ProduceRefund"))       return { bg: "rgba(255,99,71,0.9)",  hover: "rgba(255,99,71,1)" };
-  if (is("PetMutationBoost"))    return { bg: "rgba(156,65,181,0.9)", hover: "rgba(156,65,181,1)" };
-  if (is("HungerRestore"))       return { bg: "rgba(255,105,180,0.9)",hover: "rgba(255,105,180,1)" };
-  if (is("PetRefund"))           return { bg: "rgba(0,80,120,0.9)",   hover: "rgba(0,80,120,1)" };
-  if (is("Copycat"))             return { bg: "rgba(255,140,0,0.9)",  hover: "rgba(255,140,0,1)" };
+  // Celestials / événements spéciaux
+  if (is("MoonKisser")) {
+    return {
+      bg: "rgba(250,166,35,0.9)",
+      hover: "rgba(250,166,35,1)",
+    };
+  }
 
+  if (is("DawnKisser")) {
+    return {
+      bg: "rgba(162,92,242,0.9)",
+      hover: "rgba(162,92,242,1)",
+    };
+  }
+
+  // Boosts de production / croissance / œufs / âge / taille / XP
+  if (is("ProduceScaleBoost")) {
+    // I & II
+    return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
+  }
+
+  if (is("PlantGrowthBoost")) {
+    // I & II
+    return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
+  }
+
+  if (is("EggGrowthBoost")) {
+    // I, II_NEW, II (III en jeu)
+    return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
+  }
+
+  if (is("PetAgeBoost")) {
+    // I & II
+    return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
+  }
+
+  if (is("PetHatchSizeBoost")) {
+    // I & II
+    return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
+  }
+
+  if (is("PetXpBoost")) {
+    // I & II
+    return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
+  }
+
+  // Faim / regen faim
+  if (is("HungerBoost")) {
+    // I & II
+    return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
+  }
+
+  if (is("HungerRestore")) {
+    // I & II
+    return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
+  }
+
+  // Sell Boost (toutes les versions)
+  if (is("SellBoost")) {
+    // I, II, III, IV
+    return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
+  }
+
+  // Coin Finder (I, II, III)
+  if (is("CoinFinder")) {
+    return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
+  }
+
+  // Seed Finder (I à IV) → même couleur pour toutes les versions
+  if (is("SeedFinder")) {
+    return {
+      bg: "rgba(168,102,38,0.9)",
+      hover: "rgba(168,102,38,1)",
+    };
+  }
+
+  // Mutation / mutation pets
+  if (is("ProduceMutationBoost")) {
+    // I & II
+    return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
+  }
+
+  if (is("PetMutationBoost")) {
+    // I & II
+    return { bg: "rgba(160,50,100,0.9)", hover: "rgba(160,50,100,1)" };
+  }
+
+  // Double récolte / double hatch
+  if (is("DoubleHarvest")) {
+    return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
+  }
+
+  if (is("DoubleHatch")) {
+    return { bg: "rgba(60,90,180,0.9)", hover: "rgba(60,90,180,1)" };
+  }
+
+  // Abilities liées aux crops / ventes / refund
+  if (is("ProduceEater")) {
+    return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
+  }
+
+  if (is("ProduceRefund")) {
+    return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
+  }
+
+  // Pet refund
+  if (is("PetRefund")) {
+    // I & II
+    return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
+  }
+
+  // Copycat
+  if (is("Copycat")) {
+    return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+  }
+
+  // Gold granter (gradient)
   if (is("GoldGranter")) {
     return {
       bg: "linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",
-      hover: "linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)",
+      hover:
+        "linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)",
     };
   }
+
+  // Rainbow granter (gradient)
   if (is("RainbowGranter")) {
     return {
       bg: "linear-gradient(45deg, rgba(200,0,0,0.9), rgba(200,120,0,0.9), rgba(160,170,30,0.9), rgba(60,170,60,0.9), rgba(50,170,170,0.9), rgba(40,150,180,0.9), rgba(20,90,180,0.9), rgba(70,30,150,0.9))",
-      hover: "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))",
+      hover:
+        "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))",
     };
-  }
-  if (is("SeedFinderIV")) {
-    return {
-      bg: "linear-gradient(130deg, rgba(0,180,216,0.9) 0%, rgba(124,42,232,0.9) 40%, rgba(160,0,126,0.9) 60%, rgba(255,215,0,0.9) 100%)",
-      hover: "linear-gradient(130deg, rgba(0,180,216,1) 0%, rgba(124,42,232,1) 40%, rgba(160,0,126,1) 60%, rgba(255,215,0,1) 100%)",
-    };
-  }
-  if (is("SeedFinder")) {
-    // I/II/III
-    const lv = key.replace(/.*?([IVX]+)$/, "$1");
-    if (lv === "II") return { bg: "rgba(183,121,31,0.9)", hover: "rgba(183,121,31,1)" };
-    if (lv === "III") return { bg: "rgba(139,62,152,0.9)", hover: "rgba(139,62,152,1)" };
-    return { bg: "rgba(94,172,70,0.9)", hover: "rgba(94,172,70,1)" };
   }
 
-  // défaut neutre
-  return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
+  // Rain Dance
+  if (is("RainDance")) {
+    return {
+      bg: "rgba(102,204,216,0.9)",
+      hover: "rgba(102,204,216,1)",
+    };
+  }
+
+  // Couleur neutre par défaut (même que le jeu)
+  return {
+    bg: "rgba(100,100,100,0.9)",
+    hover: "rgba(150,150,150,1)",
+  };
 }
 
 /* ================== Onglet: Manager ================== */

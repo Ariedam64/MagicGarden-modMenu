@@ -1,0 +1,125 @@
+create table public.blocked_ips (
+  ip text not null,
+  reason text null,
+  blocked_at timestamp with time zone not null default now(),
+  constraint blocked_ips_pkey primary key (ip)
+) TABLESPACE pg_default;
+
+create table public.player_privacy (
+  player_id text not null,
+  show_profile boolean null,
+  show_garden boolean null,
+  show_inventory boolean null,
+  show_coins boolean null,
+  show_activity_log boolean null,
+  hide_room_from_public_list boolean null,
+  updated_at timestamp with time zone not null default now(),
+  show_journal boolean null,
+  show_stats boolean null,
+  constraint player_privacy_pkey primary key (player_id),
+  constraint player_privacy_player_id_fkey foreign KEY (player_id) references players (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+
+create table public.player_relationships (
+  user_one_id text not null,
+  user_two_id text not null,
+  requested_by text not null,
+  status text not null,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint player_relationships_pkey primary key (user_one_id, user_two_id),
+  constraint player_relationships_requested_by_fkey foreign KEY (requested_by) references players (id) on delete CASCADE,
+  constraint player_relationships_user_one_id_fkey foreign KEY (user_one_id) references players (id) on delete CASCADE,
+  constraint player_relationships_user_two_id_fkey foreign KEY (user_two_id) references players (id) on delete CASCADE,
+  constraint player_relationships_status_check check (
+    (
+      status = any (
+        array[
+          'pending'::text,
+          'accepted'::text,
+          'rejected'::text
+        ]
+      )
+    )
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists player_relationships_requested_by_idx on public.player_relationships using btree (requested_by) TABLESPACE pg_default;
+
+create index IF not exists player_relationships_user_one_idx on public.player_relationships using btree (user_one_id) TABLESPACE pg_default;
+
+create index IF not exists player_relationships_user_two_idx on public.player_relationships using btree (user_two_id) TABLESPACE pg_default;
+
+create index IF not exists player_relationships_status_idx on public.player_relationships using btree (status) TABLESPACE pg_default;
+
+
+create table public.player_state (
+  player_id text not null,
+  garden jsonb null,
+  inventory jsonb null,
+  stats jsonb null,
+  updated_at timestamp with time zone not null default now(),
+  activity_log jsonb null,
+  journal jsonb null,
+  constraint player_state_pkey primary key (player_id),
+  constraint player_state_player_id_fkey foreign KEY (player_id) references players (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create table public.players (
+  id text not null,
+  name text not null,
+  avatar_url text null,
+  coins bigint not null default 0,
+  last_event_at timestamp with time zone null,
+  created_at timestamp with time zone not null default now(),
+  has_mod_installed boolean not null default false,
+  constraint players_pkey primary key (id)
+) TABLESPACE pg_default;
+
+create index IF not exists players_name_idx on public.players using btree (name) TABLESPACE pg_default;
+
+
+create table public.rate_limit_usage (
+  id bigserial not null,
+  ip text null,
+  player_id text null,
+  bucket_start timestamp with time zone not null,
+  hit_count integer not null default 1,
+  constraint rate_limit_usage_pkey primary key (id),
+  constraint rate_limit_usage_ip_bucket_unique unique (ip, bucket_start),
+  constraint rate_limit_usage_player_bucket_unique unique (player_id, bucket_start)
+) TABLESPACE pg_default;
+
+create index IF not exists rate_limit_usage_bucket_idx on public.rate_limit_usage using btree (bucket_start) TABLESPACE pg_default;
+
+create index IF not exists rate_limit_usage_ip_idx on public.rate_limit_usage using btree (ip) TABLESPACE pg_default;
+
+create index IF not exists rate_limit_usage_player_idx on public.rate_limit_usage using btree (player_id) TABLESPACE pg_default;
+
+
+create table public.room_players (
+  room_id text not null,
+  player_id text not null,
+  joined_at timestamp with time zone not null default now(),
+  left_at timestamp with time zone null,
+  constraint room_players_pkey primary key (room_id, player_id),
+  constraint room_players_player_id_fkey foreign KEY (player_id) references players (id) on delete CASCADE,
+  constraint room_players_room_id_fkey foreign KEY (room_id) references rooms (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create index IF not exists room_players_player_id_idx on public.room_players using btree (player_id) TABLESPACE pg_default;
+
+create index IF not exists room_players_room_id_idx on public.room_players using btree (room_id) TABLESPACE pg_default;
+
+create table public.rooms (
+  id text not null,
+  is_private boolean not null default false,
+  last_updated_at timestamp with time zone null,
+  last_updated_by_player_id text null,
+  created_at timestamp with time zone not null default now(),
+  players_count integer not null default 0,
+  user_slots jsonb null,
+  constraint rooms_pkey primary key (id),
+  constraint rooms_last_updated_by_player_id_fkey foreign KEY (last_updated_by_player_id) references players (id)
+) TABLESPACE pg_default;

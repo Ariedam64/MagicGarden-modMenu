@@ -1,0 +1,95 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0].trim() || null;
+
+  const url = new URL(req.url);
+  const playerId = url.searchParams.get("playerId");
+
+  if (!playerId || playerId.length < 3) {
+    return new Response("Invalid playerId", { status: 400 });
+  }
+
+  // Rate limit, encore
+  const { data: allowed, error: rateError } = await supabase.rpc(
+    "check_rate_limit",
+    {
+      p_ip: ip,
+      p_player_id: playerId,
+    },
+  );
+
+  if (rateError) {
+    console.error("rate limit error:", rateError);
+    return new Response("Rate limiter error", { status: 500 });
+  }
+
+  if (allowed === false) {
+    return new Response("Too many requests", { status: 429 });
+  }
+
+  // On récupère toutes les pending où ce joueur est dans la relation
+  const { data, error } = await supabase
+    .from("player_relationships")
+    .select("user_one_id, user_two_id, requested_by, status, created_at")
+    .eq("status", "pending")
+    .or(`user_one_id.eq.${playerId},user_two_id.eq.${playerId}`)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("list-friend-requests error:", error);
+    return new Response("DB error", { status: 500 });
+  }
+
+  const incoming: { fromPlayerId: string; otherPlayerId: string; createdAt: string }[] = [];
+  const outgoing: { toPlayerId: string; otherPlayerId: string; createdAt: string }[] = [];
+
+  for (const rel of data ?? []) {
+    const otherId =
+      rel.user_one_id === playerId ? rel.user_two_id : rel.user_one_id;
+
+    if (rel.requested_by === playerId) {
+      // c'est ce joueur qui a envoyé la demande → outgoing
+      outgoing.push({
+        toPlayerId: otherId,
+        otherPlayerId: otherId,
+        createdAt: rel.created_at,
+      });
+    } else {
+      // quelqu'un d'autre lui a envoyé une demande → incoming
+      incoming.push({
+        fromPlayerId: rel.requested_by,
+        otherPlayerId: rel.requested_by,
+        createdAt: rel.created_at,
+      });
+    }
+  }
+
+  const responseBody = {
+    playerId,
+    incoming,
+    outgoing,
+  };
+
+  return new Response(JSON.stringify(responseBody), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+});

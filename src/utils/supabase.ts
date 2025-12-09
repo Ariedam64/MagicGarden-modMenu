@@ -1,12 +1,7 @@
-// supabase.ts
-// Point d'entrée unique pour parler à tes Edge Functions Supabase
-// à utiliser dans ton userscript / overlay.
+// api.ts
+// Point d'entrée unique pour parler à ton backend ariesmod-api.ariedam.fr
 
-const SUPABASE_FUNCTION_BASE =
-  "https://pquktqrngyxkvrgtfygp.supabase.co/functions/v1/";
-
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdWt0cXJuZ3l4a3ZyZ3RmeWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2MTQzMDMsImV4cCI6MjA3NTE5MDMwM30.-d45t6qyEO54iz2SrjaoTUQjeNb6tngDx6pOQL7-Ubg";
+const API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
 
 // Si tu n'as pas les types Tampermonkey, ça évite que TS hurle
 declare function GM_xmlhttpRequest(details: {
@@ -22,7 +17,7 @@ import type {
   PlayerStatePayload,
   PlayerPrivacyPayload,
 } from "./payload";
-import { garden, type GardenState } from "../store/atoms";
+import { type GardenState } from "../store/atoms";
 
 // ---------- Types côté client ----------
 
@@ -48,7 +43,7 @@ export interface Room {
 interface RoomDto {
   id: string;
   is_private: boolean;
-  players_count: number;
+  players_count: number | null;
   last_updated_at: string;
   last_updated_by_player_id: string | null;
   user_slots?: Array<{
@@ -76,11 +71,13 @@ export interface PlayerView {
   isOnline: boolean;
   lastEventAt: string | null;
   privacy: PlayerPrivacyPayload;
-  state: PlayerViewState;
+  // Sur /get-player-view (single) présent, sur /get-players-view parfois absent selon sections
+  state?: PlayerViewState;
 }
 
 let cachedFriendsView: PlayerView[] | null = null;
 let cachedIncomingRequests: PlayerView[] | null = null;
+
 
 export function getCachedFriendsWithViews(): PlayerView[] {
   return cachedFriendsView ? [...cachedFriendsView] : [];
@@ -117,7 +114,7 @@ export interface PlayerRoomResult {
   roomPlayersCount: number;
 }
 
-// sections possibles pour get-players-view (mappées à l’Edge)
+// sections possibles pour get-players-view
 export type PlayerViewSection =
   | "profile"
   | "garden"
@@ -133,7 +130,7 @@ function buildUrl(
   path: string,
   query?: Record<string, string | number | undefined>,
 ): string {
-  const url = new URL(path, SUPABASE_FUNCTION_BASE);
+  const url = new URL(path, API_BASE_URL);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined) continue;
@@ -153,10 +150,7 @@ function httpGet<T>(
     GM_xmlhttpRequest({
       method: "GET",
       url,
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
+      headers: {},
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
           try {
@@ -165,16 +159,16 @@ function httpGet<T>(
               : null;
             resolve({ status: res.status, data: parsed });
           } catch (e) {
-            console.error("[supabase] GET parse error:", e, res.responseText);
+            console.error("[api] GET parse error:", e, res.responseText);
             resolve({ status: res.status, data: null });
           }
         } else {
-          console.error("[supabase] GET error:", res.status, res.responseText);
+          console.error("[api] GET error:", res.status, res.responseText);
           resolve({ status: res.status, data: null });
         }
       },
       onerror: (err) => {
-        console.error("[supabase] GET request failed:", err);
+        console.error("[api] GET request failed:", err);
         resolve({ status: 0, data: null });
       },
     });
@@ -193,8 +187,6 @@ function httpPost<T>(
       url,
       headers: {
         "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       data: JSON.stringify(body),
       onload: (res) => {
@@ -205,35 +197,40 @@ function httpPost<T>(
               : null;
             resolve({ status: res.status, data: parsed });
           } catch (e) {
-            console.error("[supabase] POST parse error:", e, res.responseText);
+            console.error("[api] POST parse error:", e, res.responseText);
             resolve({ status: res.status, data: null });
           }
         } else {
-          console.error(
-            "[supabase] POST error:",
-            res.status,
-            res.responseText,
-          );
+          console.error("[api] POST error:", res.status, res.responseText);
           resolve({ status: res.status, data: null });
         }
       },
       onerror: (err) => {
-        console.error("[supabase] POST request failed:", err);
+        console.error("[api] POST request failed:", err);
         resolve({ status: 0, data: null });
       },
     });
   });
 }
 
-// ---------- 1) Envoi du state joueur ----------
 
+/**
+ * À appeler toutes les 60s côté jeu.
+ * - Si le payload a changé depuis le dernier appel -> on envoie.
+ * - Si le payload est identique -> on n'envoie qu'une fois toutes les 5 minutes
+ *   (5e appel identique).
+ */
 export async function sendPlayerState(
-  payload: PlayerStatePayload,
+  payload: PlayerStatePayload | null,
 ): Promise<boolean> {
-  const { status } = await httpPost<null>("collect-state", payload);
+  if (!payload) {
+    return false;
+  }
+
+  const { status } = await httpPost<null>('collect-state', payload);
   if (status === 204) return true;
   if (status === 429) {
-    console.warn("[supabase] sendPlayerState rate-limited");
+    console.warn('[api] sendPlayerState rate-limited');
   }
   return false;
 }
@@ -243,13 +240,13 @@ export async function sendPlayerState(
 export async function fetchAvailableRooms(
   limit = 50,
 ): Promise<Room[]> {
-  const { data } = await httpGet<RoomDto[]>("list-rooms", { limit });
+  const { data } = await httpGet<RoomDto[]>("rooms", { limit });
   if (!data || !Array.isArray(data)) return [];
 
   return data.map((r) => ({
     id: r.id,
     isPrivate: r.is_private,
-    playersCount: r.players_count,
+    playersCount: r.players_count ?? 0,
     lastUpdatedAt: r.last_updated_at,
     lastUpdatedByPlayerId: r.last_updated_by_player_id,
     userSlots: Array.isArray(r.user_slots)
@@ -276,12 +273,6 @@ export async function fetchPlayerView(
 
 /**
  * Récupère des PlayerView en batch, avec possibilité de limiter les sections.
- *
- * - si options.sections est omis → tout est renvoyé (comportement actuel)
- * - sinon tu peux passer :
- *    ["profile", "room"]
- *    ["profile", "garden"]
- *    etc.
  */
 export async function fetchPlayersView(
   playerIds: string[],
@@ -330,10 +321,9 @@ export async function sendFriendRequest(
     toPlayerId,
   });
 
-  // 204 = ok, 409 = déjà ami / déjà pending / rejeté
   if (status === 204) return true;
   if (status === 409) {
-    console.warn("[supabase] friend-request conflict (already exists)");
+    console.warn("[api] friend-request conflict (already exists)");
   }
   return false;
 }
@@ -383,8 +373,9 @@ export async function fetchFriendsWithViews(
     return [];
   }
 
-  // Pour les friends, généralement tu as surtout besoin du profil + room
-  const result = await fetchPlayersView(friendIds, { sections: ["profile","room"] });
+  const result = await fetchPlayersView(friendIds, {
+    sections: ["profile", "room"],
+  });
   cachedFriendsView = result;
   return [...result];
 }
@@ -422,7 +413,6 @@ export async function fetchIncomingRequestsWithViews(
     return [];
   }
 
-  // Pour les requêtes entrantes, profil + room suffisent largement
   const result = await fetchPlayersView(ids, { sections: ["profile"] });
   cachedIncomingRequests = result;
   return [...result];
@@ -454,31 +444,27 @@ export async function removeFriend(
   return status === 204;
 }
 
-
 // ---------- 6) Recherche de joueurs via les rooms publiques ----------
 
 export async function searchPlayersByName(
   rawQuery: string,
   options?: {
-    limitRooms?: number;       // combien de rooms max on fetch
-    minQueryLength?: number;   // longueur minimale du pseudo
+    limitRooms?: number;
+    minQueryLength?: number;
   },
 ): Promise<PlayerRoomResult[]> {
   const query = rawQuery.trim();
   const minLen = options?.minQueryLength ?? 2;
 
   if (query.length < minLen) {
-    // On évite de lancer une requête Supabase pour "a" ou "x"
     return [];
   }
 
   const limitRooms = options?.limitRooms ?? 200;
   const qLower = query.toLowerCase();
 
-  // 1) On récupère les rooms publiques + leurs userSlots
   const rooms = await fetchAvailableRooms(limitRooms);
 
-  // 2) On parcourt tout, on filtre sur les noms qui matchent
   const map = new Map<string, PlayerRoomResult>();
 
   for (const room of rooms) {
@@ -490,7 +476,6 @@ export async function searchPlayersByName(
       const nameLower = slot.name.toLowerCase();
       if (!nameLower.includes(qLower)) continue;
 
-      // Pas de playerId dispo ici, donc clé = roomId + name
       const key = `${room.id}::${slot.name}`;
       if (map.has(key)) continue;
 
@@ -509,8 +494,8 @@ export async function searchPlayersByName(
 export async function searchRoomsByPlayerName(
   rawQuery: string,
   options?: {
-    limitRooms?: number;      // combien de rooms max on fetch
-    minQueryLength?: number;  // longueur minimale de la query
+    limitRooms?: number;
+    minQueryLength?: number;
   },
 ): Promise<RoomSearchResult[]> {
   const query = rawQuery.trim();
@@ -542,8 +527,6 @@ export async function searchRoomsByPlayerName(
       });
     }
   }
-
-  console.log(results);
 
   return results;
 }

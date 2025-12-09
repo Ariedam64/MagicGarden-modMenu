@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.8.16
+// @version      2.9.0
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17,7 +17,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_download
-// @connect      supabase.co
+// @connect      ariesmod-api.ariedam.fr
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -5537,10 +5537,7 @@
     "soundEffectsVolumeAtom",
     "qws:pos",
     "qws:collapsed",
-    "qws:hidden",
-    "mg-mod.inventory.sortKey",
-    "mg-mod.inventory.sortDirection",
-    "mg-mod.inventory.showValues"
+    "qws:hidden"
   ];
   var LEGACY_PREFIXES = [
     "qws:keybind:",
@@ -5625,19 +5622,7 @@
     },
     { legacyKey: "qws:pos", apply: (raw, r) => r.hud = mergeSection(r.hud, { pos: parseSafe(raw) }) },
     { legacyKey: "qws:collapsed", apply: (raw, r) => r.hud = mergeSection(r.hud, { collapsed: parseSafe(raw) }) },
-    { legacyKey: "qws:hidden", apply: (raw, r) => r.hud = mergeSection(r.hud, { hidden: parseSafe(raw) }) },
-    {
-      legacyKey: "mg-mod.inventory.sortKey",
-      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { sortKey: parseSafe(raw) })
-    },
-    {
-      legacyKey: "mg-mod.inventory.sortDirection",
-      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { sortDirection: parseSafe(raw) })
-    },
-    {
-      legacyKey: "mg-mod.inventory.showValues",
-      apply: (raw, r) => r.inventory = mergeSection(r.inventory, { showValues: parseSafe(raw) })
-    }
+    { legacyKey: "qws:hidden", apply: (raw, r) => r.hud = mergeSection(r.hud, { hidden: parseSafe(raw) }) }
   ];
   function getHostStorage() {
     if (typeof window === "undefined") return null;
@@ -24032,9 +24017,9 @@
     "mutations",
     "strength"
   ];
-  var SORT_STORAGE_KEY = "mg-mod.inventory.sortKey";
+  var SORT_KEY_PATH = "inventory.sortKey";
   var SORT_KEY_SET = new Set(ORDER);
-  var SORT_DIRECTION_STORAGE_KEY = "mg-mod.inventory.sortDirection";
+  var SORT_DIRECTION_PATH = "inventory.sortDirection";
   var SORT_DIRECTION_SET = /* @__PURE__ */ new Set(["asc", "desc"]);
   var DEFAULT_DIRECTION_LABEL = "Order:";
   var DIRECTION_LABELS_DEFAULT = {
@@ -24051,14 +24036,17 @@
     const trimmedName = name.trim();
     return trimmedName ? trimmedName : null;
   };
-  var INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = "mg-mod.inventory.showValues";
+  var INVENTORY_VALUE_VISIBILITY_PATH = "inventory.showValues";
+  var resolveVisibilityFromStoredValue = (value) => {
+    if (value === true || value === false) return value;
+    if (value === 1 || value === "1" || value === "true") return true;
+    if (value === 0 || value === "0" || value === "false") return false;
+    return null;
+  };
   var loadPersistedInventoryValueVisibility = () => {
-    if (typeof window === "undefined") return null;
     try {
-      const stored = window.localStorage?.getItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY) ?? null;
-      if (stored === "1") return true;
-      if (stored === "0") return false;
-      return null;
+      const stored = readAriesPath(INVENTORY_VALUE_VISIBILITY_PATH);
+      return resolveVisibilityFromStoredValue(stored);
     } catch (error) {
       console.warn(
         "[InventorySorting] Impossible de lire la pr\xE9f\xE9rence d'affichage des valeurs d'inventaire",
@@ -24068,9 +24056,8 @@
     }
   };
   var persistInventoryValueVisibility = (visible) => {
-    if (typeof window === "undefined") return;
     try {
-      window.localStorage?.setItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY, visible ? "1" : "0");
+      writeAriesPath(INVENTORY_VALUE_VISIBILITY_PATH, visible);
     } catch (error) {
       console.warn(
         "[InventorySorting] Impossible de sauvegarder la pr\xE9f\xE9rence d'affichage des valeurs d'inventaire",
@@ -24097,9 +24084,8 @@
   var isPersistedSortKey = (value) => typeof value === "string" && SORT_KEY_SET.has(value);
   var isPersistedSortDirection = (value) => typeof value === "string" && SORT_DIRECTION_SET.has(value);
   var loadPersistedSortKey = () => {
-    if (typeof window === "undefined") return null;
     try {
-      const stored = window.localStorage?.getItem(SORT_STORAGE_KEY) ?? null;
+      const stored = readAriesPath(SORT_KEY_PATH);
       return isPersistedSortKey(stored) ? stored : null;
     } catch (error) {
       console.warn("[InventorySorting] Impossible de lire la valeur de tri persist\xE9e", error);
@@ -24107,17 +24093,15 @@
     }
   };
   var persistSortKey = (value) => {
-    if (typeof window === "undefined") return;
     try {
-      window.localStorage?.setItem(SORT_STORAGE_KEY, value);
+      writeAriesPath(SORT_KEY_PATH, value);
     } catch (error) {
       console.warn("[InventorySorting] Impossible de sauvegarder la valeur de tri", error);
     }
   };
   var loadPersistedSortDirection = () => {
-    if (typeof window === "undefined") return null;
     try {
-      const stored = window.localStorage?.getItem(SORT_DIRECTION_STORAGE_KEY) ?? null;
+      const stored = readAriesPath(SORT_DIRECTION_PATH);
       return isPersistedSortDirection(stored) ? stored : null;
     } catch (error) {
       console.warn("[InventorySorting] Impossible de lire l'ordre de tri persist\xE9", error);
@@ -24125,9 +24109,8 @@
     }
   };
   var persistSortDirection = (value) => {
-    if (typeof window === "undefined") return;
     try {
-      window.localStorage?.setItem(SORT_DIRECTION_STORAGE_KEY, value);
+      writeAriesPath(SORT_DIRECTION_PATH, value);
     } catch (error) {
       console.warn("[InventorySorting] Impossible de sauvegarder l'ordre de tri", error);
     }
@@ -26254,6 +26237,10 @@
   // src/services/activityLogHistory.ts
   var HISTORY_STORAGE_KEY = "activityLog.history";
   var HISTORY_LIMIT = 500;
+  var skipNextHistoryReopen = false;
+  function skipNextActivityLogHistoryReopen() {
+    skipNextHistoryReopen = true;
+  }
   function normalizeEntry(raw) {
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
@@ -26448,10 +26435,17 @@
       lastModal = cur ?? null;
     } catch {
     }
+    const consumeHistoryReopenSkip = () => {
+      if (!skipNextHistoryReopen) return false;
+      skipNextHistoryReopen = false;
+      return true;
+    };
     const onModalChange = async (modalId) => {
       const cur = modalId ?? null;
       if (cur === ACTIVITY_LOG_MODAL_ID && lastModal !== ACTIVITY_LOG_MODAL_ID) {
-        await reopenFakeActivityLogFromHistory();
+        if (!consumeHistoryReopenSkip()) {
+          await reopenFakeActivityLogFromHistory();
+        }
       }
       lastModal = cur;
     };
@@ -33068,6 +33062,11 @@ next: ${next}`;
     friendPlayers: FRIEND_BONUS_MIN_PLAYERS
   };
   var BASE_SPRITE_SIZE_PX = 96;
+  var COLOR_VARIANT_FILTERS = {
+    normal: null,
+    gold: "Gold",
+    rainbow: "Rainbow"
+  };
   var WEATHER_EFFECT_PRIORITY = ["wet", "chilled", "frozen"];
   var LIGHTING_EFFECT_PRIORITY_GROUPS = [
     ["dawnlit"],
@@ -33659,7 +33658,11 @@ next: ${next}`;
       size: canvas.width,
       data: canvas
     };
-    return Sprites.toCanvas(tileInfo);
+    const baseCanvas = Sprites.toCanvas(tileInfo);
+    const filterName = COLOR_VARIANT_FILTERS[variant];
+    if (!filterName) return baseCanvas;
+    const filtered = Sprites.applyCanvasFilter(baseCanvas, filterName);
+    return filtered ?? baseCanvas;
   }
   function loadPlantSpriteVariant(seedKey, variant) {
     if (variant === "normal") {
@@ -34037,6 +34040,17 @@ next: ${next}`;
       opacity: 0.7;
       padding: 24px 12px;
     }
+    .mg-crop-calculator__source-hint {
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.7);
+      text-align: center;
+      margin-top: 20px;
+      padding-bottom: 4px;
+    }
+    .mg-crop-calculator__source-hint a {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
   `);
   }
   function clamp3(value, min, max) {
@@ -34223,7 +34237,7 @@ next: ${next}`;
       root.innerHTML = "";
       root.style.padding = "8px";
       root.style.boxSizing = "border-box";
-      root.style.height = "61vh";
+      root.style.height = "66vh";
       root.style.overflow = "auto";
       root.style.display = "grid";
       const layout = applyStyles2(document.createElement("div"), {
@@ -34355,6 +34369,15 @@ next: ${next}`;
       );
       simulationRoot.appendChild(detailLayout);
       detailScroll.appendChild(simulationRoot);
+      const sourceHint = document.createElement("div");
+      sourceHint.className = "mg-crop-calculator__source-hint";
+      sourceHint.innerHTML = `
+      Based on
+      <a href="https://daserix.github.io/magic-garden-calculator" target="_blank" rel="noreferrer noopener">
+        Daserix&apos; Magic Garden Calculators
+      </a>
+    `;
+      root.appendChild(sourceHint);
       const refs = {
         root: simulationRoot,
         sprite,
@@ -38053,23 +38076,78 @@ next: ${next}`;
     const key2 = String(id || "");
     const base = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
     const is = (prefix) => key2.startsWith(prefix) || base === prefix.toLowerCase();
-    if (is("ProduceScaleBoost")) return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
-    if (is("PlantGrowthBoost")) return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
-    if (is("EggGrowthBoost")) return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
-    if (is("PetAgeBoost")) return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
-    if (is("PetHatchSizeBoost")) return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
-    if (is("PetXpBoost")) return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
-    if (is("HungerBoost")) return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
-    if (is("SellBoost")) return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
-    if (is("CoinFinder")) return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
-    if (is("ProduceMutationBoost")) return { bg: "rgba(138,43,226,0.9)", hover: "rgba(138,43,226,1)" };
-    if (is("DoubleHarvest")) return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
-    if (is("ProduceEater")) return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
-    if (is("ProduceRefund")) return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
-    if (is("PetMutationBoost")) return { bg: "rgba(156,65,181,0.9)", hover: "rgba(156,65,181,1)" };
-    if (is("HungerRestore")) return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
-    if (is("PetRefund")) return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
-    if (is("Copycat")) return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+    if (is("MoonKisser")) {
+      return {
+        bg: "rgba(250,166,35,0.9)",
+        hover: "rgba(250,166,35,1)"
+      };
+    }
+    if (is("DawnKisser")) {
+      return {
+        bg: "rgba(162,92,242,0.9)",
+        hover: "rgba(162,92,242,1)"
+      };
+    }
+    if (is("ProduceScaleBoost")) {
+      return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
+    }
+    if (is("PlantGrowthBoost")) {
+      return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
+    }
+    if (is("EggGrowthBoost")) {
+      return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
+    }
+    if (is("PetAgeBoost")) {
+      return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
+    }
+    if (is("PetHatchSizeBoost")) {
+      return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
+    }
+    if (is("PetXpBoost")) {
+      return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
+    }
+    if (is("HungerBoost")) {
+      return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
+    }
+    if (is("HungerRestore")) {
+      return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
+    }
+    if (is("SellBoost")) {
+      return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
+    }
+    if (is("CoinFinder")) {
+      return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
+    }
+    if (is("SeedFinder")) {
+      return {
+        bg: "rgba(168,102,38,0.9)",
+        hover: "rgba(168,102,38,1)"
+      };
+    }
+    if (is("ProduceMutationBoost")) {
+      return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
+    }
+    if (is("PetMutationBoost")) {
+      return { bg: "rgba(160,50,100,0.9)", hover: "rgba(160,50,100,1)" };
+    }
+    if (is("DoubleHarvest")) {
+      return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
+    }
+    if (is("DoubleHatch")) {
+      return { bg: "rgba(60,90,180,0.9)", hover: "rgba(60,90,180,1)" };
+    }
+    if (is("ProduceEater")) {
+      return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
+    }
+    if (is("ProduceRefund")) {
+      return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
+    }
+    if (is("PetRefund")) {
+      return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
+    }
+    if (is("Copycat")) {
+      return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+    }
     if (is("GoldGranter")) {
       return {
         bg: "linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",
@@ -38082,19 +38160,16 @@ next: ${next}`;
         hover: "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))"
       };
     }
-    if (is("SeedFinderIV")) {
+    if (is("RainDance")) {
       return {
-        bg: "linear-gradient(130deg, rgba(0,180,216,0.9) 0%, rgba(124,42,232,0.9) 40%, rgba(160,0,126,0.9) 60%, rgba(255,215,0,0.9) 100%)",
-        hover: "linear-gradient(130deg, rgba(0,180,216,1) 0%, rgba(124,42,232,1) 40%, rgba(160,0,126,1) 60%, rgba(255,215,0,1) 100%)"
+        bg: "rgba(102,204,216,0.9)",
+        hover: "rgba(102,204,216,1)"
       };
     }
-    if (is("SeedFinder")) {
-      const lv = key2.replace(/.*?([IVX]+)$/, "$1");
-      if (lv === "II") return { bg: "rgba(183,121,31,0.9)", hover: "rgba(183,121,31,1)" };
-      if (lv === "III") return { bg: "rgba(139,62,152,0.9)", hover: "rgba(139,62,152,1)" };
-      return { bg: "rgba(94,172,70,0.9)", hover: "rgba(94,172,70,1)" };
-    }
-    return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
+    return {
+      bg: "rgba(100,100,100,0.9)",
+      hover: "rgba(150,150,150,1)"
+    };
   }
   function renderManagerTab(view, ui) {
     view.innerHTML = "";
@@ -40778,6 +40853,7 @@ next: ${next}`;
   var overlayEl = null;
   var currentEnabled = false;
   var listeners4 = /* @__PURE__ */ new Set();
+  var savedGardensListeners = /* @__PURE__ */ new Set();
   var sideOverlayEl = null;
   var sideListWrap = null;
   var sideSelect = null;
@@ -40851,6 +40927,16 @@ next: ${next}`;
     if (overlayEl) {
       overlayEl.remove();
       overlayEl = null;
+    }
+  }
+  function notifySavedGardensChanged() {
+    if (!savedGardensListeners.size) return;
+    for (const listener of savedGardensListeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[EditorService] saved gardens listener failed", error);
+      }
     }
   }
   function getSelectedId() {
@@ -42917,6 +43003,10 @@ next: ${next}`;
     onChange(listener) {
       listeners4.add(listener);
       return () => listeners4.delete(listener);
+    },
+    onSavedGardensChange(listener) {
+      savedGardensListeners.add(listener);
+      return () => savedGardensListeners.delete(listener);
     }
   };
   var EMPTY_GARDEN = { tileObjects: {}, boardwalkTileObjects: {} };
@@ -42955,7 +43045,9 @@ next: ${next}`;
     try {
       writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
     } catch {
+      return;
     }
+    notifySavedGardensChanged();
   }
   async function getGardenForPlayer(playerId2) {
     try {
@@ -43887,12 +43979,28 @@ next: ${next}`;
     ui.mount(container);
     const view = ui.root.querySelector(".qmm-views");
     view.innerHTML = "";
-    view.style.display = "grid";
+    view.style.display = "flex";
+    view.style.flexDirection = "column";
     view.style.gap = "8px";
-    view.style.justifyItems = "center";
+    view.style.justifyContent = "flex-start";
+    view.style.alignItems = "stretch";
+    view.style.height = "100%";
+    view.style.minHeight = "0";
+    view.style.overflow = "hidden";
+    view.style.flex = "1";
+    ui.root.style.display = "flex";
+    ui.root.style.flexDirection = "column";
+    ui.root.style.height = "100%";
+    ui.root.style.maxHeight = "100%";
+    ui.root.style.minHeight = "0";
+    ui.root.style.overflow = "hidden";
+    ui.root.style.flex = "1 1 auto";
     const card = ui.card("Editor mode", { tone: "muted", align: "center" });
     card.header.style.display = "none";
     card.root.style.maxWidth = "420px";
+    card.root.style.alignSelf = "stretch";
+    card.root.style.flex = "0 0 auto";
+    card.root.style.flexShrink = "0";
     card.body.style.display = "grid";
     card.body.style.gap = "10px";
     const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
@@ -43942,18 +44050,25 @@ next: ${next}`;
       toggle.checked = enabled;
       renderSavedList();
     });
+    let savedListCleanup;
     view.__cleanup__ = () => {
       try {
         cleanup2();
       } catch {
       }
+      try {
+        savedListCleanup?.();
+      } catch {
+      }
     };
-    const sectionCard = (title, content) => {
+    const sectionCard = (title, content2) => {
       const card2 = ui.card(title, { tone: "muted", align: "center" });
       card2.root.style.maxWidth = "520px";
       card2.body.style.display = "grid";
       card2.body.style.gap = "8px";
-      card2.body.append(content);
+      card2.body.style.width = "100%";
+      card2.body.style.minHeight = "0";
+      card2.body.append(content2);
       return card2;
     };
     const status = document.createElement("div");
@@ -44029,8 +44144,14 @@ next: ${next}`;
     importBtn.style.width = "100%";
     importWrap.append(importArea, importBtn);
     const listWrap = document.createElement("div");
-    listWrap.style.display = "grid";
+    listWrap.style.display = "flex";
+    listWrap.style.flexDirection = "column";
     listWrap.style.gap = "8px";
+    listWrap.style.flex = "1";
+    listWrap.style.overflowY = "auto";
+    listWrap.style.width = "100%";
+    listWrap.style.boxSizing = "border-box";
+    listWrap.style.minHeight = "0";
     const renderSavedList = () => {
       const listFn = window.qwsEditorListSavedGardens;
       const loadFn = window.qwsEditorLoadGarden;
@@ -44119,11 +44240,43 @@ next: ${next}`;
       }
     };
     renderSavedList();
+    savedListCleanup = EditorService.onSavedGardensChange(renderSavedList);
     const currentCard = sectionCard("\u{1F331} Current garden", currentWrap);
+    currentCard.root.style.alignSelf = "stretch";
+    currentCard.root.style.flex = "0 0 auto";
+    currentCard.root.style.flexShrink = "0";
     const importCard = sectionCard("\u{1F4E5} Import", importWrap);
+    importCard.root.style.alignSelf = "stretch";
+    importCard.root.style.flex = "0 0 auto";
+    importCard.root.style.flexShrink = "0";
     const savedCard = sectionCard("\u{1F4BE} Saved gardens", listWrap);
-    savedCard.body.append(status);
-    view.append(card.root, currentCard.root, importCard.root, savedCard.root);
+    savedCard.root.style.display = "flex";
+    savedCard.root.style.flexDirection = "column";
+    savedCard.root.style.flex = "1 1 0";
+    savedCard.root.style.minHeight = "220px";
+    savedCard.root.style.overflow = "hidden";
+    savedCard.body.style.display = "flex";
+    savedCard.body.style.flexDirection = "column";
+    savedCard.body.style.alignItems = "stretch";
+    savedCard.body.style.justifyContent = "stretch";
+    savedCard.body.style.overflow = "hidden";
+    savedCard.body.style.flex = "1 1 auto";
+    savedCard.body.style.minHeight = "0";
+    savedCard.body.innerHTML = "";
+    status.style.flex = "0 0 auto";
+    status.style.alignSelf = "stretch";
+    status.style.margin = "0";
+    status.style.height = "18px";
+    savedCard.body.append(status, listWrap);
+    const content = document.createElement("div");
+    content.style.display = "flex";
+    content.style.flexDirection = "column";
+    content.style.gap = "8px";
+    content.style.flex = "1";
+    content.style.minHeight = "0";
+    content.style.overflow = "hidden";
+    content.append(currentCard.root, importCard.root, savedCard.root);
+    view.append(card.root, content);
   }
 
   // src/services/players.ts
@@ -44594,6 +44747,7 @@ next: ${next}`;
           await toastSimple("Activity log", "No activity logs for this player.", "info");
           return;
         }
+        skipNextActivityLogHistoryReopen();
         await fakeActivityLogShow(logs, { open: true });
         if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
       } catch (e) {
@@ -44795,8 +44949,7 @@ next: ${next}`;
   };
 
   // src/utils/supabase.ts
-  var SUPABASE_FUNCTION_BASE = "https://pquktqrngyxkvrgtfygp.supabase.co/functions/v1/";
-  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdWt0cXJuZ3l4a3ZyZ3RmeWdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk2MTQzMDMsImV4cCI6MjA3NTE5MDMwM30.-d45t6qyEO54iz2SrjaoTUQjeNb6tngDx6pOQL7-Ubg";
+  var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
   var cachedFriendsView = null;
   var cachedIncomingRequests = null;
   function getCachedFriendsWithViews() {
@@ -44806,7 +44959,7 @@ next: ${next}`;
     return cachedIncomingRequests ? [...cachedIncomingRequests] : [];
   }
   function buildUrl(path, query) {
-    const url = new URL(path, SUPABASE_FUNCTION_BASE);
+    const url = new URL(path, API_BASE_URL);
     if (query) {
       for (const [key2, value] of Object.entries(query)) {
         if (value === void 0) continue;
@@ -44821,26 +44974,23 @@ next: ${next}`;
       GM_xmlhttpRequest({
         method: "GET",
         url,
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
-        },
+        headers: {},
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
             try {
               const parsed = res.responseText ? JSON.parse(res.responseText) : null;
               resolve2({ status: res.status, data: parsed });
             } catch (e) {
-              console.error("[supabase] GET parse error:", e, res.responseText);
+              console.error("[api] GET parse error:", e, res.responseText);
               resolve2({ status: res.status, data: null });
             }
           } else {
-            console.error("[supabase] GET error:", res.status, res.responseText);
+            console.error("[api] GET error:", res.status, res.responseText);
             resolve2({ status: res.status, data: null });
           }
         },
         onerror: (err) => {
-          console.error("[supabase] GET request failed:", err);
+          console.error("[api] GET request failed:", err);
           resolve2({ status: 0, data: null });
         }
       });
@@ -44853,9 +45003,7 @@ next: ${next}`;
         method: "POST",
         url,
         headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+          "Content-Type": "application/json"
         },
         data: JSON.stringify(body),
         onload: (res) => {
@@ -44864,40 +45012,39 @@ next: ${next}`;
               const parsed = res.responseText ? JSON.parse(res.responseText) : null;
               resolve2({ status: res.status, data: parsed });
             } catch (e) {
-              console.error("[supabase] POST parse error:", e, res.responseText);
+              console.error("[api] POST parse error:", e, res.responseText);
               resolve2({ status: res.status, data: null });
             }
           } else {
-            console.error(
-              "[supabase] POST error:",
-              res.status,
-              res.responseText
-            );
+            console.error("[api] POST error:", res.status, res.responseText);
             resolve2({ status: res.status, data: null });
           }
         },
         onerror: (err) => {
-          console.error("[supabase] POST request failed:", err);
+          console.error("[api] POST request failed:", err);
           resolve2({ status: 0, data: null });
         }
       });
     });
   }
   async function sendPlayerState(payload) {
+    if (!payload) {
+      return false;
+    }
     const { status } = await httpPost("collect-state", payload);
     if (status === 204) return true;
     if (status === 429) {
-      console.warn("[supabase] sendPlayerState rate-limited");
+      console.warn("[api] sendPlayerState rate-limited");
     }
     return false;
   }
   async function fetchAvailableRooms(limit = 50) {
-    const { data } = await httpGet("list-rooms", { limit });
+    const { data } = await httpGet("rooms", { limit });
     if (!data || !Array.isArray(data)) return [];
     return data.map((r) => ({
       id: r.id,
       isPrivate: r.is_private,
-      playersCount: r.players_count,
+      playersCount: r.players_count ?? 0,
       lastUpdatedAt: r.last_updated_at,
       lastUpdatedByPlayerId: r.last_updated_by_player_id,
       userSlots: Array.isArray(r.user_slots) ? r.user_slots.map((slot) => ({
@@ -44934,7 +45081,7 @@ next: ${next}`;
     });
     if (status === 204) return true;
     if (status === 409) {
-      console.warn("[supabase] friend-request conflict (already exists)");
+      console.warn("[api] friend-request conflict (already exists)");
     }
     return false;
   }
@@ -44963,7 +45110,9 @@ next: ${next}`;
       cachedFriendsView = [];
       return [];
     }
-    const result = await fetchPlayersView(friendIds, { sections: ["profile", "room"] });
+    const result = await fetchPlayersView(friendIds, {
+      sections: ["profile", "room"]
+    });
     cachedFriendsView = result;
     return [...result];
   }
@@ -45028,7 +45177,6 @@ next: ${next}`;
         });
       }
     }
-    console.log(results);
     return results;
   }
 
@@ -45624,8 +45772,6 @@ next: ${next}`;
       switch (selectedPlayerFilter) {
         case "any":
           return true;
-        case "empty":
-          return room.players === 0;
         case "few":
           return room.players > 0 && room.players <= 3;
         case "crowded":
@@ -45686,7 +45832,6 @@ next: ${next}`;
     playerFilterSelect.style.minWidth = "130px";
     const playerFilters = [
       { value: "any", label: "Any players" },
-      { value: "empty", label: "Empty rooms" },
       { value: "few", label: "1 - 3 players" },
       { value: "crowded", label: "4 - 5 players" },
       { value: "full", label: "Full rooms" }
@@ -47075,6 +47220,97 @@ next: ${next}`;
   }
 
   // src/ui/menus/friends.ts
+  var FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
+  function ensureFriendsMenuRefreshStyle() {
+    if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
+    const style2 = document.createElement("style");
+    style2.id = FRIENDS_MENU_REFRESH_STYLE_ID;
+    style2.textContent = `
+@keyframes friends-menu-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+`;
+    document.head.appendChild(style2);
+  }
+  function createRefreshIndicator(scrollTarget, container, offsetY = 14) {
+    ensureFriendsMenuRefreshStyle();
+    const computedPosition = container.style.position || "";
+    if (!computedPosition || computedPosition === "static") {
+      container.style.position = "relative";
+    }
+    const indicator = document.createElement("div");
+    Object.assign(indicator.style, {
+      position: "absolute",
+      top: `${offsetY}px`,
+      right: "14px",
+      width: "28px",
+      height: "28px",
+      borderRadius: "999px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(14, 16, 25, 0.9)",
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      boxShadow: "0 10px 24px rgba(0, 0, 0, 0.45)",
+      opacity: "0",
+      visibility: "hidden",
+      pointerEvents: "none",
+      transition: "opacity 160ms ease, transform 160ms ease",
+      zIndex: "3"
+    });
+    const spinner = document.createElement("div");
+    Object.assign(spinner.style, {
+      width: "16px",
+      height: "16px",
+      borderRadius: "999px",
+      border: "2px solid rgba(248, 250, 252, 0.16)",
+      borderTopColor: "#f8fafc",
+      animation: "friends-menu-spin 1s linear infinite"
+    });
+    indicator.appendChild(spinner);
+    container.appendChild(indicator);
+    let isVisible3 = false;
+    let hideTimeout = null;
+    const hide = () => {
+      if (hideTimeout) {
+        window.clearTimeout(hideTimeout);
+        hideTimeout = null;
+      }
+      indicator.style.opacity = "0";
+      const onTransitionEnd = () => {
+        if (!isVisible3) {
+          indicator.style.visibility = "hidden";
+        }
+      };
+      indicator.addEventListener("transitionend", onTransitionEnd, { once: true });
+      hideTimeout = window.setTimeout(() => {
+        if (!isVisible3) {
+          indicator.style.visibility = "hidden";
+        }
+        hideTimeout = null;
+      }, 220);
+    };
+    const setVisible = (next) => {
+      if (next) {
+        if (hideTimeout) {
+          window.clearTimeout(hideTimeout);
+          hideTimeout = null;
+        }
+        isVisible3 = true;
+        indicator.style.visibility = "visible";
+        indicator.style.opacity = "1";
+      } else if (isVisible3) {
+        isVisible3 = false;
+        hide();
+      }
+    };
+    return { setVisible };
+  }
   var activeGardenPreview = null;
   async function stopActiveGardenPreview(keepButton) {
     if (!activeGardenPreview) return;
@@ -47094,6 +47330,7 @@ next: ${next}`;
     activeGardenPreview = null;
   }
   var refreshAllFriends = null;
+  var refreshIncomingRequests = null;
   function formatLastSeen2(timestamp) {
     if (!timestamp) return null;
     const parsed = Date.parse(timestamp);
@@ -47114,8 +47351,9 @@ next: ${next}`;
     return `${days}d`;
   }
   function formatCoinAmount(value) {
-    if (value == null || !Number.isFinite(value)) return null;
-    const abs = Math.abs(value);
+    const numeric = typeof value === "string" ? Number(value) : value;
+    if (numeric == null || !Number.isFinite(numeric)) return null;
+    const abs = Math.abs(numeric);
     const units = [
       { threshold: 1e12, suffix: "T" },
       { threshold: 1e9, suffix: "B" },
@@ -47124,11 +47362,11 @@ next: ${next}`;
     ];
     for (const { threshold, suffix } of units) {
       if (abs >= threshold) {
-        const normalized = value / threshold;
+        const normalized = numeric / threshold;
         return `${normalized.toFixed(2)}${suffix}`;
       }
     }
-    return value.toLocaleString("en-US");
+    return numeric.toLocaleString("en-US");
   }
   function createPrivacyBadge(label2, enabled) {
     const badge = document.createElement("span");
@@ -47340,16 +47578,34 @@ next: ${next}`;
     if (coinsText) {
       const coinsRow = document.createElement("div");
       coinsRow.style.display = "flex";
-      coinsRow.style.justifyContent = "flex-end";
-      coinsRow.style.paddingRight = "16px";
+      coinsRow.style.justifyContent = "flex-start";
       const coinsEl = document.createElement("div");
       coinsEl.textContent = `${coinsText} coins`;
       coinsEl.style.fontSize = "12px";
       coinsEl.style.opacity = "0.8";
       coinsEl.style.whiteSpace = "nowrap";
-      coinsEl.style.justifySelf = "end";
+      coinsEl.style.justifySelf = "start";
       coinsRow.append(coinsEl);
       detailsContent.append(coinsRow);
+    }
+    if (joinRoomId) {
+      const roomRow = document.createElement("div");
+      roomRow.style.display = "flex";
+      roomRow.style.alignItems = "center";
+      roomRow.style.gap = "8px";
+      roomRow.style.paddingRight = "16px";
+      const roomLabel = document.createElement("span");
+      roomLabel.textContent = "Room";
+      roomLabel.style.fontSize = "12px";
+      roomLabel.style.fontWeight = "600";
+      roomLabel.style.opacity = "0.8";
+      const roomValue = document.createElement("span");
+      roomValue.textContent = joinRoomId;
+      roomValue.style.fontSize = "12px";
+      roomValue.style.opacity = "0.9";
+      roomValue.style.whiteSpace = "nowrap";
+      roomRow.append(roomLabel, roomValue);
+      detailsContent.append(roomRow);
     }
     const privacyRow = document.createElement("div");
     privacyRow.style.display = "flex";
@@ -47478,7 +47734,10 @@ next: ${next}`;
         "Activity Log",
         "activityLog",
         (view) => view?.state?.activityLog ?? view?.state?.activityLogs ?? null,
-        (payload) => fakeActivityLogShow(payload, { open: true })
+        (payload) => {
+          skipNextActivityLogHistoryReopen();
+          return fakeActivityLogShow(payload, { open: true });
+        }
       )
     );
     buttonRow.appendChild(
@@ -47564,8 +47823,12 @@ next: ${next}`;
   function renderAllTab(view, ui) {
     view.innerHTML = "";
     const wrap = document.createElement("div");
-    wrap.style.display = "grid";
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
     wrap.style.gap = "10px";
+    wrap.style.position = wrap.style.position || "relative";
+    wrap.style.height = "100%";
+    wrap.style.minHeight = "0";
     const controls = ui.flexRow({ align: "center", gap: 8 });
     const search = ui.inputText("Search for a friend...");
     search.style.flex = "1";
@@ -47580,6 +47843,12 @@ next: ${next}`;
     statusMessage.style.fontSize = "12px";
     statusMessage.style.opacity = "0.7";
     statusMessage.textContent = "Loading friends...";
+    const listContainer = document.createElement("div");
+    listContainer.style.display = "flex";
+    listContainer.style.flexDirection = "column";
+    listContainer.style.flex = "1";
+    listContainer.style.minHeight = "0";
+    listContainer.style.position = "relative";
     const list = document.createElement("div");
     list.style.display = "grid";
     list.style.gap = "8px";
@@ -47587,13 +47856,17 @@ next: ${next}`;
     list.style.borderRadius = "10px";
     list.style.border = "1px solid rgba(255, 255, 255, 0.08)";
     list.style.background = "rgba(255, 255, 255, 0.02)";
-    list.style.maxHeight = "36vh";
+    list.style.flex = "1";
+    list.style.minHeight = "0";
     list.style.overflow = "auto";
-    wrap.append(controls, statusMessage, list);
+    listContainer.appendChild(list);
+    wrap.append(controls, statusMessage, listContainer);
     view.appendChild(wrap);
     let friends = [];
     let isLoading = false;
     let destroyed = false;
+    list.style.position = list.style.position || "relative";
+    const refreshIndicator = createRefreshIndicator(list, listContainer);
     const renderPlaceholder = (text) => {
       list.innerHTML = "";
       const placeholder = document.createElement("div");
@@ -47604,8 +47877,12 @@ next: ${next}`;
       list.appendChild(placeholder);
     };
     const normalizeQuery = (term) => term.trim().toLowerCase();
-    const renderList = () => {
+    const renderList = (options = {}) => {
       if (destroyed) return;
+      const shouldForce = options.force ?? true;
+      if (isLoading && friends.length && !shouldForce) {
+        return;
+      }
       list.innerHTML = "";
       if (isLoading) {
         renderPlaceholder("Loading friends...");
@@ -47640,15 +47917,21 @@ next: ${next}`;
       if (showOnlineOnly) {
         statusMessage.textContent = `${filtered.length} online friend${filtered.length !== 1 ? "s" : ""} shown.`;
       } else {
-        statusMessage.textContent = `${friends.length} friends loaded.`;
+        statusMessage.textContent = `${filtered.length} friend${filtered.length !== 1 ? "s" : ""} shown.`;
       }
+    };
+    const updateRefreshControls = () => {
+      const enabled = !destroyed && !isLoading;
+      ui.setButtonEnabled(refresh, enabled);
+      refresh.setAttribute("aria-busy", isLoading ? "true" : "false");
     };
     const loadFriends = async (options) => {
       if (destroyed) return;
       isLoading = true;
-      statusMessage.textContent = "Loading friends...";
-      refresh.disabled = true;
-      renderList();
+      statusMessage.textContent = friends.length ? "Refreshing friends..." : "Loading friends...";
+      refreshIndicator.setVisible(true);
+      updateRefreshControls();
+      renderList({ force: friends.length === 0 });
       try {
         const player2 = await playerDatabaseUserId.get();
         if (!player2) {
@@ -47675,19 +47958,20 @@ next: ${next}`;
         return;
       } finally {
         isLoading = false;
-        refresh.disabled = false;
-        renderList();
+        refreshIndicator.setVisible(false);
+        updateRefreshControls();
+        renderList({ force: true });
       }
     };
     search.addEventListener("input", () => {
-      renderList();
+      renderList({ force: true });
     });
     refresh.addEventListener("click", () => {
       void loadFriends({ force: true });
     });
     const unsubscribeSettings = onFriendSettingsChange(() => {
       if (!destroyed) {
-        renderList();
+        renderList({ force: true });
       }
     });
     refreshAllFriends = loadFriends;
@@ -47703,8 +47987,12 @@ next: ${next}`;
   function renderAddFriendTab(view, ui) {
     view.innerHTML = "";
     const layout = document.createElement("div");
-    layout.style.display = "grid";
+    layout.style.display = "flex";
+    layout.style.flexDirection = "column";
     layout.style.gap = "12px";
+    layout.style.height = "100%";
+    layout.style.minHeight = "0";
+    layout.style.flex = "1";
     const profileCard = ui.card("My profile");
     profileCard.body.style.display = "grid";
     profileCard.body.style.gap = "12px";
@@ -47828,8 +48116,15 @@ next: ${next}`;
   function renderFriendRequestsTab(view, ui) {
     view.innerHTML = "";
     const card = ui.card("Incoming requests");
-    card.body.style.display = "grid";
+    card.root.style.display = "flex";
+    card.root.style.flexDirection = "column";
+    card.root.style.height = "100%";
+    card.root.style.minHeight = "0";
+    card.body.style.display = "flex";
+    card.body.style.flexDirection = "column";
     card.body.style.gap = "10px";
+    card.body.style.flex = "1";
+    card.body.style.minHeight = "0";
     const controls = ui.flexRow({ justify: "end", align: "center" });
     const requestsRefresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
     requestsRefresh.style.background = "rgba(248, 250, 252, 0.08)";
@@ -47847,38 +48142,75 @@ next: ${next}`;
     requestsStatus.style.opacity = "0.8";
     requestsStatus.textContent = "";
     card.body.appendChild(requestsStatus);
+    const requestsListWrapper = document.createElement("div");
+    requestsListWrapper.style.position = requestsListWrapper.style.position || "relative";
+    requestsListWrapper.style.flex = "1";
+    requestsListWrapper.style.display = "flex";
+    requestsListWrapper.style.flexDirection = "column";
+    requestsListWrapper.style.minHeight = "0";
     const requestsList = document.createElement("div");
     requestsList.style.display = "grid";
     requestsList.style.gap = "8px";
-    requestsList.style.maxHeight = "26vh";
+    requestsList.style.flex = "1";
+    requestsList.style.minHeight = "0";
     requestsList.style.overflow = "auto";
-    card.body.appendChild(requestsList);
+    requestsListWrapper.appendChild(requestsList);
+    card.body.appendChild(requestsListWrapper);
+    requestsList.style.position = requestsList.style.position || "relative";
+    const requestsIndicator = createRefreshIndicator(requestsList, requestsListWrapper);
     view.appendChild(card.root);
     let myId = null;
     let requests = [];
     let loadingRequests = false;
     let destroyedRequests = false;
     const requestActionInProgress = /* @__PURE__ */ new Set();
-    const renderRequests = () => {
-      if (destroyedRequests) return;
-      requestsList.innerHTML = "";
+    const updateRequestsRefreshControls = () => {
+      const enabled = !destroyedRequests && !loadingRequests;
+      ui.setButtonEnabled(requestsRefresh, enabled);
+      requestsRefresh.setAttribute("aria-busy", loadingRequests ? "true" : "false");
+    };
+    updateRequestsRefreshControls();
+    const getRequestsStatusText = () => {
       if (loadingRequests) {
-        const placeholder = document.createElement("div");
-        placeholder.textContent = "Loading friend requests...";
-        placeholder.style.opacity = "0.6";
-        placeholder.style.fontSize = "12px";
-        placeholder.style.textAlign = "center";
-        requestsList.appendChild(placeholder);
+        return requests.length ? "Refreshing friend requests..." : "Loading incoming friend requests...";
+      }
+      if (!requests.length) {
+        return "No incoming friend requests.";
+      }
+      return `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
+    };
+    const renderRequestsPlaceholder = (message) => {
+      const placeholder = document.createElement("div");
+      placeholder.textContent = message;
+      placeholder.style.opacity = "0.6";
+      placeholder.style.fontSize = "12px";
+      placeholder.style.textAlign = "center";
+      placeholder.style.minHeight = "48px";
+      requestsList.appendChild(placeholder);
+    };
+    const updateRequestsStatusText = () => {
+      if (!requests.length) {
         requestsStatus.textContent = "";
         return;
       }
+      requestsStatus.textContent = loadingRequests ? "Refreshing friend requests..." : `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
+    };
+    const renderRequests = (options = {}) => {
+      if (destroyedRequests) return;
+      const shouldForce = options.force ?? true;
+      if (loadingRequests && requests.length && !shouldForce) {
+        updateRequestsStatusText();
+        return;
+      }
+      requestsList.innerHTML = "";
+      if (loadingRequests && !requests.length) {
+        renderRequestsPlaceholder(getRequestsStatusText());
+        updateRequestsStatusText();
+        return;
+      }
       if (!requests.length) {
-        const placeholder = document.createElement("div");
-        placeholder.textContent = "No incoming friend requests.";
-        placeholder.style.opacity = "0.6";
-        placeholder.style.fontSize = "12px";
-        placeholder.style.textAlign = "center";
-        requestsList.appendChild(placeholder);
+        renderRequestsPlaceholder(getRequestsStatusText());
+        updateRequestsStatusText();
         return;
       }
       for (const request of requests) {
@@ -47960,7 +48292,7 @@ next: ${next}`;
         row.append(avatar, info, actions);
         requestsList.appendChild(row);
       }
-      requestsStatus.textContent = `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
+      updateRequestsStatusText();
     };
     async function loadRequests(options) {
       if (destroyedRequests) return;
@@ -47976,7 +48308,9 @@ next: ${next}`;
         return;
       }
       loadingRequests = true;
-      renderRequests();
+      requestsIndicator.setVisible(true);
+      updateRequestsRefreshControls();
+      renderRequests({ force: requests.length === 0 });
       try {
         if (!options?.force) {
           const cached = getCachedIncomingRequestsWithViews();
@@ -47991,9 +48325,12 @@ next: ${next}`;
         requests = [];
       } finally {
         loadingRequests = false;
-        renderRequests();
+        requestsIndicator.setVisible(false);
+        updateRequestsRefreshControls();
+        renderRequests({ force: true });
       }
     }
+    refreshIncomingRequests = loadRequests;
     const refreshPlayerId = async () => {
       const resolved = await playerDatabaseUserId.get();
       myId = resolved;
@@ -48013,14 +48350,21 @@ next: ${next}`;
     void refreshPlayerId();
     view.__cleanup__ = () => {
       destroyedRequests = true;
+      if (refreshIncomingRequests === loadRequests) {
+        refreshIncomingRequests = null;
+      }
     };
   }
   function renderSettingsTab2(view, ui) {
     view.innerHTML = "";
     const settings = getFriendSettings();
     const layout = document.createElement("div");
-    layout.style.display = "grid";
+    layout.style.display = "flex";
+    layout.style.flexDirection = "column";
     layout.style.gap = "12px";
+    layout.style.height = "100%";
+    layout.style.minHeight = "0";
+    layout.style.flex = "1";
     const globalCard = ui.card("Global settings");
     globalCard.body.style.display = "grid";
     globalCard.body.style.gap = "12px";
@@ -48063,12 +48407,6 @@ next: ${next}`;
         settings.showOnlineFriendsOnly,
         void 0,
         (next) => applyPatch({ showOnlineFriendsOnly: next })
-      ),
-      buildToggleRow(
-        "Auto-accept incoming requests",
-        settings.autoAcceptIncomingRequests,
-        void 0,
-        (next) => applyPatch({ autoAcceptIncomingRequests: next })
       ),
       buildToggleRow(
         "Hide my room from the public list",
@@ -48121,9 +48459,18 @@ next: ${next}`;
   function renderFriendsMenu(root) {
     const ui = new Menu({ id: "friends", compact: true });
     ui.mount(root);
-    ui.root.style.width = "420px";
-    ui.root.style.maxWidth = "420px";
-    ui.root.style.minWidth = "340px";
+    ui.root.style.width = "480px";
+    ui.root.style.maxWidth = "520px";
+    ui.root.style.minWidth = "380px";
+    ui.root.style.height = "640px";
+    ui.root.style.maxHeight = "90vh";
+    ui.root.style.flexDirection = "column";
+    const views = ui.root.querySelector(".qmm-views");
+    if (views) {
+      views.style.flex = "1";
+      views.style.maxHeight = "none";
+      views.style.minHeight = "0";
+    }
     ui.addTabs([
       { id: "friends-all", title: "Friend list", render: (view) => renderAllTab(view, ui) },
       { id: "friends-add", title: "Add friend", render: (view) => renderAddFriendTab(view, ui) },
@@ -48131,6 +48478,14 @@ next: ${next}`;
       { id: "friends-settings", title: "Settings", render: (view) => renderSettingsTab2(view, ui) }
     ]);
     ui.switchTo("friends-all");
+    ui.on("tab:change", (id) => {
+      if (id === "friends-all" && refreshAllFriends) {
+        void refreshAllFriends({ force: true });
+      }
+      if (id === "friends-requests" && refreshIncomingRequests) {
+        void refreshIncomingRequests({ force: true });
+      }
+    });
   }
 
   // src/utils/antiafk.ts
@@ -48451,7 +48806,10 @@ next: ${next}`;
         const normalizedSlotId = String(candidateId);
         const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? slotData2?.coins ?? slot2?.coins ?? null;
         const coinValue2 = Number(coinCandidate2);
-        coinsById.set(normalizedSlotId, Number.isFinite(coinValue2) ? coinValue2 : null);
+        coinsById.set(
+          normalizedSlotId,
+          Number.isFinite(coinValue2) ? coinValue2 : null
+        );
       }
       const userSlots = normalizedPlayers.map((player2) => {
         const playerDatabaseId = player2?.databaseUserId ?? player2?.playerId ?? player2?.id ?? null;
@@ -48491,7 +48849,7 @@ next: ${next}`;
       const persistedActivityLog = readAriesPath("activityLog.history");
       const activityLog = Array.isArray(persistedActivityLog) ? persistedActivityLog : normalizeActivityLog(slotData);
       const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
-      return {
+      const payload = {
         playerId: playerId2 != null ? String(playerId2) : null,
         playerName: privacy.showProfile ? playerName : null,
         avatarUrl: privacy.showProfile ? avatarUrl : null,
@@ -48511,7 +48869,9 @@ next: ${next}`;
           journal: privacy.showJournal ? journalEntry : null
         }
       };
-    } catch {
+      return payload;
+    } catch (error) {
+      console.error("[PlayerPayload] buildPlayerStatePayload failed", error);
       return null;
     }
   }
@@ -48520,7 +48880,9 @@ next: ${next}`;
     return log2.filter((entry) => entry?.action !== "feedPet");
   }
   function sanitizeStateForComparison(state2) {
-    const sanitizedActivityLog = sanitizeActivityLogForCompare(state2.activityLog ?? null);
+    const sanitizedActivityLog = sanitizeActivityLogForCompare(
+      state2.activityLog ?? null
+    );
     if (sanitizedActivityLog === state2.activityLog) {
       return state2;
     }
@@ -48529,12 +48891,19 @@ next: ${next}`;
       activityLog: sanitizedActivityLog
     };
   }
-  function snapshotPlayerState(state2) {
+  function snapshotPayloadForComparison(payload) {
     try {
-      const sanitized = sanitizeStateForComparison(state2);
-      return JSON.stringify(sanitized);
+      const sanitizedState = sanitizeStateForComparison(payload.state);
+      const clone = {
+        ...payload,
+        state: sanitizedState
+      };
+      return JSON.stringify(clone);
     } catch (error) {
-      console.error("[PlayerPayload] Failed to snapshot player state", error);
+      console.error(
+        "[PlayerPayload] Failed to snapshot payload for comparison",
+        error
+      );
       return null;
     }
   }
@@ -48556,13 +48925,19 @@ next: ${next}`;
       const dbId = await playerDatabaseUserId.get();
       if (!dbId) return;
       const requests = await fetchIncomingRequestsWithViews(dbId);
-      const acceptedCount = await maybeAutoAcceptIncomingRequests(dbId, requests);
+      const acceptedCount = await maybeAutoAcceptIncomingRequests(
+        dbId,
+        requests
+      );
       if (acceptedCount > 0) {
         await fetchIncomingRequestsWithViews(dbId);
       }
       await fetchFriendsWithViews(dbId);
     } catch (error) {
-      console.error("[PlayerPayload] Failed to prefetch friends data", error);
+      console.error(
+        "[PlayerPayload] Failed to prefetch friends data",
+        error
+      );
     }
   }
   async function maybeAutoAcceptIncomingRequests(playerId2, requests) {
@@ -48656,27 +49031,44 @@ next: ${next}`;
   }
   var payloadReportingTimer = null;
   var isPayloadReporting = false;
-  var firstPayloadStateSnapshot = null;
-  var lastSentStateSnapshot = null;
+  var lastSentPayloadSnapshot = null;
+  var unchangedSnapshotCount = 0;
+  var MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
   async function buildAndSendPlayerState() {
     if (isPayloadReporting) return;
     isPayloadReporting = true;
     try {
       const payload = await buildPlayerStatePayload();
-      console.log(payload);
       if (!payload) {
         return;
       }
-      const currentSnapshot2 = snapshotPlayerState(payload.state);
-      if (currentSnapshot2 !== null && !firstPayloadStateSnapshot) {
-        firstPayloadStateSnapshot = currentSnapshot2;
-      }
-      if (currentSnapshot2 !== null && lastSentStateSnapshot === currentSnapshot2) {
+      if (!payload.playerId || payload.playerId.length < 3) {
         return;
       }
-      await sendPlayerState(payload);
-      if (currentSnapshot2 !== null) {
-        lastSentStateSnapshot = currentSnapshot2;
+      const snapshot = snapshotPayloadForComparison(payload);
+      let mustSend = false;
+      if (snapshot === null) {
+        mustSend = true;
+      } else if (lastSentPayloadSnapshot === null) {
+        mustSend = true;
+      } else if (snapshot !== lastSentPayloadSnapshot) {
+        mustSend = true;
+      } else if (unchangedSnapshotCount + 1 >= MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND) {
+        mustSend = true;
+      }
+      if (!mustSend) {
+        if (snapshot !== null) {
+          unchangedSnapshotCount += 1;
+        }
+        return;
+      }
+      const ok = await sendPlayerState(payload);
+      if (ok) {
+        if (snapshot !== null) {
+          lastSentPayloadSnapshot = snapshot;
+          unchangedSnapshotCount = 0;
+        }
+      } else {
       }
     } catch (error) {
       console.error("[PlayerPayload] Failed to send payload:", error);
@@ -48684,10 +49076,9 @@ next: ${next}`;
       isPayloadReporting = false;
     }
   }
-  function startPlayerStateReporting(intervalMs = 3e5) {
-    console.log("start reporting");
+  function startPlayerStateReporting(intervalMs = 6e4) {
     if (payloadReportingTimer !== null) return;
-    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 3e5;
+    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
     void buildAndSendPlayerState();
     payloadReportingTimer = setInterval(() => {
       void buildAndSendPlayerState();

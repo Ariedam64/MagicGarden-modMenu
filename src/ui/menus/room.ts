@@ -53,7 +53,7 @@ const TAB_ID = "public-rooms";
 const CUSTOM_TAB_ID = "custom-rooms";
 const SEARCH_TAB_ID = "search-player";
 const PLAYERS_TAB_ID = "players";
-type PlayerFilter = "any" | "empty" | "few" | "crowded" | "full";
+type PlayerFilter = "any" | "few" | "crowded" | "full";
 
 export async function renderRoomMenu(root: HTMLElement) {
   const ui = new Menu({
@@ -248,8 +248,6 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
     switch (selectedPlayerFilter) {
       case "any":
         return true;
-      case "empty":
-        return room.players === 0;
       case "few":
         return room.players > 0 && room.players <= 3;
       case "crowded":
@@ -320,7 +318,6 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
 
   const playerFilters: { value: PlayerFilter; label: string }[] = [
     { value: "any", label: "Any players" },
-    { value: "empty", label: "Empty rooms" },
     { value: "few", label: "1 - 3 players" },
     { value: "crowded", label: "4 - 5 players" },
     { value: "full", label: "Full rooms" },
@@ -790,8 +787,6 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
     switch (selectedPlayerFilter) {
       case "any":
         return true;
-      case "empty":
-        return room.players === 0;
       case "few":
         return room.players > 0 && room.players <= 3;
       case "crowded":
@@ -879,7 +874,6 @@ function renderCustomRoomsTab(view: HTMLElement, ui: Menu) {
 
   const playerFilters: { value: PlayerFilter; label: string }[] = [
     { value: "any", label: "Any players" },
-    { value: "empty", label: "Empty rooms" },
     { value: "few", label: "1 – 3 players" },
     { value: "crowded", label: "4 – 5 players" },
     { value: "full", label: "Full rooms" },

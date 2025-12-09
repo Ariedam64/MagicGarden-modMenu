@@ -33,6 +33,8 @@ const mutationColorMap: Record<string, string> = {
 let overlayEl: HTMLDivElement | null = null;
 let currentEnabled = false;
 const listeners = new Set<Listener>();
+type SavedGardensListener = () => void;
+const savedGardensListeners = new Set<SavedGardensListener>();
 let sideOverlayEl: HTMLDivElement | null = null;
 let sideListWrap: HTMLDivElement | null = null;
 let sideSelect: HTMLSelectElement | null = null;
@@ -137,6 +139,17 @@ function hideOverlay() {
   if (overlayEl) {
     overlayEl.remove();
     overlayEl = null;
+  }
+}
+
+function notifySavedGardensChanged(): void {
+  if (!savedGardensListeners.size) return;
+  for (const listener of savedGardensListeners) {
+    try {
+      listener();
+    } catch (error) {
+      console.error("[EditorService] saved gardens listener failed", error);
+    }
   }
 }
 
@@ -2622,6 +2635,11 @@ export const EditorService = {
     listeners.add(listener);
     return () => listeners.delete(listener);
   },
+
+  onSavedGardensChange(listener: SavedGardensListener): () => void {
+    savedGardensListeners.add(listener);
+    return () => savedGardensListeners.delete(listener);
+  },
 };
 
 /* -------------------------------------------------------------------------- */
@@ -2710,7 +2728,9 @@ function writeSavedGardens(list: SavedGarden[]) {
     writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
   } catch {
     /* ignore */
+    return;
   }
+  notifySavedGardensChanged();
 }
 
 async function getCurrentGarden(): Promise<GardenState | null> {

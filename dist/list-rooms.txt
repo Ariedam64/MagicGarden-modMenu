@@ -1,0 +1,71 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+const ROOM_TTL_MINUTES = 6;
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const url = new URL(req.url);
+  const limitParam = url.searchParams.get("limit");
+  let limit = Number(limitParam ?? "50");
+  if (!Number.isFinite(limit) || limit <= 0) limit = 50;
+  if (limit > 200) limit = 200;
+
+  const now = Date.now();
+  const cutoff = new Date(now - ROOM_TTL_MINUTES * 60 * 1000).toISOString();
+
+  // 1) Cleanup paresseux : on supprime les rooms mortes
+  {
+    const { error: deleteError } = await supabase
+      .from("rooms")
+      .delete()
+      .lt("last_updated_at", cutoff);
+
+    if (deleteError) {
+      console.error("list-rooms cleanup error:", deleteError);
+      // on ne bloque pas pour ça, sinon t’exploses ta UX pour un cleanup
+    }
+  }
+
+  // 2) Récup des rooms encore vivantes & publiques
+  const { data, error } = await supabase
+    .from("rooms")
+    .select(
+      `
+        id,
+        is_private,
+        players_count,
+        last_updated_at,
+        last_updated_by_player_id,
+        user_slots
+      `,
+    )
+    .eq("is_private", false)
+    .gte("last_updated_at", cutoff)
+    .order("last_updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("list-rooms error:", error);
+    return new Response("DB error", { status: 500 });
+  }
+
+  return new Response(JSON.stringify(data ?? []), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+});

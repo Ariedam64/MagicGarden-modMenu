@@ -75,9 +75,6 @@ const LEGACY_STATIC_KEYS = [
   "qws:pos",
   "qws:collapsed",
   "qws:hidden",
-  "mg-mod.inventory.sortKey",
-  "mg-mod.inventory.sortDirection",
-  "mg-mod.inventory.showValues",
 ];
 
 const LEGACY_PREFIXES = [
@@ -168,18 +165,6 @@ const STATIC_LEGACY_KEYS: Array<{
   { legacyKey: "qws:pos", apply: (raw, r) => (r.hud = mergeSection(r.hud, { pos: parseSafe(raw) })) },
   { legacyKey: "qws:collapsed", apply: (raw, r) => (r.hud = mergeSection(r.hud, { collapsed: parseSafe(raw) })) },
   { legacyKey: "qws:hidden", apply: (raw, r) => (r.hud = mergeSection(r.hud, { hidden: parseSafe(raw) })) },
-  {
-    legacyKey: "mg-mod.inventory.sortKey",
-    apply: (raw, r) => (r.inventory = mergeSection(r.inventory, { sortKey: parseSafe(raw) })),
-  },
-  {
-    legacyKey: "mg-mod.inventory.sortDirection",
-    apply: (raw, r) => (r.inventory = mergeSection(r.inventory, { sortDirection: parseSafe(raw) })),
-  },
-  {
-    legacyKey: "mg-mod.inventory.showValues",
-    apply: (raw, r) => (r.inventory = mergeSection(r.inventory, { showValues: parseSafe(raw) })),
-  },
 ];
 
 function getHostStorage(): Storage | null {

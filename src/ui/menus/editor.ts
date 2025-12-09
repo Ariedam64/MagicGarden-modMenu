@@ -9,13 +9,29 @@ export function renderEditorMenu(container: HTMLElement) {
 
   const view = ui.root.querySelector(".qmm-views") as HTMLElement;
   view.innerHTML = "";
-  view.style.display = "grid";
+  view.style.display = "flex";
+  view.style.flexDirection = "column";
   view.style.gap = "8px";
-  view.style.justifyItems = "center";
+  view.style.justifyContent = "flex-start";
+  view.style.alignItems = "stretch";
+  view.style.height = "100%";
+  view.style.minHeight = "0";
+  view.style.overflow = "hidden";
+  view.style.flex = "1";
+  ui.root.style.display = "flex";
+  ui.root.style.flexDirection = "column";
+  ui.root.style.height = "100%";
+  ui.root.style.maxHeight = "100%";
+  ui.root.style.minHeight = "0";
+  ui.root.style.overflow = "hidden";
+  ui.root.style.flex = "1 1 auto";
 
   const card = ui.card("Editor mode", { tone: "muted", align: "center" });
   card.header.style.display = "none";
   card.root.style.maxWidth = "420px";
+  card.root.style.alignSelf = "stretch";
+  card.root.style.flex = "0 0 auto";
+  card.root.style.flexShrink = "0";
   card.body.style.display = "grid";
   card.body.style.gap = "10px";
 
@@ -73,9 +89,11 @@ export function renderEditorMenu(container: HTMLElement) {
     toggle.checked = enabled;
     renderSavedList();
   });
+  let savedListCleanup: (() => void) | undefined;
 
   (view as any).__cleanup__ = () => {
     try { cleanup(); } catch {}
+    try { savedListCleanup?.(); } catch {}
   };
 
   // Saved gardens section
@@ -84,6 +102,8 @@ export function renderEditorMenu(container: HTMLElement) {
     card.root.style.maxWidth = "520px";
     card.body.style.display = "grid";
     card.body.style.gap = "8px";
+    card.body.style.width = "100%";
+    card.body.style.minHeight = "0";
     card.body.append(content);
     return card;
   };
@@ -175,8 +195,14 @@ export function renderEditorMenu(container: HTMLElement) {
 
   // Saved list
   const listWrap = document.createElement("div");
-  listWrap.style.display = "grid";
+  listWrap.style.display = "flex";
+  listWrap.style.flexDirection = "column";
   listWrap.style.gap = "8px";
+  listWrap.style.flex = "1";
+  listWrap.style.overflowY = "auto";
+  listWrap.style.width = "100%";
+  listWrap.style.boxSizing = "border-box";
+  listWrap.style.minHeight = "0";
 
   const renderSavedList = () => {
     const listFn = (window as any).qwsEditorListSavedGardens;
@@ -274,11 +300,44 @@ export function renderEditorMenu(container: HTMLElement) {
   };
 
   renderSavedList();
+  savedListCleanup = EditorService.onSavedGardensChange(renderSavedList);
 
   const currentCard = sectionCard("🌱 Current garden", currentWrap);
+  currentCard.root.style.alignSelf = "stretch";
+  currentCard.root.style.flex = "0 0 auto";
+  currentCard.root.style.flexShrink = "0";
   const importCard = sectionCard("📥 Import", importWrap);
+  importCard.root.style.alignSelf = "stretch";
+  importCard.root.style.flex = "0 0 auto";
+  importCard.root.style.flexShrink = "0";
   const savedCard = sectionCard("💾 Saved gardens", listWrap);
-  savedCard.body.append(status);
+  savedCard.root.style.display = "flex";
+  savedCard.root.style.flexDirection = "column";
+  savedCard.root.style.flex = "1 1 0";
+  savedCard.root.style.minHeight = "220px";
+  savedCard.root.style.overflow = "hidden";
+  savedCard.body.style.display = "flex";
+  savedCard.body.style.flexDirection = "column";
+  savedCard.body.style.alignItems = "stretch";
+  savedCard.body.style.justifyContent = "stretch";
+  savedCard.body.style.overflow = "hidden";
+  savedCard.body.style.flex = "1 1 auto";
+  savedCard.body.style.minHeight = "0";
+  savedCard.body.innerHTML = "";
+  status.style.flex = "0 0 auto";
+  status.style.alignSelf = "stretch";
+  status.style.margin = "0";
+  status.style.height = "18px";
+  savedCard.body.append(status, listWrap);
 
-  view.append(card.root, currentCard.root, importCard.root, savedCard.root);
+  const content = document.createElement("div");
+  content.style.display = "flex";
+  content.style.flexDirection = "column";
+  content.style.gap = "8px";
+  content.style.flex = "1";
+  content.style.minHeight = "0";
+  content.style.overflow = "hidden";
+  content.append(currentCard.root, importCard.root, savedCard.root);
+
+  view.append(card.root, content);
 }

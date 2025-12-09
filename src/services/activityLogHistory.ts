@@ -12,6 +12,11 @@ type ActivityLogEntry = {
 
 const HISTORY_STORAGE_KEY = "activityLog.history";
 const HISTORY_LIMIT = 500;
+let skipNextHistoryReopen = false;
+
+export function skipNextActivityLogHistoryReopen(): void {
+  skipNextHistoryReopen = true;
+}
 
 function normalizeEntry(raw: any): ActivityLogEntry | null {
   if (!raw || typeof raw !== "object") return null;
@@ -237,10 +242,18 @@ export async function startActivityLogHistoryWatcher(): Promise<() => void> {
   } catch {
   }
 
+  const consumeHistoryReopenSkip = () => {
+    if (!skipNextHistoryReopen) return false;
+    skipNextHistoryReopen = false;
+    return true;
+  };
+
   const onModalChange = async (modalId: string | null) => {
     const cur = modalId ?? null;
     if (cur === ACTIVITY_LOG_MODAL_ID && lastModal !== ACTIVITY_LOG_MODAL_ID) {
-      await reopenFakeActivityLogFromHistory();
+      if (!consumeHistoryReopenSkip()) {
+        await reopenFakeActivityLogFromHistory();
+      }
     }
     lastModal = cur;
   };

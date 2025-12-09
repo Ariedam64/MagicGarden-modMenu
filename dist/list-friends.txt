@@ -1,0 +1,77 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0].trim() || null;
+
+  const url = new URL(req.url);
+  const playerId = url.searchParams.get("playerId");
+
+  if (!playerId || playerId.length < 3) {
+    return new Response("Invalid playerId", { status: 400 });
+  }
+
+  // Rate limit sur la lecture aussi, histoire d'éviter le spam
+  const { data: allowed, error: rateError } = await supabase.rpc(
+    "check_rate_limit",
+    {
+      p_ip: ip,
+      p_player_id: playerId,
+    },
+  );
+
+  if (rateError) {
+    console.error("rate limit error:", rateError);
+    return new Response("Rate limiter error", { status: 500 });
+  }
+
+  if (allowed === false) {
+    return new Response("Too many requests", { status: 429 });
+  }
+
+  // Récupérer toutes les relations accepted où ce joueur est impliqué
+  const { data, error } = await supabase
+    .from("player_relationships")
+    .select("user_one_id, user_two_id, status")
+    .eq("status", "accepted")
+    .or(`user_one_id.eq.${playerId},user_two_id.eq.${playerId}`);
+
+  if (error) {
+    console.error("list-friends error:", error);
+    return new Response("DB error", { status: 500 });
+  }
+
+  const friends: string[] = [];
+
+  for (const rel of data ?? []) {
+    if (rel.user_one_id === playerId) {
+      friends.push(rel.user_two_id);
+    } else if (rel.user_two_id === playerId) {
+      friends.push(rel.user_one_id);
+    }
+  }
+
+  // retire les doublons au cas où
+  const uniqueFriends = Array.from(new Set(friends));
+
+  return new Response(JSON.stringify({ playerId, friends: uniqueFriends }), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+});

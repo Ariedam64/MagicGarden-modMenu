@@ -18,6 +18,7 @@ import {
   getInventoryValueSnapshot,
   onInventoryValueChange,
 } from "./inventoryValue";
+import { readAriesPath, writeAriesPath } from "./localStorage";
 
 export type SortKey =
   | 'none'
@@ -108,10 +109,10 @@ const ORDER: SortKey[] = [
   'strength',
 ];
 
-const SORT_STORAGE_KEY = 'mg-mod.inventory.sortKey';
+const SORT_KEY_PATH = 'inventory.sortKey';
 const SORT_KEY_SET = new Set<SortKey>(ORDER);
 
-const SORT_DIRECTION_STORAGE_KEY = 'mg-mod.inventory.sortDirection';
+const SORT_DIRECTION_PATH = 'inventory.sortDirection';
 const SORT_DIRECTION_SET = new Set<SortDirection>(['asc', 'desc']);
 
 const DEFAULT_DIRECTION_LABEL = 'Order:';
@@ -135,15 +136,19 @@ const getPetAbilityDisplayName = (abilityId: unknown): string | null => {
   return trimmedName ? trimmedName : null;
 };
 
-const INVENTORY_VALUE_VISIBILITY_STORAGE_KEY = 'mg-mod.inventory.showValues';
+const INVENTORY_VALUE_VISIBILITY_PATH = 'inventory.showValues';
+
+const resolveVisibilityFromStoredValue = (value: unknown): boolean | null => {
+  if (value === true || value === false) return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return null;
+};
 
 const loadPersistedInventoryValueVisibility = (): boolean | null => {
-  if (typeof window === 'undefined') return null;
   try {
-    const stored = window.localStorage?.getItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY) ?? null;
-    if (stored === '1') return true;
-    if (stored === '0') return false;
-    return null;
+    const stored = readAriesPath<unknown>(INVENTORY_VALUE_VISIBILITY_PATH);
+    return resolveVisibilityFromStoredValue(stored);
   } catch (error) {
     console.warn(
       "[InventorySorting] Impossible de lire la préférence d'affichage des valeurs d'inventaire",
@@ -154,9 +159,8 @@ const loadPersistedInventoryValueVisibility = (): boolean | null => {
 };
 
 const persistInventoryValueVisibility = (visible: boolean) => {
-  if (typeof window === 'undefined') return;
   try {
-    window.localStorage?.setItem(INVENTORY_VALUE_VISIBILITY_STORAGE_KEY, visible ? '1' : '0');
+    writeAriesPath(INVENTORY_VALUE_VISIBILITY_PATH, visible);
   } catch (error) {
     console.warn(
       "[InventorySorting] Impossible de sauvegarder la préférence d'affichage des valeurs d'inventaire",
@@ -193,9 +197,8 @@ const isPersistedSortDirection = (value: unknown): value is SortDirection =>
   typeof value === 'string' && SORT_DIRECTION_SET.has(value as SortDirection);
 
 const loadPersistedSortKey = (): SortKey | null => {
-  if (typeof window === 'undefined') return null;
   try {
-    const stored = window.localStorage?.getItem(SORT_STORAGE_KEY) ?? null;
+    const stored = readAriesPath<unknown>(SORT_KEY_PATH);
     return isPersistedSortKey(stored) ? stored : null;
   } catch (error) {
     console.warn('[InventorySorting] Impossible de lire la valeur de tri persistée', error);
@@ -204,18 +207,16 @@ const loadPersistedSortKey = (): SortKey | null => {
 };
 
 const persistSortKey = (value: SortKey) => {
-  if (typeof window === 'undefined') return;
   try {
-    window.localStorage?.setItem(SORT_STORAGE_KEY, value);
+    writeAriesPath(SORT_KEY_PATH, value);
   } catch (error) {
     console.warn('[InventorySorting] Impossible de sauvegarder la valeur de tri', error);
   }
 };
 
 const loadPersistedSortDirection = (): SortDirection | null => {
-  if (typeof window === 'undefined') return null;
   try {
-    const stored = window.localStorage?.getItem(SORT_DIRECTION_STORAGE_KEY) ?? null;
+    const stored = readAriesPath<unknown>(SORT_DIRECTION_PATH);
     return isPersistedSortDirection(stored) ? stored : null;
   } catch (error) {
     console.warn('[InventorySorting] Impossible de lire l\'ordre de tri persisté', error);
@@ -224,9 +225,8 @@ const loadPersistedSortDirection = (): SortDirection | null => {
 };
 
 const persistSortDirection = (value: SortDirection) => {
-  if (typeof window === 'undefined') return;
   try {
-    window.localStorage?.setItem(SORT_DIRECTION_STORAGE_KEY, value);
+    writeAriesPath(SORT_DIRECTION_PATH, value);
   } catch (error) {
     console.warn("[InventorySorting] Impossible de sauvegarder l'ordre de tri", error);
   }

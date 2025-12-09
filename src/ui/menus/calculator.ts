@@ -107,6 +107,11 @@ type CropSimulationSpriteOptions = {
 const BASE_SPRITE_SIZE_PX = 96;
 const COLOR_VARIANTS = ["normal", "gold", "rainbow"] as const;
 type ColorVariant = (typeof COLOR_VARIANTS)[number];
+const COLOR_VARIANT_FILTERS: Record<ColorVariant, string | null> = {
+  normal: null,
+  gold: "Gold",
+  rainbow: "Rainbow",
+};
 
 const WEATHER_EFFECT_PRIORITY = ["wet", "chilled", "frozen"] as const;
 const LIGHTING_EFFECT_PRIORITY_GROUPS = [
@@ -772,7 +777,11 @@ async function loadPlantSpriteCanvasForVariant(
     size: canvas.width,
     data: canvas,
   } as const;
-  return Sprites.toCanvas(tileInfo);
+  const baseCanvas = Sprites.toCanvas(tileInfo);
+  const filterName = COLOR_VARIANT_FILTERS[variant];
+  if (!filterName) return baseCanvas;
+  const filtered = Sprites.applyCanvasFilter(baseCanvas, filterName);
+  return filtered ?? baseCanvas;
 }
 
 function loadPlantSpriteVariant(seedKey: string, variant: ColorVariant): Promise<string | null> {
@@ -1258,6 +1267,17 @@ function ensureCalculatorStyles(): void {
       opacity: 0.7;
       padding: 24px 12px;
     }
+    .mg-crop-calculator__source-hint {
+      font-size: 11px;
+      color: rgba(226, 232, 240, 0.7);
+      text-align: center;
+      margin-top: 20px;
+      padding-bottom: 4px;
+    }
+    .mg-crop-calculator__source-hint a {
+      color: #38bdf8;
+      text-decoration: underline;
+    }
   `);
 }
 
@@ -1497,7 +1517,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
     root.innerHTML = "";
     root.style.padding = "8px";
     root.style.boxSizing = "border-box";
-    root.style.height = "61vh";
+    root.style.height = "66vh";
     root.style.overflow = "auto";
     root.style.display = "grid";
 
@@ -1658,9 +1678,20 @@ export async function renderCalculatorMenu(container: HTMLElement) {
       mutationsSection,
       friendBonusSection,
     );
-    simulationRoot.appendChild(detailLayout);
 
+    simulationRoot.appendChild(detailLayout);
     detailScroll.appendChild(simulationRoot);
+
+        const sourceHint = document.createElement("div");
+    sourceHint.className = "mg-crop-calculator__source-hint";
+    sourceHint.innerHTML = `
+      Based on
+      <a href="https://daserix.github.io/magic-garden-calculator" target="_blank" rel="noreferrer noopener">
+        Daserix&apos; Magic Garden Calculators
+      </a>
+    `;
+
+    root.appendChild(sourceHint);
 
     const refs: CalculatorRefs = {
       root: simulationRoot,

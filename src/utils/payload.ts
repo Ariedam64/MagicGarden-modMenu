@@ -91,7 +91,7 @@ function findPlayersDeep(state: any): any[] {
         value.every((item) => item && typeof item === "object")
       ) {
         const looksLikePlayer = value.some(
-          (item) => "id" in item && "name" in item
+          (item) => "id" in item && "name" in item,
         );
         if (looksLikePlayer && /player/i.test(key)) {
           out.push(...(value as any[]));
@@ -125,7 +125,9 @@ function getSlotsArray(state: any): any[] {
     state?.child?.data?.userSlots ??
     state?.fullState?.child?.data?.userSlots ??
     state?.data?.userSlots;
+
   if (Array.isArray(raw)) return raw;
+
   if (raw && typeof raw === "object") {
     const entries = Object.entries(raw as Record<string, any>);
     entries.sort((a, b) => {
@@ -136,12 +138,13 @@ function getSlotsArray(state: any): any[] {
     });
     return entries.map(([, value]) => value);
   }
+
   return [];
 }
 
 function selectSlot(
   slots: any[],
-  options: BuildPlayerStatePayloadOptions
+  options: BuildPlayerStatePayloadOptions,
 ): any | null {
   if (!Array.isArray(slots) || slots.length === 0) return null;
 
@@ -162,7 +165,7 @@ function selectSlot(
             slot.playerId ??
             slot.data?.databaseUserId ??
             slot.data?.playerId ??
-            ""
+            "",
         ) === normalizedId
       ) {
         return slot;
@@ -181,7 +184,7 @@ function selectSlot(
 function resolvePlayer(
   players: any[],
   slot: any,
-  options: BuildPlayerStatePayloadOptions
+  options: BuildPlayerStatePayloadOptions,
 ): any | null {
   const candidate =
     options.playerId ??
@@ -212,7 +215,7 @@ function normalizeActivityLog(slotData: any): any[] | null {
 }
 
 export async function buildPlayerStatePayload(
-  options: BuildPlayerStatePayloadOptions = {}
+  options: BuildPlayerStatePayloadOptions = {},
 ): Promise<PlayerStatePayload | null> {
   try {
     const state = await Atoms.root.state.get();
@@ -233,6 +236,7 @@ export async function buildPlayerStatePayload(
     const players = getPlayersArray(state);
     const normalizedPlayers = Array.isArray(players) ? players : [];
     const slots = getSlotsArray(state).filter((slot) => !!slot);
+
     const coinsById = new Map<string, number | null>();
     for (const slot of slots) {
       const slotData = slot?.data ?? slot;
@@ -253,15 +257,20 @@ export async function buildPlayerStatePayload(
         slot?.coins ??
         null;
       const coinValue = Number(coinCandidate);
-      coinsById.set(normalizedSlotId, Number.isFinite(coinValue) ? coinValue : null);
+      coinsById.set(
+        normalizedSlotId,
+        Number.isFinite(coinValue) ? coinValue : null,
+      );
     }
+
     const userSlots = normalizedPlayers.map((player) => {
       const playerDatabaseId =
         player?.databaseUserId ??
         player?.playerId ??
         player?.id ??
         null;
-      const normalizedPlayerId = playerDatabaseId != null ? String(playerDatabaseId) : null;
+      const normalizedPlayerId =
+        playerDatabaseId != null ? String(playerDatabaseId) : null;
       const slotId =
         normalizedPlayerId ??
         (typeof player?.id === "string" || typeof player?.id === "number"
@@ -271,11 +280,14 @@ export async function buildPlayerStatePayload(
       return {
         name: typeof player?.name === "string" ? player.name : null,
         discordAvatarUrl:
-          typeof player?.discordAvatarUrl === "string" ? player.discordAvatarUrl : null,
+          typeof player?.discordAvatarUrl === "string"
+            ? player.discordAvatarUrl
+            : null,
         playerId: slotId,
         coins,
       };
     });
+
     const myDatabaseUserId = await playerDatabaseUserId.get();
     if (slots.length === 0) return null;
 
@@ -326,13 +338,14 @@ export async function buildPlayerStatePayload(
       const atomValue = await Atoms.server.numPlayers.get();
       playersCount = clampPlayers(atomValue);
     } catch {
-      // fallback to derived count
+      // fallback sur derived count
     }
 
     const persistedActivityLog = readAriesPath<any[]>("activityLog.history");
     const activityLog = Array.isArray(persistedActivityLog)
       ? persistedActivityLog
       : normalizeActivityLog(slotData);
+
     const journalEntry =
       slotData?.journal ??
       slotData?.data?.journal ??
@@ -340,7 +353,7 @@ export async function buildPlayerStatePayload(
       slot?.data?.journal ??
       null;
 
-    return {
+    const payload: PlayerStatePayload = {
       playerId: playerId != null ? String(playerId) : null,
       playerName: privacy.showProfile ? playerName : null,
       avatarUrl: privacy.showProfile ? avatarUrl : null,
@@ -353,19 +366,24 @@ export async function buildPlayerStatePayload(
       },
       privacy,
       state: {
-        garden: privacy.showGarden ? (slotData?.garden ?? null) : null,
+        garden: privacy.showGarden ? slotData?.garden ?? null : null,
         inventory: privacy.showInventory
-          ? (slotData?.inventory ?? slot?.inventory ?? null)
+          ? slotData?.inventory ?? slot?.inventory ?? null
           : null,
         stats:
-          privacy.showStats && typeof slotData?.stats === "object" && slotData?.stats
+          privacy.showStats &&
+          typeof slotData?.stats === "object" &&
+          slotData?.stats
             ? slotData.stats
             : null,
         activityLog: privacy.showActivityLog ? activityLog : null,
         journal: privacy.showJournal ? journalEntry : null,
       },
     };
-  } catch {
+
+    return payload;
+  } catch (error) {
+    console.error("[PlayerPayload] buildPlayerStatePayload failed", error);
     return null;
   }
 }
@@ -385,8 +403,12 @@ function sanitizeActivityLogForCompare(
   return log.filter((entry) => entry?.action !== "feedPet");
 }
 
-function sanitizeStateForComparison(state: PlayerStatePayload["state"]): PlayerStatePayload["state"] {
-  const sanitizedActivityLog = sanitizeActivityLogForCompare(state.activityLog ?? null);
+function sanitizeStateForComparison(
+  state: PlayerStatePayload["state"],
+): PlayerStatePayload["state"] {
+  const sanitizedActivityLog = sanitizeActivityLogForCompare(
+    state.activityLog ?? null,
+  );
   if (sanitizedActivityLog === state.activityLog) {
     return state;
   }
@@ -396,12 +418,26 @@ function sanitizeStateForComparison(state: PlayerStatePayload["state"]): PlayerS
   };
 }
 
-function snapshotPlayerState(state: PlayerStatePayload["state"]): string | null {
+/**
+ * Snapshot complet du payload pour comparaison :
+ * - privacy, coins, room...
+ * - state nettoyé pour éviter le bruit
+ */
+function snapshotPayloadForComparison(
+  payload: PlayerStatePayload,
+): string | null {
   try {
-    const sanitized = sanitizeStateForComparison(state);
-    return JSON.stringify(sanitized);
+    const sanitizedState = sanitizeStateForComparison(payload.state);
+    const clone: PlayerStatePayload = {
+      ...payload,
+      state: sanitizedState,
+    };
+    return JSON.stringify(clone);
   } catch (error) {
-    console.error("[PlayerPayload] Failed to snapshot player state", error);
+    console.error(
+      "[PlayerPayload] Failed to snapshot payload for comparison",
+      error,
+    );
     return null;
   }
 }
@@ -415,7 +451,7 @@ function tryStringifyValue(value: unknown): string | null {
 }
 
 export async function logPlayerStatePayload(
-  options?: BuildPlayerStatePayloadOptions
+  options?: BuildPlayerStatePayloadOptions,
 ): Promise<PlayerStatePayload | null> {
   return buildPlayerStatePayload(options);
 }
@@ -437,13 +473,19 @@ async function warmSupabaseInitialFetch(): Promise<void> {
     const dbId = await playerDatabaseUserId.get();
     if (!dbId) return;
     const requests = await fetchIncomingRequestsWithViews(dbId);
-    const acceptedCount = await maybeAutoAcceptIncomingRequests(dbId, requests);
+    const acceptedCount = await maybeAutoAcceptIncomingRequests(
+      dbId,
+      requests,
+    );
     if (acceptedCount > 0) {
       await fetchIncomingRequestsWithViews(dbId);
     }
     await fetchFriendsWithViews(dbId);
   } catch (error) {
-    console.error("[PlayerPayload] Failed to prefetch friends data", error);
+    console.error(
+      "[PlayerPayload] Failed to prefetch friends data",
+      error,
+    );
   }
 }
 
@@ -471,7 +513,9 @@ async function maybeAutoAcceptIncomingRequests(
         acceptedCount += 1;
         void toastSimple(
           "Friends",
-          `Auto-accepted incoming request from ${request.playerName ?? otherId}.`,
+          `Auto-accepted incoming request from ${
+            request.playerName ?? otherId
+          }.`,
           "success",
         );
       }
@@ -538,14 +582,18 @@ function stopAutoAcceptWatcher(): void {
 async function tryInitializeReporting(state?: any): Promise<void> {
   if (gameReadyTriggered) return;
   const snapshot = state ?? (await Atoms.root.state.get());
-  const players = Array.isArray(snapshot?.data?.players) ? snapshot.data.players : [];
+  const players = Array.isArray(snapshot?.data?.players)
+    ? snapshot.data.players
+    : [];
   if (players.length === 0) return;
   gameReadyTriggered = true;
   startPlayerStateReporting(preferredReportingIntervalMs);
   startFriendDataRefreshLoop();
 }
 
-export function startPlayerStateReportingWhenGameReady(intervalMs?: number): void {
+export function startPlayerStateReportingWhenGameReady(
+  intervalMs?: number,
+): void {
   if (gameReadyWatcherInitialized) return;
   gameReadyWatcherInitialized = true;
   preferredReportingIntervalMs = intervalMs;
@@ -556,33 +604,72 @@ export function startPlayerStateReportingWhenGameReady(intervalMs?: number): voi
   startAutoAcceptWatcher();
 }
 
+// ---------- Heartbeat + AFK logic ----------
+
 let payloadReportingTimer: ReturnType<typeof setInterval> | null = null;
 let isPayloadReporting = false;
-let firstPayloadStateSnapshot: string | null = null;
-let lastSentStateSnapshot: string | null = null;
+let lastSentPayloadSnapshot: string | null = null;
+let unchangedSnapshotCount = 0;
 
+// 5 ticks * 60s = 5 min AFK keep-alive
+const MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
+
+/**
+ * Tick de heartbeat :
+ * - build payload
+ * - si null ou playerId invalide → rien
+ * - compare snapshot complet avec le dernier envoyé
+ *   - change → envoi
+ *   - identique → on skip sauf toutes les 5 fois (keep-alive)
+ */
 async function buildAndSendPlayerState(): Promise<void> {
   if (isPayloadReporting) return;
   isPayloadReporting = true;
   try {
     const payload = await buildPlayerStatePayload();
-    console.log(payload)
     if (!payload) {
       return;
     }
 
-    const currentSnapshot = snapshotPlayerState(payload.state);
-    if (currentSnapshot !== null && !firstPayloadStateSnapshot) {
-      firstPayloadStateSnapshot = currentSnapshot;
-    }
-
-    if (currentSnapshot !== null && lastSentStateSnapshot === currentSnapshot) {
+    if (!payload.playerId || payload.playerId.length < 3) {
       return;
     }
 
-    await sendPlayerState(payload);
-    if (currentSnapshot !== null) {
-      lastSentStateSnapshot = currentSnapshot;
+    const snapshot = snapshotPayloadForComparison(payload);
+
+    let mustSend = false;
+
+    if (snapshot === null) {
+      // On ne peut pas snapshot → on envoie pour ne pas rester coincé
+      mustSend = true;
+    } else if (lastSentPayloadSnapshot === null) {
+      // Premier envoi
+      mustSend = true;
+    } else if (snapshot !== lastSentPayloadSnapshot) {
+      // Payload différent
+      mustSend = true;
+    } else if (
+      unchangedSnapshotCount + 1 >=
+      MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND
+    ) {
+      // 5ème tick identique → keep-alive AFK
+      mustSend = true;
+    }
+
+    if (!mustSend) {
+      if (snapshot !== null) {
+        unchangedSnapshotCount += 1;
+      }
+      return;
+    }
+
+    const ok = await sendPlayerState(payload);
+    if (ok) {
+      if (snapshot !== null) {
+        lastSentPayloadSnapshot = snapshot;
+        unchangedSnapshotCount = 0;
+      }
+    } else {
     }
   } catch (error) {
     console.error("[PlayerPayload] Failed to send payload:", error);
@@ -591,10 +678,16 @@ async function buildAndSendPlayerState(): Promise<void> {
   }
 }
 
-export function startPlayerStateReporting(intervalMs = 300000): void {
-  console.log("start reporting")
+/**
+ * Heartbeat :
+ * - par défaut toutes les 60s
+ * - envoi immédiat au démarrage
+ */
+export function startPlayerStateReporting(intervalMs = 60_000): void {
   if (payloadReportingTimer !== null) return;
-  const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 300000;
+  const normalizedMs =
+    Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60_000;
+
   void buildAndSendPlayerState();
   payloadReportingTimer = setInterval(() => {
     void buildAndSendPlayerState();

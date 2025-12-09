@@ -8,6 +8,7 @@ import {
   fakeJournalShow,
   fakeStatsShow,
 } from "./fakeModal";
+import { skipNextActivityLogHistoryReopen } from "./activityLogHistory";
 import { PlayerService } from "./player";
 import { Atoms } from "../store/atoms";
 import type { XY, GardenState  } from "../store/atoms";
@@ -580,6 +581,7 @@ export const PlayersService = {
         await toastSimple("Activity log", "No activity logs for this player.", "info");
         return;
       }
+      skipNextActivityLogHistoryReopen();
       await fakeActivityLogShow(logs, { open: true });
       if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
     } catch (e: any) {

@@ -1,0 +1,406 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+type SectionKey =
+  | "profile"
+  | "garden"
+  | "inventory"
+  | "stats"
+  | "activityLog"
+  | "journal"
+  | "room";
+
+function parseSections(raw: unknown): Set<SectionKey> | null {
+  if (!raw) return null;
+
+  let list: string[] = [];
+  if (Array.isArray(raw)) {
+    list = raw as string[];
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr)) {
+          list = arr.map(String);
+        } else {
+          list = [raw];
+        }
+      } catch {
+        list = raw.split(",");
+      }
+    } else {
+      list = raw.split(",");
+    }
+  } else {
+    return null;
+  }
+
+  const normalized = list
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.toLowerCase());
+
+  if (!normalized.length) return null;
+
+  const set = new Set<SectionKey>();
+
+  for (const s of normalized) {
+    if (s === "profile") set.add("profile");
+    else if (s === "garden") set.add("garden");
+    else if (s === "inventory") set.add("inventory");
+    else if (s === "stats") set.add("stats");
+    else if (s === "activitylog" || s === "activity_log") set.add("activityLog");
+    else if (s === "journal") set.add("journal");
+    else if (s === "room") set.add("room");
+  }
+
+  return set.size ? set : null;
+}
+
+type PlayerPrivacyPayload = {
+  showProfile: boolean;
+  showGarden: boolean;
+  showInventory: boolean;
+  showCoins: boolean;
+  showActivityLog: boolean;
+  showJournal: boolean;
+  showStats: boolean;
+  hideRoomFromPublicList?: boolean;
+};
+
+const DEFAULT_PRIVACY: PlayerPrivacyPayload = {
+  showProfile: true,
+  showGarden: true,
+  showInventory: true,
+  showCoins: true,
+  showActivityLog: true,
+  showJournal: true,
+  showStats: true,
+  hideRoomFromPublicList: false,
+};
+
+const ONLINE_THRESHOLD_MS = 6 * 60 * 1000; // 3 minutes
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0].trim() || null;
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  const playerIdsRaw = body?.playerIds;
+  const sections = parseSections(body?.sections);
+
+  if (!Array.isArray(playerIdsRaw) || playerIdsRaw.length === 0) {
+    return new Response("playerIds must be a non-empty array", {
+      status: 400,
+    });
+  }
+
+  const playerIds = Array.from(
+    new Set(
+      playerIdsRaw
+        .map((x: any) => String(x ?? "").trim())
+        .filter((x: string) => x.length >= 3),
+    ),
+  );
+
+  if (playerIds.length === 0) {
+    return new Response("No valid playerIds", { status: 400 });
+  }
+
+  if (playerIds.length > 50) {
+    return new Response("Too many playerIds (max 50)", { status: 400 });
+  }
+
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+
+  // Rate limit global sur l'IP
+  const { data: allowed, error: rateError } = await supabase.rpc(
+    "check_rate_limit",
+    {
+      p_ip: ip,
+      p_player_id: null,
+    },
+  );
+
+  if (rateError) {
+    console.error("rate limit error:", rateError);
+    return new Response("Rate limiter error", { status: 500 });
+  }
+
+  if (allowed === false) {
+    return new Response("Too many requests", { status: 429 });
+  }
+
+  // 1) players
+  const {
+    data: playerRows,
+    error: playerError,
+  } = await supabase
+    .from("players")
+    .select("id, name, avatar_url, coins, has_mod_installed, last_event_at")
+    .in("id", playerIds);
+
+  if (playerError) {
+    console.error("players select error:", playerError);
+    return new Response("DB error (players)", { status: 500 });
+  }
+
+  const safePlayers = playerRows ?? [];
+
+  // 2) player_privacy
+  let privacyRows: any[] = [];
+  if (playerIds.length > 0) {
+    const { data, error } = await supabase
+      .from("player_privacy")
+      .select(
+        "player_id, show_profile, show_garden, show_inventory, show_coins, show_activity_log, show_journal, show_stats, hide_room_from_public_list",
+      )
+      .in("player_id", playerIds);
+
+    if (error) {
+      console.error("player_privacy select error:", error);
+    } else {
+      privacyRows = data ?? [];
+    }
+  }
+
+  const privacyByPlayerId = new Map<string, any>();
+  for (const pr of privacyRows) {
+    if (pr && typeof pr.player_id === "string") {
+      privacyByPlayerId.set(pr.player_id, pr);
+    }
+  }
+
+  // 3) player_state
+  const needState =
+    !sections ||
+    sections.has("garden") ||
+    sections.has("inventory") ||
+    sections.has("stats") ||
+    sections.has("activityLog") ||
+    sections.has("journal");
+
+  let stateByPlayerId = new Map<string, any>();
+
+  if (needState && playerIds.length > 0) {
+    const { data, error } = await supabase
+      .from("player_state")
+      .select("player_id, garden, inventory, stats, activity_log, journal")
+      .in("player_id", playerIds);
+
+    if (error) {
+      console.error("player_state select error:", error);
+    } else {
+      stateByPlayerId = new Map(
+        (data ?? [])
+          .filter((st: any) => st && typeof st.player_id === "string")
+          .map((st: any) => [st.player_id, st]),
+      );
+    }
+  }
+
+  // 4) room_players + rooms
+  const needRoom = !sections || sections.has("room");
+
+  let roomIdByPlayerId = new Map<string, string>();
+  let roomMap = new Map<string, any>();
+
+  if (needRoom && playerIds.length > 0) {
+    const { data: rpData, error: rpError } = await supabase
+      .from("room_players")
+      .select("player_id, room_id")
+      .is("left_at", null)
+      .in("player_id", playerIds);
+
+    if (rpError) {
+      console.error("room_players select error:", rpError);
+    } else {
+      roomIdByPlayerId = new Map(
+        (rpData ?? [])
+          .filter(
+            (rp: any) =>
+              rp &&
+              typeof rp.player_id === "string" &&
+              typeof rp.room_id === "string",
+          )
+          .map((rp: any) => [rp.player_id, rp.room_id]),
+      );
+
+      const roomIds = Array.from(
+        new Set(
+          (rpData ?? [])
+            .map((r: any) => r.room_id)
+            .filter((id: any) => typeof id === "string" && id.length > 0),
+        ),
+      );
+
+      if (roomIds.length > 0) {
+        const { data: roomsData, error: roomsError } = await supabase
+          .from("rooms")
+          .select(
+            "id, is_private, players_count, last_updated_at, last_updated_by_player_id, user_slots",
+          )
+          .in("id", roomIds);
+
+        if (roomsError) {
+          console.error("rooms select error:", roomsError);
+        } else {
+          roomMap = new Map(
+            (roomsData ?? [])
+              .filter((room: any) => room && typeof room.id === "string")
+              .map((room: any) => [room.id, room]),
+          );
+        }
+      }
+    }
+  }
+
+  // 5) construction des vues
+  const viewById = new Map<string, any>();
+
+  for (const row of safePlayers as any[]) {
+    const dbPriv = privacyByPlayerId.get(row.id) ?? null;
+
+    const privacy: PlayerPrivacyPayload = {
+      showProfile:
+        typeof dbPriv?.show_profile === "boolean"
+          ? dbPriv.show_profile
+          : DEFAULT_PRIVACY.showProfile,
+      showGarden:
+        typeof dbPriv?.show_garden === "boolean"
+          ? dbPriv.show_garden
+          : DEFAULT_PRIVACY.showGarden,
+      showInventory:
+        typeof dbPriv?.show_inventory === "boolean"
+          ? dbPriv.show_inventory
+          : DEFAULT_PRIVACY.showInventory,
+      showCoins:
+        typeof dbPriv?.show_coins === "boolean"
+          ? dbPriv.show_coins
+          : DEFAULT_PRIVACY.showCoins,
+      showActivityLog:
+        typeof dbPriv?.show_activity_log === "boolean"
+          ? dbPriv.show_activity_log
+          : DEFAULT_PRIVACY.showActivityLog,
+      showJournal:
+        typeof dbPriv?.show_journal === "boolean"
+          ? dbPriv.show_journal
+          : DEFAULT_PRIVACY.showJournal,
+      showStats:
+        typeof dbPriv?.show_stats === "boolean"
+          ? dbPriv.show_stats
+          : DEFAULT_PRIVACY.showStats,
+      hideRoomFromPublicList:
+        typeof dbPriv?.hide_room_from_public_list === "boolean"
+          ? dbPriv.hide_room_from_public_list
+          : DEFAULT_PRIVACY.hideRoomFromPublicList,
+    };
+
+    // isOnline + lastEventAt
+    let isOnline = false;
+    let lastEventAt: string | null = null;
+
+    if (row.last_event_at) {
+      lastEventAt = row.last_event_at as string;
+      const lastEventMs = new Date(lastEventAt).getTime();
+      if (Number.isFinite(lastEventMs)) {
+        const diff = Date.now() - lastEventMs;
+        if (diff <= ONLINE_THRESHOLD_MS) {
+          isOnline = true;
+        }
+      }
+    }
+
+    const st = needState ? stateByPlayerId.get(row.id) ?? {} : {};
+    const roomId = needRoom ? roomIdByPlayerId.get(row.id) : undefined;
+    const room = needRoom && roomId ? roomMap.get(roomId) ?? null : null;
+
+    const view: any = {
+      playerId: row.id,
+      hasModInstalled: !!row.has_mod_installed,
+      isOnline,
+      lastEventAt,
+      privacy,
+    };
+
+    // profile
+    if (!sections || sections.has("profile")) {
+      view.playerName = privacy.showProfile ? row.name ?? row.id : null;
+      view.avatarUrl = privacy.showProfile ? row.avatar_url ?? null : null;
+      view.coins = privacy.showCoins ? row.coins ?? null : null;
+    }
+
+    // room
+    if (!sections || sections.has("room")) {
+      view.room = room;
+    }
+
+    // state
+    if (
+      !sections ||
+      sections.has("garden") ||
+      sections.has("inventory") ||
+      sections.has("stats") ||
+      sections.has("activityLog") ||
+      sections.has("journal")
+    ) {
+      view.state = {
+        garden:
+          (!sections || sections.has("garden")) && privacy.showGarden
+            ? st.garden ?? null
+            : null,
+        inventory:
+          (!sections || sections.has("inventory")) && privacy.showInventory
+            ? st.inventory ?? null
+            : null,
+        stats:
+          (!sections || sections.has("stats")) && privacy.showStats
+            ? st.stats ?? null
+            : null,
+        activityLog:
+          (!sections || sections.has("activityLog")) &&
+          privacy.showActivityLog
+            ? st.activity_log ?? null
+            : null,
+        journal:
+          (!sections || sections.has("journal")) && privacy.showJournal
+            ? st.journal ?? null
+            : null,
+      };
+    }
+
+    viewById.set(row.id, view);
+  }
+
+  const ordered = playerIds
+    .map((id) => viewById.get(id))
+    .filter((v) => v != null);
+
+  return json(ordered, 200);
+});

@@ -1,0 +1,293 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+type SectionKey =
+  | "profile"
+  | "garden"
+  | "inventory"
+  | "stats"
+  | "activityLog"
+  | "journal"
+  | "room";
+
+function parseSections(raw: unknown): Set<SectionKey> | null {
+  if (!raw) return null;
+
+  let list: string[] = [];
+  if (Array.isArray(raw)) {
+    list = raw as string[];
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    // support '["profile","room"]' ou "profile,room"
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const arr = JSON.parse(trimmed);
+        if (Array.isArray(arr)) {
+          list = arr.map(String);
+        } else {
+          list = [raw];
+        }
+      } catch {
+        list = raw.split(",");
+      }
+    } else {
+      list = raw.split(",");
+    }
+  } else {
+    return null;
+  }
+
+  const normalized = list
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.toLowerCase());
+
+  if (!normalized.length) return null;
+
+  const set = new Set<SectionKey>();
+
+  for (const s of normalized) {
+    if (s === "profile") set.add("profile");
+    else if (s === "garden") set.add("garden");
+    else if (s === "inventory") set.add("inventory");
+    else if (s === "stats") set.add("stats");
+    else if (s === "activitylog" || s === "activity_log") set.add("activityLog");
+    else if (s === "journal") set.add("journal");
+    else if (s === "room") set.add("room");
+  }
+
+  return set.size ? set : null;
+}
+
+type PlayerPrivacyPayload = {
+  showProfile: boolean;
+  showGarden: boolean;
+  showInventory: boolean;
+  showCoins: boolean;
+  showActivityLog: boolean;
+  showJournal: boolean;
+  showStats: boolean;
+  hideRoomFromPublicList?: boolean;
+};
+
+const DEFAULT_PRIVACY: PlayerPrivacyPayload = {
+  showProfile: true,
+  showGarden: true,
+  showInventory: true,
+  showCoins: true,
+  showActivityLog: true,
+  showJournal: true,
+  showStats: true,
+  hideRoomFromPublicList: false,
+};
+
+const ONLINE_THRESHOLD_MS = 6 * 60 * 1000;
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const url = new URL(req.url);
+  const playerId = url.searchParams.get("playerId");
+  const sectionsParam = url.searchParams.get("sections"); // "profile,room" ou '["room"]'
+
+  if (!playerId || playerId.length < 3) {
+    return new Response("Invalid playerId", { status: 400 });
+  }
+
+  const sectionsSet = parseSections(sectionsParam ?? undefined);
+
+  const wantProfile = !sectionsSet || sectionsSet.has("profile");
+  const wantGarden = !sectionsSet || sectionsSet.has("garden");
+  const wantInventory = !sectionsSet || sectionsSet.has("inventory");
+  const wantStats = !sectionsSet || sectionsSet.has("stats");
+  const wantActivityLog = !sectionsSet || sectionsSet.has("activityLog");
+  const wantJournal = !sectionsSet || sectionsSet.has("journal");
+  const wantRoom = !sectionsSet || sectionsSet.has("room");
+
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), {
+      status,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    });
+
+  // 1) players (avec last_event_at)
+  const {
+    data: player,
+    error: playerError,
+  } = await supabase
+    .from("players")
+    .select("id, name, avatar_url, coins, has_mod_installed, last_event_at")
+    .eq("id", playerId)
+    .maybeSingle();
+
+  if (playerError) {
+    console.error("get-player-view players error:", playerError);
+    return new Response("DB error (players)", { status: 500 });
+  }
+
+  if (!player) {
+    return new Response("Player not found", { status: 404 });
+  }
+
+  // 2) player_privacy
+  const {
+    data: privacyRow,
+    error: privacyError,
+  } = await supabase
+    .from("player_privacy")
+    .select(
+      "show_profile, show_garden, show_inventory, show_coins, show_activity_log, show_journal, show_stats, hide_room_from_public_list",
+    )
+    .eq("player_id", playerId)
+    .maybeSingle();
+
+  if (privacyError) {
+    console.error("get-player-view privacy error:", privacyError);
+  }
+
+  const rawPrivacy = privacyRow ?? {};
+
+  const privacy: PlayerPrivacyPayload = {
+    showProfile:
+      typeof rawPrivacy.show_profile === "boolean"
+        ? rawPrivacy.show_profile
+        : DEFAULT_PRIVACY.showProfile,
+    showGarden:
+      typeof rawPrivacy.show_garden === "boolean"
+        ? rawPrivacy.show_garden
+        : DEFAULT_PRIVACY.showGarden,
+    showInventory:
+      typeof rawPrivacy.show_inventory === "boolean"
+        ? rawPrivacy.show_inventory
+        : DEFAULT_PRIVACY.showInventory,
+    showCoins:
+      typeof rawPrivacy.show_coins === "boolean"
+        ? rawPrivacy.show_coins
+        : DEFAULT_PRIVACY.showCoins,
+    showActivityLog:
+      typeof rawPrivacy.show_activity_log === "boolean"
+        ? rawPrivacy.show_activity_log
+        : DEFAULT_PRIVACY.showActivityLog,
+    showJournal:
+      typeof rawPrivacy.show_journal === "boolean"
+        ? rawPrivacy.show_journal
+        : DEFAULT_PRIVACY.showJournal,
+    showStats:
+      typeof rawPrivacy.show_stats === "boolean"
+        ? rawPrivacy.show_stats
+        : DEFAULT_PRIVACY.showStats,
+    hideRoomFromPublicList:
+      typeof rawPrivacy.hide_room_from_public_list === "boolean"
+        ? rawPrivacy.hide_room_from_public_list
+        : DEFAULT_PRIVACY.hideRoomFromPublicList,
+  };
+
+  // 3) player_state
+  const needState =
+    wantGarden || wantInventory || wantStats || wantActivityLog || wantJournal;
+
+  let st: any = {};
+  if (needState) {
+    const { data: stateRow, error: stateError } = await supabase
+      .from("player_state")
+      .select("garden, inventory, stats, activity_log, journal")
+      .eq("player_id", playerId)
+      .maybeSingle();
+
+    if (stateError) {
+      console.error("get-player-view player_state error:", stateError);
+    }
+    st = stateRow ?? {};
+  }
+
+  // 4) room
+  let room: any = null;
+  if (wantRoom) {
+    const { data: rpRow, error: rpError } = await supabase
+      .from("room_players")
+      .select("room_id")
+      .eq("player_id", playerId)
+      .is("left_at", null)
+      .maybeSingle();
+
+    if (rpError) {
+      console.error("get-player-view room_players error:", rpError);
+    } else if (rpRow?.room_id) {
+      const { data: roomRow, error: roomError } = await supabase
+        .from("rooms")
+        .select(
+          "id, is_private, players_count, last_updated_at, last_updated_by_player_id, user_slots",
+        )
+        .eq("id", rpRow.room_id)
+        .maybeSingle();
+
+      if (roomError) {
+        console.error("get-player-view rooms error:", roomError);
+      } else if (roomRow) {
+        room = roomRow;
+      }
+    }
+  }
+
+  // 5) isOnline + lastEventAt
+  const lastEventAt: string | null = player.last_event_at ?? null;
+  let isOnline = false;
+
+  if (lastEventAt) {
+    const lastMs = new Date(lastEventAt).getTime();
+    if (Number.isFinite(lastMs)) {
+      const diff = Date.now() - lastMs;
+      if (diff <= ONLINE_THRESHOLD_MS) {
+        isOnline = true;
+      }
+    }
+  }
+
+  const responseBody = {
+    playerId: player.id,
+    playerName:
+      wantProfile && privacy.showProfile ? player.name : null,
+    avatarUrl:
+      wantProfile && privacy.showProfile ? player.avatar_url : null,
+    coins:
+      wantProfile && privacy.showCoins ? player.coins : null,
+    room: wantRoom ? room : null,
+    hasModInstalled: wantProfile ? !!player.has_mod_installed : false,
+    isOnline,
+    lastEventAt,
+    privacy: wantProfile ? privacy : DEFAULT_PRIVACY,
+    state: {
+      garden:
+        wantGarden && privacy.showGarden ? st.garden ?? null : null,
+      inventory:
+        wantInventory && privacy.showInventory
+          ? st.inventory ?? null
+          : null,
+      stats:
+        wantStats && privacy.showStats ? st.stats ?? null : null,
+      activityLog:
+        wantActivityLog && privacy.showActivityLog
+          ? st.activity_log ?? null
+          : null,
+      journal:
+        wantJournal && privacy.showJournal
+          ? st.journal ?? null
+          : null,
+    },
+  };
+
+  return json(responseBody, 200);
+});

@@ -1,0 +1,99 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+if (!supabaseUrl || !serviceRoleKey) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+Deno.serve(async (req: Request): Promise<Response> => {
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", { status: 405 });
+  }
+
+  const ipHeader = req.headers.get("x-forwarded-for") ?? "";
+  const ip = ipHeader.split(",")[0].trim() || null;
+
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+
+  const { playerId, otherPlayerId } = body ?? {};
+
+  if (
+    typeof playerId !== "string" ||
+    typeof otherPlayerId !== "string" ||
+    playerId.length < 3 ||
+    otherPlayerId.length < 3
+  ) {
+    return new Response("Invalid player ids", { status: 400 });
+  }
+
+  if (playerId === otherPlayerId) {
+    return new Response("Invalid self relation", { status: 400 });
+  }
+
+  // Rate limit sur celui qui supprime
+  const { data: allowed, error: rateError } = await supabase.rpc(
+    "check_rate_limit",
+    {
+      p_ip: ip,
+      p_player_id: playerId,
+    },
+  );
+
+  if (rateError) {
+    console.error("rate limit error:", rateError);
+    return new Response("Rate limiter error", { status: 500 });
+  }
+
+  if (allowed === false) {
+    return new Response("Too many requests", { status: 429 });
+  }
+
+  // normaliser la paire
+  const [userOneId, userTwoId] =
+    playerId < otherPlayerId
+      ? [playerId, otherPlayerId]
+      : [otherPlayerId, playerId];
+
+  const { data: rel, error: relError } = await supabase
+    .from("player_relationships")
+    .select("status")
+    .eq("user_one_id", userOneId)
+    .eq("user_two_id", userTwoId)
+    .maybeSingle();
+
+  if (relError) {
+    console.error("relationship fetch error:", relError);
+    return new Response("DB error (relationship fetch)", { status: 500 });
+  }
+
+  if (!rel) {
+    return new Response("No relationship found", { status: 404 });
+  }
+
+  if (rel.status !== "accepted") {
+    // pas amis → rien à supprimer
+    return new Response("Not friends", { status: 409 });
+  }
+
+  const { error: delError } = await supabase
+    .from("player_relationships")
+    .delete()
+    .eq("user_one_id", userOneId)
+    .eq("user_two_id", userTwoId);
+
+  if (delError) {
+    console.error("relationship delete error:", delError);
+    return new Response("DB error (relationship delete)", { status: 500 });
+  }
+
+  return new Response(null, { status: 204 });
+});
