@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.8.16
+// @version      2.8.17
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -39602,6 +39602,10 @@ next: ${next}`;
         }
       }
       btnSelect.onclick = async () => {
+        try {
+          await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+        } catch {
+        }
         await MiscService.openSeedSelectorFlow(ui.setWindowVisible.bind(ui));
         updateSummaryUI();
       };
@@ -39792,6 +39796,10 @@ next: ${next}`;
         }
       }
       btnSelect.onclick = async () => {
+        try {
+          await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+        } catch {
+        }
         await MiscService.openDecorSelectorFlow(ui.setWindowVisible.bind(ui));
         updateSummaryUI();
       };
