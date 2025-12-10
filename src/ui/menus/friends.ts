@@ -240,6 +240,10 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
   card.style.cursor = "default";
 
   const roomInfo = friend.room ?? {};
+  const roomIsPrivate =
+    Boolean(roomInfo.isPrivate) ||
+    Boolean(roomInfo.is_private) ||
+    Boolean(friend.privacy?.hideRoomFromPublicList);
   const joinRoomId =
     typeof roomInfo.id === "string"
       ? roomInfo.id.trim()
@@ -252,6 +256,7 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
     Number.isFinite(Number(rawPlayerCount)) && rawPlayerCount !== null
       ? Math.floor(Number(rawPlayerCount))
       : null;
+  const isFriendOnline = Boolean(friend.isOnline);
   const isDiscordTarget = RoomService.isDiscordActivity();
   const ROOM_CAPACITY = 6;
   const seatsLeft =
@@ -263,9 +268,13 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
     typeof playersCount === "number" &&
     seatsLeft !== null &&
     seatsLeft > 0 &&
-    !isDiscordTarget;
-  const joinButtonTitle = canJoinRoom
-    ? "Join this room"
+    !isDiscordTarget &&
+    !roomIsPrivate &&
+    isFriendOnline;
+  const joinButtonTitle = roomIsPrivate
+    ? "Room is private"
+    : !isFriendOnline
+    ? "Player is offline"
     : isDiscordTarget
     ? "Joining rooms is disabled on Discord"
     : playersCount !== null && playersCount >= 6
@@ -335,15 +344,14 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
   statusRow.style.gap = "6px";
 
   const statusIndicator = document.createElement("span");
-  const isOnline = Boolean(friend.isOnline);
   statusIndicator.style.width = "10px";
   statusIndicator.style.height = "10px";
   statusIndicator.style.borderRadius = "50%";
-  statusIndicator.style.background = isOnline ? "#34d399" : "#f87171";
+  statusIndicator.style.background = isFriendOnline ? "#34d399" : "#f87171";
   statusIndicator.style.display = "inline-block";
 
   const statusText = document.createElement("span");
-  statusText.textContent = isOnline ? "Online" : "Offline";
+  statusText.textContent = isFriendOnline ? "Online" : "Offline";
   statusText.style.fontSize = "11px";
   statusText.style.opacity = "0.7";
 
@@ -417,11 +425,15 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
   seatsInfo.style.whiteSpace = "nowrap";
   seatsInfo.style.textAlign = "center";
   seatsInfo.style.margin = "0";
-  if (seatsLeft !== null) {
+  if (roomIsPrivate) {
+    seatsInfo.textContent = "Private";
+  } else if (!isFriendOnline) {
+    seatsInfo.textContent = "";
+  } else if (seatsLeft !== null) {
     seatsInfo.textContent =
       seatsLeft > 0 ? `${seatsLeft} slot${seatsLeft === 1 ? "" : "s"} left` : "Room full";
   } else {
-    seatsInfo.textContent = "Room size unknown";
+    seatsInfo.textContent = "";
   }
   joinControl.appendChild(seatsInfo);
   actionBlock.append(detailsBtn, joinControl);
@@ -480,7 +492,7 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
     coinsRow.append(coinsEl);
     detailsContent.append(coinsRow);
   }
-  if (joinRoomId) {
+  if (joinRoomId && isFriendOnline) {
     const roomRow = document.createElement("div");
     roomRow.style.display = "flex";
     roomRow.style.alignItems = "center";
@@ -496,7 +508,21 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
     roomValue.style.fontSize = "12px";
     roomValue.style.opacity = "0.9";
     roomValue.style.whiteSpace = "nowrap";
-    roomRow.append(roomLabel, roomValue);
+    roomRow.append(roomLabel);
+    if (roomIsPrivate) {
+      const lockIcon = document.createElement("span");
+      lockIcon.textContent = "🔒";
+      lockIcon.style.fontSize = "12px";
+      lockIcon.style.opacity = "0.8";
+      lockIcon.style.display = "inline-flex";
+      lockIcon.style.alignItems = "center";
+      lockIcon.style.justifyContent = "center";
+      lockIcon.style.lineHeight = "1";
+      lockIcon.title = "Room is private";
+      roomRow.append(lockIcon);
+    } else {
+      roomRow.append(roomValue);
+    }
     detailsContent.append(roomRow);
   }
   const privacyRow = document.createElement("div");
@@ -1417,10 +1443,10 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
       undefined,
       (next) => applyPatch({ showOnlineFriendsOnly: next }),
     ),
-      buildToggleRow(
-        "Hide my room from the public list",
-        settings.hideRoomFromPublicList,
-        "If another player in your room keeps this option disabled, the room will still appear in the public list.",
+    buildToggleRow(
+      "Make my room private",
+      settings.hideRoomFromPublicList,
+      "Prevents friends from joining and hides your room from the public list.",
       (next) => applyPatch({ hideRoomFromPublicList: next }),
     ),
   );
@@ -1499,4 +1525,24 @@ export function renderFriendsMenu(root: HTMLElement) {
       void refreshIncomingRequests({ force: true });
     }
   });
+
+  const windowEl = ui.root.closest<HTMLElement>(".qws-win");
+  if (windowEl) {
+    let lastVisible = windowEl.style.display !== "none";
+    const observer = new MutationObserver(() => {
+      const isVisible = windowEl.style.display !== "none";
+      if (isVisible && !lastVisible) {
+        void refreshAllFriends?.({ force: true });
+      }
+      lastVisible = isVisible;
+    });
+    observer.observe(windowEl, { attributes: true, attributeFilter: ["style"] });
+    const previousCleanup = (root as any).__cleanup__;
+    (root as any).__cleanup__ = () => {
+      observer.disconnect();
+      if (typeof previousCleanup === "function") {
+        previousCleanup.call(root);
+      }
+    };
+  }
 }
