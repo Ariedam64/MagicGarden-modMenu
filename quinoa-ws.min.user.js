@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.9.0
+// @version      2.9.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -47395,14 +47395,16 @@ next: ${next}`;
     card.style.boxShadow = "0 1px 0 rgba(0, 0, 0, 0.35) inset";
     card.style.cursor = "default";
     const roomInfo = friend.room ?? {};
+    const roomIsPrivate = Boolean(roomInfo.isPrivate) || Boolean(roomInfo.is_private) || Boolean(friend.privacy?.hideRoomFromPublicList);
     const joinRoomId = typeof roomInfo.id === "string" ? roomInfo.id.trim() : typeof roomInfo.roomId === "string" ? roomInfo.roomId.trim() : null;
     const rawPlayerCount = roomInfo.playersCount ?? roomInfo.players_count ?? roomInfo.players ?? null;
     const playersCount = Number.isFinite(Number(rawPlayerCount)) && rawPlayerCount !== null ? Math.floor(Number(rawPlayerCount)) : null;
+    const isFriendOnline = Boolean(friend.isOnline);
     const isDiscordTarget = RoomService.isDiscordActivity();
     const ROOM_CAPACITY = 6;
     const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY - playersCount) : null;
-    const canJoinRoom = Boolean(joinRoomId) && typeof playersCount === "number" && seatsLeft !== null && seatsLeft > 0 && !isDiscordTarget;
-    const joinButtonTitle = canJoinRoom ? "Join this room" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= 6 ? "Room is full" : "Unable to join this room";
+    const canJoinRoom = Boolean(joinRoomId) && typeof playersCount === "number" && seatsLeft !== null && seatsLeft > 0 && !isDiscordTarget && !roomIsPrivate && isFriendOnline;
+    const joinButtonTitle = roomIsPrivate ? "Room is private" : !isFriendOnline ? "Player is offline" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= 6 ? "Room is full" : "Unable to join this room";
     const avatar = document.createElement("div");
     avatar.style.width = "48px";
     avatar.style.height = "48px";
@@ -47459,14 +47461,13 @@ next: ${next}`;
     statusRow.style.alignItems = "center";
     statusRow.style.gap = "6px";
     const statusIndicator = document.createElement("span");
-    const isOnline = Boolean(friend.isOnline);
     statusIndicator.style.width = "10px";
     statusIndicator.style.height = "10px";
     statusIndicator.style.borderRadius = "50%";
-    statusIndicator.style.background = isOnline ? "#34d399" : "#f87171";
+    statusIndicator.style.background = isFriendOnline ? "#34d399" : "#f87171";
     statusIndicator.style.display = "inline-block";
     const statusText = document.createElement("span");
-    statusText.textContent = isOnline ? "Online" : "Offline";
+    statusText.textContent = isFriendOnline ? "Online" : "Offline";
     statusText.style.fontSize = "11px";
     statusText.style.opacity = "0.7";
     statusRow.append(statusIndicator, statusText);
@@ -47531,10 +47532,14 @@ next: ${next}`;
     seatsInfo.style.whiteSpace = "nowrap";
     seatsInfo.style.textAlign = "center";
     seatsInfo.style.margin = "0";
-    if (seatsLeft !== null) {
+    if (roomIsPrivate) {
+      seatsInfo.textContent = "Private";
+    } else if (!isFriendOnline) {
+      seatsInfo.textContent = "";
+    } else if (seatsLeft !== null) {
       seatsInfo.textContent = seatsLeft > 0 ? `${seatsLeft} slot${seatsLeft === 1 ? "" : "s"} left` : "Room full";
     } else {
-      seatsInfo.textContent = "Room size unknown";
+      seatsInfo.textContent = "";
     }
     joinControl.appendChild(seatsInfo);
     actionBlock.append(detailsBtn, joinControl);
@@ -47588,7 +47593,7 @@ next: ${next}`;
       coinsRow.append(coinsEl);
       detailsContent.append(coinsRow);
     }
-    if (joinRoomId) {
+    if (joinRoomId && isFriendOnline) {
       const roomRow = document.createElement("div");
       roomRow.style.display = "flex";
       roomRow.style.alignItems = "center";
@@ -47604,7 +47609,21 @@ next: ${next}`;
       roomValue.style.fontSize = "12px";
       roomValue.style.opacity = "0.9";
       roomValue.style.whiteSpace = "nowrap";
-      roomRow.append(roomLabel, roomValue);
+      roomRow.append(roomLabel);
+      if (roomIsPrivate) {
+        const lockIcon = document.createElement("span");
+        lockIcon.textContent = "\u{1F512}";
+        lockIcon.style.fontSize = "12px";
+        lockIcon.style.opacity = "0.8";
+        lockIcon.style.display = "inline-flex";
+        lockIcon.style.alignItems = "center";
+        lockIcon.style.justifyContent = "center";
+        lockIcon.style.lineHeight = "1";
+        lockIcon.title = "Room is private";
+        roomRow.append(lockIcon);
+      } else {
+        roomRow.append(roomValue);
+      }
       detailsContent.append(roomRow);
     }
     const privacyRow = document.createElement("div");
@@ -48409,9 +48428,9 @@ next: ${next}`;
         (next) => applyPatch({ showOnlineFriendsOnly: next })
       ),
       buildToggleRow(
-        "Hide my room from the public list",
+        "Make my room private",
         settings.hideRoomFromPublicList,
-        "If another player in your room keeps this option disabled, the room will still appear in the public list.",
+        "Prevents friends from joining and hides your room from the public list.",
         (next) => applyPatch({ hideRoomFromPublicList: next })
       )
     );
@@ -48486,6 +48505,25 @@ next: ${next}`;
         void refreshIncomingRequests({ force: true });
       }
     });
+    const windowEl = ui.root.closest(".qws-win");
+    if (windowEl) {
+      let lastVisible = windowEl.style.display !== "none";
+      const observer2 = new MutationObserver(() => {
+        const isVisible3 = windowEl.style.display !== "none";
+        if (isVisible3 && !lastVisible) {
+          void refreshAllFriends?.({ force: true });
+        }
+        lastVisible = isVisible3;
+      });
+      observer2.observe(windowEl, { attributes: true, attributeFilter: ["style"] });
+      const previousCleanup = root.__cleanup__;
+      root.__cleanup__ = () => {
+        observer2.disconnect();
+        if (typeof previousCleanup === "function") {
+          previousCleanup.call(root);
+        }
+      };
+    }
   }
 
   // src/utils/antiafk.ts
