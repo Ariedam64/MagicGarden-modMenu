@@ -16,6 +16,7 @@ export type KeybindId =
   | "sell.sell-all-pets"
   | "game.action"
   | "game.inventory"
+  | "game.pet-hutch"
   | "game.move-up"
   | "game.move-down"
   | "game.move-left"
@@ -45,6 +46,7 @@ export interface KeybindAction {
   defaultHotkey: Hotkey | null;
   allowModifierOnly?: boolean;
   holdDetection?: KeybindHoldDetectionConfig;
+  allowClear?: boolean;
 }
 
 export interface KeybindSection {
@@ -74,6 +76,7 @@ interface KeybindActionConfig {
   hint?: string;
   defaultHotkey: Hotkey | null;
   allowModifierOnly?: boolean;
+  allowClear?: boolean;
   holdDetection?: KeybindHoldDetectionConfig;
 }
 
@@ -154,6 +157,12 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
         id: "game.inventory",
         label: "🎒 Inventory",
         defaultHotkey: { code: "KeyE" },
+      },
+      {
+        id: "game.pet-hutch",
+        label: "🏠 Pet hutch",
+        defaultHotkey: null,
+        allowClear: true,
       },
       {
         id: "game.move-up",
@@ -240,13 +249,14 @@ const holdListeners = new Map<KeybindId, Set<(enabled: boolean) => void>>();
 
 const keybindSections: KeybindSection[] = SECTION_CONFIG.map((section) => {
   const actions = section.actions.map<KeybindAction>((action) => {
-    const normalized: KeybindAction = {
-      id: action.id,
-      sectionId: section.id,
-      label: action.label,
-      hint: action.hint,
-      allowModifierOnly: action.allowModifierOnly,
-      defaultHotkey: cloneHotkey(action.defaultHotkey),
+  const normalized: KeybindAction = {
+    id: action.id,
+    sectionId: section.id,
+    label: action.label,
+    hint: action.hint,
+    allowModifierOnly: action.allowModifierOnly,
+    allowClear: action.allowClear,
+    defaultHotkey: cloneHotkey(action.defaultHotkey),
       holdDetection: action.holdDetection
         ? {
             label: action.holdDetection.label,
@@ -281,7 +291,7 @@ type PetTeamActionId = `${typeof PET_TEAM_ACTION_PREFIX}${string}`;
 const petSection: KeybindSection = {
   id: PET_SECTION_ID,
   title: "Pets",
-  icon: "🐷",
+  icon: "ðŸ·",
   description: "Assign shortcuts to your pet teams and cycle through them instantly.",
   actions: [],
 };
@@ -342,7 +352,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
     {
       id: PET_TEAM_PREV_ID,
       sectionId: PET_SECTION_ID,
-      label: "◀️ Previous team",
+      label: "â—€ï¸ Previous team",
       defaultHotkey: null,
     },
     null
@@ -352,7 +362,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
     {
       id: PET_TEAM_NEXT_ID,
       sectionId: PET_SECTION_ID,
-      label: "▶️ Next team",
+      label: "â–¶ï¸ Next team",
       defaultHotkey: null,
     },
     null
@@ -365,7 +375,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
       {
         id: getPetTeamActionId(team.id),
         sectionId: PET_SECTION_ID,
-        label: `Use team — ${labelName}`,
+        label: `Use team â€” ${labelName}`,
         defaultHotkey: null,
       },
       null
@@ -471,7 +481,7 @@ function hotkeyToCombo(hk: Hotkey | null): string | null {
 function purgeTargetBindings(emitCombo: string): void {
   try { inGameHotkeys.unblock(emitCombo); } catch {}
   try {
-    const curr = inGameHotkeys.current(); // { fromCombo: "Ctrl+KeyX" | "KeyX" | ... → "KeyY" | "Space" | ... }
+    const curr = inGameHotkeys.current(); // { fromCombo: "Ctrl+KeyX" | "KeyX" | ... â†’ "KeyY" | "Space" | ... }
     for (const [from, to] of Object.entries(curr)) {
       // isole le dernier token (le code destination)
       const toCode = String(to).split("+").pop();
@@ -495,39 +505,39 @@ function codeToDisplay(code?: string): string {
   const mDigit = code.match(/^Digit([0-9])$/);
   if (mDigit) return mDigit[1];                  // "Digit5" -> "5"
 
-  // Modifiers (côté “key” principal, pas besoin de préciser Left/Right)
+  // Modifiers (cÃ´tÃ© â€œkeyâ€ principal, pas besoin de prÃ©ciser Left/Right)
   if (code === "ControlLeft" || code === "ControlRight") return "Ctrl";
   if (code === "AltLeft"     || code === "AltRight")     return "Alt";
   if (code === "ShiftLeft"   || code === "ShiftRight")   return "Shift";
-  if (code === "MetaLeft"    || code === "MetaRight")    return isMac() ? "⌘" : "Win";
+  if (code === "MetaLeft"    || code === "MetaRight")    return isMac() ? "âŒ˜" : "Win";
 
-  // Spéciaux / navigation
-  if (code === "Space")     return "Space";   // ou "⎵"
-  if (code === "Enter")     return "Enter";   // ou "↵"
+  // SpÃ©ciaux / navigation
+  if (code === "Space")     return "Space";   // ou "âŽµ"
+  if (code === "Enter")     return "Enter";   // ou "â†µ"
   if (code === "Escape")    return "Esc";
   if (code === "Tab")       return "Tab";
-  if (code === "Backspace") return "Backspace"; // ou "⌫"
+  if (code === "Backspace") return "Backspace"; // ou "âŒ«"
   if (code === "Delete")    return "Del";
   if (code === "Insert")    return "Ins";
-  if (code === "ArrowUp")   return "↑";
-  if (code === "ArrowDown") return "↓";
-  if (code === "ArrowLeft") return "←";
-  if (code === "ArrowRight")return "→";
+  if (code === "ArrowUp")   return "â†‘";
+  if (code === "ArrowDown") return "â†“";
+  if (code === "ArrowLeft") return "â†";
+  if (code === "ArrowRight")return "â†’";
 
-  // Par défaut, on garde tel quel (rare)
+  // Par dÃ©faut, on garde tel quel (rare)
   return code;
 }
 
 function prettyHotkey(hk: Hotkey | null): string {
-  if (!hk) return "—";
+  if (!hk) return "â€”";
 
   const mods: string[] = [];
   if ((hk as any).ctrl)  mods.push("Ctrl");
   if ((hk as any).shift) mods.push("Shift");
   if ((hk as any).alt)   mods.push("Alt");
-  if ((hk as any).meta)  mods.push(isMac() ? "⌘" : "Win");
+  if ((hk as any).meta)  mods.push(isMac() ? "âŒ˜" : "Win");
 
-  // base: on préfère hk.key si c’est un seul caractère (ex: "e"), sinon on dérive de hk.code
+  // base: on prÃ©fÃ¨re hk.key si câ€™est un seul caractÃ¨re (ex: "e"), sinon on dÃ©rive de hk.code
   let base = "";
   const k = (hk as any).key;
   if (typeof k === "string" && k.length === 1) {
@@ -536,8 +546,8 @@ function prettyHotkey(hk: Hotkey | null): string {
     base = codeToDisplay((hk as any).code);
   }
 
-  // éviter “Alt + Alt” si { alt: true, code: "AltLeft" } etc.
-  const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "⌘", "Win"].includes(base);
+  // Ã©viter â€œAlt + Altâ€ si { alt: true, code: "AltLeft" } etc.
+  const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "âŒ˜", "Win"].includes(base);
   const parts = baseIsModifier ? mods : (mods.concat(base ? [base] : []));
 
   return parts.join(" + ");
@@ -549,20 +559,20 @@ function syncGameKeybind(id: GameKeybindId): void {
 
   const emitCombo = GAME_KEYBIND_TARGETS[id]; // ex. "Space" ou "KeyW"
 
-  // 0) Nettoyage complet de TOUT ce qui cible la touche in-game (blocages + remaps résiduels)
+  // 0) Nettoyage complet de TOUT ce qui cible la touche in-game (blocages + remaps rÃ©siduels)
   purgeTargetBindings(emitCombo);
 
-  // 1) Nettoyage de l'état précédent (si on en avait un suivi)
+  // 1) Nettoyage de l'Ã©tat prÃ©cÃ©dent (si on en avait un suivi)
   const prev = gameActiveStates.get(id);
   if (prev) {
     if (prev.rapidFire) {
       try { inGameHotkeys.stopRapidFire(prev.combo); } catch {}
     }
-    // NB: pas besoin de remove/unblock ici : purgeTargetBindings l'a déjà fait pour nous
+    // NB: pas besoin de remove/unblock ici : purgeTargetBindings l'a dÃ©jÃ  fait pour nous
     gameActiveStates.delete(id);
   }
 
-  // 2) Récupère le combo utilisateur choisi dans l’UI
+  // 2) RÃ©cupÃ¨re le combo utilisateur choisi dans lâ€™UI
   const combo = hotkeyToCombo(getKeybind(id));
   if (!combo) {
     if (id === GAME_ACTION_ID) {
@@ -573,7 +583,7 @@ function syncGameKeybind(id: GameKeybindId): void {
 
   const holdEnabled = getKeybindHoldDetection(id);
 
-  // 3) Si l’utilisateur a choisi la même touche que le jeu attend → rien à remapper
+  // 3) Si lâ€™utilisateur a choisi la mÃªme touche que le jeu attend â†’ rien Ã  remapper
   let replaced = false;
   if (combo !== emitCombo) {
     try {
@@ -582,9 +592,9 @@ function syncGameKeybind(id: GameKeybindId): void {
       replaced = true;
     } catch {}
   }
-  // sinon: aucun replace, et Space (ou KeyW, etc.) n'est plus bloqué grâce à purgeTargetBindings()
+  // sinon: aucun replace, et Space (ou KeyW, etc.) n'est plus bloquÃ© grÃ¢ce Ã  purgeTargetBindings()
 
-  // 4) Rapid-fire uniquement si l’option Hold est activée pour cette action
+  // 4) Rapid-fire uniquement si lâ€™option Hold est activÃ©e pour cette action
   let rapidFire = false;
   if (holdEnabled) {
     try {
@@ -606,11 +616,11 @@ function syncGameKeybind(id: GameKeybindId): void {
 }
 
 export function mountGlobalKeybinds(opts: {
-  onAction: KeybindDispatch;                // quoi faire quand une action est déclenchée
-  isRebinding?: () => boolean;              // vrai quand tu es en train d’enregistrer un nouveau bind
+  onAction: KeybindDispatch;                // quoi faire quand une action est dÃ©clenchÃ©e
+  isRebinding?: () => boolean;              // vrai quand tu es en train dâ€™enregistrer un nouveau bind
   canUseGameplayInput?: () => boolean;      // ex: () => document.hasFocus() && !ui.isPaused()
   preventDefault?: boolean;                 // false pour ne pas stopper scroll/shortcuts navigateur
-  actionIds?: Array<KeybindAction["id"]>;   // par défaut: toutes les actions déclarées
+  actionIds?: Array<KeybindAction["id"]>;   // par dÃ©faut: toutes les actions dÃ©clarÃ©es
 }): () => void {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return () => {};
@@ -698,7 +708,7 @@ export function mountGlobalKeybinds(opts: {
   const onDown = (e: KeyboardEvent) => handle(e, "down");
   const onUp   = (e: KeyboardEvent) => handle(e, "up");
 
-  window.addEventListener("keydown", onDown, true); // capture:true => avant l’UI
+  window.addEventListener("keydown", onDown, true); // capture:true => avant lâ€™UI
   window.addEventListener("keyup", onUp, true);
 
   window.addEventListener("blur", () => pressed.clear());

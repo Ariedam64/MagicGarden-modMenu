@@ -25,7 +25,7 @@ function createKeybindRow(ui: Menu, action: KeybindAction) {
     (hk) => setKeybind(action.id, hk),
     {
       emptyLabel: "Unassigned",
-      listeningLabel: "Press a key…",
+      listeningLabel: "Press a keyâ€¦",
       clearable: true,
       allowModifierOnly: action.allowModifierOnly,
     }
@@ -152,7 +152,7 @@ function createKeybindRow(ui: Menu, action: KeybindAction) {
   actionsWrap.style.marginLeft = "auto";
 
   const clearBtn =
-    action.sectionId === "game"
+    action.sectionId === "game" && !action.allowClear
       ? null
       : ui.btn("", {
           icon: "🗑️",

@@ -4,6 +4,7 @@ import { ensureStore, isStoreCaptured, getCapturedInfo } from "../store/jotai";
 import { PetsService, installPetTeamHotkeysOnce, setTeamsForHotkeys } from "../services/pets";
 import { installShopKeybindsOnce } from "../services/shops";
 import { installSellKeybindsOnce } from "../services/sell";
+import { installPetHutchKeybindsOnce } from "../services/petHutchKeybind";
 import {
   getKeybind,
   getKeybindLabel,
@@ -1022,6 +1023,7 @@ export function initWatchers(){
     installShopKeybindsOnce();
     installSellKeybindsOnce();
     installGameKeybindsOnce();
+    installPetHutchKeybindsOnce();
     (async () => {
         try { setTeamsForHotkeys(PetsService.getTeams()); } catch {}
         try {
