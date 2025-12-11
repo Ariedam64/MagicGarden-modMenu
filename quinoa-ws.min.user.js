@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.9.1
+// @version      2.9.11
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -13349,6 +13349,12 @@
           defaultHotkey: { code: "KeyE" }
         },
         {
+          id: "game.pet-hutch",
+          label: "\u{1F3E0} Pet hutch",
+          defaultHotkey: null,
+          allowClear: true
+        },
+        {
           id: "game.move-up",
           label: "\u2B06 Move up",
           defaultHotkey: { code: "KeyW" }
@@ -13436,6 +13442,7 @@
         label: action2.label,
         hint: action2.hint,
         allowModifierOnly: action2.allowModifierOnly,
+        allowClear: action2.allowClear,
         defaultHotkey: cloneHotkey(action2.defaultHotkey),
         holdDetection: action2.holdDetection ? {
           label: action2.holdDetection.label,
@@ -13465,7 +13472,7 @@
   var petSection = {
     id: PET_SECTION_ID,
     title: "Pets",
-    icon: "\u{1F437}",
+    icon: "\xF0\u0178\x90\xB7",
     description: "Assign shortcuts to your pet teams and cycle through them instantly.",
     actions: []
   };
@@ -13512,7 +13519,7 @@
       {
         id: PET_TEAM_PREV_ID,
         sectionId: PET_SECTION_ID,
-        label: "\u25C0\uFE0F Previous team",
+        label: "\xE2\u2014\u20AC\xEF\xB8\x8F Previous team",
         defaultHotkey: null
       },
       null
@@ -13521,7 +13528,7 @@
       {
         id: PET_TEAM_NEXT_ID,
         sectionId: PET_SECTION_ID,
-        label: "\u25B6\uFE0F Next team",
+        label: "\xE2\u2013\xB6\xEF\xB8\x8F Next team",
         defaultHotkey: null
       },
       null
@@ -13533,7 +13540,7 @@
         {
           id: getPetTeamActionId(team.id),
           sectionId: PET_SECTION_ID,
-          label: `Use team \u2014 ${labelName}`,
+          label: `Use team \xE2\u20AC\u201D ${labelName}`,
           defaultHotkey: null
         },
         null
@@ -13639,7 +13646,7 @@
     if (code === "ControlLeft" || code === "ControlRight") return "Ctrl";
     if (code === "AltLeft" || code === "AltRight") return "Alt";
     if (code === "ShiftLeft" || code === "ShiftRight") return "Shift";
-    if (code === "MetaLeft" || code === "MetaRight") return isMac2() ? "\u2318" : "Win";
+    if (code === "MetaLeft" || code === "MetaRight") return isMac2() ? "\xE2\u0152\u02DC" : "Win";
     if (code === "Space") return "Space";
     if (code === "Enter") return "Enter";
     if (code === "Escape") return "Esc";
@@ -13647,19 +13654,19 @@
     if (code === "Backspace") return "Backspace";
     if (code === "Delete") return "Del";
     if (code === "Insert") return "Ins";
-    if (code === "ArrowUp") return "\u2191";
-    if (code === "ArrowDown") return "\u2193";
-    if (code === "ArrowLeft") return "\u2190";
-    if (code === "ArrowRight") return "\u2192";
+    if (code === "ArrowUp") return "\xE2\u2020\u2018";
+    if (code === "ArrowDown") return "\xE2\u2020\u201C";
+    if (code === "ArrowLeft") return "\xE2\u2020\x90";
+    if (code === "ArrowRight") return "\xE2\u2020\u2019";
     return code;
   }
   function prettyHotkey(hk) {
-    if (!hk) return "\u2014";
+    if (!hk) return "\xE2\u20AC\u201D";
     const mods = [];
     if (hk.ctrl) mods.push("Ctrl");
     if (hk.shift) mods.push("Shift");
     if (hk.alt) mods.push("Alt");
-    if (hk.meta) mods.push(isMac2() ? "\u2318" : "Win");
+    if (hk.meta) mods.push(isMac2() ? "\xE2\u0152\u02DC" : "Win");
     let base = "";
     const k = hk.key;
     if (typeof k === "string" && k.length === 1) {
@@ -13667,7 +13674,7 @@
     } else {
       base = codeToDisplay(hk.code);
     }
-    const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "\u2318", "Win"].includes(base);
+    const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "\xE2\u0152\u02DC", "Win"].includes(base);
     const parts = baseIsModifier ? mods : mods.concat(base ? [base] : []);
     return parts.join(" + ");
   }
@@ -16452,6 +16459,34 @@
           event.stopPropagation();
           void runSellAllPetsFlow();
         }
+      },
+      true
+    );
+  }
+
+  // src/services/petHutchKeybind.ts
+  var ACTION_ID = "game.pet-hutch";
+  var PET_HUTCH_MODAL_ID = "petHutch";
+  var petHutchKeybindsInstalled = false;
+  async function togglePetHutchModal() {
+    try {
+      const current = await Atoms.ui.activeModal.get();
+      const next = current === PET_HUTCH_MODAL_ID ? null : PET_HUTCH_MODAL_ID;
+      await Atoms.ui.activeModal.set(next);
+    } catch {
+    }
+  }
+  function installPetHutchKeybindsOnce() {
+    if (petHutchKeybindsInstalled || typeof window === "undefined") return;
+    petHutchKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown(event)) return;
+        if (!eventMatchesKeybind(ACTION_ID, event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void togglePetHutchModal();
       },
       true
     );
@@ -28127,6 +28162,7 @@
     installShopKeybindsOnce();
     installSellKeybindsOnce();
     installGameKeybindsOnce();
+    installPetHutchKeybindsOnce();
     (async () => {
       try {
         setTeamsForHotkeys(PetsService.getTeams());
@@ -46942,7 +46978,7 @@ next: ${next}`;
       (hk) => setKeybind(action2.id, hk),
       {
         emptyLabel: "Unassigned",
-        listeningLabel: "Press a key\u2026",
+        listeningLabel: "Press a key\xE2\u20AC\xA6",
         clearable: true,
         allowModifierOnly: action2.allowModifierOnly
       }
@@ -47044,7 +47080,7 @@ next: ${next}`;
     actionsWrap.style.alignItems = "center";
     actionsWrap.style.gap = "4px";
     actionsWrap.style.marginLeft = "auto";
-    const clearBtn = action2.sectionId === "game" ? null : ui.btn("", {
+    const clearBtn = action2.sectionId === "game" && !action2.allowClear ? null : ui.btn("", {
       icon: "\u{1F5D1}\uFE0F",
       variant: "danger",
       size: "sm",
