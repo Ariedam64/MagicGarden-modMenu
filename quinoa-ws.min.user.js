@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.9.15
+// @version      2.9.16
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -21211,8 +21211,8 @@
         top: `${targetTop}px`,
         left: `${targetLeft}px`,
         transform: isColumn ? "translate(-50%, 0)" : "translate(0, -50%)",
-        pointerEvents: "none",
-        // ne perturbe pas le layout / hover du toolbar
+        pointerEvents: "auto",
+        // laisse les clics traverser vers le panel/bouton
         margin: "0"
       });
       style(this.btn, { pointerEvents: "auto" });
