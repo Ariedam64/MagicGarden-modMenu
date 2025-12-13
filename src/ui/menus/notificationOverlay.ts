@@ -1763,23 +1763,14 @@ class OverlayBarebone {
 
 
     style(this.slot, {
-
       position: "absolute",
-
       top: `${targetTop}px`,
-
       left: `${targetLeft}px`,
-
       transform: isColumn ? "translate(-50%, 0)" : "translate(0, -50%)",
-
-      pointerEvents: "none", // ne perturbe pas le layout / hover du toolbar
-
+      pointerEvents: "auto", // laisse les clics traverser vers le panel/bouton
       margin: "0",
-
     });
-
     style(this.btn, { pointerEvents: "auto" });
-
 
 
     if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
