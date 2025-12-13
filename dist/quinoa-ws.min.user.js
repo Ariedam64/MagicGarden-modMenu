@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.9.1
+// @version      2.9.15
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -20581,30 +20581,55 @@
       const style2 = document.createElement("style");
       style2.id = "qws-bell-anim-css";
       style2.textContent = `
+
 @keyframes qwsBellShake {
+
   0% { transform: rotate(0deg); }
+
   10% { transform: rotate(-16deg); }
+
   20% { transform: rotate(12deg); }
+
   30% { transform: rotate(-10deg); }
+
   40% { transform: rotate(8deg); }
+
   50% { transform: rotate(-6deg); }
+
   60% { transform: rotate(4deg); }
+
   70% { transform: rotate(-2deg); }
+
   80% { transform: rotate(1deg); }
+
   100% { transform: rotate(0deg); }
+
 }
+
+
 
 /* Classe appliqu\xE9e sur le span cloche quand il y a des items dans l'overlay */
+
 .qws-bell--wiggle {
+
   animation: qwsBellShake 1.2s ease-in-out infinite;
+
   transform-origin: 50% 0%;
+
   display: inline-block;
+
 }
 
+
+
 /* Respecte l'accessibilit\xE9 */
+
 @media (prefers-reduced-motion: reduce) {
+
   .qws-bell--wiggle { animation: none !important; }
+
 }
+
 `;
       document.head.appendChild(style2);
     }
@@ -20872,6 +20897,7 @@
         title.textContent = labelOf(r.id);
         Object.assign(title.style, {
           fontWeight: "600",
+          fontSize: "12px",
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -21043,7 +21069,7 @@
         position: "absolute",
         top: "calc(100% + var(--chakra-space-2, 0.5rem))",
         right: "0",
-        width: "min(280px, 70vw)",
+        width: "min(340px, 80vw)",
         // ← largeur réduite (était 360px)
         maxHeight: "50vh",
         overflow: "auto",
@@ -21166,6 +21192,47 @@
       });
       style(this.btn, { position: "relative" });
     }
+    anchorIntoToolbar(toolbar) {
+      this.applyToolbarLook(toolbar);
+      const cs = getComputedStyle(toolbar);
+      const isColumn = (cs.flexDirection || "").startsWith("column");
+      const gap = Number.parseFloat(cs.gap || cs.columnGap || cs.rowGap || "0") || 0;
+      if (cs.position === "static") {
+        toolbar.style.position = "relative";
+      }
+      const rect = toolbar.getBoundingClientRect();
+      const siblings = Array.from(toolbar.children).filter((c) => c !== this.slot);
+      const last = siblings[siblings.length - 1];
+      const lastRect = last?.getBoundingClientRect();
+      const targetTop = isColumn ? lastRect ? lastRect.bottom - rect.top + gap : rect.height + gap : lastRect ? lastRect.top - rect.top + lastRect.height / 2 : rect.height / 2;
+      const targetLeft = isColumn ? lastRect ? lastRect.left - rect.left + lastRect.width / 2 : rect.width / 2 : lastRect ? lastRect.right - rect.left + gap : rect.width + gap;
+      style(this.slot, {
+        position: "absolute",
+        top: `${targetTop}px`,
+        left: `${targetLeft}px`,
+        transform: isColumn ? "translate(-50%, 0)" : "translate(0, -50%)",
+        pointerEvents: "none",
+        // ne perturbe pas le layout / hover du toolbar
+        margin: "0"
+      });
+      style(this.btn, { pointerEvents: "auto" });
+      if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
+        toolbar.appendChild(this.slot);
+      }
+    }
+    resetSlotPositioning() {
+      style(this.slot, {
+        position: "relative",
+        top: "",
+        left: "",
+        right: "",
+        bottom: "",
+        transform: "",
+        pointerEvents: "auto",
+        margin: "0"
+      });
+      style(this.btn, { pointerEvents: "auto" });
+    }
     findAnchorBlockFromCanvas(c) {
       try {
         const tabbable = c.closest("span[tabindex]");
@@ -21200,12 +21267,10 @@
     }
     attachLeftOfTargetCanvas() {
       try {
+        this.resetSlotPositioning();
         const toolbar = this.findToolbarContainer();
         if (toolbar && toolbar.isConnected) {
-          this.applyToolbarLook(toolbar);
-          if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
-            toolbar.appendChild(this.slot);
-          }
+          this.anchorIntoToolbar(toolbar);
           return;
         }
         const canvas = this.findTargetCanvas();
@@ -24190,7 +24255,9 @@
     strength: "Strength"
   };
   var INVENTORY_BASE_INDEX_DATASET_KEY = "tmInventoryBaseIndex";
+  var INVENTORY_ITEM_CARD_SELECTORS = [".css-vmnhaw", ".css-1avy1fz"];
   var INVENTORY_ITEMS_CONTAINER_SELECTOR = ".McFlex.css-zo8r2v";
+  var INVENTORY_ITEM_CARD_SELECTOR = INVENTORY_ITEM_CARD_SELECTORS.join(", ");
   var INVENTORY_VALUE_CONTAINER_SELECTOR = ".McFlex.css-1p00rng";
   var INVENTORY_VALUE_ELEMENT_CLASS = "tm-inventory-item-value";
   var INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
@@ -24635,17 +24702,21 @@
   function getInventoryItemsContainer(grid) {
     return grid.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR) || document.querySelector(INVENTORY_ITEMS_CONTAINER_SELECTOR);
   }
+  var getInventoryCardElement = (element) => {
+    for (const selector of INVENTORY_ITEM_CARD_SELECTORS) {
+      if (element.matches(selector)) {
+        return element;
+      }
+    }
+    return element.querySelector(INVENTORY_ITEM_CARD_SELECTOR);
+  };
   function getInventoryDomEntries(container) {
     const entries = [];
     const children = Array.from(container.children);
     for (const child of children) {
       if (!(child instanceof HTMLElement)) continue;
-      if (child.matches(".css-vmnhaw")) {
-        entries.push({ wrapper: child, card: child });
-        continue;
-      }
-      const card = child.querySelector(".css-vmnhaw");
-      if (card instanceof HTMLElement) {
+      const card = getInventoryCardElement(child);
+      if (card) {
         entries.push({ wrapper: child, card });
       }
     }

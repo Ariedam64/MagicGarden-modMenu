@@ -280,7 +280,9 @@ const LABEL_BY_VALUE_DEFAULT: Record<SortKey, string> = {
 
 const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
 // Updated items container to match new inventory DOM (inside the main content area)
+const INVENTORY_ITEM_CARD_SELECTORS = ['.css-vmnhaw', '.css-1avy1fz'];
 const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-zo8r2v';
+const INVENTORY_ITEM_CARD_SELECTOR = INVENTORY_ITEM_CARD_SELECTORS.join(', ');
 const INVENTORY_VALUE_CONTAINER_SELECTOR = '.McFlex.css-1p00rng';
 const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
 const INVENTORY_VALUE_TEXT_CLASS = `${INVENTORY_VALUE_ELEMENT_CLASS}__text`;
@@ -878,6 +880,15 @@ function getInventoryItemsContainer(grid: Element): HTMLElement | null {
   );
 }
 
+const getInventoryCardElement = (element: HTMLElement): HTMLElement | null => {
+  for (const selector of INVENTORY_ITEM_CARD_SELECTORS) {
+    if (element.matches(selector)) {
+      return element;
+    }
+  }
+  return element.querySelector<HTMLElement>(INVENTORY_ITEM_CARD_SELECTOR);
+};
+
 function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
   const entries: InventoryDomEntry[] = [];
   const children = Array.from(container.children) as Element[];
@@ -885,13 +896,8 @@ function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
   for (const child of children) {
     if (!(child instanceof HTMLElement)) continue;
 
-    if (child.matches('.css-vmnhaw')) {
-      entries.push({ wrapper: child, card: child });
-      continue;
-    }
-
-    const card = child.querySelector('.css-vmnhaw');
-    if (card instanceof HTMLElement) {
+    const card = getInventoryCardElement(child);
+    if (card) {
       entries.push({ wrapper: child, card });
     }
   }
