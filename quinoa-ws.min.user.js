@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.95.21
+// @version      2.95.22
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1575,6 +1575,7 @@
       }
     });
   };
+  var delay = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   async function warmupSpritesFromAtlases(atlasJsons, blobs) {
     const FRAME_YIELD_EVERY = 6;
     const MAX_CHUNK_MS = 10;
@@ -1648,6 +1649,20 @@
       if (m?.[1]) return m[1];
     }
     throw new Error("Version not found.");
+  }
+  async function resolveGameVersionWithRetry(timeoutMs = 6e3) {
+    const deadline = Date.now() + timeoutMs;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        const v = detectGameVersion();
+        if (v) return v;
+      } catch (err) {
+        lastError = err;
+      }
+      await delay(120);
+    }
+    throw lastError ?? new Error("Version not found.");
   }
   function drawFrameToDataURL(img, frameKey, data) {
     try {
@@ -1781,7 +1796,23 @@
   async function start() {
     if (ctx.state.started) return;
     ctx.state.started = true;
-    const version = detectGameVersion();
+    let version;
+    const retryDeadline = typeof performance !== "undefined" ? performance.now() + 8e3 : Date.now() + 8e3;
+    for (; ; ) {
+      try {
+        version = await resolveGameVersionWithRetry();
+        console.info("[MG SpriteCatalog] game version resolved", version);
+        break;
+      } catch (err) {
+        const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now2 >= retryDeadline) {
+          console.error("[MG SpriteCatalog] failed to resolve game version", err);
+          throw err;
+        }
+        console.warn("[MG SpriteCatalog] retrying game version detection...");
+        await delay(200);
+      }
+    }
     const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
     if (!prefetchPromise) {
       prefetchPromise = prefetchAtlas(base);
@@ -9928,7 +9959,7 @@
     return "normal";
   }
   async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay(0);
+    await delay2(0);
     const initial = await readInventoryPetSnapshots();
     if (hasNewInventoryPet(initial, previous)) {
       return initial;
@@ -9981,7 +10012,7 @@
   function hasNewInventoryPet(pets, previous) {
     return pets.some((pet) => !previous.has(pet.id));
   }
-  function delay(ms) {
+  function delay2(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function resolveSendMessage(Conn) {
@@ -15814,7 +15845,7 @@
         }
       }
       if (attempt < attempts - 1) {
-        await delay2(delayMs);
+        await delay3(delayMs);
       }
     }
     try {
@@ -15823,7 +15854,7 @@
     }
     return null;
   }
-  function delay2(ms) {
+  function delay3(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function safeInvokeClick(handler, ev, ctx2, logger) {
@@ -19984,7 +20015,7 @@
   async function waitForHungerIncrease(petId, previousPct, options = {}) {
     const { initialDelay = 0, timeout = HUNGER_TIMEOUT_MS, interval = HUNGER_POLL_INTERVAL_MS } = options;
     if (initialDelay > 0) {
-      await delay3(initialDelay);
+      await delay4(initialDelay);
     }
     const start2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
     let lastResult = null;
@@ -20001,11 +20032,11 @@
         return lastResult;
       }
       if (interval > 0) {
-        await delay3(interval);
+        await delay4(interval);
       }
     }
   }
-  function delay3(ms) {
+  function delay4(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function waitForFakeInventorySelection(timeoutMs = 2e4) {
