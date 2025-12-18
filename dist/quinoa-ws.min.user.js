@@ -18,6 +18,7 @@
 // @grant        GM_setValue
 // @grant        GM_download
 // @connect      ariesmod-api.ariedam.fr
+// @connect      magicgarden.gg
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -903,17 +904,34 @@
   }
 
   // src/sprite/data/assetFetcher.ts
+  function fetchFallback(url, type) {
+    return fetch(url).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} (${url})`);
+      if (type === "blob") return { status: res.status, response: await res.blob(), responseText: "" };
+      const text = await res.text();
+      return {
+        status: res.status,
+        response: type === "json" ? JSON.parse(text) : text,
+        responseText: text
+      };
+    }).catch((err) => {
+      throw new Error(`Network (${url}): ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
   function gm(url, type = "text") {
-    return new Promise(
-      (resolve2, reject) => GM_xmlhttpRequest({
-        method: "GET",
-        url,
-        responseType: type,
-        onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url})`)),
-        onerror: () => reject(new Error(`Network (${url})`)),
-        ontimeout: () => reject(new Error(`Timeout (${url})`))
-      })
-    );
+    if (typeof GM_xmlhttpRequest === "function") {
+      return new Promise(
+        (resolve2, reject) => GM_xmlhttpRequest({
+          method: "GET",
+          url,
+          responseType: type,
+          onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url})`)),
+          onerror: () => reject(new Error(`Network (${url})`)),
+          ontimeout: () => reject(new Error(`Timeout (${url})`))
+        })
+      );
+    }
+    return fetchFallback(url, type);
   }
   var getJSON = async (url) => JSON.parse((await gm(url, "text")).responseText);
   var getBlob = async (url) => (await gm(url, "blob")).response;

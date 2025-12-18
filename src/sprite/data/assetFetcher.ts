@@ -2,29 +2,56 @@
 import { joinPath, relPath } from '../utils/path';
 import type { ManifestBundle } from '../types';
 
-declare function GM_xmlhttpRequest(options: {
-  method: 'GET';
-  url: string;
-  responseType: 'text' | 'blob' | 'json';
-  onload: (resp: { status: number; responseText: string; response: any }) => void;
-  onerror: () => void;
-  ontimeout: () => void;
-}): void;
+declare const GM_xmlhttpRequest:
+  | ((
+      options: {
+        method: 'GET';
+        url: string;
+        responseType: 'text' | 'blob' | 'json';
+        onload: (resp: { status: number; responseText: string; response: any }) => void;
+        onerror: () => void;
+        ontimeout: () => void;
+      },
+    ) => void)
+  | undefined;
+
+function fetchFallback(url: string, type: 'text' | 'blob' | 'json') {
+  return fetch(url)
+    .then(async res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} (${url})`);
+      if (type === 'blob') return { status: res.status, response: await res.blob(), responseText: '' };
+      const text = await res.text();
+      return {
+        status: res.status,
+        response: type === 'json' ? JSON.parse(text) : text,
+        responseText: text,
+      };
+    })
+    .catch(err => {
+      throw new Error(`Network (${url}): ${err instanceof Error ? err.message : String(err)}`);
+    });
+}
 
 export function gm(url: string, type: 'text' | 'blob' | 'json' = 'text') {
-  return new Promise<any>((resolve, reject) =>
-    GM_xmlhttpRequest({
-      method: 'GET',
-      url,
-      responseType: type,
-      onload: r =>
-        r.status >= 200 && r.status < 300
-          ? resolve(r)
-          : reject(new Error(`HTTP ${r.status} (${url})`)),
-      onerror: () => reject(new Error(`Network (${url})`)),
-      ontimeout: () => reject(new Error(`Timeout (${url})`)),
-    })
-  );
+  // Prefer the userscript API when available (respects @connect/CSP in page).
+  if (typeof GM_xmlhttpRequest === 'function') {
+    return new Promise<any>((resolve, reject) =>
+      GM_xmlhttpRequest({
+        method: 'GET',
+        url,
+        responseType: type,
+        onload: r =>
+          r.status >= 200 && r.status < 300
+            ? resolve(r)
+            : reject(new Error(`HTTP ${r.status} (${url})`)),
+        onerror: () => reject(new Error(`Network (${url})`)),
+        ontimeout: () => reject(new Error(`Timeout (${url})`)),
+      })
+    );
+  }
+
+  // Fallback to fetch only when GM_xmlhttpRequest is unavailable.
+  return fetchFallback(url, type);
 }
 
 export const getJSON = async <T = any>(url: string): Promise<T> =>

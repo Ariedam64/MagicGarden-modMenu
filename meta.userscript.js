@@ -18,6 +18,7 @@
 // @grant        GM_setValue
 // @grant        GM_download
 // @connect      ariesmod-api.ariedam.fr
+// @connect      magicgarden.gg
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
