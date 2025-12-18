@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.95.1
+// @version      2.95.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1158,6 +1158,31 @@
   // src/sprite/index.ts
   init_variantBuilder();
 
+  // src/utils/page-context.ts
+  var sandboxWin = window;
+  var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
+  var pageWindow = pageWin;
+  var isIsolatedContext = pageWin !== sandboxWin;
+  function shareGlobal(name, value) {
+    try {
+      pageWin[name] = value;
+    } catch {
+    }
+    if (isIsolatedContext) {
+      try {
+        sandboxWin[name] = value;
+      } catch {
+      }
+    }
+  }
+  function readSharedGlobal(name) {
+    if (isIsolatedContext) {
+      const sandboxValue = sandboxWin[name];
+      if (sandboxValue !== void 0) return sandboxValue;
+    }
+    return pageWin[name];
+  }
+
   // src/ui/spriteIconCache.ts
   var SPRITE_PRELOAD_CATEGORIES = [
     "plant",
@@ -1248,8 +1273,8 @@
     });
   };
   function getSpriteService() {
-    const g = globalThis;
-    return g?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? g?.__MG_SPRITE_SERVICE__ ?? null;
+    const win = pageWindow ?? globalThis;
+    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
   }
   var parseKeyToCategoryId = (key2) => {
     const parts = key2.split("/").filter(Boolean);
@@ -1364,7 +1389,10 @@
             break;
           }
         }
-        if (!selected) return;
+        if (!selected) {
+          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
+          return;
+        }
         const resolved = selected;
         const dataUrl = await ensureSpriteDataCached(
           service,
@@ -1923,31 +1951,6 @@
   }
   var __mg_ready = start();
   __mg_ready.catch((err) => console.error("[MG SpriteCatalog] failed", err));
-
-  // src/utils/page-context.ts
-  var sandboxWin = window;
-  var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
-  var pageWindow = pageWin;
-  var isIsolatedContext = pageWin !== sandboxWin;
-  function shareGlobal(name, value) {
-    try {
-      pageWin[name] = value;
-    } catch {
-    }
-    if (isIsolatedContext) {
-      try {
-        sandboxWin[name] = value;
-      } catch {
-      }
-    }
-  }
-  function readSharedGlobal(name) {
-    if (isIsolatedContext) {
-      const sandboxValue = sandboxWin[name];
-      if (sandboxValue !== void 0) return sandboxValue;
-    }
-    return pageWin[name];
-  }
 
   // src/core/state.ts
   var NativeWS = pageWindow.WebSocket;
@@ -18073,15 +18076,18 @@
         if (!trimmed) return;
         candidatesSet.add(trimmed);
         candidatesSet.add(trimmed.replace(/\s+/g, ""));
+        const last = trimmed.split(/[./]/).pop();
+        if (last && last !== trimmed) {
+          candidatesSet.add(last);
+          candidatesSet.add(last.replace(/\s+/g, ""));
+        }
       };
       addCandidate(id.split(":")[1]);
       addCandidate(label2);
       if (rawType) addCandidate(rawType);
-      const baseCandidates = Array.from(candidatesSet).map((value) => value.replace(/icon$/i, "")).filter(Boolean);
-      const candidates = Array.from(/* @__PURE__ */ new Set([
-        ...baseCandidates.map((value) => `${value}Icon`),
-        ...Array.from(candidatesSet)
-      ])).filter(Boolean);
+      const originals = Array.from(candidatesSet);
+      const iconized = originals.map((value) => value.replace(/icon$/i, "")).filter(Boolean).map((value) => `${value}Icon`);
+      const candidates = Array.from(/* @__PURE__ */ new Set([...originals, ...iconized])).filter(Boolean);
       if (candidates.length) {
         attachSpriteIcon(wrap, categories, candidates, size, "alerts-overlay");
       }
