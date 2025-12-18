@@ -76,17 +76,21 @@ function iconOf(id: string, size = 24): HTMLElement {
       if (!trimmed) return;
       candidatesSet.add(trimmed);
       candidatesSet.add(trimmed.replace(/\s+/g, ""));
+      const last = trimmed.split(/[./]/).pop();
+      if (last && last !== trimmed) {
+        candidatesSet.add(last);
+        candidatesSet.add(last.replace(/\s+/g, ""));
+      }
     };
     addCandidate(id.split(":")[1]);
     addCandidate(label);
     if (rawType) addCandidate(rawType);
-    const baseCandidates = Array.from(candidatesSet)
-      .map((value) => value.replace(/icon$/i, ""))
-      .filter(Boolean);
-    const candidates = Array.from(new Set([
-      ...baseCandidates.map((value) => `${value}Icon`),
-      ...Array.from(candidatesSet),
-    ])).filter(Boolean);
+    const originals = Array.from(candidatesSet);
+    const iconized = originals
+      .map(value => value.replace(/icon$/i, ""))
+      .filter(Boolean)
+      .map(value => `${value}Icon`);
+    const candidates = Array.from(new Set([...originals, ...iconized])).filter(Boolean);
     if (candidates.length) {
       attachSpriteIcon(wrap, categories, candidates, size, "alerts-overlay");
     }

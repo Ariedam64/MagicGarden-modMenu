@@ -1,3 +1,5 @@
+import { pageWindow } from "../utils/page-context";
+
 type SpriteServiceHandle = {
   ready?: Promise<unknown>;
   renderToCanvas?: (params: { category: string; id: string; mutations?: string[] }) => HTMLCanvasElement | null;
@@ -130,8 +132,8 @@ const scheduleNonBlocking = <T>(cb: () => T | Promise<T>): Promise<T> => {
 };
 
 function getSpriteService(): SpriteServiceHandle | null {
-  const g: any = globalThis as any;
-  return g?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? g?.__MG_SPRITE_SERVICE__ ?? null;
+  const win: any = pageWindow ?? (globalThis as any);
+  return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
 }
 
 const parseKeyToCategoryId = (key: string): { category: string; id: string } | null => {
@@ -263,6 +265,7 @@ type AttachSpriteIconOptions = {
     img: HTMLImageElement,
     meta: { category: string; spriteId: string; candidate: string },
   ) => void;
+  onNoSpriteFound?: (meta: { categories: string[]; candidates: string[] }) => void;
 };
 
 export function attachSpriteIcon(
@@ -294,7 +297,10 @@ export function attachSpriteIcon(
           break;
         }
       }
-      if (!selected) return;
+      if (!selected) {
+        options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
+        return;
+      }
       const resolved = selected;
       const dataUrl = await ensureSpriteDataCached(
         service,
