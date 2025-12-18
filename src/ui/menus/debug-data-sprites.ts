@@ -1,833 +1,783 @@
 import { Menu } from "../menu";
-import { Sprites, type TileInfo, type MutationIconTile } from "../../core/sprite";
-import { findTileRefMatch } from "../../data/sprites";
-import {
-  tileRefsMutationLabels,
-  tileRefsMutations,
-} from "../../data/hardcoded-data.clean.js";
-import { loadTileSheet, normalizeSheetBase } from "../../utils/tileSheet.js";
-import type { MutationName } from "../../utils/calculators";
 import { createTwoColumns } from "./debug-data-shared";
+import { attachSpriteIcon } from "../spriteIconCache";
+import { MUT_G1, MUT_G2, MUT_G3, type MutationName } from "../../sprite/settings";
 
-const COLOR_FILTERS = ["None", "Gold", "Rainbow"] as const;
-const CONDITION_MUTATION_KEYS = ["None", "Wet", "Chilled", "Frozen"] as const;
+type SpriteListEntry = { key?: string; isAnim?: boolean; count?: number };
 
-function debugAssetName(url: string): string {
-  const clean = url.split(/[?#]/)[0];
-  const last = clean.split("/").filter(Boolean).pop() ?? clean;
-  return last.replace(/\.[a-z0-9]+$/i, "");
+type SpriteServiceHandle = {
+  ready?: Promise<unknown>;
+  list?: (category?: string) => SpriteListEntry[];
+  state?: { cats?: Map<string, unknown> | Record<string, unknown>; loaded?: boolean };
+  renderToDataURL?: (arg: any, type?: string, quality?: number) => Promise<string | null> | string | null;
+  renderToCanvas?: (params: { category: string; id: string; mutations?: string[] }) => HTMLCanvasElement | null;
+};
+
+const SPRITE_FAMILY_ID = "sprite";
+const ANY_CATEGORY = "all";
+const MAX_VISIBLE_SPRITES = 400;
+const SPRITE_ICON_SIZE = 96;
+
+let spriteServicePromise: Promise<SpriteServiceHandle | null> | null = null;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+function resolveGlobalSpriteService(): SpriteServiceHandle | null {
+  const root: any = (globalThis as any).unsafeWindow || globalThis;
+  return root?.__MG_SPRITE_SERVICE__ ?? null;
 }
 
-function deriveAssetCategory(family: string, url: string): string {
-  const base = debugAssetName(url);
-  const normalized = (family || "").toLowerCase();
-  if (normalized === 'tiles') return base;
-  if (normalized === 'cosmetics') {
-    return base.split("_")[0] || base;
-  }
-  try {
-    const trimmed = url.split(/[?#]/)[0].replace(/^https?:\/\/[^/]+\//, '');
-    const segments = trimmed.split('/').filter(Boolean);
-    if (segments.length >= 2) {
-      return segments[1].split('.')[0] || base;
+async function waitForSpriteService(): Promise<SpriteServiceHandle | null> {
+  const timeoutMs = 8_000;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const svc = resolveGlobalSpriteService();
+    if (svc) {
+      try {
+        if (svc.ready && typeof svc.ready.then === "function") {
+          await svc.ready;
+        }
+      } catch {
+        /* ignore readiness errors */
+      }
+      return svc;
     }
-  } catch {
-    /* ignore */
+    await sleep(200);
   }
-  return base;
+  return null;
 }
 
-const COSMETICS_EXPRESSION_CATEGORY = "expression";
-const COSMETICS_EXPRESSION_BASE_REGEX = /\/cosmetics\/mid_defaultblack\.png(?:$|\?)/i;
-
-function isExpressionCategoryName(name: string | null | undefined): boolean {
-  return (name ?? "").toLowerCase() === COSMETICS_EXPRESSION_CATEGORY;
-}
-
-function findExpressionBaseUrl(urls: string[]): string | null {
-  return urls.find((url) => COSMETICS_EXPRESSION_BASE_REGEX.test(url.split(/[?#]/)[0])) ?? null;
-}
-
-function formatExpressionDisplayName(url: string): string {
-  const raw = debugAssetName(url);
-  const cleaned = raw.replace(/^Mid_DefaultBlack[_-]?/i, "").replace(/_/g, " ").trim();
-  return cleaned || raw;
-}
-
-async function loadImageElement(url: string): Promise<HTMLImageElement> {
-  const response = await fetch(url, { credentials: "include" });
-  if (!response.ok) {
-    throw new Error(`Failed to load image ${url}: ${response.status}`);
+async function acquireSpriteService(force = false): Promise<SpriteServiceHandle | null> {
+  if (force) {
+    spriteServicePromise = null;
   }
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  try {
-    return await new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve(img);
-      };
-      img.onerror = (error) => {
-        URL.revokeObjectURL(objectUrl);
-        reject(error);
-      };
-      img.src = objectUrl;
-    });
-  } catch (error) {
-    URL.revokeObjectURL(objectUrl);
-    throw error;
+  if (!spriteServicePromise) {
+    spriteServicePromise = waitForSpriteService();
   }
-}
-
-function imageToCanvas(img: HTMLImageElement): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to get 2D context for expression canvas");
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(img, 0, 0);
-  return canvas;
-}
-
-async function loadCanvasFromUrl(url: string): Promise<HTMLCanvasElement | null> {
-  try {
-    const img = await loadImageElement(url);
-    return imageToCanvas(img);
-  } catch (error) {
-    console.error("[Sprites] Failed to load canvas for expression asset", { url, error });
+  const svc = await spriteServicePromise;
+  if (!svc) {
+    spriteServicePromise = null;
     return null;
   }
+  return svc;
 }
 
-function blendBaseAndOverlay(
-  baseCanvas: HTMLCanvasElement | null,
-  overlayCanvas: HTMLCanvasElement | null,
-): HTMLCanvasElement {
-  const width = baseCanvas?.width ?? overlayCanvas?.width ?? 1;
-  const height = baseCanvas?.height ?? overlayCanvas?.height ?? 1;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to get 2D context when blending canvases");
-  ctx.imageSmoothingEnabled = false;
-  if (baseCanvas) ctx.drawImage(baseCanvas, 0, 0, width, height);
-  else if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
-  if (overlayCanvas) ctx.drawImage(overlayCanvas, 0, 0, width, height);
-  return canvas;
+type ParsedSpriteKey = {
+  category: string;
+  id: string;
+  full: string;
+};
+
+function parseSpriteKey(key: string): ParsedSpriteKey {
+  const safe = String(key || "");
+  const parts = safe.split("/").filter(Boolean);
+  const start = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
+  const category = parts[start] ?? "misc";
+  const id = parts.slice(start + 1).join("/") || parts[parts.length - 1] || safe;
+  const full = parts.slice(start).join("/") || safe;
+  return { category, id, full };
 }
+
+function buildSpriteCandidates(parsed: ParsedSpriteKey): string[] {
+  const variants = [parsed.id, parsed.full];
+  const compact = parsed.id.replace(/\W+/g, "");
+  if (compact && compact !== parsed.id) {
+    variants.push(compact);
+  }
+  return Array.from(new Set(variants.filter(Boolean)));
+}
+
+function extractSpriteCategories(service: SpriteServiceHandle | null): string[] {
+  if (!service) return [];
+  const cats = service.state?.cats;
+  let values: string[] = [];
+  if (cats instanceof Map) {
+    values = Array.from(cats.keys());
+  } else if (cats && typeof cats === "object") {
+    values = Object.keys(cats);
+  }
+  if (!values.length && typeof service.list === "function") {
+    try {
+      const fallback = service.list("any" as any) ?? [];
+      const collected = new Set<string>();
+      fallback.forEach(entry => {
+        const parsed = parseSpriteKey(entry?.key ?? "");
+        if (parsed.category) collected.add(parsed.category);
+      });
+      values = Array.from(collected);
+    } catch {
+      values = [];
+    }
+  }
+  return values
+    .map(value => value.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+const sanitizeFileComponent = (value: string): string =>
+  value.replace(/[^a-z0-9_\-]+/gi, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "") || "sprite";
+
+const buildSpriteFilename = (parsed: ParsedSpriteKey, mutations: MutationName[]): string => {
+  const mutSegment = mutations.length ? `-${mutations.map(m => sanitizeFileComponent(m)).join("_")}` : "";
+  return `${sanitizeFileComponent(parsed.category)}-${sanitizeFileComponent(parsed.id)}${mutSegment}.png`;
+};
+
+type ColorSelection = "None" | (typeof MUT_G1)[number];
+type ConditionSelection = "None" | (typeof MUT_G2)[number];
+type LightingSelection = "None" | (typeof MUT_G3)[number];
+
+const COLOR_SELECTIONS: ColorSelection[] = ["None", ...MUT_G1];
+const CONDITION_SELECTIONS: ConditionSelection[] = ["None", ...MUT_G2];
+const LIGHTING_SELECTIONS: LightingSelection[] = ["None", ...MUT_G3];
+
+type MutationFilterState = {
+  color: ColorSelection;
+  condition: ConditionSelection;
+  lighting: LightingSelection;
+};
+
+type MutationGroupKey = "color" | "condition" | "lighting";
+
+type SpriteCardRecord = { entry: SpriteListEntry; parsed: ParsedSpriteKey };
 
 export function renderSpritesTab(view: HTMLElement, ui: Menu) {
   view.innerHTML = "";
   view.classList.add("dd-debug-view");
+
   const { leftCol, rightCol } = createTwoColumns(view);
 
   const explorerCard = ui.card("Sprite Explorer", {
     tone: "muted",
-    subtitle: "Browse captured assets by manifest family.",
+    subtitle: "Browse captured sprites via the runtime sprite service.",
   });
   leftCol.appendChild(explorerCard.root);
 
-  const listCard = ui.card("Assets", {
+  const listCard = ui.card("Sprites", {
     tone: "muted",
-    subtitle: "Click an entry to open the file in a new tab.",
+    subtitle: "Preview sprites for the selected category.",
   });
   rightCol.appendChild(listCard.root);
 
-  const families = ["all", ...Array.from(new Set(Sprites.listFamilies().filter(Boolean))).sort()];
-  let selectedFamily = "all";
-  let selectedCategory = "all";
-  const categoryCache = new Map<string, string[]>();
-
   const familySelect = ui.select({ width: "100%" });
-  families.forEach((family) => {
+  const families = [{ value: SPRITE_FAMILY_ID, label: "Sprite catalog" }];
+  families.forEach(({ value, label }) => {
     const option = document.createElement("option");
-    option.value = family;
-    option.textContent = family === "all" ? "All families" : family;
+    option.value = value;
+    option.textContent = label;
     familySelect.appendChild(option);
   });
-  familySelect.value = selectedFamily;
+  familySelect.value = SPRITE_FAMILY_ID;
 
   const categorySelect = ui.select({ width: "100%" });
   categorySelect.disabled = true;
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "search";
+  searchInput.placeholder = "Search name or key";
+  searchInput.className = "dd-sprite-search";
+
+  const reloadBtn = ui.btn("Reload sprites", {
+    size: "sm",
+    variant: "ghost",
+    onClick: () => {
+      void updateList(true);
+    },
+  }) as HTMLButtonElement;
+  const downloadBtnLabel = "Download visible sprites";
+  const downloadBtn = ui.btn(downloadBtnLabel, {
+    size: "sm",
+    variant: "primary",
+    onClick: () => {
+      void downloadVisibleSprites();
+    },
+  }) as HTMLButtonElement;
+  downloadBtn.disabled = true;
 
   const controlsGrid = document.createElement("div");
   controlsGrid.className = "dd-sprite-control-grid";
   controlsGrid.append(
     createSelectControl("Asset family", familySelect),
     createSelectControl("Asset category", categorySelect),
+    createSelectControl("Search", searchInput),
   );
   explorerCard.body.appendChild(controlsGrid);
+  const actionRow = document.createElement("div");
+  actionRow.className = "dd-sprite-actions";
+  actionRow.append(reloadBtn, downloadBtn);
+  explorerCard.body.appendChild(actionRow);
 
-  const filterPanel = document.createElement("div");
-  filterPanel.className = "dd-sprite-filter-panel";
-  explorerCard.body.appendChild(filterPanel);
+  const mutationFilters: MutationFilterState = { color: "None", condition: "None", lighting: "None" };
+  let mutationGroupContainers: Record<MutationGroupKey, HTMLDivElement> | null = null;
 
-  const colorSegmentRow = document.createElement("div");
-  const conditionSegmentRow = document.createElement("div");
-  const lightingSegmentRow = document.createElement("div");
-  filterPanel.append(colorSegmentRow, conditionSegmentRow, lightingSegmentRow);
-
-  const COLOR_FILTERS_LIST = COLOR_FILTERS;
-  const mutationLabelMap = tileRefsMutationLabels as Record<string, string>;
-  const CONDITION_OPTIONS = CONDITION_MUTATION_KEYS.map((value) => ({
-    value: value as MutationName,
-    label: value === "None" ? "None" : mutationLabelMap[value] ?? value,
-  }));
-const LIGHTING_DEFINITIONS: { id: MutationName; key: string; label: string }[] = [
-    { id: "None", key: "None", label: "None" },
-    { id: "Dawnlit", key: "Dawnlit", label: mutationLabelMap["Dawnlit"] ?? "Dawnlit" },
-    { id: "Ambershine", key: "Amberlit", label: mutationLabelMap["Amberlit"] ?? "Amberlit" },
-    { id: "Dawncharged", key: "Dawnbound", label: mutationLabelMap["Dawnbound"] ?? "Dawnbound" },
-    { id: "Ambercharged", key: "Amberbound", label: mutationLabelMap["Amberbound"] ?? "Amberbound" },
-  ];
-  const LIGHTING_OPTIONS = LIGHTING_DEFINITIONS.map((def) => ({
-    value: def.id,
-    label: def.label,
-  }));
-
-  let colorFilter: (typeof COLOR_FILTERS)[number] = "None";
-  let conditionFilter: string = "None";
-  let lightingFilter: string = "None";
-  let lightingSelectionKey: string = "None";
-
-  const categoryMatches = (keyword: string) =>
-    selectedFamily === "tiles" && selectedCategory.toLowerCase().includes(keyword);
-
-  const renderSegment = (
-    container: HTMLDivElement,
-    title: string,
-    options: { value: string; label: string }[],
-    selected: string,
-    onSelect: (value: string) => void,
-  ): void => {
-    container.innerHTML = "";
-    const heading = document.createElement("span");
-    heading.className = "dd-sprite-filter-label";
-    heading.textContent = title;
-    const segment = document.createElement("div");
-    segment.className = "dd-sprite-segmented";
-    options.forEach(({ value, label }) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "dd-sprite-seg-btn";
-      btn.textContent = label;
-      if (value === selected) btn.classList.add("is-active");
-      btn.addEventListener("click", () => {
-        onSelect(value);
-        renderFilters();
-        void updateList();
-      });
-      segment.append(btn);
-    });
-    container.append(heading, segment);
-  };
-
-  let currentTilesheetUrl: string | null = null;
-  let currentTiles: TileInfo<HTMLCanvasElement>[] = [];
-  let tileSheetActive = false;
-  let visibleAssetUrls: string[] = [];
-  let mutationIconsCache: Record<string, MutationIconTile> | null = null;
-  const mutationIconsPromise = loadMutationIcons();
-
-  const applyFiltersToCanvas = (
-    canvas: HTMLCanvasElement,
-    filters: string[] = buildFilterQueue(),
-  ): HTMLCanvasElement => {
-    let result = canvas;
-    for (const filterName of filters) {
-      const filtered = Sprites.applyCanvasFilter(result, filterName);
-      if (filtered) result = filtered;
-    }
-    return result;
-  };
-
-  const exportCard = ui.card("Export", {
+  const mutationCard = ui.card("Mutations", {
     tone: "muted",
-    subtitle: "Download the assets currently visible in the explorer.",
+    subtitle: "Apply color or weather overlays to the previews.",
   });
-  leftCol.appendChild(exportCard.root);
-  const exportBtn = ui.btn("Export visible assets", {
-    variant: "primary",
-    icon: "⬇",
-    onClick: exportVisibleAssets,
-  }) as HTMLButtonElement;
-  const exportStatus = document.createElement("span");
-  exportStatus.className = "dd-sprite-stats";
-  exportStatus.textContent = "Select assets to export.";
-  const progressWrapper = document.createElement("div");
-  progressWrapper.className = "dd-sprite-export-progress";
-  const progressBar = document.createElement("div");
-  progressBar.className = "dd-sprite-export-progress__bar";
-  progressWrapper.append(progressBar);
-  exportCard.body.append(exportBtn, exportStatus, progressWrapper);
-  let exporting = false;
-  const showProgress = (value: number) => {
-    progressBar.style.width = `${value}%`;
-    progressWrapper.style.opacity = value > 0 && value < 100 ? "1" : "0";
+  leftCol.appendChild(mutationCard.root);
+  const mutationBody = document.createElement("div");
+  mutationBody.className = "dd-sprite-mutation-card";
+  mutationCard.body.appendChild(mutationBody);
+  mutationGroupContainers = {
+    color: document.createElement("div"),
+    condition: document.createElement("div"),
+    lighting: document.createElement("div"),
   };
-
-  const getAssetExportBaseName = (): string => {
-    const familyPart = selectedFamily === "all" ? "all" : selectedFamily || "assets";
-    const categoryPart = selectedCategory && selectedCategory !== "all" ? `-${selectedCategory}` : "";
-    const raw = `${familyPart}${categoryPart}`.replace(/[^a-z0-9_-]+/gi, "_");
-    return raw || "assets";
-  };
-
-  const updateExportStatusText = (): void => {
-    if (tileSheetActive) {
-      exportStatus.textContent = currentTiles.length
-        ? `${currentTiles.length} tiles ready to export.`
-        : "Load a tilesheet to export.";
-      return;
-    }
-    if (visibleAssetUrls.length) {
-      exportStatus.textContent = `${visibleAssetUrls.length} assets ready to download.`;
-      return;
-    }
-    exportStatus.textContent = "Select assets to export.";
-  };
-
-  function triggerDownload(blob: Blob, filename: string): void {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-  }
-
-  async function downloadCanvasAsPng(canvas: HTMLCanvasElement, filename: string): Promise<void> {
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => {
-        if (!b) {
-          reject(new Error("canvas.toBlob returned null"));
-          return;
-        }
-        resolve(b);
-      }, "image/png");
-    });
-    triggerDownload(blob, filename);
-  }
-
-  async function renderCosmeticsExpressionPreview(options: {
-    previewArea: HTMLElement;
-    expressionUrls: string[];
-    baseUrl: string | null;
-    baseCanvas: HTMLCanvasElement | null;
-  }): Promise<void> {
-    const { previewArea, expressionUrls, baseUrl, baseCanvas } = options;
-    previewArea.innerHTML = "";
-    previewArea.classList.remove("dd-sprite-grid--tiles");
-
-    const baseItem = document.createElement("div");
-    baseItem.className = "dd-sprite-grid__item";
-    if (baseCanvas || baseUrl) {
-      const baseImg = document.createElement("img");
-      baseImg.className = "dd-sprite-grid__img";
-      baseImg.alt = "Mid Default Black base";
-      baseImg.loading = "lazy";
-      baseImg.referrerPolicy = "no-referrer";
-      baseImg.src = baseCanvas ? baseCanvas.toDataURL() : baseUrl!;
-      baseItem.appendChild(baseImg);
-    }
-    const baseName = document.createElement("span");
-    baseName.className = "dd-sprite-grid__name";
-    baseName.textContent = "Mid Default Black (base)";
-    const baseMeta = document.createElement("span");
-    baseMeta.className = "dd-sprite-grid__meta";
-    baseMeta.textContent = baseUrl ?? "Base asset missing (Mid_DefaultBlack)";
-    baseItem.append(baseName, baseMeta);
-    previewArea.appendChild(baseItem);
-
-    if (!expressionUrls.length) {
-      const empty = document.createElement("div");
-      empty.className = "dd-sprite-grid__empty";
-      empty.textContent = "No expression assets recorded yet.";
-      previewArea.appendChild(empty);
-      return;
-    }
-
-    const overlays = await Promise.all(expressionUrls.map(async (url) => ({
-      url,
-      overlayCanvas: await loadCanvasFromUrl(url),
-    })));
-
-    for (const { url, overlayCanvas } of overlays) {
-      const displayName = formatExpressionDisplayName(url);
-      if (!overlayCanvas) {
-        const failItem = document.createElement("div");
-        failItem.className = "dd-sprite-grid__item";
-        const failLabel = document.createElement("span");
-        failLabel.className = "dd-sprite-grid__name";
-        failLabel.textContent = `${displayName} (failed to render)`;
-        const failMeta = document.createElement("span");
-        failMeta.className = "dd-sprite-grid__meta";
-        failMeta.textContent = url;
-        failItem.append(failLabel, failMeta);
-        previewArea.appendChild(failItem);
-        continue;
-      }
-
-      const combined = blendBaseAndOverlay(baseCanvas, overlayCanvas);
-      const item = document.createElement("a");
-      item.className = "dd-sprite-grid__item";
-      item.href = url;
-      item.target = "_blank";
-      item.rel = "noopener noreferrer";
-
-      const img = document.createElement("img");
-      img.className = "dd-sprite-grid__img";
-      img.src = combined.toDataURL();
-      img.alt = displayName;
-      img.loading = "lazy";
-      img.referrerPolicy = "no-referrer";
-
-      const nameEl = document.createElement("span");
-      nameEl.className = "dd-sprite-grid__name";
-      nameEl.textContent = displayName;
-
-      const meta = document.createElement("span");
-      meta.className = "dd-sprite-grid__meta";
-      meta.textContent = url;
-
-      item.append(img, nameEl, meta);
-      item.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const downloadCanvas = overlayCanvas ?? combined;
-        void downloadCanvasAsPng(downloadCanvas, `${debugAssetName(url)}.png`);
-      });
-      previewArea.appendChild(item);
-    }
-  }
-
-  async function downloadUrlAsset(url: string): Promise<void> {
-    try {
-      const resp = await fetch(url, { credentials: "include" });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const blob = await resp.blob();
-      let name = debugAssetName(url);
-      if (!/\.[a-z0-9]+$/i.test(name)) name += ".png";
-      triggerDownload(blob, name);
-    } catch (error) {
-      console.error("[Sprites] Asset download failed", { url, error });
-    }
-  }
-
-  async function exportVisibleAssets(): Promise<void> {
-    if (exporting) return;
-    const hasTiles = tileSheetActive && Boolean(currentTilesheetUrl) && currentTiles.length > 0;
-    const hasAssets = visibleAssetUrls.length > 0;
-    if (!hasTiles && !hasAssets) {
-      showProgress(0);
-      exportStatus.textContent = "Select assets to export.";
-      return;
-    }
-
-    exporting = true;
-    exportBtn.disabled = true;
-    showProgress(0);
-    exportStatus.textContent = "Preparing export...";
-
-    try {
-      if (hasTiles) {
-        const base = normalizeSheetBase(currentTilesheetUrl!);
-        const filters = buildFilterQueue();
-        await Sprites.exportFilteredTileset({
-          tiles: currentTiles,
-          filters,
-          baseName: base,
-          onProgress: (processed, total) => {
-            const percent = total ? Math.round((processed / total) * 100) : 0;
-            showProgress(percent);
-            exportStatus.textContent = `Processing ${processed}/${total} tiles`;
-          },
-        });
-      } else {
-        const base = getAssetExportBaseName();
-        await Sprites.exportAssets({
-          urls: visibleAssetUrls,
-          baseName: base,
-          onProgress: (processed, total) => {
-            const percent = total ? Math.round((processed / total) * 100) : 0;
-            showProgress(percent);
-            exportStatus.textContent = `Processing ${processed}/${total} assets`;
-          },
-        });
-      }
-
-      showProgress(100);
-      exportStatus.textContent = "Export ready — check your downloads.";
-      setTimeout(() => showProgress(0), 1_000);
-    } catch (error) {
-      console.error("[Sprites] Export failed", error);
-      exportStatus.textContent = "Export failed (see console).";
-      showProgress(0);
-    } finally {
-      exporting = false;
-      exportBtn.disabled = false;
-    }
-  }
-
-  const renderFilters = (): void => {
-    const showColor = categoryMatches("plant") || categoryMatches("pet");
-    const showCondition = categoryMatches("plant");
-    const showLighting = categoryMatches("plant");
-    filterPanel.style.display = showColor ? "" : "none";
-    colorSegmentRow.style.display = showColor ? "" : "none";
-    conditionSegmentRow.style.display = showCondition ? "" : "none";
-    lightingSegmentRow.style.display = showLighting ? "" : "none";
-
-    renderSegment(
-      colorSegmentRow,
-      "Color",
-      COLOR_FILTERS_LIST.map((value) => ({ value, label: value })),
-      colorFilter,
-      (value) => {
-        colorFilter = value as (typeof COLOR_FILTERS_LIST)[number];
-      },
-    );
-    renderSegment(conditionSegmentRow, "Weather", CONDITION_OPTIONS, conditionFilter, (value) => {
-      conditionFilter = value;
-    });
-    renderSegment(lightingSegmentRow, "Lighting", LIGHTING_OPTIONS, lightingFilter, (value) => {
-      lightingFilter = value;
-      lightingSelectionKey = LIGHTING_DEFINITIONS.find((def) => def.id === value)?.key ?? value;
-    });
-  };
-
-  const buildFilterQueue = (): string[] => {
-    const queue: string[] = [];
-    if (colorFilter !== "None") queue.push(colorFilter);
-    if (colorFilter === "Gold" || colorFilter === "Rainbow") return queue;
-    if (categoryMatches("plant")) {
-      if (conditionFilter !== "None") queue.push(conditionFilter);
-      if (lightingFilter !== "None") queue.push(lightingFilter);
-    }
-    return queue;
-  };
-
-  renderFilters();
+  mutationGroupContainers.color.className = "dd-sprite-mutation-group";
+  mutationGroupContainers.condition.className = "dd-sprite-mutation-group";
+  mutationGroupContainers.lighting.className = "dd-sprite-mutation-group";
+  mutationBody.append(
+    mutationGroupContainers.color,
+    mutationGroupContainers.condition,
+    mutationGroupContainers.lighting,
+  );
+  renderMutationControls();
 
   const stats = document.createElement("p");
   stats.className = "dd-sprite-stats";
-  stats.textContent = "Select a family to inspect its assets.";
+  stats.textContent = "Waiting for sprite service…";
   explorerCard.body.appendChild(stats);
 
   const previewArea = document.createElement("div");
   previewArea.className = "dd-sprite-grid";
-  listCard.body.appendChild(previewArea);
+  const previewWrap = document.createElement("div");
+  previewWrap.className = "dd-sprite-grid-wrap";
+  previewWrap.appendChild(previewArea);
+  listCard.body.appendChild(previewWrap);
 
-  const ensureCategories = (family: string): string[] => {
-    if (!categoryCache.has(family)) {
-      const assets = Sprites.listAssetsForFamily(family);
-      const categories = Array.from(new Set(assets.map((url) => deriveAssetCategory(family, url))));
-      categories.sort();
-      categoryCache.set(family, categories);
+  let selectedFamily = SPRITE_FAMILY_ID;
+  let selectedCategory = ANY_CATEGORY;
+  let searchTerm = "";
+  let spriteCategories: string[] = [];
+  let listRequestId = 0;
+  let retryTimer: number | null = null;
+  let searchDebounce: number | null = null;
+  let visibleSpriteRecords: SpriteCardRecord[] = [];
+  let downloadInProgress = false;
+
+  const clearRetry = () => {
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
     }
-    return categoryCache.get(family) ?? [];
   };
 
-  const updateCategoryOptions = () => {
-    if (selectedFamily === "all") {
-      categorySelect.innerHTML = "";
-      const option = document.createElement("option");
-      option.value = "all";
-      option.textContent = "All categories";
-      categorySelect.appendChild(option);
-      categorySelect.value = "all";
-      categorySelect.disabled = true;
-      selectedCategory = "all";
-      return;
-    }
+  const scheduleRetry = () => {
+    if (retryTimer !== null) return;
+    retryTimer = window.setTimeout(() => {
+      retryTimer = null;
+      void updateList();
+    }, 2_000);
+  };
 
-    const familyHasGroups = selectedFamily === "tiles" || selectedFamily === "cosmetics";
-    if (!familyHasGroups) {
-      categorySelect.innerHTML = "";
-      const option = document.createElement("option");
-      option.value = "all";
-      option.textContent = "All categories";
-      categorySelect.appendChild(option);
-      categorySelect.value = "all";
-      categorySelect.disabled = true;
-      selectedCategory = "all";
-      return;
-    }
-
-    const categories = ensureCategories(selectedFamily);
+  const applySpriteCategories = (categories: string[]) => {
+    spriteCategories = categories;
     categorySelect.innerHTML = "";
     const allOption = document.createElement("option");
-    allOption.value = "all";
-    allOption.textContent = "All categories";
+    allOption.value = ANY_CATEGORY;
+    allOption.textContent = categories.length ? "All categories" : "No categories";
     categorySelect.appendChild(allOption);
-    categories.forEach((category) => {
+    categories.forEach(category => {
       const option = document.createElement("option");
       option.value = category;
       option.textContent = category;
       categorySelect.appendChild(option);
     });
-    if (!categories.length) {
-      categorySelect.disabled = true;
-      selectedCategory = "all";
-    } else {
-      categorySelect.disabled = false;
-      selectedCategory = categories.includes(selectedCategory) ? selectedCategory : "all";
-      categorySelect.value = selectedCategory;
-    }
+    const valid = categories.includes(selectedCategory);
+    selectedCategory = valid ? selectedCategory : ANY_CATEGORY;
+    categorySelect.value = selectedCategory;
+    categorySelect.disabled = !categories.length;
   };
 
-  const updateList = async () => {
-    const filterQueue = buildFilterQueue();
-    const familyAssets = selectedFamily === "all"
-      ? Sprites.lists().all
-      : Sprites.listAssetsForFamily(selectedFamily);
-    let assets = familyAssets;
-    if (selectedFamily !== "all" && selectedCategory !== "all") {
-      assets = assets.filter(
-        (url) => deriveAssetCategory(selectedFamily, url) === selectedCategory,
-      );
-    }
-    visibleAssetUrls = assets;
+  const renderEmptyState = (message: string) => {
     previewArea.innerHTML = "";
-    let tileCount: number | null = null;
-    const isTileSheetView =
-      selectedFamily === "tiles" && selectedCategory !== "all" && assets.length > 0;
-    previewArea.classList.toggle("dd-sprite-grid--tiles", isTileSheetView);
-    currentTilesheetUrl = null;
-    currentTiles = [];
-    tileSheetActive = isTileSheetView;
-    const isCosmeticsExpressionCategory =
-      selectedFamily === "cosmetics" && isExpressionCategoryName(selectedCategory);
-    if (isCosmeticsExpressionCategory) {
-      const expressionBaseUrl = findExpressionBaseUrl(familyAssets);
-      const expressionBaseCanvas = expressionBaseUrl ? await loadCanvasFromUrl(expressionBaseUrl) : null;
-      tileSheetActive = false;
-      currentTilesheetUrl = null;
-      currentTiles = [];
-      previewArea.classList.remove("dd-sprite-grid--tiles");
-      await renderCosmeticsExpressionPreview({
-        previewArea,
-        expressionUrls: assets,
-        baseUrl: expressionBaseUrl,
-        baseCanvas: expressionBaseCanvas,
+    const empty = document.createElement("div");
+    empty.className = "dd-sprite-grid__empty";
+    empty.textContent = message;
+    previewArea.appendChild(empty);
+  };
+
+  const getActiveMutations = (): MutationName[] => {
+    const active: MutationName[] = [];
+    if (mutationFilters.color !== "None") active.push(mutationFilters.color);
+    if (mutationFilters.condition !== "None") active.push(mutationFilters.condition);
+    if (mutationFilters.lighting !== "None") active.push(mutationFilters.lighting);
+    return active;
+  };
+
+  function renderMutationControls(): void {
+    if (!mutationGroupContainers) return;
+    renderMutationGroup(
+      "color",
+      COLOR_SELECTIONS,
+      "Color",
+      mutationGroupContainers.color,
+    );
+    renderMutationGroup(
+      "condition",
+      CONDITION_SELECTIONS,
+      "Weather",
+      mutationGroupContainers.condition,
+    );
+    renderMutationGroup(
+      "lighting",
+      LIGHTING_SELECTIONS,
+      "Lighting",
+      mutationGroupContainers.lighting,
+    );
+  }
+
+  function renderMutationGroup(
+    key: MutationGroupKey,
+    options: readonly ("None" | MutationName)[],
+    label: string,
+    container: HTMLElement,
+  ): void {
+    container.innerHTML = "";
+    const heading = document.createElement("span");
+    heading.className = "dd-sprite-mutation-group-title";
+    heading.textContent = label;
+    const row = document.createElement("div");
+    row.className = "dd-sprite-mutation-buttons";
+    options.forEach(option => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "dd-sprite-mutation-btn";
+      btn.textContent = option === "None" ? "None" : option;
+      if (mutationFilters[key] === option) {
+        btn.classList.add("active");
+      }
+      btn.setAttribute("aria-pressed", mutationFilters[key] === option ? "true" : "false");
+      btn.addEventListener("click", () => {
+        if (mutationFilters[key] === option) return;
+        mutationFilters[key] = option as any;
+        renderMutationControls();
+        if (visibleSpriteRecords.length) {
+          renderSpriteCards(visibleSpriteRecords);
+        }
       });
-      const baseLabel = expressionBaseUrl ? debugAssetName(expressionBaseUrl) : "Mid Default Black";
-      stats.textContent = `${assets.length} expression overlays on ${baseLabel}`;
-      updateExportStatusText();
+      row.appendChild(btn);
+    });
+    container.append(heading, row);
+  };
+
+  function renderSpriteCards(records: SpriteCardRecord[]): void {
+    if (!records.length) {
+      renderEmptyState("No sprites match the current filters.");
       return;
     }
-    if (isTileSheetView) {
-      const sheetUrl = assets[0];
-      const base = normalizeSheetBase(sheetUrl);
-      const tiles = await loadTileSheet(base);
-      currentTilesheetUrl = sheetUrl;
-      currentTiles = tiles;
-      tileCount = tiles.length;
-      if (!tiles.length) {
-        const empty = document.createElement("div");
-        empty.className = "dd-sprite-grid__empty";
-        empty.textContent = `No tiles could be sliced for ${debugAssetName(sheetUrl)} yet.`;
-        previewArea.appendChild(empty);
-      } else {
-        tiles.forEach((tile) => {
-          const item = document.createElement("a");
-          item.className = "dd-sprite-grid__item";
-          item.href = sheetUrl;
-          item.target = "_blank";
-          item.rel = "noopener noreferrer";
+    const activeMutations = getActiveMutations();
+    previewArea.innerHTML = "";
+    records.forEach(record => {
+      const { entry, parsed } = record;
+      const card = document.createElement("div");
+      card.className = "dd-sprite-grid__item";
+      card.title = entry?.key ?? parsed.full;
 
-          const baseCanvas = Sprites.toCanvas(tile as TileInfo);
-          const match = findTileRefMatch(tile.sheet, tile.index);
-          const isPlantSheet = match?.sheetId === "plants";
-          let displayCanvas = applyFiltersToCanvas(baseCanvas, filterQueue);
-          if (
-            isPlantSheet &&
-            filterQueue.length &&
-            mutationIconsCache &&
-            Object.keys(mutationIconsCache).length > 0
-          ) {
-            const renderMutations: MutationName[] = [];
+      const imgWrap = document.createElement("div");
+      imgWrap.className = "dd-sprite-grid__img";
+      imgWrap.style.setProperty("--sprite-size", `${SPRITE_ICON_SIZE}px`);
 
-if (colorFilter !== "None") {
-  renderMutations.push(colorFilter as MutationName);          // Gold / Rainbow
-}
-if (conditionFilter !== "None") {
-  renderMutations.push(conditionFilter as MutationName);      // Wet / Chilled / Frozen
-}
-if (lightingFilter !== "None") {
-  renderMutations.push(lightingFilter as MutationName);       // Dawnlit / Ambershine / Dawncharged / Ambercharged
-}
+      const iconSlot = document.createElement("span");
+      iconSlot.className = "dd-sprite-grid__icon";
+      iconSlot.textContent = "…";
+      imgWrap.appendChild(iconSlot);
 
-const mutated = Sprites.renderPlantWithMutationsNonTall({
-  baseTile: tile as TileInfo,
-  mutations: renderMutations,
-  mutationIcons: mutationIconsCache!,
-});
-            if (mutated) displayCanvas = mutated;
-          }
-          displayCanvas.className = "dd-sprite-grid__img";
-          const name = document.createElement("span");
-          name.className = "dd-sprite-grid__name";
-          const displayNames = match?.entries.map((entry) => entry.displayName).filter(Boolean);
-          if (displayNames && displayNames.length) {
-            name.textContent = displayNames.join(", ");
-          } else {
-            name.textContent = `${debugAssetName(tile.url)} #${tile.index + 1}`;
-          }
+      attachSpriteIcon(
+        iconSlot,
+        [parsed.category],
+        buildSpriteCandidates(parsed),
+        SPRITE_ICON_SIZE,
+        "debug-sprites",
+        { mutations: activeMutations },
+      );
 
-          const meta = document.createElement("span");
-          meta.className = "dd-sprite-grid__meta";
-          const sheetLabel = match?.sheetLabel ?? tile.sheet;
-          meta.textContent = `${sheetLabel} (${tile.col},${tile.row})`;
+      const nameEl = document.createElement("span");
+      nameEl.className = "dd-sprite-grid__name";
+      const animSuffix =
+        entry?.isAnim && typeof entry.count === "number" ? ` (anim ${entry.count})` : entry?.isAnim ? " (anim)" : "";
+      nameEl.textContent = `${parsed.id}${animSuffix}`;
 
-          item.append(displayCanvas, name, meta);
-          item.addEventListener("click", (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            const label = match?.sheetLabel ?? debugAssetName(tile.url);
-            const tileName = `${label}_#${String(tile.index + 1).padStart(3, "0")}.png`;
-            void downloadCanvasAsPng(displayCanvas, tileName);
-          });
-          previewArea.appendChild(item);
-        });
-      }
-    } else {
-      if (!assets.length) {
-        const empty = document.createElement("div");
-        empty.className = "dd-sprite-grid__empty";
-        empty.textContent = "No assets recorded for this selection yet.";
-        previewArea.appendChild(empty);
-      } else {
-        assets.forEach((url) => {
-          const item = document.createElement("a");
-          item.className = "dd-sprite-grid__item";
-          item.href = url;
-          item.target = "_blank";
-          item.rel = "noopener noreferrer";
+      const meta = document.createElement("span");
+      meta.className = "dd-sprite-grid__meta";
+      meta.textContent = entry?.key ?? parsed.full;
 
-          const img = document.createElement("img");
-          img.className = "dd-sprite-grid__img";
-          img.src = url;
-          img.alt = debugAssetName(url);
-          img.loading = "lazy";
-          img.referrerPolicy = "no-referrer";
+      card.append(imgWrap, nameEl, meta);
+      const triggerDownload = () => {
+        if (downloadInProgress) return;
+        void downloadSpriteRecord(record, undefined, getActiveMutations());
+      };
+      card.addEventListener("click", triggerDownload);
+      card.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          triggerDownload();
+        }
+      });
+      card.tabIndex = 0;
+      previewArea.appendChild(card);
+    });
+  }
 
-          const name = document.createElement("span");
-          name.className = "dd-sprite-grid__name";
-          name.textContent = debugAssetName(url);
+  const updateList = async (forceService = false) => {
+    const token = ++listRequestId;
+    stats.textContent = "Loading sprites…";
+    const service = await acquireSpriteService(forceService);
+    if (token !== listRequestId) return;
+    if (!service) {
+      renderEmptyState("Sprite service not ready. Waiting…");
+      stats.textContent = "Sprite service not ready yet.";
+      scheduleRetry();
+      return;
+    }
+    clearRetry();
 
-          const meta = document.createElement("span");
-          meta.className = "dd-sprite-grid__meta";
-          meta.textContent = url;
-
-          item.append(img, name, meta);
-          previewArea.appendChild(item);
-          item.addEventListener("click", (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            void downloadUrlAsset(url);
-          });
-        });
-      }
+    if (!spriteCategories.length || forceService) {
+      const categories = extractSpriteCategories(service);
+      applySpriteCategories(categories);
     }
 
-    const familyLabel = selectedFamily === "all"
-      ? "all families"
-      : `family "${selectedFamily}" (${familyAssets.length})`;
-    const categoryLabel = (selectedFamily === "all" || selectedCategory === "all")
-      ? "all categories"
-      : `category "${selectedCategory}"`;
-    const summaryCount = tileCount !== null ? `${tileCount} tiles` : `${assets.length} assets`;
-    stats.textContent = `${summaryCount} · ${familyLabel} · ${categoryLabel}`;
-    updateExportStatusText();
+    if (selectedFamily !== SPRITE_FAMILY_ID) {
+      renderEmptyState("No assets for this family.");
+      stats.textContent = "Select the sprite family to browse sprites.";
+      return;
+    }
+
+    const catArg = selectedCategory === ANY_CATEGORY ? ("any" as any) : (selectedCategory as any);
+    let sprites: SpriteListEntry[] = [];
+    try {
+      sprites = typeof service.list === "function" ? service.list(catArg) ?? [] : [];
+    } catch (error) {
+      console.error("[DebugSprites] Failed to list sprites", error);
+      renderEmptyState("Failed to list sprites (see console).");
+      stats.textContent = "Listing sprites failed.";
+      return;
+    }
+
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const filtered = !normalizedSearch
+      ? sprites
+      : sprites.filter(entry => {
+          const parsed = parseSpriteKey(entry?.key ?? "");
+          const label = `${parsed.category}/${parsed.id}`.toLowerCase();
+          return label.includes(normalizedSearch) || (entry?.key ?? "").toLowerCase().includes(normalizedSearch);
+        });
+
+    const limited = filtered.slice(0, MAX_VISIBLE_SPRITES);
+    const records = limited.map(entry => ({ entry, parsed: parseSpriteKey(entry?.key ?? "") }));
+    visibleSpriteRecords = records;
+    if (!downloadInProgress) {
+      downloadBtn.textContent = downloadBtnLabel;
+    }
+    downloadBtn.disabled = !records.length || downloadInProgress;
+    if (!records.length) {
+      renderEmptyState("No sprites match the current filters.");
+    } else {
+      renderSpriteCards(records);
+    }
+
+    const clipped = filtered.length > MAX_VISIBLE_SPRITES;
+    const categoryLabel =
+      selectedCategory === ANY_CATEGORY ? "all categories" : `category "${selectedCategory}"`;
+    stats.textContent = clipped
+      ? `Showing ${limited.length}/${filtered.length} sprites for ${categoryLabel}.`
+      : `${filtered.length} sprites for ${categoryLabel}.`;
   };
 
   familySelect.addEventListener("change", () => {
-    selectedFamily = familySelect.value || "all";
-    selectedCategory = "all";
-    colorFilter = "None";
-    conditionFilter = "None";
-    lightingFilter = "None";
-    updateCategoryOptions();
-    renderFilters();
+    selectedFamily = familySelect.value || SPRITE_FAMILY_ID;
     void updateList();
   });
 
   categorySelect.addEventListener("change", () => {
-    selectedCategory = categorySelect.value || "all";
-    colorFilter = "None";
-    conditionFilter = "None";
-    lightingFilter = "None";
-    renderFilters();
+    selectedCategory = categorySelect.value || ANY_CATEGORY;
     void updateList();
   });
 
-  updateCategoryOptions();
-  void updateList();
-  mutationIconsPromise
-    .then((map) => {
-      mutationIconsCache = map;
-    })
-    .catch(() => {
-      mutationIconsCache = {};
-    })
-    .finally(() => {
-      void updateList();
-    });
-}
-
-function createSelectControl(labelText: string, select: HTMLSelectElement): HTMLLabelElement {
-  const wrapper = document.createElement('label');
-  wrapper.className = 'dd-sprite-control';
-  const label = document.createElement('span');
-  label.className = 'dd-sprite-control__label';
-  label.textContent = labelText;
-  wrapper.append(label, select);
-  return wrapper;
-}
-
-async function loadMutationIcons(): Promise<Record<string, MutationIconTile>> {
-  const icons: Record<string, MutationIconTile> = {};
-  const tiles = await loadTileSheet("mutations");
-
-  // 1) mapping depuis les tileRefs du jeu vers les mutations logiques que ton core utilise
-  const TILE_REF_TO_MUTATION_NAME: Record<string, MutationName> = {
-    Wet: "Wet",
-    Chilled: "Chilled",
-    Frozen: "Frozen",
-    Dawnlit: "Dawnlit",
-    Amberlit: "Ambershine",
-    Dawnbound: "Dawncharged",
-    Amberbound: "Ambercharged",
-  };
-
-  for (const [key, rawIndex] of Object.entries(tileRefsMutations)) {
-    if (typeof rawIndex !== "number") continue;
-    const index = rawIndex > 0 ? rawIndex - 1 : rawIndex;
-    const tile = tiles.find((t) => t.index === index);
-    if (!tile) continue;
-
-    // clé brute = tileRef (toujours utile pour debug)
-    icons[key] = { tile };
-
-    // clé logique = nom de mutation pour le rendu
-    const logical = TILE_REF_TO_MUTATION_NAME[key];
-    if (logical) {
-      icons[logical] = { tile };
+  searchInput.addEventListener("input", () => {
+    if (searchDebounce !== null) {
+      clearTimeout(searchDebounce);
     }
-  }
-
-  console.debug("[Sprites] mutationIcons loaded", {
-    keys: Object.keys(icons),
+    searchDebounce = window.setTimeout(() => {
+      searchDebounce = null;
+      searchTerm = searchInput.value || "";
+      void updateList();
+    }, 150);
   });
 
-  return icons;
+  void updateList();
+
+async function downloadSpriteRecord(
+  record: SpriteCardRecord,
+  svc?: SpriteServiceHandle | null,
+  mutations?: MutationName[],
+): Promise<boolean> {
+  const activeMutations = mutations ?? getActiveMutations();
+  const dataUrl = await renderRecordToDataUrl(record, svc, activeMutations);
+  if (!dataUrl) return false;
+  triggerDataUrlDownload(
+    dataUrl,
+    buildSpriteFilename(record.parsed, activeMutations),
+  );
+  return true;
 }
 
+async function downloadVisibleSprites(): Promise<void> {
+  if (!visibleSpriteRecords.length || downloadInProgress) return;
+  downloadInProgress = true;
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = "Preparing zip...";
+  try {
+    const service = await acquireSpriteService();
+    if (!service) return;
+    const activeMutations = getActiveMutations();
+    const files: { name: string; dataUrl: string }[] = [];
+    for (const record of visibleSpriteRecords) {
+      const dataUrl = await renderRecordToDataUrl(record, service, activeMutations);
+      if (!dataUrl) continue;
+      files.push({ name: buildSpriteFilename(record.parsed, activeMutations), dataUrl });
+      downloadBtn.textContent = `Collected ${files.length}/${visibleSpriteRecords.length}`;
+    }
+    if (!files.length) return;
+    downloadBtn.textContent = "Bundling zip...";
+    const zipBlob = await packFilesToZip(files);
+    triggerBlobDownload(zipBlob, `sprites-${Date.now()}.zip`);
+  } finally {
+    downloadInProgress = false;
+    downloadBtn.textContent = downloadBtnLabel;
+    downloadBtn.disabled = !visibleSpriteRecords.length;
+  }
+}
 
+async function renderRecordToDataUrl(
+  record: SpriteCardRecord,
+  svc?: SpriteServiceHandle | null,
+  mutations?: MutationName[],
+): Promise<string | null> {
+  const service = svc ?? (await acquireSpriteService());
+  if (!service?.renderToDataURL) return null;
+  try {
+    const dataUrl = await service.renderToDataURL(
+      {
+        category: record.parsed.category,
+        id: record.parsed.id,
+        mutations: mutations ?? getActiveMutations(),
+      },
+      "image/png",
+    );
+    return dataUrl ?? null;
+  } catch (error) {
+    console.error("[DebugSprites] download failed", { key: record.entry.key, error });
+    return null;
+  }
+}
 
+async function packFilesToZip(files: { name: string; dataUrl: string }[]): Promise<Blob> {
+  const chunks: Uint8Array[] = [];
+  const fileEntries: { nameBytes: Uint8Array; data: Uint8Array; crc: number; offset: number }[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const { bytes: data, crc32 } = dataUrlToBytesAndCrc(file.dataUrl);
+    const nameBytes = new TextEncoder().encode(file.name);
+    const localHeader = buildZipLocalHeader(nameBytes, data.length, crc32);
+    fileEntries.push({ nameBytes, data, crc: crc32, offset });
+    chunks.push(localHeader, data);
+    offset += localHeader.length + data.length;
+  }
 
+  const centralRecords: Uint8Array[] = [];
+  fileEntries.forEach(entry => {
+    centralRecords.push(
+      buildZipCentralDirectory(entry.nameBytes, entry.data.length, entry.crc, entry.offset),
+    );
+  });
+  const centralDirectory = concatUint8Arrays(centralRecords);
+  const endRecord = buildZipEndRecord(fileEntries.length, centralDirectory.length, offset);
+  return new Blob([...chunks, centralDirectory, endRecord].map(chunk => chunk.slice()), {
+    type: "application/zip",
+  });
+}
+
+const LOCAL_HEADER_SIGNATURE = 0x04034b50;
+const CENTRAL_DIR_SIGNATURE = 0x02014b50;
+const END_SIGNATURE = 0x06054b50;
+const ZIP_VERSION = 20;
+const ZIP_FLAGS = 0;
+const ZIP_METHOD_STORE = 0;
+
+function buildZipLocalHeader(nameBytes: Uint8Array, size: number, crc32: number): Uint8Array {
+  const buffer = new ArrayBuffer(30 + nameBytes.length);
+  const view = new DataView(buffer);
+  let offset = 0;
+  view.setUint32(offset, LOCAL_HEADER_SIGNATURE, true);
+  offset += 4;
+  view.setUint16(offset, ZIP_VERSION, true);
+  offset += 2;
+  view.setUint16(offset, ZIP_FLAGS, true);
+  offset += 2;
+  view.setUint16(offset, ZIP_METHOD_STORE, true);
+  offset += 2;
+  view.setUint16(offset, 0, true); // mod time
+  offset += 2;
+  view.setUint16(offset, 0, true); // mod date
+  offset += 2;
+  view.setUint32(offset, crc32 >>> 0, true);
+  offset += 4;
+  view.setUint32(offset, size, true);
+  offset += 4;
+  view.setUint32(offset, size, true);
+  offset += 4;
+  view.setUint16(offset, nameBytes.length, true);
+  offset += 2;
+  view.setUint16(offset, 0, true); // extra length
+  const out = new Uint8Array(buffer);
+  out.set(nameBytes, offset);
+  return out;
+}
+
+function buildZipCentralDirectory(
+  nameBytes: Uint8Array,
+  size: number,
+  crc32: number,
+  offset: number,
+): Uint8Array {
+  const buffer = new ArrayBuffer(46 + nameBytes.length);
+  const view = new DataView(buffer);
+  let pos = 0;
+  view.setUint32(pos, CENTRAL_DIR_SIGNATURE, true);
+  pos += 4;
+  view.setUint16(pos, ZIP_VERSION, true);
+  pos += 2;
+  view.setUint16(pos, ZIP_VERSION, true);
+  pos += 2;
+  view.setUint16(pos, ZIP_FLAGS, true);
+  pos += 2;
+  view.setUint16(pos, ZIP_METHOD_STORE, true);
+  pos += 2;
+  view.setUint16(pos, 0, true);
+  pos += 2;
+  view.setUint16(pos, 0, true);
+  pos += 2;
+  view.setUint32(pos, crc32 >>> 0, true);
+  pos += 4;
+  view.setUint32(pos, size, true);
+  pos += 4;
+  view.setUint32(pos, size, true);
+  pos += 4;
+  view.setUint16(pos, nameBytes.length, true);
+  pos += 2;
+  view.setUint16(pos, 0, true); // extra
+  pos += 2;
+  view.setUint16(pos, 0, true); // comment
+  pos += 2;
+  view.setUint16(pos, 0, true); // disk number
+  pos += 2;
+  view.setUint16(pos, 0, true); // internal attrs
+  pos += 2;
+  view.setUint32(pos, 0, true); // external attrs
+  pos += 4;
+  view.setUint32(pos, offset, true);
+  pos += 4;
+  const out = new Uint8Array(buffer);
+  out.set(nameBytes, pos);
+  return out;
+}
+
+function buildZipEndRecord(
+  fileCount: number,
+  centralSize: number,
+  centralOffset: number,
+): Uint8Array {
+  const buffer = new ArrayBuffer(22);
+  const view = new DataView(buffer);
+  let pos = 0;
+  view.setUint32(pos, END_SIGNATURE, true);
+  pos += 4;
+  view.setUint16(pos, 0, true); // disk number
+  pos += 2;
+  view.setUint16(pos, 0, true); // disk with central dir
+  pos += 2;
+  view.setUint16(pos, fileCount, true);
+  pos += 2;
+  view.setUint16(pos, fileCount, true);
+  pos += 2;
+  view.setUint32(pos, centralSize, true);
+  pos += 4;
+  view.setUint32(pos, centralOffset, true);
+  pos += 4;
+  view.setUint16(pos, 0, true); // comment length
+  return new Uint8Array(buffer);
+}
+
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const total = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  arrays.forEach(arr => {
+    result.set(arr, offset);
+    offset += arr.length;
+  });
+  return result;
+}
+
+function dataUrlToBytesAndCrc(dataUrl: string): { bytes: Uint8Array; crc32: number } {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  const binary = atob(base64);
+  const length = binary.length;
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return { bytes, crc32: crc32(bytes) };
+}
+
+function crc32(bytes: Uint8Array): number {
+  let crc = ~0;
+  for (let i = 0; i < bytes.length; i++) {
+    crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xff];
+  }
+  return ~crc >>> 0;
+}
+
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function triggerDataUrlDownload(dataUrl: string, filename: string): void {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+}
+
+function createSelectControl(labelText: string, control: HTMLElement): HTMLLabelElement {
+  const wrapper = document.createElement("label");
+  wrapper.className = "dd-sprite-control";
+  const label = document.createElement("span");
+  label.className = "dd-sprite-control__label";
+  label.textContent = labelText;
+  wrapper.append(label, control);
+  return wrapper;
+}

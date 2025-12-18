@@ -1,4 +1,5 @@
 // src/main.ts
+import "./sprite";
 import { installPageWebSocketHook } from "./hooks/ws-hook";
 import { mountHUD, initWatchers } from "./ui/hud";
 
@@ -16,33 +17,24 @@ import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
 import { renderFriendsMenu } from "./ui/menus/friends";
 
-import { ensureSpritesReady } from "./services/assetManifest";
-import { prefetchManifest, recordAssetUrlHint } from "./services/assetManifest";
-
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
-import { initSprites  } from "./core/sprite";
 import { EditorService } from "./services/editor";
 
 import { initGameVersion } from "./utils/gameVersion";
-import { warmUpAllSprites } from "./utils/sprites";
-import { loadTileSheet } from "./utils/tileSheet";
 import { migrateLocalStorageToAries } from "./utils/localStorage";
 import type { AriesModApi } from "./utils/ariesModApi";
 import { installAriesModApi } from "./utils/ariesModApi";
 import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 
+import { warmupSpriteCache } from "./ui/spriteIconCache";
+
 const ariesMod: AriesModApi = installAriesModApi();
 
-const TILE_SHEETS_TO_PRELOAD = ["plants", "mutations", "pets", "animations", "items", "decor"] as const;
-
-async function preloadAllTiles(): Promise<void> {
-  const tasks = TILE_SHEETS_TO_PRELOAD.map(async (base) => {
-    const result = await loadTileSheet(base);
-    return result;
-  });
-
-  await Promise.all(tasks);
+try {
+  warmupSpriteCache();
+} catch {
+  /* ignore */
 }
 
 (async function () {
@@ -52,23 +44,6 @@ async function preloadAllTiles(): Promise<void> {
 
   installPageWebSocketHook();
   initGameVersion();
-  void prefetchManifest({ registerSprites: true, waitForVersionMs: 3_000 });
-
-  initSprites({
-    config: {
-      blackBelow: 10,
-      skipAlphaBelow: 1,
-      tolerance: 0.005,
-    },
-    onAsset: (url) => {
-      recordAssetUrlHint(url);
-      void prefetchManifest({ registerSprites: true });
-    },
-  });
-
-  await ensureSpritesReady();
-  await preloadAllTiles();
-  await warmUpAllSprites();
 
   EditorService.init();
 

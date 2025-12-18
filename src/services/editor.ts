@@ -4,8 +4,6 @@
 import { Atoms, type GardenState } from "../store/atoms";
 import { plantCatalog, decorCatalog, mutationCatalog } from "../data/hardcoded-data.clean";
 import { ensureStore, getAtomByLabel } from "../store/jotai";
-import { createShopSprite } from "../utils/sprites";
-import { ensureSpritesReady } from "../services/assetManifest";
 import { shareGlobal } from "../utils/page-context";
 import { eventMatchesKeybind } from "./keybinds";
 import { shouldIgnoreKeydown } from "../utils/keyboard";
@@ -90,6 +88,23 @@ let stateFrozenValue: any = null;
 let statePatch: StatePatch | null = null;
 let stateOriginalValue: any = null;
 let friendGardenPreviewActive = false;
+
+function createSelectionIcon(kind: "decor" | "plants", label: string, size = 32): HTMLElement {
+  const wrap = document.createElement("span");
+  Object.assign(wrap.style, {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: `${Math.max(14, size - 10)}px`,
+    lineHeight: "1",
+  });
+  const fallback = label?.trim().charAt(0).toUpperCase() || (kind === "decor" ? "🪑" : "🌱");
+  wrap.textContent = fallback;
+  wrap.setAttribute("aria-hidden", "true");
+  return wrap;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Overlay + toggle state                                                     */
@@ -197,7 +212,6 @@ function getSideSpriteKind(): "Decor" | "Crop" {
 
 function ensureSideOverlay(): HTMLDivElement {
   if (sideOverlayEl && document.contains(sideOverlayEl)) return sideOverlayEl;
-  void ensureSpritesReady().catch(() => {});
 
   const root = document.createElement("div");
   root.id = "qws-editor-side";
@@ -507,13 +521,6 @@ function renderCurrentItemOverlay() {
           infoRow.style.alignItems = "center";
           infoRow.style.gap = "6px";
 
-          const sprite = createShopSprite(
-            selected.itemType === "Decor" ? "Decor" : "Crop",
-            selected.itemType === "Decor" ? selected.decorId : selected.species,
-            { size: 40, fallback: "?" }
-          );
-          sprite.style.display = "inline-block";
-
           const nameEl = document.createElement("div");
           nameEl.textContent = getInventoryItemLabel(selected);
           nameEl.style.fontWeight = "700";
@@ -523,7 +530,13 @@ function renderCurrentItemOverlay() {
           nameEl.style.whiteSpace = "nowrap";
           nameEl.style.textAlign = "center";
 
-          infoRow.append(sprite, nameEl);
+          const icon = createSelectionIcon(
+            selected.itemType === "Decor" ? "decor" : "plants",
+            getInventoryItemLabel(selected),
+            40,
+          );
+
+          infoRow.append(icon, nameEl);
           content.appendChild(infoRow);
 
           if (selected.itemType === "Plant") {
@@ -604,13 +617,6 @@ function renderCurrentItemOverlay() {
     }
 
     const name = getGardenObjectLabel(tileObject);
-    const sprite = createShopSprite(
-      tileObject.objectType === "decor" ? "Decor" : "Crop",
-      tileObject.objectType === "decor" ? tileObject.decorId : tileObject.species,
-      { size: 48, fallback: "?" }
-    );
-    sprite.style.display = "inline-block";
-
     const header = document.createElement("div");
     header.style.display = "flex";
     header.style.flexDirection = "column";
@@ -626,7 +632,13 @@ function renderCurrentItemOverlay() {
     nameEl.style.whiteSpace = "nowrap";
     nameEl.style.textAlign = "center";
 
-    header.append(sprite, nameEl);
+    const icon = createSelectionIcon(
+      tileObject.objectType === "decor" ? "decor" : "plants",
+      name,
+      48,
+    );
+
+    header.append(icon, nameEl);
     content.appendChild(header);
 
     if (tileObject.objectType === "plant") {
@@ -1376,8 +1388,11 @@ function renderSideList() {
       cursor: "pointer",
       fontWeight: selected ? "700" : "600",
     } as Partial<CSSStyleDeclaration>);
-    const sprite = createShopSprite(getSideSpriteKind(), key, { size: 26, fallback: "❓" });
-    sprite.style.display = "inline-block";
+    const icon = createSelectionIcon(
+      getSideSpriteKind() === "Decor" ? "decor" : "plants",
+      label,
+      26,
+    );
 
     const labelEl = document.createElement("span");
     labelEl.textContent = label;
@@ -1391,7 +1406,7 @@ function renderSideList() {
       renderSideList();
       renderSideDetails();
     };
-    btn.append(sprite, labelEl);
+    btn.append(icon, labelEl);
     return btn;
   };
 
@@ -1450,19 +1465,18 @@ function renderSideDetails() {
   const entry = getSideEntry(selId);
   const label = getSideEntryLabel(selId, entry);
 
-  // bloc sprite + nom
+  // bloc icône + nom
   const infoRow = document.createElement("div");
   infoRow.style.display = "grid";
   infoRow.style.gridTemplateColumns = "auto 1fr";
   infoRow.style.alignItems = "center";
   infoRow.style.gap = "10px";
 
-  const sprite = createShopSprite(getSideSpriteKind(), selId, {
-    size: 48,
-    fallback: "❓",
-    alt: label,
-  });
-  sprite.style.display = "inline-block";
+  const icon = createSelectionIcon(
+    getSideSpriteKind() === "Decor" ? "decor" : "plants",
+    label,
+    48,
+  );
 
   const nameEl = document.createElement("div");
   nameEl.textContent = label;
@@ -1472,7 +1486,7 @@ function renderSideDetails() {
   nameEl.style.overflow = "hidden";
   nameEl.style.textOverflow = "ellipsis";
 
-  infoRow.append(sprite, nameEl);
+  infoRow.append(icon, nameEl);
   content.appendChild(infoRow);
 
   // --- Slots config UI : uniquement pour les plantes ---
@@ -3967,4 +3981,5 @@ async function handleEditorPlaceRemove(ev?: KeyboardEvent, isHeld = false) {
     await placeSelectedItemInGardenAtCurrentTile();
     void triggerEditorAnimation("dropObject");
   }
+
 }

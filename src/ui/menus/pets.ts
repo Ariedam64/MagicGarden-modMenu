@@ -5,11 +5,11 @@ import { Menu} from "../menu";
 import { PetsService,
   InventoryPet,
   installPetTeamHotkeysOnce,
-  setTeamsForHotkeys,
-  } from "../../services/pets";
+  setTeamsForHotkeys } from "../../services/pets";
+import type { PetInfo } from "../../services/player";
 import type { PetTeam } from "../../services/pets";
 import { onActivePetsStructuralChangeNow } from "../../store/atoms";
-import { loadPetSpriteFromMutations } from "../../utils/sprites";
+import { attachSpriteIcon } from "../spriteIconCache";
 
 /* ================== petits helpers UI (mêmes vibes que garden) ================== */
 
@@ -855,44 +855,21 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
         iconWrap.appendChild(span);
       };
 
-      let iconRequestId = 0;
-
-      const setIcon = (species?: string, mutation?: string | string[]) => {
-        iconRequestId += 1;
-        const requestId = iconRequestId;
+      const setIcon = (species?: string, mutations?: string[]) => {
         const speciesLabel = String(species ?? "").trim();
+        iconWrap.replaceChildren();
         if (!speciesLabel) {
           useEmojiFallback();
           return;
         }
-
-        useEmojiFallback();
-
-        loadPetSpriteFromMutations(speciesLabel, mutation)
-          .then((src) => {
-            if (requestId !== iconRequestId) return;
-            if (!src) {
-              useEmojiFallback();
-              return;
-            }
-            const img = new Image();
-            img.src = src;
-            img.alt = speciesLabel || "pet";
-            img.decoding = "async";
-            img.loading = "lazy";
-            img.draggable = false;
-            Object.assign(img.style, {
-              width: "100%",
-              height: "100%",
-              imageRendering: "auto",
-              objectFit: "contain",
-            });
-            iconWrap.replaceChildren(img);
-          })
-          .catch(() => {
-            if (requestId !== iconRequestId) return;
-            useEmojiFallback();
-          });
+        const span = document.createElement("span");
+        span.textContent = speciesLabel.charAt(0).toUpperCase() || "\u0110Y?\xf3";
+        span.style.fontSize = `${Math.max(ICON - 6, 12)}px`;
+        span.setAttribute("aria-hidden", "true");
+        iconWrap.appendChild(span);
+        attachSpriteIcon(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
+          mutations,
+        });
       };
 
       // text column
@@ -953,7 +930,7 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
       function update(p: InventoryPet | null) {
         if (!p) {
           nameEl.textContent = "None";
-          setIcon(undefined, undefined);
+          setIcon(undefined);
           const fresh = abilitiesBadge([]);
           (fresh as any).style.display = "inline-block";
           left.replaceChild(fresh, left.children[1]);
@@ -1245,6 +1222,7 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
     };
   })();
 }
+
 
 /* ================== Onglet: Logs (nouveau) ================== */
 
@@ -1539,7 +1517,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
 export function renderPetsMenu(root: HTMLElement) {
   const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
   ui.mount(root);
-  
+
   ui.addTab("manager", "🧰 Manager", (view) => renderManagerTab(view, ui));
   ui.addTab("logs", "📝 Logs", (view) => renderLogsTab(view, ui));
 }

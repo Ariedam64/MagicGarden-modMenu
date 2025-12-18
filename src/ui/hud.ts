@@ -2,7 +2,7 @@
 import { NativeWS, sockets, workerFound } from "../core/state";
 import { ensureStore, isStoreCaptured, getCapturedInfo } from "../store/jotai";
 import { PetsService, installPetTeamHotkeysOnce, setTeamsForHotkeys } from "../services/pets";
-import { installShopKeybindsOnce } from "../services/shops";
+import { ShopsService, installShopKeybindsOnce } from "../services/shops";
 import { installSellKeybindsOnce } from "../services/sell";
 import { installPetHutchKeybindsOnce } from "../services/petHutchKeybind";
 import {
@@ -13,22 +13,24 @@ import {
   type Hotkey,
   type KeybindId,
 } from "../services/keybinds";
+import { PlayerService } from "../services/player";
 import { renderOverlay } from "./menus/notificationOverlay";
+import { getSpriteWarmupState, onSpriteWarmupProgress } from "./spriteIconCache";
 import { setupBuyAll, startReorderObserver } from "../utils/shopUtility";
+import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
 import { startCropValuesObserverFromGardenAtom } from "../utils/cropValues";
 import { startInjectSellAllPets } from "../utils/sellAllPets";
-import { fetchRemoteVersion, getLocalVersion } from "../utils/version";
-import { isDiscordSurface } from "../utils/api";
-import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
-import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
-import { startModalObserver } from "../utils/checkModal";
-import { startInventorySortingObserver } from "../utils/inventorySorting";
-import { startActivityLogHistoryWatcher } from "../services/activityLogHistory";
-import { startActivityLogFilter } from "../utils/activityLogFilter";
 import { startSellCropsLockWatcher } from "../utils/sellCropsLock";
 import { startEggHatchLockIndicator } from "../utils/eggHatchLockIndicator";
 import { startDecorPickupLockIndicator } from "../utils/decorPickupLockIndicator";
+import { fetchRemoteVersion, getLocalVersion } from "../utils/version";
+import { isDiscordSurface } from "../utils/api";
+import { startSelectedInventoryQuantityLogger } from "../utils/inventorySelectionLogger";
+import { startInventorySortingObserver } from "../utils/inventorySorting";
+import { startModalObserver } from "../utils/checkModal";
+import { startActivityLogFilter } from "../utils/activityLogFilter";
 import { readAriesPath, writeAriesPath } from "../utils/localStorage";
+import { startActivityLogHistoryWatcher } from "../services/activityLogHistory";
 
 // ========================
 // Types d’intégration
@@ -71,6 +73,7 @@ export function mountHUD(opts?: HUDOptions) {
   /* ---------- HUD floating box ---------- */
   .qws2{
     position:fixed; right:16px; bottom:16px; z-index:${Z_BASE};
+    position:fixed; right:16px; bottom:16px; z-index:1000010;
     font:12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     color:var(--qws-text);
     background:var(--qws-panel);
@@ -82,20 +85,6 @@ export function mountHUD(opts?: HUDOptions) {
     min-width:160px;
     display:flex; flex-direction:column; gap:8px;
   }
-
-
-  .qws2 .btn{
-    cursor:pointer;
-    border-radius:10px;
-    border:1px solid var(--qws-border);
-    padding:6px 10px;
-    background:linear-gradient(180deg, #ffffff12, #ffffff06);
-    color:#fff;
-    transition:transform .1s ease, background .18s ease, border-color .18s ease;
-    width:auto !important;
-    margin-bottom:0 !important;
-  }
-
   .qws2.hidden{ display:none }
   .qws2 .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
   .qws2 .col{ display:flex; flex-direction:column; gap:4px }
@@ -471,7 +460,7 @@ export function mountHUD(opts?: HUDOptions) {
   btnMin.onclick = () => {
     withTopLocked(box, () => {
       box.classList.toggle('min');
-      btnMin.textContent = box.classList.contains('min') ? '+' : '-';
+      btnMin.textContent = box.classList.contains('min') ? '+' : '–';
       try { writeAriesPath(HUD_COLLAPSED_PATH, box.classList.contains('min')); } catch {}
     });
   };
@@ -942,7 +931,26 @@ export function mountHUD(opts?: HUDOptions) {
   (async () => { try { await ensureStore(); } catch {} })();
 
   // ---------- Status loop ----------
-  setInterval(() => {
+  let warmupState = getSpriteWarmupState();
+
+  const updateStatus = () => {
+    if (!warmupState.completed) {
+      const total = warmupState.total;
+      const done = warmupState.done;
+      const progressText = total > 0 ? `${done}/${total}` : `${done}`;
+      const summary = total > 0 ? `Sprites warming: ${progressText}` : "Sprites warming up";
+      sFull!.textContent = `Sprites ${progressText}`;
+      sFull!.title = summary;
+      tag(sFull!, "warn");
+      sFull!.style.display = "";
+
+      sMini!.textContent = progressText;
+      sMini!.title = summary;
+      tag(sMini!, "warn");
+      sMini!.style.display = "";
+      return;
+    }
+
     const wsStatus = getWSStatus();
     const storeStatus = getStoreStatus();
 
@@ -959,12 +967,25 @@ export function mountHUD(opts?: HUDOptions) {
     sFull!.textContent = "status";
     sFull!.title = summary;
     tag(sFull!, level);
+    sFull!.style.display = "";
 
     const miniText = level === 'ok' ? 'OK' : level === 'warn' ? 'WARN' : 'ISSUES';
     sMini!.textContent = miniText;
     sMini!.title = summary;
     tag(sMini!, level);
-  }, 800);
+    if (level === "ok") {
+      sMini!.style.display = "none";
+    } else {
+      sMini!.style.display = "";
+    }
+  };
+
+  const offWarmup = onSpriteWarmupProgress((state) => {
+    warmupState = state;
+    updateStatus();
+  });
+
+  setInterval(updateStatus, 800);
 
   function getOpenPageWS(): WebSocket {
     for (let i=0;i<sockets.length;i++){
@@ -1014,6 +1035,14 @@ export function mountHUD(opts?: HUDOptions) {
     if (cls) el.classList.add(cls);
   }
 
+  (box as any).__cleanup__ = (() => {
+    const prev = (box as any).__cleanup__;
+    return () => {
+      offWarmup?.();
+      if (typeof prev === "function") prev();
+    };
+  })();
+
   function escapeHtml(s: string) {
     return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]!));
   }
@@ -1022,8 +1051,8 @@ export function mountHUD(opts?: HUDOptions) {
 export function initWatchers(){
     installShopKeybindsOnce();
     installSellKeybindsOnce();
-    installGameKeybindsOnce();
     installPetHutchKeybindsOnce();
+    installGameKeybindsOnce();
     (async () => {
         try { setTeamsForHotkeys(PetsService.getTeams()); } catch {}
         try {
@@ -1043,14 +1072,14 @@ export function initWatchers(){
       await renderOverlay()
       setupBuyAll()
       startReorderObserver();
-      startSellCropsLockWatcher();
       startCropValuesObserverFromGardenAtom();
-      startInjectSellAllPets();
-      startEggHatchLockIndicator();
+      startSellCropsLockWatcher();
       startDecorPickupLockIndicator();
+      startEggHatchLockIndicator();
+      startInjectSellAllPets();
       startPetPanelEnhancer();
       startSelectedInventoryQuantityLogger();
       startInventorySortingObserver();
-      startModalObserver({ intervalMs: 60_000, log: false });
+      startModalObserver({ intervalMs: 60_000, log: true });
   })();
 }

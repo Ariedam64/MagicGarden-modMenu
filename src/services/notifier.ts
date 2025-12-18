@@ -16,7 +16,6 @@ import {
   weatherCatalog,
 } from "../data/hardcoded-data.clean";
 import { audio, type PlaybackMode, type TriggerOverrides } from "../utils/audio";
-import { getWeatherSpriteKey } from "../utils/sprites";
 import { StatsService } from "./stats";
 import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
@@ -74,7 +73,6 @@ export type WeatherRow = {
   id: string;
   name: string;
   type: string;
-  spriteKey?: string | null;
   atomValue: string;
   notify: boolean;
   lastSeen: number | null;
@@ -316,7 +314,6 @@ type WeatherDef = {
   id: string;
   name: string;
   atomValue: string;
-  spriteKey: string | null;
   type: string;
   description: string | null;
   cycle: WeatherCycleMeta | null;
@@ -386,9 +383,6 @@ const WEATHER_DEFS: WeatherDef[] = (() => {
     const atomValue = typeof (rawValue as any)?.atomValue === "string"
       ? String((rawValue as any).atomValue).trim()
       : "";
-    const spriteKey = getWeatherSpriteKey(safeName)
-      ?? getWeatherSpriteKey(rawDisplayName)
-      ?? null;
     const type = atomValue || displayName;
     const description = typeof (rawValue as any)?.description === "string"
       ? String((rawValue as any).description).trim()
@@ -400,7 +394,6 @@ const WEATHER_DEFS: WeatherDef[] = (() => {
       id: `Weather:${safeName}`,
       name: displayName || safeName,
       atomValue,
-      spriteKey,
       type,
       description,
       cycle,
@@ -674,7 +667,6 @@ function _recomputeWeatherState() {
       id: def.id,
       name: def.name,
       type: def.type,
-      spriteKey: def.spriteKey,
       atomValue: def.atomValue,
       notify,
       lastSeen,

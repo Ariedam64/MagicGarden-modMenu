@@ -1,24 +1,15 @@
 // src/ui/menus/calculator.ts
 import { addStyle } from "../../core/dom";
-import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../services/assetManifest";
-import {
-  coin,
-  mutationCatalog,
-  plantCatalog,
-  tileRefsMutationLabels,
-} from "../../data/hardcoded-data.clean";
-import { loadTileSheet } from "../../utils/tileSheet";
+import { coin, plantCatalog } from "../../data/hardcoded-data.clean";
 import { DefaultPricing, estimateProduceValue } from "../../utils/calculators";
 import {
-  createPlantSprite,
   getLockerSeedEmojiForKey,
   getLockerSeedEmojiForSeedName,
   getLockerSeedOptions,
-  scheduleLockerSpritePreload,
   type LockerSeedOption,
 } from "./locker";
 import { Menu } from "../menu";
+import { attachSpriteIcon } from "../spriteIconCache";
 
 const ROOT_CLASS = "mg-crop-simulation";
 const SIZE_MIN = 50;
@@ -52,6 +43,13 @@ const WEATHER_LIGHTING_SEGMENT_METADATA: Record<string, Record<string, string>> 
   Dawnbound: { mgLighting: "dawnbound" },
   Amberlit: { mgLighting: "amberlit" },
   Amberbound: { mgLighting: "amberbound" },
+};
+
+const MUTATION_SPRITE_OVERRIDES: Record<string, string> = {
+  dawnlit: "Dawnlit",
+  dawnbound: "Dawncharged",
+  amberlit: "Ambershine",
+  amberbound: "Ambercharged",
 };
 
 type ColorLabel = (typeof COLOR_MUTATION_LABELS)[number];
@@ -99,225 +97,24 @@ const DEFAULT_STATE: CalculatorState = {
 
 
 type CropSimulationSpriteOptions = {
-  colorLabel?: string | null;
-  weatherLabels?: readonly string[] | null;
   fallback?: string | null;
+  candidates?: string[];
+  mutations?: string[];
+  categories?: string[];
 };
 
 const BASE_SPRITE_SIZE_PX = 96;
-const COLOR_VARIANTS = ["normal", "gold", "rainbow"] as const;
-type ColorVariant = (typeof COLOR_VARIANTS)[number];
-const COLOR_VARIANT_FILTERS: Record<ColorVariant, string | null> = {
-  normal: null,
-  gold: "Gold",
-  rainbow: "Rainbow",
-};
-
-const WEATHER_EFFECT_PRIORITY = ["wet", "chilled", "frozen"] as const;
-const LIGHTING_EFFECT_PRIORITY_GROUPS = [
-  ["dawnlit"],
-  ["dawnbound", "dawncharged", "dawn radiant", "dawnradiant", "dawn-radiant"],
-  ["ambershine", "amberlit"],
-  ["amberbound", "ambercharged", "amber radiant", "amberradiant", "amber-radiant"],
-] as const;
-
-type SpriteEffectConfig = {
-  blendMode: GlobalCompositeOperation;
-  colors: readonly string[];
-  alpha: number;
-};
-
-const EFFECTS_CONFIG = {
-  Wet: {
-    blendMode: "source-atop",
-    colors: ["rgb(128, 128, 255)"],
-    alpha: 0.2,
-  },
-  Chilled: {
-    blendMode: "source-atop",
-    colors: ["rgb(183, 183, 236)"],
-    alpha: 0.5,
-  },
-  Frozen: {
-    blendMode: "source-atop",
-    colors: ["rgb(128, 128, 255)"],
-    alpha: 0.6,
-  },
-  Dawnlit: {
-    blendMode: "source-atop",
-    colors: ["rgb(120, 100, 180)"],
-    alpha: 0.4,
-  },
-  Ambershine: {
-    blendMode: "source-atop",
-    colors: ["rgb(255, 140, 26)", "rgb(230, 92, 26)", "rgb(178, 58, 26)"],
-    alpha: 0.5,
-  },
-  Dawncharged: {
-    blendMode: "source-atop",
-    colors: ["rgb(100, 80, 160)", "rgb(110, 90, 170)", "rgb(120, 100, 180)"],
-    alpha: 0.5,
-  },
-  Ambercharged: {
-    blendMode: "source-atop",
-    colors: ["rgb(167, 50, 30)", "rgb(177, 60, 40)", "rgb(187, 70, 50)"],
-    alpha: 0.5,
-  },
-} as const satisfies Record<string, SpriteEffectConfig>;
-
-type EffectName = keyof typeof EFFECTS_CONFIG;
-
-const EFFECT_PRIORITY_BY_LOWER_NAME = (() => {
-  const map = new Map<string, number>();
-  WEATHER_EFFECT_PRIORITY.forEach((name, index) => {
-    map.set(name.toLowerCase(), index);
-  });
-  let offset = WEATHER_EFFECT_PRIORITY.length;
-  LIGHTING_EFFECT_PRIORITY_GROUPS.forEach((group) => {
-    group.forEach((name) => {
-      map.set(name.toLowerCase(), offset);
-    });
-    offset += 1;
-  });
-  return map;
-})();
-
-const LIGHTING_EFFECT_NAMES_LOWER = new Set<string>([
-  "dawnlit",
-  "dawncharged",
-  "ambershine",
-  "ambercharged",
+const DEFAULT_SPRITE_CATEGORIES = ["tallplant", "plant", "crop"] as const;
+const PLANT_PRIORITY_IDENTIFIERS = new Set([
+  "dawncelestial",
+  "mooncelestial",
+  "dawnbinder",
+  "moonbinder",
+  "dawnbinderbulb",
+  "moonbinderbulb",
+  "dawnbinderpod",
+  "moonbinderpod",
 ]);
-
-const EFFECT_TOKEN_ALIASES = new Map<string, EffectName>([
-  ["wet", "Wet"],
-  ["damp", "Wet"],
-  ["moist", "Wet"],
-  ["chilled", "Chilled"],
-  ["cold", "Chilled"],
-  ["frozen", "Frozen"],
-  ["ice", "Frozen"],
-  ["icy", "Frozen"],
-  ["dawnlit", "Dawnlit"],
-  ["dawn-lit", "Dawnlit"],
-  ["dawnbound", "Dawnlit"],
-  ["dawn-bound", "Dawnlit"],
-  ["dawncharged", "Dawncharged"],
-  ["dawn-charged", "Dawncharged"],
-  ["dawn radiant", "Dawncharged"],
-  ["dawnradiant", "Dawncharged"],
-  ["dawn-radiant", "Dawncharged"],
-  ["ambershine", "Ambershine"],
-  ["amber-shine", "Ambershine"],
-  ["amberlit", "Ambershine"],
-  ["amber-lit", "Ambershine"],
-  ["amberbound", "Ambercharged"],
-  ["amber-bound", "Ambercharged"],
-  ["ambercharged", "Ambercharged"],
-  ["amber-charged", "Ambercharged"],
-  ["amber radiant", "Ambercharged"],
-  ["amberradiant", "Ambercharged"],
-  ["amber-radiant", "Ambercharged"],
-]);
-
-const EFFECT_NAME_BY_TOKEN = (() => {
-  const map = new Map<string, EffectName>();
-  (Object.keys(EFFECTS_CONFIG) as EffectName[]).forEach((key) => {
-    map.set(key.toLowerCase(), key);
-  });
-  EFFECT_TOKEN_ALIASES.forEach((value, key) => {
-    map.set(key, value);
-  });
-  return map;
-})();
-
-const WEATHER_LABEL_NORMALIZATION = (() => {
-  const map = new Map<string, string>();
-  const entries = tileRefsMutationLabels as Record<string, string>;
-  for (const [key, value] of Object.entries(entries)) {
-    if (typeof key !== "string" || typeof value !== "string") continue;
-    map.set(key.toLowerCase(), value);
-    map.set(value.toLowerCase(), value);
-  }
-  return map;
-})();
-
-const TALL_PLANT_SEEDS = new Set(["Bamboo", "Cactus"]);
-
-type MutationCategory = "color" | "weather";
-type MutationMetadata = {
-  id: string;
-  label: string;
-  tileRef: number | null;
-  category: MutationCategory;
-};
-
-const mutationMetadataByNormalizedName = (() => {
-  const map = new Map<string, MutationMetadata>();
-  const catalog = mutationCatalog as Record<string, any>;
-  for (const [key, value] of Object.entries(catalog)) {
-    if (typeof key !== "string" || !key.trim()) continue;
-    const label =
-      typeof value?.name === "string" && value.name.trim().length > 0 ? value.name : key;
-    const tileRef = typeof value?.tileRef === "number" ? value.tileRef : null;
-    const category: MutationCategory = tileRef != null ? "weather" : "color";
-    const info: MutationMetadata = {
-      id: key,
-      label,
-      tileRef,
-      category,
-    };
-    map.set(key.toLowerCase(), info);
-    map.set(label.toLowerCase(), info);
-  }
-  const tileRefLabels = tileRefsMutationLabels as Record<string, unknown>;
-  for (const [key, value] of Object.entries(tileRefLabels)) {
-    if (typeof key !== "string" || typeof value !== "string") continue;
-    const info = map.get(key.toLowerCase());
-    if (!info) continue;
-    const normalizedLabel = value.toLowerCase();
-    if (!map.has(normalizedLabel)) {
-      map.set(normalizedLabel, info);
-    }
-  }
-  const goldInfo = map.get("gold");
-  if (goldInfo) {
-    map.set("golden", goldInfo);
-  }
-  const normalInfo: MutationMetadata = {
-    id: "Normal",
-    label: "Normal",
-    tileRef: null,
-    category: "color",
-  };
-  map.set("normal", normalInfo);
-  return map;
-})();
-
-type NormalizedMutation = MutationMetadata;
-
-type SpriteRenderOptions = {
-  colorVariant: ColorVariant;
-  weatherMutations: NormalizedMutation[];
-  fallback?: string | null;
-};
-
-type OverlaySpriteLayer = {
-  mutation: NormalizedMutation;
-  src: string;
-};
-
-const plantSpriteCache = new Map<string, string | null>();
-const plantSpritePromises = new Map<string, Promise<string | null>>();
-const plantSpriteCanvasCache = new Map<string, HTMLCanvasElement | null>();
-const plantSpriteCanvasPromises = new Map<string, Promise<HTMLCanvasElement | null>>();
-const plantSpriteVariantCache = new Map<string, string | null>();
-const plantSpriteVariantPromises = new Map<string, Promise<string | null>>();
-const plantSpriteEffectVariantCache = new Map<string, string | null>();
-const plantSpriteEffectVariantPromises = new Map<string, Promise<string | null>>();
-const mutationSpriteCache = new Map<string, string | null>();
-const mutationSpritePromises = new Map<string, Promise<string | null>>();
-let spriteUpdateSeq = 0;
 
 const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} {
@@ -401,6 +198,9 @@ const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} .mg-crop-simulation__sprite-fallback {
   z-index: 0;
   font-size: 42px;
+}
+.${ROOT_CLASS} .mg-crop-simulation__sprite[data-mg-has-sprite="1"] .mg-crop-simulation__sprite-fallback {
+  opacity: 0;
 }
 .${ROOT_CLASS} .mg-crop-simulation__slider-container {
   display: flex;
@@ -634,572 +434,90 @@ function ensureCropSimulationStyles(): void {
   cropSimulationStyleEl = addStyle(CROP_SIMULATION_CSS);
 }
 
-function resolveEffectNameToken(value: unknown): EffectName | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return null;
-  return EFFECT_NAME_BY_TOKEN.get(normalized) ?? null;
-}
-
-function getMutationEffectName(mutation: NormalizedMutation): EffectName | null {
-  return resolveEffectNameToken(mutation.id) ?? resolveEffectNameToken(mutation.label);
-}
-
-function getEffectPriority(effectName: EffectName): number {
-  const lower = effectName.toLowerCase();
-  return EFFECT_PRIORITY_BY_LOWER_NAME.get(lower) ?? Number.MAX_SAFE_INTEGER;
-}
-
-function isLightingEffect(effectName: EffectName): boolean {
-  return LIGHTING_EFFECT_NAMES_LOWER.has(effectName.toLowerCase());
-}
-
-function normalizeEffectNames(effectNames: readonly EffectName[]): EffectName[] {
-  const seen = new Set<EffectName>();
-  const order = new Map<EffectName, number>();
-  const normalized: EffectName[] = [];
-  effectNames.forEach((name, index) => {
-    if (seen.has(name)) return;
-    seen.add(name);
-    normalized.push(name);
-    order.set(name, index);
-  });
-  normalized.sort((a, b) => {
-    const priorityDiff = getEffectPriority(a) - getEffectPriority(b);
-    if (priorityDiff !== 0) return priorityDiff;
-    return (order.get(a) ?? 0) - (order.get(b) ?? 0);
-  });
-  return normalized;
-}
-
-function getApplicableEffectNames(weatherMutations: NormalizedMutation[]): EffectName[] {
-  const effectNames = weatherMutations
-    .map((mutation) => getMutationEffectName(mutation))
-    .filter((value): value is EffectName => value != null);
-  return normalizeEffectNames(effectNames);
-}
-
-function makeEffectCacheKey(
-  seedKey: string,
-  variant: ColorVariant,
-  effectNames: readonly EffectName[],
-): string {
-  return `${seedKey}::variant::${variant}::effects::${effectNames.join("+")}`;
-}
-
-function getMutationSheetBases(): string[] {
-  const urls = new Set<string>();
-  try {
-    Sprites.listTilesByCategory(/mutations/i).forEach((url) => urls.add(url));
-  } catch {
-    /* ignore */
+function buildSpriteCandidates(primary: string, option?: LockerSeedOption | null): string[] {
+  const candidates = new Set<string>();
+  const addCandidate = (value?: string | null) => {
+    if (!value) return;
+    const trimmed = String(value).trim();
+    if (!trimmed) return;
+    candidates.add(trimmed);
+    candidates.add(trimmed.replace(/\W+/g, ""));
+  };
+  addCandidate(primary);
+  if (option) {
+    addCandidate(option.seedName);
+    addCandidate(option.cropName);
   }
-  const bases = Array.from(urls, (url) => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  });
-  return bases.length ? bases : ["mutations"];
+  const baseCandidates = Array.from(candidates)
+    .map(value => value.replace(/icon$/i, ""))
+    .filter(Boolean);
+  const expanded = Array.from(
+    new Set([
+      ...baseCandidates.map(value => `${value}Icon`),
+      ...Array.from(candidates),
+    ]),
+  ).filter(Boolean);
+  return expanded.length ? expanded : [primary];
 }
 
-async function fetchPlantSpriteCanvas(seedKey: string): Promise<HTMLCanvasElement | null> {
-  await ensureSpritesReady();
-
-  if (typeof window === "undefined") return null;
-  const entry = (plantCatalog as Record<string, any>)[seedKey];
-  if (!entry) return null;
-  const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
-  const bases = plantSheetBases(seedKey);
-  const index = toTileIndex(tileRef, bases);
-  if (index == null) return null;
-
-  for (const base of bases) {
-    try {
-      const tiles = await loadTileSheet(base);
-      const tile = tiles.find((t) => t.index === index);
-      if (!tile) continue;
-      const canvas = Sprites.toCanvas(tile);
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        const copy = document.createElement("canvas");
-        copy.width = canvas.width;
-        copy.height = canvas.height;
-        const ctx = copy.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy;
-      }
-    } catch {
-      /* ignore */
+function getSpriteCategoriesForKey(key?: string | null, ...alts: Array<string | null | undefined>): string[] {
+  const candidates = [key, ...alts];
+  for (const candidate of candidates) {
+    const normalized = typeof candidate === "string" ? candidate.trim().toLowerCase() : "";
+    if (normalized && PLANT_PRIORITY_IDENTIFIERS.has(normalized)) {
+      return ["plant", "tallplant", "crop"];
     }
   }
-
-  return null;
+  return [...DEFAULT_SPRITE_CATEGORIES];
 }
 
-function loadPlantSpriteCanvas(seedKey: string): Promise<HTMLCanvasElement | null> {
-  const cached = plantSpriteCanvasCache.get(seedKey);
-  if (cached !== undefined) return Promise.resolve(cached);
+type CropSpriteLayers = {
+  fallback: HTMLSpanElement;
+  layer: HTMLSpanElement;
+};
 
-  const inFlight = plantSpriteCanvasPromises.get(seedKey);
-  if (inFlight) return inFlight;
-
-  const promise = fetchPlantSpriteCanvas(seedKey)
-    .then((canvas) => {
-      plantSpriteCanvasCache.set(seedKey, canvas);
-      plantSpriteCanvasPromises.delete(seedKey);
-      return canvas;
-    })
-    .catch(() => {
-      plantSpriteCanvasCache.set(seedKey, null);
-      plantSpriteCanvasPromises.delete(seedKey);
-      return null;
-    });
-
-  plantSpriteCanvasPromises.set(seedKey, promise);
-  return promise;
-}
-
-async function loadPlantSpriteCanvasForVariant(
-  seedKey: string,
-  variant: ColorVariant,
-): Promise<HTMLCanvasElement | null> {
-  const canvas = await loadPlantSpriteCanvas(seedKey);
-  if (!canvas) return null;
-  if (variant === "normal") return canvas;
-
-  const tileInfo = {
-    sheet: "",
-    url: "",
-    index: 0,
-    col: 0,
-    row: 0,
-    size: canvas.width,
-    data: canvas,
-  } as const;
-  const baseCanvas = Sprites.toCanvas(tileInfo);
-  const filterName = COLOR_VARIANT_FILTERS[variant];
-  if (!filterName) return baseCanvas;
-  const filtered = Sprites.applyCanvasFilter(baseCanvas, filterName);
-  return filtered ?? baseCanvas;
-}
-
-function loadPlantSpriteVariant(seedKey: string, variant: ColorVariant): Promise<string | null> {
-  if (variant === "normal") {
-    return loadPlantSprite(seedKey);
-  }
-
-  const cacheKey = `${seedKey}::${variant}`;
-  const cached = plantSpriteVariantCache.get(cacheKey);
-  if (cached !== undefined) return Promise.resolve(cached);
-
-  const inFlight = plantSpriteVariantPromises.get(cacheKey);
-  if (inFlight) return inFlight;
-
-  const promise = loadPlantSpriteCanvasForVariant(seedKey, variant)
-    .then((canvas) => {
-      if (!canvas) return null;
-      return canvas.toDataURL();
-    })
-    .then((src) => {
-      plantSpriteVariantCache.set(cacheKey, src ?? null);
-      plantSpriteVariantPromises.delete(cacheKey);
-      return src ?? null;
-    })
-    .catch(() => {
-      plantSpriteVariantCache.set(cacheKey, null);
-      plantSpriteVariantPromises.delete(cacheKey);
-      return null;
-    });
-
-  plantSpriteVariantPromises.set(cacheKey, promise);
-  return promise;
-}
-
-function loadMutationSprite(mutation: NormalizedMutation): Promise<string | null> {
-  const tileRef = mutation.tileRef;
-  if (tileRef == null) return Promise.resolve(null);
-  const cacheKey = mutation.id.toLowerCase();
-  const cached = mutationSpriteCache.get(cacheKey);
-  if (cached !== undefined) return Promise.resolve(cached);
-
-  const inFlight = mutationSpritePromises.get(cacheKey);
-  if (inFlight) return inFlight;
-
-  const promise = (async () => {
-    await ensureSpritesReady();
-
-    const bases = getMutationSheetBases();
-    const index = tileRef > 0 ? tileRef - 1 : tileRef;
-    for (const base of bases) {
-      try {
-        const tiles = await loadTileSheet(base);
-        const tile = tiles.find((t) => t.index === index);
-        if (!tile) continue;
-        const canvas = Sprites.toCanvas(tile);
-        if (canvas && canvas.width > 0 && canvas.height > 0) {
-          const copy = document.createElement("canvas");
-          copy.width = canvas.width;
-          copy.height = canvas.height;
-          const ctx = copy.getContext("2d");
-          if (!ctx) continue;
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(canvas, 0, 0);
-          return copy.toDataURL();
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    return null;
-  })()
-    .then((src) => {
-      mutationSpriteCache.set(cacheKey, src);
-      mutationSpritePromises.delete(cacheKey);
-      return src;
-    })
-    .catch(() => {
-      mutationSpriteCache.set(cacheKey, null);
-      mutationSpritePromises.delete(cacheKey);
-      return null;
-    });
-
-  mutationSpritePromises.set(cacheKey, promise);
-  return promise;
-}
-
-function plantSheetBases(seedKey?: string): string[] {
-  const urls = new Set<string>();
-  try {
-    Sprites.listPlants().forEach((url) => urls.add(url));
-  } catch {
-    /* ignore */
-  }
-  try {
-    Sprites.listAllPlants().forEach((url) => urls.add(url));
-  } catch {
-    /* ignore */
-  }
-  const bases = Array.from(urls, (url) => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  });
-
-  if (!seedKey) return bases.length ? bases : ["plants"];
-
-  const normalizedBases = bases.map((base) => base.toLowerCase());
-  const findPreferred = (
-    predicate: (base: string, normalized: string) => boolean,
-  ): string[] => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
-
-  if (TALL_PLANT_SEEDS.has(seedKey)) {
-    const tallExact = findPreferred((_, norm) => norm === "tallplants");
-    if (tallExact.length) return tallExact;
-    const tallAny = findPreferred((base, norm) => /tall/.test(base) || /tall/.test(norm));
-    if (tallAny.length) return tallAny;
-  } else {
-    const plantsExact = findPreferred((_, norm) => norm === "plants");
-    if (plantsExact.length) return plantsExact;
-    const nonTall = findPreferred((base, norm) => !/tall/.test(base) && !/tall/.test(norm));
-    if (nonTall.length) return nonTall;
-  }
-
-  return bases.length ? bases : ["plants"];
-}
-
-function toTileIndex(tileRef: unknown, bases: string[] = []): number | null {
-  const value =
-    typeof tileRef === "number" && Number.isFinite(tileRef)
-      ? tileRef
-      : Number(tileRef);
-  if (!Number.isFinite(value)) return null;
-
-  if (value <= 0) return value;
-
-  const normalizedBases = bases.map((base) => base.toLowerCase());
-  if (normalizedBases.some((base) => base.includes("tall"))) {
-    return value - 1;
-  }
-  if (normalizedBases.some((base) => base.includes("plants"))) {
-    return value - 1;
-  }
-
-  return value - 1;
-}
-
-function loadPlantSprite(seedKey: string): Promise<string | null> {
-  const cached = plantSpriteCache.get(seedKey);
-  if (cached !== undefined) return Promise.resolve(cached);
-
-  const inFlight = plantSpritePromises.get(seedKey);
-  if (inFlight) return inFlight;
-
-  const promise = loadPlantSpriteCanvas(seedKey)
-    .then((canvas) => {
-      const src = canvas ? canvas.toDataURL() : null;
-      plantSpriteCache.set(seedKey, src);
-      plantSpritePromises.delete(seedKey);
-      return src;
-    })
-    .catch(() => {
-      plantSpriteCache.set(seedKey, null);
-      plantSpritePromises.delete(seedKey);
-      return null;
-    });
-
-  plantSpritePromises.set(seedKey, promise);
-  return promise;
-}
-
-function sortMutationsForRendering(mutations: NormalizedMutation[]): NormalizedMutation[] {
-  const entries = mutations.map((mutation, index) => ({ mutation, index }));
-  entries.sort((a, b) => {
-    const effectA = getMutationEffectName(a.mutation);
-    const effectB = getMutationEffectName(b.mutation);
-    const priorityA = effectA ? getEffectPriority(effectA) : Number.MAX_SAFE_INTEGER;
-    const priorityB = effectB ? getEffectPriority(effectB) : Number.MAX_SAFE_INTEGER;
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    return a.index - b.index;
-  });
-  return entries.map((entry) => entry.mutation);
-}
-
-function applyEffectToCanvas(canvas: HTMLCanvasElement, effect: SpriteEffectConfig): void {
-  if (!effect.colors.length) return;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalCompositeOperation = effect.blendMode;
-  ctx.globalAlpha = effect.alpha;
-
-  if (effect.colors.length === 1) {
-    ctx.fillStyle = effect.colors[0] ?? "transparent";
-  } else {
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    const stops = effect.colors.length - 1;
-    effect.colors.forEach((color, index) => {
-      const stop = stops === 0 ? 0 : index / stops;
-      gradient.addColorStop(stop, color);
-    });
-    ctx.fillStyle = gradient;
-  }
-
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.restore();
-}
-
-function loadPlantSpriteWithEffects(
-  seedKey: string,
-  variant: ColorVariant,
-  effectNames: readonly EffectName[],
-): Promise<string | null> {
-  const normalizedEffects = normalizeEffectNames(effectNames);
-  if (!normalizedEffects.length) {
-    return loadPlantSpriteVariant(seedKey, variant);
-  }
-
-  const cacheKey = makeEffectCacheKey(seedKey, variant, normalizedEffects);
-  const cached = plantSpriteEffectVariantCache.get(cacheKey);
-  if (cached !== undefined) return Promise.resolve(cached);
-
-  const inFlight = plantSpriteEffectVariantPromises.get(cacheKey);
-  if (inFlight) return inFlight;
-
-  const promise = loadPlantSpriteCanvasForVariant(seedKey, variant)
-    .then((canvas) => {
-      if (!canvas) return null;
-      const copy = document.createElement("canvas");
-      copy.width = canvas.width;
-      copy.height = canvas.height;
-      const ctx = copy.getContext("2d");
-      if (!ctx) return null;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(canvas, 0, 0);
-      normalizedEffects.forEach((effectName) => {
-        const effect = EFFECTS_CONFIG[effectName];
-        if (effect) {
-          applyEffectToCanvas(copy, effect);
-        }
-      });
-      return copy.toDataURL();
-    })
-    .then((src) => {
-      plantSpriteEffectVariantCache.set(cacheKey, src ?? null);
-      plantSpriteEffectVariantPromises.delete(cacheKey);
-      return src ?? null;
-    })
-    .catch(() => {
-      plantSpriteEffectVariantCache.set(cacheKey, null);
-      plantSpriteEffectVariantPromises.delete(cacheKey);
-      return null;
-    });
-
-  plantSpriteEffectVariantPromises.set(cacheKey, promise);
-  return promise;
-}
-
-function getCachedPlantSpriteSource(
-  seedKey: string,
-  variant: ColorVariant,
-  effectNames: readonly EffectName[],
-): string | null | undefined {
-  const normalizedEffects = normalizeEffectNames(effectNames);
-
-  if (normalizedEffects.length === 0) {
-    if (variant === "normal") {
-      return plantSpriteCache.get(seedKey);
-    }
-    const variantCacheKey = `${seedKey}::${variant}`;
-    return plantSpriteVariantCache.get(variantCacheKey);
-  }
-
-  const cacheKey = makeEffectCacheKey(seedKey, variant, normalizedEffects);
-  return plantSpriteEffectVariantCache.get(cacheKey);
-}
-
-function isLightingOverlay(mutation: NormalizedMutation): boolean {
-  const effectName = getMutationEffectName(mutation);
-  if (!effectName) return false;
-  return isLightingEffect(effectName);
-}
-
-function applySpriteElement(
-  el: HTMLSpanElement,
-  baseSrc: string | null,
-  overlayLayers: OverlaySpriteLayer[],
-  fallbackText?: string | null,
-): void {
-  el.innerHTML = "";
-
-  if (baseSrc) {
-    const baseLayer = document.createElement("span");
-    baseLayer.className = "mg-crop-simulation__sprite-layer mg-crop-simulation__sprite-layer--base";
-    const img = document.createElement("img");
-    img.src = baseSrc;
-    img.alt = "";
-    img.decoding = "async";
-    (img as any).loading = "lazy";
-    img.draggable = false;
-    baseLayer.appendChild(img);
-    el.appendChild(baseLayer);
-  }
-
-  overlayLayers.forEach(({ src, mutation }, index) => {
-    const layer = document.createElement("span");
-    layer.className =
-      "mg-crop-simulation__sprite-layer mg-crop-simulation__sprite-layer--overlay";
-    layer.style.setProperty("--mg-crop-simulation-layer", String(index + 1));
-    if (isLightingOverlay(mutation)) {
-      layer.classList.add("mg-crop-simulation__sprite-layer--overlay-lighting");
-    }
-    const img = document.createElement("img");
-    img.src = src;
-    img.alt = "";
-    img.decoding = "async";
-    (img as any).loading = "lazy";
-    img.draggable = false;
-    layer.appendChild(img);
-    el.appendChild(layer);
-  });
-
-  if (!baseSrc && overlayLayers.length === 0) {
-    const fallback = document.createElement("span");
+function ensureCropSpriteLayers(el: HTMLSpanElement): CropSpriteLayers {
+  let fallback = el.querySelector<HTMLSpanElement>(".mg-crop-simulation__sprite-fallback");
+  if (!fallback) {
+    fallback = document.createElement("span");
     fallback.className = "mg-crop-simulation__sprite-fallback";
-    const content =
-      typeof fallbackText === "string" && fallbackText.trim().length > 0
-        ? fallbackText
-        : "🌱";
-    fallback.textContent = content;
     el.appendChild(fallback);
   }
+  let layer = el.querySelector<HTMLSpanElement>(".mg-crop-simulation__sprite-layer--base");
+  if (!layer) {
+    layer = document.createElement("span");
+    layer.className = "mg-crop-simulation__sprite-layer mg-crop-simulation__sprite-layer--base";
+    el.appendChild(layer);
+  }
+  return { fallback, layer };
 }
 
-function setSpriteElement(
-  el: HTMLSpanElement,
-  speciesKey: string | null,
-  options: SpriteRenderOptions,
-): void {
-  spriteUpdateSeq += 1;
-  const seq = spriteUpdateSeq;
-  el.dataset.spriteSeq = String(seq);
-
-  if (!speciesKey) {
-    applySpriteElement(el, null, [], options.fallback ?? null);
-    return;
+function syncCropSpriteLoadedState(el: HTMLSpanElement, layer: HTMLElement): void {
+  if (layer.childElementCount > 0) {
+    el.dataset.mgHasSprite = "1";
+  } else {
+    delete el.dataset.mgHasSprite;
   }
-
-  const { colorVariant, weatherMutations } = options;
-  const sortedMutations = sortMutationsForRendering(weatherMutations);
-  const effectNames =
-    colorVariant === "normal" ? getApplicableEffectNames(sortedMutations) : [];
-  const cachedBase = getCachedPlantSpriteSource(speciesKey, colorVariant, effectNames);
-  const cachedOverlays = sortedMutations
-    .map((mutation) => {
-      const src = mutationSpriteCache.get(mutation.id.toLowerCase());
-      return typeof src === "string" && src.length > 0
-        ? ({ mutation, src } satisfies OverlaySpriteLayer)
-        : null;
-    })
-    .filter((value): value is OverlaySpriteLayer => value != null);
-
-  const baseSrcCached = typeof cachedBase === "string" ? cachedBase : null;
-  applySpriteElement(el, baseSrcCached, cachedOverlays, options.fallback ?? null);
-
-  const basePromise = loadPlantSpriteWithEffects(speciesKey, colorVariant, effectNames);
-
-  const overlayPromises = sortedMutations.map(async (mutation) => ({
-    mutation,
-    src: await loadMutationSprite(mutation),
-  }));
-
-  Promise.all([basePromise, Promise.all(overlayPromises)])
-    .then(([baseSrc, overlays]) => {
-      if (el.dataset.spriteSeq !== String(seq)) return;
-      const overlaySources = overlays.filter(
-        (entry): entry is OverlaySpriteLayer => typeof entry.src === "string" && entry.src.length > 0,
-      );
-      applySpriteElement(el, baseSrc ?? null, overlaySources, options.fallback ?? null);
-    })
-    .catch(() => {
-      if (el.dataset.spriteSeq !== String(seq)) return;
-      applySpriteElement(el, null, [], options.fallback ?? null);
-    });
 }
 
-function labelToVariant(label: string): ColorVariant {
-  const normalized = typeof label === "string" ? label.trim().toLowerCase() : "";
-  if (normalized === "gold") return "gold";
-  if (normalized === "rainbow") return "rainbow";
-  return "normal";
+function resetCropSimulationSprite(el: HTMLSpanElement): void {
+  el.innerHTML = "";
+  delete el.dataset.mgHasSprite;
 }
 
-function normalizeMutationName(name: string): NormalizedMutation | null {
-  if (typeof name !== "string") return null;
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.toLowerCase();
-  const info = mutationMetadataByNormalizedName.get(normalized);
-  if (info) {
-    return info;
-  }
-  const normalizedLabel = WEATHER_LABEL_NORMALIZATION.get(normalized);
-  if (normalizedLabel) {
-    const fallback = mutationMetadataByNormalizedName.get(normalizedLabel.toLowerCase());
-    if (fallback) {
-      return fallback;
-    }
-  }
-  return {
-    id: trimmed,
-    label: trimmed,
-    tileRef: null,
-    category: "weather",
-  };
+function createSeedSpriteIcon(option: LockerSeedOption, fallback: string, size: number, logTag: string): HTMLSpanElement {
+  const wrap = applyStyles(document.createElement("span"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+  wrap.textContent = fallback && fallback.trim().length > 0 ? fallback : "??";
+  const candidates = buildSpriteCandidates(option.key, option);
+  const categories = getSpriteCategoriesForKey(option?.key, option?.seedName, option?.cropName);
+  attachSpriteIcon(wrap, categories, candidates, size, logTag);
+  return wrap;
 }
 
 function applyCropSimulationSprite(
@@ -1207,27 +525,46 @@ function applyCropSimulationSprite(
   speciesKey: string | null,
   options: CropSimulationSpriteOptions = {},
 ): void {
-  const colorLabel = options.colorLabel ?? "None";
-  const colorVariant = labelToVariant(colorLabel);
+  const { fallback, layer } = ensureCropSpriteLayers(el);
+  const fallbackText =
+    typeof options.fallback === "string" && options.fallback.trim().length > 0
+      ? options.fallback
+      : "??";
+  fallback.textContent = fallbackText;
 
-  const weatherLabels = Array.isArray(options.weatherLabels) ? options.weatherLabels : [];
-  const seen = new Set<string>();
-  const weatherMutations: NormalizedMutation[] = [];
-  for (const label of weatherLabels) {
-    if (!label || typeof label !== "string") continue;
-    const info = normalizeMutationName(label);
-    if (!info || info.category !== "weather") continue;
-    const key = info.id.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    weatherMutations.push(info);
+  if (!speciesKey) {
+    layer.replaceChildren();
+    syncCropSpriteLoadedState(el, layer);
+    return;
   }
 
-  setSpriteElement(el, speciesKey, {
-    colorVariant,
-    weatherMutations,
-    fallback: options.fallback ?? null,
-  });
+  const candidates =
+    options.candidates && options.candidates.length
+      ? options.candidates
+      : buildSpriteCandidates(speciesKey);
+  const mutations =
+    Array.isArray(options.mutations) && options.mutations.length
+      ? options.mutations
+      : undefined;
+  const categories =
+    options.categories && options.categories.length
+      ? options.categories
+      : getSpriteCategoriesForKey(speciesKey);
+
+  const updateLoadedState = () => syncCropSpriteLoadedState(el, layer);
+  updateLoadedState();
+
+  attachSpriteIcon(
+    layer,
+    categories,
+    candidates,
+    BASE_SPRITE_SIZE_PX,
+    "calculator",
+    {
+      mutations,
+      onSpriteApplied: updateLoadedState,
+    },
+  );
 }
 
 const applyStyles = <T extends HTMLElement>(el: T, styles: Record<string, string>): T => {
@@ -1453,14 +790,14 @@ function getMutationsForState(state: CalculatorState): string[] {
   if (state.color !== "None") mutations.push(state.color);
   if (state.weatherCondition !== "None") mutations.push(state.weatherCondition);
   if (state.weatherLighting !== "None") mutations.push(state.weatherLighting);
-  return mutations;
+  return mutations.map((label) => normalizeMutationLabelForSprite(label));
 }
 
-function getWeatherLabelsForState(state: CalculatorState): string[] {
-  const labels: string[] = [];
-  if (state.weatherCondition !== "None") labels.push(state.weatherCondition);
-  if (state.weatherLighting !== "None") labels.push(state.weatherLighting);
-  return labels;
+function normalizeMutationLabelForSprite(label: string): string {
+  const normalized = label.trim();
+  if (!normalized) return normalized;
+  const overridden = MUTATION_SPRITE_OVERRIDES[normalized.toLowerCase()];
+  return overridden ?? normalized;
 }
 
 function computePrice(
@@ -1509,7 +846,6 @@ function getBaseWeightForSpecies(key: string): number | null {
 
 export async function renderCalculatorMenu(container: HTMLElement) {
   ensureCalculatorStyles();
-  scheduleLockerSpritePreload();
 
   const ui = new Menu({ id: "calculator", compact: true });
 
@@ -1722,6 +1058,18 @@ export async function renderCalculatorMenu(container: HTMLElement) {
     let selectedKey: string | null = null;
     let currentMaxScale: number | null = null;
     let currentBaseWeight: number | null = null;
+    const listButtons = new Map<
+      string,
+      { button: HTMLButtonElement; dot: HTMLSpanElement }
+    >();
+
+    const refreshListStyles = () => {
+      listButtons.forEach(({ button, dot }, key) => {
+        const isSelected = selectedKey === key;
+        button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
+        dot.style.background = isSelected ? "#2ecc71" : "#4c566a";
+      });
+    };
 
     function renderColorSegment(state: CalculatorState | null, interactive: boolean): void {
       const active = state?.color ?? COLOR_MUTATION_LABELS[0];
@@ -1831,7 +1179,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
     function updateSprite(): void {
       const key = selectedKey;
       if (!key) {
-        refs.sprite.innerHTML = "";
+        resetCropSimulationSprite(refs.sprite);
         return;
       }
       const state = getStateForKey(key);
@@ -1840,17 +1188,21 @@ export async function renderCalculatorMenu(container: HTMLElement) {
         getLockerSeedEmojiForKey(key) ||
         (option?.seedName ? getLockerSeedEmojiForSeedName(option.seedName) : undefined) ||
         "🌱";
+      const mutations = getMutationsForState(state);
+      const candidates = buildSpriteCandidates(key, option);
+      const categories = getSpriteCategoriesForKey(key, option?.seedName, option?.cropName);
       applyCropSimulationSprite(refs.sprite, key, {
-        colorLabel: state.color,
-        weatherLabels: getWeatherLabelsForState(state),
         fallback: fallbackEmoji,
+        candidates,
+        mutations,
+        categories,
       });
     }
 
     function renderDetail(): void {
       const key = selectedKey;
       if (!key) {
-        refs.sprite.innerHTML = "";
+        resetCropSimulationSprite(refs.sprite);
         refs.sizeSlider.disabled = true;
         currentBaseWeight = null;
         applySizePercent(refs, SIZE_MIN, null, currentBaseWeight);
@@ -1890,6 +1242,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
     function renderList(): void {
       const previous = list.scrollTop;
       list.innerHTML = "";
+      listButtons.clear();
       if (!options.length) {
         const empty = document.createElement("div");
         empty.className = "mg-crop-calculator__placeholder";
@@ -1912,7 +1265,6 @@ export async function renderCalculatorMenu(container: HTMLElement) {
       }
 
       const fragment = document.createDocumentFragment();
-      scheduleLockerSpritePreload();
 
       options.forEach(opt => {
         const button = document.createElement("button");
@@ -1941,10 +1293,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
           getLockerSeedEmojiForKey(opt.key) ||
           getLockerSeedEmojiForSeedName(opt.seedName) ||
           "🌱";
-        const sprite = createPlantSprite(opt.key, {
-          size: 24,
-          fallback: fallbackEmoji,
-        });
+        const sprite = createSeedSpriteIcon(opt, fallbackEmoji, 24, "calculator-list");
 
         button.append(dot, label, sprite);
 
@@ -1954,8 +1303,12 @@ export async function renderCalculatorMenu(container: HTMLElement) {
           if (selectedKey === opt.key) return;
           selectedKey = opt.key;
           currentMaxScale = getMaxScaleForSpecies(opt.key);
-          renderList();
+          refreshListStyles();
+          renderDetail();
+          updateOutputs();
         };
+
+        listButtons.set(opt.key, { button, dot });
 
         fragment.appendChild(button);
       });
@@ -1963,6 +1316,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
       list.appendChild(fragment);
 
       list.scrollTop = previous;
+      refreshListStyles();
       renderDetail();
     }
 

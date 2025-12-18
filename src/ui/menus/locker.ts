@@ -1,13 +1,10 @@
 // src/ui/menus/locker.ts
 import { Menu } from "../menu";
-import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../services/assetManifest";
 import {
   plantCatalog,
   tileRefsMutations,
   tileRefsMutationLabels,
 } from "../../data/hardcoded-data.clean";
-import { loadTileSheet } from "../../utils/tileSheet";
 import {
   lockerService,
   type LockerSettingsPersisted,
@@ -24,7 +21,7 @@ import {
   percentToRequiredFriendCount,
 } from "../../services/lockerRestrictions";
 import { Atoms } from "../../store/atoms";
-import { createShopSprite } from "../../utils/sprites";
+import { attachSpriteIcon, attachWeatherSpriteIcon } from "../spriteIconCache";
 
 // Reuse tag definitions from garden menu for consistency
 type VisualTag = "Gold" | "Rainbow";
@@ -122,12 +119,12 @@ type LockerOverrideState = {
   hasPersistedSettings: boolean;
 };
 
-type SpriteOptions = {
+type IconOptions = {
   size?: number;
   fallback?: string;
 };
 
-type WeatherIconFactory = (options?: SpriteOptions) => HTMLElement;
+type WeatherIconFactory = (options?: IconOptions) => HTMLElement;
 
 type WeatherMutationInfo = {
   key: WeatherTag;
@@ -163,6 +160,7 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
     key,
     label: WEATHER_MUTATION_LABELS[key] ?? formatMutationLabel(key),
     tileRef: value,
+    iconFactory: options => createWeatherBadge(key, options),
   }));
 
 const createNoWeatherIcon: WeatherIconFactory = options => {
@@ -242,448 +240,66 @@ const applyStyles = <T extends HTMLElement>(el: T, styles: Record<string, string
   return el;
 };
 
-const plantSpriteCache = new Map<string, string | null>();
-const plantSpritePromises = new Map<string, Promise<string | null>>();
-const plantSpriteSubscribers = new Map<string, Set<HTMLSpanElement>>();
-const spriteConfig = new WeakMap<HTMLSpanElement, { size: number; fallback: string }>();
-let plantSpriteListenerAttached = false;
-let lockerSpritesPreloaded = false;
-let lockerSpritesLoading = false;
-let lockerSpritePreloadTimer: number | null = null;
 let weatherModeNameSeq = 0;
 
-function hasLockerSpriteSources(): boolean {
-  try {
-    if (Sprites.listPlants().length || Sprites.listAllPlants().length) {
-      return true;
-    }
-  } catch {
-    /* ignore */
-  }
-
-  try {
-    if (Sprites.listTilesByCategory(/mutations/i).length) {
-      return true;
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return false;
-}
-
-export function scheduleLockerSpritePreload(delay = 0): void {
-  if (lockerSpritesPreloaded || typeof window === "undefined") {
-    return;
-  }
-
-  if (lockerSpritePreloadTimer != null) {
-    window.clearTimeout(lockerSpritePreloadTimer);
-  }
-
-  lockerSpritePreloadTimer = window.setTimeout(() => {
-    lockerSpritePreloadTimer = null;
-    preloadLockerSprites();
-  }, Math.max(0, delay));
-}
-
-function ensurePlantSpriteListener(): void {
-  if (plantSpriteListenerAttached) return;
-  plantSpriteListenerAttached = true;
-  window.addEventListener("mg:sprite-detected", () => {
-    plantSpriteCache.clear();
-    plantSpritePromises.clear();
-    const keys = Array.from(plantSpriteSubscribers.keys());
-    keys.forEach(key => {
-      loadPlantSprite(key);
-    });
+function createEmojiIcon(symbol: string, size: number): HTMLSpanElement {
+  const wrap = applyStyles(document.createElement("span"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: `${Math.round(size * 0.75)}px`,
+    lineHeight: "1",
   });
+  wrap.textContent = symbol;
+  wrap.setAttribute("aria-hidden", "true");
+  return wrap;
 }
 
-function subscribePlantSprite(seedKey: string, el: HTMLSpanElement, config: { size: number; fallback: string }): void {
-  let subs = plantSpriteSubscribers.get(seedKey);
-  if (!subs) {
-    subs = new Set();
-    plantSpriteSubscribers.set(seedKey, subs);
-  }
-  subs.add(el);
-  spriteConfig.set(el, config);
-}
-
-function notifyPlantSpriteSubscribers(seedKey: string, src: string | null): void {
-  const subs = plantSpriteSubscribers.get(seedKey);
-  if (!subs) return;
-  subs.forEach(el => {
-    if (!el.isConnected) {
-      subs.delete(el);
-      spriteConfig.delete(el);
-      return;
-    }
-    applySprite(el, src);
-  });
-  if (subs.size === 0) {
-    plantSpriteSubscribers.delete(seedKey);
-  }
-}
-
-const TALL_PLANT_SEEDS = new Set(["Bamboo", "Cactus"]);
-
-function plantSheetBases(seedKey?: string): string[] {
-  const urls = new Set<string>();
-  try {
-    Sprites.listPlants().forEach(url => urls.add(url));
-  } catch {
-    /* ignore */
-  }
-  try {
-    Sprites.listAllPlants().forEach(url => urls.add(url));
-  } catch {
-    /* ignore */
-  }
-  const bases = Array.from(urls, url => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  });
-
-  if (!seedKey) return bases;
-
-  const normalizedBases = bases.map(base => base.toLowerCase());
-  const findPreferred = (
-    predicate: (base: string, normalized: string) => boolean,
-  ): string[] => bases.filter((base, index) => predicate(base, normalizedBases[index] ?? base.toLowerCase()));
-
-  if (TALL_PLANT_SEEDS.has(seedKey)) {
-    const tallExact = findPreferred((_, norm) => norm === "tallplants");
-    if (tallExact.length) return tallExact;
-    const tallAny = findPreferred((base, norm) => /tall/.test(base) || /tall/.test(norm));
-    if (tallAny.length) return tallAny;
-  } else {
-    const plantsExact = findPreferred((_, norm) => norm === "plants");
-    if (plantsExact.length) return plantsExact;
-    const nonTall = findPreferred((base, norm) => !/tall/.test(base) && !/tall/.test(norm));
-    if (nonTall.length) return nonTall;
-  }
-
-  return bases;
-}
-
-function toTileIndex(tileRef: unknown, bases: string[] = []): number | null {
-  const value =
-    typeof tileRef === "number" && Number.isFinite(tileRef)
-      ? tileRef
-      : Number(tileRef);
-  if (!Number.isFinite(value)) return null;
-
-  if (value <= 0) return value;
-
-  const normalizedBases = bases.map(base => base.toLowerCase());
-  if (normalizedBases.some(base => base.includes("tall"))) {
-    return value - 1;
-  }
-  if (normalizedBases.some(base => base.includes("plants"))) {
-    return value - 1;
-  }
-
-  return value - 1;
-}
-
-async function fetchPlantSprite(seedKey: string): Promise<string | null> {
-  await ensureSpritesReady();
-
-  const entry = (plantCatalog as Record<string, any>)[seedKey];
-  if (!entry) return null;
-  const tileRef = entry?.crop?.tileRef ?? entry?.plant?.tileRef ?? entry?.seed?.tileRef;
-  const bases = plantSheetBases(seedKey);
-  const index = toTileIndex(tileRef, bases);
-  if (index == null) return null;
-
-  for (const base of bases) {
-    try {
-      const tiles = await loadTileSheet(base);
-      const tile = tiles.find(t => t.index === index);
-      if (!tile) continue;
-      const canvas = Sprites.toCanvas(tile);
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        const copy = document.createElement("canvas");
-        copy.width = canvas.width;
-        copy.height = canvas.height;
-        const ctx = copy.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy.toDataURL();
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return null;
-}
-
-function applySprite(el: HTMLSpanElement, src: string | null): void {
-  const cfg = spriteConfig.get(el);
-  if (!cfg) return;
-  const { size, fallback } = cfg;
-  el.innerHTML = "";
-  el.style.display = "inline-flex";
-  el.style.alignItems = "center";
-  el.style.justifyContent = "center";
-  el.style.width = `${size}px`;
-  el.style.height = `${size}px`;
-  el.style.flexShrink = "0";
-  el.style.position = "relative";
-
-  if (src) {
-    const img = document.createElement("img");
-    img.src = src;
-    img.alt = "";
-    img.decoding = "async";
-    (img as any).loading = "lazy";
-    img.draggable = false;
-    img.style.width = "100%";
-    img.style.height = "100%";
-    img.style.objectFit = "contain";
-    (img.style as any).imageRendering = "pixelated";
-    el.appendChild(img);
-  } else {
-    el.textContent = fallback;
-    el.style.fontSize = `${Math.max(10, Math.round(size * 0.8))}px`;
-  }
-}
-
-function loadPlantSprite(seedKey: string): Promise<string | null> {
-  const cached = plantSpriteCache.get(seedKey);
-  if (cached !== undefined) {
-    notifyPlantSpriteSubscribers(seedKey, cached);
-    return Promise.resolve(cached);
-  }
-
-  const inflight = plantSpritePromises.get(seedKey);
-  if (inflight) return inflight;
-
-  const promise = fetchPlantSprite(seedKey)
-    .then(src => {
-      plantSpriteCache.set(seedKey, src);
-      plantSpritePromises.delete(seedKey);
-      notifyPlantSpriteSubscribers(seedKey, src);
-      return src;
-    })
-    .catch(() => {
-      plantSpritePromises.delete(seedKey);
-      return null;
-    });
-
-  plantSpritePromises.set(seedKey, promise);
-  return promise;
-}
-
-export function createPlantSprite(seedKey: string, options: SpriteOptions = {}): HTMLSpanElement {
-  ensurePlantSpriteListener();
+function createSeedIcon(seedKey: string, options: IconOptions = {}): HTMLSpanElement {
   const size = Math.max(12, options.size ?? 24);
-  const fallback = options.fallback ?? "🌱";
-  const el = document.createElement("span");
-  subscribePlantSprite(seedKey, el, { size, fallback });
-  const cached = plantSpriteCache.get(seedKey);
-  applySprite(el, cached ?? null);
-  loadPlantSprite(seedKey);
-  return el;
-}
-
-const mutationSpriteCache = new Map<WeatherTag, string | null>();
-const mutationSpritePromises = new Map<WeatherTag, Promise<string | null>>();
-const mutationSpriteSubscribers = new Map<WeatherTag, Set<HTMLSpanElement>>();
-let mutationSpriteListenerAttached = false;
-let mutationSpriteBases: string[] | null = null;
-
-function ensureMutationSpriteListener(): void {
-  if (mutationSpriteListenerAttached) return;
-  mutationSpriteListenerAttached = true;
-  window.addEventListener("mg:sprite-detected", () => {
-    mutationSpriteCache.clear();
-    mutationSpritePromises.clear();
-    mutationSpriteBases = null;
-    const keys = Array.from(mutationSpriteSubscribers.keys());
-    keys.forEach(key => {
-      loadMutationSprite(key);
-    });
+  const fallback =
+    options.fallback ??
+    getLockerSeedEmojiForKey(seedKey) ??
+    getLockerSeedEmojiForSeedName(seedKey) ??
+    "🌱";
+  const wrap = applyStyles(document.createElement("span"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   });
+  wrap.appendChild(createEmojiIcon(fallback, size));
+  attachSpriteIcon(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
+  return wrap;
 }
 
-function mutationSheetBases(): string[] {
-  if (mutationSpriteBases) return mutationSpriteBases;
-
-  const urls = new Set<string>();
-  try {
-    Sprites.listTilesByCategory(/mutations/i).forEach(url => urls.add(url));
-  } catch {
-    /* ignore */
+function createWeatherBadge(tag: WeatherTag, options: IconOptions = {}): HTMLElement {
+  if (tag === NO_WEATHER_TAG) {
+    return createNoWeatherIcon(options);
   }
-
-  const bases = Array.from(urls, url => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
+  const size = Math.max(16, options.size ?? 32);
+  const wrap = applyStyles(document.createElement("span"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "999px",
+    background: "rgba(17,20,24,0.85)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    fontSize: `${Math.round(size * 0.55)}px`,
+    color: "#e7eef7",
+    lineHeight: "1",
   });
-
-  if (!bases.length) {
-    bases.push("mutations");
-  }
-
-  mutationSpriteBases = bases;
-  return mutationSpriteBases;
-}
-
-function subscribeMutationSprite(tag: WeatherTag, el: HTMLSpanElement, config: { size: number; fallback: string }): void {
-  let subs = mutationSpriteSubscribers.get(tag);
-  if (!subs) {
-    subs = new Set();
-    mutationSpriteSubscribers.set(tag, subs);
-  }
-  subs.add(el);
-  spriteConfig.set(el, config);
-}
-
-function notifyMutationSpriteSubscribers(tag: WeatherTag, src: string | null): void {
-  const subs = mutationSpriteSubscribers.get(tag);
-  if (!subs) return;
-  subs.forEach(el => {
-    if (!el.isConnected) {
-      subs.delete(el);
-      spriteConfig.delete(el);
-      return;
-    }
-    applySprite(el, src);
-  });
-  if (subs.size === 0) {
-    mutationSpriteSubscribers.delete(tag);
-  }
-}
-
-async function fetchMutationSprite(tag: WeatherTag): Promise<string | null> {
-  await ensureSpritesReady();
-
-  const entry = WEATHER_MUTATIONS.find(info => info.key === tag);
-  if (!entry || entry.tileRef == null) return null;
-  const [base] = mutationSheetBases();
-
-  const index = toTileIndex(entry.tileRef, base ? [base] : []);
-  if (index == null || !base) return null;
-
-  try {
-    const tiles = await loadTileSheet(base);
-    const tile = tiles.find(t => t.index === index);
-    if (!tile) return null;
-    const canvas = Sprites.toCanvas(tile);
-    if (canvas && canvas.width > 0 && canvas.height > 0) {
-      const copy = document.createElement("canvas");
-      copy.width = canvas.width;
-      copy.height = canvas.height;
-      const ctx = copy.getContext("2d");
-      if (!ctx) return null;
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(canvas, 0, 0);
-      return copy.toDataURL();
-    }
-  } catch {
-    /* ignore */
-  }
-
-  return null;
-}
-
-function loadMutationSprite(tag: WeatherTag): Promise<string | null> {
-  const cached = mutationSpriteCache.get(tag);
-  if (cached !== undefined) {
-    notifyMutationSpriteSubscribers(tag, cached);
-    return Promise.resolve(cached);
-  }
-
-  const inflight = mutationSpritePromises.get(tag);
-  if (inflight) return inflight;
-
-  const promise = fetchMutationSprite(tag)
-    .then(src => {
-      mutationSpriteCache.set(tag, src);
-      mutationSpritePromises.delete(tag);
-      notifyMutationSpriteSubscribers(tag, src);
-      return src;
-    })
-    .catch(() => {
-      mutationSpritePromises.delete(tag);
-      return null;
-    });
-
-  mutationSpritePromises.set(tag, promise);
-  return promise;
-}
-
-function createMutationSprite(tag: WeatherTag, options: SpriteOptions = {}): HTMLSpanElement {
-  ensureMutationSpriteListener();
-  const size = Math.max(12, options.size ?? 36);
-  const fallback = options.fallback ?? "?";
-  const el = document.createElement("span");
-  subscribeMutationSprite(tag, el, { size, fallback });
-  const cached = mutationSpriteCache.get(tag);
-  applySprite(el, cached ?? null);
-  loadMutationSprite(tag);
-  return el;
-}
-
-function preloadLockerSprites(): void {
-  if (lockerSpritesPreloaded || lockerSpritesLoading || typeof window === "undefined") {
-    return;
-  }
-
-  lockerSpritesLoading = true;
-
-  (async () => {
-    try {
-      await ensureSpritesReady();
-
-      if (!hasLockerSpriteSources()) {
-        scheduleLockerSpritePreload(200);
-        return;
-      }
-
-      lockerSpritesPreloaded = true;
-
-      ensurePlantSpriteListener();
-      ensureMutationSpriteListener();
-
-      try {
-        const catalog = plantCatalog as Record<string, unknown>;
-        Object.keys(catalog).forEach(seedKey => {
-          if (seedKey) {
-            loadPlantSprite(seedKey);
-          }
-        });
-      } catch {
-        /* ignore */
-      }
-
-      WEATHER_MUTATIONS.forEach(info => {
-        if (info.tileRef != null) {
-          loadMutationSprite(info.key);
-        }
-      });
-    } finally {
-      lockerSpritesLoading = false;
-    }
-  })().catch(error => {
-    console.warn("[LockerSprites]", "preload failed", error);
-    scheduleLockerSpritePreload(500);
-  });
-}
-
-if (typeof window !== "undefined") {
-  scheduleLockerSpritePreload();
-  window.addEventListener("mg:sprite-detected", () => {
-    if (!lockerSpritesPreloaded) {
-      scheduleLockerSpritePreload(100);
-    }
-  });
+  const label = WEATHER_MUTATION_LABELS[tag] ?? formatMutationLabel(tag);
+  const fallback = options.fallback ?? label.charAt(0);
+  wrap.textContent = fallback || "?";
+  wrap.title = label;
+  wrap.setAttribute("aria-label", label);
+  return wrap;
 }
 
 function createDefaultSettings(): LockerSettingsState {
@@ -961,7 +577,7 @@ type WeatherMutationToggle = {
 type WeatherMutationToggleOptions = {
   key: WeatherTag;
   label: string;
-  spriteSize?: number;
+  iconSize?: number;
   dense?: boolean;
   kind?: "main" | "recipe";
   iconFactory?: WeatherIconFactory;
@@ -970,7 +586,7 @@ type WeatherMutationToggleOptions = {
 function createWeatherMutationToggle({
   key,
   label,
-  spriteSize,
+  iconSize,
   dense,
   kind = "main",
   iconFactory,
@@ -1013,17 +629,24 @@ function createWeatherMutationToggle({
   wrap.appendChild(input);
   wrap.dataset.weatherToggle = kind;
 
-  const iconSize = Math.max(24, spriteSize ?? (dense ? 36 : isMain ? 52 : 72));
-  const icon = iconFactory
-    ? iconFactory({ size: iconSize, fallback: label.charAt(0) || "?" })
-    : createMutationSprite(key, {
-        size: iconSize,
+  const computedIconSize = Math.max(24, iconSize ?? (dense ? 36 : isMain ? 52 : 72));
+  const iconWrap = applyStyles(document.createElement("span"), {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+  const fallbackIcon = iconFactory
+    ? iconFactory({ size: computedIconSize, fallback: label.charAt(0) || "?" })
+    : createWeatherBadge(key, {
+        size: computedIconSize,
         fallback: label.charAt(0) || "?",
       });
-  applyStyles(icon, {
+  applyStyles(iconWrap, {
     filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))",
   });
-  wrap.appendChild(icon);
+  iconWrap.appendChild(fallbackIcon);
+  wrap.appendChild(iconWrap);
+  attachWeatherSpriteIcon(iconWrap, key, computedIconSize);
 
   const caption = applyStyles(document.createElement("div"), {
     fontSize: dense ? "11px" : "11.5px",
@@ -1724,20 +1347,27 @@ function createLockerSettingsCard(
       letterSpacing: "0.2px",
     });
 
-    const sprite = info.iconFactory
+    const iconWrap = applyStyles(document.createElement("span"), {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+    });
+    const fallbackIcon = info.iconFactory
       ? info.iconFactory({ size: 20, fallback: label.charAt(0) || "?" })
-      : createMutationSprite(tag, {
+      : createWeatherBadge(tag, {
           size: 20,
           fallback: label.charAt(0) || "?",
         });
-    applyStyles(sprite, {
+    applyStyles(iconWrap, {
       filter: "drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))",
     });
+    iconWrap.appendChild(fallbackIcon);
+    attachWeatherSpriteIcon(iconWrap, tag, 20);
 
     const text = document.createElement("span");
     text.textContent = label;
 
-    badge.append(sprite, text);
+    badge.append(iconWrap, text);
     return badge;
   };
 
@@ -1801,7 +1431,7 @@ function createLockerSettingsCard(
       const toggle = createWeatherMutationToggle({
         key: info.key,
         label: info.label,
-        spriteSize: 40,
+        iconSize: 40,
         dense: true,
         kind: "recipe",
         iconFactory: info.iconFactory,
@@ -2207,13 +1837,11 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
       renderEggList();
     });
 
-    const sprite = createShopSprite("Egg", opt.id, { size: 32, fallback: "🥚" });
-    sprite.style.filter = "drop-shadow(0 1px 1px rgba(0,0,0,0.45))";
-
     const name = document.createElement("div");
     name.style.fontWeight = "600";
     name.style.color = "#e7eef7";
-    row.append(toggle, sprite, name);
+    const icon = createEmojiIcon("🥚", 32);
+    row.append(toggle, icon, name);
 
     return { row, toggle, name };
   };
@@ -2565,6 +2193,10 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
   let selectedKey: string | null = null;
   let renderedDetailKey: string | null = null;
   const detailScrollMemory = new Map<string, { detail: number; card: number }>();
+  const listButtons = new Map<
+    string,
+    { button: HTMLButtonElement; dot: HTMLSpanElement }
+  >();
 
   const getClampedScrollTop = (element: HTMLElement): number => {
     const max = Math.max(0, element.scrollHeight - element.clientHeight);
@@ -2595,6 +2227,14 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     detailScrollMemory.set(renderedDetailKey, memory);
   });
 
+  const refreshListStyles = () => {
+    listButtons.forEach(({ button, dot }, key) => {
+      const isSelected = selectedKey === key;
+      button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
+      dot.style.background = store.getOverride(key)?.enabled ? "#2ecc71" : "#e74c3c";
+    });
+  };
+
   const renderList = () => {
     const previousScrollTop = getClampedScrollTop(list);
     list.innerHTML = "";
@@ -2612,12 +2252,11 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       return;
     }
 
-    scheduleLockerSpritePreload();
-
     if (selectedKey && !seeds.some(opt => opt.key === selectedKey)) {
       selectedKey = null;
     }
 
+    listButtons.clear();
     const fragment = document.createDocumentFragment();
     seeds.forEach(opt => {
       const button = document.createElement("button");
@@ -2641,23 +2280,17 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       label.className = "label";
       label.textContent = opt.cropName || opt.key;
 
-      const fallbackEmoji =
-        getLockerSeedEmojiForKey(opt.key) ||
-        getLockerSeedEmojiForSeedName(opt.seedName) ||
-        "🌱";
-      const sprite = createPlantSprite(opt.key, {
-        size: 24,
-        fallback: fallbackEmoji,
-      });
+      const icon = createSeedIcon(opt.key, { size: 24 });
 
-      button.append(dot, label, sprite);
+      button.append(dot, label, icon);
+      listButtons.set(opt.key, { button, dot });
 
       button.onmouseenter = () => (button.style.borderColor = "#6aa1");
       button.onmouseleave = () => (button.style.borderColor = "#4445");
       button.onclick = () => {
         if (selectedKey === opt.key) return;
         selectedKey = opt.key;
-        renderList();
+        refreshListStyles();
         renderDetail();
       };
 
@@ -2665,6 +2298,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     });
 
     list.appendChild(fragment);
+    refreshListStyles();
     restoreScrollTop(list, previousScrollTop);
   };
 
@@ -2711,18 +2345,13 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     const titleWrap = ui.flexRow({ gap: 10, align: "center" });
     titleWrap.style.flexWrap = "nowrap";
 
-    const fallbackEmoji =
-      getLockerSeedEmojiForKey(seed.key) ||
-      getLockerSeedEmojiForSeedName(seed.seedName) ||
-      "🌱";
-    const sprite = createPlantSprite(seed.key, { size: 32, fallback: fallbackEmoji });
-
     const title = document.createElement("div");
     title.textContent = seed.cropName || seed.key;
     title.style.fontWeight = "600";
     title.style.fontSize = "15px";
 
-    titleWrap.append(sprite, title);
+    const icon = createSeedIcon(seed.key, { size: 32 });
+    titleWrap.append(icon, title);
 
     const toggleWrap = ui.flexRow({ gap: 8, align: "center" });
     toggleWrap.style.flexWrap = "nowrap";
@@ -2793,8 +2422,11 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     }
   };
 
+  renderList();
+  renderDetail();
+
   const refresh = () => {
-    renderList();
+    refreshListStyles();
     renderDetail();
   };
 

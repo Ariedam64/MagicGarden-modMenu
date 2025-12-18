@@ -291,7 +291,7 @@ type PetTeamActionId = `${typeof PET_TEAM_ACTION_PREFIX}${string}`;
 const petSection: KeybindSection = {
   id: PET_SECTION_ID,
   title: "Pets",
-  icon: "ðŸ·",
+  icon: "🐷",
   description: "Assign shortcuts to your pet teams and cycle through them instantly.",
   actions: [],
 };
@@ -352,7 +352,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
     {
       id: PET_TEAM_PREV_ID,
       sectionId: PET_SECTION_ID,
-      label: "â—€ï¸ Previous team",
+      label: "◀️ Previous team",
       defaultHotkey: null,
     },
     null
@@ -362,7 +362,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
     {
       id: PET_TEAM_NEXT_ID,
       sectionId: PET_SECTION_ID,
-      label: "â–¶ï¸ Next team",
+      label: "▶️ Next team",
       defaultHotkey: null,
     },
     null
@@ -375,7 +375,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
       {
         id: getPetTeamActionId(team.id),
         sectionId: PET_SECTION_ID,
-        label: `Use team â€” ${labelName}`,
+        label: `Use team — ${labelName}`,
         defaultHotkey: null,
       },
       null

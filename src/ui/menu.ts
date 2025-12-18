@@ -1362,9 +1362,7 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
       const stored = readAriesPath<string>(`menu.activeTabs.${this.menuId}`);
       if (typeof stored === "string" && stored) id = stored;
     } catch {}
-    if (!id) {
-      try { id = localStorage.getItem(this.lsKeyActive); } catch {}
-    }
+    try { id = localStorage.getItem(this.lsKeyActive); } catch {}
     if (id && this.tabs.has(id)) this.switchTo(id);
     else if (this.tabs.size) this.switchTo(this.firstTabId());
   }
@@ -1777,24 +1775,6 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 }
 .qmm .stats-pet__total-value{
   font-weight:700;
-}
-.qmm .stats-pet__sprite-icon{
-  --stats-pet-sprite-size:28px;
-  width:var(--stats-pet-sprite-size);
-  height:var(--stats-pet-sprite-size);
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:6px;
-  background:rgba(255,255,255,.08);
-  padding:2px;
-  flex-shrink:0;
-}
-.qmm .stats-pet__sprite-icon img{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  image-rendering:pixelated;
 }
 .qmm .stats-weather__name{
   display:inline-flex;

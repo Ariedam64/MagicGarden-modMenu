@@ -16,12 +16,12 @@ import {
   type ContextStopDefaults,
 } from "../../services/notifier";
 
-import { createShopSprite, createWeatherSprite, loadPetSpriteFromMutations } from "../../utils/sprites";
 
 import { audio, type AudioContextKey, type PlaybackMode } from "../../utils/audio";
 import { PetAlertService } from "../../services/pet-alerts";
 import { PetsService } from "../../services/pets";
 import type { PetInfo } from "../../services/player";
+import { attachSpriteIcon } from "../spriteIconCache";
 
 type RuleEditorRow = {
   id: string;
@@ -1732,23 +1732,48 @@ style.textContent = `
       aspectRatio: "1 / 1",
     });
 
-    const afterColon = (s: string) => {
-      const i = s.indexOf(":");
-      return i >= 0 ? s.slice(i + 1) : s;
-    };
-
-    const spriteFallback =
+    const iconFallback =
       row.type === "Seed" ? "🌱" :
       row.type === "Egg"  ? "🥚" :
       row.type === "Tool" ? "🧰" : "🏠";
 
-    const spriteKey = afterColon(row.id);
-    const sprite = createShopSprite(row.type, spriteKey, {
-      size: ICON - 6,
-      fallback: spriteFallback,
-      alt: row.name,
-    });
-    iconWrap.appendChild(sprite);
+    const icon = document.createElement("span");
+    icon.textContent = iconFallback;
+    icon.style.fontSize = `${ICON - 10}px`;
+    icon.setAttribute("aria-hidden", "true");
+    iconWrap.appendChild(icon);
+
+    const spriteCategories =
+      row.type === "Seed" ? ["seed"] :
+      row.type === "Egg" ? ["pet"] :
+      row.type === "Tool" ? ["item"] :
+      row.type === "Decor" ? ["decor"] : null;
+
+    if (spriteCategories) {
+      const baseId = row.id.split(":")[1] ?? row.name ?? row.id;
+      const candidatesSet = new Set<string>();
+      const addCandidate = (value: string | undefined | null) => {
+        if (!value) return;
+        const trimmed = value.trim();
+        if (!trimmed) return;
+        candidatesSet.add(trimmed);
+        candidatesSet.add(trimmed.replace(/\s+/g, ""));
+        if (row.type === "Seed" || row.type === "Egg") {
+          const stripped = trimmed.replace(/(?:seed|egg)$/i, "").trim();
+          if (stripped) {
+            candidatesSet.add(stripped);
+            candidatesSet.add(stripped.replace(/\s+/g, ""));
+          }
+        }
+      };
+      addCandidate(baseId);
+      addCandidate(row.id);
+      addCandidate(row.name);
+      const candidates = Array.from(candidatesSet).filter(Boolean);
+      if (candidates.length) {
+        attachSpriteIcon(iconWrap, spriteCategories, candidates, ICON, "alerts");
+      }
+    }
 
     // ---- Texte
     const col = document.createElement("div");
@@ -2102,45 +2127,25 @@ function renderPetAlertsTab(view: HTMLElement, ui: Menu) {
         avatar.appendChild(span);
       };
 
-      let iconRequestId = 0;
-      const setIcon = (species?: string, mutation?: string | string[]) => {
-        iconRequestId += 1;
-        const requestId = iconRequestId;
+      const setIcon = (species?: string, mutations?: string[]) => {
         const speciesLabel = String(species ?? "").trim();
+        avatar.replaceChildren();
         if (!speciesLabel) {
           useEmojiFallback();
           return;
         }
-        useEmojiFallback();
-        loadPetSpriteFromMutations(speciesLabel, mutation)
-          .then((src) => {
-            if (requestId !== iconRequestId) return;
-            if (!src) {
-              useEmojiFallback();
-              return;
-            }
-            const img = new Image();
-            img.src = src;
-            img.alt = speciesLabel || "pet";
-            img.decoding = "async";
-            img.loading = "lazy";
-            img.draggable = false;
-            Object.assign(img.style, {
-              width: "100%",
-              height: "100%",
-              imageRendering: "auto",
-              objectFit: "contain",
-            });
-            avatar.replaceChildren(img);
-          })
-          .catch(() => {
-            if (requestId !== iconRequestId) return;
-            useEmojiFallback();
-          });
+        const span = document.createElement("span");
+        span.textContent = speciesLabel.charAt(0).toUpperCase() || "ĐY?ó";
+        span.style.fontSize = "28px";
+        span.setAttribute("aria-hidden", "true");
+        avatar.appendChild(span);
+        attachSpriteIcon(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
+          mutations: Array.isArray(mutations) ? mutations : undefined,
+        });
       };
       const species = String(slot?.petSpecies || "");
       const mutations = (slot as any)?.mutations ?? (pet as any)?.mutations;
-      setIcon(species, mutations);
+      setIcon(species, Array.isArray(mutations) ? mutations : undefined);
 
       const titleWrap = document.createElement("div");
       titleWrap.style.display = "flex";
@@ -2293,12 +2298,36 @@ function renderWeatherTab(view: HTMLElement, ui: Menu) {
       background: "#101820",
     });
 
-    const weatherSprite = createWeatherSprite(row.spriteKey ?? row.id, {
-      size: ICON - 4,
-      fallback: "🌦",
-      alt: row.name,
-    });
-    iconWrap.appendChild(weatherSprite);
+    const weatherIcon = document.createElement("span");
+    weatherIcon.textContent = row.name.trim().charAt(0) || "🌦";
+    weatherIcon.style.fontSize = `${ICON - 8}px`;
+    weatherIcon.setAttribute("aria-hidden", "true");
+    iconWrap.appendChild(weatherIcon);
+
+    const weatherCategories = ["ui", "weather", "mutation"];
+    const candidateSet = new Set<string>();
+    const addCandidate = (value?: string | null) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      if (trimmed) {
+        candidateSet.add(trimmed);
+        candidateSet.add(trimmed.replace(/\s+/g, ""));
+      }
+    };
+    addCandidate(row.name);
+    addCandidate(row.atomValue);
+    addCandidate(row.id);
+    const bases = Array.from(candidateSet).map(value => value.replace(/icon$/i, ""));
+    const candidates = Array.from(
+      new Set(
+        bases
+          .map(base => `${base}Icon`)
+          .concat(Array.from(candidateSet)),
+      ).values(),
+    ).filter(Boolean);
+    if (candidates.length) {
+      attachSpriteIcon(iconWrap, weatherCategories, candidates, ICON, "alerts-weather");
+    }
 
     const col = document.createElement("div");
     Object.assign(col.style, {
@@ -2558,4 +2587,3 @@ export function renderNotifierMenu(root: HTMLElement) {
   ui.addTab("settings", "⚙️ Settings", (view) => renderSettingsTab(view, ui));
   ui.mount(root);
 }
-

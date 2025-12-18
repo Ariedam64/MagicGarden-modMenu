@@ -7,10 +7,6 @@ import {
   rarity,
   weatherCatalog,
 } from "../../data/hardcoded-data.clean";
-import { Sprites } from "../../core/sprite";
-import { ensureSpritesReady } from "../../services/assetManifest";
-import { loadTileSheet } from "../../utils/tileSheet";
-import { createWeatherSprite, getWeatherSpriteKey } from "../../utils/sprites";
 import { formatPrice } from "../../utils/format";
 import { StatsService } from "../../services/stats";
 import type { StatsSnapshot } from "../../services/stats";
@@ -24,6 +20,7 @@ import {
   myPetInfos,
 } from "../../store/atoms";
 import type { GardenState } from "../../store/atoms";
+import { attachSpriteIcon } from "../spriteIconCache";
 const NF_INT = new Intl.NumberFormat("en-US");
 const formatInt = (value: number) => NF_INT.format(Math.max(0, Math.floor(value || 0)));
 
@@ -659,19 +656,43 @@ type StatListCell = {
   content?: Node;
 };
 
-function createWeatherNameCell(entry: { label: string; spriteKey?: string | null }): StatListCell {
+function createWeatherNameCell(entry: { label: string; lookupId: string }): StatListCell {
   const wrapper = document.createElement("span");
   wrapper.className = "stats-weather__name";
 
   const iconWrap = document.createElement("span");
   iconWrap.className = "stats-weather__icon";
 
-  const sprite = createWeatherSprite(entry.spriteKey ?? entry.label, {
-    size: 32,
-    fallback: "🌦",
-    alt: entry.label,
-  });
-  iconWrap.appendChild(sprite);
+  const initials = entry.label?.trim().charAt(0) || "—";
+  iconWrap.textContent = initials.toUpperCase();
+  if (entry.label) {
+    iconWrap.setAttribute("aria-label", entry.label);
+    iconWrap.setAttribute("title", entry.label);
+  }
+  const categories = ["ui"];
+  const normalized = entry.lookupId.replace(/\s+/g, "");
+  const sanitize = (value: string) => value.replace(/[^a-zA-Z0-9]/g, "");
+  const bases = Array.from(
+    new Set(
+      [
+        sanitize(entry.lookupId),
+        normalized,
+        entry.lookupId.replace(/Icon$/i, ""),
+        normalized.replace(/Icon$/i, ""),
+      ].filter(Boolean),
+    ),
+  );
+  const candidates = Array.from(
+    new Set(
+      bases
+        .map(base => `${base}Icon`)
+        .filter(candidate => candidate.includes("Icon")),
+    ),
+  );
+  if (candidates.length === 0) {
+    candidates.push(`${normalized || sanitize(entry.lookupId)}Icon`);
+  }
+  attachSpriteIcon(iconWrap, categories, candidates, 28, "stats-weather");
 
   const label = document.createElement("span");
   label.className = "stats-weather__label";
@@ -889,228 +910,21 @@ function createPetRarityGroups(): Map<PetRarity, string[]> {
   return map;
 }
 
-type SpriteOptions = {
-  size?: number;
-  fallback?: string;
-};
-
-const petSpriteCache = new Map<string, string | null>();
-const petSpritePromises = new Map<string, Promise<string | null>>();
-const petSpriteSubscribers = new Map<string, Set<HTMLSpanElement>>();
-const petSpriteConfig = new WeakMap<HTMLSpanElement, { size: number; fallback: string }>();
-let petSpriteListenerAttached = false;
-let petSheetBasesCache: string[] | null = null;
-
-function resetPetSheetBases(): void {
-  petSheetBasesCache = null;
-}
-
-function getPetSheetBases(): string[] {
-  if (petSheetBasesCache) return petSheetBasesCache;
-  const urls = new Set<string>();
-  try {
-    Sprites.listPets().forEach((url) => urls.add(url));
-  } catch {
-    /* ignore */
-  }
-
-  const bases = Array.from(urls, (url) => {
-    const clean = url.split(/[?#]/)[0] ?? url;
-    const file = clean.split("/").pop() ?? clean;
-    return file.replace(/\.[^.]+$/, "");
-  });
-
-  petSheetBasesCache = bases;
-  return bases;
-}
-
-function toPetTileIndex(tileRef: unknown): number | null {
-  const value =
-    typeof tileRef === "number" && Number.isFinite(tileRef) ? tileRef : Number(tileRef);
-  if (!Number.isFinite(value)) return null;
-  if (value <= 0) return value;
-  return value - 1;
-}
-
-async function fetchPetSprite(species: string): Promise<string | null> {
-  await ensureSpritesReady();
-
-  const entry = petCatalog[species as keyof typeof petCatalog] as
-    | { tileRef?: number | null }
-    | undefined;
-  const tileRef = entry?.tileRef;
-  if (tileRef == null) return null;
-  const index = toPetTileIndex(tileRef);
-  if (index == null) return null;
-
-  const baseCandidates = new Set<string>(getPetSheetBases());
-  if (baseCandidates.size === 0) {
-    baseCandidates.add("pets");
-    baseCandidates.add("Pets");
-  }
-
-  for (const base of baseCandidates) {
-    try {
-      const tiles = await loadTileSheet(base);
-      const tile = tiles.find((t) => t.index === index);
-      if (!tile) continue;
-      const canvas = Sprites.toCanvas(tile);
-      if (canvas && canvas.width > 0 && canvas.height > 0) {
-        const copy = document.createElement("canvas");
-        copy.width = canvas.width;
-        copy.height = canvas.height;
-        const ctx = copy.getContext("2d");
-        if (!ctx) continue;
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(canvas, 0, 0);
-        return copy.toDataURL();
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  return null;
-}
-
-function applyPetSprite(el: HTMLSpanElement, src: string | null): void {
-  const cfg = petSpriteConfig.get(el);
-  if (!cfg) return;
-  const { size, fallback } = cfg;
-
-  el.classList.add("stats-pet__sprite-icon");
-  el.style.setProperty("--stats-pet-sprite-size", `${size}px`);
-  el.innerHTML = "";
-
-  if (src) {
-    el.style.fontSize = "";
-    const img = document.createElement("img");
-    img.src = src;
-    img.alt = "";
-    img.decoding = "async";
-    (img as any).loading = "lazy";
-    img.draggable = false;
-    el.appendChild(img);
-  } else {
-    el.textContent = fallback;
-    el.style.fontSize = `${Math.max(10, Math.round(size * 0.7))}px`;
-  }
-}
-
-function subscribePetSprite(
-  species: string,
-  el: HTMLSpanElement,
-  config: { size: number; fallback: string },
-): void {
-  let subs = petSpriteSubscribers.get(species);
-  if (!subs) {
-    subs = new Set();
-    petSpriteSubscribers.set(species, subs);
-  }
-  subs.add(el);
-  petSpriteConfig.set(el, config);
-}
-
-function notifyPetSpriteSubscribers(species: string, src: string | null): void {
-  const subs = petSpriteSubscribers.get(species);
-  if (!subs) return;
-
-  subs.forEach((el) => {
-    if (!el.isConnected) {
-      subs.delete(el);
-      petSpriteConfig.delete(el);
-      return;
-    }
-    applyPetSprite(el, src);
-  });
-
-  if (subs.size === 0) {
-    petSpriteSubscribers.delete(species);
-  }
-}
-
-function loadPetSprite(species: string): Promise<string | null> {
-  if (typeof window === "undefined") {
-    return Promise.resolve(null);
-  }
-
-  const cached = petSpriteCache.get(species);
-  if (cached !== undefined) {
-    notifyPetSpriteSubscribers(species, cached);
-    return Promise.resolve(cached);
-  }
-
-  const inflight = petSpritePromises.get(species);
-  if (inflight) return inflight;
-
-  const promise = fetchPetSprite(species)
-    .then((src) => {
-      petSpriteCache.set(species, src);
-      petSpritePromises.delete(species);
-      notifyPetSpriteSubscribers(species, src);
-      return src;
-    })
-    .catch(() => {
-      petSpritePromises.delete(species);
-      return null;
-    });
-
-  petSpritePromises.set(species, promise);
-  return promise;
-}
-
-function ensurePetSpriteListener(): void {
-  if (petSpriteListenerAttached || typeof window === "undefined") return;
-  petSpriteListenerAttached = true;
-  window.addEventListener("mg:sprite-detected", () => {
-    petSpriteCache.clear();
-    petSpritePromises.clear();
-    resetPetSheetBases();
-    const keys = Array.from(petSpriteSubscribers.keys());
-    keys.forEach((key) => {
-      void loadPetSprite(key);
-    });
-  });
-}
-
-function createPetSprite(species: string, options: SpriteOptions = {}): HTMLSpanElement {
-  const size = Math.max(12, options.size ?? 28);
-  const defaultFallback = species.trim().charAt(0) || "🐾";
-  const fallbackSource = options.fallback ?? defaultFallback;
-  const fallback = fallbackSource.toString();
-  const el = document.createElement("span");
-
-  if (typeof window === "undefined") {
-    el.classList.add("stats-pet__sprite-icon");
-    el.style.setProperty("--stats-pet-sprite-size", `${size}px`);
-    el.textContent = fallback;
-    el.style.fontSize = `${Math.max(10, Math.round(size * 0.7))}px`;
-    return el;
-  }
-
-  ensurePetSpriteListener();
-  subscribePetSprite(species, el, { size, fallback });
-  const cached = petSpriteCache.get(species);
-  applyPetSprite(el, cached ?? null);
-  void loadPetSprite(species);
-  return el;
-}
-
 function createPetSpeciesCell(species: string): StatListCell {
   const wrapper = document.createElement("span");
   wrapper.className = "stats-pet__species";
 
-  const sprite = createPetSprite(species, {
-    size: 28,
-    fallback: species.trim().charAt(0).toUpperCase() || "🐾",
-  });
+  const iconWrap = document.createElement("span");
+  iconWrap.className = "stats-pet__icon";
+  iconWrap.textContent = species?.trim().charAt(0).toUpperCase() || "?";
+  iconWrap.setAttribute("aria-hidden", "true");
+  attachSpriteIcon(iconWrap, ["pet"], species, 28, "stats-pet");
 
   const label = document.createElement("span");
   label.className = "stats-pet__label";
   label.textContent = species;
 
-  wrapper.appendChild(sprite);
-  wrapper.appendChild(label);
+  wrapper.append(iconWrap, label);
 
   return { content: wrapper };
 }
@@ -1238,18 +1052,19 @@ function renderWeatherSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot)
       const label = info?.atomValue ?? key;
       const lower = key.toLowerCase();
       const entry = stats.weather[lower] ?? { triggers: 0 };
-      const spriteKey =
-        getWeatherSpriteKey(key)
-        ?? getWeatherSpriteKey(info?.atomValue)
-        ?? getWeatherSpriteKey((info as any)?.displayName)
-        ?? null;
-      return { key: lower, label, triggers: entry.triggers, spriteKey };
+      const lookupId = (label && label.trim()) || key;
+      return {
+        key: lower,
+        label,
+        triggers: entry.triggers,
+        lookupId,
+      };
     })
     .sort((a, b) => a.label.localeCompare(b.label));
 
   for (const entry of weatherEntries) {
     rows.push([
-      createWeatherNameCell({ label: entry.label, spriteKey: entry.spriteKey }),
+      createWeatherNameCell({ label: entry.label, lookupId: entry.lookupId }),
       { text: formatInt(entry.triggers) },
     ]);
   }
