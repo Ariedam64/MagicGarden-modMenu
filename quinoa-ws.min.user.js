@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.95.2
+// @version      2.95.21
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1527,6 +1527,30 @@
     processNext();
   }
 
+  // src/utils/gameVersion.ts
+  var gameVersion = null;
+  function initGameVersion(doc) {
+    if (gameVersion !== null) {
+      return;
+    }
+    const d = doc ?? (typeof document !== "undefined" ? document : null);
+    if (!d) {
+      return;
+    }
+    const scripts = d.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts.item(i);
+      if (!script) continue;
+      const src = script.src;
+      if (!src) continue;
+      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (match && match[1]) {
+        gameVersion = match[1];
+        return;
+      }
+    }
+  }
+
   // src/sprite/index.ts
   var ctx = createSpriteContext();
   var hooks = createPixiHooks();
@@ -1602,6 +1626,11 @@
   }
   var prefetchPromise = null;
   function detectGameVersion() {
+    try {
+      initGameVersion();
+      if (gameVersion) return gameVersion;
+    } catch {
+    }
     const root = globalThis.unsafeWindow || globalThis;
     const gv = root.gameVersion || root.MG_gameVersion || root.__MG_GAME_VERSION__;
     if (gv) {
@@ -36507,30 +36536,6 @@ next: ${next}`;
       } catch {
       }
     };
-  }
-
-  // src/utils/gameVersion.ts
-  var gameVersion = null;
-  function initGameVersion(doc) {
-    if (gameVersion !== null) {
-      return;
-    }
-    const d = doc ?? (typeof document !== "undefined" ? document : null);
-    if (!d) {
-      return;
-    }
-    const scripts = d.scripts;
-    for (let i = 0; i < scripts.length; i++) {
-      const script = scripts.item(i);
-      if (!script) continue;
-      const src = script.src;
-      if (!src) continue;
-      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
-      if (match && match[1]) {
-        gameVersion = match[1];
-        return;
-      }
-    }
   }
 
   // src/services/settings.ts
