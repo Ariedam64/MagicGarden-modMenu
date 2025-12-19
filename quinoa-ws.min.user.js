@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.95.22
+// @version      2.95.25
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -28432,6 +28432,36 @@ next: ${next}`;
     attachSpriteIcon(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
     return wrap;
   }
+  function createEggIcon(eggId, label2, size = 32) {
+    const fallback = "\u{1F95A}";
+    const wrap = applyStyles(document.createElement("span"), {
+      width: `${size}px`,
+      height: `${size}px`,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center"
+    });
+    wrap.appendChild(createEmojiIcon(fallback, size));
+    const candidates = /* @__PURE__ */ new Set();
+    const add = (value) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      candidates.add(trimmed);
+      candidates.add(trimmed.replace(/\s+/g, ""));
+      const last = trimmed.split(/[./]/).pop();
+      if (last && last !== trimmed) {
+        candidates.add(last);
+        candidates.add(last.replace(/\s+/g, ""));
+      }
+    };
+    add(eggId);
+    add(label2);
+    if (candidates.size) {
+      attachSpriteIcon(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
+    }
+    return wrap;
+  }
   function createWeatherBadge(tag, options = {}) {
     if (tag === NO_WEATHER_TAG) {
       return createNoWeatherIcon(options);
@@ -29758,7 +29788,7 @@ next: ${next}`;
       const name = document.createElement("div");
       name.style.fontWeight = "600";
       name.style.color = "#e7eef7";
-      const icon = createEmojiIcon("\u{1F95A}", 32);
+      const icon = createEggIcon(opt.id, opt.name, 32);
       row.append(toggle, icon, name);
       return { row, toggle, name };
     };
