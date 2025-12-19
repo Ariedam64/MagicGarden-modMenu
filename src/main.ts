@@ -28,14 +28,11 @@ import { installAriesModApi } from "./utils/ariesModApi";
 import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 
 import { warmupSpriteCache } from "./ui/spriteIconCache";
+import { tos } from "./utils/tileObjectSystemApi";
 
 const ariesMod: AriesModApi = installAriesModApi();
 
-try {
-  warmupSpriteCache();
-} catch {
-  /* ignore */
-}
+
 
 (async function () {
   "use strict";
@@ -44,6 +41,9 @@ try {
 
   installPageWebSocketHook();
   initGameVersion();
+
+  try {warmupSpriteCache();} catch {}
+    tos.init()
 
   EditorService.init();
 

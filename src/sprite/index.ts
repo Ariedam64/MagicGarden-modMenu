@@ -9,6 +9,7 @@ import { joinPath, relPath } from './utils/path';
 import { exposeApi, type HudHandles } from './api/expose';
 import { curVariant, processJobs } from './mutations/variantBuilder';
 import { primeSpriteData, primeWarmupKeys, warmupSpriteCache } from '../ui/spriteIconCache';
+import { gameVersion as globalGameVersion, initGameVersion } from '../utils/gameVersion';
 
 const ctx = createSpriteContext();
 const hooks = createPixiHooks();
@@ -41,6 +42,8 @@ const yieldToBrowser = (): Promise<void> => {
     }
   });
 };
+
+const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 async function warmupSpritesFromAtlases(
   atlasJsons: Record<string, any>,
@@ -99,6 +102,14 @@ async function warmupSpritesFromAtlases(
 let prefetchPromise: Promise<PrefetchedAtlas | null> | null = null;
 
 function detectGameVersion() {
+  // Prefer the global helper initialized in utils/gameVersion
+  try {
+    initGameVersion();
+    if (globalGameVersion) return globalGameVersion;
+  } catch {
+    /* fall through to legacy detection */
+  }
+
   const root: any = (globalThis as any).unsafeWindow || (globalThis as any);
   const gv = root.gameVersion || root.MG_gameVersion || root.__MG_GAME_VERSION__;
   if (gv) {
@@ -113,9 +124,24 @@ function detectGameVersion() {
   const urls = [...scriptUrls, ...linkUrls];
   for (const u of urls) {
     const m = u.match(/\/version\/([^/]+)\//);
-    if (m?.[1]) return m[1];
+  if (m?.[1]) return m[1];
   }
   throw new Error('Version not found.');
+}
+
+async function resolveGameVersionWithRetry(timeoutMs: number = 6000): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: any = null;
+  while (Date.now() < deadline) {
+    try {
+      const v = detectGameVersion();
+      if (v) return v;
+    } catch (err) {
+      lastError = err;
+    }
+    await delay(120);
+  }
+  throw lastError ?? new Error('Version not found.');
 }
 
 function drawFrameToDataURL(
@@ -284,7 +310,23 @@ async function start() {
   ctx.state.started = true;
 
   // Detect version/base early to prefetch in parallel.
-  const version = detectGameVersion();
+  let version: string;
+  const retryDeadline = typeof performance !== 'undefined' ? performance.now() + 8000 : Date.now() + 8000;
+  for (;;) {
+    try {
+      version = await resolveGameVersionWithRetry();
+      console.info('[MG SpriteCatalog] game version resolved', version);
+      break;
+    } catch (err) {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      if (now >= retryDeadline) {
+        console.error('[MG SpriteCatalog] failed to resolve game version', err);
+        throw err;
+      }
+      console.warn('[MG SpriteCatalog] retrying game version detection...');
+      await delay(200);
+    }
+  }
   const base = `${ctx.cfg.origin.replace(/\/$/, '')}/version/${version}/assets/`;
   if (!prefetchPromise) {
     prefetchPromise = prefetchAtlas(base);

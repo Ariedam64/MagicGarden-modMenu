@@ -276,6 +276,41 @@ function createSeedIcon(seedKey: string, options: IconOptions = {}): HTMLSpanEle
   return wrap;
 }
 
+function createEggIcon(eggId: string, label?: string, size: number = 32): HTMLSpanElement {
+  const fallback = "🥚";
+  const wrap = applyStyles(document.createElement("span"), {
+    width: `${size}px`,
+    height: `${size}px`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+  });
+  wrap.appendChild(createEmojiIcon(fallback, size));
+
+  const candidates = new Set<string>();
+  const add = (value?: string | null) => {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    candidates.add(trimmed);
+    candidates.add(trimmed.replace(/\s+/g, ""));
+    const last = trimmed.split(/[./]/).pop();
+    if (last && last !== trimmed) {
+      candidates.add(last);
+      candidates.add(last.replace(/\s+/g, ""));
+    }
+  };
+
+  add(eggId);
+  add(label);
+
+  if (candidates.size) {
+    attachSpriteIcon(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
+  }
+
+  return wrap;
+}
+
 function createWeatherBadge(tag: WeatherTag, options: IconOptions = {}): HTMLElement {
   if (tag === NO_WEATHER_TAG) {
     return createNoWeatherIcon(options);
@@ -1840,7 +1875,7 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
     const name = document.createElement("div");
     name.style.fontWeight = "600";
     name.style.color = "#e7eef7";
-    const icon = createEmojiIcon("🥚", 32);
+    const icon = createEggIcon(opt.id, opt.name, 32);
     row.append(toggle, icon, name);
 
     return { row, toggle, name };

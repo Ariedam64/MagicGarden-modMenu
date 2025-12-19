@@ -45,129 +45,117 @@ export const tileRefsMap = {
 };
 
 export const tileRefsPlants = {
-  DirtPatch: 1,
-  SproutFlower: 2,
-  SproutVegetable: 3,
-  SproutFruit: 4,
-  SproutVine: 5,
-  StemFlower: 6,
-  Trellis: 7,
-
-  Daffodil: 11,
-  Tulip: 12,
-  Sunflower: 13,
-  Lily: 14,
-  Starweaver: 15,
-  Chrysanthemum: 16,
-  AloePlant: 17,
-  Aloe: 18,
-
-  Blueberry: 21,
-  Banana: 22,
-  Strawberry: 23,
-  Mango: 24,
-  Grape: 25,
-  Watermelon: 26,
-  Lemon: 27,
-  Apple: 28,
-  Pear: 29,
-  Pineapple: 30,
-  Pepper: 31,
-  Tomato: 32,
-  BabyCarrot: 33,
-  Carrot: 34,
-  Pumpkin: 35,
-  Corn: 36,
-  FavaBean: 37,
-  Cacao: 38,
-
-  PalmTreeTop: 39,
-  BushyTree: 40,
-  Coconut: 41,
-  MushroomPlant: 42,
-  PassionFruit: 43,
-  DragonFruit: 44,
-  Lychee: 45,
-  Mushroom: 46,
-  BurrosTail: 47,
-
-  Echeveria: 49,
-  Delphinium: 50,
-  DawnCelestialCrop: 51,
-  MoonCelestialCrop: 52,
-
-  Camellia: 57,
-  Hedge: 58,
-  FlowerBush: 59,
-  Squash: 60,
+    DirtPatch: 1,
+    SproutFlower: 2,
+    SproutVegetable: 3,
+    SproutFruit: 4,
+    SproutVine: 5,
+    StemFlower: 6,
+    Trellis: 7,
+    Daffodil: 11,
+    Tulip: 12,
+    Sunflower: 13,
+    Lily: 14,
+    Starweaver: 15,
+    Chrysanthemum: 16,
+    Aloe: 18,
+    Blueberry: 21,
+    Banana: 22,
+    Strawberry: 23,
+    Mango: 24,
+    Grape: 25,
+    Watermelon: 26,
+    Lemon: 27,
+    Apple: 28,
+    Pear: 29,
+    Pineapple: 30,
+    Pepper: 31,
+    PalmTree: 3e3,
+    CacaoTree: 3001,
+    Tree: 8,
+    Tomato: 32,
+    BabyCarrot: 33,
+    Carrot: 34,
+    Pumpkin: 35,
+    Corn: 36,
+    FavaBean: 37,
+    Cacao: 38,
+    PalmTreeTop: 39,
+    BushyTree: 40,
+    Coconut: 41,
+    PassionFruit: 43,
+    DragonFruit: 44,
+    Lychee: 45,
+    Mushroom: 3002,
+    BurrosTail: 47,
+    Echeveria: 49,
+    Delphinium: 50,
+    DawnCelestialCrop: 51,
+    MoonCelestialCrop: 52,
+    Camellia: 57,
+    Hedge: 58,
+    FlowerBush: 59,
+    Squash: 60,
+    PineTree: 61,
+    Poinsettia: 62,
+    Shrub: 63
 };
 
 export const tileRefsTallPlants = {
-  Bamboo: 1,
-  PalmTree: 2,
-
-  DawnCelestialPlatform: 3,
-  DawnCelestialPlant: 4,
-  DawnCelestialPlantActive: 5,
-  DawnCelestialPlatformTopmostLayer: 6,
-
-  Cactus: 7,
-  Tree: 8,
-
-  MoonCelestialPlatform: 9,
-  MoonCelestialPlant: 10,
-  MoonCelestialPlantActive: 11,
-
-  StarweaverPlatform: 13,
-  StarweaverPlant: 14,
-
-  CacaoTree: 15,
+    Bamboo: 1,
+    DawnCelestialPlatform: 3,
+    DawnCelestialPlant: 4,
+    DawnCelestialPlantActive: 5,
+    DawnCelestialPlatformTopmostLayer: 6,
+    Cactus: 7,
+    MoonCelestialPlatform: 9,
+    MoonCelestialPlant: 10,
+    MoonCelestialPlantActive: 11,
+    StarweaverPlatform: 13,
+    StarweaverPlant: 14
 };
 
 export const tileRefsSeeds = {
-  Daffodil: 1,
-  Tulip: 2,
-  Sunflower: 3,
-
-  Starweaver: 6,
-  DawnCelestial: 7,
-  MoonCelestial: 8,
-
-  Blueberry: 11,
-  Banana: 12,
-  Strawberry: 13,
-  Mango: 14,
-  Grape: 15,
-  Watermelon: 16,
-  Lemon: 17,
-  Apple: 18,
-  Pear: 19,
-  Lily: 20,
-  Pepper: 21,
-  Tomato: 22,
-  Carrot: 23,
-  Pumpkin: 25,
-  Corn: 26,
-  Peach: 27,
-  FavaBean: 28,
-  Cacao: 29,
-  Delphinium: 30,
-
-  Coconut: 31,
-  Mushroom: 32,
-  PassionFruit: 33,
-  DragonFruit: 34,
-  Lychee: 35,
-  BurrosTail: 37,
-
-  Aloe: 39,
-  Echeveria: 40,
-  Bamboo: 41,
-  Cactus: 42,
-
-  Camellia: 48,
-  Chrysanthemum: 49,
-  Squash: 50,
+    Daffodil: 1,
+    Tulip: 2,
+    Sunflower: 3,
+    Starweaver: 6,
+    DawnCelestial: 7,
+    MoonCelestial: 8,
+    Blueberry: 11,
+    Banana: 12,
+    Strawberry: 13,
+    Mango: 14,
+    Grape: 15,
+    Watermelon: 16,
+    Lemon: 17,
+    Apple: 18,
+    Pear: 19,
+    Lily: 20,
+    Pepper: 21,
+    Tomato: 22,
+    Carrot: 23,
+    Pumpkin: 25,
+    Corn: 26,
+    Peach: 27,
+    FavaBean: 28,
+    Cacao: 29,
+    Delphinium: 30,
+    Coconut: 31,
+    Mushroom: 32,
+    PassionFruit: 33,
+    DragonFruit: 34,
+    Lychee: 35,
+    BurrosTail: 37,
+    Aloe: 39,
+    Echeveria: 40,
+    Bamboo: 41,
+    Cactus: 42,
+    Camellia: 48,
+    Chrysanthemum: 49,
+    Squash: 50,
+    Pinecone: 51,
+    Poinsettia: 52
 };
 
 export const tileRefsItems = {
@@ -234,7 +222,11 @@ export const tileRefsPets = {
   Goat: 19,
   Dragonfly: 20,
   Turkey: 29,
-  Peacock: 30
+  Peacock: 30,
+  SnowFox: 31,
+  Stoat: 32,
+  WhiteCaribou: 33,
+  WinterEgg: 34
 }
 
 export const tileRefsMutations = {
@@ -260,67 +252,73 @@ export const tileRefsMutationLabels = {
   Ambercharged: "Amberbound"};
 
 export const tileRefsDecor = {
-  WoodPedestal: 4,
-  StonePedestal: 6,
-  MarblePedestal: 8,
-  SmallRock: 11,
-  WoodBench: 13,
-  WoodBenchBackwards: 14,
-  StoneBench: 15,
-  StoneBucketPedestal: 16,
-  MarbleBench: 17,
-  MarbleBenchBackwards: 18,
-  MediumRock: 21,
-  WoodLampPost: 23,
-  WoodBenchSideways: 24,
-  StoneLampPost: 25,
-  StoneBenchSideways: 26,
-  StoneColumn: 26,
-  MarbleLampPost: 27,
-  MarbleBenchSideways: 28,
-  HayBale: 29,
-  PetHutch: 30,
-  LargeRock: 31,
-  WoodArch: 33,
-  WoodBucketPedestal: 34,
-  WoodBridge: 34,
-  StoneArch: 35,
-  StoneBridge: 36,
-  MarbleArch: 37,
-  MarbleBridge: 38,
-  HayBaleSideways: 39,
-  MiniFairyForge: 40,
-  WoodArchSide: 43,
-  WoodBridgeSideways: 44,
-  StoneArchSideways: 45,
-  StoneBridgeSideways: 46,
-  MarbleArchSideways: 47,
-  MarbleBridgeSideways: 48,
-  StrawScarecrow: 49,
-  MiniFairyCottage: 50,
-  WoodOwl: 53,
-  Birdhouse: 54,
-  StoneGnome: 55,
-  StoneBirdBath: 56,
-  MarbleBlobling: 57,
-  MarbleBucketPedestal: 58,
-  MarbleFountain: 58,
-  Cauldron: 59,
-  MiniFairyKeep: 60,
-  WoodStool: 63,
-  WoodWindmill: 64,
-  StoneGardenBox: 66,
-  MarbleColumn: 68,
-  MiniWizardTower: 68,
-  SmallGravestone: 69,
-  SmallGravestoneSideways: 70,
-  WoodenWindmill: 73,
-  WoodGardenBox: 74,
-  MarbleGardenBox: 78,
-  MediumGravestone: 79,
-  MediumGravestoneSideways: 80,
-  LargeGravestone: 89,
-  LargeGravestoneSideways: 90,
+      SmallRock: 11,
+    MediumRock: 21,
+    LargeRock: 31,
+    WoodPedestal: 4,
+    WoodBench: 13,
+    WoodBenchBackwards: 14,
+    WoodBenchSideways: 24,
+    WoodBucketPedestal: 34,
+    WoodLampPost: 23,
+    WoodStool: 63,
+    WoodArch: 33,
+    WoodArchSide: 43,
+    WoodBridge: 34,
+    WoodBridgeSideways: 44,
+    WoodOwl: 53,
+    WoodGardenBox: 74,
+    Birdhouse: 54,
+    WoodWindmill: 64,
+    StonePedestal: 6,
+    StoneBench: 15,
+    StoneBenchSideways: 2600,
+    StoneBucketPedestal: 16,
+    StoneLampPost: 25,
+    StoneColumn: 2601,
+    StoneArch: 35,
+    StoneArchSideways: 45,
+    StoneBridge: 36,
+    StoneBridgeSideways: 46,
+    StoneGnome: 55,
+    StoneGardenBox: 66,
+    StoneBirdBath: 56,
+    MarblePedestal: 8,
+    MarbleBench: 17,
+    MarbleBenchBackwards: 18,
+    MarbleBenchSideways: 28,
+    MarbleBucketPedestal: 58,
+    MarbleLampPost: 27,
+    MarbleColumn: 68,
+    MarbleArch: 37,
+    MarbleArchSideways: 47,
+    MarbleBridge: 38,
+    MarbleBridgeSideways: 48,
+    MarbleBlobling: 57,
+    MarbleFountain: 58,
+    MarbleGardenBox: 78,
+    MiniFairyCottage: 50,
+    MiniFairyForge: 40,
+    MiniFairyKeep: 60,
+    MiniWizardTower: 68,
+    HayBale: 29,
+    HayBaleSideways: 39,
+    StrawScarecrow: 49,
+    Cauldron: 59,
+    SmallGravestone: 69,
+    SmallGravestoneSideways: 70,
+    MediumGravestone: 79,
+    MediumGravestoneSideways: 80,
+    LargeGravestone: 89,
+    LargeGravestoneSideways: 90,
+    WoodCaribou: 91,
+    StoneCaribou: 92,
+    MarbleCaribou: 93,
+    ColoredStringLights: 94,
+    ColoredStringLightsSideways: 95,
+    StringLights: 96,
+    StringLightsSideways: 97,
+    PetHutch: 30
 };
 
 export const plantCatalog = {
@@ -793,6 +791,29 @@ export const plantCatalog = {
       maxScale: 1.7,
     },
   },
+  PineTree: {
+        seed: {
+            tileRef: tileRefsSeeds.Pinecone,
+            name: "Pinecone",
+            coinPrice: 12e3,
+            creditPrice: 30,
+            rarity: rarity.Legendary,
+        },
+        plant: {
+            tileRef: tileRefsPlants.PineTree,
+            name: "Pine Tree",
+            harvestType: harvestType.Single,
+            baseTileScale: 1.5
+        },
+        crop: {
+            tileRef: tileRefsPlants.PineTree,
+            name: "Pine Tree",
+            baseSellPrice: 15e3,
+            baseWeight: 1e3,
+            baseTileScale: 1.5,
+            maxScale: 3.5
+        }
+    },
 
   Lily: {
     seed: {
@@ -996,6 +1017,48 @@ export const plantCatalog = {
       maxScale: 2,
     },
   },
+  Poinsettia: {
+        seed: {
+            tileRef: tileRefsSeeds.Poinsettia,
+            name: "Poinsettia Seed",
+            coinPrice: 5e5,
+            creditPrice: 500,
+            rarity: rarity.Mythic,
+        },
+        plant: {
+            tileRef: tileRefsTallPlants.Shrub,
+            name: "Poinsettia Bush",
+            harvestType: harvestType.Multiple,
+            slotOffsets: [{
+                x: .05,
+                y: -.4,
+                rotation: 0
+            }, {
+                x: -.3,
+                y: -.15,
+                rotation: 0
+            }, {
+                x: .3,
+                y: -.1,
+                rotation: 0
+            }, {
+                x: -.02,
+                y: .17,
+                rotation: 0
+            }],
+            secondsToMature: 10800,
+            baseTileScale: 1,
+            rotateSlotOffsetsRandomly: !0
+        },
+        crop: {
+            tileRef: tileRefsTallPlants.Poinsettia,
+            name: "Poinsettia",
+            baseSellPrice: 3e4,
+            baseWeight: .02,
+            baseTileScale: .3,
+            maxScale: 2
+        }
+    },
 
   Chrysanthemum: {
     seed: {
@@ -1437,7 +1500,19 @@ export const eggCatalog = {
   UncommonEgg: { tileRef: tileRefsPets.UncommonEgg, name: "Uncommon Egg", coinPrice: 1e6, creditPrice: 48, rarity: rarity.Uncommon, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 3600, faunaSpawnWeights: { Chicken: 65, Bunny: 25, Dragonfly: 10 } },
   RareEgg: { tileRef: tileRefsPets.RareEgg, name: "Rare Egg", coinPrice: 1e7, creditPrice: 99, rarity: rarity.Rare, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 21600, faunaSpawnWeights: { Pig: 90, Cow: 10 } },
   LegendaryEgg: { tileRef: tileRefsPets.LegendaryEgg, name: "Legendary Egg", coinPrice: 1e8, creditPrice: 249, rarity: rarity.Legendary, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 43200, faunaSpawnWeights: { Squirrel: 60, Turtle: 30, Goat: 10 } },
-  MythicalEgg: { tileRef: tileRefsPets.MythicalEgg, name: "Mythical Egg", coinPrice: 1e9, creditPrice: 599, rarity: rarity.Mythic, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 86400, faunaSpawnWeights: { Butterfly: 75, Capybara: 5, Peacock: 20 } }
+  MythicalEgg: { tileRef: tileRefsPets.MythicalEgg, name: "Mythical Egg", coinPrice: 1e9, creditPrice: 599, rarity: rarity.Mythic, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 86400, faunaSpawnWeights: { Butterfly: 75, Capybara: 5, Peacock: 20 } },
+  WinterEgg: {
+    tileRef: tileRefsPets.WinterEgg,
+    name: "Winter Egg",
+    coinPrice: 80_000_000,
+    creditPrice: 199,
+    rarity: rarity.Legendary,
+    initialTileScale: 0.3,
+    baseTileScale: 0.8,
+    secondsToHatch: 43200,
+    faunaSpawnWeights: { SnowFox: 75, Stoat: 20, WhiteCaribou: 5 },
+    expiryDate: new Date("2026-01-12T01:00:00.000Z"),
+  },
 };
 
 export const petCatalog = {
@@ -1559,6 +1634,60 @@ export const petCatalog = {
     tileTransformOrigin: "bottom", nudgeY: -0.1,
     diet: ["Pumpkin", "Coconut", "Pepper", "Camellia", "PassionFruit"]
   },
+  SnowFox: {
+        tileRef: tileRefsPets.SnowFox,
+        name: "Snow Fox",
+        coinsToFullyReplenishHunger: 14e3,
+        innateAbilityWeights: {
+            SnowGranter: 30,
+            SnowyCoinFinder: 30,
+            SnowyPetXpBoost: 30
+        },
+        maxScale: 2,
+        maturitySellPrice: 7e6,
+        matureWeight: 7.5,
+        moveProbability: .35,
+        moveTweenDurationMs: 400,
+        hoursToMature: 100,
+        rarity: rarity.Legendary,
+        diet: ["Echeveria", "Squash", "Grape"]
+    },
+    Stoat: {
+        tileRef: tileRefsPets.Stoat,
+        name: "Stoat",
+        coinsToFullyReplenishHunger: 1e4,
+        innateAbilityWeights: {
+            SnowGranter: 40,
+            SnowyHungerBoost: 40,
+            SnowyCropMutationBoost: 20
+        },
+        maxScale: 2,
+        maturitySellPrice: 1e7,
+        matureWeight: .4,
+        moveProbability: .3,
+        moveTweenDurationMs: 600,
+        hoursToMature: 100,
+        rarity: rarity.Legendary,
+        diet: ["Banana", "Pepper", "Cactus"]
+    },
+    WhiteCaribou: {
+        tileRef: tileRefsPets.WhiteCaribou,
+        name: "Caribou",
+        coinsToFullyReplenishHunger: 3e4,
+        innateAbilityWeights: {
+            FrostGranter: 50,
+            SnowyPlantGrowthBoost: 40,
+            SnowyCropSizeBoost: 10
+        },
+        maxScale: 2.5,
+        maturitySellPrice: 15e6,
+        matureWeight: 300,
+        moveProbability: .2,
+        moveTweenDurationMs: 1e3,
+        hoursToMature: 100,
+        rarity: rarity.Legendary,
+        diet: ["Camellia", "BurrosTail", "Mushroom"]
+    },
 
   Butterfly: {
     tileRef: tileRefsPets.Butterfly, name: "Butterfly",
@@ -1912,7 +2041,25 @@ export const petAbilities = {
     description: "Empowers dawn crops with special mutations",
     trigger: "continuous",
     baseParameters: {}
-  }
+  },
+  SnowGranter: {
+      name: "Snow Granter",
+      description: "Number of times Snow Granter triggered",
+      trigger: "continuous",
+      baseProbability: 8,
+      baseParameters: {
+          grantedMutations: ["Chilled"]
+      }
+  },
+  FrostGranter: {
+      name: "Frost Granter",
+      description: "Number of times Frost Granter triggered",
+      trigger: "continuous",
+      baseProbability: 6,
+      baseParameters: {
+          grantedMutations: ["Frozen"]
+      }
+  },
 };
 
 export const toolCatalog = {
@@ -1979,6 +2126,15 @@ export const decorCatalog = {
     coinPrice: 5000, creditPrice: 10, rarity: rarity.Common,
     baseTileScale: 1, isOneTimePurchase: false
   },
+  WoodCaribou: {
+        tileRef: tileRefsDecor.WoodCaribou,
+        name: "Wood Caribou",
+        coinPrice: 9e3,
+        creditPrice: 14,
+        rarity: rarity.Common,
+        baseTileScale: 1,
+        isOneTimePurchase: !1,
+    },
 
   // Bois
   WoodBench: {
@@ -2043,6 +2199,16 @@ export const decorCatalog = {
         baseTileScale: 1.5,isOneTimePurchase: false, nudgeY: -0.47
     },
 
+    StoneCaribou: {
+        tileRef: tileRefsDecor.StoneCaribou,
+        name: "Stone Caribou",
+        coinPrice: 75e4,
+        creditPrice: 72,
+        rarity: rarity.Uncommon,
+        baseTileScale: 1.2,
+        isOneTimePurchase: !1,
+    },
+
   // Pierre
   StoneBench: {
     tileRef: tileRefsDecor.StoneBench,
@@ -2098,6 +2264,16 @@ export const decorCatalog = {
     coinPrice: 10000000, creditPrice: 249, rarity: rarity.Uncommon,
     baseTileScale: 1.2, isOneTimePurchase: false, nudgeY: -0.46
   },
+
+      MarbleCaribou: {
+        tileRef: tileRefsDecor.MarbleCaribou,
+        name: "Marble Caribou",
+        coinPrice: 5e7,
+        creditPrice: 299,
+        rarity: rarity.Rare,
+        baseTileScale: 1.4,
+        isOneTimePurchase: !1,
+    },
 
   // Marbre
   MarbleBench: {
@@ -2216,6 +2392,51 @@ export const decorCatalog = {
     baseTileScale: 1.8, isOneTimePurchase: false, nudgeY: -0.42,
     expiryDate: new Date("2025-11-07T01:00:00.000Z")
   },
+
+  StringLights: {
+        tileRef: tileRefsDecor.StringLights,
+        rotationVariants: {
+            90: {
+                tileRef: tileRefsDecor.StringLightsSideways,
+                flipH: !0
+            },
+            180: {
+                tileRef: tileRefsDecor.StringLights,
+                flipH: !0
+            },
+            270: {
+                tileRef: tileRefsDecor.StringLightsSideways
+            }
+        },
+        name: "String Lights",
+        coinPrice: 7e3,
+        creditPrice: 12,
+        rarity: rarity.Common,
+        baseTileScale: 1,
+        isOneTimePurchase: !1
+    },
+    ColoredStringLights: {
+        tileRef: tileRefsDecor.ColoredStringLights,
+        rotationVariants: {
+            90: {
+                tileRef: tileRefsDecor.ColoredStringLightsSideways,
+                flipH: !0
+            },
+            180: {
+                tileRef: tileRefsDecor.ColoredStringLights,
+                flipH: !0
+            },
+            270: {
+                tileRef: tileRefsDecor.ColoredStringLightsSideways
+            }
+        },
+        name: "Colored String Lights",
+        coinPrice: 8e3,
+        creditPrice: 13,
+        rarity: rarity.Common,
+        baseTileScale: 1,
+        isOneTimePurchase: !1,
+    },
   SmallGravestone: {
     tileRef: tileRefsDecor.SmallGravestone,
     rotationVariants: {

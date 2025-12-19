@@ -302,6 +302,15 @@ export function attachSpriteIcon(
         return;
       }
       const resolved = selected;
+      const { key: mutationKey } = normalizeMutationList(options?.mutations);
+      const spriteKey = `${resolved.match.category}:${resolved.match.spriteId}${mutationKey}`;
+
+      const existingImg = target.querySelector<HTMLImageElement>("img[data-sprite-key]");
+      if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
+        // Already showing the right sprite; avoid flicker/replacement.
+        return;
+      }
+
       const dataUrl = await ensureSpriteDataCached(
         service,
         resolved.match.category,
@@ -325,6 +334,9 @@ export function attachSpriteIcon(
       img.style.objectFit = "contain";
       img.style.imageRendering = "auto";
       img.style.display = "block";
+      img.dataset.spriteKey = spriteKey;
+      img.dataset.spriteCategory = resolved.match.category;
+      img.dataset.spriteId = resolved.match.spriteId;
       requestAnimationFrame(() => {
         target.replaceChildren(img);
         options?.onSpriteApplied?.(img, {
