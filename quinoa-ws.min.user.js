@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.95.1
+// @version      2.95.25
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1158,6 +1158,31 @@
   // src/sprite/index.ts
   init_variantBuilder();
 
+  // src/utils/page-context.ts
+  var sandboxWin = window;
+  var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
+  var pageWindow = pageWin;
+  var isIsolatedContext = pageWin !== sandboxWin;
+  function shareGlobal(name, value) {
+    try {
+      pageWin[name] = value;
+    } catch {
+    }
+    if (isIsolatedContext) {
+      try {
+        sandboxWin[name] = value;
+      } catch {
+      }
+    }
+  }
+  function readSharedGlobal(name) {
+    if (isIsolatedContext) {
+      const sandboxValue = sandboxWin[name];
+      if (sandboxValue !== void 0) return sandboxValue;
+    }
+    return pageWin[name];
+  }
+
   // src/ui/spriteIconCache.ts
   var SPRITE_PRELOAD_CATEGORIES = [
     "plant",
@@ -1248,8 +1273,8 @@
     });
   };
   function getSpriteService() {
-    const g = globalThis;
-    return g?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? g?.__MG_SPRITE_SERVICE__ ?? null;
+    const win = pageWindow ?? globalThis;
+    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
   }
   var parseKeyToCategoryId = (key2) => {
     const parts = key2.split("/").filter(Boolean);
@@ -1364,7 +1389,10 @@
             break;
           }
         }
-        if (!selected) return;
+        if (!selected) {
+          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
+          return;
+        }
         const resolved = selected;
         const dataUrl = await ensureSpriteDataCached(
           service,
@@ -1499,6 +1527,30 @@
     processNext();
   }
 
+  // src/utils/gameVersion.ts
+  var gameVersion = null;
+  function initGameVersion(doc) {
+    if (gameVersion !== null) {
+      return;
+    }
+    const d = doc ?? (typeof document !== "undefined" ? document : null);
+    if (!d) {
+      return;
+    }
+    const scripts = d.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts.item(i);
+      if (!script) continue;
+      const src = script.src;
+      if (!src) continue;
+      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (match && match[1]) {
+        gameVersion = match[1];
+        return;
+      }
+    }
+  }
+
   // src/sprite/index.ts
   var ctx = createSpriteContext();
   var hooks = createPixiHooks();
@@ -1523,6 +1575,7 @@
       }
     });
   };
+  var delay = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   async function warmupSpritesFromAtlases(atlasJsons, blobs) {
     const FRAME_YIELD_EVERY = 6;
     const MAX_CHUNK_MS = 10;
@@ -1574,6 +1627,11 @@
   }
   var prefetchPromise = null;
   function detectGameVersion() {
+    try {
+      initGameVersion();
+      if (gameVersion) return gameVersion;
+    } catch {
+    }
     const root = globalThis.unsafeWindow || globalThis;
     const gv = root.gameVersion || root.MG_gameVersion || root.__MG_GAME_VERSION__;
     if (gv) {
@@ -1591,6 +1649,20 @@
       if (m?.[1]) return m[1];
     }
     throw new Error("Version not found.");
+  }
+  async function resolveGameVersionWithRetry(timeoutMs = 6e3) {
+    const deadline = Date.now() + timeoutMs;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        const v = detectGameVersion();
+        if (v) return v;
+      } catch (err) {
+        lastError = err;
+      }
+      await delay(120);
+    }
+    throw lastError ?? new Error("Version not found.");
   }
   function drawFrameToDataURL(img, frameKey, data) {
     try {
@@ -1724,7 +1796,23 @@
   async function start() {
     if (ctx.state.started) return;
     ctx.state.started = true;
-    const version = detectGameVersion();
+    let version;
+    const retryDeadline = typeof performance !== "undefined" ? performance.now() + 8e3 : Date.now() + 8e3;
+    for (; ; ) {
+      try {
+        version = await resolveGameVersionWithRetry();
+        console.info("[MG SpriteCatalog] game version resolved", version);
+        break;
+      } catch (err) {
+        const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now2 >= retryDeadline) {
+          console.error("[MG SpriteCatalog] failed to resolve game version", err);
+          throw err;
+        }
+        console.warn("[MG SpriteCatalog] retrying game version detection...");
+        await delay(200);
+      }
+    }
     const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
     if (!prefetchPromise) {
       prefetchPromise = prefetchAtlas(base);
@@ -1923,31 +2011,6 @@
   }
   var __mg_ready = start();
   __mg_ready.catch((err) => console.error("[MG SpriteCatalog] failed", err));
-
-  // src/utils/page-context.ts
-  var sandboxWin = window;
-  var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
-  var pageWindow = pageWin;
-  var isIsolatedContext = pageWin !== sandboxWin;
-  function shareGlobal(name, value) {
-    try {
-      pageWin[name] = value;
-    } catch {
-    }
-    if (isIsolatedContext) {
-      try {
-        sandboxWin[name] = value;
-      } catch {
-      }
-    }
-  }
-  function readSharedGlobal(name) {
-    if (isIsolatedContext) {
-      const sandboxValue = sandboxWin[name];
-      if (sandboxValue !== void 0) return sandboxValue;
-    }
-    return pageWin[name];
-  }
 
   // src/core/state.ts
   var NativeWS = pageWindow.WebSocket;
@@ -9896,7 +9959,7 @@
     return "normal";
   }
   async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay(0);
+    await delay2(0);
     const initial = await readInventoryPetSnapshots();
     if (hasNewInventoryPet(initial, previous)) {
       return initial;
@@ -9949,7 +10012,7 @@
   function hasNewInventoryPet(pets, previous) {
     return pets.some((pet) => !previous.has(pet.id));
   }
-  function delay(ms) {
+  function delay2(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function resolveSendMessage(Conn) {
@@ -15782,7 +15845,7 @@
         }
       }
       if (attempt < attempts - 1) {
-        await delay2(delayMs);
+        await delay3(delayMs);
       }
     }
     try {
@@ -15791,7 +15854,7 @@
     }
     return null;
   }
-  function delay2(ms) {
+  function delay3(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function safeInvokeClick(handler, ev, ctx2, logger) {
@@ -18073,15 +18136,18 @@
         if (!trimmed) return;
         candidatesSet.add(trimmed);
         candidatesSet.add(trimmed.replace(/\s+/g, ""));
+        const last = trimmed.split(/[./]/).pop();
+        if (last && last !== trimmed) {
+          candidatesSet.add(last);
+          candidatesSet.add(last.replace(/\s+/g, ""));
+        }
       };
       addCandidate(id.split(":")[1]);
       addCandidate(label2);
       if (rawType) addCandidate(rawType);
-      const baseCandidates = Array.from(candidatesSet).map((value) => value.replace(/icon$/i, "")).filter(Boolean);
-      const candidates = Array.from(/* @__PURE__ */ new Set([
-        ...baseCandidates.map((value) => `${value}Icon`),
-        ...Array.from(candidatesSet)
-      ])).filter(Boolean);
+      const originals = Array.from(candidatesSet);
+      const iconized = originals.map((value) => value.replace(/icon$/i, "")).filter(Boolean).map((value) => `${value}Icon`);
+      const candidates = Array.from(/* @__PURE__ */ new Set([...originals, ...iconized])).filter(Boolean);
       if (candidates.length) {
         attachSpriteIcon(wrap, categories, candidates, size, "alerts-overlay");
       }
@@ -19949,7 +20015,7 @@
   async function waitForHungerIncrease(petId, previousPct, options = {}) {
     const { initialDelay = 0, timeout = HUNGER_TIMEOUT_MS, interval = HUNGER_POLL_INTERVAL_MS } = options;
     if (initialDelay > 0) {
-      await delay3(initialDelay);
+      await delay4(initialDelay);
     }
     const start2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
     let lastResult = null;
@@ -19966,11 +20032,11 @@
         return lastResult;
       }
       if (interval > 0) {
-        await delay3(interval);
+        await delay4(interval);
       }
     }
   }
-  function delay3(ms) {
+  function delay4(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function waitForFakeInventorySelection(timeoutMs = 2e4) {
@@ -28366,6 +28432,36 @@ next: ${next}`;
     attachSpriteIcon(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
     return wrap;
   }
+  function createEggIcon(eggId, label2, size = 32) {
+    const fallback = "\u{1F95A}";
+    const wrap = applyStyles(document.createElement("span"), {
+      width: `${size}px`,
+      height: `${size}px`,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center"
+    });
+    wrap.appendChild(createEmojiIcon(fallback, size));
+    const candidates = /* @__PURE__ */ new Set();
+    const add = (value) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      candidates.add(trimmed);
+      candidates.add(trimmed.replace(/\s+/g, ""));
+      const last = trimmed.split(/[./]/).pop();
+      if (last && last !== trimmed) {
+        candidates.add(last);
+        candidates.add(last.replace(/\s+/g, ""));
+      }
+    };
+    add(eggId);
+    add(label2);
+    if (candidates.size) {
+      attachSpriteIcon(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
+    }
+    return wrap;
+  }
   function createWeatherBadge(tag, options = {}) {
     if (tag === NO_WEATHER_TAG) {
       return createNoWeatherIcon(options);
@@ -29692,7 +29788,7 @@ next: ${next}`;
       const name = document.createElement("div");
       name.style.fontWeight = "600";
       name.style.color = "#e7eef7";
-      const icon = createEmojiIcon("\u{1F95A}", 32);
+      const icon = createEggIcon(opt.id, opt.name, 32);
       row.append(toggle, icon, name);
       return { row, toggle, name };
     };
@@ -36501,30 +36597,6 @@ next: ${next}`;
       } catch {
       }
     };
-  }
-
-  // src/utils/gameVersion.ts
-  var gameVersion = null;
-  function initGameVersion(doc) {
-    if (gameVersion !== null) {
-      return;
-    }
-    const d = doc ?? (typeof document !== "undefined" ? document : null);
-    if (!d) {
-      return;
-    }
-    const scripts = d.scripts;
-    for (let i = 0; i < scripts.length; i++) {
-      const script = scripts.item(i);
-      if (!script) continue;
-      const src = script.src;
-      if (!src) continue;
-      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
-      if (match && match[1]) {
-        gameVersion = match[1];
-        return;
-      }
-    }
   }
 
   // src/services/settings.ts
