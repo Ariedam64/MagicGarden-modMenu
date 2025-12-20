@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.06
+// @version      2.99.07
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -42254,7 +42254,7 @@ next: ${next}`;
     };
   }
   var DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
-  var DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/;
+  var DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/i;
   function getPublicRoomCategory(roomId) {
     return DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
   }
@@ -42595,11 +42595,39 @@ next: ${next}`;
     }
     return room.name;
   }
+  var DISCORD_GUILD_ID_REGEX = /^i-\d{17,19}-[a-z]{2,3}-(\d{17,19})(?:-\d{17,19})?$/i;
+  var GUILD_PLANT_BADGES = Object.entries(plantCatalog).map(([plantId, entry]) => {
+    const fn = entry?.seed?.getCanSpawnInGuild;
+    if (typeof fn !== "function") return null;
+    return { plantId, predicate: fn };
+  }).filter((v) => Boolean(v));
+  function extractDiscordGuildId(roomId) {
+    const match = DISCORD_GUILD_ID_REGEX.exec(roomId);
+    if (match) return match[1];
+    const parts = roomId.split("-");
+    if (parts.length >= 4 && /^i$/i.test(parts[0])) {
+      return parts[3] || null;
+    }
+    return null;
+  }
+  function getGuildPlantBadgesForRoom(roomId) {
+    const guildId = extractDiscordGuildId(roomId);
+    if (!guildId || !GUILD_PLANT_BADGES.length) return [];
+    const badges = [];
+    for (const entry of GUILD_PLANT_BADGES) {
+      try {
+        if (entry.predicate(guildId)) badges.push(entry.plantId);
+      } catch {
+      }
+    }
+    return badges;
+  }
   function createRoomEntry(room, ui, options) {
     const isDiscord = RoomService.isDiscordActivity();
     const currentRoomCode = getCurrentRoomCode();
     const isCurrentRoom = currentRoomCode === room.idRoom;
     const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
+    const plantBadges = room.category === "Discord" ? getGuildPlantBadgesForRoom(room.idRoom || room.name) : [];
     const wrapper = document.createElement("div");
     wrapper.style.display = "grid";
     wrapper.style.gap = "8px";
@@ -42906,6 +42934,11 @@ next: ${next}`;
     }
     if (isDiscord) {
       addBadge("Discord activity", "#facc15", "rgba(251, 191, 36, 0.12)");
+    }
+    if (room.category === "Discord" && plantBadges.length) {
+      for (const badge of plantBadges) {
+        addBadge(badge, "#93c5fd", "rgba(147, 197, 253, 0.14)");
+      }
     }
     if (badgeRow.childElementCount > 0) {
       wrapper.appendChild(badgeRow);
