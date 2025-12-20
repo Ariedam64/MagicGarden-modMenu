@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.05
+// @version      2.99.06
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12393,9 +12393,15 @@
   var _sOpt = (v) => typeof v === "string" ? v : null;
   var _n = (v) => Number.isFinite(v) ? v : 0;
   var _sArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  var _petCatalogKeyByLc = new Map(
+    Object.keys(petCatalog).map((k) => [k.toLowerCase(), k])
+  );
   function _canonicalSpecies(s) {
     if (!s) return s;
     if (petCatalog[s]) return s;
+    const lc = s.toLowerCase();
+    const found = _petCatalogKeyByLc.get(lc);
+    if (found) return found;
     const t = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
     return petCatalog[t] ? t : s;
   }
@@ -12453,10 +12459,11 @@
     if (!x || x.itemType !== "Pet") return null;
     const id = _s(x.id);
     if (!id) return null;
+    const speciesRaw = x.petSpecies ?? x.data?.petSpecies;
     return {
       id,
       itemType: "Pet",
-      petSpecies: _s(x.petSpecies ?? x.data?.petSpecies),
+      petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
       name: _sOpt(x.name ?? x.data?.name ?? null),
       xp: _n(x.xp ?? x.data?.xp),
       hunger: _n(x.hunger ?? x.data?.hunger),
@@ -12470,10 +12477,11 @@
     if (!slot || typeof slot !== "object") return null;
     const id = _s(slot.id);
     if (!id) return null;
+    const speciesRaw = slot.petSpecies;
     return {
       id,
       itemType: "Pet",
-      petSpecies: _s(slot.petSpecies),
+      petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
       name: _sOpt(slot.name ?? null),
       xp: _n(slot.xp),
       hunger: _n(slot.hunger),
