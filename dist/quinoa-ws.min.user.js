@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.0
+// @version      2.99.06
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -691,473 +691,6 @@
     }
   });
 
-  // src/sprite/state.ts
-  init_settings();
-  function createInitialState() {
-    return {
-      started: false,
-      open: false,
-      loaded: false,
-      version: null,
-      base: null,
-      ctors: null,
-      app: null,
-      renderer: null,
-      cat: "__all__",
-      q: "",
-      f: "",
-      mutOn: false,
-      mutations: [],
-      scroll: 0,
-      items: [],
-      filtered: [],
-      cats: /* @__PURE__ */ new Map(),
-      tex: /* @__PURE__ */ new Map(),
-      lru: /* @__PURE__ */ new Map(),
-      cost: 0,
-      jobs: [],
-      jobMap: /* @__PURE__ */ new Set(),
-      srcCan: /* @__PURE__ */ new Map(),
-      atlasBases: /* @__PURE__ */ new Set(),
-      dbgCount: {},
-      sig: "",
-      changedAt: 0,
-      needsLayout: false,
-      overlay: null,
-      bg: null,
-      grid: null,
-      dom: null,
-      selCat: null,
-      count: null,
-      pool: [],
-      active: /* @__PURE__ */ new Map(),
-      anim: /* @__PURE__ */ new Set()
-    };
-  }
-  function createSpriteContext() {
-    return {
-      cfg: { ...DEFAULT_CFG },
-      state: createInitialState()
-    };
-  }
-
-  // src/sprite/utils/async.ts
-  var sleep = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
-  async function waitWithTimeout(p, ms, label2) {
-    const t0 = performance.now();
-    while (performance.now() - t0 < ms) {
-      const result = await Promise.race([p, sleep(50).then(() => null)]);
-      if (result !== null) return result;
-    }
-    throw new Error(`${label2} timeout`);
-  }
-
-  // src/sprite/pixi/hooks.ts
-  function createPixiHooks() {
-    let appResolver;
-    let rdrResolver;
-    const appReady = new Promise((resolve2) => appResolver = resolve2);
-    const rendererReady = new Promise((resolve2) => rdrResolver = resolve2);
-    let APP = null;
-    let RDR = null;
-    let PIXI_VER = null;
-    const hook = (name, cb) => {
-      const root = globalThis.unsafeWindow || globalThis;
-      const prev = root[name];
-      root[name] = function() {
-        try {
-          cb.apply(this, arguments);
-        } finally {
-          if (typeof prev === "function") {
-            try {
-              prev.apply(this, arguments);
-            } catch {
-            }
-          }
-        }
-      };
-    };
-    hook("__PIXI_APP_INIT__", (a, v) => {
-      if (!APP) {
-        APP = a;
-        PIXI_VER = v;
-        appResolver(a);
-      }
-    });
-    hook("__PIXI_RENDERER_INIT__", (r, v) => {
-      if (!RDR) {
-        RDR = r;
-        PIXI_VER = v;
-        rdrResolver(r);
-      }
-    });
-    const tryResolveExisting = () => {
-      const root = globalThis.unsafeWindow || globalThis;
-      if (!APP) {
-        const maybeApp = root.__PIXI_APP__ || root.PIXI_APP || root.app;
-        if (maybeApp) {
-          APP = maybeApp;
-          appResolver(APP);
-        }
-      }
-      if (!RDR) {
-        const maybeRdr = root.__PIXI_RENDERER__ || root.PIXI_RENDERER__ || root.renderer || APP?.renderer;
-        if (maybeRdr) {
-          RDR = maybeRdr;
-          rdrResolver(RDR);
-        }
-      }
-    };
-    tryResolveExisting();
-    let fallbackPolls = 0;
-    const fallbackInterval = setInterval(() => {
-      if (APP && RDR) {
-        clearInterval(fallbackInterval);
-        return;
-      }
-      tryResolveExisting();
-      fallbackPolls += 1;
-      if (fallbackPolls >= 50) {
-        clearInterval(fallbackInterval);
-      }
-    }, 100);
-    return {
-      get app() {
-        return APP;
-      },
-      get renderer() {
-        return RDR;
-      },
-      get pixiVersion() {
-        return PIXI_VER;
-      },
-      appReady,
-      rendererReady
-    };
-  }
-  async function waitForPixi(handles, timeoutMs = 15e3) {
-    const app = await waitWithTimeout(handles.appReady, timeoutMs, "PIXI app");
-    const renderer = await waitWithTimeout(handles.rendererReady, timeoutMs, "PIXI renderer");
-    return { app, renderer, version: handles.pixiVersion };
-  }
-
-  // src/sprite/utils/pixi.ts
-  function findAny(root, pred, lim = 25e3) {
-    const stack = [root];
-    const seen = /* @__PURE__ */ new Set();
-    let n = 0;
-    while (stack.length && n++ < lim) {
-      const node = stack.pop();
-      if (!node || seen.has(node)) continue;
-      seen.add(node);
-      if (pred(node)) return node;
-      const children = node.children;
-      if (Array.isArray(children)) {
-        for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]);
-      }
-    }
-    return null;
-  }
-  function getCtors(app) {
-    const P = globalThis.PIXI || globalThis.unsafeWindow?.PIXI;
-    if (P?.Texture && P?.Sprite && P?.Container && P?.Rectangle) {
-      return { Container: P.Container, Sprite: P.Sprite, Texture: P.Texture, Rectangle: P.Rectangle, Text: P.Text || null };
-    }
-    const stage = app?.stage;
-    const anySpr = findAny(stage, (x) => x?.texture?.frame && x?.constructor && x?.texture?.constructor && x?.texture?.frame?.constructor);
-    if (!anySpr) throw new Error("No Sprite found (ctors).");
-    const anyTxt = findAny(stage, (x) => (typeof x?.text === "string" || typeof x?.text === "number") && x?.style);
-    return {
-      Container: stage.constructor,
-      Sprite: anySpr.constructor,
-      Texture: anySpr.texture.constructor,
-      Rectangle: anySpr.texture.frame.constructor,
-      Text: anyTxt?.constructor || null
-    };
-  }
-  var baseTexOf = (tex) => tex?.baseTexture ?? tex?.source?.baseTexture ?? tex?.source ?? tex?._baseTexture ?? null;
-  function rememberBaseTex(tex, atlasBases) {
-    const base = baseTexOf(tex);
-    if (base) atlasBases.add(base);
-  }
-
-  // src/sprite/utils/path.ts
-  var splitKey = (key2) => String(key2 || "").split("/").filter(Boolean);
-  var joinPath = (base, path) => base.replace(/\/?$/, "/") + String(path || "").replace(/^\//, "");
-  var dirOf = (path) => path.lastIndexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/") + 1) : "";
-  var relPath = (base, path) => typeof path === "string" ? path.startsWith("/") ? path.slice(1) : dirOf(base) + path : path;
-  function categoryOf(key2, cfg) {
-    const parts = splitKey(key2);
-    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
-    const width = Math.max(1, cfg.catLevels | 0);
-    return parts.slice(start2, start2 + width).join("/") || "misc";
-  }
-  function animParse(key2) {
-    const parts = splitKey(key2);
-    const last = parts[parts.length - 1];
-    const match = last && last.match(/^(.*?)(?:[_-])(\d{1,6})(\.[a-z0-9]+)?$/i);
-    if (!match) return null;
-    const baseName = (match[1] || "") + (match[3] || "");
-    const idx = Number(match[2]);
-    if (!baseName || !Number.isFinite(idx)) return null;
-    return { baseKey: parts.slice(0, -1).concat(baseName).join("/"), idx, frameKey: key2 };
-  }
-
-  // src/sprite/data/assetFetcher.ts
-  function fetchFallback(url, type) {
-    return fetch(url).then(async (res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status} (${url})`);
-      if (type === "blob") return { status: res.status, response: await res.blob(), responseText: "" };
-      const text = await res.text();
-      return {
-        status: res.status,
-        response: type === "json" ? JSON.parse(text) : text,
-        responseText: text
-      };
-    }).catch((err) => {
-      throw new Error(`Network (${url}): ${err instanceof Error ? err.message : String(err)}`);
-    });
-  }
-  function gm(url, type = "text") {
-    if (typeof GM_xmlhttpRequest === "function") {
-      return new Promise(
-        (resolve2, reject) => GM_xmlhttpRequest({
-          method: "GET",
-          url,
-          responseType: type,
-          onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url})`)),
-          onerror: () => reject(new Error(`Network (${url})`)),
-          ontimeout: () => reject(new Error(`Timeout (${url})`))
-        })
-      );
-    }
-    return fetchFallback(url, type);
-  }
-  var getJSON = async (url) => JSON.parse((await gm(url, "text")).responseText);
-  var getBlob = async (url) => (await gm(url, "blob")).response;
-  function blobToImage(blob) {
-    return new Promise((resolve2, reject) => {
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.decoding = "async";
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        resolve2(img);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("decode fail"));
-      };
-      img.src = url;
-    });
-  }
-  function extractAtlasJsons(manifest) {
-    const jsons = /* @__PURE__ */ new Set();
-    for (const bundle of manifest.bundles || []) {
-      for (const asset of bundle.assets || []) {
-        for (const src of asset.src || []) {
-          if (typeof src !== "string") continue;
-          if (!src.endsWith(".json")) continue;
-          if (src === "manifest.json") continue;
-          if (src.startsWith("audio/")) continue;
-          jsons.add(src);
-        }
-      }
-    }
-    return jsons;
-  }
-  async function loadAtlasJsons(base, manifest) {
-    const jsons = extractAtlasJsons(manifest);
-    const seen = /* @__PURE__ */ new Set();
-    const data = {};
-    const loadOne = async (path) => {
-      if (seen.has(path)) return;
-      seen.add(path);
-      const json = await getJSON(joinPath(base, path));
-      data[path] = json;
-      if (json?.meta?.related_multi_packs) {
-        for (const rel of json.meta.related_multi_packs) {
-          await loadOne(relPath(path, rel));
-        }
-      }
-    };
-    for (const p of jsons) {
-      await loadOne(p);
-    }
-    return data;
-  }
-
-  // src/sprite/pixi/atlasToTextures.ts
-  var isAtlas = (j) => j && typeof j === "object" && j.frames && j.meta && typeof j.meta.image === "string";
-  function mkRect(Rectangle, x, y, w, h) {
-    return new Rectangle(x, y, w, h);
-  }
-  function mkSubTex(Texture, baseTex, frame, orig, trim, rotate, anchor) {
-    let t;
-    try {
-      t = new Texture({ source: baseTex.source, frame, orig, trim: trim || void 0, rotate: rotate || 0 });
-    } catch {
-      t = new Texture(baseTex.baseTexture ?? baseTex, frame, orig, trim || void 0, rotate || 0);
-    }
-    try {
-      if (t && !t.label) t.label = frame?.width && frame?.height ? `sub:${frame.width}x${frame.height}` : "subtex";
-    } catch {
-    }
-    if (anchor) {
-      const target = t;
-      if (target.defaultAnchor?.set) {
-        try {
-          target.defaultAnchor.set(anchor.x, anchor.y);
-        } catch {
-        }
-      }
-      if (target.defaultAnchor && !target.defaultAnchor.set) {
-        target.defaultAnchor.x = anchor.x;
-        target.defaultAnchor.y = anchor.y;
-      }
-      if (!target.defaultAnchor) {
-        target.defaultAnchor = { x: anchor.x, y: anchor.y };
-      }
-    }
-    try {
-      t?.updateUvs?.();
-    } catch {
-    }
-    return t;
-  }
-  function buildAtlasTextures(data, baseTex, texMap, atlasBases, ctors) {
-    const { Texture, Rectangle } = ctors;
-    try {
-      if (baseTex && !baseTex.label) baseTex.label = data?.meta?.image || "atlasBase";
-    } catch {
-    }
-    rememberBaseTex(baseTex, atlasBases);
-    for (const [k, fd] of Object.entries(data.frames)) {
-      const fr = fd.frame;
-      const rot = fd.rotated ? 2 : 0;
-      const w = fd.rotated ? fr.h : fr.w;
-      const h = fd.rotated ? fr.w : fr.h;
-      const frame = mkRect(Rectangle, fr.x, fr.y, w, h);
-      const ss = fd.sourceSize || { w: fr.w, h: fr.h };
-      const orig = mkRect(Rectangle, 0, 0, ss.w, ss.h);
-      let trim = null;
-      if (fd.trimmed && fd.spriteSourceSize) {
-        const s = fd.spriteSourceSize;
-        trim = mkRect(Rectangle, s.x, s.y, s.w, s.h);
-      }
-      const t = mkSubTex(Texture, baseTex, frame, orig, trim, rot, fd.anchor || null);
-      try {
-        t.label = k;
-      } catch {
-      }
-      rememberBaseTex(t, atlasBases);
-      texMap.set(k, t);
-    }
-  }
-
-  // src/sprite/data/catalogIndexer.ts
-  function buildItemsFromTextures(tex, cfg) {
-    const keys = [...tex.keys()].sort((a, b) => a.localeCompare(b));
-    const used = /* @__PURE__ */ new Set();
-    const items = [];
-    const cats = /* @__PURE__ */ new Map();
-    const addToCat = (key2, item) => {
-      const cat = categoryOf(key2, cfg);
-      if (!cats.has(cat)) cats.set(cat, []);
-      cats.get(cat).push(item);
-    };
-    for (const key2 of keys) {
-      const texEntry = tex.get(key2);
-      if (!texEntry || used.has(key2)) continue;
-      const anim = animParse(key2);
-      if (!anim) {
-        const item = { key: key2, isAnim: false, first: texEntry };
-        items.push(item);
-        addToCat(key2, item);
-        continue;
-      }
-      const frames = [];
-      for (const candidate of keys) {
-        const maybe = animParse(candidate);
-        if (!maybe || maybe.baseKey !== anim.baseKey) continue;
-        const t = tex.get(candidate);
-        if (!t) continue;
-        frames.push({ idx: maybe.idx, tex: t });
-        used.add(candidate);
-      }
-      frames.sort((a, b) => a.idx - b.idx);
-      const ordered = frames.map((f) => f.tex);
-      if (ordered.length === 1) {
-        const item = { key: anim.baseKey, isAnim: false, first: ordered[0] };
-        items.push(item);
-        addToCat(anim.baseKey, item);
-      } else if (ordered.length > 1) {
-        const item = {
-          key: anim.baseKey,
-          isAnim: true,
-          frames: ordered,
-          first: ordered[0],
-          count: ordered.length
-        };
-        items.push(item);
-        addToCat(anim.baseKey, item);
-      }
-    }
-    return { items, cats };
-  }
-
-  // src/sprite/api/expose.ts
-  init_variantBuilder();
-  function exposeApi(state3, hud) {
-    const root = globalThis.unsafeWindow || globalThis;
-    const api = {
-      open() {
-        hud.root?.style && (hud.root.style.display = "block");
-        state3.open = true;
-      },
-      close() {
-        hud.root?.style && (hud.root.style.display = "none");
-        state3.open = false;
-      },
-      toggle() {
-        state3.open ? api.close() : api.open();
-      },
-      setCategory(cat) {
-        state3.cat = cat || "__all__";
-      },
-      setFilterText(text) {
-        state3.q = String(text || "").trim();
-      },
-      setSpriteFilter(name) {
-        state3.f = name;
-        state3.mutOn = false;
-      },
-      setMutation(on, ...muts) {
-        state3.mutOn = !!on;
-        state3.f = "";
-        state3.mutations = state3.mutOn ? muts.filter(Boolean).map((name) => name) : [];
-      },
-      filters() {
-        return [];
-      },
-      categories() {
-        return [...state3.cats.keys()].sort((a, b) => a.localeCompare(b));
-      },
-      cacheStats() {
-        return { entries: state3.lru.size, cost: state3.cost };
-      },
-      clearCache() {
-        clearVariantCache(state3);
-      },
-      curVariant: () => curVariant(state3)
-    };
-    root.MGSpriteCatalog = api;
-    return api;
-  }
-
-  // src/sprite/index.ts
-  init_variantBuilder();
-
   // src/utils/page-context.ts
   var sandboxWin = window;
   var pageWin = typeof unsafeWindow !== "undefined" && unsafeWindow ? unsafeWindow : sandboxWin;
@@ -1182,844 +715,6 @@
     }
     return pageWin[name];
   }
-
-  // src/ui/spriteIconCache.ts
-  var SPRITE_PRELOAD_CATEGORIES = [
-    "plant",
-    "tallplant",
-    "decor",
-    "item",
-    "pet",
-    "seed",
-    "ui",
-    "mutation",
-    "mutation-overlay"
-  ];
-  var spriteDataUrlCache = /* @__PURE__ */ new Map();
-  var spriteWarmupQueued = false;
-  var spriteWarmupStarted = false;
-  var warmupState = { total: 0, done: 0, completed: false };
-  var prefetchedWarmupKeys = [];
-  var warmupCompletedKeys = /* @__PURE__ */ new Set();
-  var WARMUP_RETRY_MS = 100;
-  var WARMUP_DELAY_MS = 8;
-  var WARMUP_BATCH = 3;
-  var warmupListeners = /* @__PURE__ */ new Set();
-  function notifyWarmup(state3) {
-    warmupState = state3;
-    warmupListeners.forEach((listener) => {
-      try {
-        listener(warmupState);
-      } catch {
-      }
-    });
-  }
-  function getSpriteWarmupState() {
-    return warmupState;
-  }
-  function onSpriteWarmupProgress(listener) {
-    warmupListeners.add(listener);
-    try {
-      listener(warmupState);
-    } catch {
-    }
-    return () => {
-      warmupListeners.delete(listener);
-    };
-  }
-  function primeWarmupKeys(keys) {
-    prefetchedWarmupKeys.push(...keys);
-  }
-  function primeSpriteData(category, spriteId, dataUrl) {
-    const cacheKey = cacheKeyFor(category, spriteId);
-    if (!spriteDataUrlCache.has(cacheKey)) {
-      spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
-    }
-    if (!warmupCompletedKeys.has(cacheKey)) {
-      warmupCompletedKeys.add(cacheKey);
-      const nextDone = warmupState.done + 1;
-      const completed = warmupState.total > 0 ? nextDone >= warmupState.total : false;
-      notifyWarmup({ total: Math.max(warmupState.total, nextDone), done: nextDone, completed });
-    }
-  }
-  var normalizeSpriteId = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  var baseNameFromKey = (key2) => {
-    const parts = key2.split("/").filter(Boolean);
-    return parts[parts.length - 1] ?? key2;
-  };
-  var normalizeMutationList = (mutations) => {
-    const list = Array.from(
-      new Set((mutations ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))
-    );
-    if (!list.length) {
-      return { list, key: "" };
-    }
-    const key2 = list.map((val) => normalizeSpriteId(val)).filter(Boolean).sort().join(",");
-    return { list, key: key2 ? `|m=${key2}` : "" };
-  };
-  var cacheKeyFor = (category, spriteId, mutationKey) => `${category}:${normalizeSpriteId(spriteId)}${mutationKey ?? ""}`;
-  var scheduleNonBlocking = (cb) => {
-    return new Promise((resolve2) => {
-      const runner = () => {
-        Promise.resolve().then(cb).then(resolve2).catch(() => resolve2(cb()));
-      };
-      if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(runner, { timeout: 50 });
-      } else if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(runner);
-      } else {
-        setTimeout(runner, 0);
-      }
-    });
-  };
-  function getSpriteService() {
-    const win = pageWindow ?? globalThis;
-    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
-  }
-  var parseKeyToCategoryId = (key2) => {
-    const parts = key2.split("/").filter(Boolean);
-    if (!parts.length) return null;
-    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
-    const category = parts[start2] ?? "";
-    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
-    if (!category || !id) return null;
-    return { category, id };
-  };
-  function whenServiceReady(handle) {
-    if (!handle || !handle.ready || typeof handle.ready.then !== "function") {
-      return Promise.resolve();
-    }
-    return handle.ready.then(
-      () => {
-      },
-      () => {
-      }
-    );
-  }
-  async function ensureSpriteDataCached(service, category, spriteId, logTag, options) {
-    if (!service?.renderToCanvas) {
-      return null;
-    }
-    const { list: mutationList, key: mutationKey } = normalizeMutationList(options?.mutations);
-    const cacheKey = cacheKeyFor(category, spriteId, mutationKey);
-    let promise = spriteDataUrlCache.get(cacheKey);
-    if (!promise) {
-      promise = scheduleNonBlocking(async () => {
-        try {
-          const canvas = service.renderToCanvas?.({
-            category,
-            id: spriteId,
-            mutations: mutationList
-          });
-          if (!canvas) return null;
-          return canvas.toDataURL("image/png");
-        } catch (error) {
-          console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
-          return null;
-        }
-      });
-      spriteDataUrlCache.set(cacheKey, promise);
-    }
-    return promise;
-  }
-  var spriteMatchCache = /* @__PURE__ */ new Map();
-  function getMatchCacheKey(categories, id) {
-    const normalizedCategories = categories.map((category) => category.toLowerCase()).join("|");
-    return `${normalizedCategories}|${normalizeSpriteId(id)}`;
-  }
-  function findSpriteMatch(service, categories, id) {
-    if (!service.list) return null;
-    const cacheKey = getMatchCacheKey(categories, id);
-    if (spriteMatchCache.has(cacheKey)) {
-      return spriteMatchCache.get(cacheKey) ?? null;
-    }
-    const normalizedTarget = normalizeSpriteId(id);
-    const categoryLists = categories.map((category) => ({
-      category,
-      items: service.list?.(category) ?? []
-    }));
-    let matched = null;
-    const tryMatch = (category, base) => {
-      if (normalizeSpriteId(base) === normalizedTarget) {
-        matched = { category, spriteId: base };
-        return true;
-      }
-      return false;
-    };
-    for (const { category, items } of categoryLists) {
-      for (const it of items) {
-        const key2 = typeof it?.key === "string" ? it.key : "";
-        if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        if (tryMatch(category, base)) {
-          spriteMatchCache.set(cacheKey, matched);
-          return matched;
-        }
-      }
-    }
-    for (const { category, items } of categoryLists) {
-      for (const it of items) {
-        const key2 = typeof it?.key === "string" ? it.key : "";
-        if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        const normBase = normalizeSpriteId(base);
-        if (!normBase) continue;
-        if (normalizedTarget.includes(normBase) || normBase.includes(normalizedTarget) || normBase.startsWith(normalizedTarget) || normalizedTarget.startsWith(normBase)) {
-          matched = { category, spriteId: base };
-          spriteMatchCache.set(cacheKey, matched);
-          return matched;
-        }
-      }
-    }
-    spriteMatchCache.set(cacheKey, null);
-    return null;
-  }
-  function attachSpriteIcon(target, categories, id, size, logTag, options) {
-    const service = getSpriteService();
-    if (!service?.renderToCanvas) return;
-    const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
-    if (!candidateIds.length) return;
-    void whenServiceReady(service).then(
-      () => scheduleNonBlocking(async () => {
-        let selected = null;
-        for (const candidate of candidateIds) {
-          const match = findSpriteMatch(service, categories, candidate);
-          if (match) {
-            selected = { match, candidate };
-            break;
-          }
-        }
-        if (!selected) {
-          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
-          return;
-        }
-        const resolved = selected;
-        const { key: mutationKey } = normalizeMutationList(options?.mutations);
-        const spriteKey = `${resolved.match.category}:${resolved.match.spriteId}${mutationKey}`;
-        const existingImg = target.querySelector("img[data-sprite-key]");
-        if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
-          return;
-        }
-        const dataUrl = await ensureSpriteDataCached(
-          service,
-          resolved.match.category,
-          resolved.match.spriteId,
-          logTag,
-          {
-            mutations: options?.mutations
-          }
-        );
-        if (!dataUrl) return;
-        const img = document.createElement("img");
-        img.src = dataUrl;
-        img.width = size;
-        img.height = size;
-        img.alt = "";
-        img.decoding = "async";
-        img.loading = "lazy";
-        img.draggable = false;
-        img.style.width = `${size}px`;
-        img.style.height = `${size}px`;
-        img.style.objectFit = "contain";
-        img.style.imageRendering = "auto";
-        img.style.display = "block";
-        img.dataset.spriteKey = spriteKey;
-        img.dataset.spriteCategory = resolved.match.category;
-        img.dataset.spriteId = resolved.match.spriteId;
-        requestAnimationFrame(() => {
-          target.replaceChildren(img);
-          options?.onSpriteApplied?.(img, {
-            category: resolved.match.category,
-            spriteId: resolved.match.spriteId,
-            candidate: resolved.candidate
-          });
-        });
-      })
-    );
-  }
-  function attachWeatherSpriteIcon(target, tag, size) {
-    if (tag === "NoWeatherEffect") return;
-    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
-  }
-  function warmupSpriteCache() {
-    if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
-    spriteWarmupQueued = true;
-    notifyWarmup({ total: warmupState.total, done: warmupState.done, completed: false });
-    const scheduleRetry = () => {
-      window.setTimeout(() => {
-        spriteWarmupQueued = false;
-        warmupSpriteCache();
-      }, WARMUP_RETRY_MS);
-    };
-    let service = getSpriteService();
-    if (!service && prefetchedWarmupKeys.length === 0) {
-      scheduleRetry();
-      return;
-    }
-    const tasks = [];
-    const seen = new Set(warmupCompletedKeys);
-    if (service?.list) {
-      SPRITE_PRELOAD_CATEGORIES.forEach((category) => {
-        const items = service.list?.(category) ?? [];
-        items.forEach((item) => {
-          const key2 = typeof item?.key === "string" ? item.key : "";
-          if (!key2) return;
-          const base = baseNameFromKey(key2);
-          if (!base) return;
-          const k = `${category}:${base.toLowerCase()}`;
-          if (seen.has(k)) return;
-          seen.add(k);
-          tasks.push({ category, id: base });
-        });
-      });
-    }
-    if (prefetchedWarmupKeys.length) {
-      prefetchedWarmupKeys.forEach((key2) => {
-        const parsed = parseKeyToCategoryId(key2);
-        if (!parsed) return;
-        const k = `${parsed.category}:${parsed.id.toLowerCase()}`;
-        if (seen.has(k)) return;
-        seen.add(k);
-        tasks.push(parsed);
-      });
-      prefetchedWarmupKeys = [];
-    }
-    if (!tasks.length) {
-      if (warmupState.completed) {
-        spriteWarmupQueued = false;
-        return;
-      }
-      scheduleRetry();
-      return;
-    }
-    spriteWarmupStarted = true;
-    const total = Math.max(warmupState.total, tasks.length);
-    const startingDone = Math.min(warmupState.done, total);
-    notifyWarmup({ total, done: startingDone, completed: total === 0 || startingDone >= total });
-    const processNext = () => {
-      service = service || getSpriteService();
-      if (!service?.renderToCanvas || !service?.list) {
-        setTimeout(processNext, WARMUP_RETRY_MS);
-        return;
-      }
-      if (!tasks.length) {
-        spriteWarmupQueued = false;
-        console.log("[SpriteIconCache]", "warmup complete", {
-          categories: SPRITE_PRELOAD_CATEGORIES,
-          totalCached: spriteDataUrlCache.size
-        });
-        notifyWarmup({ total, done: warmupState.done, completed: true });
-        return;
-      }
-      let processed = 0;
-      const batch = tasks.splice(0, WARMUP_BATCH);
-      batch.forEach((entry) => {
-        ensureSpriteDataCached(service, entry.category, entry.id, "warmup").then((result) => {
-          if (result == null && !service?.renderToCanvas) {
-            tasks.unshift(entry);
-            return;
-          }
-          const completionKey = cacheKeyFor(entry.category, entry.id);
-          if (!warmupCompletedKeys.has(completionKey)) {
-            warmupCompletedKeys.add(completionKey);
-            const nextDone = Math.min(warmupState.done + 1, total);
-            notifyWarmup({ total, done: nextDone, completed: nextDone >= total });
-          }
-        }).finally(() => {
-          processed += 1;
-          if (processed >= batch.length) {
-            setTimeout(processNext, WARMUP_DELAY_MS);
-          }
-        });
-      });
-    };
-    processNext();
-  }
-
-  // src/utils/gameVersion.ts
-  var gameVersion = null;
-  function initGameVersion(doc) {
-    if (gameVersion !== null) {
-      return;
-    }
-    const d = doc ?? (typeof document !== "undefined" ? document : null);
-    if (!d) {
-      return;
-    }
-    const scripts = d.scripts;
-    for (let i = 0; i < scripts.length; i++) {
-      const script = scripts.item(i);
-      if (!script) continue;
-      const src = script.src;
-      if (!src) continue;
-      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
-      if (match && match[1]) {
-        gameVersion = match[1];
-        return;
-      }
-    }
-  }
-
-  // src/sprite/index.ts
-  var ctx = createSpriteContext();
-  var hooks = createPixiHooks();
-  var parseFrameCategory = (key2) => {
-    const parts = String(key2 || "").split("/").filter(Boolean);
-    if (!parts.length) return null;
-    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
-    const category = parts[start2] ?? "";
-    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
-    if (!category || !id) return null;
-    return { category, id };
-  };
-  var yieldToBrowser = () => {
-    return new Promise((resolve2) => {
-      const win = typeof window !== "undefined" ? window : null;
-      if (win?.requestIdleCallback) {
-        win.requestIdleCallback(() => resolve2(), { timeout: 32 });
-      } else if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(() => resolve2());
-      } else {
-        setTimeout(resolve2, 0);
-      }
-    });
-  };
-  var delay = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
-  async function warmupSpritesFromAtlases(atlasJsons, blobs) {
-    const FRAME_YIELD_EVERY = 6;
-    const MAX_CHUNK_MS = 10;
-    let framesSinceYield = 0;
-    let chunkStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const resetChunk = () => {
-      chunkStart = typeof performance !== "undefined" ? performance.now() : Date.now();
-    };
-    const yieldIfNeeded = async () => {
-      const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const elapsed = now2 - chunkStart;
-      if (framesSinceYield >= FRAME_YIELD_EVERY || elapsed >= MAX_CHUNK_MS) {
-        framesSinceYield = 0;
-        await yieldToBrowser();
-        resetChunk();
-      }
-    };
-    for (const [path, data] of Object.entries(atlasJsons)) {
-      if (!isAtlas(data)) continue;
-      const frames = data.frames || {};
-      if (!frames || !Object.keys(frames).length) continue;
-      const imgPath = relPath(path, data.meta.image);
-      const blob = blobs.get(imgPath);
-      if (!blob) continue;
-      let img;
-      try {
-        img = await blobToImage(blob);
-      } catch (error) {
-        console.warn("[MG SpriteCatalog] warmup decode failed", { imgPath, error });
-        continue;
-      }
-      for (const [frameKey, frameData] of Object.entries(frames)) {
-        const parsed = parseFrameCategory(frameKey);
-        if (!parsed) continue;
-        try {
-          const dataUrl = drawFrameToDataURL(img, frameKey, frameData);
-          if (!dataUrl) continue;
-          primeSpriteData(parsed.category, parsed.id, dataUrl);
-        } catch (error) {
-          console.warn("[MG SpriteCatalog] warmup frame failed", { frameKey, error });
-        }
-        framesSinceYield += 1;
-        await yieldIfNeeded();
-      }
-      framesSinceYield = 0;
-      await yieldToBrowser();
-      resetChunk();
-    }
-  }
-  var prefetchPromise = null;
-  function detectGameVersion() {
-    try {
-      initGameVersion();
-      if (gameVersion) return gameVersion;
-    } catch {
-    }
-    const root = globalThis.unsafeWindow || globalThis;
-    const gv = root.gameVersion || root.MG_gameVersion || root.__MG_GAME_VERSION__;
-    if (gv) {
-      if (typeof gv.getVersion === "function") return gv.getVersion();
-      if (typeof gv.get === "function") return gv.get();
-      if (typeof gv === "string") return gv;
-    }
-    const scriptUrls = Array.from(document.scripts || []).map((s) => s.src).filter(Boolean);
-    const linkUrls = Array.from(document.querySelectorAll("link[href]") || []).map(
-      (l) => l.href
-    );
-    const urls = [...scriptUrls, ...linkUrls];
-    for (const u of urls) {
-      const m = u.match(/\/version\/([^/]+)\//);
-      if (m?.[1]) return m[1];
-    }
-    throw new Error("Version not found.");
-  }
-  async function resolveGameVersionWithRetry(timeoutMs = 6e3) {
-    const deadline = Date.now() + timeoutMs;
-    let lastError = null;
-    while (Date.now() < deadline) {
-      try {
-        const v = detectGameVersion();
-        if (v) return v;
-      } catch (err) {
-        lastError = err;
-      }
-      await delay(120);
-    }
-    throw lastError ?? new Error("Version not found.");
-  }
-  function drawFrameToDataURL(img, frameKey, data) {
-    try {
-      const fr = data.frame;
-      const trimmed = data.trimmed && data.spriteSourceSize;
-      const sourceSize = data.sourceSize || { w: fr.w, h: fr.h };
-      const canvas = document.createElement("canvas");
-      canvas.width = sourceSize.w;
-      canvas.height = sourceSize.h;
-      const ctx2 = canvas.getContext("2d");
-      if (!ctx2) return null;
-      ctx2.imageSmoothingEnabled = false;
-      if (data.rotated) {
-        ctx2.save();
-        ctx2.translate(sourceSize.w / 2, sourceSize.h / 2);
-        ctx2.rotate(-Math.PI / 2);
-        ctx2.drawImage(
-          img,
-          fr.x,
-          fr.y,
-          fr.h,
-          fr.w,
-          -fr.h / 2,
-          -fr.w / 2,
-          fr.h,
-          fr.w
-        );
-        ctx2.restore();
-      } else {
-        const dx = trimmed ? data.spriteSourceSize.x : 0;
-        const dy = trimmed ? data.spriteSourceSize.y : 0;
-        ctx2.drawImage(img, fr.x, fr.y, fr.w, fr.h, dx, dy, fr.w, fr.h);
-      }
-      return canvas.toDataURL("image/png");
-    } catch {
-      return null;
-    }
-  }
-  async function prefetchAtlas(base) {
-    try {
-      const manifest = await getJSON(joinPath(base, "manifest.json"));
-      const atlasJsons = await loadAtlasJsons(base, manifest);
-      const blobs = /* @__PURE__ */ new Map();
-      for (const [path, data] of Object.entries(atlasJsons)) {
-        if (!isAtlas(data)) continue;
-        const imgPath = relPath(path, data.meta.image);
-        try {
-          const blob = await getBlob(joinPath(base, imgPath));
-          blobs.set(imgPath, blob);
-        } catch {
-        }
-      }
-      const warmupKeys = [];
-      Object.entries(atlasJsons).forEach(([, data]) => {
-        if (!isAtlas(data)) return;
-        Object.keys(data.frames || {}).forEach((frameKey) => warmupKeys.push(frameKey));
-      });
-      if (warmupKeys.length) {
-        try {
-          primeWarmupKeys(warmupKeys);
-        } catch {
-        }
-      }
-      try {
-        warmupSpriteCache();
-      } catch {
-      }
-      if (warmupKeys.length) {
-        warmupSpritesFromAtlases(atlasJsons, blobs).catch(() => {
-        });
-      }
-      return { base, atlasJsons, blobs };
-    } catch {
-      return null;
-    }
-  }
-  async function loadTextures(base, prefetched) {
-    const usePrefetched = prefetched && prefetched.base === base ? prefetched : null;
-    const atlasJsons = usePrefetched?.atlasJsons ?? await loadAtlasJsons(base, await getJSON(joinPath(base, "manifest.json")));
-    const ctors = ctx.state.ctors;
-    if (!ctors?.Texture || !ctors?.Rectangle) throw new Error("PIXI constructors missing");
-    for (const [path, data] of Object.entries(atlasJsons)) {
-      if (!isAtlas(data)) continue;
-      const imgPath = relPath(path, data.meta.image);
-      const blob = usePrefetched?.blobs.get(imgPath) ?? usePrefetched?.blobs.get(relPath(path, data.meta.image)) ?? await getBlob(joinPath(base, imgPath));
-      const img = await blobToImage(blob);
-      const baseTex = ctors.Texture.from(img);
-      buildAtlasTextures(data, baseTex, ctx.state.tex, ctx.state.atlasBases, {
-        Texture: ctors.Texture,
-        Rectangle: ctors.Rectangle
-      });
-    }
-    const { items, cats } = buildItemsFromTextures(ctx.state.tex, ctx.cfg);
-    ctx.state.items = items;
-    ctx.state.filtered = items.slice();
-    ctx.state.cats = cats;
-    ctx.state.loaded = true;
-  }
-  function ensureDocumentReady() {
-    if (document.readyState !== "loading") return Promise.resolve();
-    return new Promise((resolve2) => {
-      const onReady = () => {
-        document.removeEventListener("DOMContentLoaded", onReady);
-        resolve2();
-      };
-      document.addEventListener("DOMContentLoaded", onReady);
-    });
-  }
-  async function resolvePixiFast() {
-    const root = globalThis.unsafeWindow || globalThis;
-    const check = () => {
-      const app = root.__PIXI_APP__ || root.PIXI_APP || root.app || null;
-      const renderer = root.__PIXI_RENDERER__ || root.PIXI_RENDERER__ || root.renderer || app?.renderer || null;
-      if (app && renderer) {
-        return { app, renderer, version: root.__PIXI_VERSION__ || null };
-      }
-      return null;
-    };
-    const hit = check();
-    if (hit) return hit;
-    const maxMs = 5e3;
-    const start2 = performance.now();
-    while (performance.now() - start2 < maxMs) {
-      await new Promise((r) => setTimeout(r, 50));
-      const retry = check();
-      if (retry) return retry;
-    }
-    const waited = await waitForPixi(hooks);
-    return { app: waited.app, renderer: waited.renderer, version: waited.version };
-  }
-  async function start() {
-    if (ctx.state.started) return;
-    ctx.state.started = true;
-    let version;
-    const retryDeadline = typeof performance !== "undefined" ? performance.now() + 8e3 : Date.now() + 8e3;
-    for (; ; ) {
-      try {
-        version = await resolveGameVersionWithRetry();
-        console.info("[MG SpriteCatalog] game version resolved", version);
-        break;
-      } catch (err) {
-        const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
-        if (now2 >= retryDeadline) {
-          console.error("[MG SpriteCatalog] failed to resolve game version", err);
-          throw err;
-        }
-        console.warn("[MG SpriteCatalog] retrying game version detection...");
-        await delay(200);
-      }
-    }
-    const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
-    if (!prefetchPromise) {
-      prefetchPromise = prefetchAtlas(base);
-    }
-    const { app, renderer: _renderer, version: pixiVersion } = await resolvePixiFast();
-    await ensureDocumentReady();
-    ctx.state.ctors = getCtors(app);
-    const renderer = _renderer || app?.renderer || app?.render || null;
-    ctx.state.app = app;
-    ctx.state.renderer = renderer;
-    ctx.state.version = pixiVersion || version || version === "" ? pixiVersion ?? version : detectGameVersion();
-    ctx.state.base = base;
-    ctx.state.sig = curVariant(ctx.state).sig;
-    const prefetched = await (prefetchPromise ?? Promise.resolve(null));
-    await loadTextures(ctx.state.base, prefetched);
-    const hud = {
-      open() {
-        ctx.state.open = true;
-      },
-      close() {
-        ctx.state.open = false;
-      },
-      toggle() {
-        ctx.state.open ? this.close() : this.open();
-      },
-      layout() {
-      },
-      root: void 0
-    };
-    ctx.state.open = true;
-    app.ticker?.add?.(() => {
-      processJobs(ctx.state, ctx.cfg);
-    });
-    exposeApi(ctx.state, hud);
-    const g = globalThis;
-    const uw = g.unsafeWindow || g;
-    const spriteApi = await Promise.resolve().then(() => (init_spriteApi(), spriteApi_exports));
-    const ensureOverlayHost = () => {
-      const id = "mg-sprite-overlay";
-      let host = document.getElementById(id);
-      if (!host) {
-        host = document.createElement("div");
-        host.id = id;
-        host.style.cssText = "position:fixed;top:8px;left:8px;z-index:2147480000;display:flex;flex-wrap:wrap;gap:8px;pointer-events:auto;background:transparent;align-items:flex-start;";
-        document.body.appendChild(host);
-      }
-      return host;
-    };
-    const getSpriteDim = (tex, key2) => {
-      const sources = [
-        tex?.orig,
-        tex?._orig,
-        tex?.frame,
-        tex?._frame,
-        tex
-      ];
-      for (const src of sources) {
-        const value = src?.[key2];
-        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-          return value;
-        }
-      }
-      return null;
-    };
-    const padCanvasToSpriteBounds = (source, tex) => {
-      const rawW = source.width || 1;
-      const rawH = source.height || 1;
-      const baseW = Math.max(rawW, Math.round(getSpriteDim(tex, "width") ?? rawW) || rawW);
-      const baseH = Math.max(rawH, Math.round(getSpriteDim(tex, "height") ?? rawH) || rawH);
-      const trim = tex?.trim ?? tex?._trim ?? null;
-      let offsetX = trim && typeof trim.x === "number" ? Math.round(trim.x) : Math.round((baseW - rawW) / 2);
-      let offsetY = trim && typeof trim.y === "number" ? Math.round(trim.y) : Math.round((baseH - rawH) / 2);
-      offsetX = Math.max(0, Math.min(baseW - rawW, offsetX));
-      offsetY = Math.max(0, Math.min(baseH - rawH, offsetY));
-      if (baseW === rawW && baseH === rawH && offsetX === 0 && offsetY === 0) {
-        return source;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = baseW;
-      canvas.height = baseH;
-      const ctx2 = canvas.getContext("2d");
-      if (!ctx2) return source;
-      ctx2.imageSmoothingEnabled = false;
-      ctx2.clearRect(0, 0, baseW, baseH);
-      ctx2.drawImage(source, offsetX, offsetY);
-      return canvas;
-    };
-    const renderTextureToCanvas = (tex) => {
-      try {
-        const spr = new ctx.state.ctors.Sprite(tex);
-        const extracted = ctx.state.renderer.extract.canvas(spr, { resolution: 1 });
-        spr.destroy?.({ children: true, texture: false, baseTexture: false });
-        return padCanvasToSpriteBounds(extracted, tex);
-      } catch {
-        return null;
-      }
-    };
-    const service = {
-      ready: Promise.resolve(),
-      // overwritten below
-      state: ctx.state,
-      cfg: ctx.cfg,
-      list(category = "any") {
-        return spriteApi.listItemsByCategory(ctx.state, category);
-      },
-      getBaseSprite(params) {
-        return spriteApi.getBaseSprite(params, ctx.state);
-      },
-      getSpriteWithMutations(params) {
-        return spriteApi.getSpriteWithMutations(params, ctx.state, ctx.cfg);
-      },
-      buildVariant(mutations) {
-        return spriteApi.buildVariant(mutations);
-      },
-      renderToCanvas(arg) {
-        const tex = arg?.isTexture || arg?.frame ? arg : service.getSpriteWithMutations(arg);
-        if (!tex) return null;
-        return renderTextureToCanvas(tex);
-      },
-      async renderToDataURL(arg, type = "image/png", quality) {
-        const c = service.renderToCanvas(arg);
-        if (!c) return null;
-        return c.toDataURL(type, quality);
-      },
-      // Render and append to a fixed overlay; each sprite gets its own wrapper.
-      renderOnCanvas(arg, opts = {}) {
-        const c = service.renderToCanvas(arg);
-        if (!c) return null;
-        c.style.background = "transparent";
-        c.style.display = "block";
-        let mutW = c.width || c.clientWidth;
-        let mutH = c.height || c.clientHeight;
-        let baseW = mutW;
-        let baseH = mutH;
-        if (arg && !arg.isTexture && !arg.frame) {
-          const baseTex = service.getBaseSprite(arg);
-          if (baseTex) {
-            baseW = baseTex?.orig?.width ?? baseTex?._orig?.width ?? baseTex?.frame?.width ?? baseTex?._frame?.width ?? baseTex?.width ?? baseW;
-            baseH = baseTex?.orig?.height ?? baseTex?._orig?.height ?? baseTex?.frame?.height ?? baseTex?._frame?.height ?? baseTex?.height ?? baseH;
-          }
-        }
-        const scaleToBase = Math.min(baseW / mutW, baseH / mutH, 1);
-        let logicalW = mutW * scaleToBase;
-        let logicalH = mutH * scaleToBase;
-        const { maxWidth, maxHeight, allowScaleUp } = opts;
-        if (maxWidth || maxHeight) {
-          const scaleW = maxWidth ? maxWidth / logicalW : 1;
-          const scaleH = maxHeight ? maxHeight / logicalH : 1;
-          let scale = Math.min(scaleW || 1, scaleH || 1);
-          if (!allowScaleUp) scale = Math.min(scale, 1);
-          logicalW = Math.floor(logicalW * scale);
-          logicalH = Math.floor(logicalH * scale);
-        }
-        if (logicalW) c.style.width = `${logicalW}px`;
-        if (logicalH) c.style.height = `${logicalH}px`;
-        const wrap = document.createElement("div");
-        wrap.style.cssText = "display:inline-flex;align-items:flex-start;justify-content:flex-start;padding:0;margin:0;background:transparent;border:none;flex:0 0 auto;";
-        wrap.appendChild(c);
-        ensureOverlayHost().appendChild(wrap);
-        return { wrap, canvas: c };
-      },
-      clearOverlay() {
-        const host = document.getElementById("mg-sprite-overlay");
-        if (host) host.remove();
-      },
-      renderAnimToCanvases(params) {
-        const item = ctx.state.items.find((it) => it.key === `sprite/${params.category}/${params.id}` || it.key === params.id);
-        if (!item) return [];
-        if (item.isAnim && item.frames?.length) {
-          const texes = params?.mutations?.length ? [service.getSpriteWithMutations(params)] : item.frames;
-          return texes.map((t2) => renderTextureToCanvas(t2)).filter(Boolean);
-        }
-        const t = service.getSpriteWithMutations(params);
-        return t ? [renderTextureToCanvas(t)] : [];
-      }
-    };
-    service.ready = Promise.resolve();
-    uw.__MG_SPRITE_STATE__ = ctx.state;
-    uw.__MG_SPRITE_CFG__ = ctx.cfg;
-    uw.__MG_SPRITE_API__ = spriteApi;
-    uw.__MG_SPRITE_SERVICE__ = service;
-    uw.getSpriteWithMutations = service.getSpriteWithMutations;
-    uw.getBaseSprite = service.getBaseSprite;
-    uw.buildSpriteVariant = service.buildVariant;
-    uw.listSpritesByCategory = service.list;
-    uw.renderSpriteToCanvas = service.renderToCanvas;
-    uw.renderSpriteToDataURL = service.renderToDataURL;
-    uw.MG_SPRITE_HELPERS = service;
-    console.log("[MG SpriteCatalog] ready", {
-      version: ctx.state.version,
-      pixi: version,
-      textures: ctx.state.tex.size,
-      items: ctx.state.items.length,
-      cats: ctx.state.cats.size
-    });
-  }
-  var __mg_ready = start();
-  __mg_ready.catch((err) => console.error("[MG SpriteCatalog] failed", err));
 
   // src/core/state.ts
   var NativeWS = pageWindow.WebSocket;
@@ -5359,122 +4054,6 @@
       settings: DEFAULT_FRIEND_SETTINGS
     }
   };
-  var LEGACY_STATIC_KEYS = [
-    "aries_storage",
-    "qws:stats:v1",
-    "mg.customRooms",
-    "qws:pets:overrides:v1",
-    "qws:pets:ui:v1",
-    "qws:pets:teams:v1",
-    "qws:pets:teamSearch:v1",
-    "qws:petAlerts:v1",
-    "qws:pets:abilityLogs:v1",
-    "qws:shop:notifs:v1",
-    "qws:shop:notifs:rules.v1",
-    "qws:weather:notifs:v1",
-    "qws:notifier:loopDefaults.v1",
-    "qws:player:ghostMode",
-    "qws:ghost:delayMs",
-    "qws:autoReco:onNewSession",
-    "qws:autoReco:delayMs",
-    "qws:locker:restrictions.v1",
-    "garden.locker.state.v2",
-    "qws:editor:saved-gardens",
-    "qws:editor:enabled",
-    "qws:activityLogs:history:v1",
-    "qws:activityLog:filter",
-    "qws:alerts:audio:settings:v1",
-    "qws:alerts:audio:library:v1",
-    "soundEffectsVolumeAtom",
-    "qws:pos",
-    "qws:collapsed",
-    "qws:hidden"
-  ];
-  var LEGACY_PREFIXES = [
-    "qws:keybind:",
-    "qws:keybind-hold:",
-    "qws:hk:petteam:use:",
-    "qws:win:",
-    "menu:"
-  ];
-  var STATIC_LEGACY_KEYS = [
-    {
-      legacyKey: "qws:stats:v1",
-      apply: (raw, r) => {
-        const flat = unwrapNestedSnapshot(parseSafe(raw));
-        r.stats = flat;
-      }
-    },
-    { legacyKey: "mg.customRooms", apply: (raw, r) => r.room = mergeSection(r.room, { customRooms: parseSafe(raw) }) },
-    { legacyKey: "qws:pets:overrides:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { overrides: parseSafe(raw) }) },
-    { legacyKey: "qws:pets:ui:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { ui: parseSafe(raw) }) },
-    { legacyKey: "qws:pets:teams:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { teams: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:pets:teamSearch:v1",
-      apply: (raw, r) => r.pets = mergeSection(r.pets, { teamSearch: parseSafe(raw) })
-    },
-    { legacyKey: "qws:petAlerts:v1", apply: (raw, r) => r.pets = mergeSection(r.pets, { alerts: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:pets:abilityLogs:v1",
-      apply: (raw, r) => r.pets = mergeSection(r.pets, { abilityLogs: parseSafe(raw) })
-    },
-    { legacyKey: "qws:shop:notifs:v1", apply: (raw, r) => r.notifier = mergeSection(r.notifier, { prefs: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:shop:notifs:rules.v1",
-      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { rules: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:weather:notifs:v1",
-      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { weatherPrefs: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:notifier:loopDefaults.v1",
-      apply: (raw, r) => r.notifier = mergeSection(r.notifier, { loopDefaults: parseSafe(raw) })
-    },
-    { legacyKey: "qws:player:ghostMode", apply: (raw, r) => r.misc = mergeSection(r.misc, { ghostMode: parseSafe(raw) }) },
-    { legacyKey: "qws:ghost:delayMs", apply: (raw, r) => r.misc = mergeSection(r.misc, { ghostDelayMs: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:autoReco:onNewSession",
-      apply: (raw, r) => r.misc = mergeSection(r.misc, { autoRecoEnabled: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:autoReco:delayMs",
-      apply: (raw, r) => r.misc = mergeSection(r.misc, { autoRecoDelayMs: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:locker:restrictions.v1",
-      apply: (raw, r) => r.locker = mergeSection(r.locker, { restrictions: parseSafe(raw) })
-    },
-    { legacyKey: "garden.locker.state.v2", apply: (raw, r) => r.locker = mergeSection(r.locker, { state: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:editor:saved-gardens",
-      apply: (raw, r) => r.editor = mergeSection(r.editor, { savedGardens: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:editor:enabled",
-      apply: (raw, r) => r.editor = mergeSection(r.editor, { enabled: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:activityLogs:history:v1",
-      apply: (raw, r) => r.activityLog = mergeSection(r.activityLog, { history: parseSafe(raw) })
-    },
-    { legacyKey: "qws:activityLog:filter", apply: (raw, r) => r.activityLog = mergeSection(r.activityLog, { filter: parseSafe(raw) }) },
-    {
-      legacyKey: "qws:alerts:audio:settings:v1",
-      apply: (raw, r) => r.audio = mergeSection(r.audio, { settings: parseSafe(raw) })
-    },
-    {
-      legacyKey: "qws:alerts:audio:library:v1",
-      apply: (raw, r) => r.audio = mergeSection(r.audio, { library: parseSafe(raw) })
-    },
-    {
-      legacyKey: "soundEffectsVolumeAtom",
-      apply: (raw, r) => r.audio = mergeSection(r.audio, { sfxVolumeAtom: parseSafe(raw) })
-    },
-    { legacyKey: "qws:pos", apply: (raw, r) => r.hud = mergeSection(r.hud, { pos: parseSafe(raw) }) },
-    { legacyKey: "qws:collapsed", apply: (raw, r) => r.hud = mergeSection(r.hud, { collapsed: parseSafe(raw) }) },
-    { legacyKey: "qws:hidden", apply: (raw, r) => r.hud = mergeSection(r.hud, { hidden: parseSafe(raw) }) }
-  ];
   function getHostStorage() {
     if (typeof window === "undefined") return null;
     try {
@@ -5499,22 +4078,6 @@
       }
     }
     return base;
-  }
-  function collectByPrefix(storage, prefix, transform) {
-    const out = {};
-    for (let i = 0; i < storage.length; i++) {
-      const key2 = storage.key(i);
-      if (!key2 || !key2.startsWith(prefix)) continue;
-      const raw = storage.getItem(key2);
-      if (raw == null) continue;
-      if (transform) {
-        const entry = transform(key2, raw);
-        if (entry) out[entry[0]] = entry[1];
-      } else {
-        out[key2.slice(prefix.length)] = parseSafe(raw);
-      }
-    }
-    return out;
   }
   function unwrapNestedSnapshot(raw) {
     let cur = raw;
@@ -5641,120 +4204,6 @@
     } else {
       cur[last] = value;
     }
-  }
-  function hasLegacyData(storage) {
-    for (const key2 of LEGACY_STATIC_KEYS) {
-      if (storage.getItem(key2) != null) return true;
-    }
-    for (let i = 0; i < storage.length; i++) {
-      const key2 = storage.key(i) || "";
-      if (LEGACY_PREFIXES.some((p) => key2.startsWith(p))) return true;
-    }
-    return false;
-  }
-  function cleanupLegacyData(storage) {
-    for (const key2 of LEGACY_STATIC_KEYS) {
-      try {
-        storage.removeItem(key2);
-      } catch {
-      }
-    }
-    for (let i = storage.length - 1; i >= 0; i--) {
-      const key2 = storage.key(i);
-      if (!key2) continue;
-      if (LEGACY_PREFIXES.some((p) => key2.startsWith(p))) {
-        try {
-          storage.removeItem(key2);
-        } catch {
-        }
-      }
-    }
-  }
-  function migrateLocalStorageToAries() {
-    const storage = getHostStorage();
-    if (!storage) return loadAriesStorage();
-    const current = loadAriesStorage();
-    const shouldMigrate = hasLegacyData(storage);
-    const result = { ...DEFAULT_ARIES_STORAGE, ...current };
-    if (!shouldMigrate) {
-      return result;
-    }
-    for (const entry of STATIC_LEGACY_KEYS) {
-      const { legacyKey, apply } = entry;
-      const raw = storage.getItem(legacyKey);
-      if (raw == null) continue;
-      apply(raw, result);
-    }
-    const bindings = collectByPrefix(storage, "qws:keybind:", (key2, raw) => [
-      key2.replace("qws:keybind:", ""),
-      raw
-    ]);
-    const holds = collectByPrefix(storage, "qws:keybind-hold:", (key2, raw) => [
-      key2.replace("qws:keybind-hold:", ""),
-      raw === "1" || raw === "true"
-    ]);
-    if ((Object.keys(bindings).length || Object.keys(holds).length) && !result.keybinds) {
-      result.keybinds = {};
-    }
-    if (Object.keys(bindings).length) {
-      result.keybinds = {
-        ...result.keybinds ?? {},
-        bindings: { ...result.keybinds?.bindings ?? {}, ...bindings }
-      };
-    }
-    if (Object.keys(holds).length) {
-      result.keybinds = {
-        ...result.keybinds ?? {},
-        hold: { ...result.keybinds?.hold ?? {}, ...holds }
-      };
-    }
-    const teamHotkeys = collectByPrefix(storage, "qws:hk:petteam:use:", (key2, raw) => [
-      key2.replace("qws:hk:petteam:use:", ""),
-      raw
-    ]);
-    if (Object.keys(teamHotkeys).length) {
-      result.pets = {
-        ...result.pets ?? {},
-        hotkeys: { ...result.pets?.hotkeys ?? {}, ...teamHotkeys }
-      };
-    }
-    const hudWindows = collectByPrefix(storage, "qws:win:", (key2, raw) => {
-      const match = key2.match(/^qws:win:(.+):pos$/);
-      if (!match || !match[1]) return null;
-      return [match[1], parseSafe(raw)];
-    });
-    if (Object.keys(hudWindows).length) {
-      result.hud = {
-        ...result.hud ?? {},
-        windows: { ...result.hud?.windows ?? {}, ...hudWindows }
-      };
-    }
-    const menuTabs = collectByPrefix(storage, "menu:", (key2, raw) => {
-      const match = key2.match(/^menu:(.+):activeTab$/);
-      if (!match || !match[1]) return null;
-      return [match[1], parseSafe(raw)];
-    });
-    if (Object.keys(menuTabs).length) {
-      const activeTabs = {};
-      for (const [k, v] of Object.entries(menuTabs)) {
-        if (typeof v === "string") activeTabs[k] = v;
-      }
-      if (Object.keys(activeTabs).length) {
-        result.menu = {
-          ...result.menu ?? {},
-          activeTabs: { ...result.menu?.activeTabs ?? {}, ...activeTabs }
-        };
-      }
-    }
-    if (result.stats && typeof result.stats === "object") {
-      const flat = unwrapNestedSnapshot(result.stats);
-      result.stats = flat;
-    }
-    result.version = ARIES_STORAGE_VERSION;
-    if (!result.migratedAt) result.migratedAt = Date.now();
-    persistAriesStorage(result);
-    cleanupLegacyData(storage);
-    return result;
   }
   function getAriesStorage() {
     return loadAriesStorage();
@@ -8455,7 +6904,7 @@
   var OVERLAY_DECOR_ID = "qws-decordeleter-overlay";
   var LIST_DECOR_ID = "qws-decordeleter-list";
   var SUMMARY_DECOR_ID = "qws-decordeleter-summary";
-  function sleep2(ms) {
+  function sleep(ms) {
     return new Promise((r) => setTimeout(r, ms));
   }
   function buildDisplayNameToSpeciesFromCatalog() {
@@ -8584,7 +7033,7 @@
             }));
           } catch {
           }
-          if (delayMs > 0 && remaining > 0) await sleep2(delayMs);
+          if (delayMs > 0 && remaining > 0) await sleep(delayMs);
         }
       }
       if (!opts.keepSelection) selectedMap.clear();
@@ -9393,12 +7842,12 @@
             await PlayerService.placeDecor(emptySlot.tileType, emptySlot.index, t.decorId, 0);
           } catch {
           }
-          if (delayMs > 0) await sleep2(delayMs);
+          if (delayMs > 0) await sleep(delayMs);
           try {
             await PlayerService.removeGardenObject(emptySlot.index, emptySlot.tileType);
           } catch {
           }
-          if (delayMs > 0) await sleep2(delayMs);
+          if (delayMs > 0) await sleep(delayMs);
           done += 1;
           remaining -= 1;
           try {
@@ -10201,7 +8650,7 @@
     return "normal";
   }
   async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay2(0);
+    await delay(0);
     const initial = await readInventoryPetSnapshots();
     if (hasNewInventoryPet(initial, previous)) {
       return initial;
@@ -10254,7 +8703,7 @@
   function hasNewInventoryPet(pets, previous) {
     return pets.some((pet) => !previous.has(pet.id));
   }
-  function delay2(ms) {
+  function delay(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function resolveSendMessage(Conn) {
@@ -13944,9 +12393,15 @@
   var _sOpt = (v) => typeof v === "string" ? v : null;
   var _n = (v) => Number.isFinite(v) ? v : 0;
   var _sArr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
+  var _petCatalogKeyByLc = new Map(
+    Object.keys(petCatalog).map((k) => [k.toLowerCase(), k])
+  );
   function _canonicalSpecies(s) {
     if (!s) return s;
     if (petCatalog[s]) return s;
+    const lc = s.toLowerCase();
+    const found = _petCatalogKeyByLc.get(lc);
+    if (found) return found;
     const t = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
     return petCatalog[t] ? t : s;
   }
@@ -14004,10 +12459,11 @@
     if (!x || x.itemType !== "Pet") return null;
     const id = _s(x.id);
     if (!id) return null;
+    const speciesRaw = x.petSpecies ?? x.data?.petSpecies;
     return {
       id,
       itemType: "Pet",
-      petSpecies: _s(x.petSpecies ?? x.data?.petSpecies),
+      petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
       name: _sOpt(x.name ?? x.data?.name ?? null),
       xp: _n(x.xp ?? x.data?.xp),
       hunger: _n(x.hunger ?? x.data?.hunger),
@@ -14021,10 +12477,11 @@
     if (!slot || typeof slot !== "object") return null;
     const id = _s(slot.id);
     if (!id) return null;
+    const speciesRaw = slot.petSpecies;
     return {
       id,
       itemType: "Pet",
-      petSpecies: _s(slot.petSpecies),
+      petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
       name: _sOpt(slot.name ?? null),
       xp: _n(slot.xp),
       hunger: _n(slot.hunger),
@@ -16087,7 +14544,7 @@
         }
       }
       if (attempt < attempts - 1) {
-        await delay3(delayMs);
+        await delay2(delayMs);
       }
     }
     try {
@@ -16096,7 +14553,7 @@
     }
     return null;
   }
-  function delay3(ms) {
+  function delay2(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   function safeInvokeClick(handler, ev, ctx2, logger) {
@@ -18346,6 +16803,359 @@
     return cat?.[decorId]?.name ?? void 0;
   }
 
+  // src/ui/spriteIconCache.ts
+  var SPRITE_PRELOAD_CATEGORIES = [
+    "plant",
+    "tallplant",
+    "decor",
+    "item",
+    "pet",
+    "seed",
+    "ui",
+    "mutation",
+    "mutation-overlay"
+  ];
+  var spriteDataUrlCache = /* @__PURE__ */ new Map();
+  var spriteWarmupQueued = false;
+  var spriteWarmupStarted = false;
+  var warmupState = { total: 0, done: 0, completed: false };
+  var prefetchedWarmupKeys = [];
+  var warmupCompletedKeys = /* @__PURE__ */ new Set();
+  var WARMUP_RETRY_MS = 100;
+  var WARMUP_DELAY_MS = 8;
+  var WARMUP_BATCH = 3;
+  var warmupListeners = /* @__PURE__ */ new Set();
+  function notifyWarmup(state3) {
+    warmupState = state3;
+    warmupListeners.forEach((listener) => {
+      try {
+        listener(warmupState);
+      } catch {
+      }
+    });
+  }
+  function getSpriteWarmupState() {
+    return warmupState;
+  }
+  function onSpriteWarmupProgress(listener) {
+    warmupListeners.add(listener);
+    try {
+      listener(warmupState);
+    } catch {
+    }
+    return () => {
+      warmupListeners.delete(listener);
+    };
+  }
+  function primeWarmupKeys(keys) {
+    prefetchedWarmupKeys.push(...keys);
+  }
+  function primeSpriteData(category, spriteId, dataUrl) {
+    const cacheKey = cacheKeyFor(category, spriteId);
+    if (!spriteDataUrlCache.has(cacheKey)) {
+      spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
+    }
+    if (!warmupCompletedKeys.has(cacheKey)) {
+      warmupCompletedKeys.add(cacheKey);
+      const nextDone = warmupState.done + 1;
+      const completed = warmupState.total > 0 ? nextDone >= warmupState.total : false;
+      notifyWarmup({ total: Math.max(warmupState.total, nextDone), done: nextDone, completed });
+    }
+  }
+  var normalizeSpriteId = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  var baseNameFromKey = (key2) => {
+    const parts = key2.split("/").filter(Boolean);
+    return parts[parts.length - 1] ?? key2;
+  };
+  var normalizeMutationList = (mutations) => {
+    const list = Array.from(
+      new Set((mutations ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))
+    );
+    if (!list.length) {
+      return { list, key: "" };
+    }
+    const key2 = list.map((val) => normalizeSpriteId(val)).filter(Boolean).sort().join(",");
+    return { list, key: key2 ? `|m=${key2}` : "" };
+  };
+  var cacheKeyFor = (category, spriteId, mutationKey) => `${category}:${normalizeSpriteId(spriteId)}${mutationKey ?? ""}`;
+  var scheduleNonBlocking = (cb) => {
+    return new Promise((resolve2) => {
+      const runner = () => {
+        Promise.resolve().then(cb).then(resolve2).catch(() => resolve2(cb()));
+      };
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(runner, { timeout: 50 });
+      } else if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(runner);
+      } else {
+        setTimeout(runner, 0);
+      }
+    });
+  };
+  function getSpriteService() {
+    const win = pageWindow ?? globalThis;
+    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
+  }
+  var parseKeyToCategoryId = (key2) => {
+    const parts = key2.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
+    const category = parts[start2] ?? "";
+    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
+    if (!category || !id) return null;
+    return { category, id };
+  };
+  function whenServiceReady(handle) {
+    if (!handle || !handle.ready || typeof handle.ready.then !== "function") {
+      return Promise.resolve();
+    }
+    return handle.ready.then(
+      () => {
+      },
+      () => {
+      }
+    );
+  }
+  async function ensureSpriteDataCached(service, category, spriteId, logTag, options) {
+    if (!service?.renderToCanvas) {
+      return null;
+    }
+    const { list: mutationList, key: mutationKey } = normalizeMutationList(options?.mutations);
+    const cacheKey = cacheKeyFor(category, spriteId, mutationKey);
+    let promise = spriteDataUrlCache.get(cacheKey);
+    if (!promise) {
+      promise = scheduleNonBlocking(async () => {
+        try {
+          const canvas = service.renderToCanvas?.({
+            category,
+            id: spriteId,
+            mutations: mutationList
+          });
+          if (!canvas) return null;
+          return canvas.toDataURL("image/png");
+        } catch (error) {
+          console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
+          return null;
+        }
+      });
+      spriteDataUrlCache.set(cacheKey, promise);
+    }
+    return promise;
+  }
+  var spriteMatchCache = /* @__PURE__ */ new Map();
+  function getMatchCacheKey(categories, id) {
+    const normalizedCategories = categories.map((category) => category.toLowerCase()).join("|");
+    return `${normalizedCategories}|${normalizeSpriteId(id)}`;
+  }
+  function findSpriteMatch(service, categories, id) {
+    if (!service.list) return null;
+    const cacheKey = getMatchCacheKey(categories, id);
+    if (spriteMatchCache.has(cacheKey)) {
+      return spriteMatchCache.get(cacheKey) ?? null;
+    }
+    const normalizedTarget = normalizeSpriteId(id);
+    const categoryLists = categories.map((category) => ({
+      category,
+      items: service.list?.(category) ?? []
+    }));
+    let matched = null;
+    const tryMatch = (category, base) => {
+      if (normalizeSpriteId(base) === normalizedTarget) {
+        matched = { category, spriteId: base };
+        return true;
+      }
+      return false;
+    };
+    for (const { category, items } of categoryLists) {
+      for (const it of items) {
+        const key2 = typeof it?.key === "string" ? it.key : "";
+        if (!key2) continue;
+        const base = baseNameFromKey(key2);
+        if (tryMatch(category, base)) {
+          spriteMatchCache.set(cacheKey, matched);
+          return matched;
+        }
+      }
+    }
+    for (const { category, items } of categoryLists) {
+      for (const it of items) {
+        const key2 = typeof it?.key === "string" ? it.key : "";
+        if (!key2) continue;
+        const base = baseNameFromKey(key2);
+        const normBase = normalizeSpriteId(base);
+        if (!normBase) continue;
+        if (normalizedTarget.includes(normBase) || normBase.includes(normalizedTarget) || normBase.startsWith(normalizedTarget) || normalizedTarget.startsWith(normBase)) {
+          matched = { category, spriteId: base };
+          spriteMatchCache.set(cacheKey, matched);
+          return matched;
+        }
+      }
+    }
+    spriteMatchCache.set(cacheKey, null);
+    return null;
+  }
+  function attachSpriteIcon(target, categories, id, size, logTag, options) {
+    const service = getSpriteService();
+    if (!service?.renderToCanvas) return;
+    const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
+    if (!candidateIds.length) return;
+    void whenServiceReady(service).then(
+      () => scheduleNonBlocking(async () => {
+        let selected = null;
+        for (const candidate of candidateIds) {
+          const match = findSpriteMatch(service, categories, candidate);
+          if (match) {
+            selected = { match, candidate };
+            break;
+          }
+        }
+        if (!selected) {
+          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
+          return;
+        }
+        const resolved = selected;
+        const { key: mutationKey } = normalizeMutationList(options?.mutations);
+        const spriteKey = `${resolved.match.category}:${resolved.match.spriteId}${mutationKey}`;
+        const existingImg = target.querySelector("img[data-sprite-key]");
+        if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
+          return;
+        }
+        const dataUrl = await ensureSpriteDataCached(
+          service,
+          resolved.match.category,
+          resolved.match.spriteId,
+          logTag,
+          {
+            mutations: options?.mutations
+          }
+        );
+        if (!dataUrl) return;
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.width = size;
+        img.height = size;
+        img.alt = "";
+        img.decoding = "async";
+        img.loading = "lazy";
+        img.draggable = false;
+        img.style.width = `${size}px`;
+        img.style.height = `${size}px`;
+        img.style.objectFit = "contain";
+        img.style.imageRendering = "auto";
+        img.style.display = "block";
+        img.dataset.spriteKey = spriteKey;
+        img.dataset.spriteCategory = resolved.match.category;
+        img.dataset.spriteId = resolved.match.spriteId;
+        requestAnimationFrame(() => {
+          target.replaceChildren(img);
+          options?.onSpriteApplied?.(img, {
+            category: resolved.match.category,
+            spriteId: resolved.match.spriteId,
+            candidate: resolved.candidate
+          });
+        });
+      })
+    );
+  }
+  function attachWeatherSpriteIcon(target, tag, size) {
+    if (tag === "NoWeatherEffect") return;
+    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
+  }
+  function warmupSpriteCache() {
+    if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
+    spriteWarmupQueued = true;
+    notifyWarmup({ total: warmupState.total, done: warmupState.done, completed: false });
+    const scheduleRetry = () => {
+      window.setTimeout(() => {
+        spriteWarmupQueued = false;
+        warmupSpriteCache();
+      }, WARMUP_RETRY_MS);
+    };
+    let service = getSpriteService();
+    if (!service && prefetchedWarmupKeys.length === 0) {
+      scheduleRetry();
+      return;
+    }
+    const tasks = [];
+    const seen = new Set(warmupCompletedKeys);
+    if (service?.list) {
+      SPRITE_PRELOAD_CATEGORIES.forEach((category) => {
+        const items = service.list?.(category) ?? [];
+        items.forEach((item) => {
+          const key2 = typeof item?.key === "string" ? item.key : "";
+          if (!key2) return;
+          const base = baseNameFromKey(key2);
+          if (!base) return;
+          const k = `${category}:${base.toLowerCase()}`;
+          if (seen.has(k)) return;
+          seen.add(k);
+          tasks.push({ category, id: base });
+        });
+      });
+    }
+    if (prefetchedWarmupKeys.length) {
+      prefetchedWarmupKeys.forEach((key2) => {
+        const parsed = parseKeyToCategoryId(key2);
+        if (!parsed) return;
+        const k = `${parsed.category}:${parsed.id.toLowerCase()}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        tasks.push(parsed);
+      });
+      prefetchedWarmupKeys = [];
+    }
+    if (!tasks.length) {
+      if (warmupState.completed) {
+        spriteWarmupQueued = false;
+        return;
+      }
+      scheduleRetry();
+      return;
+    }
+    spriteWarmupStarted = true;
+    const total = Math.max(warmupState.total, tasks.length);
+    const startingDone = Math.min(warmupState.done, total);
+    notifyWarmup({ total, done: startingDone, completed: total === 0 || startingDone >= total });
+    const processNext = () => {
+      service = service || getSpriteService();
+      if (!service?.renderToCanvas || !service?.list) {
+        setTimeout(processNext, WARMUP_RETRY_MS);
+        return;
+      }
+      if (!tasks.length) {
+        spriteWarmupQueued = false;
+        console.log("[SpriteIconCache]", "warmup complete", {
+          categories: SPRITE_PRELOAD_CATEGORIES,
+          totalCached: spriteDataUrlCache.size
+        });
+        notifyWarmup({ total, done: warmupState.done, completed: true });
+        return;
+      }
+      let processed = 0;
+      const batch = tasks.splice(0, WARMUP_BATCH);
+      batch.forEach((entry) => {
+        ensureSpriteDataCached(service, entry.category, entry.id, "warmup").then((result) => {
+          if (result == null && !service?.renderToCanvas) {
+            tasks.unshift(entry);
+            return;
+          }
+          const completionKey = cacheKeyFor(entry.category, entry.id);
+          if (!warmupCompletedKeys.has(completionKey)) {
+            warmupCompletedKeys.add(completionKey);
+            const nextDone = Math.min(warmupState.done + 1, total);
+            notifyWarmup({ total, done: nextDone, completed: nextDone >= total });
+          }
+        }).finally(() => {
+          processed += 1;
+          if (processed >= batch.length) {
+            setTimeout(processNext, WARMUP_DELAY_MS);
+          }
+        });
+      });
+    };
+    processNext();
+  }
+
   // src/ui/menus/notificationOverlay.ts
   var style = (el2, s) => Object.assign(el2.style, s);
   var setProps = (el2, props) => {
@@ -20257,7 +19067,7 @@
   async function waitForHungerIncrease(petId, previousPct, options = {}) {
     const { initialDelay = 0, timeout = HUNGER_TIMEOUT_MS, interval = HUNGER_POLL_INTERVAL_MS } = options;
     if (initialDelay > 0) {
-      await delay4(initialDelay);
+      await delay3(initialDelay);
     }
     const start2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
     let lastResult = null;
@@ -20274,11 +19084,11 @@
         return lastResult;
       }
       if (interval > 0) {
-        await delay4(interval);
+        await delay3(interval);
       }
     }
   }
-  function delay4(ms) {
+  function delay3(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function waitForFakeInventorySelection(timeoutMs = 2e4) {
@@ -27742,7 +26552,7 @@ next: ${next}`;
   var MAX_VISIBLE_SPRITES = 400;
   var SPRITE_ICON_SIZE = 96;
   var spriteServicePromise = null;
-  var sleep3 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  var sleep2 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   function resolveGlobalSpriteService() {
     const root = globalThis.unsafeWindow || globalThis;
     return root?.__MG_SPRITE_SERVICE__ ?? null;
@@ -27761,7 +26571,7 @@ next: ${next}`;
         }
         return svc;
       }
-      await sleep3(200);
+      await sleep2(200);
     }
     return null;
   }
@@ -36839,6 +35649,30 @@ next: ${next}`;
       } catch {
       }
     };
+  }
+
+  // src/utils/gameVersion.ts
+  var gameVersion = null;
+  function initGameVersion(doc) {
+    if (gameVersion !== null) {
+      return;
+    }
+    const d = doc ?? (typeof document !== "undefined" ? document : null);
+    if (!d) {
+      return;
+    }
+    const scripts = d.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts.item(i);
+      if (!script) continue;
+      const src = script.src;
+      if (!src) continue;
+      const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (match && match[1]) {
+        gameVersion = match[1];
+        return;
+      }
+    }
   }
 
   // src/services/settings.ts
@@ -46621,13 +45455,938 @@ next: ${next}`;
     }, normalizedMs);
   }
 
+  // src/sprite/state.ts
+  init_settings();
+  function createInitialState() {
+    return {
+      started: false,
+      open: false,
+      loaded: false,
+      version: null,
+      base: null,
+      ctors: null,
+      app: null,
+      renderer: null,
+      cat: "__all__",
+      q: "",
+      f: "",
+      mutOn: false,
+      mutations: [],
+      scroll: 0,
+      items: [],
+      filtered: [],
+      cats: /* @__PURE__ */ new Map(),
+      tex: /* @__PURE__ */ new Map(),
+      lru: /* @__PURE__ */ new Map(),
+      cost: 0,
+      jobs: [],
+      jobMap: /* @__PURE__ */ new Set(),
+      srcCan: /* @__PURE__ */ new Map(),
+      atlasBases: /* @__PURE__ */ new Set(),
+      dbgCount: {},
+      sig: "",
+      changedAt: 0,
+      needsLayout: false,
+      overlay: null,
+      bg: null,
+      grid: null,
+      dom: null,
+      selCat: null,
+      count: null,
+      pool: [],
+      active: /* @__PURE__ */ new Map(),
+      anim: /* @__PURE__ */ new Set()
+    };
+  }
+  function createSpriteContext() {
+    return {
+      cfg: { ...DEFAULT_CFG },
+      state: createInitialState()
+    };
+  }
+
+  // src/sprite/utils/async.ts
+  var sleep3 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  async function waitWithTimeout(p, ms, label2) {
+    const t0 = performance.now();
+    while (performance.now() - t0 < ms) {
+      const result = await Promise.race([p, sleep3(50).then(() => null)]);
+      if (result !== null) return result;
+    }
+    throw new Error(`${label2} timeout`);
+  }
+
+  // src/sprite/pixi/hooks.ts
+  function createPixiHooks() {
+    let appResolver;
+    let rdrResolver;
+    const appReady = new Promise((resolve2) => appResolver = resolve2);
+    const rendererReady = new Promise((resolve2) => rdrResolver = resolve2);
+    let APP = null;
+    let RDR = null;
+    let PIXI_VER = null;
+    const hook = (name, cb) => {
+      const root = globalThis.unsafeWindow || globalThis;
+      const prev = root[name];
+      root[name] = function() {
+        try {
+          cb.apply(this, arguments);
+        } finally {
+          if (typeof prev === "function") {
+            try {
+              prev.apply(this, arguments);
+            } catch {
+            }
+          }
+        }
+      };
+    };
+    hook("__PIXI_APP_INIT__", (a, v) => {
+      if (!APP) {
+        APP = a;
+        PIXI_VER = v;
+        appResolver(a);
+      }
+    });
+    hook("__PIXI_RENDERER_INIT__", (r, v) => {
+      if (!RDR) {
+        RDR = r;
+        PIXI_VER = v;
+        rdrResolver(r);
+      }
+    });
+    const tryResolveExisting = () => {
+      const root = globalThis.unsafeWindow || globalThis;
+      if (!APP) {
+        const maybeApp = root.__PIXI_APP__ || root.PIXI_APP || root.app;
+        if (maybeApp) {
+          APP = maybeApp;
+          appResolver(APP);
+        }
+      }
+      if (!RDR) {
+        const maybeRdr = root.__PIXI_RENDERER__ || root.PIXI_RENDERER__ || root.renderer || APP?.renderer;
+        if (maybeRdr) {
+          RDR = maybeRdr;
+          rdrResolver(RDR);
+        }
+      }
+    };
+    tryResolveExisting();
+    let fallbackPolls = 0;
+    const fallbackInterval = setInterval(() => {
+      if (APP && RDR) {
+        clearInterval(fallbackInterval);
+        return;
+      }
+      tryResolveExisting();
+      fallbackPolls += 1;
+      if (fallbackPolls >= 50) {
+        clearInterval(fallbackInterval);
+      }
+    }, 100);
+    return {
+      get app() {
+        return APP;
+      },
+      get renderer() {
+        return RDR;
+      },
+      get pixiVersion() {
+        return PIXI_VER;
+      },
+      appReady,
+      rendererReady
+    };
+  }
+  async function waitForPixi(handles, timeoutMs = 15e3) {
+    const app = await waitWithTimeout(handles.appReady, timeoutMs, "PIXI app");
+    const renderer = await waitWithTimeout(handles.rendererReady, timeoutMs, "PIXI renderer");
+    return { app, renderer, version: handles.pixiVersion };
+  }
+
+  // src/sprite/utils/pixi.ts
+  function findAny(root, pred, lim = 25e3) {
+    const stack = [root];
+    const seen = /* @__PURE__ */ new Set();
+    let n = 0;
+    while (stack.length && n++ < lim) {
+      const node = stack.pop();
+      if (!node || seen.has(node)) continue;
+      seen.add(node);
+      if (pred(node)) return node;
+      const children = node.children;
+      if (Array.isArray(children)) {
+        for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]);
+      }
+    }
+    return null;
+  }
+  function getCtors(app) {
+    const P = globalThis.PIXI || globalThis.unsafeWindow?.PIXI;
+    if (P?.Texture && P?.Sprite && P?.Container && P?.Rectangle) {
+      return { Container: P.Container, Sprite: P.Sprite, Texture: P.Texture, Rectangle: P.Rectangle, Text: P.Text || null };
+    }
+    const stage = app?.stage;
+    const anySpr = findAny(stage, (x) => x?.texture?.frame && x?.constructor && x?.texture?.constructor && x?.texture?.frame?.constructor);
+    if (!anySpr) throw new Error("No Sprite found (ctors).");
+    const anyTxt = findAny(stage, (x) => (typeof x?.text === "string" || typeof x?.text === "number") && x?.style);
+    return {
+      Container: stage.constructor,
+      Sprite: anySpr.constructor,
+      Texture: anySpr.texture.constructor,
+      Rectangle: anySpr.texture.frame.constructor,
+      Text: anyTxt?.constructor || null
+    };
+  }
+  var baseTexOf = (tex) => tex?.baseTexture ?? tex?.source?.baseTexture ?? tex?.source ?? tex?._baseTexture ?? null;
+  function rememberBaseTex(tex, atlasBases) {
+    const base = baseTexOf(tex);
+    if (base) atlasBases.add(base);
+  }
+
+  // src/sprite/utils/path.ts
+  var splitKey = (key2) => String(key2 || "").split("/").filter(Boolean);
+  var joinPath = (base, path) => base.replace(/\/?$/, "/") + String(path || "").replace(/^\//, "");
+  var dirOf = (path) => path.lastIndexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/") + 1) : "";
+  var relPath = (base, path) => typeof path === "string" ? path.startsWith("/") ? path.slice(1) : dirOf(base) + path : path;
+  function categoryOf(key2, cfg) {
+    const parts = splitKey(key2);
+    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
+    const width = Math.max(1, cfg.catLevels | 0);
+    return parts.slice(start2, start2 + width).join("/") || "misc";
+  }
+  function animParse(key2) {
+    const parts = splitKey(key2);
+    const last = parts[parts.length - 1];
+    const match = last && last.match(/^(.*?)(?:[_-])(\d{1,6})(\.[a-z0-9]+)?$/i);
+    if (!match) return null;
+    const baseName = (match[1] || "") + (match[3] || "");
+    const idx = Number(match[2]);
+    if (!baseName || !Number.isFinite(idx)) return null;
+    return { baseKey: parts.slice(0, -1).concat(baseName).join("/"), idx, frameKey: key2 };
+  }
+
+  // src/sprite/data/assetFetcher.ts
+  function fetchFallback(url, type) {
+    return fetch(url).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} (${url})`);
+      if (type === "blob") return { status: res.status, response: await res.blob(), responseText: "" };
+      const text = await res.text();
+      return {
+        status: res.status,
+        response: type === "json" ? JSON.parse(text) : text,
+        responseText: text
+      };
+    }).catch((err) => {
+      throw new Error(`Network (${url}): ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+  function gm(url, type = "text") {
+    if (typeof GM_xmlhttpRequest === "function") {
+      return new Promise(
+        (resolve2, reject) => GM_xmlhttpRequest({
+          method: "GET",
+          url,
+          responseType: type,
+          onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url})`)),
+          onerror: () => reject(new Error(`Network (${url})`)),
+          ontimeout: () => reject(new Error(`Timeout (${url})`))
+        })
+      );
+    }
+    return fetchFallback(url, type);
+  }
+  var getJSON = async (url) => JSON.parse((await gm(url, "text")).responseText);
+  var getBlob = async (url) => (await gm(url, "blob")).response;
+  function blobToImage(blob) {
+    return new Promise((resolve2, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve2(img);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode fail"));
+      };
+      img.src = url;
+    });
+  }
+  function extractAtlasJsons(manifest) {
+    const jsons = /* @__PURE__ */ new Set();
+    for (const bundle of manifest.bundles || []) {
+      for (const asset of bundle.assets || []) {
+        for (const src of asset.src || []) {
+          if (typeof src !== "string") continue;
+          if (!src.endsWith(".json")) continue;
+          if (src === "manifest.json") continue;
+          if (src.startsWith("audio/")) continue;
+          jsons.add(src);
+        }
+      }
+    }
+    return jsons;
+  }
+  async function loadAtlasJsons(base, manifest) {
+    const jsons = extractAtlasJsons(manifest);
+    const seen = /* @__PURE__ */ new Set();
+    const data = {};
+    const loadOne = async (path) => {
+      if (seen.has(path)) return;
+      seen.add(path);
+      const json = await getJSON(joinPath(base, path));
+      data[path] = json;
+      if (json?.meta?.related_multi_packs) {
+        for (const rel of json.meta.related_multi_packs) {
+          await loadOne(relPath(path, rel));
+        }
+      }
+    };
+    for (const p of jsons) {
+      await loadOne(p);
+    }
+    return data;
+  }
+
+  // src/sprite/pixi/atlasToTextures.ts
+  var isAtlas = (j) => j && typeof j === "object" && j.frames && j.meta && typeof j.meta.image === "string";
+  function mkRect(Rectangle, x, y, w, h) {
+    return new Rectangle(x, y, w, h);
+  }
+  function mkSubTex(Texture, baseTex, frame, orig, trim, rotate, anchor) {
+    let t;
+    try {
+      t = new Texture({ source: baseTex.source, frame, orig, trim: trim || void 0, rotate: rotate || 0 });
+    } catch {
+      t = new Texture(baseTex.baseTexture ?? baseTex, frame, orig, trim || void 0, rotate || 0);
+    }
+    try {
+      if (t && !t.label) t.label = frame?.width && frame?.height ? `sub:${frame.width}x${frame.height}` : "subtex";
+    } catch {
+    }
+    if (anchor) {
+      const target = t;
+      if (target.defaultAnchor?.set) {
+        try {
+          target.defaultAnchor.set(anchor.x, anchor.y);
+        } catch {
+        }
+      }
+      if (target.defaultAnchor && !target.defaultAnchor.set) {
+        target.defaultAnchor.x = anchor.x;
+        target.defaultAnchor.y = anchor.y;
+      }
+      if (!target.defaultAnchor) {
+        target.defaultAnchor = { x: anchor.x, y: anchor.y };
+      }
+    }
+    try {
+      t?.updateUvs?.();
+    } catch {
+    }
+    return t;
+  }
+  function buildAtlasTextures(data, baseTex, texMap, atlasBases, ctors) {
+    const { Texture, Rectangle } = ctors;
+    try {
+      if (baseTex && !baseTex.label) baseTex.label = data?.meta?.image || "atlasBase";
+    } catch {
+    }
+    rememberBaseTex(baseTex, atlasBases);
+    for (const [k, fd] of Object.entries(data.frames)) {
+      const fr = fd.frame;
+      const rot = fd.rotated ? 2 : 0;
+      const w = fd.rotated ? fr.h : fr.w;
+      const h = fd.rotated ? fr.w : fr.h;
+      const frame = mkRect(Rectangle, fr.x, fr.y, w, h);
+      const ss = fd.sourceSize || { w: fr.w, h: fr.h };
+      const orig = mkRect(Rectangle, 0, 0, ss.w, ss.h);
+      let trim = null;
+      if (fd.trimmed && fd.spriteSourceSize) {
+        const s = fd.spriteSourceSize;
+        trim = mkRect(Rectangle, s.x, s.y, s.w, s.h);
+      }
+      const t = mkSubTex(Texture, baseTex, frame, orig, trim, rot, fd.anchor || null);
+      try {
+        t.label = k;
+      } catch {
+      }
+      rememberBaseTex(t, atlasBases);
+      texMap.set(k, t);
+    }
+  }
+
+  // src/sprite/data/catalogIndexer.ts
+  function buildItemsFromTextures(tex, cfg) {
+    const keys = [...tex.keys()].sort((a, b) => a.localeCompare(b));
+    const used = /* @__PURE__ */ new Set();
+    const items = [];
+    const cats = /* @__PURE__ */ new Map();
+    const addToCat = (key2, item) => {
+      const cat = categoryOf(key2, cfg);
+      if (!cats.has(cat)) cats.set(cat, []);
+      cats.get(cat).push(item);
+    };
+    for (const key2 of keys) {
+      const texEntry = tex.get(key2);
+      if (!texEntry || used.has(key2)) continue;
+      const anim = animParse(key2);
+      if (!anim) {
+        const item = { key: key2, isAnim: false, first: texEntry };
+        items.push(item);
+        addToCat(key2, item);
+        continue;
+      }
+      const frames = [];
+      for (const candidate of keys) {
+        const maybe = animParse(candidate);
+        if (!maybe || maybe.baseKey !== anim.baseKey) continue;
+        const t = tex.get(candidate);
+        if (!t) continue;
+        frames.push({ idx: maybe.idx, tex: t });
+        used.add(candidate);
+      }
+      frames.sort((a, b) => a.idx - b.idx);
+      const ordered = frames.map((f) => f.tex);
+      if (ordered.length === 1) {
+        const item = { key: anim.baseKey, isAnim: false, first: ordered[0] };
+        items.push(item);
+        addToCat(anim.baseKey, item);
+      } else if (ordered.length > 1) {
+        const item = {
+          key: anim.baseKey,
+          isAnim: true,
+          frames: ordered,
+          first: ordered[0],
+          count: ordered.length
+        };
+        items.push(item);
+        addToCat(anim.baseKey, item);
+      }
+    }
+    return { items, cats };
+  }
+
+  // src/sprite/api/expose.ts
+  init_variantBuilder();
+  function exposeApi(state3, hud) {
+    const root = globalThis.unsafeWindow || globalThis;
+    const api = {
+      open() {
+        hud.root?.style && (hud.root.style.display = "block");
+        state3.open = true;
+      },
+      close() {
+        hud.root?.style && (hud.root.style.display = "none");
+        state3.open = false;
+      },
+      toggle() {
+        state3.open ? api.close() : api.open();
+      },
+      setCategory(cat) {
+        state3.cat = cat || "__all__";
+      },
+      setFilterText(text) {
+        state3.q = String(text || "").trim();
+      },
+      setSpriteFilter(name) {
+        state3.f = name;
+        state3.mutOn = false;
+      },
+      setMutation(on, ...muts) {
+        state3.mutOn = !!on;
+        state3.f = "";
+        state3.mutations = state3.mutOn ? muts.filter(Boolean).map((name) => name) : [];
+      },
+      filters() {
+        return [];
+      },
+      categories() {
+        return [...state3.cats.keys()].sort((a, b) => a.localeCompare(b));
+      },
+      cacheStats() {
+        return { entries: state3.lru.size, cost: state3.cost };
+      },
+      clearCache() {
+        clearVariantCache(state3);
+      },
+      curVariant: () => curVariant(state3)
+    };
+    root.MGSpriteCatalog = api;
+    return api;
+  }
+
+  // src/sprite/index.ts
+  init_variantBuilder();
+  var ctx = createSpriteContext();
+  var hooks = createPixiHooks();
+  var parseFrameCategory = (key2) => {
+    const parts = String(key2 || "").split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
+    const category = parts[start2] ?? "";
+    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
+    if (!category || !id) return null;
+    return { category, id };
+  };
+  var yieldToBrowser = () => {
+    return new Promise((resolve2) => {
+      const win = typeof window !== "undefined" ? window : null;
+      if (win?.requestIdleCallback) {
+        win.requestIdleCallback(() => resolve2(), { timeout: 32 });
+      } else if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(() => resolve2());
+      } else {
+        setTimeout(resolve2, 0);
+      }
+    });
+  };
+  var delay4 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  async function warmupSpritesFromAtlases(atlasJsons, blobs) {
+    const FRAME_YIELD_EVERY = 6;
+    const MAX_CHUNK_MS = 10;
+    let framesSinceYield = 0;
+    let chunkStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const resetChunk = () => {
+      chunkStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+    };
+    const yieldIfNeeded = async () => {
+      const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const elapsed = now2 - chunkStart;
+      if (framesSinceYield >= FRAME_YIELD_EVERY || elapsed >= MAX_CHUNK_MS) {
+        framesSinceYield = 0;
+        await yieldToBrowser();
+        resetChunk();
+      }
+    };
+    for (const [path, data] of Object.entries(atlasJsons)) {
+      if (!isAtlas(data)) continue;
+      const frames = data.frames || {};
+      if (!frames || !Object.keys(frames).length) continue;
+      const imgPath = relPath(path, data.meta.image);
+      const blob = blobs.get(imgPath);
+      if (!blob) continue;
+      let img;
+      try {
+        img = await blobToImage(blob);
+      } catch (error) {
+        console.warn("[MG SpriteCatalog] warmup decode failed", { imgPath, error });
+        continue;
+      }
+      for (const [frameKey, frameData] of Object.entries(frames)) {
+        const parsed = parseFrameCategory(frameKey);
+        if (!parsed) continue;
+        try {
+          const dataUrl = drawFrameToDataURL(img, frameKey, frameData);
+          if (!dataUrl) continue;
+          primeSpriteData(parsed.category, parsed.id, dataUrl);
+        } catch (error) {
+          console.warn("[MG SpriteCatalog] warmup frame failed", { frameKey, error });
+        }
+        framesSinceYield += 1;
+        await yieldIfNeeded();
+      }
+      framesSinceYield = 0;
+      await yieldToBrowser();
+      resetChunk();
+    }
+  }
+  var prefetchPromise = null;
+  function detectGameVersion() {
+    try {
+      initGameVersion();
+      if (gameVersion) return gameVersion;
+    } catch {
+    }
+    const root = globalThis.unsafeWindow || globalThis;
+    const gv = root.gameVersion || root.MG_gameVersion || root.__MG_GAME_VERSION__;
+    if (gv) {
+      if (typeof gv.getVersion === "function") return gv.getVersion();
+      if (typeof gv.get === "function") return gv.get();
+      if (typeof gv === "string") return gv;
+    }
+    const scriptUrls = Array.from(document.scripts || []).map((s) => s.src).filter(Boolean);
+    const linkUrls = Array.from(document.querySelectorAll("link[href]") || []).map(
+      (l) => l.href
+    );
+    const urls = [...scriptUrls, ...linkUrls];
+    for (const u of urls) {
+      const m = u.match(/\/version\/([^/]+)\//);
+      if (m?.[1]) return m[1];
+    }
+    throw new Error("Version not found.");
+  }
+  async function resolveGameVersionWithRetry(timeoutMs = 6e3) {
+    const deadline = Date.now() + timeoutMs;
+    let lastError = null;
+    while (Date.now() < deadline) {
+      try {
+        const v = detectGameVersion();
+        if (v) return v;
+      } catch (err) {
+        lastError = err;
+      }
+      await delay4(120);
+    }
+    throw lastError ?? new Error("Version not found.");
+  }
+  function drawFrameToDataURL(img, frameKey, data) {
+    try {
+      const fr = data.frame;
+      const trimmed = data.trimmed && data.spriteSourceSize;
+      const sourceSize = data.sourceSize || { w: fr.w, h: fr.h };
+      const canvas = document.createElement("canvas");
+      canvas.width = sourceSize.w;
+      canvas.height = sourceSize.h;
+      const ctx2 = canvas.getContext("2d");
+      if (!ctx2) return null;
+      ctx2.imageSmoothingEnabled = false;
+      if (data.rotated) {
+        ctx2.save();
+        ctx2.translate(sourceSize.w / 2, sourceSize.h / 2);
+        ctx2.rotate(-Math.PI / 2);
+        ctx2.drawImage(
+          img,
+          fr.x,
+          fr.y,
+          fr.h,
+          fr.w,
+          -fr.h / 2,
+          -fr.w / 2,
+          fr.h,
+          fr.w
+        );
+        ctx2.restore();
+      } else {
+        const dx = trimmed ? data.spriteSourceSize.x : 0;
+        const dy = trimmed ? data.spriteSourceSize.y : 0;
+        ctx2.drawImage(img, fr.x, fr.y, fr.w, fr.h, dx, dy, fr.w, fr.h);
+      }
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+  async function prefetchAtlas(base) {
+    try {
+      const manifest = await getJSON(joinPath(base, "manifest.json"));
+      const atlasJsons = await loadAtlasJsons(base, manifest);
+      const blobs = /* @__PURE__ */ new Map();
+      for (const [path, data] of Object.entries(atlasJsons)) {
+        if (!isAtlas(data)) continue;
+        const imgPath = relPath(path, data.meta.image);
+        try {
+          const blob = await getBlob(joinPath(base, imgPath));
+          blobs.set(imgPath, blob);
+        } catch {
+        }
+      }
+      const warmupKeys = [];
+      Object.entries(atlasJsons).forEach(([, data]) => {
+        if (!isAtlas(data)) return;
+        Object.keys(data.frames || {}).forEach((frameKey) => warmupKeys.push(frameKey));
+      });
+      if (warmupKeys.length) {
+        try {
+          primeWarmupKeys(warmupKeys);
+        } catch {
+        }
+      }
+      try {
+        warmupSpriteCache();
+      } catch {
+      }
+      if (warmupKeys.length) {
+        warmupSpritesFromAtlases(atlasJsons, blobs).catch(() => {
+        });
+      }
+      return { base, atlasJsons, blobs };
+    } catch {
+      return null;
+    }
+  }
+  async function loadTextures(base, prefetched) {
+    const usePrefetched = prefetched && prefetched.base === base ? prefetched : null;
+    const atlasJsons = usePrefetched?.atlasJsons ?? await loadAtlasJsons(base, await getJSON(joinPath(base, "manifest.json")));
+    const ctors = ctx.state.ctors;
+    if (!ctors?.Texture || !ctors?.Rectangle) throw new Error("PIXI constructors missing");
+    for (const [path, data] of Object.entries(atlasJsons)) {
+      if (!isAtlas(data)) continue;
+      const imgPath = relPath(path, data.meta.image);
+      const blob = usePrefetched?.blobs.get(imgPath) ?? usePrefetched?.blobs.get(relPath(path, data.meta.image)) ?? await getBlob(joinPath(base, imgPath));
+      const img = await blobToImage(blob);
+      const baseTex = ctors.Texture.from(img);
+      buildAtlasTextures(data, baseTex, ctx.state.tex, ctx.state.atlasBases, {
+        Texture: ctors.Texture,
+        Rectangle: ctors.Rectangle
+      });
+    }
+    const { items, cats } = buildItemsFromTextures(ctx.state.tex, ctx.cfg);
+    ctx.state.items = items;
+    ctx.state.filtered = items.slice();
+    ctx.state.cats = cats;
+    ctx.state.loaded = true;
+  }
+  function ensureDocumentReady() {
+    if (document.readyState !== "loading") return Promise.resolve();
+    return new Promise((resolve2) => {
+      const onReady = () => {
+        document.removeEventListener("DOMContentLoaded", onReady);
+        resolve2();
+      };
+      document.addEventListener("DOMContentLoaded", onReady);
+    });
+  }
+  async function resolvePixiFast() {
+    const root = globalThis.unsafeWindow || globalThis;
+    const check = () => {
+      const app = root.__PIXI_APP__ || root.PIXI_APP || root.app || null;
+      const renderer = root.__PIXI_RENDERER__ || root.PIXI_RENDERER__ || root.renderer || app?.renderer || null;
+      if (app && renderer) {
+        return { app, renderer, version: root.__PIXI_VERSION__ || null };
+      }
+      return null;
+    };
+    const hit = check();
+    if (hit) return hit;
+    const maxMs = 5e3;
+    const start2 = performance.now();
+    while (performance.now() - start2 < maxMs) {
+      await new Promise((r) => setTimeout(r, 50));
+      const retry = check();
+      if (retry) return retry;
+    }
+    const waited = await waitForPixi(hooks);
+    return { app: waited.app, renderer: waited.renderer, version: waited.version };
+  }
+  async function start() {
+    if (ctx.state.started) return;
+    ctx.state.started = true;
+    let version;
+    const retryDeadline = typeof performance !== "undefined" ? performance.now() + 8e3 : Date.now() + 8e3;
+    for (; ; ) {
+      try {
+        version = await resolveGameVersionWithRetry();
+        console.info("[MG SpriteCatalog] game version resolved", version);
+        break;
+      } catch (err) {
+        const now2 = typeof performance !== "undefined" ? performance.now() : Date.now();
+        if (now2 >= retryDeadline) {
+          console.error("[MG SpriteCatalog] failed to resolve game version", err);
+          throw err;
+        }
+        console.warn("[MG SpriteCatalog] retrying game version detection...");
+        await delay4(200);
+      }
+    }
+    const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
+    if (!prefetchPromise) {
+      prefetchPromise = prefetchAtlas(base);
+    }
+    const { app, renderer: _renderer, version: pixiVersion } = await resolvePixiFast();
+    await ensureDocumentReady();
+    ctx.state.ctors = getCtors(app);
+    const renderer = _renderer || app?.renderer || app?.render || null;
+    ctx.state.app = app;
+    ctx.state.renderer = renderer;
+    ctx.state.version = pixiVersion || version || version === "" ? pixiVersion ?? version : detectGameVersion();
+    ctx.state.base = base;
+    ctx.state.sig = curVariant(ctx.state).sig;
+    const prefetched = await (prefetchPromise ?? Promise.resolve(null));
+    await loadTextures(ctx.state.base, prefetched);
+    const hud = {
+      open() {
+        ctx.state.open = true;
+      },
+      close() {
+        ctx.state.open = false;
+      },
+      toggle() {
+        ctx.state.open ? this.close() : this.open();
+      },
+      layout() {
+      },
+      root: void 0
+    };
+    ctx.state.open = true;
+    app.ticker?.add?.(() => {
+      processJobs(ctx.state, ctx.cfg);
+    });
+    exposeApi(ctx.state, hud);
+    const g = globalThis;
+    const uw = g.unsafeWindow || g;
+    const spriteApi = await Promise.resolve().then(() => (init_spriteApi(), spriteApi_exports));
+    const ensureOverlayHost = () => {
+      const id = "mg-sprite-overlay";
+      let host = document.getElementById(id);
+      if (!host) {
+        host = document.createElement("div");
+        host.id = id;
+        host.style.cssText = "position:fixed;top:8px;left:8px;z-index:2147480000;display:flex;flex-wrap:wrap;gap:8px;pointer-events:auto;background:transparent;align-items:flex-start;";
+        document.body.appendChild(host);
+      }
+      return host;
+    };
+    const getSpriteDim = (tex, key2) => {
+      const sources = [
+        tex?.orig,
+        tex?._orig,
+        tex?.frame,
+        tex?._frame,
+        tex
+      ];
+      for (const src of sources) {
+        const value = src?.[key2];
+        if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+          return value;
+        }
+      }
+      return null;
+    };
+    const padCanvasToSpriteBounds = (source, tex) => {
+      const rawW = source.width || 1;
+      const rawH = source.height || 1;
+      const baseW = Math.max(rawW, Math.round(getSpriteDim(tex, "width") ?? rawW) || rawW);
+      const baseH = Math.max(rawH, Math.round(getSpriteDim(tex, "height") ?? rawH) || rawH);
+      const trim = tex?.trim ?? tex?._trim ?? null;
+      let offsetX = trim && typeof trim.x === "number" ? Math.round(trim.x) : Math.round((baseW - rawW) / 2);
+      let offsetY = trim && typeof trim.y === "number" ? Math.round(trim.y) : Math.round((baseH - rawH) / 2);
+      offsetX = Math.max(0, Math.min(baseW - rawW, offsetX));
+      offsetY = Math.max(0, Math.min(baseH - rawH, offsetY));
+      if (baseW === rawW && baseH === rawH && offsetX === 0 && offsetY === 0) {
+        return source;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = baseW;
+      canvas.height = baseH;
+      const ctx2 = canvas.getContext("2d");
+      if (!ctx2) return source;
+      ctx2.imageSmoothingEnabled = false;
+      ctx2.clearRect(0, 0, baseW, baseH);
+      ctx2.drawImage(source, offsetX, offsetY);
+      return canvas;
+    };
+    const renderTextureToCanvas = (tex) => {
+      try {
+        const spr = new ctx.state.ctors.Sprite(tex);
+        const extracted = ctx.state.renderer.extract.canvas(spr, { resolution: 1 });
+        spr.destroy?.({ children: true, texture: false, baseTexture: false });
+        return padCanvasToSpriteBounds(extracted, tex);
+      } catch {
+        return null;
+      }
+    };
+    const service = {
+      ready: Promise.resolve(),
+      // overwritten below
+      state: ctx.state,
+      cfg: ctx.cfg,
+      list(category = "any") {
+        return spriteApi.listItemsByCategory(ctx.state, category);
+      },
+      getBaseSprite(params) {
+        return spriteApi.getBaseSprite(params, ctx.state);
+      },
+      getSpriteWithMutations(params) {
+        return spriteApi.getSpriteWithMutations(params, ctx.state, ctx.cfg);
+      },
+      buildVariant(mutations) {
+        return spriteApi.buildVariant(mutations);
+      },
+      renderToCanvas(arg) {
+        const tex = arg?.isTexture || arg?.frame ? arg : service.getSpriteWithMutations(arg);
+        if (!tex) return null;
+        return renderTextureToCanvas(tex);
+      },
+      async renderToDataURL(arg, type = "image/png", quality) {
+        const c = service.renderToCanvas(arg);
+        if (!c) return null;
+        return c.toDataURL(type, quality);
+      },
+      // Render and append to a fixed overlay; each sprite gets its own wrapper.
+      renderOnCanvas(arg, opts = {}) {
+        const c = service.renderToCanvas(arg);
+        if (!c) return null;
+        c.style.background = "transparent";
+        c.style.display = "block";
+        let mutW = c.width || c.clientWidth;
+        let mutH = c.height || c.clientHeight;
+        let baseW = mutW;
+        let baseH = mutH;
+        if (arg && !arg.isTexture && !arg.frame) {
+          const baseTex = service.getBaseSprite(arg);
+          if (baseTex) {
+            baseW = baseTex?.orig?.width ?? baseTex?._orig?.width ?? baseTex?.frame?.width ?? baseTex?._frame?.width ?? baseTex?.width ?? baseW;
+            baseH = baseTex?.orig?.height ?? baseTex?._orig?.height ?? baseTex?.frame?.height ?? baseTex?._frame?.height ?? baseTex?.height ?? baseH;
+          }
+        }
+        const scaleToBase = Math.min(baseW / mutW, baseH / mutH, 1);
+        let logicalW = mutW * scaleToBase;
+        let logicalH = mutH * scaleToBase;
+        const { maxWidth, maxHeight, allowScaleUp } = opts;
+        if (maxWidth || maxHeight) {
+          const scaleW = maxWidth ? maxWidth / logicalW : 1;
+          const scaleH = maxHeight ? maxHeight / logicalH : 1;
+          let scale = Math.min(scaleW || 1, scaleH || 1);
+          if (!allowScaleUp) scale = Math.min(scale, 1);
+          logicalW = Math.floor(logicalW * scale);
+          logicalH = Math.floor(logicalH * scale);
+        }
+        if (logicalW) c.style.width = `${logicalW}px`;
+        if (logicalH) c.style.height = `${logicalH}px`;
+        const wrap = document.createElement("div");
+        wrap.style.cssText = "display:inline-flex;align-items:flex-start;justify-content:flex-start;padding:0;margin:0;background:transparent;border:none;flex:0 0 auto;";
+        wrap.appendChild(c);
+        ensureOverlayHost().appendChild(wrap);
+        return { wrap, canvas: c };
+      },
+      clearOverlay() {
+        const host = document.getElementById("mg-sprite-overlay");
+        if (host) host.remove();
+      },
+      renderAnimToCanvases(params) {
+        const item = ctx.state.items.find((it) => it.key === `sprite/${params.category}/${params.id}` || it.key === params.id);
+        if (!item) return [];
+        if (item.isAnim && item.frames?.length) {
+          const texes = params?.mutations?.length ? [service.getSpriteWithMutations(params)] : item.frames;
+          return texes.map((t2) => renderTextureToCanvas(t2)).filter(Boolean);
+        }
+        const t = service.getSpriteWithMutations(params);
+        return t ? [renderTextureToCanvas(t)] : [];
+      }
+    };
+    service.ready = Promise.resolve();
+    uw.__MG_SPRITE_STATE__ = ctx.state;
+    uw.__MG_SPRITE_CFG__ = ctx.cfg;
+    uw.__MG_SPRITE_API__ = spriteApi;
+    uw.__MG_SPRITE_SERVICE__ = service;
+    uw.getSpriteWithMutations = service.getSpriteWithMutations;
+    uw.getBaseSprite = service.getBaseSprite;
+    uw.buildSpriteVariant = service.buildVariant;
+    uw.listSpritesByCategory = service.list;
+    uw.renderSpriteToCanvas = service.renderToCanvas;
+    uw.renderSpriteToDataURL = service.renderToDataURL;
+    uw.MG_SPRITE_HELPERS = service;
+    console.log("[MG SpriteCatalog] ready", {
+      version: ctx.state.version,
+      pixi: version,
+      textures: ctx.state.tex.size,
+      items: ctx.state.items.length,
+      cats: ctx.state.cats.size
+    });
+  }
+  var __mg_ready = start();
+  __mg_ready.catch((err) => console.error("[MG SpriteCatalog] failed", err));
+
   // src/main.ts
-  var ariesMod = installAriesModApi();
   (async function() {
     "use strict";
-    migrateLocalStorageToAries();
     installPageWebSocketHook();
     initGameVersion();
+    const ariesMod = installAriesModApi();
     try {
       warmupSpriteCache();
     } catch {

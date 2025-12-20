@@ -320,9 +320,16 @@ const _sOpt = (v: unknown) => (typeof v === "string" ? v : null);
 const _n    = (v: unknown) => (Number.isFinite(v as number) ? (v as number) : 0);
 const _sArr = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
 
+// Normalise une espèce pour matcher les clés du catalog (case-insensitive, support CamelCase)
+const _petCatalogKeyByLc = new Map<string, string>(
+  Object.keys(petCatalog as any).map(k => [k.toLowerCase(), k])
+);
 function _canonicalSpecies(s: string): string {
   if (!s) return s;
   if ((petCatalog as any)[s]) return s;
+  const lc = s.toLowerCase();
+  const found = _petCatalogKeyByLc.get(lc);
+  if (found) return found;
   const t = s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
   return (petCatalog as any)[t] ? t : s;
 }
@@ -399,10 +406,11 @@ function _inventoryItemToPet(x: any): InventoryPet | null {
   if (!x || x.itemType !== "Pet") return null;
   const id = _s(x.id);
   if (!id) return null;
+  const speciesRaw = x.petSpecies ?? x.data?.petSpecies;
   return {
     id,
     itemType: "Pet",
-    petSpecies: _s(x.petSpecies ?? x.data?.petSpecies),
+    petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
     name: _sOpt(x.name ?? x.data?.name ?? null),
     xp: _n(x.xp ?? x.data?.xp),
     hunger: _n(x.hunger ?? x.data?.hunger),
@@ -418,10 +426,11 @@ function _activeSlotToPet(entry: any): InventoryPet | null {
   if (!slot || typeof slot !== "object") return null;
   const id = _s(slot.id);
   if (!id) return null;
+  const speciesRaw = slot.petSpecies;
   return {
     id,
     itemType: "Pet",
-    petSpecies: _s(slot.petSpecies),
+    petSpecies: _canonicalSpecies(String(speciesRaw ?? "").trim()),
     name: _sOpt(slot.name ?? null),
     xp: _n(slot.xp),
     hunger: _n(slot.hunger),

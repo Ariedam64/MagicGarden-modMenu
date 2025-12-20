@@ -1,5 +1,5 @@
 // src/main.ts
-import "./sprite";
+
 import { installPageWebSocketHook } from "./hooks/ws-hook";
 import { mountHUD, initWatchers } from "./ui/hud";
 
@@ -29,18 +29,16 @@ import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 
 import { warmupSpriteCache } from "./ui/spriteIconCache";
 import { tos } from "./utils/tileObjectSystemApi";
-
-const ariesMod: AriesModApi = installAriesModApi();
+import "./sprite";
 
 
 
 (async function () {
   "use strict";
 
-  migrateLocalStorageToAries();
-
   installPageWebSocketHook();
   initGameVersion();
+  const ariesMod: AriesModApi = installAriesModApi();
 
   try {warmupSpriteCache();} catch {}
     tos.init()
