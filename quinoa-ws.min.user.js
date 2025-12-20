@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.07
+// @version      2.99.08
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3746,7 +3746,7 @@
     MarbleFountain: {
       tileRef: tileRefsDecor.MarbleFountain,
       name: "Marble Fountain",
-      coinPrice: 45e8,
+      coinPrice: 45e7,
       creditPrice: 449,
       rarity: rarity.Rare,
       baseTileScale: 1.5,
