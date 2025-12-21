@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.08
+// @version      2.99.11
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6694,7 +6694,7 @@
   var DEFAULT_DELAY_MS = 50;
   var PATH_AUTO_RECO_ENABLED = "misc.autoRecoEnabled";
   var PATH_AUTO_RECO_DELAY = "misc.autoRecoDelayMs";
-  var AUTO_RECO_MIN_MS = 3e4;
+  var AUTO_RECO_MIN_MS = 0;
   var AUTO_RECO_MAX_MS = 5 * 6e4;
   var AUTO_RECO_DEFAULT_MS = 6e4;
   var readGhostEnabled = (def = false) => {
@@ -6730,7 +6730,10 @@
     } catch (err) {
     }
   };
-  var clampAutoRecoDelay = (ms) => Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
+  var clampAutoRecoDelay = (ms) => {
+    const safeMs = Number.isFinite(ms) ? Math.floor(ms) : AUTO_RECO_DEFAULT_MS;
+    return Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, safeMs));
+  };
   var readAutoRecoEnabled = (def = false) => {
     try {
       const stored = readAriesPath(PATH_AUTO_RECO_ENABLED);
@@ -7984,756 +7987,503 @@
     }
   };
 
-  // src/hooks/ws-hook.ts
-  var wsCloseListeners = [];
-  var versionReloadScheduled = false;
-  var autoRecoTimer = null;
-  function onWebSocketClose(cb) {
-    wsCloseListeners.push(cb);
-    return () => {
-      const idx = wsCloseListeners.indexOf(cb);
-      if (idx !== -1) wsCloseListeners.splice(idx, 1);
-    };
-  }
-  function notifyWebSocketClose(ev, ws) {
-    for (const listener of [...wsCloseListeners]) {
-      try {
-        listener(ev, ws);
-      } catch {
+  // src/core/ingameHotkeys.ts
+  var resolveContext = (context) => {
+    if (context) return context;
+    const win = pageWindow ?? window;
+    const doc = win.document ?? document;
+    return { window: win, document: doc };
+  };
+  var KEYCODE_TABLE = {
+    KeyA: 65,
+    KeyB: 66,
+    KeyC: 67,
+    KeyD: 68,
+    KeyE: 69,
+    KeyF: 70,
+    KeyG: 71,
+    KeyH: 72,
+    KeyI: 73,
+    KeyJ: 74,
+    KeyK: 75,
+    KeyL: 76,
+    KeyM: 77,
+    KeyN: 78,
+    KeyO: 79,
+    KeyP: 80,
+    KeyQ: 81,
+    KeyR: 82,
+    KeyS: 83,
+    KeyT: 84,
+    KeyU: 85,
+    KeyV: 86,
+    KeyW: 87,
+    KeyX: 88,
+    KeyY: 89,
+    KeyZ: 90,
+    Digit0: 48,
+    Digit1: 49,
+    Digit2: 50,
+    Digit3: 51,
+    Digit4: 52,
+    Digit5: 53,
+    Digit6: 54,
+    Digit7: 55,
+    Digit8: 56,
+    Digit9: 57,
+    Space: 32,
+    Enter: 13,
+    Escape: 27,
+    Tab: 9,
+    Backspace: 8,
+    Delete: 46,
+    Insert: 45,
+    ArrowLeft: 37,
+    ArrowUp: 38,
+    ArrowRight: 39,
+    ArrowDown: 40
+  };
+  var codeToKey = (code, shift = false) => {
+    if (!code) return "";
+    if (/^Key[A-Z]$/.test(code)) return shift ? code.slice(3).toUpperCase() : code.slice(3).toLowerCase();
+    if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+    if (code === "Space") return " ";
+    return code;
+  };
+  var isEditableTarget = (t) => {
+    const el2 = t;
+    if (!el2 || !el2.tagName) return false;
+    const tag = el2.tagName.toLowerCase();
+    if (tag === "input" || tag === "textarea") return true;
+    const ce = el2.getAttribute && el2.getAttribute("contenteditable");
+    return !!(ce && ce !== "false");
+  };
+  var normalizeCombo = (c) => {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    const mods = [];
+    let code = "";
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") mods.push("ctrl");
+      else if (P === "shift") mods.push("shift");
+      else if (P === "alt") mods.push("alt");
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") mods.push("meta");
+      else code = p;
+    }
+    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
+    return (mods.length ? mods.join("+") + "+" : "") + code;
+  };
+  var parseCombo = (c) => {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    const spec = {};
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") spec.ctrl = true;
+      else if (P === "shift") spec.shift = true;
+      else if (P === "alt") spec.alt = true;
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") spec.meta = true;
+      else spec.code = p;
+    }
+    if (spec.code && spec.key === void 0) spec.key = codeToKey(spec.code, !!spec.shift);
+    return spec;
+  };
+  var evToCombo = (e) => {
+    const mods = [];
+    if (e.ctrlKey) mods.push("ctrl");
+    if (e.shiftKey) mods.push("shift");
+    if (e.altKey) mods.push("alt");
+    if (e.metaKey) mods.push("meta");
+    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
+    return (mods.length ? mods.join("+") + "+" : "") + (e.code || "");
+  };
+  var REMAP_FLAG = "__inGameHotkeysRemapped__";
+  var RAPID_SYN_FLAG = "__inGameHotkeysRapidSynthetic__";
+  var InGameHotkeys = class {
+    constructor(autoAttach = true, context) {
+      __publicField(this, "win");
+      __publicField(this, "doc");
+      // remapper
+      __publicField(this, "enabled", true);
+      __publicField(this, "map", /* @__PURE__ */ new Map());
+      // combo normalisé -> spec destination
+      __publicField(this, "blockedSet", /* @__PURE__ */ new Set());
+      // combos bloqués
+      __publicField(this, "eventBlockers", /* @__PURE__ */ new Set());
+      __publicField(this, "attachedDocs", /* @__PURE__ */ new WeakSet());
+      // docs déjà hookés
+      __publicField(this, "observers", []);
+      __publicField(this, "handlers", /* @__PURE__ */ new Map());
+      __publicField(this, "passthrough", /* @__PURE__ */ new Set(["F5", "F12"]));
+      // rapid-fire manager
+      __publicField(this, "sessions", /* @__PURE__ */ new Map());
+      const ctx2 = resolveContext(context);
+      this.win = ctx2.window;
+      this.doc = ctx2.document;
+      if (autoAttach) {
+        this.attachDoc(this.doc);
+        this.attachAllFrames();
+        if (this.win.MutationObserver) {
+          const mo = new this.win.MutationObserver(() => this.attachAllFrames());
+          mo.observe(this.doc.documentElement || this.doc, { childList: true, subtree: true });
+          this.observers.push(mo);
+        }
       }
     }
-  }
-  function isVersionExpiredClose(ev) {
-    return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
-  }
-  function startAutoReloadOnVersionExpired() {
-    onWebSocketClose((ev) => {
-      if (!isVersionExpiredClose(ev)) return;
-      const env = detectEnvironment();
-      if (env.surface === "discord" || env.isInIframe) return;
-      if (versionReloadScheduled) return;
-      versionReloadScheduled = true;
-      try {
-        console.warn("[MagicGarden] Version expired, reloading...");
-      } catch {
+    /* --------- on/off remapper --------- */
+    enable(flag = true) {
+      this.enabled = !!flag;
+    }
+    disable() {
+      this.enabled = false;
+    }
+    isEnabled() {
+      return this.enabled;
+    }
+    /* --------- remaps --------- */
+    setMap(m) {
+      this.map.clear();
+      for (const [from, to] of Object.entries(m || {})) this.map.set(normalizeCombo(from), parseCombo(to));
+    }
+    add(from, to) {
+      this.map.set(normalizeCombo(from), parseCombo(to));
+    }
+    remove(from) {
+      this.map.delete(normalizeCombo(from));
+    }
+    clear() {
+      this.map.clear();
+    }
+    current() {
+      const out = {};
+      for (const [k, v] of this.map.entries()) {
+        const mods = [];
+        if (v.ctrl) mods.push("Ctrl");
+        if (v.shift) mods.push("Shift");
+        if (v.alt) mods.push("Alt");
+        if (v.meta) mods.push("Meta");
+        out[k] = (mods.length ? mods.join("+") + "+" : "") + (v.code || "");
       }
-      try {
-        pageWindow.location.reload();
-      } catch {
+      return out;
+    }
+    /* --------- blocages --------- */
+    block(combo) {
+      this.blockedSet.add(normalizeCombo(combo));
+    }
+    unblock(combo) {
+      this.blockedSet.delete(normalizeCombo(combo));
+    }
+    blocked() {
+      return Array.from(this.blockedSet);
+    }
+    addEventBlocker(blocker) {
+      if (typeof blocker !== "function") {
+        return () => {
+        };
+      }
+      this.eventBlockers.add(blocker);
+      return () => {
+        this.eventBlockers.delete(blocker);
+      };
+    }
+    /* --------- helpers de binding --------- */
+    /** Déplace l’action bindée sur oldBase vers newPhysical et désactive oldBase. */
+    replace(oldBase, newPhysical) {
+      const oldN = normalizeCombo(oldBase);
+      const newN = normalizeCombo(newPhysical);
+      this.blockedSet.add(oldN);
+      this.map.set(newN, parseCombo(oldN));
+    }
+    /** Échange réciproquement deux touches (ne bloque pas). */
+    swap(a, b) {
+      const an = normalizeCombo(a), bn = normalizeCombo(b);
+      this.map.set(an, parseCombo(bn));
+      this.map.set(bn, parseCombo(an));
+    }
+    /* --------- frames & cleanup --------- */
+    attachAllFrames() {
+      this.doc.querySelectorAll("iframe").forEach((f) => {
         try {
-          window.location.reload();
+          const d = f.contentDocument;
+          const origin = d?.location?.origin;
+          if (d && origin && origin === this.win.location.origin) this.attachDoc(d);
+        } catch {
+        }
+      });
+    }
+    destroy() {
+      for (const [doc, handler] of this.handlers.entries()) {
+        try {
+          const win = doc.defaultView || this.win;
+          win.removeEventListener("keydown", handler, true);
+          win.removeEventListener("keypress", handler, true);
+          win.removeEventListener("keyup", handler, true);
         } catch {
         }
       }
-    });
-  }
-  function isSupersededSessionClose(ev) {
-    if (ev?.code !== 4250) return false;
-    const reason = ev?.reason || "";
-    return /superseded/i.test(reason) || /newer user session/i.test(reason);
-  }
-  function startAutoReconnectOnSuperseded() {
-    onWebSocketClose((ev) => {
-      if (!isSupersededSessionClose(ev)) return;
-      if (!MiscService.readAutoRecoEnabled(false)) return;
-      const delayMs = MiscService.getAutoRecoDelayMs();
-      if (autoRecoTimer !== null) {
-        clearTimeout(autoRecoTimer);
-        autoRecoTimer = null;
+      this.handlers.clear();
+      this.attachedDocs = /* @__PURE__ */ new WeakSet();
+      for (const mo of this.observers) mo.disconnect();
+      this.observers = [];
+      this.stopAllRapidFires();
+      this.eventBlockers.clear();
+    }
+    /* --------- rapid-fire (API) --------- */
+    startRapidFire(opts) {
+      const trigger = normalizeCombo(opts.trigger);
+      const emit = normalizeCombo(opts.emit ?? opts.trigger);
+      const rateMs = 1e3 / Math.max(1, opts.rateHz ?? 12);
+      const mode = opts.mode ?? "tap";
+      const keyupDelayMs = opts.keyupDelayMs ?? 20;
+      this.sessions.set(trigger, {
+        trigger: parseRapid(trigger),
+        emit: parseRapid(emit),
+        rateMs,
+        mode,
+        keyupDelayMs,
+        pressed: false,
+        lastTarget: null,
+        tickTimer: null,
+        upTimer: null
+      });
+    }
+    stopRapidFire(trigger) {
+      if (!trigger) {
+        this.stopAllRapidFires();
+        return;
       }
-      autoRecoTimer = window.setTimeout(() => {
-        autoRecoTimer = null;
-        if (!MiscService.readAutoRecoEnabled(false)) return;
-        try {
-          const conn = pageWindow.MagicCircle_RoomConnection;
-          const connect = conn?.connect;
-          if (typeof connect === "function") {
-            connect.call(conn);
-          }
-        } catch (error) {
-          console.warn("[MagicGarden] Auto reco failed:", error);
-        }
-      }, delayMs);
-    });
-  }
-  function installPageWebSocketHook() {
-    if (!pageWindow || !NativeWS) return;
-    startAutoReloadOnVersionExpired();
-    startAutoReconnectOnSuperseded();
-    function WrappedWebSocket(url, protocols) {
-      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
-      sockets.push(ws);
-      ws.addEventListener("open", () => {
-        setTimeout(() => {
-          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
-        }, 800);
-      });
-      ws.addEventListener("message", async (ev) => {
-        const j = await parseWSData(ev.data);
-        if (!j) return;
-        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
-          setQWS(ws, "message:" + (j.type || "state"));
-        }
-      });
-      ws.addEventListener("close", (ev) => {
-        notifyWebSocketClose(ev, ws);
-      });
-      return ws;
+      const key2 = normalizeCombo(trigger);
+      const s = this.sessions.get(key2);
+      if (!s) return;
+      this.endSession(s);
+      this.sessions.delete(key2);
     }
-    WrappedWebSocket.prototype = NativeWS.prototype;
-    try {
-      WrappedWebSocket.OPEN = NativeWS.OPEN;
-    } catch {
+    stopAllRapidFires() {
+      for (const s of this.sessions.values()) this.endSession(s);
+      this.sessions.clear();
     }
-    try {
-      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
-    } catch {
+    isRapidFireActive(trigger) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      return !!(s && s.pressed);
     }
-    try {
-      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
-    } catch {
+    setRapidFireRate(trigger, hz) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      if (!s) return;
+      s.rateMs = 1e3 / Math.max(1, hz);
+      if (s.pressed) this.restartLoop(s);
     }
-    try {
-      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
-    } catch {
+    setRapidFireMode(trigger, mode) {
+      const s = this.sessions.get(normalizeCombo(trigger));
+      if (!s) return;
+      s.mode = mode;
     }
-    pageWindow.WebSocket = WrappedWebSocket;
-    if (pageWindow !== window) {
-      try {
-        window.WebSocket = WrappedWebSocket;
-      } catch {
+    listRapidFires() {
+      const out = [];
+      for (const [key2, s] of this.sessions.entries()) {
+        out.push({
+          trigger: key2,
+          emit: joinRapid(s.emit),
+          rateHz: Math.round(1e3 / s.rateMs),
+          mode: s.mode
+        });
       }
+      return out;
     }
-    function hasSharedQuinoaWS() {
-      const existing = readSharedGlobal("quinoaWS");
-      return !!existing;
+    /* ================= internes ================= */
+    attachDoc(doc) {
+      if (!doc || this.attachedDocs.has(doc)) return;
+      const handler = this.makeHandler(doc);
+      const win = doc.defaultView || this.win;
+      win.addEventListener("keydown", handler, true);
+      win.addEventListener("keypress", handler, true);
+      win.addEventListener("keyup", handler, true);
+      this.handlers.set(doc, handler);
+      this.attachedDocs.add(doc);
     }
-    installHarvestCropInterceptor();
-  }
-  var interceptorsByType = /* @__PURE__ */ new Map();
-  var interceptorStatus = readSharedGlobal(
-    "__tmMessageHookInstalled"
-  ) ? "installed" : "idle";
-  var interceptorPoll = null;
-  var interceptorTimeout = null;
-  function registerMessageInterceptor(type, interceptor) {
-    const list = interceptorsByType.get(type);
-    if (list) {
-      list.push(interceptor);
-    } else {
-      interceptorsByType.set(type, [interceptor]);
-    }
-    ensureMessageInterceptorInstalled();
-    return () => {
-      const current = interceptorsByType.get(type);
-      if (!current) return;
-      const index = current.indexOf(interceptor);
-      if (index !== -1) current.splice(index, 1);
-      if (current.length === 0) interceptorsByType.delete(type);
-    };
-  }
-  function ensureMessageInterceptorInstalled() {
-    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
-    interceptorStatus = "installing";
-    const tryInstall = () => {
-      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
-      if (!Conn) return false;
-      const original = resolveSendMessage(Conn);
-      if (!original) return false;
-      const wrap = function(message, ...rest) {
-        let currentMessage = message;
-        try {
-          const type = currentMessage?.type;
-          if (type && interceptorsByType.size > 0) {
-            const context = { thisArg: this, args: rest };
-            const result = applyInterceptors(type, currentMessage, context);
-            if (result.drop) return;
-            currentMessage = result.message;
+    makeHandler(doc) {
+      return (evt) => {
+        const e = evt;
+        if (e[REMAP_FLAG]) return;
+        const isRapidSynthetic = !!e[RAPID_SYN_FLAG];
+        if (!isRapidSynthetic) this.handleRapidFireInput(doc, e);
+        if (!isRapidSynthetic && this.eventBlockers.size) {
+          for (const blocker of Array.from(this.eventBlockers)) {
+            let shouldBlock = false;
+            try {
+              shouldBlock = blocker(e);
+            } catch {
+              shouldBlock = false;
+            }
+            if (shouldBlock) {
+              e.stopImmediatePropagation();
+              e.preventDefault();
+              return;
+            }
           }
-        } catch (error) {
-          console.error("[MG-mod] Erreur dans le hook WS :", error);
         }
-        return original.fn.call(this, currentMessage, ...rest);
+        if (!this.enabled) return;
+        if (isEditableTarget(e.target)) return;
+        if (this.passthrough.has(e.code)) return;
+        const combo = evToCombo(e);
+        if (this.blockedSet.has(combo)) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return;
+        }
+        const spec = this.map.get(combo);
+        if (!spec) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        const code = spec.code || "";
+        const key2 = spec.key !== void 0 ? spec.key : codeToKey(code, e.shiftKey);
+        const ctrl = spec.ctrl ?? e.ctrlKey;
+        const shift = spec.shift ?? e.shiftKey;
+        const alt = spec.alt ?? e.altKey;
+        const meta = spec.meta ?? e.metaKey;
+        const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
+        const eventWindow = doc.defaultView || this.win;
+        const ne = new eventWindow.KeyboardEvent(e.type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          key: key2,
+          code,
+          ctrlKey: ctrl,
+          shiftKey: shift,
+          altKey: alt,
+          metaKey: meta,
+          repeat: e.repeat,
+          location: e.location
+        });
+        Object.defineProperties(ne, {
+          keyCode: { get: () => kc },
+          which: { get: () => kc },
+          charCode: { get: () => kc },
+          [REMAP_FLAG]: { value: true }
+        });
+        const target = e.target || doc;
+        target.dispatchEvent(ne);
       };
-      if (original.kind === "static") {
-        Conn.sendMessage = wrap;
-      } else {
-        Conn.prototype.sendMessage = wrap;
-      }
-      interceptorStatus = "installed";
-      shareGlobal("__tmMessageHookInstalled", true);
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorTimeout !== null) {
-        clearTimeout(interceptorTimeout);
-        interceptorTimeout = null;
-      }
-      return true;
-    };
-    if (tryInstall()) return;
-    interceptorPoll = window.setInterval(() => {
-      if (tryInstall()) {
-        if (interceptorPoll !== null) {
-          clearInterval(interceptorPoll);
-          interceptorPoll = null;
-        }
-      }
-    }, 200);
-    interceptorTimeout = window.setTimeout(() => {
-      if (interceptorPoll !== null) {
-        clearInterval(interceptorPoll);
-        interceptorPoll = null;
-      }
-      if (interceptorStatus !== "installed") {
-        interceptorStatus = "idle";
-      }
-      interceptorTimeout = null;
-    }, 2e4);
-  }
-  function applyInterceptors(type, initialMessage, context) {
-    const interceptors = interceptorsByType.get(type);
-    if (!interceptors || interceptors.length === 0) {
-      return { message: initialMessage, drop: false };
     }
-    let currentMessage = initialMessage;
-    for (const interceptor of [...interceptors]) {
-      try {
-        const result = interceptor(currentMessage, context);
-        if (!result) continue;
-        if (result.kind === "drop") {
-          return { message: currentMessage, drop: true };
-        }
-        if (result.kind === "replace") {
-          currentMessage = result.message;
-        }
-      } catch (error) {
-      }
-    }
-    return { message: currentMessage, drop: false };
-  }
-  function installHarvestCropInterceptor() {
-    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
-    let latestGardenState = null;
-    let friendBonusPercent = null;
-    let friendBonusFromPlayers = null;
-    let latestEggId = null;
-    void (async () => {
-      try {
-        latestGardenState = await Atoms.data.garden.get() ?? null;
-      } catch {
-      }
-      try {
-        await Atoms.data.garden.onChange((next) => {
-          latestGardenState = next ?? null;
-        });
-      } catch {
-      }
-      try {
-        const initialObj = await Atoms.data.myCurrentGardenObject.get();
-        latestEggId = extractEggId(initialObj);
-      } catch {
-      }
-      try {
-        await Atoms.data.myCurrentGardenObject.onChange((next) => {
-          latestEggId = extractEggId(next);
-        });
-      } catch {
-      }
-    })();
-    void (async () => {
-      try {
-        const initial = await Atoms.server.friendBonusMultiplier.get();
-        friendBonusPercent = friendBonusPercentFromMultiplier(initial);
-      } catch {
-      }
-      try {
-        await Atoms.server.friendBonusMultiplier.onChange((next) => {
-          friendBonusPercent = friendBonusPercentFromMultiplier(next);
-        });
-      } catch {
-      }
-      try {
-        const initialPlayers = await Atoms.server.numPlayers.get();
-        friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
-      } catch {
-      }
-      try {
-        await Atoms.server.numPlayers.onChange((next) => {
-          friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
-        });
-      } catch {
-      }
-    })();
-    const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
-    registerMessageInterceptor("HarvestCrop", (message) => {
-      const slot = message.slot;
-      const slotsIndex = message.slotsIndex;
-      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
-        return;
-      }
-      const garden2 = latestGardenState;
-      const tileObjects = garden2?.tileObjects;
-      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
-      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
-        return;
-      }
-      const slots = Array.isArray(tile.slots) ? tile.slots : [];
-      const cropSlot = slots[slotsIndex];
-      if (!cropSlot || typeof cropSlot !== "object") {
-        return;
-      }
-      const seedKey = extractSeedKey2(tile);
-      const sizePercent = extractSizePercent2(cropSlot);
-      const mutations = sanitizeMutations(cropSlot?.mutations);
-      const lockerEnabled = (() => {
-        try {
-          return lockerService.getState().enabled;
-        } catch {
-          return false;
-        }
-      })();
-      if (lockerEnabled) {
-        let harvestAllowed = true;
-        try {
-          harvestAllowed = lockerService.allowsHarvest({
-            seedKey,
-            sizePercent,
-            mutations
-          });
-        } catch {
-          harvestAllowed = true;
-        }
-        if (!harvestAllowed) {
-          console.log("[HarvestCrop] Blocked by locker", {
-            slot,
-            slotsIndex,
-            seedKey,
-            sizePercent,
-            mutations
-          });
-          return { kind: "drop" };
-        }
-      }
-      StatsService.incrementGardenStat("totalHarvested");
-      void (async () => {
-        try {
-          const garden3 = await Atoms.data.garden.get();
-          const tileObjects2 = garden3?.tileObjects ?? null;
-          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
-          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
-          console.log("[HarvestCrop]", {
-            slot,
-            slotsIndex,
-            cropSlot: cropSlot2
-          });
-        } catch (error) {
-          console.error("[HarvestCrop] Unable to log crop slot", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("RemoveGardenObject", (message) => {
-      StatsService.incrementGardenStat("totalDestroyed");
-    });
-    registerMessageInterceptor("WaterPlant", (message) => {
-      StatsService.incrementGardenStat("watercanUsed");
-      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
-    });
-    registerMessageInterceptor("PlantSeed", (message) => {
-      StatsService.incrementGardenStat("totalPlanted");
-    });
-    registerMessageInterceptor("PurchaseDecor", (message) => {
-      StatsService.incrementShopStat("decorBought");
-    });
-    registerMessageInterceptor("PurchaseSeed", (message) => {
-      StatsService.incrementShopStat("seedsBought");
-    });
-    registerMessageInterceptor("PurchaseEgg", (message) => {
-      StatsService.incrementShopStat("eggsBought");
-    });
-    registerMessageInterceptor("PurchaseTool", (message) => {
-      StatsService.incrementShopStat("toolsBought");
-    });
-    registerMessageInterceptor("PickupDecor", () => {
-      const decorLocked = lockerRestrictionsService.isDecorPickupLocked();
-      if (decorLocked) {
-        console.log("[PickupDecor] Blocked by decor picker");
-        return { kind: "drop" };
-      }
-    });
-    registerMessageInterceptor("HatchEgg", () => {
-      const locked = lockerRestrictionsService.isEggLocked(latestEggId);
-      if (locked) {
-        console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
-        void (async () => {
-          try {
-            await dedupeEggLockToast(latestEggId);
-          } catch {
-          }
-        })();
-        return { kind: "drop" };
-      }
-      void (async () => {
-        const previousPets = await readInventoryPetSnapshots();
-        const previousMap = buildPetMap(previousPets);
-        const nextPets = await waitForInventoryPetAddition(previousMap);
-        if (!nextPets) return;
-        const newPets = extractNewPets(nextPets, previousMap);
-        if (!newPets.length) return;
-        for (const pet of newPets) {
-          const rarity2 = inferPetRarity(pet.mutations);
-          if (pet.species) {
-            StatsService.incrementPetHatched(pet.species, rarity2);
+    /* ---------- Rapid-fire internes ---------- */
+    handleRapidFireInput(doc, e) {
+      if (isEditableTarget(e.target)) return;
+      if (e.type === "keydown" && !e.repeat) {
+        for (const s of this.sessions.values()) {
+          if (this.matches(e, s.trigger)) {
+            s.pressed = true;
+            s.lastTarget = e.target || doc;
+            this.startLoop(doc, s);
           }
         }
-      })();
-    });
-    registerMessageInterceptor("SellAllCrops", (message) => {
-      const restrictionState = lockerRestrictionsService.getState();
-      const requiredPct = lockerRestrictionsService.getRequiredPercent();
-      const requiredPlayers = restrictionState.minRequiredPlayers;
-      const currentBonusPct = resolveFriendBonusPercent();
-      const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
-      if (!allowed) {
-        const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
-        console.log("[SellAllCrops] Blocked by friend bonus restriction", {
-          requiredPct,
-          requiredPlayers,
-          currentBonusPct,
-          currentPlayers
-        });
-        void (async () => {
-          try {
-            await toastSimple(
-              "Friend bonus locker",
-              `Require at least ${requiredPct}% friend bonus`,
-              "error"
-            );
-          } catch {
-          }
-          void removeSellSuccessToast();
-        })();
-        return { kind: "drop" };
-      }
-      void (async () => {
-        try {
-          const items = await Atoms.inventory.myCropItemsToSell.get();
-          const count = Array.isArray(items) ? items.length : 0;
-          if (count > 0) {
-            StatsService.incrementShopStat("cropsSoldCount", count);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop items", error);
-        }
-        try {
-          const total = await Atoms.shop.totalCropSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("cropsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellAllCrops] Unable to read crop sell price", error);
-        }
-      })();
-    });
-    registerMessageInterceptor("SellPet", (message) => {
-      StatsService.incrementShopStat("petsSoldCount");
-      void (async () => {
-        try {
-          const total = await Atoms.pets.totalPetSellPrice.get();
-          const value = Number(total);
-          if (Number.isFinite(value) && value > 0) {
-            StatsService.incrementShopStat("petsSoldValue", value);
-          }
-        } catch (error) {
-          console.error("[SellPet] Unable to read pet sell price", error);
-        }
-      })();
-    });
-    shareGlobal("__tmHarvestHookInstalled", true);
-  }
-  function extractSeedKey2(tile) {
-    if (!tile || typeof tile !== "object") return null;
-    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
-    if (typeof tile.species === "string" && tile.species) return tile.species;
-    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
-    for (const key2 of fallbacks) {
-      const value = tile[key2];
-      if (typeof value === "string" && value) return value;
-    }
-    return null;
-  }
-  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
-  var MAX_SCALE_BY_SPECIES2 = (() => {
-    const map2 = /* @__PURE__ */ new Map();
-    const register = (key2, value) => {
-      if (typeof key2 !== "string") return;
-      const normalized = normalizeSpeciesKey2(key2.trim());
-      if (!normalized || map2.has(normalized)) return;
-      map2.set(normalized, value);
-    };
-    for (const [species, entry] of Object.entries(plantCatalog)) {
-      const maxScale = Number(entry?.crop?.maxScale);
-      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
-      register(species, maxScale);
-      register(entry?.seed?.name, maxScale);
-      register(entry?.plant?.name, maxScale);
-      register(entry?.crop?.name, maxScale);
-    }
-    return map2;
-  })();
-  function lookupMaxScale2(species) {
-    if (typeof species !== "string") return null;
-    const normalized = normalizeSpeciesKey2(species.trim());
-    if (!normalized) return null;
-    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
-    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
-      return found;
-    }
-    return null;
-  }
-  function getMaxScaleForSlot2(slot) {
-    if (!slot || typeof slot !== "object") return null;
-    const candidates = /* @__PURE__ */ new Set();
-    const fromSeedKey = extractSeedKey2(slot);
-    if (fromSeedKey) candidates.add(fromSeedKey);
-    const fields = [
-      "species",
-      "seedSpecies",
-      "plantSpecies",
-      "cropSpecies",
-      "baseSpecies",
-      "seedKey"
-    ];
-    for (const field of fields) {
-      const value = slot[field];
-      if (typeof value === "string" && value) {
-        candidates.add(value);
-      }
-    }
-    for (const cand of candidates) {
-      const max = lookupMaxScale2(cand);
-      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
-        return max;
-      }
-    }
-    return null;
-  }
-  function extractSizePercent2(slot) {
-    if (!slot || typeof slot !== "object") return 100;
-    const direct = Number(
-      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
-    );
-    if (Number.isFinite(direct)) {
-      return clampPercent3(Math.round(direct), 0, 100);
-    }
-    const scale = Number(slot.targetScale ?? slot.scale);
-    if (Number.isFinite(scale)) {
-      const maxScale = getMaxScaleForSlot2(slot);
-      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
-        const clamped = Math.max(1, Math.min(maxScale, scale));
-        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
-        return clampPercent3(Math.round(pct2), 50, 100);
-      }
-      if (scale > 1 && scale <= 2) {
-        const pct2 = 50 + (scale - 1) / 1 * 50;
-        return clampPercent3(Math.round(pct2), 50, 100);
-      }
-      const pct = Math.round(scale * 100);
-      return clampPercent3(pct, 0, 100);
-    }
-    return 100;
-  }
-  function sanitizeMutations(raw) {
-    if (!Array.isArray(raw)) return [];
-    const out = [];
-    for (let i = 0; i < raw.length; i++) {
-      const value = raw[i];
-      if (typeof value === "string") {
-        if (value) out.push(value);
-      } else if (value != null) {
-        const str = String(value);
-        if (str) out.push(str);
-      }
-    }
-    return out;
-  }
-  function clampPercent3(value, min, max) {
-    return Math.max(min, Math.min(max, value));
-  }
-  var HATCH_EGG_TIMEOUT_MS = 5e3;
-  async function readInventoryPetSnapshots() {
-    try {
-      const inventory = await Atoms.inventory.myInventory.get();
-      return collectInventoryPets(inventory);
-    } catch (error) {
-      console.error("[HatchEgg] Unable to read inventory", error);
-      return [];
-    }
-  }
-  function collectInventoryPets(rawInventory) {
-    const items = extractInventoryItems(rawInventory);
-    const pets = [];
-    for (const entry of items) {
-      const pet = toInventoryPet(entry);
-      if (pet) pets.push(pet);
-    }
-    return pets;
-  }
-  function extractInventoryItems(rawInventory) {
-    if (!rawInventory) return [];
-    if (Array.isArray(rawInventory)) return rawInventory;
-    if (Array.isArray(rawInventory.items)) return rawInventory.items;
-    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
-    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
-    return [];
-  }
-  function toInventoryPet(entry) {
-    if (!entry || typeof entry !== "object") return null;
-    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
-    if (!source || typeof source !== "object") return null;
-    const type = source.itemType ?? source.data?.itemType ?? "";
-    if (String(type).toLowerCase() !== "pet") return null;
-    const id = source.id ?? source.data?.id;
-    const species = source.petSpecies ?? source.data?.petSpecies;
-    if (!id || !species) return null;
-    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
-    return {
-      id: String(id),
-      species: String(species),
-      mutations
-    };
-  }
-  function buildPetMap(pets) {
-    const map2 = /* @__PURE__ */ new Map();
-    for (const pet of pets) {
-      map2.set(pet.id, pet);
-    }
-    return map2;
-  }
-  function extractNewPets(pets, previous) {
-    return pets.filter((pet) => !previous.has(pet.id));
-  }
-  function extractEggId(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (obj.objectType !== "egg") return null;
-    const eggId = obj.eggId;
-    return typeof eggId === "string" && eggId ? eggId : null;
-  }
-  async function dedupeEggLockToast(latestEggId) {
-    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
-    const description = latestEggId ? `Hatching locked for ${latestEggId}` : "Hatching locked by egg locker";
-    if (!toastsAtom) {
-      await toastSimple("Egg hatch locker", description, "error");
-      return;
-    }
-    const list = await jGet(toastsAtom).catch(() => []);
-    const filtered = Array.isArray(list) ? list.filter((t) => !(t?.title === "Egg hatch locker")) : [];
-    filtered.push({
-      isClosable: true,
-      duration: 3500,
-      title: "Egg hatch locker",
-      description,
-      variant: "error",
-      id: "quinoa-game-toast"
-    });
-    await jSet(toastsAtom, filtered);
-  }
-  function inferPetRarity(mutations) {
-    if (!Array.isArray(mutations) || mutations.length === 0) {
-      return "normal";
-    }
-    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
-    if (seen.has("rainbow")) return "rainbow";
-    if (seen.has("gold") || seen.has("golden")) return "gold";
-    return "normal";
-  }
-  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
-    await delay(0);
-    const initial = await readInventoryPetSnapshots();
-    if (hasNewInventoryPet(initial, previous)) {
-      return initial;
-    }
-    return new Promise(async (resolve2) => {
-      let settled = false;
-      let unsub = null;
-      let timer = null;
-      const finalize = (value) => {
-        if (settled) return;
-        settled = true;
-        if (timer !== null) {
-          clearTimeout(timer);
-        }
-        if (unsub) {
-          try {
-            unsub();
-          } catch {
+      } else if (e.type === "keyup") {
+        for (const s of this.sessions.values()) {
+          if (this.matches(e, s.trigger)) {
+            s.pressed = false;
+            this.stopLoop(doc, s);
           }
         }
-        resolve2(value);
-      };
-      const evaluate = (source) => {
-        const pets = collectInventoryPets(source);
-        if (hasNewInventoryPet(pets, previous)) {
-          finalize(pets);
+      }
+    }
+    matches(e, c) {
+      return e.code === c.code && !!e.ctrlKey === !!c.ctrl && !!e.shiftKey === !!c.shift && !!e.altKey === !!c.alt && !!e.metaKey === !!c.meta;
+    }
+    startLoop(doc, s) {
+      this.stopLoop(doc, s);
+      const tick = () => {
+        if (!s.pressed) return;
+        this.dispatchKey(doc, s.lastTarget || doc, "keydown", s.emit, true);
+        if (s.mode === "tap") {
+          if (s.upTimer) this.win.clearTimeout(s.upTimer);
+          s.upTimer = this.win.setTimeout(() => {
+            this.dispatchKey(doc, s.lastTarget || doc, "keyup", s.emit, false);
+          }, s.keyupDelayMs);
         }
       };
+      tick();
+      s.tickTimer = this.win.setInterval(tick, s.rateMs);
+    }
+    stopLoop(doc, s) {
+      if (s.tickTimer) {
+        this.win.clearInterval(s.tickTimer);
+        s.tickTimer = null;
+      }
+      if (s.upTimer) {
+        this.win.clearTimeout(s.upTimer);
+        s.upTimer = null;
+      }
+      if (s.mode === "hold" && s.lastTarget) {
+        this.dispatchKey(doc, s.lastTarget, "keyup", s.emit, false);
+      }
+    }
+    restartLoop(s) {
+      if (!s.pressed) return;
+      const anyDoc = this.doc;
+      this.startLoop(anyDoc, s);
+    }
+    endSession(s) {
+      this.stopLoop(this.doc, s);
+      s.pressed = false;
+      s.lastTarget = null;
+    }
+    dispatchKey(doc, target, type, c, repeat) {
+      const code = c.code;
+      const key2 = codeToKey(code, c.shift);
+      const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
+      const eventWindow = doc.defaultView || this.win;
+      const ev = new eventWindow.KeyboardEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        key: key2,
+        code,
+        ctrlKey: c.ctrl,
+        shiftKey: c.shift,
+        altKey: c.alt,
+        metaKey: c.meta,
+        repeat
+      });
+      Object.defineProperties(ev, {
+        keyCode: { get: () => kc },
+        which: { get: () => kc },
+        charCode: { get: () => kc },
+        [RAPID_SYN_FLAG]: { value: true }
+      });
       try {
-        unsub = await Atoms.inventory.myInventory.onChange((next) => {
-          evaluate(next);
-        });
-      } catch (error) {
-        console.error("[HatchEgg] Unable to observe inventory", error);
-        finalize(null);
-        return;
+        target.dispatchEvent(ev);
+      } catch {
+        doc.dispatchEvent(ev);
       }
-      timer = setTimeout(() => {
-        void (async () => {
-          const latest = await readInventoryPetSnapshots();
-          if (hasNewInventoryPet(latest, previous)) {
-            finalize(latest);
-          } else {
-            finalize(null);
-          }
-        })();
-      }, timeoutMs);
-    });
-  }
-  function hasNewInventoryPet(pets, previous) {
-    return pets.some((pet) => !previous.has(pet.id));
-  }
-  function delay(ms) {
-    return new Promise((resolve2) => setTimeout(resolve2, ms));
-  }
-  function resolveSendMessage(Conn) {
-    const isFn = (value) => typeof value === "function";
-    if (isFn(Conn.sendMessage)) {
-      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
     }
-    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
-      return { kind: "proto", fn: Conn.prototype.sendMessage };
+  };
+  function parseRapid(c) {
+    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
+    let code = "";
+    let ctrl = false, shift = false, alt = false, meta = false;
+    for (const p of parts) {
+      const P = p.toLowerCase();
+      if (P === "ctrl" || P === "control") ctrl = true;
+      else if (P === "shift") shift = true;
+      else if (P === "alt") alt = true;
+      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") meta = true;
+      else code = p;
     }
-    return null;
+    return { code, ctrl, shift, alt, meta };
   }
-  async function removeSellSuccessToast() {
-    try {
-      const toastsAtom = getAtomByLabel("quinoaToastsAtom");
-      if (!toastsAtom) return;
-      const list = await jGet(toastsAtom).catch(() => []);
-      const filtered = Array.isArray(list) ? list.filter((t) => {
-        if (!t || typeof t !== "object") return true;
-        if (t.variant !== "success") return true;
-        const icon = t.icon;
-        const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
-        const hasCropText = !!t?.description?.props?.values?.cropText;
-        return !(isTileSell || hasCropText);
-      }) : list;
-      if (filtered.length !== list.length) {
-        await jSet(toastsAtom, filtered);
-      }
-    } catch {
-    }
+  function joinRapid(c) {
+    const mods = [];
+    if (c.ctrl) mods.push("Ctrl");
+    if (c.shift) mods.push("Shift");
+    if (c.alt) mods.push("Alt");
+    if (c.meta) mods.push("Meta");
+    mods.push(c.code);
+    return mods.join("+");
+  }
+  var defaultContext = resolveContext();
+  var inGameHotkeys = new InGameHotkeys(true, defaultContext);
+  shareGlobal("inGameHotkeys", inGameHotkeys);
+  try {
+    window.inGameHotkeys = inGameHotkeys;
+  } catch {
   }
 
   // src/ui/menu.ts
@@ -11058,505 +10808,6 @@
     return parts.join(mac ? "" : " + ");
   }
 
-  // src/core/ingameHotkeys.ts
-  var resolveContext = (context) => {
-    if (context) return context;
-    const win = pageWindow ?? window;
-    const doc = win.document ?? document;
-    return { window: win, document: doc };
-  };
-  var KEYCODE_TABLE = {
-    KeyA: 65,
-    KeyB: 66,
-    KeyC: 67,
-    KeyD: 68,
-    KeyE: 69,
-    KeyF: 70,
-    KeyG: 71,
-    KeyH: 72,
-    KeyI: 73,
-    KeyJ: 74,
-    KeyK: 75,
-    KeyL: 76,
-    KeyM: 77,
-    KeyN: 78,
-    KeyO: 79,
-    KeyP: 80,
-    KeyQ: 81,
-    KeyR: 82,
-    KeyS: 83,
-    KeyT: 84,
-    KeyU: 85,
-    KeyV: 86,
-    KeyW: 87,
-    KeyX: 88,
-    KeyY: 89,
-    KeyZ: 90,
-    Digit0: 48,
-    Digit1: 49,
-    Digit2: 50,
-    Digit3: 51,
-    Digit4: 52,
-    Digit5: 53,
-    Digit6: 54,
-    Digit7: 55,
-    Digit8: 56,
-    Digit9: 57,
-    Space: 32,
-    Enter: 13,
-    Escape: 27,
-    Tab: 9,
-    Backspace: 8,
-    Delete: 46,
-    Insert: 45,
-    ArrowLeft: 37,
-    ArrowUp: 38,
-    ArrowRight: 39,
-    ArrowDown: 40
-  };
-  var codeToKey = (code, shift = false) => {
-    if (!code) return "";
-    if (/^Key[A-Z]$/.test(code)) return shift ? code.slice(3).toUpperCase() : code.slice(3).toLowerCase();
-    if (/^Digit[0-9]$/.test(code)) return code.slice(5);
-    if (code === "Space") return " ";
-    return code;
-  };
-  var isEditableTarget = (t) => {
-    const el2 = t;
-    if (!el2 || !el2.tagName) return false;
-    const tag = el2.tagName.toLowerCase();
-    if (tag === "input" || tag === "textarea") return true;
-    const ce = el2.getAttribute && el2.getAttribute("contenteditable");
-    return !!(ce && ce !== "false");
-  };
-  var normalizeCombo = (c) => {
-    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
-    const mods = [];
-    let code = "";
-    for (const p of parts) {
-      const P = p.toLowerCase();
-      if (P === "ctrl" || P === "control") mods.push("ctrl");
-      else if (P === "shift") mods.push("shift");
-      else if (P === "alt") mods.push("alt");
-      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") mods.push("meta");
-      else code = p;
-    }
-    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
-    return (mods.length ? mods.join("+") + "+" : "") + code;
-  };
-  var parseCombo = (c) => {
-    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
-    const spec = {};
-    for (const p of parts) {
-      const P = p.toLowerCase();
-      if (P === "ctrl" || P === "control") spec.ctrl = true;
-      else if (P === "shift") spec.shift = true;
-      else if (P === "alt") spec.alt = true;
-      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") spec.meta = true;
-      else spec.code = p;
-    }
-    if (spec.code && spec.key === void 0) spec.key = codeToKey(spec.code, !!spec.shift);
-    return spec;
-  };
-  var evToCombo = (e) => {
-    const mods = [];
-    if (e.ctrlKey) mods.push("ctrl");
-    if (e.shiftKey) mods.push("shift");
-    if (e.altKey) mods.push("alt");
-    if (e.metaKey) mods.push("meta");
-    mods.sort((a, b) => ["ctrl", "shift", "alt", "meta"].indexOf(a) - ["ctrl", "shift", "alt", "meta"].indexOf(b));
-    return (mods.length ? mods.join("+") + "+" : "") + (e.code || "");
-  };
-  var REMAP_FLAG = "__inGameHotkeysRemapped__";
-  var RAPID_SYN_FLAG = "__inGameHotkeysRapidSynthetic__";
-  var InGameHotkeys = class {
-    constructor(autoAttach = true, context) {
-      __publicField(this, "win");
-      __publicField(this, "doc");
-      // remapper
-      __publicField(this, "enabled", true);
-      __publicField(this, "map", /* @__PURE__ */ new Map());
-      // combo normalisé -> spec destination
-      __publicField(this, "blockedSet", /* @__PURE__ */ new Set());
-      // combos bloqués
-      __publicField(this, "eventBlockers", /* @__PURE__ */ new Set());
-      __publicField(this, "attachedDocs", /* @__PURE__ */ new WeakSet());
-      // docs déjà hookés
-      __publicField(this, "observers", []);
-      __publicField(this, "handlers", /* @__PURE__ */ new Map());
-      __publicField(this, "passthrough", /* @__PURE__ */ new Set(["F5", "F12"]));
-      // rapid-fire manager
-      __publicField(this, "sessions", /* @__PURE__ */ new Map());
-      const ctx2 = resolveContext(context);
-      this.win = ctx2.window;
-      this.doc = ctx2.document;
-      if (autoAttach) {
-        this.attachDoc(this.doc);
-        this.attachAllFrames();
-        if (this.win.MutationObserver) {
-          const mo = new this.win.MutationObserver(() => this.attachAllFrames());
-          mo.observe(this.doc.documentElement || this.doc, { childList: true, subtree: true });
-          this.observers.push(mo);
-        }
-      }
-    }
-    /* --------- on/off remapper --------- */
-    enable(flag = true) {
-      this.enabled = !!flag;
-    }
-    disable() {
-      this.enabled = false;
-    }
-    isEnabled() {
-      return this.enabled;
-    }
-    /* --------- remaps --------- */
-    setMap(m) {
-      this.map.clear();
-      for (const [from, to] of Object.entries(m || {})) this.map.set(normalizeCombo(from), parseCombo(to));
-    }
-    add(from, to) {
-      this.map.set(normalizeCombo(from), parseCombo(to));
-    }
-    remove(from) {
-      this.map.delete(normalizeCombo(from));
-    }
-    clear() {
-      this.map.clear();
-    }
-    current() {
-      const out = {};
-      for (const [k, v] of this.map.entries()) {
-        const mods = [];
-        if (v.ctrl) mods.push("Ctrl");
-        if (v.shift) mods.push("Shift");
-        if (v.alt) mods.push("Alt");
-        if (v.meta) mods.push("Meta");
-        out[k] = (mods.length ? mods.join("+") + "+" : "") + (v.code || "");
-      }
-      return out;
-    }
-    /* --------- blocages --------- */
-    block(combo) {
-      this.blockedSet.add(normalizeCombo(combo));
-    }
-    unblock(combo) {
-      this.blockedSet.delete(normalizeCombo(combo));
-    }
-    blocked() {
-      return Array.from(this.blockedSet);
-    }
-    addEventBlocker(blocker) {
-      if (typeof blocker !== "function") {
-        return () => {
-        };
-      }
-      this.eventBlockers.add(blocker);
-      return () => {
-        this.eventBlockers.delete(blocker);
-      };
-    }
-    /* --------- helpers de binding --------- */
-    /** Déplace l’action bindée sur oldBase vers newPhysical et désactive oldBase. */
-    replace(oldBase, newPhysical) {
-      const oldN = normalizeCombo(oldBase);
-      const newN = normalizeCombo(newPhysical);
-      this.blockedSet.add(oldN);
-      this.map.set(newN, parseCombo(oldN));
-    }
-    /** Échange réciproquement deux touches (ne bloque pas). */
-    swap(a, b) {
-      const an = normalizeCombo(a), bn = normalizeCombo(b);
-      this.map.set(an, parseCombo(bn));
-      this.map.set(bn, parseCombo(an));
-    }
-    /* --------- frames & cleanup --------- */
-    attachAllFrames() {
-      this.doc.querySelectorAll("iframe").forEach((f) => {
-        try {
-          const d = f.contentDocument;
-          const origin = d?.location?.origin;
-          if (d && origin && origin === this.win.location.origin) this.attachDoc(d);
-        } catch {
-        }
-      });
-    }
-    destroy() {
-      for (const [doc, handler] of this.handlers.entries()) {
-        try {
-          const win = doc.defaultView || this.win;
-          win.removeEventListener("keydown", handler, true);
-          win.removeEventListener("keypress", handler, true);
-          win.removeEventListener("keyup", handler, true);
-        } catch {
-        }
-      }
-      this.handlers.clear();
-      this.attachedDocs = /* @__PURE__ */ new WeakSet();
-      for (const mo of this.observers) mo.disconnect();
-      this.observers = [];
-      this.stopAllRapidFires();
-      this.eventBlockers.clear();
-    }
-    /* --------- rapid-fire (API) --------- */
-    startRapidFire(opts) {
-      const trigger = normalizeCombo(opts.trigger);
-      const emit = normalizeCombo(opts.emit ?? opts.trigger);
-      const rateMs = 1e3 / Math.max(1, opts.rateHz ?? 12);
-      const mode = opts.mode ?? "tap";
-      const keyupDelayMs = opts.keyupDelayMs ?? 20;
-      this.sessions.set(trigger, {
-        trigger: parseRapid(trigger),
-        emit: parseRapid(emit),
-        rateMs,
-        mode,
-        keyupDelayMs,
-        pressed: false,
-        lastTarget: null,
-        tickTimer: null,
-        upTimer: null
-      });
-    }
-    stopRapidFire(trigger) {
-      if (!trigger) {
-        this.stopAllRapidFires();
-        return;
-      }
-      const key2 = normalizeCombo(trigger);
-      const s = this.sessions.get(key2);
-      if (!s) return;
-      this.endSession(s);
-      this.sessions.delete(key2);
-    }
-    stopAllRapidFires() {
-      for (const s of this.sessions.values()) this.endSession(s);
-      this.sessions.clear();
-    }
-    isRapidFireActive(trigger) {
-      const s = this.sessions.get(normalizeCombo(trigger));
-      return !!(s && s.pressed);
-    }
-    setRapidFireRate(trigger, hz) {
-      const s = this.sessions.get(normalizeCombo(trigger));
-      if (!s) return;
-      s.rateMs = 1e3 / Math.max(1, hz);
-      if (s.pressed) this.restartLoop(s);
-    }
-    setRapidFireMode(trigger, mode) {
-      const s = this.sessions.get(normalizeCombo(trigger));
-      if (!s) return;
-      s.mode = mode;
-    }
-    listRapidFires() {
-      const out = [];
-      for (const [key2, s] of this.sessions.entries()) {
-        out.push({
-          trigger: key2,
-          emit: joinRapid(s.emit),
-          rateHz: Math.round(1e3 / s.rateMs),
-          mode: s.mode
-        });
-      }
-      return out;
-    }
-    /* ================= internes ================= */
-    attachDoc(doc) {
-      if (!doc || this.attachedDocs.has(doc)) return;
-      const handler = this.makeHandler(doc);
-      const win = doc.defaultView || this.win;
-      win.addEventListener("keydown", handler, true);
-      win.addEventListener("keypress", handler, true);
-      win.addEventListener("keyup", handler, true);
-      this.handlers.set(doc, handler);
-      this.attachedDocs.add(doc);
-    }
-    makeHandler(doc) {
-      return (evt) => {
-        const e = evt;
-        if (e[REMAP_FLAG]) return;
-        const isRapidSynthetic = !!e[RAPID_SYN_FLAG];
-        if (!isRapidSynthetic) this.handleRapidFireInput(doc, e);
-        if (!isRapidSynthetic && this.eventBlockers.size) {
-          for (const blocker of Array.from(this.eventBlockers)) {
-            let shouldBlock = false;
-            try {
-              shouldBlock = blocker(e);
-            } catch {
-              shouldBlock = false;
-            }
-            if (shouldBlock) {
-              e.stopImmediatePropagation();
-              e.preventDefault();
-              return;
-            }
-          }
-        }
-        if (!this.enabled) return;
-        if (isEditableTarget(e.target)) return;
-        if (this.passthrough.has(e.code)) return;
-        const combo = evToCombo(e);
-        if (this.blockedSet.has(combo)) {
-          e.stopImmediatePropagation();
-          e.preventDefault();
-          return;
-        }
-        const spec = this.map.get(combo);
-        if (!spec) return;
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        const code = spec.code || "";
-        const key2 = spec.key !== void 0 ? spec.key : codeToKey(code, e.shiftKey);
-        const ctrl = spec.ctrl ?? e.ctrlKey;
-        const shift = spec.shift ?? e.shiftKey;
-        const alt = spec.alt ?? e.altKey;
-        const meta = spec.meta ?? e.metaKey;
-        const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
-        const eventWindow = doc.defaultView || this.win;
-        const ne = new eventWindow.KeyboardEvent(e.type, {
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-          key: key2,
-          code,
-          ctrlKey: ctrl,
-          shiftKey: shift,
-          altKey: alt,
-          metaKey: meta,
-          repeat: e.repeat,
-          location: e.location
-        });
-        Object.defineProperties(ne, {
-          keyCode: { get: () => kc },
-          which: { get: () => kc },
-          charCode: { get: () => kc },
-          [REMAP_FLAG]: { value: true }
-        });
-        const target = e.target || doc;
-        target.dispatchEvent(ne);
-      };
-    }
-    /* ---------- Rapid-fire internes ---------- */
-    handleRapidFireInput(doc, e) {
-      if (isEditableTarget(e.target)) return;
-      if (e.type === "keydown" && !e.repeat) {
-        for (const s of this.sessions.values()) {
-          if (this.matches(e, s.trigger)) {
-            s.pressed = true;
-            s.lastTarget = e.target || doc;
-            this.startLoop(doc, s);
-          }
-        }
-      } else if (e.type === "keyup") {
-        for (const s of this.sessions.values()) {
-          if (this.matches(e, s.trigger)) {
-            s.pressed = false;
-            this.stopLoop(doc, s);
-          }
-        }
-      }
-    }
-    matches(e, c) {
-      return e.code === c.code && !!e.ctrlKey === !!c.ctrl && !!e.shiftKey === !!c.shift && !!e.altKey === !!c.alt && !!e.metaKey === !!c.meta;
-    }
-    startLoop(doc, s) {
-      this.stopLoop(doc, s);
-      const tick = () => {
-        if (!s.pressed) return;
-        this.dispatchKey(doc, s.lastTarget || doc, "keydown", s.emit, true);
-        if (s.mode === "tap") {
-          if (s.upTimer) this.win.clearTimeout(s.upTimer);
-          s.upTimer = this.win.setTimeout(() => {
-            this.dispatchKey(doc, s.lastTarget || doc, "keyup", s.emit, false);
-          }, s.keyupDelayMs);
-        }
-      };
-      tick();
-      s.tickTimer = this.win.setInterval(tick, s.rateMs);
-    }
-    stopLoop(doc, s) {
-      if (s.tickTimer) {
-        this.win.clearInterval(s.tickTimer);
-        s.tickTimer = null;
-      }
-      if (s.upTimer) {
-        this.win.clearTimeout(s.upTimer);
-        s.upTimer = null;
-      }
-      if (s.mode === "hold" && s.lastTarget) {
-        this.dispatchKey(doc, s.lastTarget, "keyup", s.emit, false);
-      }
-    }
-    restartLoop(s) {
-      if (!s.pressed) return;
-      const anyDoc = this.doc;
-      this.startLoop(anyDoc, s);
-    }
-    endSession(s) {
-      this.stopLoop(this.doc, s);
-      s.pressed = false;
-      s.lastTarget = null;
-    }
-    dispatchKey(doc, target, type, c, repeat) {
-      const code = c.code;
-      const key2 = codeToKey(code, c.shift);
-      const kc = KEYCODE_TABLE[code] ?? (key2 && key2.length === 1 ? key2.toUpperCase().charCodeAt(0) : 0);
-      const eventWindow = doc.defaultView || this.win;
-      const ev = new eventWindow.KeyboardEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        key: key2,
-        code,
-        ctrlKey: c.ctrl,
-        shiftKey: c.shift,
-        altKey: c.alt,
-        metaKey: c.meta,
-        repeat
-      });
-      Object.defineProperties(ev, {
-        keyCode: { get: () => kc },
-        which: { get: () => kc },
-        charCode: { get: () => kc },
-        [RAPID_SYN_FLAG]: { value: true }
-      });
-      try {
-        target.dispatchEvent(ev);
-      } catch {
-        doc.dispatchEvent(ev);
-      }
-    }
-  };
-  function parseRapid(c) {
-    const parts = String(c).split("+").map((s) => s.trim()).filter(Boolean);
-    let code = "";
-    let ctrl = false, shift = false, alt = false, meta = false;
-    for (const p of parts) {
-      const P = p.toLowerCase();
-      if (P === "ctrl" || P === "control") ctrl = true;
-      else if (P === "shift") shift = true;
-      else if (P === "alt") alt = true;
-      else if (P === "meta" || P === "cmd" || P === "command" || P === "win") meta = true;
-      else code = p;
-    }
-    return { code, ctrl, shift, alt, meta };
-  }
-  function joinRapid(c) {
-    const mods = [];
-    if (c.ctrl) mods.push("Ctrl");
-    if (c.shift) mods.push("Shift");
-    if (c.alt) mods.push("Alt");
-    if (c.meta) mods.push("Meta");
-    mods.push(c.code);
-    return mods.join("+");
-  }
-  var defaultContext = resolveContext();
-  var inGameHotkeys = new InGameHotkeys(true, defaultContext);
-  shareGlobal("inGameHotkeys", inGameHotkeys);
-  try {
-    window.inGameHotkeys = inGameHotkeys;
-  } catch {
-  }
-
   // src/services/keybinds.ts
   var SECTION_CONFIG = [
     {
@@ -12203,6 +11454,5360 @@
     const el2 = e.target;
     if (!el2) return false;
     return el2.isContentEditable || el2.tagName === "INPUT" || el2.tagName === "TEXTAREA" || el2.tagName === "SELECT";
+  }
+
+  // src/core/audioPlayer.ts
+  var AudioPlayer = class {
+    constructor(opts = {}) {
+      __publicField(this, "found", /* @__PURE__ */ new Set());
+      __publicField(this, "meta", /* @__PURE__ */ new Map());
+      __publicField(this, "groupsMap", /* @__PURE__ */ new Map());
+      // config volume
+      __publicField(this, "atomKey");
+      __publicField(this, "min");
+      __publicField(this, "max");
+      __publicField(this, "gainFactor");
+      // Howler cache local
+      __publicField(this, "howler", null);
+      // options
+      __publicField(this, "minVariantsPerAutoGroup");
+      this.atomKey = opts.atomKey ?? "soundEffectsVolumeAtom";
+      this.min = opts.min ?? 1e-3;
+      this.max = opts.max ?? 0.2000000000000001;
+      this.gainFactor = opts.gainFactor ?? 1;
+      this.minVariantsPerAutoGroup = opts.minVariantsPerAutoGroup ?? 2;
+      if (opts.autoScan) void this.init();
+    }
+    /** Lance un scan initial et reconstruit les groupes auto. */
+    async init() {
+      await this.scanAll();
+    }
+    // ----------------- Utils -----------------
+    abs(u) {
+      try {
+        return new URL(u, location.href).href;
+      } catch {
+        return u;
+      }
+    }
+    isMP3(u) {
+      return /\.mp3(?:[\?#][^\s'"]*)?$/i.test(u);
+    }
+    fileName(u) {
+      try {
+        return new URL(u, location.href).pathname.split("/").pop() || u;
+      } catch {
+        return String(u);
+      }
+    }
+    logicalName(fileName) {
+      return fileName.replace(/-[A-Za-z0-9_=-]{6,}(?=\.mp3$)/i, "");
+    }
+    clamp(x, a, b) {
+      return Math.max(a, Math.min(b, x));
+    }
+    choose(arr) {
+      return arr && arr.length ? arr[Math.random() * arr.length | 0] : void 0;
+    }
+    toKey(name) {
+      return String(name || "").trim().toLowerCase();
+    }
+    add(u, sourceTag) {
+      if (!u || !this.isMP3(u)) return;
+      const url = this.abs(u);
+      if (!this.found.has(url)) {
+        this.found.add(url);
+        const name = this.fileName(url);
+        this.meta.set(url, { from: /* @__PURE__ */ new Set([sourceTag]), name, logicalName: this.logicalName(name) });
+      } else {
+        this.meta.get(url)?.from.add(sourceTag);
+      }
+    }
+    refreshHowler() {
+      this.howler = window.Howler && Array.isArray(window.Howler._howls) ? window.Howler : null;
+      return this.howler;
+    }
+    sameAsset(a, b) {
+      try {
+        const A = new URL(a, location.href).href;
+        const B = new URL(b, location.href).href;
+        if (A === B) return true;
+        const fn = (p) => new URL(p, location.href).pathname.split("/").pop();
+        const la = this.logicalName(fn(A));
+        const lb = this.logicalName(fn(B));
+        return la === lb;
+      } catch {
+        return a === b;
+      }
+    }
+    readAtomRaw() {
+      const raw = localStorage.getItem(this.atomKey);
+      if (raw == null) return null;
+      try {
+        const val = JSON.parse(raw);
+        if (typeof val === "number") return val;
+        const m = JSON.stringify(val).match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : null;
+      } catch {
+        const m = String(raw).match(/-?\d+(?:\.\d+)?/);
+        return m ? parseFloat(m[0]) : null;
+      }
+    }
+    howlerMaster() {
+      try {
+        return window.Howler && typeof window.Howler.volume === "function" ? window.Howler.volume() : 1;
+      } catch {
+        return 1;
+      }
+    }
+    // 0.001 est considéré comme un vrai mute (→ 0)
+    finalVolumeObj() {
+      let raw = this.readAtomRaw();
+      if (raw == null) raw = this.max;
+      const clamped = this.clamp(raw, this.min, this.max);
+      const nearMute = Math.abs(clamped - this.min) < 1e-6 ? 0 : clamped;
+      const vol = nearMute * this.howlerMaster() * this.gainFactor;
+      return { raw, clamped, vol };
+    }
+    // ----------------- Scanners -----------------
+    async scanPerformance() {
+      performance.getEntriesByType("resource").map((e) => e.name).filter(Boolean).forEach((u) => this.add(u, "perf"));
+    }
+    async scanHowler() {
+      this.refreshHowler();
+      if (!this.howler) return;
+      this.howler._howls.forEach((h) => {
+        const src = h && (h._src || h._urls && h._urls[0]);
+        if (src) this.add(src, "howler");
+      });
+    }
+    async scanCaches() {
+      if (!("caches" in window)) return;
+      try {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          const c = await caches.open(k);
+          const reqs = await c.keys();
+          for (const r of reqs) {
+            const u = r.url;
+            if (this.isMP3(u)) this.add(u, `cache:${k}`);
+          }
+        }
+      } catch {
+      }
+    }
+    async fetchText(u) {
+      try {
+        const res = await fetch(u, { mode: "same-origin", credentials: "same-origin" });
+        if (!res.ok) return "";
+        const ct = res.headers.get("content-type") || "";
+        if (!/javascript|ecmascript|css|html/i.test(ct)) return "";
+        return await res.text();
+      } catch {
+        return "";
+      }
+    }
+    extractMp3s(text) {
+      if (!text) return [];
+      const re = /["'`](\/?[^"'`)\s]+?\.mp3(?:\?[^"'`\s]*)?)["'`]/ig;
+      const out = [];
+      let m;
+      while (m = re.exec(text)) out.push(m[1]);
+      return out;
+    }
+    async scanResourcesForRefs() {
+      const urls = /* @__PURE__ */ new Set();
+      document.querySelectorAll('script[src],link[rel="stylesheet"][href]').forEach((el2) => {
+        const u = el2.src || el2.href;
+        try {
+          const url = new URL(u, location.href);
+          if (url.origin === location.origin) urls.add(url.href);
+        } catch {
+        }
+      });
+      urls.add(location.href);
+      const texts = await Promise.all([...urls].map((u) => this.fetchText(u)));
+      texts.forEach((t, i) => {
+        for (const match of this.extractMp3s(t)) this.add(match, `ref:${[...urls][i]}`);
+      });
+    }
+    async scanDOM() {
+      document.querySelectorAll("audio[src]").forEach((a) => this.add(a.getAttribute("src") || "", "dom"));
+      document.querySelectorAll("source[src]").forEach((s) => this.add(s.getAttribute("src") || "", "dom"));
+      const html = document.documentElement?.outerHTML || "";
+      for (const m of this.extractMp3s(html)) this.add(m, "html");
+    }
+    async scanAll() {
+      this.found.clear();
+      this.meta.clear();
+      await Promise.all([
+        this.scanPerformance(),
+        this.scanHowler(),
+        this.scanCaches(),
+        this.scanDOM()
+      ]);
+      await this.scanResourcesForRefs();
+      this.autoGroups({ overwrite: true });
+      return this.urls();
+    }
+    // ----------------- Groupes -----------------
+    inferGroupKey(logicalName) {
+      const base = String(logicalName || "").replace(/\.mp3$/i, "");
+      let m = base.match(/^([A-Za-z]+)[_\-]/);
+      if (m) return m[1].toLowerCase();
+      m = base.match(/^([A-Za-z]+)\d+$/);
+      if (m) return m[1].toLowerCase();
+      m = base.match(/^([A-Za-z]+)/);
+      return m ? m[1].toLowerCase() : base.toLowerCase();
+    }
+    defineGroup(name, matcher) {
+      const key2 = this.toKey(name);
+      const set2 = /* @__PURE__ */ new Set();
+      const items = this.urls().map((u) => [u, this.meta.get(u)]);
+      const test = (url, meta) => {
+        if (!matcher) return false;
+        if (typeof matcher === "function") return !!matcher(url, meta);
+        const ln = meta?.logicalName || meta?.name || url;
+        if (matcher instanceof RegExp) return matcher.test(ln) || matcher.test(url);
+        const txt = String(matcher).toLowerCase();
+        return ln.toLowerCase().startsWith(txt) || url.toLowerCase().includes("/" + txt);
+      };
+      for (const [url, meta] of items)
+        if (test(url, meta && { name: meta.name, logicalName: meta.logicalName })) set2.add(url);
+      this.groupsMap.set(key2, set2);
+      return [...set2];
+    }
+    undefineGroup(name) {
+      this.groupsMap.delete(this.toKey(name));
+    }
+    // --- Unique implémentation publique ---
+    autoGroups({ overwrite = false, minVariants = this.minVariantsPerAutoGroup } = {}) {
+      this.rebuildAutoGroups(overwrite, minVariants);
+      return this.groups();
+    }
+    // Helper privé appelé par autoGroups()
+    rebuildAutoGroups(overwrite, minVariants) {
+      const tmp = /* @__PURE__ */ new Map();
+      for (const [url, m] of this.meta.entries()) {
+        const grp = this.inferGroupKey(m?.logicalName || m?.name || url);
+        if (!tmp.has(grp)) tmp.set(grp, /* @__PURE__ */ new Set());
+        tmp.get(grp).add(url);
+      }
+      for (const [grp, set2] of tmp.entries()) {
+        if (set2.size < minVariants) continue;
+        if (overwrite || !this.groupsMap.has(grp)) this.groupsMap.set(grp, set2);
+      }
+    }
+    groups() {
+      const out = {};
+      for (const [k, set2] of this.groupsMap.entries()) out[k] = [...set2];
+      return out;
+    }
+    getGroup(name) {
+      const set2 = this.groupsMap.get(this.toKey(name));
+      return set2 ? [...set2] : [];
+    }
+    pick(name) {
+      const g = this.getGroup(name);
+      return this.choose(g);
+    }
+    // ----------------- Lecture -----------------
+    findExistingHowlByUrl(url) {
+      this.refreshHowler();
+      if (!this.howler) return null;
+      for (const h of this.howler._howls) {
+        const src = h && (h._src || h._urls && h._urls[0]);
+        if (src && this.sameAsset(src, url)) return h;
+      }
+      return null;
+    }
+    /** Volume calculé selon config + atom du jeu. */
+    getGameSfxVolume() {
+      return this.finalVolumeObj();
+    }
+    /** Ajoute un offset global (sans toucher à l’atom du jeu). */
+    setGainFactor(g = 1) {
+      this.gainFactor = +g || 1;
+    }
+    /** Permet d’adapter la clé et la plage de l’atom si ça change côté jeu. */
+    setAtomConfig(key2 = "soundEffectsVolumeAtom", min = 1e-3, max = 0.2000000000000001) {
+      this.atomKey = key2;
+      this.min = min;
+      this.max = max;
+    }
+    /** Joue une URL en respectant le volume du jeu et Howler si dispo. */
+    playUrl(url) {
+      const { vol } = this.finalVolumeObj();
+      const existing = this.findExistingHowlByUrl(url);
+      if (existing) {
+        try {
+          existing.play();
+          return existing;
+        } catch {
+        }
+      }
+      const Howl = window.Howl && window.Howler ? window.Howl : null;
+      if (Howl) {
+        try {
+          const h = new Howl({ src: [url], volume: vol });
+          h.play();
+          return h;
+        } catch {
+        }
+      }
+      try {
+        const a = new Audio(url);
+        a.volume = Math.max(0, Math.min(1, vol));
+        void a.play().catch(() => {
+        });
+        return a;
+      } catch {
+        return null;
+      }
+    }
+    /** Joue par motif (RegExp ou texte partiel). */
+    playBy(matcher) {
+      const list = this.urls();
+      const re = matcher instanceof RegExp ? matcher : new RegExp(String(matcher).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const hit = list.find((u) => re.test(u));
+      return hit ? this.playUrl(hit) : null;
+    }
+    /** Joue par nom logique exact si possible, sinon via motif. */
+    play(nameOrRegex) {
+      if (typeof nameOrRegex === "string") {
+        const m = this.map();
+        if (m[nameOrRegex]?.[0]) return this.playUrl(m[nameOrRegex][0]);
+      }
+      return this.playBy(nameOrRegex);
+    }
+    /** Joue une entrée d’un groupe (index fixe, ou aléatoire). */
+    playGroup(name, opts = {}) {
+      const { index, random = true, filter } = opts;
+      let list = this.getGroup(name);
+      if (!list.length) return null;
+      if (typeof filter === "function") {
+        list = list.filter((u) => {
+          const m = this.meta.get(u);
+          return filter(u, m && { name: m.name, logicalName: m.logicalName });
+        });
+        if (!list.length) return null;
+      }
+      const url = typeof index === "number" ? list[(index % list.length + list.length) % list.length] : random ? this.choose(list) : list[0];
+      return this.playUrl(url);
+    }
+    /** Alias pratique pour jouer une variation aléatoire d’un groupe (ex: "harvest"). */
+    playRandom(name) {
+      return this.playGroup(name, { random: true });
+    }
+    // ----------------- Tables & export -----------------
+    urls() {
+      return [...this.found];
+    }
+    map() {
+      const map2 = {};
+      for (const [url, m] of this.meta.entries()) {
+        const key2 = m.logicalName || m.name;
+        (map2[key2] || (map2[key2] = [])).push(url);
+      }
+      return map2;
+    }
+    info() {
+      return this.urls().map((u) => {
+        const m = this.meta.get(u);
+        return { url: u, name: m?.name, logicalName: m?.logicalName, sources: [...m?.from || []].join(",") };
+      });
+    }
+    /** Exporte JSON (URLs + groupes). Retourne la string. */
+    exportJSON() {
+      return JSON.stringify({ urls: this.info(), groups: this.groups() }, null, 2);
+    }
+    /** Scan public de commodité. */
+    async scan() {
+      return this.scanAll();
+    }
+    /* Helpers */
+    playHarvest() {
+      return this.playGroup("harvest");
+    }
+    playPlantSeed() {
+      return this.playGroup("plantseed");
+    }
+    playWaterPlant() {
+      return this.playBy("water");
+    }
+    playDestroyPlant() {
+      return this.playBy("Break_Dirt");
+    }
+    playDestroyStone() {
+      return this.playBy("Break_Stone");
+    }
+    playSellNotification() {
+      return this.playBy("Score_PlusOne");
+    }
+    playInfoNotification() {
+      return this.playBy("Keyboard_Enter_01");
+    }
+    playBuy() {
+      return this.playGroup("coinbuy");
+    }
+  };
+  var audioPlayer = new AudioPlayer({ autoScan: true });
+  window.__audioPlayer = audioPlayer;
+
+  // src/utils/tileObjectSystemApi.ts
+  var state2 = {
+    engine: null,
+    tos: null,
+    origBind: Function.prototype.bind,
+    bindPatched: false
+  };
+  function looksLikeEngine(o) {
+    return !!(o && typeof o === "object" && typeof o.start === "function" && typeof o.destroy === "function" && o.app && o.app.stage && o.app.renderer && o.systems && typeof o.systems.values === "function");
+  }
+  function findTileObjectSystem(engine) {
+    try {
+      for (const e of engine.systems.values()) {
+        const s = e?.system;
+        if (s?.name === "tileObject") return s;
+      }
+    } catch {
+    }
+    return null;
+  }
+  function tryCaptureFromKnownGlobals() {
+    const w = window;
+    if (!state2.engine && w.__QUINOA_ENGINE__) state2.engine = w.__QUINOA_ENGINE__;
+    if (!state2.tos && w.__TILE_OBJECT_SYSTEM__) state2.tos = w.__TILE_OBJECT_SYSTEM__;
+    if (state2.engine && !state2.tos) state2.tos = findTileObjectSystem(state2.engine);
+  }
+  function armCapture() {
+    if (state2.engine && state2.tos) return;
+    if (state2.bindPatched) return;
+    state2.bindPatched = true;
+    Function.prototype.bind = function(thisArg, ...args) {
+      const bound = state2.origBind.call(this, thisArg, ...args);
+      try {
+        if (!state2.engine && looksLikeEngine(thisArg)) {
+          state2.engine = thisArg;
+          state2.tos = findTileObjectSystem(thisArg);
+          Function.prototype.bind = state2.origBind;
+          state2.bindPatched = false;
+        }
+      } catch {
+      }
+      return bound;
+    };
+  }
+  function deepClone(v) {
+    try {
+      if (typeof structuredClone === "function") return structuredClone(v);
+    } catch {
+    }
+    try {
+      return JSON.parse(JSON.stringify(v));
+    } catch {
+    }
+    return v;
+  }
+  function globalIndexFromXY(tx, ty) {
+    const cols = state2.tos?.map?.cols;
+    if (!Number.isFinite(cols) || cols <= 0) return null;
+    return ty * cols + tx | 0;
+  }
+  function getTileViewAt(tx, ty, ensureView) {
+    const gidx = globalIndexFromXY(tx, ty);
+    if (!state2.tos || gidx == null) return { gidx: null, tv: null };
+    let tv = state2.tos.tileViews?.get?.(gidx) ?? null;
+    if (!tv && ensureView && typeof state2.tos.getOrCreateTileView === "function") {
+      try {
+        tv = state2.tos.getOrCreateTileView(gidx);
+      } catch {
+      }
+    }
+    return { gidx, tv };
+  }
+  function assertReady() {
+    if (!state2.engine || !state2.tos) {
+      throw new Error("Quinoa engine/TOS not captured. Call tos.init() early (main entry) and ensure it runs before engine initializes.");
+    }
+  }
+  function applyTileObject(tx, ty, nextObj, opts = {}) {
+    assertReady();
+    const ensureView = opts.ensureView !== false;
+    const forceUpdate = opts.forceUpdate !== false;
+    const { gidx, tv } = getTileViewAt(tx, ty, ensureView);
+    if (gidx == null) throw new Error("TOS/map cols not available");
+    if (!tv) throw new Error("TileView not available");
+    const before = tv.tileObject;
+    tv.onDataChanged(nextObj);
+    if (forceUpdate && state2.engine?.reusableContext) {
+      try {
+        tv.update(state2.engine.reusableContext);
+      } catch {
+      }
+    }
+    return { tx, ty, gidx, ok: true, before, after: tv.tileObject };
+  }
+  function assertType(obj, type) {
+    if (!obj) throw new Error("No tileObject on this tile");
+    if (obj.objectType !== type) throw new Error(`Wrong objectType: expected "${type}", got "${obj.objectType}"`);
+  }
+  function patchPlantSlot(slot, slotPatch) {
+    const p = slotPatch || {};
+    if ("startTime" in p) slot.startTime = Number(p.startTime);
+    if ("endTime" in p) slot.endTime = Number(p.endTime);
+    if ("targetScale" in p) slot.targetScale = Number(p.targetScale);
+    if ("mutations" in p) {
+      if (!Array.isArray(p.mutations)) throw new Error("mutations must be an array of strings");
+      if (!p.mutations.every((x) => typeof x === "string")) throw new Error("mutations must contain only strings");
+      slot.mutations = p.mutations.slice();
+    }
+  }
+  var tos = {
+    /** À appeler une fois dans le main, le plus tôt possible */
+    init() {
+      tryCaptureFromKnownGlobals();
+      armCapture();
+      tryCaptureFromKnownGlobals();
+      return { ok: !!(state2.engine && state2.tos), engine: state2.engine, tos: state2.tos };
+    },
+    isReady() {
+      return !!(state2.engine && state2.tos);
+    },
+    getStatus() {
+      return { ok: !!(state2.engine && state2.tos), engine: state2.engine, tos: state2.tos };
+    },
+    getTileObject(tx, ty, opts = {}) {
+      assertReady();
+      const ensureView = opts.ensureView !== false;
+      const { gidx, tv } = getTileViewAt(Number(tx), Number(ty), ensureView);
+      if (gidx == null) throw new Error("TOS/map cols not available");
+      return {
+        tx: Number(tx),
+        ty: Number(ty),
+        gidx,
+        tileView: tv,
+        tileObject: tv?.tileObject
+      };
+    },
+    /** Met la tile à vide (tileObject = null) */
+    setTileEmpty(tx, ty, opts = {}) {
+      return applyTileObject(Number(tx), Number(ty), null, opts);
+    },
+    setTilePlant(tx, ty, patch, opts = {}) {
+      const info = this.getTileObject(tx, ty, opts);
+      const cur = info.tileObject;
+      assertType(cur, "plant");
+      const next = deepClone(cur);
+      if (!Array.isArray(next.slots)) next.slots = [];
+      const p = patch || {};
+      if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
+      if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
+      if ("species" in p) next.species = String(p.species);
+      if ("slotIdx" in p && "slotPatch" in p) {
+        const i = Number(p.slotIdx) | 0;
+        if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
+        patchPlantSlot(next.slots[i], p.slotPatch);
+        return applyTileObject(Number(tx), Number(ty), next, opts);
+      }
+      if ("slots" in p) {
+        const s = p.slots;
+        if (Array.isArray(s)) {
+          for (let i = 0; i < s.length; i++) {
+            if (s[i] == null) continue;
+            if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
+            patchPlantSlot(next.slots[i], s[i]);
+          }
+        } else if (s && typeof s === "object") {
+          for (const k of Object.keys(s)) {
+            const i = Number(k) | 0;
+            if (!Number.isFinite(i)) continue;
+            if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
+            patchPlantSlot(next.slots[i], s[k]);
+          }
+        } else {
+          throw new Error("patch.slots must be an array or object map");
+        }
+        return applyTileObject(Number(tx), Number(ty), next, opts);
+      }
+      return applyTileObject(Number(tx), Number(ty), next, opts);
+    },
+    setTileDecor(tx, ty, patch, opts = {}) {
+      const info = this.getTileObject(tx, ty, opts);
+      const cur = info.tileObject;
+      assertType(cur, "decor");
+      const next = deepClone(cur);
+      const p = patch || {};
+      if ("rotation" in p) next.rotation = Number(p.rotation);
+      return applyTileObject(Number(tx), Number(ty), next, opts);
+    },
+    setTileEgg(tx, ty, patch, opts = {}) {
+      const info = this.getTileObject(tx, ty, opts);
+      const cur = info.tileObject;
+      assertType(cur, "egg");
+      const next = deepClone(cur);
+      const p = patch || {};
+      if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
+      if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
+      return applyTileObject(Number(tx), Number(ty), next, opts);
+    }
+  };
+
+  // src/ui/spriteIconCache.ts
+  var SPRITE_PRELOAD_CATEGORIES = [
+    "plant",
+    "tallplant",
+    "decor",
+    "item",
+    "pet",
+    "seed",
+    "ui",
+    "mutation",
+    "mutation-overlay"
+  ];
+  var spriteDataUrlCache = /* @__PURE__ */ new Map();
+  var spriteWarmupQueued = false;
+  var spriteWarmupStarted = false;
+  var warmupState = { total: 0, done: 0, completed: false };
+  var prefetchedWarmupKeys = [];
+  var warmupCompletedKeys = /* @__PURE__ */ new Set();
+  var WARMUP_RETRY_MS = 100;
+  var WARMUP_DELAY_MS = 8;
+  var WARMUP_BATCH = 3;
+  var warmupListeners = /* @__PURE__ */ new Set();
+  function notifyWarmup(state3) {
+    warmupState = state3;
+    warmupListeners.forEach((listener) => {
+      try {
+        listener(warmupState);
+      } catch {
+      }
+    });
+  }
+  function getSpriteWarmupState() {
+    return warmupState;
+  }
+  function onSpriteWarmupProgress(listener) {
+    warmupListeners.add(listener);
+    try {
+      listener(warmupState);
+    } catch {
+    }
+    return () => {
+      warmupListeners.delete(listener);
+    };
+  }
+  function primeWarmupKeys(keys) {
+    prefetchedWarmupKeys.push(...keys);
+  }
+  function primeSpriteData(category, spriteId, dataUrl) {
+    const cacheKey = cacheKeyFor(category, spriteId);
+    if (!spriteDataUrlCache.has(cacheKey)) {
+      spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
+    }
+    if (!warmupCompletedKeys.has(cacheKey)) {
+      warmupCompletedKeys.add(cacheKey);
+      const nextDone = warmupState.done + 1;
+      const completed = warmupState.total > 0 ? nextDone >= warmupState.total : false;
+      notifyWarmup({ total: Math.max(warmupState.total, nextDone), done: nextDone, completed });
+    }
+  }
+  var normalizeSpriteId = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  var baseNameFromKey = (key2) => {
+    const parts = key2.split("/").filter(Boolean);
+    return parts[parts.length - 1] ?? key2;
+  };
+  var normalizeMutationList = (mutations) => {
+    const list = Array.from(
+      new Set((mutations ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))
+    );
+    if (!list.length) {
+      return { list, key: "" };
+    }
+    const key2 = list.map((val) => normalizeSpriteId(val)).filter(Boolean).sort().join(",");
+    return { list, key: key2 ? `|m=${key2}` : "" };
+  };
+  var cacheKeyFor = (category, spriteId, mutationKey) => `${category}:${normalizeSpriteId(spriteId)}${mutationKey ?? ""}`;
+  var scheduleNonBlocking = (cb) => {
+    return new Promise((resolve2) => {
+      const runner = () => {
+        Promise.resolve().then(cb).then(resolve2).catch(() => resolve2(cb()));
+      };
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(runner, { timeout: 50 });
+      } else if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(runner);
+      } else {
+        setTimeout(runner, 0);
+      }
+    });
+  };
+  function getSpriteService() {
+    const win = pageWindow ?? globalThis;
+    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
+  }
+  var parseKeyToCategoryId = (key2) => {
+    const parts = key2.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
+    const category = parts[start2] ?? "";
+    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
+    if (!category || !id) return null;
+    return { category, id };
+  };
+  function whenServiceReady(handle) {
+    if (!handle || !handle.ready || typeof handle.ready.then !== "function") {
+      return Promise.resolve();
+    }
+    return handle.ready.then(
+      () => {
+      },
+      () => {
+      }
+    );
+  }
+  async function ensureSpriteDataCached(service, category, spriteId, logTag, options) {
+    if (!service?.renderToCanvas) {
+      return null;
+    }
+    const { list: mutationList, key: mutationKey } = normalizeMutationList(options?.mutations);
+    const cacheKey = cacheKeyFor(category, spriteId, mutationKey);
+    let promise = spriteDataUrlCache.get(cacheKey);
+    if (!promise) {
+      promise = scheduleNonBlocking(async () => {
+        try {
+          const canvas = service.renderToCanvas?.({
+            category,
+            id: spriteId,
+            mutations: mutationList
+          });
+          if (!canvas) return null;
+          return canvas.toDataURL("image/png");
+        } catch (error) {
+          console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
+          return null;
+        }
+      });
+      spriteDataUrlCache.set(cacheKey, promise);
+    }
+    return promise;
+  }
+  var spriteMatchCache = /* @__PURE__ */ new Map();
+  function getMatchCacheKey(categories, id) {
+    const normalizedCategories = categories.map((category) => category.toLowerCase()).join("|");
+    return `${normalizedCategories}|${normalizeSpriteId(id)}`;
+  }
+  function findSpriteMatch(service, categories, id) {
+    if (!service.list) return null;
+    const cacheKey = getMatchCacheKey(categories, id);
+    if (spriteMatchCache.has(cacheKey)) {
+      return spriteMatchCache.get(cacheKey) ?? null;
+    }
+    const normalizedTarget = normalizeSpriteId(id);
+    const categoryLists = categories.map((category) => ({
+      category,
+      items: service.list?.(category) ?? []
+    }));
+    let matched = null;
+    const tryMatch = (category, base) => {
+      if (normalizeSpriteId(base) === normalizedTarget) {
+        matched = { category, spriteId: base };
+        return true;
+      }
+      return false;
+    };
+    for (const { category, items } of categoryLists) {
+      for (const it of items) {
+        const key2 = typeof it?.key === "string" ? it.key : "";
+        if (!key2) continue;
+        const base = baseNameFromKey(key2);
+        if (tryMatch(category, base)) {
+          spriteMatchCache.set(cacheKey, matched);
+          return matched;
+        }
+      }
+    }
+    for (const { category, items } of categoryLists) {
+      for (const it of items) {
+        const key2 = typeof it?.key === "string" ? it.key : "";
+        if (!key2) continue;
+        const base = baseNameFromKey(key2);
+        const normBase = normalizeSpriteId(base);
+        if (!normBase) continue;
+        if (normalizedTarget.includes(normBase) || normBase.includes(normalizedTarget) || normBase.startsWith(normalizedTarget) || normalizedTarget.startsWith(normBase)) {
+          matched = { category, spriteId: base };
+          spriteMatchCache.set(cacheKey, matched);
+          return matched;
+        }
+      }
+    }
+    spriteMatchCache.set(cacheKey, null);
+    return null;
+  }
+  function attachSpriteIcon(target, categories, id, size, logTag, options) {
+    const service = getSpriteService();
+    if (!service?.renderToCanvas) return;
+    const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
+    if (!candidateIds.length) return;
+    void whenServiceReady(service).then(
+      () => scheduleNonBlocking(async () => {
+        let selected = null;
+        for (const candidate of candidateIds) {
+          const match = findSpriteMatch(service, categories, candidate);
+          if (match) {
+            selected = { match, candidate };
+            break;
+          }
+        }
+        if (!selected) {
+          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
+          return;
+        }
+        const resolved = selected;
+        const { key: mutationKey } = normalizeMutationList(options?.mutations);
+        const spriteKey = `${resolved.match.category}:${resolved.match.spriteId}${mutationKey}`;
+        const existingImg = target.querySelector("img[data-sprite-key]");
+        if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
+          return;
+        }
+        const dataUrl = await ensureSpriteDataCached(
+          service,
+          resolved.match.category,
+          resolved.match.spriteId,
+          logTag,
+          {
+            mutations: options?.mutations
+          }
+        );
+        if (!dataUrl) return;
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.width = size;
+        img.height = size;
+        img.alt = "";
+        img.decoding = "async";
+        img.loading = "lazy";
+        img.draggable = false;
+        img.style.width = `${size}px`;
+        img.style.height = `${size}px`;
+        img.style.objectFit = "contain";
+        img.style.imageRendering = "auto";
+        img.style.display = "block";
+        img.dataset.spriteKey = spriteKey;
+        img.dataset.spriteCategory = resolved.match.category;
+        img.dataset.spriteId = resolved.match.spriteId;
+        requestAnimationFrame(() => {
+          target.replaceChildren(img);
+          options?.onSpriteApplied?.(img, {
+            category: resolved.match.category,
+            spriteId: resolved.match.spriteId,
+            candidate: resolved.candidate
+          });
+        });
+      })
+    );
+  }
+  function attachWeatherSpriteIcon(target, tag, size) {
+    if (tag === "NoWeatherEffect") return;
+    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
+  }
+  function warmupSpriteCache() {
+    if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
+    spriteWarmupQueued = true;
+    notifyWarmup({ total: warmupState.total, done: warmupState.done, completed: false });
+    const scheduleRetry = () => {
+      window.setTimeout(() => {
+        spriteWarmupQueued = false;
+        warmupSpriteCache();
+      }, WARMUP_RETRY_MS);
+    };
+    let service = getSpriteService();
+    if (!service && prefetchedWarmupKeys.length === 0) {
+      scheduleRetry();
+      return;
+    }
+    const tasks = [];
+    const seen = new Set(warmupCompletedKeys);
+    if (service?.list) {
+      SPRITE_PRELOAD_CATEGORIES.forEach((category) => {
+        const items = service.list?.(category) ?? [];
+        items.forEach((item) => {
+          const key2 = typeof item?.key === "string" ? item.key : "";
+          if (!key2) return;
+          const base = baseNameFromKey(key2);
+          if (!base) return;
+          const k = `${category}:${base.toLowerCase()}`;
+          if (seen.has(k)) return;
+          seen.add(k);
+          tasks.push({ category, id: base });
+        });
+      });
+    }
+    if (prefetchedWarmupKeys.length) {
+      prefetchedWarmupKeys.forEach((key2) => {
+        const parsed = parseKeyToCategoryId(key2);
+        if (!parsed) return;
+        const k = `${parsed.category}:${parsed.id.toLowerCase()}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        tasks.push(parsed);
+      });
+      prefetchedWarmupKeys = [];
+    }
+    if (!tasks.length) {
+      if (warmupState.completed) {
+        spriteWarmupQueued = false;
+        return;
+      }
+      scheduleRetry();
+      return;
+    }
+    spriteWarmupStarted = true;
+    const total = Math.max(warmupState.total, tasks.length);
+    const startingDone = Math.min(warmupState.done, total);
+    notifyWarmup({ total, done: startingDone, completed: total === 0 || startingDone >= total });
+    const processNext = () => {
+      service = service || getSpriteService();
+      if (!service?.renderToCanvas || !service?.list) {
+        setTimeout(processNext, WARMUP_RETRY_MS);
+        return;
+      }
+      if (!tasks.length) {
+        spriteWarmupQueued = false;
+        console.log("[SpriteIconCache]", "warmup complete", {
+          categories: SPRITE_PRELOAD_CATEGORIES,
+          totalCached: spriteDataUrlCache.size
+        });
+        notifyWarmup({ total, done: warmupState.done, completed: true });
+        return;
+      }
+      let processed = 0;
+      const batch = tasks.splice(0, WARMUP_BATCH);
+      batch.forEach((entry) => {
+        ensureSpriteDataCached(service, entry.category, entry.id, "warmup").then((result) => {
+          if (result == null && !service?.renderToCanvas) {
+            tasks.unshift(entry);
+            return;
+          }
+          const completionKey = cacheKeyFor(entry.category, entry.id);
+          if (!warmupCompletedKeys.has(completionKey)) {
+            warmupCompletedKeys.add(completionKey);
+            const nextDone = Math.min(warmupState.done + 1, total);
+            notifyWarmup({ total, done: nextDone, completed: nextDone >= total });
+          }
+        }).finally(() => {
+          processed += 1;
+          if (processed >= batch.length) {
+            setTimeout(processNext, WARMUP_DELAY_MS);
+          }
+        });
+      });
+    };
+    processNext();
+  }
+
+  // src/services/editor.ts
+  var ARIES_SAVED_GARDENS_PATH = "editor.savedGardens";
+  var FIXED_SLOT_START = 1760866288723;
+  var FIXED_SLOT_END = 1760867858782;
+  var mutationColorMap = {
+    Gold: "rgba(200, 170, 0, 1)",
+    Rainbow: "linear-gradient(135deg, #ff0000, #ff7a00, #ffeb3b, #00c853, #40c4ff, #8e24aa)",
+    Wet: "rgb(30, 140, 230)",
+    Chilled: "rgb(100, 190, 200)",
+    Frozen: "rgb(100, 120, 255)",
+    Dawnlit: "rgba(120, 100, 180, 1)",
+    Ambershine: "rgba(160, 70, 50, 1)",
+    // <- important : Ambershine, pas Amberlit
+    Dawncharged: "rgba(160, 140, 220, 1)",
+    Ambercharged: "rgba(240, 110, 80, 1)"
+  };
+  function buildSpriteCandidates(rawId, label2) {
+    const set2 = /* @__PURE__ */ new Set();
+    const add = (value) => {
+      if (!value) return;
+      const trimmed = String(value).trim();
+      if (!trimmed) return;
+      set2.add(trimmed);
+      set2.add(trimmed.replace(/\s+/g, ""));
+      const last = trimmed.split(/[./]/).pop();
+      if (last && last !== trimmed) {
+        set2.add(last);
+        set2.add(last.replace(/\s+/g, ""));
+      }
+    };
+    add(rawId);
+    add(label2);
+    return Array.from(set2).filter(Boolean);
+  }
+  var overlayEl = null;
+  var currentEnabled = false;
+  var listeners3 = /* @__PURE__ */ new Set();
+  var savedGardensListeners = /* @__PURE__ */ new Set();
+  var sideOverlayEl = null;
+  var sideListWrap = null;
+  var sideSelect = null;
+  var sideRightWrap = null;
+  var currentSideMode = "plants";
+  var selectedPlantId = null;
+  var selectedDecorId = null;
+  var currentItemOverlayEl = null;
+  var currentItemUnsub = null;
+  var currentItemApplyAll = false;
+  var currentItemSlotModes = {};
+  var editorKeybindsInstalled = false;
+  var overlaysVisible = true;
+  var EDITOR_PLACE_REMOVE_FIRST_DELAY_MS = 200;
+  var EDITOR_PLACE_REMOVE_REPEAT_MS = 100;
+  var lastEditorPlaceRemoveTs = 0;
+  var lastEditorPressStartTs = 0;
+  var lastEditorFirstFired = false;
+  var lastEditorTileKey = null;
+  var lastEditorTileType;
+  var lastEditorFirstActionTs = 0;
+  var editorActionHeld = false;
+  async function triggerEditorAnimation(animation) {
+    try {
+      const playerId2 = await getPlayerId();
+      if (!playerId2) return;
+      await Atoms.player.avatarTriggerAnimationAtom.set({ playerId: playerId2, animation });
+      if (animation === "dig") {
+        void audioPlayer.playBy("Break_Dirt_01");
+      } else if (animation === "dropObject") {
+        void (audioPlayer.playGroup("plant") || audioPlayer.playGroup("hit_dirt") || audioPlayer.playGroup("hit") || audioPlayer.playBy(/Hit_Dirt/i));
+      }
+    } catch {
+    }
+  }
+  var stateFrozenValue = null;
+  var statePatch = null;
+  var stateOriginalValue = null;
+  var friendGardenPreviewActive = false;
+  var friendGardenBackup = null;
+  function createSelectionIcon(kind, label2, size = 32, rawId) {
+    const wrap = document.createElement("span");
+    Object.assign(wrap.style, {
+      width: `${size}px`,
+      height: `${size}px`,
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: `${Math.max(14, size - 10)}px`,
+      lineHeight: "1"
+    });
+    const fallback = label2?.trim().charAt(0).toUpperCase() || (kind === "decor" ? "D" : "P");
+    wrap.textContent = "";
+    wrap.setAttribute("aria-hidden", "true");
+    const applyFallback = () => {
+      if (!wrap.querySelector("img")) {
+        wrap.textContent = fallback;
+      }
+    };
+    const candidates = buildSpriteCandidates(rawId, label2);
+    let categories = kind === "decor" ? ["decor"] : ["plant"];
+    if (kind !== "decor" && /bamboo|cactus/i.test(String(rawId ?? label2 ?? ""))) {
+      categories = ["tallplant", "tallPlant", "plant"];
+    }
+    if (candidates.length) {
+      attachSpriteIcon(wrap, categories, candidates, size, "editor", {
+        onNoSpriteFound: applyFallback
+      });
+    } else {
+      applyFallback();
+    }
+    return wrap;
+  }
+  function persist(enabled) {
+  }
+  function ensureOverlay() {
+    if (overlayEl && document.contains(overlayEl)) return overlayEl;
+    const el2 = document.createElement("div");
+    el2.id = "qws-editor-overlay";
+    el2.textContent = "Editor mode";
+    Object.assign(el2.style, {
+      position: "fixed",
+      top: "7%",
+      left: "50%",
+      transform: "translateX(-50%)",
+      zIndex: "1000001",
+      padding: "8px 12px",
+      borderRadius: "999px",
+      border: "1px solid #ffffff33",
+      background: "linear-gradient(180deg, rgba(17,24,31,0.95), rgba(12,18,26,0.92))",
+      color: "#e7eef7",
+      font: "600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      letterSpacing: "0.3px",
+      boxShadow: "0 10px 30px rgba(0,0,0,.35)",
+      pointerEvents: "none"
+    });
+    (document.body || document.documentElement || document).appendChild(el2);
+    overlayEl = el2;
+    return el2;
+  }
+  function showOverlay() {
+    ensureOverlay();
+  }
+  function hideOverlay() {
+    if (overlayEl) {
+      overlayEl.remove();
+      overlayEl = null;
+    }
+  }
+  function notifySavedGardensChanged() {
+    if (!savedGardensListeners.size) return;
+    for (const listener of savedGardensListeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.error("[EditorService] saved gardens listener failed", error);
+      }
+    }
+  }
+  function getSelectedId() {
+    return currentSideMode === "decor" ? selectedDecorId : selectedPlantId;
+  }
+  function setSelectedId(next) {
+    if (currentSideMode === "decor") {
+      selectedDecorId = next;
+    } else {
+      selectedPlantId = next;
+    }
+  }
+  function getSideEntries() {
+    if (currentSideMode === "decor") {
+      return Object.entries(decorCatalog || {}).map(([decorId, val]) => ({
+        id: decorId,
+        label: String(val?.name || decorId)
+      }));
+    }
+    return Object.entries(plantCatalog || {}).map(([species, val]) => ({
+      id: species,
+      label: String(val?.crop?.name || val?.seed?.name || species)
+    }));
+  }
+  function getSideEntry(id) {
+    if (!id) return null;
+    return currentSideMode === "decor" ? decorCatalog?.[id] : plantCatalog?.[id];
+  }
+  function getSideEntryLabel(id, entry) {
+    if (currentSideMode === "decor") return entry?.name || id;
+    return entry?.crop?.name || entry?.seed?.name || id;
+  }
+  function getSideSpriteKind() {
+    return currentSideMode === "decor" ? "Decor" : "Crop";
+  }
+  function ensureSideOverlay() {
+    if (sideOverlayEl && document.contains(sideOverlayEl)) return sideOverlayEl;
+    const root = document.createElement("div");
+    root.id = "qws-editor-side";
+    Object.assign(root.style, {
+      position: "fixed",
+      top: "12%",
+      left: "12px",
+      zIndex: "1000001",
+      width: "560px",
+      minHeight: "420px",
+      maxHeight: "86vh",
+      height: "min(720px, 86vh)",
+      display: "grid",
+      gridTemplateRows: "auto 1fr",
+      // <- header + contenu
+      gap: "10px",
+      padding: "10px",
+      borderRadius: "12px",
+      border: "1px solid #ffffff22",
+      background: "linear-gradient(180deg, rgba(14,18,25,0.95), rgba(10,14,20,0.92))",
+      color: "#e7eef7",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      pointerEvents: "auto"
+    });
+    const header = document.createElement("div");
+    header.textContent = "Item picker";
+    header.style.fontWeight = "700";
+    header.style.fontSize = "13px";
+    header.style.letterSpacing = "0.08em";
+    header.style.textTransform = "uppercase";
+    header.style.opacity = "0.85";
+    header.style.textAlign = "center";
+    const content = document.createElement("div");
+    content.style.display = "grid";
+    content.style.gridTemplateColumns = "260px 1fr";
+    content.style.gap = "10px";
+    content.style.minHeight = "0";
+    const left = document.createElement("div");
+    left.style.display = "grid";
+    left.style.gridTemplateRows = "auto 1fr";
+    left.style.gap = "8px";
+    left.style.minHeight = "0";
+    const select2 = document.createElement("select");
+    select2.id = "qws-editor-side-select";
+    select2.style.width = "100%";
+    select2.style.padding = "8px";
+    select2.style.borderRadius = "10px";
+    select2.style.border = "1px solid #33404e";
+    select2.style.background = "rgba(20,25,33,0.9)";
+    select2.style.color = "#e7eef7";
+    select2.style.fontWeight = "600";
+    select2.style.cursor = "pointer";
+    const optPlants = document.createElement("option");
+    optPlants.value = "plants";
+    optPlants.textContent = "Plants";
+    const optDecor = document.createElement("option");
+    optDecor.value = "decor";
+    optDecor.textContent = "Decor";
+    select2.append(optPlants, optDecor);
+    select2.value = currentSideMode;
+    select2.onchange = () => {
+      currentSideMode = select2.value === "decor" ? "decor" : "plants";
+      renderSideList();
+    };
+    sideSelect = select2;
+    const listWrap = document.createElement("div");
+    listWrap.id = "qws-editor-side-list";
+    Object.assign(listWrap.style, {
+      border: "1px solid #2c3643",
+      borderRadius: "10px",
+      background: "rgba(16,21,28,0.9)",
+      overflow: "auto",
+      padding: "6px",
+      maxHeight: "72vh"
+    });
+    sideListWrap = listWrap;
+    left.append(select2, listWrap);
+    const right = document.createElement("div");
+    right.id = "qws-editor-side-details";
+    right.style.display = "grid";
+    right.style.gridTemplateRows = "1fr auto";
+    right.style.gap = "8px";
+    right.style.border = "1px solid #2c3643";
+    right.style.borderRadius = "10px";
+    right.style.background = "rgba(16,21,28,0.9)";
+    right.style.padding = "10px";
+    right.style.minHeight = "0";
+    right.style.overflow = "hidden";
+    sideRightWrap = right;
+    content.append(left, right);
+    root.append(header, content);
+    (document.body || document.documentElement || document).appendChild(root);
+    sideOverlayEl = root;
+    renderSideList();
+    renderSideDetails();
+    return root;
+  }
+  function showSideOverlay() {
+    ensureSideOverlay();
+  }
+  function hideSideOverlay() {
+    if (sideOverlayEl) {
+      sideOverlayEl.remove();
+      sideOverlayEl = null;
+      sideListWrap = null;
+      sideSelect = null;
+      sideRightWrap = null;
+    }
+  }
+  function ensureCurrentItemOverlay() {
+    if (currentItemOverlayEl && document.contains(currentItemOverlayEl)) return currentItemOverlayEl;
+    const root = document.createElement("div");
+    root.id = "qws-editor-current-item";
+    Object.assign(root.style, {
+      position: "fixed",
+      top: "12%",
+      right: "12px",
+      zIndex: "1000001",
+      width: "420px",
+      minHeight: "200px",
+      maxHeight: "86vh",
+      display: "grid",
+      gridTemplateRows: "auto 1fr",
+      gap: "10px",
+      padding: "10px",
+      borderRadius: "12px",
+      border: "1px solid #ffffff22",
+      background: "linear-gradient(180deg, rgba(14,18,25,0.95), rgba(10,14,20,0.92))",
+      color: "#e7eef7",
+      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+      pointerEvents: "auto"
+    });
+    const header = document.createElement("div");
+    header.textContent = "Current item";
+    header.style.fontWeight = "700";
+    header.style.fontSize = "13px";
+    header.style.letterSpacing = "0.08em";
+    header.style.textTransform = "uppercase";
+    header.style.opacity = "0.85";
+    header.style.textAlign = "center";
+    const content = document.createElement("div");
+    content.id = "qws-editor-current-item-content";
+    content.style.display = "grid";
+    content.style.gap = "10px";
+    content.style.minHeight = "0";
+    content.style.overflow = "auto";
+    root.append(header, content);
+    (document.body || document.documentElement || document).appendChild(root);
+    currentItemOverlayEl = root;
+    attachCurrentItemListener();
+    renderCurrentItemOverlay();
+    return root;
+  }
+  function showCurrentItemOverlay() {
+    ensureCurrentItemOverlay();
+  }
+  function hideCurrentItemOverlay() {
+    if (currentItemUnsub) {
+      try {
+        currentItemUnsub();
+      } catch {
+      }
+      currentItemUnsub = null;
+    }
+    if (currentItemOverlayEl) {
+      currentItemOverlayEl.remove();
+      currentItemOverlayEl = null;
+    }
+  }
+  function attachCurrentItemListener() {
+    if (currentItemUnsub) {
+      try {
+        currentItemUnsub();
+      } catch {
+      }
+      currentItemUnsub = null;
+    }
+    void (async () => {
+      try {
+        const atom = getAtomByLabel("myCurrentGardenObjectAtom");
+        const selectedIdxAtom = getAtomByLabel("myValidatedSelectedItemIndexAtom");
+        const store = await ensureStore().catch(() => null);
+        if (!atom || !store) return;
+        const unsubA = store.sub(atom, () => {
+          renderCurrentItemOverlay();
+        });
+        const unsubB = selectedIdxAtom ? store.sub(selectedIdxAtom, () => renderCurrentItemOverlay()) : null;
+        currentItemUnsub = () => {
+          try {
+            unsubA();
+          } catch {
+          }
+          if (unsubB) {
+            try {
+              unsubB();
+            } catch {
+            }
+          }
+        };
+      } catch {
+      }
+    })();
+  }
+  async function readCurrentTileContext() {
+    try {
+      const store = await ensureStore().catch(() => null);
+      if (!store) return { tileType: void 0, tileKey: null, tileObject: null };
+      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
+      if (!tileAtom) return { tileType: void 0, tileKey: null, tileObject: null };
+      const tileVal = store.get(tileAtom);
+      if (!tileVal) return { tileType: void 0, tileKey: null, tileObject: null };
+      const tileType = tileVal.tileType;
+      const localTileIndex = tileVal.localTileIndex;
+      const userSlotIdxRaw = tileVal.userSlotIdx;
+      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
+      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
+        return { tileType, tileKey: null, tileObject: null };
+      }
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const garden2 = Array.isArray(cur?.child?.data?.userSlots) ? cur?.child?.data?.userSlots?.[userSlotIdx]?.data?.garden : cur?.child?.data?.userSlots?.[String(userSlotIdx)]?.data?.garden;
+      const safeGarden = garden2 && typeof garden2 === "object" ? garden2 : makeEmptyGarden();
+      const key2 = String(localTileIndex);
+      const targetMap = tileType === "Dirt" ? safeGarden.tileObjects || {} : safeGarden.boardwalkTileObjects || {};
+      return { tileType, tileKey: key2, tileObject: targetMap[key2] };
+    } catch {
+      return { tileType: void 0, tileKey: null, tileObject: null };
+    }
+  }
+  function getGardenObjectLabel(obj) {
+    if (!obj || typeof obj !== "object") return "Unknown";
+    if (obj.objectType === "plant") {
+      const entry = plantCatalog[obj.species];
+      return entry?.crop?.name || entry?.seed?.name || obj.species || "Plant";
+    }
+    if (obj.objectType === "decor") {
+      const entry = decorCatalog[obj.decorId];
+      return entry?.name || obj.decorId || "Decor";
+    }
+    return String(obj.objectType || "Item");
+  }
+  function getInventoryItemLabel(item) {
+    if (!item || typeof item !== "object") return "Item";
+    if (item.itemType === "Plant") {
+      const entry = plantCatalog[item.species];
+      return entry?.crop?.name || entry?.seed?.name || item.species || "Plant";
+    }
+    if (item.itemType === "Decor") {
+      const entry = decorCatalog[item.decorId];
+      return entry?.name || item.decorId || "Decor";
+    }
+    return String(item.itemType || "Item");
+  }
+  function renderCurrentItemOverlay() {
+    if (!currentItemOverlayEl) return;
+    const content = currentItemOverlayEl.querySelector("#qws-editor-current-item-content");
+    if (!content) return;
+    void (async () => {
+      content.innerHTML = "";
+      const { tileType, tileKey, tileObject } = await readCurrentTileContext();
+      if (!tileObject) {
+        const empty = document.createElement("div");
+        empty.textContent = "Look at a plant or decor to edit it.";
+        empty.style.opacity = "0.7";
+        empty.style.textAlign = "center";
+        content.appendChild(empty);
+        try {
+          const inv = await Atoms.inventory.myInventory.get();
+          const idx = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+          const items = Array.isArray(inv?.items) ? inv.items : [];
+          const selected = typeof idx === "number" ? items[idx] : null;
+          if (selected) {
+            const infoRow = document.createElement("div");
+            infoRow.style.display = "flex";
+            infoRow.style.flexDirection = "column";
+            infoRow.style.alignItems = "center";
+            infoRow.style.gap = "6px";
+            const nameEl2 = document.createElement("div");
+            nameEl2.textContent = getInventoryItemLabel(selected);
+            nameEl2.style.fontWeight = "700";
+            nameEl2.style.fontSize = "14px";
+            nameEl2.style.overflow = "hidden";
+            nameEl2.style.textOverflow = "ellipsis";
+            nameEl2.style.whiteSpace = "nowrap";
+            nameEl2.style.textAlign = "center";
+            const icon2 = createSelectionIcon(
+              selected.itemType === "Decor" ? "decor" : "plants",
+              getInventoryItemLabel(selected),
+              40,
+              selected.itemType === "Decor" ? selected?.decorId : selected?.species
+            );
+            infoRow.append(icon2, nameEl2);
+            content.appendChild(infoRow);
+            if (selected.itemType === "Plant") {
+              const slotsArr = Array.isArray(selected.slots) ? selected.slots : [];
+              const mutSet = /* @__PURE__ */ new Set();
+              for (const s of slotsArr) {
+                const muts = Array.isArray(s?.mutations) ? s.mutations : [];
+                muts.forEach((m) => mutSet.add(m));
+              }
+              const mutList = Array.from(mutSet);
+              const mutRow = document.createElement("div");
+              mutRow.style.display = "flex";
+              mutRow.style.flexWrap = "wrap";
+              mutRow.style.gap = "6px";
+              mutRow.style.justifyContent = "center";
+              if (mutList.length) {
+                for (const mutId of mutList) {
+                  const tag = document.createElement("span");
+                  tag.textContent = mutationCatalog[mutId]?.name?.charAt(0)?.toUpperCase() || mutId.charAt(0)?.toUpperCase() || "?";
+                  tag.style.fontWeight = "900";
+                  tag.style.fontSize = "12px";
+                  tag.style.padding = "4px 8px";
+                  tag.style.borderRadius = "999px";
+                  tag.style.border = "1px solid #2c3643";
+                  tag.style.background = "rgba(10,14,20,0.9)";
+                  const color = mutationColorMap[mutId];
+                  if (color) {
+                    if (color.startsWith("linear-gradient")) {
+                      tag.style.backgroundImage = color;
+                      tag.style.backgroundClip = "text";
+                      tag.style.webkitBackgroundClip = "text";
+                      tag.style.color = "transparent";
+                      tag.style.webkitTextFillColor = "transparent";
+                    } else {
+                      tag.style.color = color;
+                    }
+                  }
+                  mutRow.appendChild(tag);
+                }
+              } else {
+                const none = document.createElement("div");
+                none.textContent = "No mutations";
+                none.style.opacity = "0.7";
+                none.style.fontSize = "11px";
+                mutRow.appendChild(none);
+              }
+              content.append(mutRow);
+            }
+            const placeBtn = document.createElement("button");
+            placeBtn.type = "button";
+            placeBtn.textContent = "Place";
+            Object.assign(placeBtn.style, {
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              border: "1px solid #2b3441",
+              background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
+              color: "#e7eef7",
+              fontWeight: "700",
+              cursor: "pointer"
+            });
+            placeBtn.onclick = () => {
+              void placeSelectedItemInGardenAtCurrentTile();
+            };
+            content.appendChild(placeBtn);
+          }
+        } catch {
+        }
+        return;
+      }
+      const name = getGardenObjectLabel(tileObject);
+      const header = document.createElement("div");
+      header.style.display = "flex";
+      header.style.flexDirection = "column";
+      header.style.alignItems = "center";
+      header.style.gap = "6px";
+      const nameEl = document.createElement("div");
+      nameEl.textContent = name;
+      nameEl.style.fontWeight = "700";
+      nameEl.style.fontSize = "15px";
+      nameEl.style.overflow = "hidden";
+      nameEl.style.textOverflow = "ellipsis";
+      nameEl.style.whiteSpace = "nowrap";
+      nameEl.style.textAlign = "center";
+      const icon = createSelectionIcon(
+        tileObject.objectType === "decor" ? "decor" : "plants",
+        name,
+        48,
+        tileObject.objectType === "decor" ? tileObject.decorId || tileKey || name : tileObject.species || tileKey || name
+      );
+      header.append(icon, nameEl);
+      content.appendChild(header);
+      if (tileObject.objectType === "plant") {
+        renderCurrentPlantEditor(content, tileObject, tileKey || "");
+      }
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.textContent = "Copy to inventory";
+      Object.assign(addBtn.style, {
+        width: "100%",
+        padding: "8px 10px",
+        borderRadius: "8px",
+        border: "1px solid #2b3441",
+        background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
+        color: "#e7eef7",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      addBtn.onclick = () => {
+        void addTileObjectToInventory(tileObject);
+      };
+      content.appendChild(addBtn);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "Remove";
+      Object.assign(removeBtn.style, {
+        width: "100%",
+        padding: "8px 10px",
+        borderRadius: "8px",
+        border: "1px solid #2b3441",
+        background: "linear-gradient(180deg, rgba(220,80,80,0.18), rgba(160,40,40,0.25))",
+        color: "#e7eef7",
+        fontWeight: "700",
+        cursor: "pointer"
+      });
+      removeBtn.onclick = () => {
+        if (tileObject.objectType === "plant") void removeItemFromGardenAtCurrentTile();
+        else void removeDecorFromGardenAtCurrentTile();
+      };
+      content.appendChild(removeBtn);
+    })();
+  }
+  function renderCurrentPlantEditor(content, tileObject, tileKey) {
+    const species = tileObject?.species;
+    const slots = Array.isArray(tileObject?.slots) ? tileObject.slots : [];
+    const modeKey = tileKey || "default";
+    const slotModeMap = currentItemSlotModes[modeKey] || {};
+    let applyAll = currentItemApplyAll;
+    const slotsList = document.createElement("div");
+    slotsList.style.display = "grid";
+    slotsList.style.gap = "8px";
+    const maxSlots = getMaxSlotsForSpecies(species);
+    const applyAllRow = document.createElement("label");
+    applyAllRow.style.display = "flex";
+    applyAllRow.style.alignItems = "center";
+    applyAllRow.style.gap = "6px";
+    applyAllRow.style.fontSize = "12px";
+    applyAllRow.style.opacity = "0.9";
+    const applyToggle = document.createElement("input");
+    applyToggle.type = "checkbox";
+    applyToggle.checked = applyAll;
+    applyToggle.onchange = () => {
+      applyAll = !!applyToggle.checked;
+      currentItemApplyAll = applyAll;
+      if (applyAll) syncApplyAllControls();
+    };
+    const applyLabel = document.createElement("span");
+    applyLabel.textContent = "Edit all slots together";
+    applyAllRow.append(applyToggle, applyLabel);
+    const syncApplyAllControls = () => {
+      if (!applyAll) return;
+      slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
+        s.value = String(s._currentPct || s.value);
+        const mode = s._currentMode || "percent";
+        s.disabled = mode === "custom";
+        s.style.opacity = mode === "custom" ? "0.45" : "1";
+      });
+      slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
+        s.value = String(s._currentScale || s.value);
+      });
+      slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
+        const curPct = lab._currentPct;
+        if (curPct != null) lab.textContent = `${curPct}%`;
+      });
+      slotsList.querySelectorAll("input[data-scale-mode-slot]").forEach((chk) => {
+        const mode = chk._currentMode || "percent";
+        chk.checked = mode === "custom";
+      });
+      slotsList.querySelectorAll("[data-custom-row-slot]").forEach((row) => {
+        const mode = row._currentMode || "percent";
+        row.style.display = mode === "custom" ? "flex" : "none";
+      });
+      slotsList.querySelectorAll("[data-slider-row-slot]").forEach((row) => {
+        const mode = row._currentMode || "percent";
+        row.style.display = mode === "custom" ? "none" : "";
+      });
+    };
+    slots.forEach((slot, idx) => {
+      const box = document.createElement("div");
+      Object.assign(box.style, {
+        border: "1px solid #2c3643",
+        borderRadius: "8px",
+        padding: "8px",
+        background: "rgba(10,14,20,0.9)",
+        display: "grid",
+        gap: "6px"
+      });
+      const rawScale = Number(slot?.targetScale);
+      const fallbackScale = computeTargetScaleFromPercent(species, 100);
+      const initialScale = Number.isFinite(rawScale) ? rawScale : fallbackScale;
+      const { minScale, maxScale } = getScaleBoundsForSpecies(species);
+      const computePercentLoose = (scale) => {
+        const { minScale: minScale2, maxScale: maxScale2 } = getScaleBoundsForSpecies(species);
+        if (!maxScale2 || maxScale2 <= minScale2) return 100;
+        const pct2 = 50 + (scale - minScale2) / (maxScale2 - minScale2) * 50;
+        return clampSizePercent(pct2);
+      };
+      const pct = computePercentLoose(initialScale);
+      let currentPct = pct;
+      let currentScale = initialScale;
+      const outOfBounds = initialScale < minScale || initialScale > maxScale;
+      let currentMode = slotModeMap[idx] === "custom" ? "custom" : outOfBounds ? "custom" : "percent";
+      if (!slotModeMap[idx] && outOfBounds) {
+        currentItemSlotModes[modeKey] = { ...currentItemSlotModes[modeKey] || {}, [idx]: "custom" };
+      }
+      const sizeRow = document.createElement("div");
+      sizeRow.style.display = "flex";
+      sizeRow.style.justifyContent = "space-between";
+      sizeRow.style.alignItems = "center";
+      sizeRow.style.fontSize = "11px";
+      sizeRow.style.opacity = "0.85";
+      const sizeName = document.createElement("span");
+      sizeName.textContent = "Size";
+      const sizeValue = document.createElement("span");
+      sizeValue.textContent = `${currentPct}%`;
+      sizeValue.dataset.sizeLabel = String(idx);
+      sizeValue._currentPct = currentPct;
+      sizeRow.append(sizeName, sizeValue);
+      const slider = document.createElement("input");
+      slider.type = "range";
+      slider.min = "50";
+      slider.max = "100";
+      slider.step = "1";
+      slider.value = String(currentPct);
+      slider.dataset.slotIdx = String(idx);
+      slider._currentPct = currentPct;
+      slider._currentMode = currentMode;
+      Object.assign(slider.style, { width: "100%", cursor: "pointer" });
+      const sliderRow = document.createElement("div");
+      sliderRow.dataset.sliderRowSlot = String(idx);
+      sliderRow.appendChild(slider);
+      const customRow = document.createElement("div");
+      customRow.style.display = "flex";
+      customRow.style.alignItems = "center";
+      customRow.style.gap = "6px";
+      customRow.style.fontSize = "11px";
+      customRow.style.opacity = "0.9";
+      const customLabel = document.createElement("span");
+      customLabel.textContent = "Custom scale";
+      const customInput = document.createElement("input");
+      customInput.type = "text";
+      customInput.inputMode = "decimal";
+      customInput.autocomplete = "off";
+      customInput.value = String(currentScale);
+      customInput.dataset.scaleInputSlot = String(idx);
+      customInput._currentScale = currentScale;
+      Object.assign(customInput.style, {
+        width: "90px",
+        padding: "4px 6px",
+        borderRadius: "6px",
+        border: "1px solid #2c3643",
+        background: "rgba(10,14,20,0.9)",
+        color: "#e7eef7"
+      });
+      let pendingPatch = null;
+      let debounceTimer = null;
+      const flushPatch = () => {
+        if (!pendingPatch) return;
+        const patch = pendingPatch;
+        pendingPatch = null;
+        void updateGardenObjectAtCurrentTile((obj) => {
+          if (obj?.objectType !== "plant") return obj;
+          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
+          if (applyAll) {
+            for (let i = 0; i < nextSlots.length; i++) {
+              nextSlots[i] = { ...nextSlots[i] || {}, ...patch };
+            }
+          } else {
+            nextSlots[idx] = { ...nextSlots[idx] || {}, ...patch };
+          }
+          return { ...obj, slots: nextSlots };
+        });
+      };
+      const queuePatch = (patch) => {
+        pendingPatch = { ...pendingPatch || {}, ...patch };
+        if (debounceTimer != null) window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(() => {
+          flushPatch();
+        }, 150);
+      };
+      const updatePercent = (nextPct) => {
+        const pctVal = clampSizePercent(nextPct);
+        currentPct = pctVal;
+        slider._currentPct = pctVal;
+        sizeValue._currentPct = pctVal;
+        sizeValue.textContent = `${pctVal}%`;
+        slider.value = String(pctVal);
+        currentScale = computeTargetScaleFromPercent(species, pctVal);
+        if (currentMode !== "custom") customInput.value = currentScale.toFixed(4);
+        customInput._currentScale = currentScale;
+        queuePatch({ targetScale: currentScale });
+        if (applyAll) {
+          slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
+            if (s === slider) return;
+            s.value = String(pctVal);
+            s._currentPct = pctVal;
+            s._currentMode = "percent";
+            s.disabled = false;
+            s.style.opacity = "1";
+          });
+          slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
+            if (s === customInput) return;
+            s.value = currentScale.toFixed(4);
+            s._currentScale = currentScale;
+          });
+          slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
+            lab.textContent = `${pctVal}%`;
+            lab._currentPct = pctVal;
+          });
+          applyModeToAll("percent", currentScale, currentPct);
+        }
+      };
+      const updateCustomScale = (raw) => {
+        const normalized = raw.replace(",", ".").replace(/\s+/g, "");
+        const n = Number(normalized);
+        if (!Number.isFinite(n)) return;
+        currentScale = n;
+        customInput.value = normalized;
+        customInput._currentScale = n;
+        const pctVal = computePercentFromScale(species, n);
+        currentPct = pctVal;
+        slider.value = String(pctVal);
+        sizeValue.textContent = `${pctVal}%`;
+        queuePatch({ targetScale: n });
+        if (applyAll) {
+          slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
+            if (s === slider) return;
+            s.value = String(pctVal);
+            s._currentPct = pctVal;
+            s._currentMode = "custom";
+            s.disabled = true;
+            s.style.opacity = "0.45";
+          });
+          slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
+            if (s === customInput) return;
+            s.value = String(n);
+            s._currentScale = n;
+          });
+          slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
+            lab.textContent = `${pctVal}%`;
+            lab._currentPct = pctVal;
+          });
+          applyModeToAll("custom", n, currentPct);
+        }
+      };
+      slider.oninput = () => updatePercent(Number(slider.value));
+      const commitCustomInput = () => updateCustomScale(customInput.value);
+      customInput.onblur = commitCustomInput;
+      customInput.onkeydown = (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          commitCustomInput();
+        }
+      };
+      customRow.append(customLabel, customInput);
+      const modeRow = document.createElement("label");
+      modeRow.style.display = "flex";
+      modeRow.style.alignItems = "center";
+      modeRow.style.gap = "6px";
+      modeRow.style.fontSize = "11px";
+      modeRow.style.opacity = "0.9";
+      const modeToggle = document.createElement("input");
+      modeToggle.type = "checkbox";
+      modeToggle.dataset.scaleModeSlot = String(idx);
+      modeToggle._currentMode = currentMode;
+      modeToggle.checked = currentMode === "custom";
+      const modeText = document.createElement("span");
+      modeText.textContent = "Use custom scale";
+      const syncValueLabel = () => {
+        sizeValue.textContent = currentMode === "custom" ? `${currentScale.toFixed(2)}x` : `${currentPct}%`;
+        sizeValue._currentPct = currentPct;
+      };
+      const syncControlState = () => {
+        const showPercent = currentMode !== "custom";
+        modeToggle._currentMode = currentMode;
+        slider._currentMode = currentMode;
+        slider.disabled = !showPercent;
+        sliderRow.style.display = showPercent ? "" : "none";
+        customRow.style.display = showPercent ? "none" : "flex";
+      };
+      modeToggle.onchange = () => {
+        currentMode = modeToggle.checked ? "custom" : "percent";
+        currentItemSlotModes[modeKey] = {
+          ...currentItemSlotModes[modeKey] || {},
+          [idx]: currentMode
+        };
+        if (currentMode === "custom") {
+          queuePatch({ targetScale: currentScale });
+        } else {
+          const clamped = clampCustomScale(species, currentScale);
+          currentScale = clamped;
+          customInput._currentScale = clamped;
+          customInput.value = String(clamped);
+          const pctVal = computePercentFromScale(species, clamped);
+          currentPct = pctVal;
+          slider._currentPct = pctVal;
+          slider.value = String(pctVal);
+          queuePatch({ targetScale: clamped });
+        }
+        syncControlState();
+        syncValueLabel();
+        if (applyAll) syncApplyAllControls();
+        if (applyAll) {
+          applyModeToAll(currentMode, currentScale, currentPct);
+        }
+      };
+      const installGameKeyBlocker = (inp) => {
+        const stop2 = (ev) => {
+          ev.stopImmediatePropagation?.();
+          ev.stopPropagation();
+        };
+        const attach = () => {
+          window.addEventListener("keydown", stop2, true);
+          window.addEventListener("keyup", stop2, true);
+        };
+        const detach = () => {
+          window.removeEventListener("keydown", stop2, true);
+          window.removeEventListener("keyup", stop2, true);
+        };
+        inp.addEventListener("focus", attach);
+        inp.addEventListener("blur", detach);
+        inp.addEventListener("keydown", stop2);
+      };
+      const installCharGuard = (inp) => {
+        const allowed = /* @__PURE__ */ new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "."]);
+        inp.addEventListener("keydown", (ev) => {
+          if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+          const k = ev.key;
+          if (["Backspace", "Delete", "Tab", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(k)) {
+            return;
+          }
+          if (k.length === 1 && !allowed.has(k)) {
+            ev.preventDefault();
+          }
+        });
+        inp.addEventListener("input", () => {
+          const cleaned = inp.value.replace(/[^0-9.-]/g, "");
+          if (cleaned !== inp.value) inp.value = cleaned;
+        });
+      };
+      installGameKeyBlocker(customInput);
+      installCharGuard(customInput);
+      modeRow.append(modeToggle, modeText);
+      slider.disabled = currentMode === "custom";
+      sliderRow.style.display = currentMode === "custom" ? "none" : "";
+      customRow.style.display = currentMode === "custom" ? "flex" : "none";
+      syncControlState();
+      syncValueLabel();
+      const mutWrap = document.createElement("div");
+      mutWrap.style.display = "grid";
+      mutWrap.style.gap = "6px";
+      const mutTitle = document.createElement("div");
+      mutTitle.textContent = "Mutations";
+      mutTitle.style.fontSize = "11px";
+      mutTitle.style.opacity = "0.85";
+      const mutRow = document.createElement("div");
+      mutRow.style.display = "flex";
+      mutRow.style.flexWrap = "wrap";
+      mutRow.style.gap = "6px";
+      mutRow.style.alignItems = "center";
+      const mutations = Array.isArray(slot?.mutations) ? slot.mutations.slice() : [];
+      const mutationKeys = Object.keys(mutationCatalog || {});
+      const applyMutationsPatch = (nextMutations) => {
+        const copy2 = nextMutations.slice();
+        mutations.length = 0;
+        mutations.push(...copy2);
+        void updateGardenObjectAtCurrentTile((obj) => {
+          if (obj?.objectType !== "plant") return obj;
+          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
+          if (applyAll) {
+            for (let i = 0; i < nextSlots.length; i++) {
+              nextSlots[i] = { ...nextSlots[i] || {}, mutations: copy2.slice() };
+            }
+          } else {
+            nextSlots[idx] = { ...nextSlots[idx] || {}, mutations: copy2.slice() };
+          }
+          return { ...obj, slots: nextSlots };
+        }).then(() => {
+          renderMutations();
+        });
+      };
+      const styleLetter = (target, mutId) => {
+        const color = mutationColorMap[mutId];
+        if (!color) return;
+        if (color.startsWith("linear-gradient")) {
+          target.style.backgroundImage = color;
+          target.style.backgroundClip = "text";
+          target.style.webkitBackgroundClip = "text";
+          target.style.color = "transparent";
+          target.style.webkitTextFillColor = "transparent";
+        } else {
+          target.style.color = color;
+        }
+      };
+      const getLetter = (mutId) => {
+        const def = mutationCatalog[mutId] || {};
+        const src = def.name || mutId || "?";
+        return String(src).charAt(0).toUpperCase();
+      };
+      const renderMutations = () => {
+        mutRow.innerHTML = "";
+        for (const mutId of mutations) {
+          const tag = document.createElement("span");
+          Object.assign(tag.style, {
+            borderRadius: "999px",
+            padding: "3px 8px",
+            fontSize: "11px",
+            fontWeight: "700",
+            border: "1px solid #2c3643",
+            background: "rgba(10,14,20,0.9)",
+            cursor: "pointer"
+          });
+          const letterSpan = document.createElement("span");
+          letterSpan.textContent = getLetter(mutId);
+          letterSpan.style.fontWeight = "900";
+          styleLetter(letterSpan, mutId);
+          tag.title = "Remove mutation";
+          tag.onclick = () => {
+            const next = mutations.filter((m) => m !== mutId);
+            applyMutationsPatch(next);
+          };
+          tag.appendChild(letterSpan);
+          mutRow.appendChild(tag);
+        }
+        if (mutations.length < mutationKeys.length) {
+          const toggleBtn = document.createElement("button");
+          toggleBtn.type = "button";
+          toggleBtn.textContent = "+";
+          Object.assign(toggleBtn.style, {
+            width: "28px",
+            height: "28px",
+            borderRadius: "50%",
+            border: "1px solid #2c3643",
+            background: "rgba(10,14,20,0.9)",
+            color: "#e7eef7",
+            fontWeight: "900",
+            fontSize: "16px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center"
+          });
+          toggleBtn.onclick = () => {
+            const isOpen = dropdown.style.display !== "none";
+            dropdown.style.display = isOpen ? "none" : "grid";
+            toggleBtn.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
+          };
+          mutRow.appendChild(toggleBtn);
+        }
+      };
+      const dropdown = document.createElement("div");
+      dropdown.style.display = "none";
+      dropdown.style.gridTemplateColumns = "repeat(auto-fill, minmax(90px, 1fr))";
+      dropdown.style.gap = "6px";
+      dropdown.style.padding = "6px";
+      dropdown.style.border = "1px solid #2c3643";
+      dropdown.style.borderRadius = "8px";
+      dropdown.style.background = "rgba(8,12,18,0.9)";
+      for (const mutKey of mutationKeys) {
+        const def = mutationCatalog[mutKey] || {};
+        const storedId = mutKey === "Amberlit" ? "Ambershine" : mutKey;
+        const isActive = Array.isArray(slot.mutations) && slot.mutations.includes(storedId);
+        if (isActive) continue;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = def.name || mutKey || "?";
+        Object.assign(btn.style, {
+          padding: "6px 8px",
+          borderRadius: "8px",
+          border: isActive ? "1px solid #55d38a" : "1px solid #2c3643",
+          background: isActive ? "rgba(85,211,138,0.22)" : "rgba(10,14,20,0.9)",
+          color: "#e7eef7",
+          fontSize: "11px",
+          fontWeight: "700",
+          cursor: "pointer",
+          textAlign: "left"
+        });
+        const color = mutationColorMap[storedId];
+        if (color) {
+          btn.style.color = color.startsWith("linear-gradient") ? "#e7eef7" : color;
+          if (color.startsWith("linear-gradient")) {
+            btn.style.backgroundImage = color;
+            btn.style.backgroundClip = "text";
+            btn.style.webkitBackgroundClip = "text";
+            btn.style.color = "transparent";
+            btn.style.webkitTextFillColor = "transparent";
+          }
+        }
+        btn.onclick = () => {
+          const has = Array.isArray(slot.mutations) && slot.mutations.includes(storedId);
+          const next = has ? (slot.mutations || []).filter((x) => x !== storedId) : [...slot.mutations || [], storedId];
+          applyMutationsPatch(next);
+        };
+        dropdown.appendChild(btn);
+      }
+      mutWrap.append(mutTitle, mutRow, dropdown);
+      renderMutations();
+      box.append(sizeRow, modeRow, sliderRow, customRow, mutWrap);
+      slotsList.appendChild(box);
+    });
+    const showSlotControls = maxSlots > 1;
+    if (showSlotControls) {
+      const slotHeader = document.createElement("div");
+      slotHeader.style.display = "flex";
+      slotHeader.style.alignItems = "center";
+      slotHeader.style.justifyContent = "space-between";
+      slotHeader.style.fontSize = "12px";
+      slotHeader.style.opacity = "0.9";
+      slotHeader.style.gap = "8px";
+      const slotCount = document.createElement("span");
+      slotCount.textContent = `Slots ${slots.length}/${maxSlots}`;
+      const slotBtnWrap = document.createElement("div");
+      slotBtnWrap.style.display = "flex";
+      slotBtnWrap.style.gap = "6px";
+      slotBtnWrap.style.alignItems = "center";
+      const makeCircleBtn = (text) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        Object.assign(b.style, {
+          width: "28px",
+          height: "28px",
+          borderRadius: "50%",
+          border: "1px solid #2b3441",
+          background: "rgba(16,21,28,0.9)",
+          color: "#e7eef7",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: "600",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center"
+        });
+        return b;
+      };
+      const btnAdd = makeCircleBtn("+");
+      const btnRemove = makeCircleBtn("-");
+      const updateSlotHeaderState = () => {
+        slotCount.textContent = `Slots ${slots.length}/${maxSlots}`;
+        btnAdd.disabled = slots.length >= maxSlots;
+        btnRemove.disabled = slots.length <= 1;
+        btnAdd.style.opacity = btnAdd.disabled ? "0.4" : "1";
+        btnRemove.style.opacity = btnRemove.disabled ? "0.4" : "1";
+      };
+      updateSlotHeaderState();
+      const makeDefaultSlot = () => ({
+        species,
+        startTime: FIXED_SLOT_START,
+        endTime: FIXED_SLOT_END,
+        targetScale: computeTargetScaleFromPercent(species, 100),
+        mutations: []
+      });
+      btnAdd.onclick = () => {
+        if (slots.length >= maxSlots) return;
+        void updateGardenObjectAtCurrentTile((obj) => {
+          if (obj?.objectType !== "plant") return obj;
+          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
+          if (nextSlots.length >= maxSlots) return obj;
+          nextSlots.push(makeDefaultSlot());
+          return { ...obj, slots: nextSlots };
+        }).then((ok) => {
+          if (ok) renderCurrentItemOverlay();
+        });
+      };
+      btnRemove.onclick = () => {
+        if (slots.length <= 1) return;
+        void updateGardenObjectAtCurrentTile((obj) => {
+          if (obj?.objectType !== "plant") return obj;
+          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice(0, Math.max(1, obj.slots.length - 1)) : [];
+          return { ...obj, slots: nextSlots };
+        }).then((ok) => {
+          if (ok) renderCurrentItemOverlay();
+        });
+      };
+      slotBtnWrap.append(btnRemove, btnAdd);
+      slotHeader.append(slotCount, slotBtnWrap);
+      content.appendChild(slotHeader);
+      content.appendChild(applyAllRow);
+    }
+    content.appendChild(slotsList);
+    const applyModeToAll = (mode, refScale, refPct) => {
+      slotsList.querySelectorAll("input[data-scale-mode-slot]").forEach((chk) => {
+        chk.checked = mode === "custom";
+        chk._currentMode = mode;
+      });
+      slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
+        s._currentMode = mode;
+        s.disabled = mode === "custom";
+        s.style.opacity = mode === "custom" ? "0.45" : "1";
+        if (mode === "percent") {
+          s.value = String(s._currentPct ?? refPct);
+        }
+      });
+      slotsList.querySelectorAll("[data-slider-row-slot]").forEach((row) => {
+        row.style.display = mode === "custom" ? "none" : "";
+        row._currentMode = mode;
+      });
+      slotsList.querySelectorAll("[data-custom-row-slot]").forEach((row) => {
+        row.style.display = mode === "custom" ? "flex" : "none";
+        row._currentMode = mode;
+      });
+      slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((inp) => {
+        if (mode === "custom") {
+          inp.value = String(inp._currentScale ?? refScale);
+        }
+      });
+      slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
+        const pctVal = lab._currentPct ?? refPct;
+        lab.textContent = mode === "custom" ? `${refScale.toFixed(2)}x` : `${pctVal}%`;
+      });
+      const map2 = currentItemSlotModes[modeKey] || {};
+      for (let i = 0; i < slots.length; i++) map2[i] = mode;
+      currentItemSlotModes[modeKey] = map2;
+    };
+  }
+  function renderSideList() {
+    if (!sideListWrap) return;
+    const applySelectionStyle = (btn, selected) => {
+      btn.style.border = "1px solid " + (selected ? "#4a6fa5" : "#2b3441");
+      btn.style.background = selected ? "rgba(74,111,165,0.18)" : "rgba(24,30,39,0.9)";
+      btn.style.fontWeight = selected ? "700" : "600";
+    };
+    const selectedId = getSelectedId();
+    const entries = getSideEntries();
+    const sig = `${currentSideMode}:${JSON.stringify(entries)}`;
+    const existingList = sideListWrap.querySelector('[data-editor-side-list="list"]');
+    if (existingList && existingList.dataset.sig === sig) {
+      existingList.querySelectorAll("button[data-id]").forEach((btn) => {
+        applySelectionStyle(btn, btn.dataset.id === selectedId);
+      });
+      return;
+    }
+    sideListWrap.innerHTML = "";
+    const list = document.createElement("div");
+    list.dataset.editorSideList = "list";
+    list.dataset.sig = sig;
+    list.style.display = "grid";
+    list.style.gap = "4px";
+    const makeItem = (key2, label2, selected) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.dataset.id = key2;
+      Object.assign(btn.style, {
+        width: "100%",
+        display: "grid",
+        gridTemplateColumns: "auto 1fr",
+        alignItems: "center",
+        gap: "8px",
+        padding: "8px",
+        borderRadius: "8px",
+        color: "#e7eef7",
+        cursor: "pointer"
+      });
+      applySelectionStyle(btn, selected);
+      const icon = createSelectionIcon(
+        getSideSpriteKind() === "Decor" ? "decor" : "plants",
+        label2,
+        26,
+        key2
+      );
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label2;
+      labelEl.style.textAlign = "left";
+      labelEl.style.overflow = "hidden";
+      labelEl.style.textOverflow = "ellipsis";
+      labelEl.style.whiteSpace = "nowrap";
+      btn.onclick = () => {
+        setSelectedId(key2);
+        renderSideList();
+        renderSideDetails();
+      };
+      btn.append(icon, labelEl);
+      return btn;
+    };
+    for (const it of entries) {
+      const isSelected = selectedId === it.id;
+      list.appendChild(makeItem(it.id, it.label, isSelected));
+    }
+    if (!list.childElementCount) {
+      const empty = document.createElement("div");
+      empty.style.opacity = "0.7";
+      empty.textContent = "No entries.";
+      sideListWrap.appendChild(empty);
+      return;
+    }
+    sideListWrap.appendChild(list);
+  }
+  function renderSideDetails() {
+    if (!sideRightWrap) return;
+    sideRightWrap.innerHTML = "";
+    const content = document.createElement("div");
+    content.style.display = "grid";
+    content.style.gap = "10px";
+    content.style.minHeight = "0";
+    content.style.overflow = "auto";
+    content.style.alignContent = "flex-start";
+    content.style.justifyItems = "center";
+    const actionBar = document.createElement("div");
+    actionBar.style.display = "grid";
+    actionBar.style.gap = "6px";
+    actionBar.style.justifyItems = "start";
+    actionBar.style.marginTop = "4px";
+    const selId = getSelectedId();
+    if (!selId) {
+      const empty = document.createElement("div");
+      empty.style.opacity = "0.7";
+      empty.style.textAlign = "center";
+      empty.textContent = "Select an item on the left.";
+      content.appendChild(empty);
+      sideRightWrap.append(content, actionBar);
+      return;
+    }
+    const entry = getSideEntry(selId);
+    const label2 = getSideEntryLabel(selId, entry);
+    const infoRow = document.createElement("div");
+    infoRow.style.display = "grid";
+    infoRow.style.gridTemplateColumns = "auto 1fr";
+    infoRow.style.alignItems = "center";
+    infoRow.style.gap = "10px";
+    infoRow.dataset.editorInfoRow = "true";
+    infoRow.dataset.selId = selId;
+    const existingInfo = sideRightWrap.querySelector("[data-editor-info-row]");
+    const existingIcon = existingInfo?.querySelector("[data-editor-info-icon]");
+    const existingLabel = existingInfo?.querySelector("[data-editor-info-label]");
+    const icon = existingIcon && existingInfo?.dataset.selId === selId ? existingIcon : (() => {
+      const el2 = createSelectionIcon(
+        getSideSpriteKind() === "Decor" ? "decor" : "plants",
+        label2,
+        48,
+        selId
+      );
+      el2.dataset.editorInfoIcon = "true";
+      return el2;
+    })();
+    const nameEl = existingLabel && existingInfo?.dataset.selId === selId ? existingLabel : (() => {
+      const el2 = document.createElement("div");
+      el2.dataset.editorInfoLabel = "true";
+      el2.style.fontWeight = "700";
+      el2.style.fontSize = "15px";
+      el2.style.whiteSpace = "nowrap";
+      el2.style.overflow = "hidden";
+      el2.style.textOverflow = "ellipsis";
+      return el2;
+    })();
+    nameEl.textContent = label2;
+    infoRow.append(icon, nameEl);
+    content.appendChild(infoRow);
+    if (currentSideMode === "plants") {
+      const maxSlots = getMaxSlotsForSpecies(selId);
+      const slotsState = ensureEditorStateForSpecies(selId);
+      const slotsConfig = slotsState.slots;
+      const applyAll = slotsState.applyAll;
+      const slotsPanel = document.createElement("div");
+      slotsPanel.style.display = "grid";
+      slotsPanel.style.gap = "6px";
+      slotsPanel.style.marginTop = "6px";
+      slotsPanel.style.width = "100%";
+      if (maxSlots > 1) {
+        const headerRow = document.createElement("div");
+        headerRow.style.display = "flex";
+        headerRow.style.justifyContent = "space-between";
+        headerRow.style.alignItems = "center";
+        headerRow.style.fontSize = "12px";
+        headerRow.style.opacity = "0.9";
+        const headerLabel = document.createElement("span");
+        headerLabel.textContent = "Slots";
+        const headerRight = document.createElement("div");
+        headerRight.style.display = "flex";
+        headerRight.style.gap = "6px";
+        headerRight.style.alignItems = "center";
+        const countLabel = document.createElement("span");
+        countLabel.textContent = `${slotsConfig.length}/${maxSlots}`;
+        const btnAdd = document.createElement("button");
+        btnAdd.type = "button";
+        btnAdd.textContent = "+";
+        Object.assign(btnAdd.style, {
+          width: "28px",
+          height: "28px",
+          borderRadius: "50%",
+          border: "1px solid #2b3441",
+          background: "rgba(16,21,28,0.9)",
+          color: "#e7eef7",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: "600"
+        });
+        btnAdd.onclick = () => {
+          const state3 = ensureEditorStateForSpecies(selId);
+          const current = state3.slots;
+          if (current.length >= maxSlots) return;
+          const defaultScale = computeTargetScaleFromPercent(selId, 100);
+          editorPlantSlotsState = {
+            ...state3,
+            species: selId,
+            slots: [
+              ...current,
+              {
+                enabled: true,
+                sizePercent: 100,
+                customScale: defaultScale,
+                sizeMode: "percent",
+                mutations: []
+              }
+            ]
+          };
+          renderSideDetails();
+        };
+        const btnRemove = document.createElement("button");
+        btnRemove.type = "button";
+        btnRemove.textContent = "-";
+        Object.assign(btnRemove.style, {
+          width: "28px",
+          height: "28px",
+          borderRadius: "50%",
+          border: "1px solid #2b3441",
+          background: "rgba(220,80,80,0.18)",
+          color: "#e7eef7",
+          cursor: "pointer",
+          fontSize: "14px",
+          fontWeight: "600"
+        });
+        btnRemove.onclick = () => {
+          const state3 = ensureEditorStateForSpecies(selId);
+          const current = state3.slots;
+          if (current.length <= 1) return;
+          editorPlantSlotsState = {
+            ...state3,
+            species: selId,
+            slots: current.slice(0, current.length - 1)
+          };
+          renderSideDetails();
+        };
+        headerRight.append(countLabel, btnRemove, btnAdd);
+        headerRow.append(headerLabel, headerRight);
+        slotsPanel.appendChild(headerRow);
+      }
+      if (maxSlots > 1) {
+        const applyAllRow = document.createElement("label");
+        applyAllRow.style.display = "flex";
+        applyAllRow.style.alignItems = "center";
+        applyAllRow.style.gap = "6px";
+        applyAllRow.style.fontSize = "12px";
+        applyAllRow.style.opacity = "0.9";
+        const applyToggle = document.createElement("input");
+        applyToggle.type = "checkbox";
+        applyToggle.checked = applyAll;
+        applyToggle.onchange = () => {
+          editorPlantSlotsState.applyAll = applyToggle.checked;
+          renderSideDetails();
+        };
+        const applyLabel = document.createElement("span");
+        applyLabel.textContent = "Edit all slots together";
+        applyAllRow.append(applyToggle, applyLabel);
+        slotsPanel.appendChild(applyAllRow);
+      }
+      const list = document.createElement("div");
+      list.style.display = "grid";
+      list.style.gap = "6px";
+      slotsConfig.forEach((cfg, idx) => {
+        const slotBox = document.createElement("div");
+        Object.assign(slotBox.style, {
+          border: "1px solid #2c3643",
+          borderRadius: "8px",
+          padding: "8px",
+          background: "rgba(10,14,20,0.9)",
+          display: "grid",
+          gap: "6px"
+        });
+        const initialPct = clampSizePercent(Number.isFinite(cfg.sizePercent) ? cfg.sizePercent : 100);
+        const baseScaleFromPct = computeTargetScaleFromPercent(selId, initialPct);
+        const initialCustomScale = normalizeCustomScale(
+          selId,
+          Number.isFinite(cfg.customScale) ? cfg.customScale : baseScaleFromPct
+        );
+        let currentMode = cfg.sizeMode === "custom" ? "custom" : "percent";
+        let currentPct = initialPct;
+        let currentScale = currentMode === "custom" ? initialCustomScale : baseScaleFromPct;
+        let percentMemory = currentPct;
+        let customText = String(currentScale);
+        const sizeRow = document.createElement("div");
+        sizeRow.style.display = "flex";
+        sizeRow.style.justifyContent = "space-between";
+        sizeRow.style.alignItems = "center";
+        sizeRow.style.fontSize = "11px";
+        sizeRow.style.opacity = "0.85";
+        const sizeName = document.createElement("span");
+        sizeName.textContent = "Size";
+        const sizeValue = document.createElement("span");
+        sizeValue.dataset.sizeLabel = String(idx);
+        sizeRow.append(sizeName, sizeValue);
+        const modeRow = document.createElement("label");
+        modeRow.style.display = "flex";
+        modeRow.style.alignItems = "center";
+        modeRow.style.gap = "6px";
+        modeRow.style.fontSize = "11px";
+        modeRow.style.opacity = "0.9";
+        const modeToggle = document.createElement("input");
+        modeToggle.type = "checkbox";
+        modeToggle.dataset.scaleMode = String(idx);
+        modeToggle.checked = currentMode === "custom";
+        const modeText = document.createElement("span");
+        modeText.textContent = "Use custom scale";
+        modeRow.append(modeToggle, modeText);
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = "50";
+        slider.max = "100";
+        slider.step = "1";
+        slider.value = String(currentPct);
+        slider.dataset.slotIdx = String(idx);
+        Object.assign(slider.style, {
+          width: "100%",
+          cursor: "pointer"
+        });
+        const customRow = document.createElement("div");
+        customRow.style.display = "flex";
+        customRow.style.alignItems = "center";
+        customRow.style.gap = "6px";
+        customRow.style.fontSize = "11px";
+        customRow.style.opacity = "0.9";
+        customRow.dataset.customRow = String(idx);
+        const customLabel = document.createElement("span");
+        customLabel.textContent = "Custom scale";
+        const customInput = document.createElement("input");
+        customInput.type = "text";
+        customInput.inputMode = "decimal";
+        customInput.autocomplete = "off";
+        customInput.value = customText;
+        customInput.dataset.scaleInput = String(idx);
+        Object.assign(customInput.style, {
+          width: "90px",
+          padding: "4px 6px",
+          borderRadius: "6px",
+          border: "1px solid #2c3643",
+          background: "rgba(10,14,20,0.9)",
+          color: "#e7eef7"
+        });
+        customRow.append(customLabel, customInput);
+        const installGameKeyBlocker = (inp) => {
+          const stop2 = (ev) => {
+            ev.stopImmediatePropagation?.();
+            ev.stopPropagation();
+          };
+          const attach = () => {
+            window.addEventListener("keydown", stop2, true);
+            window.addEventListener("keyup", stop2, true);
+          };
+          const detach = () => {
+            window.removeEventListener("keydown", stop2, true);
+            window.removeEventListener("keyup", stop2, true);
+          };
+          inp.addEventListener("focus", attach);
+          inp.addEventListener("blur", detach);
+          inp.addEventListener("keydown", stop2);
+        };
+        installGameKeyBlocker(customInput);
+        const formatScaleLabel = (val) => `${val.toFixed(2)}x`;
+        const formatScaleInput = (val) => val.toFixed(2);
+        const parseInputNumber = (el2) => {
+          const raw = el2.value;
+          if (raw === "" || raw == null) return null;
+          const normalized = raw.replace(",", ".").replace(/\s+/g, "");
+          const n = Number(normalized);
+          return Number.isFinite(n) ? n : null;
+        };
+        const installCharGuard = (inp) => {
+          const allowed = /* @__PURE__ */ new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "."]);
+          inp.addEventListener("keydown", (ev) => {
+            if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+            const k = ev.key;
+            if (k === "Backspace" || k === "Delete" || k === "Tab" || k === "Enter" || k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown" || k === "Home" || k === "End") {
+              return;
+            }
+            if (k.length === 1 && !allowed.has(k)) {
+              ev.preventDefault();
+            }
+          });
+          inp.addEventListener("input", () => {
+            const cleaned = inp.value.replace(/[^0-9.-]/g, "");
+            if (cleaned !== inp.value) {
+              inp.value = cleaned;
+            }
+            customText = inp.value;
+          });
+        };
+        installCharGuard(customInput);
+        const syncValueLabel = () => {
+          sizeValue.textContent = currentMode === "custom" ? formatScaleLabel(currentScale) : `${currentPct}%`;
+        };
+        const syncControlState = () => {
+          const showPercentMode = currentMode !== "custom";
+          slider.disabled = currentMode === "custom";
+          slider.style.opacity = currentMode === "custom" ? "0.45" : "1";
+          customInput.disabled = currentMode !== "custom";
+          customInput.style.opacity = currentMode === "custom" ? "1" : "0.5";
+          slider.style.display = showPercentMode ? "" : "none";
+          customRow.style.display = showPercentMode ? "none" : "flex";
+        };
+        const syncApplyAll = () => {
+          if (!applyAll || !sideRightWrap) return;
+          const showPercentMode = currentMode !== "custom";
+          sideRightWrap.querySelectorAll("input[data-slot-idx]").forEach((s) => {
+            s.value = String(currentPct);
+            s.disabled = currentMode === "custom";
+            s.style.opacity = currentMode === "custom" ? "0.45" : "1";
+            s.style.display = showPercentMode ? "" : "none";
+          });
+          sideRightWrap.querySelectorAll("input[data-scale-input]").forEach((inp) => {
+            if (currentMode === "custom") {
+              inp.value = customText;
+            } else {
+              inp.value = formatScaleInput(currentScale);
+            }
+            inp.disabled = currentMode !== "custom";
+            inp.style.opacity = currentMode === "custom" ? "1" : "0.5";
+          });
+          sideRightWrap.querySelectorAll("input[data-scale-mode]").forEach((chk) => {
+            chk.checked = currentMode === "custom";
+          });
+          sideRightWrap.querySelectorAll("[data-size-label]").forEach((lab) => {
+            lab.textContent = currentMode === "custom" ? formatScaleLabel(currentScale) : `${currentPct}%`;
+          });
+          sideRightWrap.querySelectorAll("[data-scale-row]").forEach((row) => {
+            row.remove();
+          });
+          sideRightWrap.querySelectorAll("[data-custom-row]").forEach((row) => {
+            row.style.display = showPercentMode ? "none" : "flex";
+          });
+        };
+        const applySlotPatch = (patch) => {
+          const base = ensureEditorStateForSpecies(selId).slots;
+          editorPlantSlotsState = {
+            ...editorPlantSlotsState,
+            species: selId,
+            slots: base.map((c, i) => {
+              if (!applyAll && i !== idx) return c;
+              return { ...c, sizeMode: currentMode, ...patch };
+            })
+          };
+        };
+        const updatePercent = (nextPct) => {
+          const pct = clampSizePercent(nextPct);
+          currentPct = pct;
+          percentMemory = pct;
+          slider.value = String(pct);
+          if (currentMode !== "custom") {
+            currentScale = computeTargetScaleFromPercent(selId, pct);
+          }
+          applySlotPatch({
+            sizePercent: pct,
+            ...currentMode !== "custom" ? { customScale: currentScale } : {}
+          });
+          syncValueLabel();
+          syncApplyAll();
+        };
+        const updateCustomScale = (nextScale, rawText) => {
+          const normalized = normalizeCustomScale(selId, nextScale);
+          currentScale = normalized;
+          if (typeof rawText === "string") customText = rawText;
+          else customText = customInput.value;
+          applySlotPatch({ customScale: normalized });
+          syncValueLabel();
+          syncApplyAll();
+        };
+        slider.oninput = () => {
+          updatePercent(Number(slider.value));
+        };
+        customInput.oninput = () => {
+          const raw = customInput.value;
+          customText = raw;
+          const n = parseInputNumber(customInput);
+          if (n == null) return;
+          updateCustomScale(n, raw);
+        };
+        modeToggle.onchange = () => {
+          currentMode = modeToggle.checked ? "custom" : "percent";
+          if (currentMode === "custom") {
+            percentMemory = currentPct;
+            currentScale = normalizeCustomScale(selId, currentScale || computeTargetScaleFromPercent(selId, currentPct));
+            customText = customInput.value || String(currentScale);
+            applySlotPatch({ customScale: currentScale });
+          } else {
+            const restoredPct = clampSizePercent(percentMemory);
+            currentPct = restoredPct;
+            slider.value = String(restoredPct);
+            applySlotPatch({ sizePercent: restoredPct });
+          }
+          syncControlState();
+          syncValueLabel();
+          syncApplyAll();
+        };
+        syncControlState();
+        syncValueLabel();
+        const mutWrap = document.createElement("div");
+        mutWrap.style.display = "grid";
+        mutWrap.style.gap = "6px";
+        const mutTitle = document.createElement("div");
+        mutTitle.textContent = "Mutations";
+        mutTitle.style.fontSize = "11px";
+        mutTitle.style.opacity = "0.85";
+        const toggleMutBtn = document.createElement("button");
+        toggleMutBtn.type = "button";
+        toggleMutBtn.textContent = "+";
+        Object.assign(toggleMutBtn.style, {
+          width: "28px",
+          height: "28px",
+          borderRadius: "50%",
+          border: "1px solid #2c3643",
+          background: "rgba(10,14,20,0.9)",
+          color: "#e7eef7",
+          fontWeight: "900",
+          fontSize: "16px",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center"
+        });
+        const activeRow = document.createElement("div");
+        activeRow.style.display = "flex";
+        activeRow.style.flexWrap = "wrap";
+        activeRow.style.gap = "6px";
+        activeRow.style.alignItems = "center";
+        const mutDropdown = document.createElement("div");
+        mutDropdown.style.display = "none";
+        mutDropdown.style.gridTemplateColumns = "repeat(auto-fill, minmax(90px, 1fr))";
+        mutDropdown.style.gap = "6px";
+        mutDropdown.style.padding = "6px";
+        mutDropdown.style.border = "1px solid #2c3643";
+        mutDropdown.style.borderRadius = "8px";
+        mutDropdown.style.background = "rgba(8,12,18,0.9)";
+        const mutationKeys = Object.keys(mutationCatalog || {});
+        const renderActiveTags = () => {
+          activeRow.innerHTML = "";
+          const active = Array.isArray(cfg.mutations) ? cfg.mutations : [];
+          const allKeys = mutationKeys.map((k) => k === "Amberlit" ? "Ambershine" : k);
+          const allSelected = allKeys.every((k) => active.includes(k));
+          const styleLetter = (target, mutId) => {
+            const color = mutationColorMap[mutId];
+            if (!color) return;
+            if (color.startsWith("linear-gradient")) {
+              target.style.backgroundImage = color;
+              target.style.backgroundClip = "text";
+              target.style.webkitBackgroundClip = "text";
+              target.style.color = "transparent";
+              target.style.webkitTextFillColor = "transparent";
+            } else {
+              target.style.color = color;
+            }
+          };
+          const getLetter = (mutId) => {
+            const def = mutationCatalog[mutId] || {};
+            const src = def.name || mutId || "?";
+            return String(src).charAt(0).toUpperCase();
+          };
+          for (const mutId of active) {
+            const tag = document.createElement("span");
+            Object.assign(tag.style, {
+              borderRadius: "999px",
+              padding: "3px 8px",
+              fontSize: "11px",
+              fontWeight: "700",
+              border: "1px solid #2c3643",
+              background: "rgba(10,14,20,0.9)",
+              cursor: "pointer"
+            });
+            const letterSpan = document.createElement("span");
+            letterSpan.textContent = getLetter(mutId);
+            letterSpan.style.fontWeight = "900";
+            styleLetter(letterSpan, mutId);
+            tag.title = "Remove mutation";
+            tag.onclick = () => {
+              const base = ensureEditorStateForSpecies(selId).slots;
+              editorPlantSlotsState = {
+                ...editorPlantSlotsState,
+                species: selId,
+                slots: applyAll ? base.map((c) => {
+                  const prev = Array.isArray(c.mutations) ? c.mutations : [];
+                  const next = prev.filter((m) => m !== mutId);
+                  return { ...c, mutations: next };
+                }) : base.map((c, i) => {
+                  if (i !== idx) return c;
+                  const prev = Array.isArray(c.mutations) ? c.mutations : [];
+                  const next = prev.filter((m) => m !== mutId);
+                  return { ...c, mutations: next };
+                })
+              };
+              renderSideDetails();
+            };
+            tag.appendChild(letterSpan);
+            activeRow.appendChild(tag);
+          }
+          if (!allSelected) {
+            activeRow.appendChild(toggleMutBtn);
+          }
+        };
+        const setDropdownOpen = (open) => {
+          mutDropdown.style.display = open ? "grid" : "none";
+          toggleMutBtn.style.background = open ? "rgba(32,42,56,0.8)" : "rgba(10,14,20,0.9)";
+        };
+        toggleMutBtn.onclick = () => {
+          const isOpen = mutDropdown.style.display !== "none";
+          setDropdownOpen(!isOpen);
+        };
+        for (const mutKey of mutationKeys) {
+          const def = mutationCatalog[mutKey] || {};
+          const storedId = mutKey === "Amberlit" ? "Ambershine" : mutKey;
+          const isActive = Array.isArray(cfg.mutations) && cfg.mutations.includes(storedId);
+          if (isActive) continue;
+          const btn2 = document.createElement("button");
+          btn2.type = "button";
+          btn2.textContent = def.name || mutKey || "?";
+          Object.assign(btn2.style, {
+            padding: "6px 8px",
+            borderRadius: "8px",
+            border: isActive ? "1px solid #55d38a" : "1px solid #2c3643",
+            background: isActive ? "rgba(85,211,138,0.22)" : "rgba(10,14,20,0.9)",
+            color: "#e7eef7",
+            fontSize: "11px",
+            fontWeight: "700",
+            cursor: "pointer",
+            textAlign: "left"
+          });
+          const color = mutationColorMap[storedId];
+          if (color) {
+            btn2.style.color = color.startsWith("linear-gradient") ? "#e7eef7" : color;
+            if (color.startsWith("linear-gradient")) {
+              btn2.style.backgroundImage = color;
+              btn2.style.backgroundClip = "text";
+              btn2.style.webkitBackgroundClip = "text";
+              btn2.style.color = "transparent";
+              btn2.style.webkitTextFillColor = "transparent";
+            }
+          }
+          btn2.onclick = () => {
+            const base = ensureEditorStateForSpecies(selId).slots;
+            editorPlantSlotsState = {
+              ...editorPlantSlotsState,
+              species: selId,
+              slots: applyAll ? base.map((c) => {
+                const prev = Array.isArray(c.mutations) ? c.mutations : [];
+                const has = prev.includes(storedId);
+                const next = has ? prev.filter((x) => x !== storedId) : [...prev, storedId];
+                return { ...c, mutations: next };
+              }) : base.map((c, i) => {
+                if (i !== idx) return c;
+                const prev = Array.isArray(c.mutations) ? c.mutations : [];
+                const has = prev.includes(storedId);
+                const next = has ? prev.filter((x) => x !== storedId) : [...prev, storedId];
+                return { ...c, mutations: next };
+              })
+            };
+            renderSideDetails();
+          };
+          mutDropdown.appendChild(btn2);
+        }
+        mutWrap.append(mutTitle, activeRow, mutDropdown);
+        renderActiveTags();
+        setDropdownOpen(false);
+        slotBox.append(sizeRow, modeRow, slider, customRow, mutWrap);
+        list.appendChild(slotBox);
+      });
+      slotsPanel.appendChild(list);
+      content.appendChild(slotsPanel);
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Add to inventory";
+    Object.assign(btn.style, {
+      width: "100%",
+      padding: "8px 10px",
+      borderRadius: "8px",
+      border: "1px solid #2b3441",
+      background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
+      color: "#e7eef7",
+      fontWeight: "700",
+      cursor: "pointer"
+    });
+    btn.onclick = () => {
+      console.log("[EditorService] addSelectedItemToInventory click", {
+        mode: currentSideMode,
+        id: selId
+      });
+      void addSelectedItemToInventory();
+    };
+    actionBar.appendChild(btn);
+    sideRightWrap.append(content, actionBar);
+  }
+  function compareSlotKeys(a, b) {
+    const ai = Number(a);
+    const bi = Number(b);
+    if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+    return a.localeCompare(b);
+  }
+  function findPlayerSlot(slots, playerId2, opts = {}) {
+    if (!slots || typeof slots !== "object") return null;
+    const isMatch = (slot) => slot && String(slot.playerId || slot.id || "") === String(playerId2);
+    if (Array.isArray(slots)) {
+      const arr = slots;
+      for (let i = 0; i < arr.length; i++) {
+        if (isMatch(arr[i])) {
+          return { isArray: true, matchSlot: arr[i], matchIndex: i, entries: null, slotsArray: arr };
+        }
+      }
+      return null;
+    }
+    const entries = Object.entries(slots);
+    if (opts.sortObject) entries.sort(([a], [b]) => compareSlotKeys(a, b));
+    for (let i = 0; i < entries.length; i++) {
+      const [, s] = entries[i];
+      if (isMatch(s)) {
+        return { isArray: false, matchSlot: s, matchIndex: i, entries, slotsArray: null };
+      }
+    }
+    return null;
+  }
+  function slotMatchToIndex(meta) {
+    if (meta.isArray) return meta.matchIndex;
+    const entry = meta.entries?.[meta.matchIndex];
+    const k = entry ? entry[0] : null;
+    const n = Number(k);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function rebuildUserSlots(meta, buildSlot) {
+    if (meta.isArray) {
+      const nextSlots = (meta.slotsArray || []).slice();
+      nextSlots[meta.matchIndex] = buildSlot(meta.matchSlot);
+      return nextSlots;
+    }
+    const nextEntries = (meta.entries || []).map(
+      ([k, s], idx) => idx === meta.matchIndex ? [k, buildSlot(s)] : [k, s]
+    );
+    return Object.fromEntries(nextEntries);
+  }
+  function buildStateWithUserSlots(cur, userSlots) {
+    return {
+      ...cur || {},
+      child: {
+        ...cur?.child || {},
+        data: {
+          ...cur?.child?.data || {},
+          userSlots
+        }
+      }
+    };
+  }
+  async function withPatchedWrite(patch, op) {
+    if (!patch) {
+      await op();
+      return;
+    }
+    const { atom, readKey, origRead, writeKey, origWrite } = patch;
+    const savedRead = atom[readKey];
+    const savedWrite = writeKey ? atom[writeKey] : void 0;
+    try {
+      atom[readKey] = origRead;
+      if (writeKey && origWrite) atom[writeKey] = origWrite;
+      await op();
+    } finally {
+      atom[readKey] = savedRead;
+      if (writeKey) atom[writeKey] = savedWrite;
+    }
+  }
+  async function setStateAtom(next) {
+    console.log("[EditorService] setStateAtom attempt", {
+      hasPatch: !!statePatch
+    });
+    await withPatchedWrite(statePatch, async () => {
+      try {
+        await Atoms.root.state.set(next);
+        console.log("[EditorService] setStateAtom success");
+      } catch (err) {
+        console.log("[EditorService] setStateAtom failed", err);
+        throw err;
+      }
+    });
+  }
+  async function addSelectedItemToInventory() {
+    const selId = getSelectedId();
+    if (!selId) return;
+    if (currentSideMode === "decor") {
+      console.log("[EditorService] addSelectedItemToInventory decor", selId);
+      await addDecorToInventory(selId);
+    } else {
+      console.log("[EditorService] addSelectedItemToInventory plant", selId);
+      await addPlantToInventory(selId);
+    }
+  }
+  async function removeSelectedInventoryItem() {
+    try {
+      const pid = await getPlayerId();
+      if (!pid) return false;
+      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+      const inventoryVal = await Atoms.inventory.myInventory.get();
+      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items.slice() : [];
+      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
+        return false;
+      }
+      items.splice(selectedIndex, 1);
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) return false;
+      const slotData = slotMatch.matchSlot?.data || {};
+      const slotInv = slotData.inventory || {};
+      const favorited = Array.isArray(slotInv.favoritedItemIds) ? slotInv.favoritedItemIds.filter((id) => items.some((it) => it?.id === id)) : void 0;
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const data = slot?.data || {};
+        return {
+          ...slot || {},
+          data: {
+            ...data,
+            inventory: {
+              ...slotInv || {},
+              items,
+              ...favorited ? { favoritedItemIds: favorited } : {}
+            }
+          }
+        };
+      });
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      const newIdx = Math.max(0, Math.min(items.length - 1, selectedIndex));
+      try {
+        await Atoms.inventory.myValidatedSelectedItemIndex.set(newIdx);
+      } catch {
+      }
+      return true;
+    } catch (err) {
+      console.log("[EditorService] removeSelectedInventoryItem failed", err);
+      return false;
+    }
+  }
+  async function addTileObjectToInventory(tileObject) {
+    try {
+      const pid = await getPlayerId();
+      if (!pid || !tileObject) return false;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) return false;
+      const slotData = slotMatch.matchSlot?.data || {};
+      const inv = slotData.inventory;
+      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
+      if (tileObject.objectType === "plant") {
+        const plantItem = {
+          itemType: "Plant",
+          species: tileObject.species,
+          id: tileObject.id,
+          slots: Array.isArray(tileObject.slots) ? JSON.parse(JSON.stringify(tileObject.slots)) : [],
+          plantedAt: tileObject.plantedAt,
+          maturedAt: tileObject.maturedAt
+        };
+        items.push(plantItem);
+      } else if (tileObject.objectType === "decor") {
+        items.push({
+          itemType: "Decor",
+          decorId: tileObject.decorId,
+          quantity: 1,
+          rotation: typeof tileObject.rotation === "number" ? tileObject.rotation : 0
+        });
+      } else {
+        return false;
+      }
+      const slotInv = slotData.inventory || {};
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const data = slot?.data || {};
+        return {
+          ...slot || {},
+          data: {
+            ...data,
+            inventory: { ...slotInv || {}, items }
+          }
+        };
+      });
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      try {
+        await Atoms.inventory.myValidatedSelectedItemIndex.set(items.length - 1);
+      } catch {
+      }
+      return true;
+    } catch (err) {
+      console.log("[EditorService] addTileObjectToInventory failed", err);
+      return false;
+    }
+  }
+  async function addDecorToInventory(decorId) {
+    try {
+      console.log("[EditorService] addDecorToInventory", decorId);
+      const pid = await getPlayerId();
+      if (!pid) {
+        console.log("[EditorService] addDecorToInventory: no playerId");
+        return;
+      }
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      if (!slots || typeof slots !== "object") {
+        console.log("[EditorService] addDecorToInventory: no userSlots");
+        return;
+      }
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) {
+        console.log("[EditorService] addDecorToInventory: player slot not found");
+        return;
+      }
+      const slotData = slotMatch.matchSlot.data || {};
+      const inv = slotData.inventory;
+      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
+      console.log("[EditorService] decor before add", { itemsLen: items.length });
+      items.push({
+        itemType: "Decor",
+        decorId,
+        quantity: 1
+      });
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const slotDataInner = slot?.data || {};
+        const slotInv = slotDataInner.inventory;
+        return {
+          ...slot || {},
+          data: {
+            ...slotDataInner,
+            inventory: { ...slotInv || {}, items }
+          }
+        };
+      });
+      const next = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = next;
+      stateOriginalValue = next;
+      try {
+        await setStateAtom(next);
+      } catch (err) {
+        console.log("[EditorService] stateAtom set failed (decor)", err);
+      }
+      console.log("[EditorService] decor after add", { itemsLen: items.length });
+      console.log("[EditorService] decor added", { decorId });
+    } catch (err) {
+      console.log("[EditorService] failed to add decor", err);
+    }
+  }
+  async function addPlantToInventory(species) {
+    try {
+      console.log("[EditorService] addPlantToInventory", species);
+      const pid = await getPlayerId();
+      if (!pid) {
+        console.log("[EditorService] addPlantToInventory: no playerId");
+        return;
+      }
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      if (!slots || typeof slots !== "object") {
+        console.log("[EditorService] addPlantToInventory: no userSlots");
+        return;
+      }
+      const slotMatch = findPlayerSlot(slots, pid);
+      if (!slotMatch) {
+        console.log("[EditorService] addPlantToInventory: player slot not found");
+        return;
+      }
+      const slotData = slotMatch.matchSlot.data || {};
+      const inv = slotData.inventory;
+      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
+      const entry = plantCatalog?.[species] ?? {};
+      const plantDef = entry?.plant ?? {};
+      const isMultipleHarvest = plantDef?.harvestType === "Multiple";
+      console.log("[EditorService] plant before add", { itemsLen: items.length, isMultipleHarvest });
+      const maxSlots = getMaxSlotsForSpecies(species);
+      const slotsConfig = editorPlantSlotsState.species === species ? editorPlantSlotsState.slots.slice(0, maxSlots) : ensureEditorSlotsForSpecies(species).slice(0, maxSlots);
+      const slotsArr = [];
+      for (const cfg of slotsConfig) {
+        if (!cfg.enabled) continue;
+        const targetScale = resolveSlotTargetScale(species, cfg);
+        const mutations = Array.isArray(cfg.mutations) ? cfg.mutations.slice() : [];
+        slotsArr.push({
+          species,
+          startTime: 1760866288723,
+          endTime: 1760867858782,
+          targetScale,
+          mutations
+        });
+      }
+      const slotCount = slotsArr.length;
+      const newItem = {
+        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `plant-${Math.random().toString(16).slice(2)}`,
+        itemType: "Plant",
+        species,
+        slots: slotsArr,
+        plantedAt: 1760779438723,
+        maturedAt: 1760865838723
+      };
+      if (!isMultipleHarvest) {
+        newItem.name = entry?.crop?.name ?? plantDef?.name ?? species;
+      }
+      items.push(newItem);
+      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
+        const slotDataInner = slot?.data || {};
+        const slotInv = slotDataInner.inventory;
+        return {
+          ...slot || {},
+          data: {
+            ...slotDataInner,
+            inventory: { ...slotInv || {}, items }
+          }
+        };
+      });
+      const next = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = next;
+      stateOriginalValue = next;
+      try {
+        await setStateAtom(next);
+      } catch (err) {
+        console.log("[EditorService] stateAtom set failed (plant)", err);
+      }
+      console.log("[EditorService] plant after add", { itemsLen: items.length + 1 });
+      console.log("[EditorService] plant added", {
+        species,
+        isMultipleHarvest,
+        slotCount
+      });
+    } catch (err) {
+      console.log("[EditorService] failed to add plant", err);
+    }
+  }
+  function notify(enabled) {
+    listeners3.forEach((cb) => {
+      try {
+        cb(enabled);
+      } catch {
+      }
+    });
+  }
+  function applyState(enabled, opts = {}) {
+    const next = !!enabled;
+    const changed = next !== currentEnabled;
+    if (next && overlaysVisible) showOverlay();
+    else hideOverlay();
+    if (next && overlaysVisible) showSideOverlay();
+    else hideSideOverlay();
+    if (next && overlaysVisible) showCurrentItemOverlay();
+    else hideCurrentItemOverlay();
+    if (next && !currentEnabled) {
+      void logGardenTilesForEditor();
+      void snapshotAndClearGardenForEditor();
+      void freezeStateAtom();
+    } else if (!next && currentEnabled) {
+      void restoreGardenSnapshotForEditor();
+      void unfreezeStateAtom();
+    }
+    currentEnabled = next;
+    if (opts.persist !== false) persist(next);
+    if (changed && opts.emit !== false) notify(next);
+  }
+  var EditorService = {
+    init() {
+      installEditorKeybindsOnce();
+      applyState(currentEnabled, { persist: false, emit: false });
+    },
+    isEnabled() {
+      return currentEnabled;
+    },
+    setEnabled(enabled) {
+      applyState(enabled, { persist: true, emit: true });
+    },
+    onChange(listener) {
+      listeners3.add(listener);
+      return () => listeners3.delete(listener);
+    },
+    onSavedGardensChange(listener) {
+      savedGardensListeners.add(listener);
+      return () => savedGardensListeners.delete(listener);
+    }
+  };
+  var EMPTY_GARDEN = { tileObjects: {}, boardwalkTileObjects: {} };
+  function isGardenEmpty(val) {
+    const tiles = val?.tileObjects;
+    const boards = val?.boardwalkTileObjects;
+    const isEmptyObj = (o) => o && typeof o === "object" && Object.keys(o).length === 0;
+    return isEmptyObj(tiles) && isEmptyObj(boards);
+  }
+  function makeEmptyGarden() {
+    return { ...EMPTY_GARDEN };
+  }
+  function sanitizeGarden(val) {
+    const tileObjects = val && typeof val === "object" && typeof val.tileObjects === "object" ? val.tileObjects : {};
+    const boardwalkTileObjects = val && typeof val === "object" && typeof val.boardwalkTileObjects === "object" ? val.boardwalkTileObjects : {};
+    return {
+      tileObjects: { ...tileObjects },
+      boardwalkTileObjects: { ...boardwalkTileObjects }
+    };
+  }
+  function readSavedGardens() {
+    try {
+      const parsed = readAriesPath(ARIES_SAVED_GARDENS_PATH);
+      const arr = Array.isArray(parsed) ? parsed : [];
+      return arr.map((g) => ({
+        id: String(g?.id || ""),
+        name: String(g?.name || "Untitled"),
+        createdAt: Number(g?.createdAt) || Date.now(),
+        garden: sanitizeGarden(g?.garden || {})
+      })).filter((g) => !!g.id);
+    } catch {
+      return [];
+    }
+  }
+  function writeSavedGardens(list) {
+    try {
+      writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
+    } catch {
+      return;
+    }
+    notifySavedGardensChanged();
+  }
+  async function getGardenForPlayer(playerId2) {
+    try {
+      if (!playerId2) return null;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, playerId2, { sortObject: true });
+      if (!slotMatch || !slotMatch.matchSlot) return null;
+      const g = slotMatch.matchSlot?.data?.garden;
+      return sanitizeGarden(g || {});
+    } catch {
+      return null;
+    }
+  }
+  async function setCurrentGarden(nextGarden) {
+    try {
+      const pid = await getPlayerId();
+      if (!pid) return false;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+      if (!slotMatch || !slotMatch.matchSlot) return false;
+      const userSlotIdx = slotMatchToIndex(slotMatch);
+      const updatedSlot = {
+        ...slotMatch.matchSlot,
+        data: {
+          ...slotMatch.matchSlot?.data || {},
+          garden: sanitizeGarden(nextGarden)
+        }
+      };
+      const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      try {
+        await applyGardenToTos(nextGarden, userSlotIdx);
+      } catch {
+      }
+      return true;
+    } catch (err) {
+      console.log("[EditorService] setCurrentGarden failed", err);
+      return false;
+    }
+  }
+  async function applyFriendGardenPreview(garden2) {
+    if (!garden2 || typeof garden2 !== "object") return false;
+    try {
+      const pid = await getPlayerId();
+      if (!pid) return false;
+      const cur = await Atoms.root.state.get().catch(() => null);
+      if (!cur) return false;
+      const slots = cur?.child?.data?.userSlots;
+      const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+      if (!slotMatch || !slotMatch.matchSlot) return false;
+      const userSlotIdx = slotMatchToIndex(slotMatch);
+      const prevGarden = slotMatch.matchSlot?.data?.garden ? sanitizeGarden(slotMatch.matchSlot.data.garden) : makeEmptyGarden();
+      friendGardenBackup = { garden: prevGarden, userSlotIdx };
+      const updatedSlot = {
+        ...slotMatch.matchSlot,
+        data: {
+          ...slotMatch.matchSlot?.data || {},
+          garden: sanitizeGarden(garden2)
+        }
+      };
+      const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      await setStateAtom(nextState);
+      try {
+        await applyGardenToTos(garden2, userSlotIdx);
+      } catch {
+      }
+      friendGardenPreviewActive = true;
+      return true;
+    } catch (error) {
+      console.error("[EditorService] applyFriendGardenPreview failed", error);
+      friendGardenPreviewActive = false;
+      return false;
+    }
+  }
+  async function clearFriendGardenPreview() {
+    if (!friendGardenPreviewActive) return false;
+    friendGardenPreviewActive = false;
+    try {
+      const backup = friendGardenBackup;
+      friendGardenBackup = null;
+      if (backup) {
+        const pid = await getPlayerId();
+        if (pid) {
+          const cur = await Atoms.root.state.get().catch(() => null);
+          const slots = cur?.child?.data?.userSlots;
+          const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
+          if (slotMatch && slotMatch.matchSlot) {
+            const updatedSlot = {
+              ...slotMatch.matchSlot,
+              data: {
+                ...slotMatch.matchSlot?.data || {},
+                garden: sanitizeGarden(backup.garden)
+              }
+            };
+            const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+            const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+            await setStateAtom(nextState);
+            try {
+              await applyGardenToTos(backup.garden, backup.userSlotIdx);
+            } catch {
+            }
+          }
+        }
+      }
+      return true;
+    } catch (error) {
+      console.error("[EditorService] clearFriendGardenPreview failed", error);
+      return false;
+    }
+  }
+  function listSavedGardens() {
+    return readSavedGardens();
+  }
+  async function saveCurrentGarden(name, playerId2) {
+    const pid = playerId2 || await getPlayerId();
+    if (!pid) return null;
+    const garden2 = await getGardenForPlayer(pid);
+    if (!garden2) return null;
+    const now2 = Date.now();
+    const all = readSavedGardens();
+    const baseName = name?.trim() || "Untitled";
+    const makeUniqueName = (base, existing) => {
+      let idx = 1;
+      let candidate = base;
+      const set2 = new Set(existing);
+      while (set2.has(candidate)) {
+        candidate = `${base} (${idx})`;
+        idx += 1;
+      }
+      return candidate;
+    };
+    const existingIdx = all.findIndex((g) => g.name === baseName);
+    let finalName = baseName;
+    let reuseId = null;
+    if (existingIdx >= 0) {
+      const canConfirm = typeof window !== "undefined" && typeof window.confirm === "function";
+      const overwrite = canConfirm ? window.confirm(`A garden named "${baseName}" already exists. Overwrite it?`) : false;
+      if (overwrite) {
+        reuseId = all[existingIdx]?.id || null;
+      } else {
+        finalName = makeUniqueName(baseName, all.map((g) => g.name));
+      }
+    }
+    const saved = {
+      id: reuseId || `${now2}-${Math.random().toString(16).slice(2)}`,
+      name: finalName,
+      createdAt: now2,
+      garden: garden2
+    };
+    let updated = [];
+    if (reuseId) {
+      updated = all.map((g) => g.id === reuseId ? saved : g);
+    } else {
+      all.unshift(saved);
+      updated = all.slice(0, 50);
+    }
+    writeSavedGardens(updated);
+    return saved;
+  }
+  async function loadSavedGarden(id) {
+    if (!id) return false;
+    const all = readSavedGardens();
+    const found = all.find((g) => g.id === id);
+    if (!found) return false;
+    return setCurrentGarden(found.garden);
+  }
+  function deleteSavedGarden(id) {
+    if (!id) return false;
+    const all = readSavedGardens();
+    const next = all.filter((g) => g.id !== id);
+    if (next.length === all.length) return false;
+    writeSavedGardens(next);
+    return true;
+  }
+  function exportSavedGarden(id) {
+    if (!id) return null;
+    const all = readSavedGardens();
+    const found = all.find((g) => g.id === id);
+    if (!found) return null;
+    return JSON.stringify(found.garden, null, 2);
+  }
+  async function importGarden(name, raw) {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const garden2 = sanitizeGarden(parsed);
+      const now2 = Date.now();
+      const saved = {
+        id: `${now2}-${Math.random().toString(16).slice(2)}`,
+        name: name?.trim() || "Imported garden",
+        createdAt: now2,
+        garden: garden2
+      };
+      const all = readSavedGardens();
+      all.unshift(saved);
+      writeSavedGardens(all.slice(0, 50));
+      return saved;
+    } catch {
+      return null;
+    }
+  }
+  async function getPlayerId() {
+    try {
+      const id = await Atoms.player.playerId.get();
+      return typeof id === "string" && id ? id : null;
+    } catch {
+      return null;
+    }
+  }
+  function buildClearedState(state3, playerId2) {
+    const slots = state3?.child?.data?.userSlots;
+    const slotMatch = findPlayerSlot(slots, playerId2, { sortObject: true });
+    if (!slotMatch || !slotMatch.matchSlot || typeof slotMatch.matchSlot !== "object") {
+      return { next: state3, changed: false };
+    }
+    const garden2 = slotMatch.matchSlot?.data?.garden;
+    const inventory = slotMatch.matchSlot?.data?.inventory;
+    const hasInventory = inventory && typeof inventory === "object";
+    const gardenChanged = !isGardenEmpty(garden2);
+    const invChanged = hasInventory && (Array.isArray(inventory.items) ? inventory.items.length > 0 : true ? inventory?.inventory?.items?.length > 0 : false);
+    if (!gardenChanged && !invChanged) return { next: state3, changed: false };
+    const updatedSlot = {
+      ...slotMatch.matchSlot,
+      data: {
+        ...slotMatch.matchSlot?.data || {},
+        garden: makeEmptyGarden(),
+        petSlots: buildEmptyPetSlots(slotMatch.matchSlot?.data?.petSlots),
+        ...hasInventory ? { inventory: { ...inventory || {}, items: [], favoritedItemIds: [] } } : {}
+      }
+    };
+    const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
+    const nextState = buildStateWithUserSlots(state3, nextUserSlots);
+    return { next: nextState, changed: true };
+  }
+  async function buildClearedStateSnapshot(playerId2) {
+    try {
+      const cur = await Atoms.root.state.get();
+      const { next } = buildClearedState(cur, playerId2);
+      return next;
+    } catch {
+      return null;
+    }
+  }
+  var savedGardenSnapshot = null;
+  async function readUserSlotIdx() {
+    try {
+      const store = await ensureStore().catch(() => null);
+      const atom = store ? getAtomByLabel("myUserSlotIdxAtom") : null;
+      const raw = atom ? store?.get(atom) : null;
+      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+    } catch {
+    }
+    return 0;
+  }
+  async function collectCurrentUserGardenTiles() {
+    const [mapData, userSlotIdx] = await Promise.all([
+      Atoms.root.map.get().catch(() => null),
+      readUserSlotIdx()
+    ]);
+    const cols = Number(mapData?.cols);
+    if (!mapData || !Number.isFinite(cols)) return null;
+    const clone = (v) => {
+      try {
+        return JSON.parse(JSON.stringify(v));
+      } catch {
+        return v;
+      }
+    };
+    const toPos = (gidx) => ({
+      x: gidx % cols,
+      y: Math.floor(gidx / cols)
+    });
+    const stateVal = await Atoms.root.state.get().catch(() => null);
+    const slots = stateVal?.child?.data?.userSlots;
+    const garden2 = Array.isArray(slots) ? slots?.[userSlotIdx]?.data?.garden : slots?.[String(userSlotIdx)]?.data?.garden;
+    const dirtObjs = garden2?.tileObjects || {};
+    const boardObjs = garden2?.boardwalkTileObjects || {};
+    const dirt = Object.entries(mapData?.globalTileIdxToDirtTile || {}).filter(([, v]) => v && typeof v === "object" && v.userSlotIdx === userSlotIdx).map(([k, v]) => {
+      const gidx = Number(k);
+      const pos = toPos(gidx);
+      const localIdx = Number(v?.dirtTileIdx ?? -1);
+      return {
+        type: "dirt",
+        globalIdx: gidx,
+        localIdx,
+        obj: clone(dirtObjs?.[String(localIdx)] ?? null),
+        ...pos
+      };
+    });
+    const boardwalk = Object.entries(mapData?.globalTileIdxToBoardwalk || {}).filter(([, v]) => v && typeof v === "object" && v.userSlotIdx === userSlotIdx).map(([k, v]) => {
+      const gidx = Number(k);
+      const pos = toPos(gidx);
+      const localIdx = Number(v?.boardwalkTileIdx ?? -1);
+      return {
+        type: "boardwalk",
+        globalIdx: gidx,
+        localIdx,
+        obj: clone(boardObjs?.[String(localIdx)] ?? null),
+        ...pos
+      };
+    });
+    const tiles = [...dirt, ...boardwalk].sort((a, b) => a.globalIdx - b.globalIdx);
+    return { userSlotIdx, dirt, boardwalk, tiles };
+  }
+  async function resolveTileCoords(tileType, userSlotIdx, localTileIndex) {
+    const mapData = await Atoms.root.map.get().catch(() => null);
+    const cols = Number(mapData?.cols);
+    if (!mapData || !Number.isFinite(cols)) return null;
+    const entries = tileType === "Dirt" ? Object.entries(mapData?.globalTileIdxToDirtTile || {}) : Object.entries(mapData?.globalTileIdxToBoardwalk || {});
+    for (const [gidxStr, v] of entries) {
+      const info = v;
+      if (!info || typeof info !== "object") continue;
+      const slotOk = Number(info.userSlotIdx) === userSlotIdx;
+      const localOk = tileType === "Dirt" ? Number(info.dirtTileIdx) === localTileIndex : Number(info.boardwalkTileIdx) === localTileIndex;
+      if (slotOk && localOk) {
+        const gidx = Number(gidxStr);
+        if (!Number.isFinite(gidx)) continue;
+        return { x: gidx % cols, y: Math.floor(gidx / cols) };
+      }
+    }
+    return null;
+  }
+  function injectTileObjectRaw(tx, ty, obj) {
+    try {
+      const info = tos.getTileObject(tx, ty, { ensureView: true });
+      const tv = info?.tileView;
+      if (!tv || typeof tv.onDataChanged !== "function") return false;
+      const cloned = (() => {
+        try {
+          return JSON.parse(JSON.stringify(obj));
+        } catch {
+          return obj;
+        }
+      })();
+      tv.onDataChanged(cloned);
+      const status = tos.getStatus();
+      const ctx2 = status.engine?.reusableContext;
+      if (ctx2 && typeof tv.update === "function") {
+        try {
+          tv.update(ctx2);
+        } catch {
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  async function applyGardenToTos(garden2, userSlotIdx) {
+    if (!tos.isReady()) return;
+    const mapData = await Atoms.root.map.get().catch(() => null);
+    const cols = Number(mapData?.cols);
+    if (!mapData || !Number.isFinite(cols)) return;
+    const dirtEntries = Object.entries(mapData?.globalTileIdxToDirtTile || {}).filter(
+      ([, v]) => v?.userSlotIdx === userSlotIdx
+    );
+    const boardEntries = Object.entries(mapData?.globalTileIdxToBoardwalk || {}).filter(
+      ([, v]) => v?.userSlotIdx === userSlotIdx
+    );
+    const applyEntry = (entry, type) => {
+      const [gidxStr, v] = entry;
+      const gidx = Number(gidxStr);
+      if (!Number.isFinite(gidx)) return;
+      const x = gidx % cols;
+      const y = Math.floor(gidx / cols);
+      const localIdx = type === "Dirt" ? Number(v?.dirtTileIdx ?? -1) : Number(v?.boardwalkTileIdx ?? -1);
+      const obj = type === "Dirt" ? (garden2.tileObjects || {})[String(localIdx)] : (garden2.boardwalkTileObjects || {})[String(localIdx)];
+      if (!obj) {
+        tos.setTileEmpty(x, y, { ensureView: true, forceUpdate: true });
+        return;
+      }
+      injectTileObjectRaw(x, y, obj);
+      const typ = obj.objectType;
+      if (typ === "plant") {
+        tos.setTilePlant(x, y, {
+          species: obj.species,
+          plantedAt: obj.plantedAt,
+          maturedAt: obj.maturedAt,
+          slots: obj.slots
+        }, { ensureView: true, forceUpdate: true });
+      } else if (typ === "decor") {
+        tos.setTileDecor(x, y, { rotation: obj.rotation }, { ensureView: true, forceUpdate: true });
+      } else if (typ === "egg") {
+        tos.setTileEgg(x, y, { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt }, { ensureView: true, forceUpdate: true });
+      } else {
+        tos.setTileEmpty(x, y, { ensureView: true, forceUpdate: true });
+      }
+    };
+    dirtEntries.forEach((e) => applyEntry(e, "Dirt"));
+    boardEntries.forEach((e) => applyEntry(e, "Boardwalk"));
+  }
+  async function snapshotAndClearGardenForEditor() {
+    if (!tos.isReady()) {
+      console.log("[EditorService] snapshot skipped: tos not ready");
+      return;
+    }
+    const info = await collectCurrentUserGardenTiles();
+    if (!info) {
+      console.log("[EditorService] snapshot skipped: map/user slot not ready");
+      return;
+    }
+    savedGardenSnapshot = info.tiles.map((t) => ({ x: t.x, y: t.y, obj: t.obj }));
+    for (const t of savedGardenSnapshot) {
+      try {
+        tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
+      } catch (err) {
+        console.log("[EditorService] clear tile failed", { x: t.x, y: t.y, err });
+      }
+    }
+  }
+  async function restoreGardenSnapshotForEditor() {
+    if (!tos.isReady()) {
+      console.log("[EditorService] restore skipped: tos not ready");
+      return;
+    }
+    const snapshot = savedGardenSnapshot;
+    if (!snapshot) return;
+    for (const t of snapshot) {
+      const obj = t.obj;
+      try {
+        if (!obj) {
+          tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
+          continue;
+        }
+        const typ = obj?.objectType;
+        if (typ === "plant") {
+          const patch = {
+            species: obj.species,
+            plantedAt: obj.plantedAt,
+            maturedAt: obj.maturedAt,
+            slots: obj.slots
+          };
+          injectTileObjectRaw(t.x, t.y, obj);
+          tos.setTilePlant(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+        } else if (typ === "decor") {
+          const patch = { rotation: obj.rotation };
+          injectTileObjectRaw(t.x, t.y, obj);
+          tos.setTileDecor(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+        } else if (typ === "egg") {
+          const patch = { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt };
+          injectTileObjectRaw(t.x, t.y, obj);
+          tos.setTileEgg(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+        } else {
+          tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
+        }
+      } catch (err) {
+        const ok = obj ? injectTileObjectRaw(t.x, t.y, obj) : false;
+        if (!ok) {
+          console.log("[EditorService] restore tile failed", { x: t.x, y: t.y, err });
+        }
+      }
+    }
+    savedGardenSnapshot = null;
+  }
+  async function logGardenTilesForEditor() {
+    try {
+      const info = await collectCurrentUserGardenTiles();
+      if (!info) {
+        console.log("[EditorService] garden tiles: map/user slot not ready");
+        return;
+      }
+      console.log("[EditorService] garden tiles (for setTileEmpty)", {
+        userSlotIdx: info.userSlotIdx,
+        total: info.tiles.length,
+        dirtCount: info.dirt.length,
+        boardwalkCount: info.boardwalk.length,
+        tiles: info.tiles
+      });
+    } catch (err) {
+      console.log("[EditorService] garden tiles log failed", err);
+    }
+  }
+  async function logSelectedInventoryItemWithTile() {
+    try {
+      const store = await ensureStore().catch(() => null);
+      let tileType;
+      let localTileIndex;
+      if (store) {
+        const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
+        if (!tileAtom) {
+          console.log("[EditorService] logSelectedInventoryItemWithTile: no myCurrentGardenTileAtom");
+        } else {
+          const tileVal = store.get(tileAtom);
+          tileType = tileVal?.tileType;
+          localTileIndex = tileVal?.localTileIndex;
+        }
+      } else {
+        console.log("[EditorService] logSelectedInventoryItemWithTile: no jotai store");
+      }
+      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+      const inventoryVal = await Atoms.inventory.myInventory.get();
+      const rotation = await Atoms.inventory.mySelectedItemRotation.get();
+      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items : [];
+      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
+        console.log("[EditorService] logSelectedInventoryItemWithTile: invalid selected index", {
+          selectedIndex,
+          itemsLen: items.length
+        });
+        return;
+      }
+      const selectedItem = items[selectedIndex];
+      console.log("[EditorService] selected item placement debug", {
+        tileType,
+        localTileIndex,
+        selectedIndex,
+        rotation,
+        item: selectedItem
+      });
+    } catch (err) {
+      console.log("[EditorService] logSelectedInventoryItemWithTile failed", err);
+    }
+  }
+  async function placeSelectedItemInGardenAtCurrentTile() {
+    try {
+      const store = await ensureStore().catch(() => null);
+      if (!store) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: no jotai store");
+        return;
+      }
+      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
+      if (!tileAtom) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: no myCurrentGardenTileAtom");
+        return;
+      }
+      const tileVal = store.get(tileAtom);
+      if (!tileVal) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: tileVal is null");
+        return;
+      }
+      const tileType = tileVal.tileType;
+      const localTileIndex = tileVal.localTileIndex;
+      const userSlotIdxRaw = tileVal.userSlotIdx;
+      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
+      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: invalid localTileIndex", {
+          localTileIndex
+        });
+        return;
+      }
+      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+      const inventoryVal = await Atoms.inventory.myInventory.get();
+      const rotation = await Atoms.inventory.mySelectedItemRotation.get();
+      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items : [];
+      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: invalid selected index", {
+          selectedIndex,
+          itemsLen: items.length
+        });
+        return;
+      }
+      const selectedItem = items[selectedIndex];
+      if (selectedItem?.itemType !== "Plant" && selectedItem?.itemType !== "Decor") {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: unsupported itemType", {
+          itemType: selectedItem?.itemType
+        });
+        return;
+      }
+      let tileObject;
+      if (selectedItem.itemType === "Plant") {
+        tileObject = {
+          objectType: "plant",
+          species: selectedItem.species,
+          slots: Array.isArray(selectedItem.slots) ? selectedItem.slots : [],
+          plantedAt: selectedItem.plantedAt,
+          maturedAt: selectedItem.maturedAt
+        };
+      } else if (selectedItem.itemType === "Decor") {
+        tileObject = {
+          objectType: "decor",
+          decorId: selectedItem.decorId,
+          // rotation depuis lâatom, fallback sur ce quâaurait dÃ©jÃ  lâitem (au cas oÃ¹)
+          rotation: typeof rotation === "number" ? rotation : selectedItem.rotation ?? 0
+        };
+      }
+      if (!tileObject) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: failed to build tileObject");
+        return;
+      }
+      const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
+      if (!coords) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: cannot resolve coords", {
+          tileType,
+          localTileIndex,
+          userSlotIdx
+        });
+        return;
+      }
+      if (!tos.isReady()) {
+        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: tos not ready");
+        return;
+      }
+      injectTileObjectRaw(coords.x, coords.y, tileObject);
+      if (tileObject.objectType === "plant") {
+        tos.setTilePlant(coords.x, coords.y, {
+          species: tileObject.species,
+          plantedAt: tileObject.plantedAt,
+          maturedAt: tileObject.maturedAt,
+          slots: tileObject.slots
+        }, { ensureView: true, forceUpdate: true });
+      } else if (tileObject.objectType === "decor") {
+        tos.setTileDecor(coords.x, coords.y, { rotation: tileObject.rotation }, { ensureView: true, forceUpdate: true });
+      }
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const userSlots = cur?.child?.data?.userSlots;
+      if (userSlots && typeof userSlots === "object") {
+        const isArray = Array.isArray(userSlots);
+        const matchSlot = isArray ? userSlots[userSlotIdx] : userSlots[String(userSlotIdx)];
+        if (matchSlot) {
+          const slotData = matchSlot.data || {};
+          const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
+          const garden2 = {
+            tileObjects: { ...prevGarden.tileObjects || {} },
+            boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
+          };
+          const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
+          const tileKey = String(localTileIndex);
+          const nextTargetMap = { ...garden2[targetKey], [tileKey]: tileObject };
+          const nextGarden = {
+            tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
+            boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
+          };
+          const updatedSlot = {
+            ...matchSlot,
+            data: {
+              ...slotData,
+              garden: nextGarden
+            }
+          };
+          const nextUserSlots = isArray ? (() => {
+            const nextSlots = userSlots.slice();
+            nextSlots[userSlotIdx] = updatedSlot;
+            return nextSlots;
+          })() : {
+            ...userSlots,
+            [String(userSlotIdx)]: updatedSlot
+          };
+          const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+          stateFrozenValue = nextState;
+          stateOriginalValue = nextState;
+          try {
+            await setStateAtom(nextState);
+          } catch {
+          }
+        }
+      }
+      console.log("[EditorService] placed item in garden (tos)", {
+        tileType,
+        localTileIndex,
+        userSlotIdx,
+        selectedIndex,
+        itemType: selectedItem.itemType,
+        species: selectedItem.species,
+        decorId: selectedItem.decorId,
+        rotation,
+        coords
+      });
+    } catch (err) {
+      console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile failed", err);
+    }
+  }
+  async function removeGardenObjectAtCurrentTile() {
+    try {
+      const store = await ensureStore().catch(() => null);
+      if (!store) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: no jotai store");
+        return false;
+      }
+      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
+      if (!tileAtom) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: no myCurrentGardenTileAtom");
+        return false;
+      }
+      const tileVal = store.get(tileAtom);
+      if (!tileVal) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: tileVal is null");
+        return false;
+      }
+      const tileType = tileVal.tileType;
+      const localTileIndex = tileVal.localTileIndex;
+      const userSlotIdxRaw = tileVal.userSlotIdx;
+      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
+      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: invalid localTileIndex", {
+          localTileIndex
+        });
+        return false;
+      }
+      const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
+      if (!coords) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: cannot resolve coords", {
+          tileType,
+          localTileIndex,
+          userSlotIdx
+        });
+        return false;
+      }
+      if (!tos.isReady()) {
+        console.log("[EditorService] removeItemFromGardenAtCurrentTile: tos not ready");
+        return false;
+      }
+      tos.setTileEmpty(coords.x, coords.y, { ensureView: true, forceUpdate: true });
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const userSlots = cur?.child?.data?.userSlots;
+      if (userSlots && typeof userSlots === "object") {
+        const isArray = Array.isArray(userSlots);
+        const matchSlot = isArray ? userSlots[userSlotIdx] : userSlots[String(userSlotIdx)];
+        if (matchSlot) {
+          const slotData = matchSlot.data || {};
+          const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
+          const garden2 = {
+            tileObjects: { ...prevGarden.tileObjects || {} },
+            boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
+          };
+          const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
+          const tileKey = String(localTileIndex);
+          const currentTargetMap = garden2[targetKey] || {};
+          const nextTargetMap = { ...currentTargetMap };
+          delete nextTargetMap[tileKey];
+          const nextGarden = {
+            tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
+            boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
+          };
+          const updatedSlot = {
+            ...matchSlot,
+            data: {
+              ...slotData,
+              garden: nextGarden
+            }
+          };
+          const nextUserSlots = isArray ? (() => {
+            const nextSlots = userSlots.slice();
+            nextSlots[userSlotIdx] = updatedSlot;
+            return nextSlots;
+          })() : {
+            ...userSlots,
+            [String(userSlotIdx)]: updatedSlot
+          };
+          const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+          stateFrozenValue = nextState;
+          stateOriginalValue = nextState;
+          try {
+            await setStateAtom(nextState);
+          } catch {
+          }
+        }
+      }
+      console.log("[EditorService] removed item from garden (tos + state)", {
+        tileType,
+        localTileIndex,
+        userSlotIdx,
+        coords
+      });
+      return true;
+    } catch (err) {
+      console.log("[EditorService] removeItemFromGardenAtCurrentTile failed", err);
+      return false;
+    }
+  }
+  async function removeItemFromGardenAtCurrentTile() {
+    void removeGardenObjectAtCurrentTile();
+  }
+  async function removeDecorFromGardenAtCurrentTile() {
+    void removeGardenObjectAtCurrentTile();
+  }
+  async function updateGardenObjectAtCurrentTile(updater) {
+    try {
+      const store = await ensureStore().catch(() => null);
+      if (!store) return false;
+      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
+      if (!tileAtom) return false;
+      const tileVal = store.get(tileAtom);
+      if (!tileVal) return false;
+      const tileType = tileVal.tileType;
+      const localTileIndex = tileVal.localTileIndex;
+      const userSlotIdxRaw = tileVal.userSlotIdx;
+      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
+      if (localTileIndex == null || !Number.isFinite(localTileIndex)) return false;
+      const cur = stateFrozenValue ?? await Atoms.root.state.get();
+      const userSlots = cur?.child?.data?.userSlots;
+      if (!userSlots || typeof userSlots !== "object") return false;
+      const isArray = Array.isArray(userSlots);
+      let matchSlot;
+      if (isArray) {
+        matchSlot = userSlots[userSlotIdx];
+      } else {
+        const key2 = String(userSlotIdx);
+        matchSlot = userSlots[key2];
+      }
+      if (!matchSlot) return false;
+      const slotData = matchSlot.data || {};
+      const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
+      const garden2 = {
+        tileObjects: { ...prevGarden.tileObjects || {} },
+        boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
+      };
+      const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
+      const tileKey = String(localTileIndex);
+      const currentTargetMap = garden2[targetKey] || {};
+      const currentObj = currentTargetMap[tileKey];
+      if (!currentObj) return false;
+      const nextObj = updater(currentObj);
+      const nextTargetMap = { ...currentTargetMap, [tileKey]: nextObj };
+      const nextGarden = {
+        tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
+        boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
+      };
+      const updatedSlot = {
+        ...matchSlot,
+        data: {
+          ...slotData,
+          garden: nextGarden
+        }
+      };
+      const nextUserSlots = isArray ? (() => {
+        const nextSlots = userSlots.slice();
+        nextSlots[userSlotIdx] = updatedSlot;
+        return nextSlots;
+      })() : {
+        ...userSlots,
+        [String(userSlotIdx)]: updatedSlot
+      };
+      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
+      stateFrozenValue = nextState;
+      stateOriginalValue = nextState;
+      await setStateAtom(nextState);
+      try {
+        const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
+        if (coords && tos.isReady()) {
+          injectTileObjectRaw(coords.x, coords.y, nextObj);
+          if (nextObj.objectType === "plant") {
+            tos.setTilePlant(coords.x, coords.y, {
+              species: nextObj.species,
+              plantedAt: nextObj.plantedAt,
+              maturedAt: nextObj.maturedAt,
+              slots: nextObj.slots
+            }, { ensureView: true, forceUpdate: true });
+          } else if (nextObj.objectType === "decor") {
+            tos.setTileDecor(coords.x, coords.y, { rotation: nextObj.rotation }, { ensureView: true, forceUpdate: true });
+          } else if (nextObj.objectType === "egg") {
+            tos.setTileEgg(coords.x, coords.y, {
+              plantedAt: nextObj.plantedAt,
+              maturedAt: nextObj.maturedAt
+            }, { ensureView: true, forceUpdate: true });
+          }
+        }
+      } catch {
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function clampSizePercent(sizePercent) {
+    const pctRaw = Number.isFinite(sizePercent) ? sizePercent : 100;
+    return Math.max(50, Math.min(100, Math.round(pctRaw)));
+  }
+  function getScaleBoundsForSpecies(species) {
+    if (!species) return { minScale: 1, maxScale: 1 };
+    const entry = plantCatalog[species];
+    const maxScaleRaw = Number(entry?.crop?.maxScale);
+    const maxScale = Number.isFinite(maxScaleRaw) && maxScaleRaw > 1 ? maxScaleRaw : 1;
+    return { minScale: 1, maxScale };
+  }
+  function clampCustomScale(species, scale) {
+    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
+    if (!Number.isFinite(scale)) return minScale;
+    const upper = Math.max(minScale, maxScale);
+    return Math.max(minScale, Math.min(upper, scale));
+  }
+  function normalizeCustomScale(species, scale) {
+    if (!Number.isFinite(scale)) return 1;
+    return scale;
+  }
+  function computeTargetScaleFromPercent(species, sizePercent) {
+    const pct = clampSizePercent(sizePercent);
+    if (!species) return 1;
+    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
+    if (!maxScale || maxScale <= minScale) return minScale;
+    const t = (pct - 50) / 50;
+    return minScale + t * (maxScale - minScale);
+  }
+  function computePercentFromScale(species, targetScale) {
+    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
+    if (!maxScale || maxScale <= minScale) return 100;
+    const clamped = clampCustomScale(species, targetScale);
+    const pct = 50 + (clamped - minScale) / (maxScale - minScale) * 50;
+    return clampSizePercent(pct);
+  }
+  function resolveSlotTargetScale(species, cfg) {
+    if (cfg.sizeMode === "custom") {
+      return normalizeCustomScale(species, cfg.customScale);
+    }
+    return computeTargetScaleFromPercent(species, cfg.sizePercent);
+  }
+  var editorPlantSlotsState = {
+    species: null,
+    slots: [],
+    applyAll: false
+  };
+  function getMaxSlotsForSpecies(species) {
+    const entry = plantCatalog[species];
+    const plantDef = entry?.plant ?? {};
+    const isMultipleHarvest = plantDef?.harvestType === "Multiple";
+    const slotOffsets = Array.isArray(plantDef.slotOffsets) ? plantDef.slotOffsets : [];
+    if (isMultipleHarvest && slotOffsets.length > 0) return slotOffsets.length;
+    return 1;
+  }
+  function ensureEditorSlotsForSpecies(species) {
+    const maxSlots = getMaxSlotsForSpecies(species);
+    if (editorPlantSlotsState.species !== species) {
+      const defaultScale = computeTargetScaleFromPercent(species, 100);
+      editorPlantSlotsState = {
+        species,
+        slots: Array.from({ length: maxSlots }, () => ({
+          enabled: true,
+          sizePercent: 100,
+          customScale: defaultScale,
+          sizeMode: "percent",
+          mutations: []
+        })),
+        applyAll: false
+      };
+      return editorPlantSlotsState.slots;
+    }
+    let slots = editorPlantSlotsState.slots.slice(0, maxSlots);
+    if (!slots.length) {
+      const defaultScale = computeTargetScaleFromPercent(species, 100);
+      slots = [
+        {
+          enabled: true,
+          sizePercent: 100,
+          customScale: defaultScale,
+          sizeMode: "percent",
+          mutations: []
+        }
+      ];
+    }
+    slots = slots.map((slot) => {
+      const pct = clampSizePercent(slot.sizePercent);
+      const mode = slot.sizeMode === "custom" ? "custom" : "percent";
+      const fallbackScale = computeTargetScaleFromPercent(species, pct);
+      const customScale = normalizeCustomScale(
+        species,
+        Number.isFinite(slot.customScale) ? slot.customScale : fallbackScale
+      );
+      const sizePercent = mode === "custom" ? computePercentFromScale(species, customScale) : pct;
+      return {
+        enabled: slot.enabled !== false,
+        sizePercent,
+        customScale,
+        sizeMode: mode,
+        mutations: Array.isArray(slot.mutations) ? slot.mutations : []
+      };
+    });
+    editorPlantSlotsState = { ...editorPlantSlotsState, slots, applyAll: !!editorPlantSlotsState.applyAll };
+    return slots;
+  }
+  function ensureEditorStateForSpecies(species) {
+    ensureEditorSlotsForSpecies(species);
+    if (editorPlantSlotsState.applyAll == null) {
+      editorPlantSlotsState.applyAll = false;
+    }
+    return editorPlantSlotsState;
+  }
+  function findReadKey(atom) {
+    if (atom && typeof atom.read === "function") return "read";
+    for (const k of Object.keys(atom || {})) {
+      const v = atom[k];
+      if (typeof v === "function" && k !== "write" && k !== "onMount" && k !== "toString") {
+        const ar = v.length;
+        if (ar === 1 || ar === 2) return k;
+      }
+    }
+    throw new Error("stateAtom read() not found");
+  }
+  function findWriteKey(atom) {
+    if (atom && typeof atom.write === "function") return "write";
+    for (const k of Object.keys(atom || {})) {
+      const v = atom[k];
+      if (typeof v === "function" && k !== "read" && k !== "onMount" && k !== "toString") {
+        const ar = v.length;
+        if (ar >= 2) return k;
+      }
+    }
+    return null;
+  }
+  async function freezeStateAtom() {
+    await ensureStore().catch(() => {
+    });
+    const pid = await getPlayerId();
+    if (!pid) return;
+    const atom = getAtomByLabel("stateAtom");
+    if (!atom) return;
+    try {
+      stateOriginalValue = await Atoms.root.state.get();
+    } catch {
+      stateOriginalValue = null;
+    }
+    const frozen = await buildClearedStateSnapshot(pid);
+    if (!frozen) return;
+    try {
+      await Atoms.root.state.set(frozen);
+    } catch {
+    }
+    stateFrozenValue = frozen;
+    if (statePatch && statePatch.atom === atom) return;
+    let readKey;
+    try {
+      readKey = findReadKey(atom);
+    } catch {
+      return;
+    }
+    const origRead = atom[readKey];
+    const writeKey = findWriteKey(atom) || void 0;
+    const origWrite = writeKey ? atom[writeKey] : void 0;
+    atom[readKey] = () => stateFrozenValue;
+    if (writeKey) {
+      atom[writeKey] = () => stateFrozenValue;
+    }
+    statePatch = { atom, readKey, origRead, writeKey, origWrite };
+  }
+  function unfreezeStateAtom() {
+    if (statePatch) {
+      try {
+        statePatch.atom[statePatch.readKey] = statePatch.origRead;
+        if (statePatch.writeKey && statePatch.origWrite) {
+          statePatch.atom[statePatch.writeKey] = statePatch.origWrite;
+        }
+      } catch {
+      }
+    }
+    statePatch = null;
+    stateFrozenValue = null;
+    if (stateOriginalValue != null) {
+      try {
+        void Atoms.root.state.set(stateOriginalValue);
+      } catch {
+      }
+    }
+    stateOriginalValue = null;
+  }
+  function buildEmptyPetSlots(prev) {
+    if (Array.isArray(prev)) return [];
+    if (prev && typeof prev === "object") return {};
+    return [];
+  }
+  shareGlobal("qwsLogSelectedInventoryItemWithTile", () => {
+    void logSelectedInventoryItemWithTile();
+  });
+  shareGlobal("qwsPlaceSelectedItemInGardenAtCurrentTile", () => {
+    void placeSelectedItemInGardenAtCurrentTile();
+  });
+  shareGlobal("qwsRemoveItemFromGardenAtCurrentTile", () => {
+    void removeItemFromGardenAtCurrentTile();
+  });
+  shareGlobal("qwsRemoveDecorFromGardenAtCurrentTile", () => {
+    void removeDecorFromGardenAtCurrentTile();
+  });
+  shareGlobal("qwsEditorListSavedGardens", () => {
+    return listSavedGardens();
+  });
+  shareGlobal("qwsEditorSaveGarden", async (name) => {
+    return await saveCurrentGarden(name || "Untitled");
+  });
+  shareGlobal("qwsEditorClearGarden", async () => {
+    const empty = makeEmptyGarden();
+    return await setCurrentGarden(empty);
+  });
+  shareGlobal("qwsEditorLoadGarden", async (id) => {
+    return await loadSavedGarden(id);
+  });
+  shareGlobal("qwsEditorSaveGardenForPlayer", async (playerId2, name) => {
+    return await saveCurrentGarden(name || "Untitled", playerId2);
+  });
+  shareGlobal("qwsEditorDeleteGarden", (id) => {
+    return deleteSavedGarden(id);
+  });
+  shareGlobal("qwsEditorExportGarden", (id) => {
+    return exportSavedGarden(id);
+  });
+  shareGlobal("qwsEditorImportGarden", async (name, raw) => {
+    return await importGarden(name, raw);
+  });
+  shareGlobal("qwsEditorPreviewFriendGarden", async (garden2) => {
+    return await applyFriendGardenPreview(garden2);
+  });
+  shareGlobal("qwsEditorClearFriendGardenPreview", async () => {
+    return await clearFriendGardenPreview();
+  });
+  function installEditorKeybindsOnce() {
+    if (editorKeybindsInstalled || typeof window === "undefined") return;
+    editorKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (ev) => {
+        if (shouldIgnoreKeydown(ev)) return;
+        if (eventMatchesKeybind("editor.toggle-overlays", ev)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          if (!currentEnabled) return;
+          overlaysVisible = !overlaysVisible;
+          if (overlaysVisible) {
+            showOverlay();
+            showSideOverlay();
+            showCurrentItemOverlay();
+          } else {
+            hideOverlay();
+            hideSideOverlay();
+            hideCurrentItemOverlay();
+          }
+          return;
+        }
+        if (!currentEnabled) return;
+        if (eventMatchesKeybind("editor.place-remove", ev)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const alreadyHeld = editorActionHeld;
+          editorActionHeld = true;
+          void handleEditorPlaceRemove(ev, alreadyHeld);
+          return;
+        }
+        if (eventMatchesKeybind("editor.delete-inventory", ev)) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          void removeSelectedInventoryItem();
+        }
+      },
+      true
+    );
+    window.addEventListener(
+      "keyup",
+      (ev) => {
+        const isSyntheticRF = ev?.__inGameHotkeysRapidSynthetic__ === true;
+        if (isSyntheticRF) return;
+        if (!currentEnabled) return;
+        if (eventMatchesKeybind("editor.place-remove", ev)) {
+          editorActionHeld = false;
+          lastEditorPressStartTs = 0;
+          lastEditorPlaceRemoveTs = 0;
+          lastEditorFirstFired = false;
+          lastEditorTileKey = null;
+          lastEditorTileType = void 0;
+          lastEditorFirstActionTs = 0;
+        }
+      },
+      true
+    );
+  }
+  async function hasSelectedInventoryItem() {
+    try {
+      const inv = await Atoms.inventory.myInventory.get();
+      const idx = await Atoms.inventory.myValidatedSelectedItemIndex.get();
+      const items = Array.isArray(inv?.items) ? inv.items : [];
+      return typeof idx === "number" && !!items[idx];
+    } catch {
+      return false;
+    }
+  }
+  async function handleEditorPlaceRemove(ev, isHeld = false) {
+    const now2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
+    if (!isHeld || lastEditorPressStartTs === 0) {
+      lastEditorPressStartTs = now2;
+      lastEditorPlaceRemoveTs = 0;
+      lastEditorFirstFired = false;
+      lastEditorTileKey = null;
+      lastEditorTileType = void 0;
+      lastEditorFirstActionTs = 0;
+    }
+    const { tileObject, tileKey, tileType } = await readCurrentTileContext();
+    const hasSelection = await hasSelectedInventoryItem();
+    const wantsRemove = !!tileObject;
+    const wantsPlace = !tileObject && hasSelection;
+    if (!wantsRemove && !wantsPlace) return;
+    const tileKeyStr = `${tileType ?? "?"}|${tileKey ?? "none"}`;
+    const sameTile = tileKeyStr === `${lastEditorTileType ?? "?"}|${lastEditorTileKey ?? "none"}`;
+    if (!sameTile) {
+      lastEditorTileKey = tileKey ?? null;
+      lastEditorTileType = tileType;
+      lastEditorFirstFired = false;
+      lastEditorPlaceRemoveTs = 0;
+      lastEditorPressStartTs = now2;
+      lastEditorFirstActionTs = 0;
+    }
+    const elapsedSincePress = now2 - lastEditorPressStartTs;
+    if (!lastEditorFirstFired) {
+      lastEditorFirstFired = true;
+      lastEditorPlaceRemoveTs = now2;
+      lastEditorFirstActionTs = now2;
+    } else {
+      const sinceFirstAction = lastEditorFirstActionTs > 0 ? now2 - lastEditorFirstActionTs : elapsedSincePress;
+      const gateMs = sinceFirstAction < EDITOR_PLACE_REMOVE_FIRST_DELAY_MS ? EDITOR_PLACE_REMOVE_FIRST_DELAY_MS : EDITOR_PLACE_REMOVE_REPEAT_MS;
+      if (now2 - lastEditorPlaceRemoveTs < gateMs) {
+        return;
+      }
+      lastEditorPlaceRemoveTs = now2;
+    }
+    if (wantsRemove) {
+      if (tileObject?.objectType === "plant") {
+        await removeItemFromGardenAtCurrentTile();
+        void triggerEditorAnimation("dig");
+        return;
+      }
+      if (tileObject?.objectType === "decor") {
+        await removeDecorFromGardenAtCurrentTile();
+        void triggerEditorAnimation("dig");
+        return;
+      }
+    }
+    if (wantsPlace) {
+      await placeSelectedItemInGardenAtCurrentTile();
+      void triggerEditorAnimation("dropObject");
+    }
+  }
+
+  // src/hooks/ws-hook.ts
+  var wsCloseListeners = [];
+  var versionReloadScheduled = false;
+  var autoRecoTimer = null;
+  var autoRecoCountdownInterval = null;
+  var autoRecoOverlay = null;
+  function onWebSocketClose(cb) {
+    wsCloseListeners.push(cb);
+    return () => {
+      const idx = wsCloseListeners.indexOf(cb);
+      if (idx !== -1) wsCloseListeners.splice(idx, 1);
+    };
+  }
+  function notifyWebSocketClose(ev, ws) {
+    for (const listener of [...wsCloseListeners]) {
+      try {
+        listener(ev, ws);
+      } catch {
+      }
+    }
+  }
+  function isVersionExpiredClose(ev) {
+    return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
+  }
+  function startAutoReloadOnVersionExpired() {
+    onWebSocketClose((ev) => {
+      if (!isVersionExpiredClose(ev)) return;
+      const env = detectEnvironment();
+      if (env.surface === "discord" || env.isInIframe) return;
+      if (versionReloadScheduled) return;
+      versionReloadScheduled = true;
+      try {
+        console.warn("[MagicGarden] Version expired, reloading...");
+      } catch {
+      }
+      try {
+        pageWindow.location.reload();
+      } catch {
+        try {
+          window.location.reload();
+        } catch {
+        }
+      }
+    });
+  }
+  function isSupersededSessionClose(ev) {
+    if (ev?.code !== 4250) return false;
+    const reason = ev?.reason || "";
+    return /superseded/i.test(reason) || /newer user session/i.test(reason);
+  }
+  function ensureAutoRecoOverlayStyle() {
+    const STYLE_ID3 = "mgAutoRecoOverlayStyle";
+    if (document.getElementById(STYLE_ID3)) return;
+    const css = `
+    #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
+    #mgAutoRecoOverlay .title { font-size: 24px; font-weight: 900; letter-spacing: .02em; margin: 0 0 8px 0; }
+    #mgAutoRecoOverlay .subtitle { font-size: 14px; opacity: .85; margin: 0 0 14px 0; }
+    #mgAutoRecoOverlay .btn { margin-top: 6px; padding: 10px 16px; border-radius: 999px; border: 1px solid #7aa2ff; background: #1a2644; color: #fff; font-weight: 700; cursor: pointer; }
+    #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
+  `;
+    const style2 = document.createElement("style");
+    style2.id = STYLE_ID3;
+    style2.textContent = css;
+    document.documentElement.appendChild(style2);
+  }
+  function createAutoRecoOverlay(initialMs, onReconnectNow) {
+    ensureAutoRecoOverlayStyle();
+    const existing = document.getElementById("mgAutoRecoOverlay");
+    if (existing) existing.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "mgAutoRecoOverlay";
+    overlay.innerHTML = `
+    <div class="box" role="dialog" aria-label="Auto reconnect status">
+      <div class="title">Auto reconnect</div>
+      <div class="subtitle auto-reco-subtitle">The game will reconnect soon.</div>
+      <button class="btn" type="button">Reconnect now</button>
+    </div>
+  `;
+    const subtitle = overlay.querySelector(".auto-reco-subtitle");
+    const btn = overlay.querySelector("button.btn");
+    const render = (ms) => {
+      if (!subtitle) return;
+      const seconds = Math.max(0, Math.ceil(ms / 1e3));
+      const unit = seconds <= 1 ? "second" : "seconds";
+      subtitle.textContent = `The game will reconnect in ${seconds} ${unit}...`;
+    };
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        onReconnectNow();
+      });
+    }
+    document.documentElement.appendChild(overlay);
+    render(initialMs);
+    return {
+      update: render,
+      destroy: () => {
+        try {
+          overlay.remove();
+        } catch {
+        }
+      }
+    };
+  }
+  function clearAutoRecoOverlayAndCountdown() {
+    if (autoRecoCountdownInterval !== null) {
+      clearInterval(autoRecoCountdownInterval);
+      autoRecoCountdownInterval = null;
+    }
+    if (autoRecoOverlay) {
+      try {
+        autoRecoOverlay.destroy();
+      } catch {
+      }
+      autoRecoOverlay = null;
+    }
+  }
+  function startAutoReconnectOnSuperseded() {
+    onWebSocketClose((ev) => {
+      if (!isSupersededSessionClose(ev)) return;
+      if (!MiscService.readAutoRecoEnabled(false)) return;
+      if (autoRecoTimer !== null) {
+        clearTimeout(autoRecoTimer);
+        autoRecoTimer = null;
+      }
+      clearAutoRecoOverlayAndCountdown();
+      const delayMs = MiscService.getAutoRecoDelayMs();
+      const runReconnect = () => {
+        autoRecoTimer = null;
+        if (!MiscService.readAutoRecoEnabled(false)) {
+          clearAutoRecoOverlayAndCountdown();
+          return;
+        }
+        clearAutoRecoOverlayAndCountdown();
+        try {
+          const conn = pageWindow.MagicCircle_RoomConnection;
+          const connect = conn?.connect;
+          if (typeof connect === "function") {
+            connect.call(conn);
+          }
+        } catch (error) {
+          console.warn("[MagicGarden] Auto reco failed:", error);
+        }
+      };
+      const triggerManualReconnect = () => {
+        if (autoRecoTimer !== null) {
+          clearTimeout(autoRecoTimer);
+          autoRecoTimer = null;
+        }
+        runReconnect();
+      };
+      if (delayMs > 0) {
+        autoRecoOverlay = createAutoRecoOverlay(delayMs, triggerManualReconnect);
+        let remainingMs = delayMs;
+        autoRecoCountdownInterval = window.setInterval(() => {
+          remainingMs -= 1e3;
+          if (remainingMs < 0) remainingMs = 0;
+          if (autoRecoOverlay) autoRecoOverlay.update(remainingMs);
+          if (remainingMs <= 0) {
+            clearAutoRecoOverlayAndCountdown();
+          }
+        }, 1e3);
+      }
+      autoRecoTimer = window.setTimeout(() => {
+        runReconnect();
+      }, delayMs);
+    });
+  }
+  function installPageWebSocketHook() {
+    if (!pageWindow || !NativeWS) return;
+    startAutoReloadOnVersionExpired();
+    startAutoReconnectOnSuperseded();
+    function WrappedWebSocket(url, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+      sockets.push(ws);
+      ws.addEventListener("open", () => {
+        setTimeout(() => {
+          if (ws.readyState === NativeWS.OPEN) setQWS(ws, "open-fallback");
+        }, 800);
+      });
+      ws.addEventListener("message", async (ev) => {
+        const j = await parseWSData(ev.data);
+        if (!j) return;
+        if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
+          setQWS(ws, "message:" + (j.type || "state"));
+        }
+      });
+      ws.addEventListener("close", (ev) => {
+        notifyWebSocketClose(ev, ws);
+      });
+      return ws;
+    }
+    WrappedWebSocket.prototype = NativeWS.prototype;
+    try {
+      WrappedWebSocket.OPEN = NativeWS.OPEN;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSED = NativeWS.CLOSED;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CLOSING = NativeWS.CLOSING;
+    } catch {
+    }
+    try {
+      WrappedWebSocket.CONNECTING = NativeWS.CONNECTING;
+    } catch {
+    }
+    pageWindow.WebSocket = WrappedWebSocket;
+    if (pageWindow !== window) {
+      try {
+        window.WebSocket = WrappedWebSocket;
+      } catch {
+      }
+    }
+    function hasSharedQuinoaWS() {
+      const existing = readSharedGlobal("quinoaWS");
+      return !!existing;
+    }
+    function scheduleRoomConnectionFallback() {
+      const FALLBACK_DELAY_MS = 5e3;
+      const win = pageWindow || (typeof window !== "undefined" ? window : null);
+      if (!win) return;
+      win.setTimeout(() => {
+        try {
+          if (hasSharedQuinoaWS()) return;
+          const conn = win.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
+          const ws = conn?.currentWebSocket;
+          if (ws && ws.readyState === NativeWS.OPEN) {
+            setQWS(ws, "room-connection-fallback");
+          }
+        } catch (error) {
+          console.warn("[MagicGarden] Room connection WS fallback failed", error);
+        }
+      }, FALLBACK_DELAY_MS);
+    }
+    scheduleRoomConnectionFallback();
+    installHarvestCropInterceptor();
+  }
+  var interceptorsByType = /* @__PURE__ */ new Map();
+  var interceptorStatus = readSharedGlobal(
+    "__tmMessageHookInstalled"
+  ) ? "installed" : "idle";
+  var interceptorPoll = null;
+  var interceptorTimeout = null;
+  function registerMessageInterceptor(type, interceptor) {
+    const list = interceptorsByType.get(type);
+    if (list) {
+      list.push(interceptor);
+    } else {
+      interceptorsByType.set(type, [interceptor]);
+    }
+    ensureMessageInterceptorInstalled();
+    return () => {
+      const current = interceptorsByType.get(type);
+      if (!current) return;
+      const index = current.indexOf(interceptor);
+      if (index !== -1) current.splice(index, 1);
+      if (current.length === 0) interceptorsByType.delete(type);
+    };
+  }
+  function ensureMessageInterceptorInstalled() {
+    if (interceptorStatus === "installed" || interceptorStatus === "installing") return;
+    interceptorStatus = "installing";
+    const tryInstall = () => {
+      const Conn = pageWindow.MagicCircle_RoomConnection || readSharedGlobal("MagicCircle_RoomConnection");
+      if (!Conn) return false;
+      const original = resolveSendMessage(Conn);
+      if (!original) return false;
+      const wrap = function(message, ...rest) {
+        let currentMessage = message;
+        try {
+          const type = currentMessage?.type;
+          if (type && interceptorsByType.size > 0) {
+            const context = { thisArg: this, args: rest };
+            const result = applyInterceptors(type, currentMessage, context);
+            if (result.drop) return;
+            currentMessage = result.message;
+          }
+        } catch (error) {
+          console.error("[MG-mod] Erreur dans le hook WS :", error);
+        }
+        return original.fn.call(this, currentMessage, ...rest);
+      };
+      if (original.kind === "static") {
+        Conn.sendMessage = wrap;
+      } else {
+        Conn.prototype.sendMessage = wrap;
+      }
+      interceptorStatus = "installed";
+      shareGlobal("__tmMessageHookInstalled", true);
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorTimeout !== null) {
+        clearTimeout(interceptorTimeout);
+        interceptorTimeout = null;
+      }
+      return true;
+    };
+    if (tryInstall()) return;
+    interceptorPoll = window.setInterval(() => {
+      if (tryInstall()) {
+        if (interceptorPoll !== null) {
+          clearInterval(interceptorPoll);
+          interceptorPoll = null;
+        }
+      }
+    }, 200);
+    interceptorTimeout = window.setTimeout(() => {
+      if (interceptorPoll !== null) {
+        clearInterval(interceptorPoll);
+        interceptorPoll = null;
+      }
+      if (interceptorStatus !== "installed") {
+        interceptorStatus = "idle";
+      }
+      interceptorTimeout = null;
+    }, 2e4);
+  }
+  function applyInterceptors(type, initialMessage, context) {
+    const interceptors = interceptorsByType.get(type);
+    if (!interceptors || interceptors.length === 0) {
+      return { message: initialMessage, drop: false };
+    }
+    let currentMessage = initialMessage;
+    for (const interceptor of [...interceptors]) {
+      try {
+        const result = interceptor(currentMessage, context);
+        if (!result) continue;
+        if (result.kind === "drop") {
+          return { message: currentMessage, drop: true };
+        }
+        if (result.kind === "replace") {
+          currentMessage = result.message;
+        }
+      } catch (error) {
+      }
+    }
+    return { message: currentMessage, drop: false };
+  }
+  function installHarvestCropInterceptor() {
+    if (readSharedGlobal("__tmHarvestHookInstalled")) return;
+    let latestGardenState = null;
+    let friendBonusPercent = null;
+    let friendBonusFromPlayers = null;
+    let latestEggId = null;
+    void (async () => {
+      try {
+        latestGardenState = await Atoms.data.garden.get() ?? null;
+      } catch {
+      }
+      try {
+        await Atoms.data.garden.onChange((next) => {
+          latestGardenState = next ?? null;
+        });
+      } catch {
+      }
+      try {
+        const initialObj = await Atoms.data.myCurrentGardenObject.get();
+        latestEggId = extractEggId(initialObj);
+      } catch {
+      }
+      try {
+        await Atoms.data.myCurrentGardenObject.onChange((next) => {
+          latestEggId = extractEggId(next);
+        });
+      } catch {
+      }
+    })();
+    void (async () => {
+      try {
+        const initial = await Atoms.server.friendBonusMultiplier.get();
+        friendBonusPercent = friendBonusPercentFromMultiplier(initial);
+      } catch {
+      }
+      try {
+        await Atoms.server.friendBonusMultiplier.onChange((next) => {
+          friendBonusPercent = friendBonusPercentFromMultiplier(next);
+        });
+      } catch {
+      }
+      try {
+        const initialPlayers = await Atoms.server.numPlayers.get();
+        friendBonusFromPlayers = friendBonusPercentFromPlayers(initialPlayers);
+      } catch {
+      }
+      try {
+        await Atoms.server.numPlayers.onChange((next) => {
+          friendBonusFromPlayers = friendBonusPercentFromPlayers(next);
+        });
+      } catch {
+      }
+    })();
+    const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
+    registerMessageInterceptor("HarvestCrop", (message) => {
+      const slot = message.slot;
+      const slotsIndex = message.slotsIndex;
+      if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
+        return;
+      }
+      const garden2 = latestGardenState;
+      const tileObjects = garden2?.tileObjects;
+      const tile = tileObjects ? tileObjects[String(slot)] : void 0;
+      if (!tile || typeof tile !== "object" || tile.objectType !== "plant") {
+        return;
+      }
+      const slots = Array.isArray(tile.slots) ? tile.slots : [];
+      const cropSlot = slots[slotsIndex];
+      if (!cropSlot || typeof cropSlot !== "object") {
+        return;
+      }
+      const seedKey = extractSeedKey2(tile);
+      const sizePercent = extractSizePercent2(cropSlot);
+      const mutations = sanitizeMutations(cropSlot?.mutations);
+      const lockerEnabled = (() => {
+        try {
+          return lockerService.getState().enabled;
+        } catch {
+          return false;
+        }
+      })();
+      if (lockerEnabled) {
+        let harvestAllowed = true;
+        try {
+          harvestAllowed = lockerService.allowsHarvest({
+            seedKey,
+            sizePercent,
+            mutations
+          });
+        } catch {
+          harvestAllowed = true;
+        }
+        if (!harvestAllowed) {
+          console.log("[HarvestCrop] Blocked by locker", {
+            slot,
+            slotsIndex,
+            seedKey,
+            sizePercent,
+            mutations
+          });
+          return { kind: "drop" };
+        }
+      }
+      StatsService.incrementGardenStat("totalHarvested");
+      void (async () => {
+        try {
+          const garden3 = await Atoms.data.garden.get();
+          const tileObjects2 = garden3?.tileObjects ?? null;
+          const tile2 = tileObjects2 ? tileObjects2[String(slot)] : void 0;
+          const cropSlot2 = Array.isArray(tile2?.slots) ? tile2.slots?.[slotsIndex] : void 0;
+          console.log("[HarvestCrop]", {
+            slot,
+            slotsIndex,
+            cropSlot: cropSlot2
+          });
+        } catch (error) {
+          console.error("[HarvestCrop] Unable to log crop slot", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("RemoveGardenObject", (message) => {
+      StatsService.incrementGardenStat("totalDestroyed");
+    });
+    registerMessageInterceptor("WaterPlant", (message) => {
+      StatsService.incrementGardenStat("watercanUsed");
+      StatsService.incrementGardenStat("waterTimeSavedMs", 5 * 60 * 1e3);
+    });
+    registerMessageInterceptor("PlantSeed", (message) => {
+      StatsService.incrementGardenStat("totalPlanted");
+    });
+    registerMessageInterceptor("PurchaseDecor", (message) => {
+      StatsService.incrementShopStat("decorBought");
+    });
+    registerMessageInterceptor("PurchaseSeed", (message) => {
+      StatsService.incrementShopStat("seedsBought");
+    });
+    registerMessageInterceptor("PurchaseEgg", (message) => {
+      StatsService.incrementShopStat("eggsBought");
+    });
+    registerMessageInterceptor("PurchaseTool", (message) => {
+      StatsService.incrementShopStat("toolsBought");
+    });
+    registerMessageInterceptor("PickupDecor", () => {
+      if (EditorService.isEnabled()) {
+        try {
+          const removeFn = readSharedGlobal("qwsRemoveDecorFromGardenAtCurrentTile") || pageWindow.qwsRemoveDecorFromGardenAtCurrentTile;
+          if (typeof removeFn === "function") {
+            console.log("[PickupDecor][Editor] intercept -> local remove");
+            removeFn();
+            return { kind: "drop" };
+          }
+        } catch (err) {
+          console.log("[PickupDecor][Editor] remove interceptor error", err);
+        }
+      }
+      const decorLocked = lockerRestrictionsService.isDecorPickupLocked();
+      if (decorLocked) {
+        console.log("[PickupDecor] Blocked by decor picker");
+        return { kind: "drop" };
+      }
+    });
+    registerMessageInterceptor("HatchEgg", () => {
+      const locked = lockerRestrictionsService.isEggLocked(latestEggId);
+      if (locked) {
+        console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
+        void (async () => {
+          try {
+            await dedupeEggLockToast(latestEggId);
+          } catch {
+          }
+        })();
+        return { kind: "drop" };
+      }
+      void (async () => {
+        const previousPets = await readInventoryPetSnapshots();
+        const previousMap = buildPetMap(previousPets);
+        const nextPets = await waitForInventoryPetAddition(previousMap);
+        if (!nextPets) return;
+        const newPets = extractNewPets(nextPets, previousMap);
+        if (!newPets.length) return;
+        for (const pet of newPets) {
+          const rarity2 = inferPetRarity(pet.mutations);
+          if (pet.species) {
+            StatsService.incrementPetHatched(pet.species, rarity2);
+          }
+        }
+      })();
+    });
+    registerMessageInterceptor("SellAllCrops", (message) => {
+      const restrictionState = lockerRestrictionsService.getState();
+      const requiredPct = lockerRestrictionsService.getRequiredPercent();
+      const requiredPlayers = restrictionState.minRequiredPlayers;
+      const currentBonusPct = resolveFriendBonusPercent();
+      const allowed = lockerRestrictionsService.allowsCropSale(currentBonusPct);
+      if (!allowed) {
+        const currentPlayers = currentBonusPct != null ? percentToRequiredFriendCount(currentBonusPct) : null;
+        console.log("[SellAllCrops] Blocked by friend bonus restriction", {
+          requiredPct,
+          requiredPlayers,
+          currentBonusPct,
+          currentPlayers
+        });
+        void (async () => {
+          try {
+            await toastSimple(
+              "Friend bonus locker",
+              `Require at least ${requiredPct}% friend bonus`,
+              "error"
+            );
+          } catch {
+          }
+          void removeSellSuccessToast();
+        })();
+        return { kind: "drop" };
+      }
+      void (async () => {
+        try {
+          const items = await Atoms.inventory.myCropItemsToSell.get();
+          const count = Array.isArray(items) ? items.length : 0;
+          if (count > 0) {
+            StatsService.incrementShopStat("cropsSoldCount", count);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop items", error);
+        }
+        try {
+          const total = await Atoms.shop.totalCropSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("cropsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellAllCrops] Unable to read crop sell price", error);
+        }
+      })();
+    });
+    registerMessageInterceptor("SellPet", (message) => {
+      StatsService.incrementShopStat("petsSoldCount");
+      void (async () => {
+        try {
+          const total = await Atoms.pets.totalPetSellPrice.get();
+          const value = Number(total);
+          if (Number.isFinite(value) && value > 0) {
+            StatsService.incrementShopStat("petsSoldValue", value);
+          }
+        } catch (error) {
+          console.error("[SellPet] Unable to read pet sell price", error);
+        }
+      })();
+    });
+    shareGlobal("__tmHarvestHookInstalled", true);
+  }
+  function extractSeedKey2(tile) {
+    if (!tile || typeof tile !== "object") return null;
+    if (typeof tile.seedKey === "string" && tile.seedKey) return tile.seedKey;
+    if (typeof tile.species === "string" && tile.species) return tile.species;
+    const fallbacks = ["seedSpecies", "plantSpecies", "cropSpecies", "speciesId"];
+    for (const key2 of fallbacks) {
+      const value = tile[key2];
+      if (typeof value === "string" && value) return value;
+    }
+    return null;
+  }
+  var normalizeSpeciesKey2 = (value) => value.toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, "").replace(/-/g, "").replace(/(seed|plant|baby|fruit|crop)$/i, "");
+  var MAX_SCALE_BY_SPECIES2 = (() => {
+    const map2 = /* @__PURE__ */ new Map();
+    const register = (key2, value) => {
+      if (typeof key2 !== "string") return;
+      const normalized = normalizeSpeciesKey2(key2.trim());
+      if (!normalized || map2.has(normalized)) return;
+      map2.set(normalized, value);
+    };
+    for (const [species, entry] of Object.entries(plantCatalog)) {
+      const maxScale = Number(entry?.crop?.maxScale);
+      if (!Number.isFinite(maxScale) || maxScale <= 0) continue;
+      register(species, maxScale);
+      register(entry?.seed?.name, maxScale);
+      register(entry?.plant?.name, maxScale);
+      register(entry?.crop?.name, maxScale);
+    }
+    return map2;
+  })();
+  function lookupMaxScale2(species) {
+    if (typeof species !== "string") return null;
+    const normalized = normalizeSpeciesKey2(species.trim());
+    if (!normalized) return null;
+    const found = MAX_SCALE_BY_SPECIES2.get(normalized);
+    if (typeof found === "number" && Number.isFinite(found) && found > 0) {
+      return found;
+    }
+    return null;
+  }
+  function getMaxScaleForSlot2(slot) {
+    if (!slot || typeof slot !== "object") return null;
+    const candidates = /* @__PURE__ */ new Set();
+    const fromSeedKey = extractSeedKey2(slot);
+    if (fromSeedKey) candidates.add(fromSeedKey);
+    const fields = [
+      "species",
+      "seedSpecies",
+      "plantSpecies",
+      "cropSpecies",
+      "baseSpecies",
+      "seedKey"
+    ];
+    for (const field of fields) {
+      const value = slot[field];
+      if (typeof value === "string" && value) {
+        candidates.add(value);
+      }
+    }
+    for (const cand of candidates) {
+      const max = lookupMaxScale2(cand);
+      if (typeof max === "number" && Number.isFinite(max) && max > 0) {
+        return max;
+      }
+    }
+    return null;
+  }
+  function extractSizePercent2(slot) {
+    if (!slot || typeof slot !== "object") return 100;
+    const direct = Number(
+      slot.sizePercent ?? slot.sizePct ?? slot.size ?? slot.percent ?? slot.progressPercent
+    );
+    if (Number.isFinite(direct)) {
+      return clampPercent3(Math.round(direct), 0, 100);
+    }
+    const scale = Number(slot.targetScale ?? slot.scale);
+    if (Number.isFinite(scale)) {
+      const maxScale = getMaxScaleForSlot2(slot);
+      if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > 1) {
+        const clamped = Math.max(1, Math.min(maxScale, scale));
+        const pct2 = 50 + (clamped - 1) / (maxScale - 1) * 50;
+        return clampPercent3(Math.round(pct2), 50, 100);
+      }
+      if (scale > 1 && scale <= 2) {
+        const pct2 = 50 + (scale - 1) / 1 * 50;
+        return clampPercent3(Math.round(pct2), 50, 100);
+      }
+      const pct = Math.round(scale * 100);
+      return clampPercent3(pct, 0, 100);
+    }
+    return 100;
+  }
+  function sanitizeMutations(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const value = raw[i];
+      if (typeof value === "string") {
+        if (value) out.push(value);
+      } else if (value != null) {
+        const str = String(value);
+        if (str) out.push(str);
+      }
+    }
+    return out;
+  }
+  function clampPercent3(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+  var HATCH_EGG_TIMEOUT_MS = 5e3;
+  async function readInventoryPetSnapshots() {
+    try {
+      const inventory = await Atoms.inventory.myInventory.get();
+      return collectInventoryPets(inventory);
+    } catch (error) {
+      console.error("[HatchEgg] Unable to read inventory", error);
+      return [];
+    }
+  }
+  function collectInventoryPets(rawInventory) {
+    const items = extractInventoryItems(rawInventory);
+    const pets = [];
+    for (const entry of items) {
+      const pet = toInventoryPet(entry);
+      if (pet) pets.push(pet);
+    }
+    return pets;
+  }
+  function extractInventoryItems(rawInventory) {
+    if (!rawInventory) return [];
+    if (Array.isArray(rawInventory)) return rawInventory;
+    if (Array.isArray(rawInventory.items)) return rawInventory.items;
+    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
+    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+    return [];
+  }
+  function toInventoryPet(entry) {
+    if (!entry || typeof entry !== "object") return null;
+    const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
+    if (!source || typeof source !== "object") return null;
+    const type = source.itemType ?? source.data?.itemType ?? "";
+    if (String(type).toLowerCase() !== "pet") return null;
+    const id = source.id ?? source.data?.id;
+    const species = source.petSpecies ?? source.data?.petSpecies;
+    if (!id || !species) return null;
+    const mutations = sanitizeMutations(source.mutations ?? source.data?.mutations);
+    return {
+      id: String(id),
+      species: String(species),
+      mutations
+    };
+  }
+  function buildPetMap(pets) {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const pet of pets) {
+      map2.set(pet.id, pet);
+    }
+    return map2;
+  }
+  function extractNewPets(pets, previous) {
+    return pets.filter((pet) => !previous.has(pet.id));
+  }
+  function extractEggId(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (obj.objectType !== "egg") return null;
+    const eggId = obj.eggId;
+    return typeof eggId === "string" && eggId ? eggId : null;
+  }
+  async function dedupeEggLockToast(latestEggId) {
+    const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+    const description = latestEggId ? `Hatching locked for ${latestEggId}` : "Hatching locked by egg locker";
+    if (!toastsAtom) {
+      await toastSimple("Egg hatch locker", description, "error");
+      return;
+    }
+    const list = await jGet(toastsAtom).catch(() => []);
+    const filtered = Array.isArray(list) ? list.filter((t) => !(t?.title === "Egg hatch locker")) : [];
+    filtered.push({
+      isClosable: true,
+      duration: 3500,
+      title: "Egg hatch locker",
+      description,
+      variant: "error",
+      id: "quinoa-game-toast"
+    });
+    await jSet(toastsAtom, filtered);
+  }
+  function inferPetRarity(mutations) {
+    if (!Array.isArray(mutations) || mutations.length === 0) {
+      return "normal";
+    }
+    const seen = new Set(mutations.map((m) => String(m).toLowerCase()));
+    if (seen.has("rainbow")) return "rainbow";
+    if (seen.has("gold") || seen.has("golden")) return "gold";
+    return "normal";
+  }
+  async function waitForInventoryPetAddition(previous, timeoutMs = HATCH_EGG_TIMEOUT_MS) {
+    await delay(0);
+    const initial = await readInventoryPetSnapshots();
+    if (hasNewInventoryPet(initial, previous)) {
+      return initial;
+    }
+    return new Promise(async (resolve2) => {
+      let settled = false;
+      let unsub = null;
+      let timer = null;
+      const finalize = (value) => {
+        if (settled) return;
+        settled = true;
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        if (unsub) {
+          try {
+            unsub();
+          } catch {
+          }
+        }
+        resolve2(value);
+      };
+      const evaluate = (source) => {
+        const pets = collectInventoryPets(source);
+        if (hasNewInventoryPet(pets, previous)) {
+          finalize(pets);
+        }
+      };
+      try {
+        unsub = await Atoms.inventory.myInventory.onChange((next) => {
+          evaluate(next);
+        });
+      } catch (error) {
+        console.error("[HatchEgg] Unable to observe inventory", error);
+        finalize(null);
+        return;
+      }
+      timer = setTimeout(() => {
+        void (async () => {
+          const latest = await readInventoryPetSnapshots();
+          if (hasNewInventoryPet(latest, previous)) {
+            finalize(latest);
+          } else {
+            finalize(null);
+          }
+        })();
+      }, timeoutMs);
+    });
+  }
+  function hasNewInventoryPet(pets, previous) {
+    return pets.some((pet) => !previous.has(pet.id));
+  }
+  function delay(ms) {
+    return new Promise((resolve2) => setTimeout(resolve2, ms));
+  }
+  function resolveSendMessage(Conn) {
+    const isFn = (value) => typeof value === "function";
+    if (isFn(Conn.sendMessage)) {
+      return { kind: "static", fn: Conn.sendMessage.bind(Conn) };
+    }
+    if (Conn.prototype && isFn(Conn.prototype.sendMessage)) {
+      return { kind: "proto", fn: Conn.prototype.sendMessage };
+    }
+    return null;
+  }
+  async function removeSellSuccessToast() {
+    try {
+      const toastsAtom = getAtomByLabel("quinoaToastsAtom");
+      if (!toastsAtom) return;
+      const list = await jGet(toastsAtom).catch(() => []);
+      const filtered = Array.isArray(list) ? list.filter((t) => {
+        if (!t || typeof t !== "object") return true;
+        if (t.variant !== "success") return true;
+        const icon = t.icon;
+        const isTileSell = icon?.type === "tile" && icon?.spritesheet === "items" && Number(icon?.index) === 11;
+        const hasCropText = !!t?.description?.props?.values?.cropText;
+        return !(isTileSell || hasCropText);
+      }) : list;
+      if (filtered.length !== list.length) {
+        await jSet(toastsAtom, filtered);
+      }
+    } catch {
+    }
   }
 
   // src/services/pets.ts
@@ -13869,404 +18474,6 @@
       }
     }
   };
-
-  // src/core/audioPlayer.ts
-  var AudioPlayer = class {
-    constructor(opts = {}) {
-      __publicField(this, "found", /* @__PURE__ */ new Set());
-      __publicField(this, "meta", /* @__PURE__ */ new Map());
-      __publicField(this, "groupsMap", /* @__PURE__ */ new Map());
-      // config volume
-      __publicField(this, "atomKey");
-      __publicField(this, "min");
-      __publicField(this, "max");
-      __publicField(this, "gainFactor");
-      // Howler cache local
-      __publicField(this, "howler", null);
-      // options
-      __publicField(this, "minVariantsPerAutoGroup");
-      this.atomKey = opts.atomKey ?? "soundEffectsVolumeAtom";
-      this.min = opts.min ?? 1e-3;
-      this.max = opts.max ?? 0.2000000000000001;
-      this.gainFactor = opts.gainFactor ?? 1;
-      this.minVariantsPerAutoGroup = opts.minVariantsPerAutoGroup ?? 2;
-      if (opts.autoScan) void this.init();
-    }
-    /** Lance un scan initial et reconstruit les groupes auto. */
-    async init() {
-      await this.scanAll();
-    }
-    // ----------------- Utils -----------------
-    abs(u) {
-      try {
-        return new URL(u, location.href).href;
-      } catch {
-        return u;
-      }
-    }
-    isMP3(u) {
-      return /\.mp3(?:[\?#][^\s'"]*)?$/i.test(u);
-    }
-    fileName(u) {
-      try {
-        return new URL(u, location.href).pathname.split("/").pop() || u;
-      } catch {
-        return String(u);
-      }
-    }
-    logicalName(fileName) {
-      return fileName.replace(/-[A-Za-z0-9_=-]{6,}(?=\.mp3$)/i, "");
-    }
-    clamp(x, a, b) {
-      return Math.max(a, Math.min(b, x));
-    }
-    choose(arr) {
-      return arr && arr.length ? arr[Math.random() * arr.length | 0] : void 0;
-    }
-    toKey(name) {
-      return String(name || "").trim().toLowerCase();
-    }
-    add(u, sourceTag) {
-      if (!u || !this.isMP3(u)) return;
-      const url = this.abs(u);
-      if (!this.found.has(url)) {
-        this.found.add(url);
-        const name = this.fileName(url);
-        this.meta.set(url, { from: /* @__PURE__ */ new Set([sourceTag]), name, logicalName: this.logicalName(name) });
-      } else {
-        this.meta.get(url)?.from.add(sourceTag);
-      }
-    }
-    refreshHowler() {
-      this.howler = window.Howler && Array.isArray(window.Howler._howls) ? window.Howler : null;
-      return this.howler;
-    }
-    sameAsset(a, b) {
-      try {
-        const A = new URL(a, location.href).href;
-        const B = new URL(b, location.href).href;
-        if (A === B) return true;
-        const fn = (p) => new URL(p, location.href).pathname.split("/").pop();
-        const la = this.logicalName(fn(A));
-        const lb = this.logicalName(fn(B));
-        return la === lb;
-      } catch {
-        return a === b;
-      }
-    }
-    readAtomRaw() {
-      const raw = localStorage.getItem(this.atomKey);
-      if (raw == null) return null;
-      try {
-        const val = JSON.parse(raw);
-        if (typeof val === "number") return val;
-        const m = JSON.stringify(val).match(/-?\d+(?:\.\d+)?/);
-        return m ? parseFloat(m[0]) : null;
-      } catch {
-        const m = String(raw).match(/-?\d+(?:\.\d+)?/);
-        return m ? parseFloat(m[0]) : null;
-      }
-    }
-    howlerMaster() {
-      try {
-        return window.Howler && typeof window.Howler.volume === "function" ? window.Howler.volume() : 1;
-      } catch {
-        return 1;
-      }
-    }
-    // 0.001 est considéré comme un vrai mute (→ 0)
-    finalVolumeObj() {
-      let raw = this.readAtomRaw();
-      if (raw == null) raw = this.max;
-      const clamped = this.clamp(raw, this.min, this.max);
-      const nearMute = Math.abs(clamped - this.min) < 1e-6 ? 0 : clamped;
-      const vol = nearMute * this.howlerMaster() * this.gainFactor;
-      return { raw, clamped, vol };
-    }
-    // ----------------- Scanners -----------------
-    async scanPerformance() {
-      performance.getEntriesByType("resource").map((e) => e.name).filter(Boolean).forEach((u) => this.add(u, "perf"));
-    }
-    async scanHowler() {
-      this.refreshHowler();
-      if (!this.howler) return;
-      this.howler._howls.forEach((h) => {
-        const src = h && (h._src || h._urls && h._urls[0]);
-        if (src) this.add(src, "howler");
-      });
-    }
-    async scanCaches() {
-      if (!("caches" in window)) return;
-      try {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          const c = await caches.open(k);
-          const reqs = await c.keys();
-          for (const r of reqs) {
-            const u = r.url;
-            if (this.isMP3(u)) this.add(u, `cache:${k}`);
-          }
-        }
-      } catch {
-      }
-    }
-    async fetchText(u) {
-      try {
-        const res = await fetch(u, { mode: "same-origin", credentials: "same-origin" });
-        if (!res.ok) return "";
-        const ct = res.headers.get("content-type") || "";
-        if (!/javascript|ecmascript|css|html/i.test(ct)) return "";
-        return await res.text();
-      } catch {
-        return "";
-      }
-    }
-    extractMp3s(text) {
-      if (!text) return [];
-      const re = /["'`](\/?[^"'`)\s]+?\.mp3(?:\?[^"'`\s]*)?)["'`]/ig;
-      const out = [];
-      let m;
-      while (m = re.exec(text)) out.push(m[1]);
-      return out;
-    }
-    async scanResourcesForRefs() {
-      const urls = /* @__PURE__ */ new Set();
-      document.querySelectorAll('script[src],link[rel="stylesheet"][href]').forEach((el2) => {
-        const u = el2.src || el2.href;
-        try {
-          const url = new URL(u, location.href);
-          if (url.origin === location.origin) urls.add(url.href);
-        } catch {
-        }
-      });
-      urls.add(location.href);
-      const texts = await Promise.all([...urls].map((u) => this.fetchText(u)));
-      texts.forEach((t, i) => {
-        for (const match of this.extractMp3s(t)) this.add(match, `ref:${[...urls][i]}`);
-      });
-    }
-    async scanDOM() {
-      document.querySelectorAll("audio[src]").forEach((a) => this.add(a.getAttribute("src") || "", "dom"));
-      document.querySelectorAll("source[src]").forEach((s) => this.add(s.getAttribute("src") || "", "dom"));
-      const html = document.documentElement?.outerHTML || "";
-      for (const m of this.extractMp3s(html)) this.add(m, "html");
-    }
-    async scanAll() {
-      this.found.clear();
-      this.meta.clear();
-      await Promise.all([
-        this.scanPerformance(),
-        this.scanHowler(),
-        this.scanCaches(),
-        this.scanDOM()
-      ]);
-      await this.scanResourcesForRefs();
-      this.autoGroups({ overwrite: true });
-      return this.urls();
-    }
-    // ----------------- Groupes -----------------
-    inferGroupKey(logicalName) {
-      const base = String(logicalName || "").replace(/\.mp3$/i, "");
-      let m = base.match(/^([A-Za-z]+)[_\-]/);
-      if (m) return m[1].toLowerCase();
-      m = base.match(/^([A-Za-z]+)\d+$/);
-      if (m) return m[1].toLowerCase();
-      m = base.match(/^([A-Za-z]+)/);
-      return m ? m[1].toLowerCase() : base.toLowerCase();
-    }
-    defineGroup(name, matcher) {
-      const key2 = this.toKey(name);
-      const set2 = /* @__PURE__ */ new Set();
-      const items = this.urls().map((u) => [u, this.meta.get(u)]);
-      const test = (url, meta) => {
-        if (!matcher) return false;
-        if (typeof matcher === "function") return !!matcher(url, meta);
-        const ln = meta?.logicalName || meta?.name || url;
-        if (matcher instanceof RegExp) return matcher.test(ln) || matcher.test(url);
-        const txt = String(matcher).toLowerCase();
-        return ln.toLowerCase().startsWith(txt) || url.toLowerCase().includes("/" + txt);
-      };
-      for (const [url, meta] of items)
-        if (test(url, meta && { name: meta.name, logicalName: meta.logicalName })) set2.add(url);
-      this.groupsMap.set(key2, set2);
-      return [...set2];
-    }
-    undefineGroup(name) {
-      this.groupsMap.delete(this.toKey(name));
-    }
-    // --- Unique implémentation publique ---
-    autoGroups({ overwrite = false, minVariants = this.minVariantsPerAutoGroup } = {}) {
-      this.rebuildAutoGroups(overwrite, minVariants);
-      return this.groups();
-    }
-    // Helper privé appelé par autoGroups()
-    rebuildAutoGroups(overwrite, minVariants) {
-      const tmp = /* @__PURE__ */ new Map();
-      for (const [url, m] of this.meta.entries()) {
-        const grp = this.inferGroupKey(m?.logicalName || m?.name || url);
-        if (!tmp.has(grp)) tmp.set(grp, /* @__PURE__ */ new Set());
-        tmp.get(grp).add(url);
-      }
-      for (const [grp, set2] of tmp.entries()) {
-        if (set2.size < minVariants) continue;
-        if (overwrite || !this.groupsMap.has(grp)) this.groupsMap.set(grp, set2);
-      }
-    }
-    groups() {
-      const out = {};
-      for (const [k, set2] of this.groupsMap.entries()) out[k] = [...set2];
-      return out;
-    }
-    getGroup(name) {
-      const set2 = this.groupsMap.get(this.toKey(name));
-      return set2 ? [...set2] : [];
-    }
-    pick(name) {
-      const g = this.getGroup(name);
-      return this.choose(g);
-    }
-    // ----------------- Lecture -----------------
-    findExistingHowlByUrl(url) {
-      this.refreshHowler();
-      if (!this.howler) return null;
-      for (const h of this.howler._howls) {
-        const src = h && (h._src || h._urls && h._urls[0]);
-        if (src && this.sameAsset(src, url)) return h;
-      }
-      return null;
-    }
-    /** Volume calculé selon config + atom du jeu. */
-    getGameSfxVolume() {
-      return this.finalVolumeObj();
-    }
-    /** Ajoute un offset global (sans toucher à l’atom du jeu). */
-    setGainFactor(g = 1) {
-      this.gainFactor = +g || 1;
-    }
-    /** Permet d’adapter la clé et la plage de l’atom si ça change côté jeu. */
-    setAtomConfig(key2 = "soundEffectsVolumeAtom", min = 1e-3, max = 0.2000000000000001) {
-      this.atomKey = key2;
-      this.min = min;
-      this.max = max;
-    }
-    /** Joue une URL en respectant le volume du jeu et Howler si dispo. */
-    playUrl(url) {
-      const { vol } = this.finalVolumeObj();
-      const existing = this.findExistingHowlByUrl(url);
-      if (existing) {
-        try {
-          existing.play();
-          return existing;
-        } catch {
-        }
-      }
-      const Howl = window.Howl && window.Howler ? window.Howl : null;
-      if (Howl) {
-        try {
-          const h = new Howl({ src: [url], volume: vol });
-          h.play();
-          return h;
-        } catch {
-        }
-      }
-      try {
-        const a = new Audio(url);
-        a.volume = Math.max(0, Math.min(1, vol));
-        void a.play().catch(() => {
-        });
-        return a;
-      } catch {
-        return null;
-      }
-    }
-    /** Joue par motif (RegExp ou texte partiel). */
-    playBy(matcher) {
-      const list = this.urls();
-      const re = matcher instanceof RegExp ? matcher : new RegExp(String(matcher).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      const hit = list.find((u) => re.test(u));
-      return hit ? this.playUrl(hit) : null;
-    }
-    /** Joue par nom logique exact si possible, sinon via motif. */
-    play(nameOrRegex) {
-      if (typeof nameOrRegex === "string") {
-        const m = this.map();
-        if (m[nameOrRegex]?.[0]) return this.playUrl(m[nameOrRegex][0]);
-      }
-      return this.playBy(nameOrRegex);
-    }
-    /** Joue une entrée d’un groupe (index fixe, ou aléatoire). */
-    playGroup(name, opts = {}) {
-      const { index, random = true, filter } = opts;
-      let list = this.getGroup(name);
-      if (!list.length) return null;
-      if (typeof filter === "function") {
-        list = list.filter((u) => {
-          const m = this.meta.get(u);
-          return filter(u, m && { name: m.name, logicalName: m.logicalName });
-        });
-        if (!list.length) return null;
-      }
-      const url = typeof index === "number" ? list[(index % list.length + list.length) % list.length] : random ? this.choose(list) : list[0];
-      return this.playUrl(url);
-    }
-    /** Alias pratique pour jouer une variation aléatoire d’un groupe (ex: "harvest"). */
-    playRandom(name) {
-      return this.playGroup(name, { random: true });
-    }
-    // ----------------- Tables & export -----------------
-    urls() {
-      return [...this.found];
-    }
-    map() {
-      const map2 = {};
-      for (const [url, m] of this.meta.entries()) {
-        const key2 = m.logicalName || m.name;
-        (map2[key2] || (map2[key2] = [])).push(url);
-      }
-      return map2;
-    }
-    info() {
-      return this.urls().map((u) => {
-        const m = this.meta.get(u);
-        return { url: u, name: m?.name, logicalName: m?.logicalName, sources: [...m?.from || []].join(",") };
-      });
-    }
-    /** Exporte JSON (URLs + groupes). Retourne la string. */
-    exportJSON() {
-      return JSON.stringify({ urls: this.info(), groups: this.groups() }, null, 2);
-    }
-    /** Scan public de commodité. */
-    async scan() {
-      return this.scanAll();
-    }
-    /* Helpers */
-    playHarvest() {
-      return this.playGroup("harvest");
-    }
-    playPlantSeed() {
-      return this.playGroup("plantseed");
-    }
-    playWaterPlant() {
-      return this.playBy("water");
-    }
-    playDestroyPlant() {
-      return this.playBy("Break_Dirt");
-    }
-    playDestroyStone() {
-      return this.playBy("Break_Stone");
-    }
-    playSellNotification() {
-      return this.playBy("Score_PlusOne");
-    }
-    playInfoNotification() {
-      return this.playBy("Keyboard_Enter_01");
-    }
-    playBuy() {
-      return this.playGroup("coinbuy");
-    }
-  };
-  var audioPlayer = new AudioPlayer({ autoScan: true });
-  window.__audioPlayer = audioPlayer;
 
   // src/utils/sellAllPets.ts
   var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
@@ -16801,359 +21008,6 @@
   }
   function decorNameFromId(decorId, cat = decorCatalog) {
     return cat?.[decorId]?.name ?? void 0;
-  }
-
-  // src/ui/spriteIconCache.ts
-  var SPRITE_PRELOAD_CATEGORIES = [
-    "plant",
-    "tallplant",
-    "decor",
-    "item",
-    "pet",
-    "seed",
-    "ui",
-    "mutation",
-    "mutation-overlay"
-  ];
-  var spriteDataUrlCache = /* @__PURE__ */ new Map();
-  var spriteWarmupQueued = false;
-  var spriteWarmupStarted = false;
-  var warmupState = { total: 0, done: 0, completed: false };
-  var prefetchedWarmupKeys = [];
-  var warmupCompletedKeys = /* @__PURE__ */ new Set();
-  var WARMUP_RETRY_MS = 100;
-  var WARMUP_DELAY_MS = 8;
-  var WARMUP_BATCH = 3;
-  var warmupListeners = /* @__PURE__ */ new Set();
-  function notifyWarmup(state3) {
-    warmupState = state3;
-    warmupListeners.forEach((listener) => {
-      try {
-        listener(warmupState);
-      } catch {
-      }
-    });
-  }
-  function getSpriteWarmupState() {
-    return warmupState;
-  }
-  function onSpriteWarmupProgress(listener) {
-    warmupListeners.add(listener);
-    try {
-      listener(warmupState);
-    } catch {
-    }
-    return () => {
-      warmupListeners.delete(listener);
-    };
-  }
-  function primeWarmupKeys(keys) {
-    prefetchedWarmupKeys.push(...keys);
-  }
-  function primeSpriteData(category, spriteId, dataUrl) {
-    const cacheKey = cacheKeyFor(category, spriteId);
-    if (!spriteDataUrlCache.has(cacheKey)) {
-      spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
-    }
-    if (!warmupCompletedKeys.has(cacheKey)) {
-      warmupCompletedKeys.add(cacheKey);
-      const nextDone = warmupState.done + 1;
-      const completed = warmupState.total > 0 ? nextDone >= warmupState.total : false;
-      notifyWarmup({ total: Math.max(warmupState.total, nextDone), done: nextDone, completed });
-    }
-  }
-  var normalizeSpriteId = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  var baseNameFromKey = (key2) => {
-    const parts = key2.split("/").filter(Boolean);
-    return parts[parts.length - 1] ?? key2;
-  };
-  var normalizeMutationList = (mutations) => {
-    const list = Array.from(
-      new Set((mutations ?? []).map((value) => String(value ?? "").trim()).filter(Boolean))
-    );
-    if (!list.length) {
-      return { list, key: "" };
-    }
-    const key2 = list.map((val) => normalizeSpriteId(val)).filter(Boolean).sort().join(",");
-    return { list, key: key2 ? `|m=${key2}` : "" };
-  };
-  var cacheKeyFor = (category, spriteId, mutationKey) => `${category}:${normalizeSpriteId(spriteId)}${mutationKey ?? ""}`;
-  var scheduleNonBlocking = (cb) => {
-    return new Promise((resolve2) => {
-      const runner = () => {
-        Promise.resolve().then(cb).then(resolve2).catch(() => resolve2(cb()));
-      };
-      if (typeof window.requestIdleCallback === "function") {
-        window.requestIdleCallback(runner, { timeout: 50 });
-      } else if (typeof requestAnimationFrame === "function") {
-        requestAnimationFrame(runner);
-      } else {
-        setTimeout(runner, 0);
-      }
-    });
-  };
-  function getSpriteService() {
-    const win = pageWindow ?? globalThis;
-    return win?.__MG_SPRITE_SERVICE__ ?? win?.unsafeWindow?.__MG_SPRITE_SERVICE__ ?? null;
-  }
-  var parseKeyToCategoryId = (key2) => {
-    const parts = key2.split("/").filter(Boolean);
-    if (!parts.length) return null;
-    const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
-    const category = parts[start2] ?? "";
-    const id = parts.slice(start2 + 1).join("/") || parts[parts.length - 1] || "";
-    if (!category || !id) return null;
-    return { category, id };
-  };
-  function whenServiceReady(handle) {
-    if (!handle || !handle.ready || typeof handle.ready.then !== "function") {
-      return Promise.resolve();
-    }
-    return handle.ready.then(
-      () => {
-      },
-      () => {
-      }
-    );
-  }
-  async function ensureSpriteDataCached(service, category, spriteId, logTag, options) {
-    if (!service?.renderToCanvas) {
-      return null;
-    }
-    const { list: mutationList, key: mutationKey } = normalizeMutationList(options?.mutations);
-    const cacheKey = cacheKeyFor(category, spriteId, mutationKey);
-    let promise = spriteDataUrlCache.get(cacheKey);
-    if (!promise) {
-      promise = scheduleNonBlocking(async () => {
-        try {
-          const canvas = service.renderToCanvas?.({
-            category,
-            id: spriteId,
-            mutations: mutationList
-          });
-          if (!canvas) return null;
-          return canvas.toDataURL("image/png");
-        } catch (error) {
-          console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
-          return null;
-        }
-      });
-      spriteDataUrlCache.set(cacheKey, promise);
-    }
-    return promise;
-  }
-  var spriteMatchCache = /* @__PURE__ */ new Map();
-  function getMatchCacheKey(categories, id) {
-    const normalizedCategories = categories.map((category) => category.toLowerCase()).join("|");
-    return `${normalizedCategories}|${normalizeSpriteId(id)}`;
-  }
-  function findSpriteMatch(service, categories, id) {
-    if (!service.list) return null;
-    const cacheKey = getMatchCacheKey(categories, id);
-    if (spriteMatchCache.has(cacheKey)) {
-      return spriteMatchCache.get(cacheKey) ?? null;
-    }
-    const normalizedTarget = normalizeSpriteId(id);
-    const categoryLists = categories.map((category) => ({
-      category,
-      items: service.list?.(category) ?? []
-    }));
-    let matched = null;
-    const tryMatch = (category, base) => {
-      if (normalizeSpriteId(base) === normalizedTarget) {
-        matched = { category, spriteId: base };
-        return true;
-      }
-      return false;
-    };
-    for (const { category, items } of categoryLists) {
-      for (const it of items) {
-        const key2 = typeof it?.key === "string" ? it.key : "";
-        if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        if (tryMatch(category, base)) {
-          spriteMatchCache.set(cacheKey, matched);
-          return matched;
-        }
-      }
-    }
-    for (const { category, items } of categoryLists) {
-      for (const it of items) {
-        const key2 = typeof it?.key === "string" ? it.key : "";
-        if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        const normBase = normalizeSpriteId(base);
-        if (!normBase) continue;
-        if (normalizedTarget.includes(normBase) || normBase.includes(normalizedTarget) || normBase.startsWith(normalizedTarget) || normalizedTarget.startsWith(normBase)) {
-          matched = { category, spriteId: base };
-          spriteMatchCache.set(cacheKey, matched);
-          return matched;
-        }
-      }
-    }
-    spriteMatchCache.set(cacheKey, null);
-    return null;
-  }
-  function attachSpriteIcon(target, categories, id, size, logTag, options) {
-    const service = getSpriteService();
-    if (!service?.renderToCanvas) return;
-    const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
-    if (!candidateIds.length) return;
-    void whenServiceReady(service).then(
-      () => scheduleNonBlocking(async () => {
-        let selected = null;
-        for (const candidate of candidateIds) {
-          const match = findSpriteMatch(service, categories, candidate);
-          if (match) {
-            selected = { match, candidate };
-            break;
-          }
-        }
-        if (!selected) {
-          options?.onNoSpriteFound?.({ categories, candidates: candidateIds });
-          return;
-        }
-        const resolved = selected;
-        const { key: mutationKey } = normalizeMutationList(options?.mutations);
-        const spriteKey = `${resolved.match.category}:${resolved.match.spriteId}${mutationKey}`;
-        const existingImg = target.querySelector("img[data-sprite-key]");
-        if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
-          return;
-        }
-        const dataUrl = await ensureSpriteDataCached(
-          service,
-          resolved.match.category,
-          resolved.match.spriteId,
-          logTag,
-          {
-            mutations: options?.mutations
-          }
-        );
-        if (!dataUrl) return;
-        const img = document.createElement("img");
-        img.src = dataUrl;
-        img.width = size;
-        img.height = size;
-        img.alt = "";
-        img.decoding = "async";
-        img.loading = "lazy";
-        img.draggable = false;
-        img.style.width = `${size}px`;
-        img.style.height = `${size}px`;
-        img.style.objectFit = "contain";
-        img.style.imageRendering = "auto";
-        img.style.display = "block";
-        img.dataset.spriteKey = spriteKey;
-        img.dataset.spriteCategory = resolved.match.category;
-        img.dataset.spriteId = resolved.match.spriteId;
-        requestAnimationFrame(() => {
-          target.replaceChildren(img);
-          options?.onSpriteApplied?.(img, {
-            category: resolved.match.category,
-            spriteId: resolved.match.spriteId,
-            candidate: resolved.candidate
-          });
-        });
-      })
-    );
-  }
-  function attachWeatherSpriteIcon(target, tag, size) {
-    if (tag === "NoWeatherEffect") return;
-    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
-  }
-  function warmupSpriteCache() {
-    if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
-    spriteWarmupQueued = true;
-    notifyWarmup({ total: warmupState.total, done: warmupState.done, completed: false });
-    const scheduleRetry = () => {
-      window.setTimeout(() => {
-        spriteWarmupQueued = false;
-        warmupSpriteCache();
-      }, WARMUP_RETRY_MS);
-    };
-    let service = getSpriteService();
-    if (!service && prefetchedWarmupKeys.length === 0) {
-      scheduleRetry();
-      return;
-    }
-    const tasks = [];
-    const seen = new Set(warmupCompletedKeys);
-    if (service?.list) {
-      SPRITE_PRELOAD_CATEGORIES.forEach((category) => {
-        const items = service.list?.(category) ?? [];
-        items.forEach((item) => {
-          const key2 = typeof item?.key === "string" ? item.key : "";
-          if (!key2) return;
-          const base = baseNameFromKey(key2);
-          if (!base) return;
-          const k = `${category}:${base.toLowerCase()}`;
-          if (seen.has(k)) return;
-          seen.add(k);
-          tasks.push({ category, id: base });
-        });
-      });
-    }
-    if (prefetchedWarmupKeys.length) {
-      prefetchedWarmupKeys.forEach((key2) => {
-        const parsed = parseKeyToCategoryId(key2);
-        if (!parsed) return;
-        const k = `${parsed.category}:${parsed.id.toLowerCase()}`;
-        if (seen.has(k)) return;
-        seen.add(k);
-        tasks.push(parsed);
-      });
-      prefetchedWarmupKeys = [];
-    }
-    if (!tasks.length) {
-      if (warmupState.completed) {
-        spriteWarmupQueued = false;
-        return;
-      }
-      scheduleRetry();
-      return;
-    }
-    spriteWarmupStarted = true;
-    const total = Math.max(warmupState.total, tasks.length);
-    const startingDone = Math.min(warmupState.done, total);
-    notifyWarmup({ total, done: startingDone, completed: total === 0 || startingDone >= total });
-    const processNext = () => {
-      service = service || getSpriteService();
-      if (!service?.renderToCanvas || !service?.list) {
-        setTimeout(processNext, WARMUP_RETRY_MS);
-        return;
-      }
-      if (!tasks.length) {
-        spriteWarmupQueued = false;
-        console.log("[SpriteIconCache]", "warmup complete", {
-          categories: SPRITE_PRELOAD_CATEGORIES,
-          totalCached: spriteDataUrlCache.size
-        });
-        notifyWarmup({ total, done: warmupState.done, completed: true });
-        return;
-      }
-      let processed = 0;
-      const batch = tasks.splice(0, WARMUP_BATCH);
-      batch.forEach((entry) => {
-        ensureSpriteDataCached(service, entry.category, entry.id, "warmup").then((result) => {
-          if (result == null && !service?.renderToCanvas) {
-            tasks.unshift(entry);
-            return;
-          }
-          const completionKey = cacheKeyFor(entry.category, entry.id);
-          if (!warmupCompletedKeys.has(completionKey)) {
-            warmupCompletedKeys.add(completionKey);
-            const nextDone = Math.min(warmupState.done + 1, total);
-            notifyWarmup({ total, done: nextDone, completed: nextDone >= total });
-          }
-        }).finally(() => {
-          processed += 1;
-          if (processed >= batch.length) {
-            setTimeout(processNext, WARMUP_DELAY_MS);
-          }
-        });
-      });
-    };
-    processNext();
   }
 
   // src/ui/menus/notificationOverlay.ts
@@ -20832,7 +24686,7 @@
   var watcherPromise = null;
   var unsubscribe = null;
   var computeCounter = 0;
-  var listeners3 = /* @__PURE__ */ new Set();
+  var listeners4 = /* @__PURE__ */ new Set();
   function getFiniteNumber(value) {
     if (typeof value === "number") {
       return Number.isFinite(value) ? value : null;
@@ -21062,7 +24916,7 @@
     };
   }
   function notifyListeners(snapshot) {
-    for (const listener of listeners3) {
+    for (const listener of listeners4) {
       try {
         listener(snapshot);
       } catch (error) {
@@ -21107,9 +24961,9 @@
     return currentSnapshot;
   }
   function onInventoryValueChange(listener) {
-    listeners3.add(listener);
+    listeners4.add(listener);
     return () => {
-      listeners3.delete(listener);
+      listeners4.delete(listener);
     };
   }
 
@@ -26598,7 +30452,7 @@ next: ${next}`;
     const full = parts.slice(start2).join("/") || safe;
     return { category, id, full };
   }
-  function buildSpriteCandidates(parsed) {
+  function buildSpriteCandidates2(parsed) {
     const variants = [parsed.id, parsed.full];
     const compact = parsed.id.replace(/\W+/g, "");
     if (compact && compact !== parsed.id) {
@@ -26855,7 +30709,7 @@ next: ${next}`;
         attachSpriteIcon(
           iconSlot,
           [parsed.category],
-          buildSpriteCandidates(parsed),
+          buildSpriteCandidates2(parsed),
           SPRITE_ICON_SIZE,
           "debug-sprites",
           { mutations: activeMutations }
@@ -29751,7 +33605,7 @@ next: ${next}`;
     if (cropSimulationStyleEl) return;
     cropSimulationStyleEl = addStyle(CROP_SIMULATION_CSS);
   }
-  function buildSpriteCandidates2(primary, option) {
+  function buildSpriteCandidates3(primary, option) {
     const candidates = /* @__PURE__ */ new Set();
     const addCandidate = (value) => {
       if (!value) return;
@@ -29819,7 +33673,7 @@ next: ${next}`;
       justifyContent: "center"
     });
     wrap.textContent = fallback && fallback.trim().length > 0 ? fallback : "??";
-    const candidates = buildSpriteCandidates2(option.key, option);
+    const candidates = buildSpriteCandidates3(option.key, option);
     const categories = getSpriteCategoriesForKey(option?.key, option?.seedName, option?.cropName);
     attachSpriteIcon(wrap, categories, candidates, size, logTag);
     return wrap;
@@ -29833,7 +33687,7 @@ next: ${next}`;
       syncCropSpriteLoadedState(el2, layer);
       return;
     }
-    const candidates = options.candidates && options.candidates.length ? options.candidates : buildSpriteCandidates2(speciesKey);
+    const candidates = options.candidates && options.candidates.length ? options.candidates : buildSpriteCandidates3(speciesKey);
     const mutations = Array.isArray(options.mutations) && options.mutations.length ? options.mutations : void 0;
     const categories = options.categories && options.categories.length ? options.categories : getSpriteCategoriesForKey(speciesKey);
     const updateLoadedState = () => syncCropSpriteLoadedState(el2, layer);
@@ -30356,7 +34210,7 @@ next: ${next}`;
         const option = optionByKey.get(key2);
         const fallbackEmoji = getLockerSeedEmojiForKey(key2) || (option?.seedName ? getLockerSeedEmojiForSeedName(option.seedName) : void 0) || "\u{1F331}";
         const mutations = getMutationsForState(state3);
-        const candidates = buildSpriteCandidates2(key2, option);
+        const candidates = buildSpriteCandidates3(key2, option);
         const categories = getSpriteCategoriesForKey(key2, option?.seedName, option?.cropName);
         applyCropSimulationSprite(refs.sprite, key2, {
           fallback: fallbackEmoji,
@@ -35103,6 +38957,7 @@ next: ${next}`;
 
   // src/ui/menus/misc.ts
   var formatShortDuration = (seconds) => {
+    if (seconds <= 0) return "Instant";
     const sec = Math.max(0, Math.round(seconds));
     if (sec < 60) return `${sec} s`;
     const m = Math.floor(sec / 60);
@@ -35155,7 +39010,7 @@ next: ${next}`;
       const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
       const sliderLabel = ui.label("Reconnect after");
       sliderLabel.style.margin = "0";
-      const slider = ui.slider(30, 300, 30, initialSeconds);
+      const slider = ui.slider(0, 300, 30, initialSeconds);
       slider.style.flex = "1";
       const sliderValue = document.createElement("div");
       sliderValue.style.minWidth = "72px";
@@ -35166,7 +39021,7 @@ next: ${next}`;
       hint.style.opacity = "0.8";
       hint.style.fontSize = "12px";
       hint.style.lineHeight = "1.35";
-      const clampSeconds = (value) => Math.max(30, Math.min(300, Math.round(value / 30) * 30));
+      const clampSeconds = (value) => Math.max(0, Math.min(300, Math.round(value / 30) * 30));
       const syncToggle = () => {
         const on = !!toggle.checked;
         slider.disabled = !on;
@@ -36579,3730 +40434,6 @@ next: ${next}`;
     refreshButtonStates();
     wrapper.appendChild(cardsContainer);
     view.appendChild(wrapper);
-  }
-
-  // src/utils/tileObjectSystemApi.ts
-  var state2 = {
-    engine: null,
-    tos: null,
-    origBind: Function.prototype.bind,
-    bindPatched: false
-  };
-  function looksLikeEngine(o) {
-    return !!(o && typeof o === "object" && typeof o.start === "function" && typeof o.destroy === "function" && o.app && o.app.stage && o.app.renderer && o.systems && typeof o.systems.values === "function");
-  }
-  function findTileObjectSystem(engine) {
-    try {
-      for (const e of engine.systems.values()) {
-        const s = e?.system;
-        if (s?.name === "tileObject") return s;
-      }
-    } catch {
-    }
-    return null;
-  }
-  function tryCaptureFromKnownGlobals() {
-    const w = window;
-    if (!state2.engine && w.__QUINOA_ENGINE__) state2.engine = w.__QUINOA_ENGINE__;
-    if (!state2.tos && w.__TILE_OBJECT_SYSTEM__) state2.tos = w.__TILE_OBJECT_SYSTEM__;
-    if (state2.engine && !state2.tos) state2.tos = findTileObjectSystem(state2.engine);
-  }
-  function armCapture() {
-    if (state2.engine && state2.tos) return;
-    if (state2.bindPatched) return;
-    state2.bindPatched = true;
-    Function.prototype.bind = function(thisArg, ...args) {
-      const bound = state2.origBind.call(this, thisArg, ...args);
-      try {
-        if (!state2.engine && looksLikeEngine(thisArg)) {
-          state2.engine = thisArg;
-          state2.tos = findTileObjectSystem(thisArg);
-          Function.prototype.bind = state2.origBind;
-          state2.bindPatched = false;
-        }
-      } catch {
-      }
-      return bound;
-    };
-  }
-  function deepClone(v) {
-    try {
-      if (typeof structuredClone === "function") return structuredClone(v);
-    } catch {
-    }
-    try {
-      return JSON.parse(JSON.stringify(v));
-    } catch {
-    }
-    return v;
-  }
-  function globalIndexFromXY(tx, ty) {
-    const cols = state2.tos?.map?.cols;
-    if (!Number.isFinite(cols) || cols <= 0) return null;
-    return ty * cols + tx | 0;
-  }
-  function getTileViewAt(tx, ty, ensureView) {
-    const gidx = globalIndexFromXY(tx, ty);
-    if (!state2.tos || gidx == null) return { gidx: null, tv: null };
-    let tv = state2.tos.tileViews?.get?.(gidx) ?? null;
-    if (!tv && ensureView && typeof state2.tos.getOrCreateTileView === "function") {
-      try {
-        tv = state2.tos.getOrCreateTileView(gidx);
-      } catch {
-      }
-    }
-    return { gidx, tv };
-  }
-  function assertReady() {
-    if (!state2.engine || !state2.tos) {
-      throw new Error("Quinoa engine/TOS not captured. Call tos.init() early (main entry) and ensure it runs before engine initializes.");
-    }
-  }
-  function applyTileObject(tx, ty, nextObj, opts = {}) {
-    assertReady();
-    const ensureView = opts.ensureView !== false;
-    const forceUpdate = opts.forceUpdate !== false;
-    const { gidx, tv } = getTileViewAt(tx, ty, ensureView);
-    if (gidx == null) throw new Error("TOS/map cols not available");
-    if (!tv) throw new Error("TileView not available");
-    const before = tv.tileObject;
-    tv.onDataChanged(nextObj);
-    if (forceUpdate && state2.engine?.reusableContext) {
-      try {
-        tv.update(state2.engine.reusableContext);
-      } catch {
-      }
-    }
-    return { tx, ty, gidx, ok: true, before, after: tv.tileObject };
-  }
-  function assertType(obj, type) {
-    if (!obj) throw new Error("No tileObject on this tile");
-    if (obj.objectType !== type) throw new Error(`Wrong objectType: expected "${type}", got "${obj.objectType}"`);
-  }
-  function patchPlantSlot(slot, slotPatch) {
-    const p = slotPatch || {};
-    if ("startTime" in p) slot.startTime = Number(p.startTime);
-    if ("endTime" in p) slot.endTime = Number(p.endTime);
-    if ("targetScale" in p) slot.targetScale = Number(p.targetScale);
-    if ("mutations" in p) {
-      if (!Array.isArray(p.mutations)) throw new Error("mutations must be an array of strings");
-      if (!p.mutations.every((x) => typeof x === "string")) throw new Error("mutations must contain only strings");
-      slot.mutations = p.mutations.slice();
-    }
-  }
-  var tos = {
-    /** À appeler une fois dans le main, le plus tôt possible */
-    init() {
-      tryCaptureFromKnownGlobals();
-      armCapture();
-      tryCaptureFromKnownGlobals();
-      return { ok: !!(state2.engine && state2.tos), engine: state2.engine, tos: state2.tos };
-    },
-    isReady() {
-      return !!(state2.engine && state2.tos);
-    },
-    getStatus() {
-      return { ok: !!(state2.engine && state2.tos), engine: state2.engine, tos: state2.tos };
-    },
-    getTileObject(tx, ty, opts = {}) {
-      assertReady();
-      const ensureView = opts.ensureView !== false;
-      const { gidx, tv } = getTileViewAt(Number(tx), Number(ty), ensureView);
-      if (gidx == null) throw new Error("TOS/map cols not available");
-      return {
-        tx: Number(tx),
-        ty: Number(ty),
-        gidx,
-        tileView: tv,
-        tileObject: tv?.tileObject
-      };
-    },
-    /** Met la tile à vide (tileObject = null) */
-    setTileEmpty(tx, ty, opts = {}) {
-      return applyTileObject(Number(tx), Number(ty), null, opts);
-    },
-    setTilePlant(tx, ty, patch, opts = {}) {
-      const info = this.getTileObject(tx, ty, opts);
-      const cur = info.tileObject;
-      assertType(cur, "plant");
-      const next = deepClone(cur);
-      if (!Array.isArray(next.slots)) next.slots = [];
-      const p = patch || {};
-      if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
-      if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
-      if ("species" in p) next.species = String(p.species);
-      if ("slotIdx" in p && "slotPatch" in p) {
-        const i = Number(p.slotIdx) | 0;
-        if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
-        patchPlantSlot(next.slots[i], p.slotPatch);
-        return applyTileObject(Number(tx), Number(ty), next, opts);
-      }
-      if ("slots" in p) {
-        const s = p.slots;
-        if (Array.isArray(s)) {
-          for (let i = 0; i < s.length; i++) {
-            if (s[i] == null) continue;
-            if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
-            patchPlantSlot(next.slots[i], s[i]);
-          }
-        } else if (s && typeof s === "object") {
-          for (const k of Object.keys(s)) {
-            const i = Number(k) | 0;
-            if (!Number.isFinite(i)) continue;
-            if (!next.slots[i]) throw new Error(`Plant slot ${i} does not exist`);
-            patchPlantSlot(next.slots[i], s[k]);
-          }
-        } else {
-          throw new Error("patch.slots must be an array or object map");
-        }
-        return applyTileObject(Number(tx), Number(ty), next, opts);
-      }
-      return applyTileObject(Number(tx), Number(ty), next, opts);
-    },
-    setTileDecor(tx, ty, patch, opts = {}) {
-      const info = this.getTileObject(tx, ty, opts);
-      const cur = info.tileObject;
-      assertType(cur, "decor");
-      const next = deepClone(cur);
-      const p = patch || {};
-      if ("rotation" in p) next.rotation = Number(p.rotation);
-      return applyTileObject(Number(tx), Number(ty), next, opts);
-    },
-    setTileEgg(tx, ty, patch, opts = {}) {
-      const info = this.getTileObject(tx, ty, opts);
-      const cur = info.tileObject;
-      assertType(cur, "egg");
-      const next = deepClone(cur);
-      const p = patch || {};
-      if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
-      if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
-      return applyTileObject(Number(tx), Number(ty), next, opts);
-    }
-  };
-
-  // src/services/editor.ts
-  var ARIES_SAVED_GARDENS_PATH = "editor.savedGardens";
-  var FIXED_SLOT_START = 1760866288723;
-  var FIXED_SLOT_END = 1760867858782;
-  var mutationColorMap = {
-    Gold: "rgba(200, 170, 0, 1)",
-    Rainbow: "linear-gradient(135deg, #ff0000, #ff7a00, #ffeb3b, #00c853, #40c4ff, #8e24aa)",
-    Wet: "rgb(30, 140, 230)",
-    Chilled: "rgb(100, 190, 200)",
-    Frozen: "rgb(100, 120, 255)",
-    Dawnlit: "rgba(120, 100, 180, 1)",
-    Ambershine: "rgba(160, 70, 50, 1)",
-    // <- important : Ambershine, pas Amberlit
-    Dawncharged: "rgba(160, 140, 220, 1)",
-    Ambercharged: "rgba(240, 110, 80, 1)"
-  };
-  function buildSpriteCandidates3(rawId, label2) {
-    const set2 = /* @__PURE__ */ new Set();
-    const add = (value) => {
-      if (!value) return;
-      const trimmed = String(value).trim();
-      if (!trimmed) return;
-      set2.add(trimmed);
-      set2.add(trimmed.replace(/\s+/g, ""));
-      const last = trimmed.split(/[./]/).pop();
-      if (last && last !== trimmed) {
-        set2.add(last);
-        set2.add(last.replace(/\s+/g, ""));
-      }
-    };
-    add(rawId);
-    add(label2);
-    return Array.from(set2).filter(Boolean);
-  }
-  var overlayEl = null;
-  var currentEnabled = false;
-  var listeners4 = /* @__PURE__ */ new Set();
-  var savedGardensListeners = /* @__PURE__ */ new Set();
-  var sideOverlayEl = null;
-  var sideListWrap = null;
-  var sideSelect = null;
-  var sideRightWrap = null;
-  var currentSideMode = "plants";
-  var selectedPlantId = null;
-  var selectedDecorId = null;
-  var currentItemOverlayEl = null;
-  var currentItemUnsub = null;
-  var currentItemApplyAll = false;
-  var currentItemSlotModes = {};
-  var editorKeybindsInstalled = false;
-  var overlaysVisible = true;
-  var EDITOR_PLACE_REMOVE_FIRST_DELAY_MS = 200;
-  var EDITOR_PLACE_REMOVE_REPEAT_MS = 100;
-  var lastEditorPlaceRemoveTs = 0;
-  var lastEditorPressStartTs = 0;
-  var lastEditorFirstFired = false;
-  var lastEditorTileKey = null;
-  var lastEditorTileType;
-  var lastEditorFirstActionTs = 0;
-  var editorActionHeld = false;
-  async function triggerEditorAnimation(animation) {
-    try {
-      const playerId2 = await getPlayerId();
-      if (!playerId2) return;
-      await Atoms.player.avatarTriggerAnimationAtom.set({ playerId: playerId2, animation });
-      if (animation === "dig") {
-        void audioPlayer.playBy("Break_Dirt_01");
-      } else if (animation === "dropObject") {
-        void (audioPlayer.playGroup("plant") || audioPlayer.playGroup("hit_dirt") || audioPlayer.playGroup("hit") || audioPlayer.playBy(/Hit_Dirt/i));
-      }
-    } catch {
-    }
-  }
-  var stateFrozenValue = null;
-  var statePatch = null;
-  var stateOriginalValue = null;
-  var friendGardenPreviewActive = false;
-  var friendGardenBackup = null;
-  function createSelectionIcon(kind, label2, size = 32, rawId) {
-    const wrap = document.createElement("span");
-    Object.assign(wrap.style, {
-      width: `${size}px`,
-      height: `${size}px`,
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      fontSize: `${Math.max(14, size - 10)}px`,
-      lineHeight: "1"
-    });
-    const fallback = label2?.trim().charAt(0).toUpperCase() || (kind === "decor" ? "D" : "P");
-    wrap.textContent = "";
-    wrap.setAttribute("aria-hidden", "true");
-    const applyFallback = () => {
-      if (!wrap.querySelector("img")) {
-        wrap.textContent = fallback;
-      }
-    };
-    const candidates = buildSpriteCandidates3(rawId, label2);
-    let categories = kind === "decor" ? ["decor"] : ["plant"];
-    if (kind !== "decor" && /bamboo|cactus/i.test(String(rawId ?? label2 ?? ""))) {
-      categories = ["tallplant", "tallPlant", "plant"];
-    }
-    if (candidates.length) {
-      attachSpriteIcon(wrap, categories, candidates, size, "editor", {
-        onNoSpriteFound: applyFallback
-      });
-    } else {
-      applyFallback();
-    }
-    return wrap;
-  }
-  function persist(enabled) {
-  }
-  function ensureOverlay() {
-    if (overlayEl && document.contains(overlayEl)) return overlayEl;
-    const el2 = document.createElement("div");
-    el2.id = "qws-editor-overlay";
-    el2.textContent = "Editor mode";
-    Object.assign(el2.style, {
-      position: "fixed",
-      top: "7%",
-      left: "50%",
-      transform: "translateX(-50%)",
-      zIndex: "1000001",
-      padding: "8px 12px",
-      borderRadius: "999px",
-      border: "1px solid #ffffff33",
-      background: "linear-gradient(180deg, rgba(17,24,31,0.95), rgba(12,18,26,0.92))",
-      color: "#e7eef7",
-      font: "600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-      letterSpacing: "0.3px",
-      boxShadow: "0 10px 30px rgba(0,0,0,.35)",
-      pointerEvents: "none"
-    });
-    (document.body || document.documentElement || document).appendChild(el2);
-    overlayEl = el2;
-    return el2;
-  }
-  function showOverlay() {
-    ensureOverlay();
-  }
-  function hideOverlay() {
-    if (overlayEl) {
-      overlayEl.remove();
-      overlayEl = null;
-    }
-  }
-  function notifySavedGardensChanged() {
-    if (!savedGardensListeners.size) return;
-    for (const listener of savedGardensListeners) {
-      try {
-        listener();
-      } catch (error) {
-        console.error("[EditorService] saved gardens listener failed", error);
-      }
-    }
-  }
-  function getSelectedId() {
-    return currentSideMode === "decor" ? selectedDecorId : selectedPlantId;
-  }
-  function setSelectedId(next) {
-    if (currentSideMode === "decor") {
-      selectedDecorId = next;
-    } else {
-      selectedPlantId = next;
-    }
-  }
-  function getSideEntries() {
-    if (currentSideMode === "decor") {
-      return Object.entries(decorCatalog || {}).map(([decorId, val]) => ({
-        id: decorId,
-        label: String(val?.name || decorId)
-      }));
-    }
-    return Object.entries(plantCatalog || {}).map(([species, val]) => ({
-      id: species,
-      label: String(val?.crop?.name || val?.seed?.name || species)
-    }));
-  }
-  function getSideEntry(id) {
-    if (!id) return null;
-    return currentSideMode === "decor" ? decorCatalog?.[id] : plantCatalog?.[id];
-  }
-  function getSideEntryLabel(id, entry) {
-    if (currentSideMode === "decor") return entry?.name || id;
-    return entry?.crop?.name || entry?.seed?.name || id;
-  }
-  function getSideSpriteKind() {
-    return currentSideMode === "decor" ? "Decor" : "Crop";
-  }
-  function ensureSideOverlay() {
-    if (sideOverlayEl && document.contains(sideOverlayEl)) return sideOverlayEl;
-    const root = document.createElement("div");
-    root.id = "qws-editor-side";
-    Object.assign(root.style, {
-      position: "fixed",
-      top: "12%",
-      left: "12px",
-      zIndex: "1000001",
-      width: "560px",
-      minHeight: "420px",
-      maxHeight: "86vh",
-      height: "min(720px, 86vh)",
-      display: "grid",
-      gridTemplateRows: "auto 1fr",
-      // <- header + contenu
-      gap: "10px",
-      padding: "10px",
-      borderRadius: "12px",
-      border: "1px solid #ffffff22",
-      background: "linear-gradient(180deg, rgba(14,18,25,0.95), rgba(10,14,20,0.92))",
-      color: "#e7eef7",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      pointerEvents: "auto"
-    });
-    const header = document.createElement("div");
-    header.textContent = "Item picker";
-    header.style.fontWeight = "700";
-    header.style.fontSize = "13px";
-    header.style.letterSpacing = "0.08em";
-    header.style.textTransform = "uppercase";
-    header.style.opacity = "0.85";
-    header.style.textAlign = "center";
-    const content = document.createElement("div");
-    content.style.display = "grid";
-    content.style.gridTemplateColumns = "260px 1fr";
-    content.style.gap = "10px";
-    content.style.minHeight = "0";
-    const left = document.createElement("div");
-    left.style.display = "grid";
-    left.style.gridTemplateRows = "auto 1fr";
-    left.style.gap = "8px";
-    left.style.minHeight = "0";
-    const select2 = document.createElement("select");
-    select2.id = "qws-editor-side-select";
-    select2.style.width = "100%";
-    select2.style.padding = "8px";
-    select2.style.borderRadius = "10px";
-    select2.style.border = "1px solid #33404e";
-    select2.style.background = "rgba(20,25,33,0.9)";
-    select2.style.color = "#e7eef7";
-    select2.style.fontWeight = "600";
-    select2.style.cursor = "pointer";
-    const optPlants = document.createElement("option");
-    optPlants.value = "plants";
-    optPlants.textContent = "Plants";
-    const optDecor = document.createElement("option");
-    optDecor.value = "decor";
-    optDecor.textContent = "Decor";
-    select2.append(optPlants, optDecor);
-    select2.value = currentSideMode;
-    select2.onchange = () => {
-      currentSideMode = select2.value === "decor" ? "decor" : "plants";
-      renderSideList();
-    };
-    sideSelect = select2;
-    const listWrap = document.createElement("div");
-    listWrap.id = "qws-editor-side-list";
-    Object.assign(listWrap.style, {
-      border: "1px solid #2c3643",
-      borderRadius: "10px",
-      background: "rgba(16,21,28,0.9)",
-      overflow: "auto",
-      padding: "6px",
-      maxHeight: "72vh"
-    });
-    sideListWrap = listWrap;
-    left.append(select2, listWrap);
-    const right = document.createElement("div");
-    right.id = "qws-editor-side-details";
-    right.style.display = "grid";
-    right.style.gridTemplateRows = "1fr auto";
-    right.style.gap = "8px";
-    right.style.border = "1px solid #2c3643";
-    right.style.borderRadius = "10px";
-    right.style.background = "rgba(16,21,28,0.9)";
-    right.style.padding = "10px";
-    right.style.minHeight = "0";
-    right.style.overflow = "hidden";
-    sideRightWrap = right;
-    content.append(left, right);
-    root.append(header, content);
-    (document.body || document.documentElement || document).appendChild(root);
-    sideOverlayEl = root;
-    renderSideList();
-    renderSideDetails();
-    return root;
-  }
-  function showSideOverlay() {
-    ensureSideOverlay();
-  }
-  function hideSideOverlay() {
-    if (sideOverlayEl) {
-      sideOverlayEl.remove();
-      sideOverlayEl = null;
-      sideListWrap = null;
-      sideSelect = null;
-      sideRightWrap = null;
-    }
-  }
-  function ensureCurrentItemOverlay() {
-    if (currentItemOverlayEl && document.contains(currentItemOverlayEl)) return currentItemOverlayEl;
-    const root = document.createElement("div");
-    root.id = "qws-editor-current-item";
-    Object.assign(root.style, {
-      position: "fixed",
-      top: "12%",
-      right: "12px",
-      zIndex: "1000001",
-      width: "420px",
-      minHeight: "200px",
-      maxHeight: "86vh",
-      display: "grid",
-      gridTemplateRows: "auto 1fr",
-      gap: "10px",
-      padding: "10px",
-      borderRadius: "12px",
-      border: "1px solid #ffffff22",
-      background: "linear-gradient(180deg, rgba(14,18,25,0.95), rgba(10,14,20,0.92))",
-      color: "#e7eef7",
-      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-      pointerEvents: "auto"
-    });
-    const header = document.createElement("div");
-    header.textContent = "Current item";
-    header.style.fontWeight = "700";
-    header.style.fontSize = "13px";
-    header.style.letterSpacing = "0.08em";
-    header.style.textTransform = "uppercase";
-    header.style.opacity = "0.85";
-    header.style.textAlign = "center";
-    const content = document.createElement("div");
-    content.id = "qws-editor-current-item-content";
-    content.style.display = "grid";
-    content.style.gap = "10px";
-    content.style.minHeight = "0";
-    content.style.overflow = "auto";
-    root.append(header, content);
-    (document.body || document.documentElement || document).appendChild(root);
-    currentItemOverlayEl = root;
-    attachCurrentItemListener();
-    renderCurrentItemOverlay();
-    return root;
-  }
-  function showCurrentItemOverlay() {
-    ensureCurrentItemOverlay();
-  }
-  function hideCurrentItemOverlay() {
-    if (currentItemUnsub) {
-      try {
-        currentItemUnsub();
-      } catch {
-      }
-      currentItemUnsub = null;
-    }
-    if (currentItemOverlayEl) {
-      currentItemOverlayEl.remove();
-      currentItemOverlayEl = null;
-    }
-  }
-  function attachCurrentItemListener() {
-    if (currentItemUnsub) {
-      try {
-        currentItemUnsub();
-      } catch {
-      }
-      currentItemUnsub = null;
-    }
-    void (async () => {
-      try {
-        const atom = getAtomByLabel("myCurrentGardenObjectAtom");
-        const selectedIdxAtom = getAtomByLabel("myValidatedSelectedItemIndexAtom");
-        const store = await ensureStore().catch(() => null);
-        if (!atom || !store) return;
-        const unsubA = store.sub(atom, () => {
-          renderCurrentItemOverlay();
-        });
-        const unsubB = selectedIdxAtom ? store.sub(selectedIdxAtom, () => renderCurrentItemOverlay()) : null;
-        currentItemUnsub = () => {
-          try {
-            unsubA();
-          } catch {
-          }
-          if (unsubB) {
-            try {
-              unsubB();
-            } catch {
-            }
-          }
-        };
-      } catch {
-      }
-    })();
-  }
-  async function readCurrentTileContext() {
-    try {
-      const store = await ensureStore().catch(() => null);
-      if (!store) return { tileType: void 0, tileKey: null, tileObject: null };
-      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
-      if (!tileAtom) return { tileType: void 0, tileKey: null, tileObject: null };
-      const tileVal = store.get(tileAtom);
-      if (!tileVal) return { tileType: void 0, tileKey: null, tileObject: null };
-      const tileType = tileVal.tileType;
-      const localTileIndex = tileVal.localTileIndex;
-      const userSlotIdxRaw = tileVal.userSlotIdx;
-      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
-      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
-        return { tileType, tileKey: null, tileObject: null };
-      }
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const garden2 = Array.isArray(cur?.child?.data?.userSlots) ? cur?.child?.data?.userSlots?.[userSlotIdx]?.data?.garden : cur?.child?.data?.userSlots?.[String(userSlotIdx)]?.data?.garden;
-      const safeGarden = garden2 && typeof garden2 === "object" ? garden2 : makeEmptyGarden();
-      const key2 = String(localTileIndex);
-      const targetMap = tileType === "Dirt" ? safeGarden.tileObjects || {} : safeGarden.boardwalkTileObjects || {};
-      return { tileType, tileKey: key2, tileObject: targetMap[key2] };
-    } catch {
-      return { tileType: void 0, tileKey: null, tileObject: null };
-    }
-  }
-  function getGardenObjectLabel(obj) {
-    if (!obj || typeof obj !== "object") return "Unknown";
-    if (obj.objectType === "plant") {
-      const entry = plantCatalog[obj.species];
-      return entry?.crop?.name || entry?.seed?.name || obj.species || "Plant";
-    }
-    if (obj.objectType === "decor") {
-      const entry = decorCatalog[obj.decorId];
-      return entry?.name || obj.decorId || "Decor";
-    }
-    return String(obj.objectType || "Item");
-  }
-  function getInventoryItemLabel(item) {
-    if (!item || typeof item !== "object") return "Item";
-    if (item.itemType === "Plant") {
-      const entry = plantCatalog[item.species];
-      return entry?.crop?.name || entry?.seed?.name || item.species || "Plant";
-    }
-    if (item.itemType === "Decor") {
-      const entry = decorCatalog[item.decorId];
-      return entry?.name || item.decorId || "Decor";
-    }
-    return String(item.itemType || "Item");
-  }
-  function renderCurrentItemOverlay() {
-    if (!currentItemOverlayEl) return;
-    const content = currentItemOverlayEl.querySelector("#qws-editor-current-item-content");
-    if (!content) return;
-    void (async () => {
-      content.innerHTML = "";
-      const { tileType, tileKey, tileObject } = await readCurrentTileContext();
-      if (!tileObject) {
-        const empty = document.createElement("div");
-        empty.textContent = "Look at a plant or decor to edit it.";
-        empty.style.opacity = "0.7";
-        empty.style.textAlign = "center";
-        content.appendChild(empty);
-        try {
-          const inv = await Atoms.inventory.myInventory.get();
-          const idx = await Atoms.inventory.myValidatedSelectedItemIndex.get();
-          const items = Array.isArray(inv?.items) ? inv.items : [];
-          const selected = typeof idx === "number" ? items[idx] : null;
-          if (selected) {
-            const infoRow = document.createElement("div");
-            infoRow.style.display = "flex";
-            infoRow.style.flexDirection = "column";
-            infoRow.style.alignItems = "center";
-            infoRow.style.gap = "6px";
-            const nameEl2 = document.createElement("div");
-            nameEl2.textContent = getInventoryItemLabel(selected);
-            nameEl2.style.fontWeight = "700";
-            nameEl2.style.fontSize = "14px";
-            nameEl2.style.overflow = "hidden";
-            nameEl2.style.textOverflow = "ellipsis";
-            nameEl2.style.whiteSpace = "nowrap";
-            nameEl2.style.textAlign = "center";
-            const icon2 = createSelectionIcon(
-              selected.itemType === "Decor" ? "decor" : "plants",
-              getInventoryItemLabel(selected),
-              40,
-              selected.itemType === "Decor" ? selected?.decorId : selected?.species
-            );
-            infoRow.append(icon2, nameEl2);
-            content.appendChild(infoRow);
-            if (selected.itemType === "Plant") {
-              const slotsArr = Array.isArray(selected.slots) ? selected.slots : [];
-              const mutSet = /* @__PURE__ */ new Set();
-              for (const s of slotsArr) {
-                const muts = Array.isArray(s?.mutations) ? s.mutations : [];
-                muts.forEach((m) => mutSet.add(m));
-              }
-              const mutList = Array.from(mutSet);
-              const mutRow = document.createElement("div");
-              mutRow.style.display = "flex";
-              mutRow.style.flexWrap = "wrap";
-              mutRow.style.gap = "6px";
-              mutRow.style.justifyContent = "center";
-              if (mutList.length) {
-                for (const mutId of mutList) {
-                  const tag = document.createElement("span");
-                  tag.textContent = mutationCatalog[mutId]?.name?.charAt(0)?.toUpperCase() || mutId.charAt(0)?.toUpperCase() || "?";
-                  tag.style.fontWeight = "900";
-                  tag.style.fontSize = "12px";
-                  tag.style.padding = "4px 8px";
-                  tag.style.borderRadius = "999px";
-                  tag.style.border = "1px solid #2c3643";
-                  tag.style.background = "rgba(10,14,20,0.9)";
-                  const color = mutationColorMap[mutId];
-                  if (color) {
-                    if (color.startsWith("linear-gradient")) {
-                      tag.style.backgroundImage = color;
-                      tag.style.backgroundClip = "text";
-                      tag.style.webkitBackgroundClip = "text";
-                      tag.style.color = "transparent";
-                      tag.style.webkitTextFillColor = "transparent";
-                    } else {
-                      tag.style.color = color;
-                    }
-                  }
-                  mutRow.appendChild(tag);
-                }
-              } else {
-                const none = document.createElement("div");
-                none.textContent = "No mutations";
-                none.style.opacity = "0.7";
-                none.style.fontSize = "11px";
-                mutRow.appendChild(none);
-              }
-              content.append(mutRow);
-            }
-            const placeBtn = document.createElement("button");
-            placeBtn.type = "button";
-            placeBtn.textContent = "Place";
-            Object.assign(placeBtn.style, {
-              width: "100%",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: "1px solid #2b3441",
-              background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
-              color: "#e7eef7",
-              fontWeight: "700",
-              cursor: "pointer"
-            });
-            placeBtn.onclick = () => {
-              void placeSelectedItemInGardenAtCurrentTile();
-            };
-            content.appendChild(placeBtn);
-          }
-        } catch {
-        }
-        return;
-      }
-      const name = getGardenObjectLabel(tileObject);
-      const header = document.createElement("div");
-      header.style.display = "flex";
-      header.style.flexDirection = "column";
-      header.style.alignItems = "center";
-      header.style.gap = "6px";
-      const nameEl = document.createElement("div");
-      nameEl.textContent = name;
-      nameEl.style.fontWeight = "700";
-      nameEl.style.fontSize = "15px";
-      nameEl.style.overflow = "hidden";
-      nameEl.style.textOverflow = "ellipsis";
-      nameEl.style.whiteSpace = "nowrap";
-      nameEl.style.textAlign = "center";
-      const icon = createSelectionIcon(
-        tileObject.objectType === "decor" ? "decor" : "plants",
-        name,
-        48,
-        tileObject.objectType === "decor" ? tileObject.decorId || tileKey || name : tileObject.species || tileKey || name
-      );
-      header.append(icon, nameEl);
-      content.appendChild(header);
-      if (tileObject.objectType === "plant") {
-        renderCurrentPlantEditor(content, tileObject, tileKey || "");
-      }
-      const addBtn = document.createElement("button");
-      addBtn.type = "button";
-      addBtn.textContent = "Copy to inventory";
-      Object.assign(addBtn.style, {
-        width: "100%",
-        padding: "8px 10px",
-        borderRadius: "8px",
-        border: "1px solid #2b3441",
-        background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
-        color: "#e7eef7",
-        fontWeight: "700",
-        cursor: "pointer"
-      });
-      addBtn.onclick = () => {
-        void addTileObjectToInventory(tileObject);
-      };
-      content.appendChild(addBtn);
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.textContent = "Remove";
-      Object.assign(removeBtn.style, {
-        width: "100%",
-        padding: "8px 10px",
-        borderRadius: "8px",
-        border: "1px solid #2b3441",
-        background: "linear-gradient(180deg, rgba(220,80,80,0.18), rgba(160,40,40,0.25))",
-        color: "#e7eef7",
-        fontWeight: "700",
-        cursor: "pointer"
-      });
-      removeBtn.onclick = () => {
-        if (tileObject.objectType === "plant") void removeItemFromGardenAtCurrentTile();
-        else void removeDecorFromGardenAtCurrentTile();
-      };
-      content.appendChild(removeBtn);
-    })();
-  }
-  function renderCurrentPlantEditor(content, tileObject, tileKey) {
-    const species = tileObject?.species;
-    const slots = Array.isArray(tileObject?.slots) ? tileObject.slots : [];
-    const modeKey = tileKey || "default";
-    const slotModeMap = currentItemSlotModes[modeKey] || {};
-    let applyAll = currentItemApplyAll;
-    const slotsList = document.createElement("div");
-    slotsList.style.display = "grid";
-    slotsList.style.gap = "8px";
-    const maxSlots = getMaxSlotsForSpecies(species);
-    const applyAllRow = document.createElement("label");
-    applyAllRow.style.display = "flex";
-    applyAllRow.style.alignItems = "center";
-    applyAllRow.style.gap = "6px";
-    applyAllRow.style.fontSize = "12px";
-    applyAllRow.style.opacity = "0.9";
-    const applyToggle = document.createElement("input");
-    applyToggle.type = "checkbox";
-    applyToggle.checked = applyAll;
-    applyToggle.onchange = () => {
-      applyAll = !!applyToggle.checked;
-      currentItemApplyAll = applyAll;
-      if (applyAll) syncApplyAllControls();
-    };
-    const applyLabel = document.createElement("span");
-    applyLabel.textContent = "Edit all slots together";
-    applyAllRow.append(applyToggle, applyLabel);
-    const syncApplyAllControls = () => {
-      if (!applyAll) return;
-      slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
-        s.value = String(s._currentPct || s.value);
-        const mode = s._currentMode || "percent";
-        s.disabled = mode === "custom";
-        s.style.opacity = mode === "custom" ? "0.45" : "1";
-      });
-      slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
-        s.value = String(s._currentScale || s.value);
-      });
-      slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
-        const curPct = lab._currentPct;
-        if (curPct != null) lab.textContent = `${curPct}%`;
-      });
-      slotsList.querySelectorAll("input[data-scale-mode-slot]").forEach((chk) => {
-        const mode = chk._currentMode || "percent";
-        chk.checked = mode === "custom";
-      });
-      slotsList.querySelectorAll("[data-custom-row-slot]").forEach((row) => {
-        const mode = row._currentMode || "percent";
-        row.style.display = mode === "custom" ? "flex" : "none";
-      });
-      slotsList.querySelectorAll("[data-slider-row-slot]").forEach((row) => {
-        const mode = row._currentMode || "percent";
-        row.style.display = mode === "custom" ? "none" : "";
-      });
-    };
-    slots.forEach((slot, idx) => {
-      const box = document.createElement("div");
-      Object.assign(box.style, {
-        border: "1px solid #2c3643",
-        borderRadius: "8px",
-        padding: "8px",
-        background: "rgba(10,14,20,0.9)",
-        display: "grid",
-        gap: "6px"
-      });
-      const rawScale = Number(slot?.targetScale);
-      const fallbackScale = computeTargetScaleFromPercent(species, 100);
-      const initialScale = Number.isFinite(rawScale) ? rawScale : fallbackScale;
-      const { minScale, maxScale } = getScaleBoundsForSpecies(species);
-      const computePercentLoose = (scale) => {
-        const { minScale: minScale2, maxScale: maxScale2 } = getScaleBoundsForSpecies(species);
-        if (!maxScale2 || maxScale2 <= minScale2) return 100;
-        const pct2 = 50 + (scale - minScale2) / (maxScale2 - minScale2) * 50;
-        return clampSizePercent(pct2);
-      };
-      const pct = computePercentLoose(initialScale);
-      let currentPct = pct;
-      let currentScale = initialScale;
-      const outOfBounds = initialScale < minScale || initialScale > maxScale;
-      let currentMode = slotModeMap[idx] === "custom" ? "custom" : outOfBounds ? "custom" : "percent";
-      if (!slotModeMap[idx] && outOfBounds) {
-        currentItemSlotModes[modeKey] = { ...currentItemSlotModes[modeKey] || {}, [idx]: "custom" };
-      }
-      const sizeRow = document.createElement("div");
-      sizeRow.style.display = "flex";
-      sizeRow.style.justifyContent = "space-between";
-      sizeRow.style.alignItems = "center";
-      sizeRow.style.fontSize = "11px";
-      sizeRow.style.opacity = "0.85";
-      const sizeName = document.createElement("span");
-      sizeName.textContent = "Size";
-      const sizeValue = document.createElement("span");
-      sizeValue.textContent = `${currentPct}%`;
-      sizeValue.dataset.sizeLabel = String(idx);
-      sizeValue._currentPct = currentPct;
-      sizeRow.append(sizeName, sizeValue);
-      const slider = document.createElement("input");
-      slider.type = "range";
-      slider.min = "50";
-      slider.max = "100";
-      slider.step = "1";
-      slider.value = String(currentPct);
-      slider.dataset.slotIdx = String(idx);
-      slider._currentPct = currentPct;
-      slider._currentMode = currentMode;
-      Object.assign(slider.style, { width: "100%", cursor: "pointer" });
-      const sliderRow = document.createElement("div");
-      sliderRow.dataset.sliderRowSlot = String(idx);
-      sliderRow.appendChild(slider);
-      const customRow = document.createElement("div");
-      customRow.style.display = "flex";
-      customRow.style.alignItems = "center";
-      customRow.style.gap = "6px";
-      customRow.style.fontSize = "11px";
-      customRow.style.opacity = "0.9";
-      const customLabel = document.createElement("span");
-      customLabel.textContent = "Custom scale";
-      const customInput = document.createElement("input");
-      customInput.type = "text";
-      customInput.inputMode = "decimal";
-      customInput.autocomplete = "off";
-      customInput.value = String(currentScale);
-      customInput.dataset.scaleInputSlot = String(idx);
-      customInput._currentScale = currentScale;
-      Object.assign(customInput.style, {
-        width: "90px",
-        padding: "4px 6px",
-        borderRadius: "6px",
-        border: "1px solid #2c3643",
-        background: "rgba(10,14,20,0.9)",
-        color: "#e7eef7"
-      });
-      let pendingPatch = null;
-      let debounceTimer = null;
-      const flushPatch = () => {
-        if (!pendingPatch) return;
-        const patch = pendingPatch;
-        pendingPatch = null;
-        void updateGardenObjectAtCurrentTile((obj) => {
-          if (obj?.objectType !== "plant") return obj;
-          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
-          if (applyAll) {
-            for (let i = 0; i < nextSlots.length; i++) {
-              nextSlots[i] = { ...nextSlots[i] || {}, ...patch };
-            }
-          } else {
-            nextSlots[idx] = { ...nextSlots[idx] || {}, ...patch };
-          }
-          return { ...obj, slots: nextSlots };
-        });
-      };
-      const queuePatch = (patch) => {
-        pendingPatch = { ...pendingPatch || {}, ...patch };
-        if (debounceTimer != null) window.clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(() => {
-          flushPatch();
-        }, 150);
-      };
-      const updatePercent = (nextPct) => {
-        const pctVal = clampSizePercent(nextPct);
-        currentPct = pctVal;
-        slider._currentPct = pctVal;
-        sizeValue._currentPct = pctVal;
-        sizeValue.textContent = `${pctVal}%`;
-        slider.value = String(pctVal);
-        currentScale = computeTargetScaleFromPercent(species, pctVal);
-        if (currentMode !== "custom") customInput.value = currentScale.toFixed(4);
-        customInput._currentScale = currentScale;
-        queuePatch({ targetScale: currentScale });
-        if (applyAll) {
-          slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
-            if (s === slider) return;
-            s.value = String(pctVal);
-            s._currentPct = pctVal;
-            s._currentMode = "percent";
-            s.disabled = false;
-            s.style.opacity = "1";
-          });
-          slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
-            if (s === customInput) return;
-            s.value = currentScale.toFixed(4);
-            s._currentScale = currentScale;
-          });
-          slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
-            lab.textContent = `${pctVal}%`;
-            lab._currentPct = pctVal;
-          });
-          applyModeToAll("percent", currentScale, currentPct);
-        }
-      };
-      const updateCustomScale = (raw) => {
-        const normalized = raw.replace(",", ".").replace(/\s+/g, "");
-        const n = Number(normalized);
-        if (!Number.isFinite(n)) return;
-        currentScale = n;
-        customInput.value = normalized;
-        customInput._currentScale = n;
-        const pctVal = computePercentFromScale(species, n);
-        currentPct = pctVal;
-        slider.value = String(pctVal);
-        sizeValue.textContent = `${pctVal}%`;
-        queuePatch({ targetScale: n });
-        if (applyAll) {
-          slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
-            if (s === slider) return;
-            s.value = String(pctVal);
-            s._currentPct = pctVal;
-            s._currentMode = "custom";
-            s.disabled = true;
-            s.style.opacity = "0.45";
-          });
-          slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((s) => {
-            if (s === customInput) return;
-            s.value = String(n);
-            s._currentScale = n;
-          });
-          slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
-            lab.textContent = `${pctVal}%`;
-            lab._currentPct = pctVal;
-          });
-          applyModeToAll("custom", n, currentPct);
-        }
-      };
-      slider.oninput = () => updatePercent(Number(slider.value));
-      const commitCustomInput = () => updateCustomScale(customInput.value);
-      customInput.onblur = commitCustomInput;
-      customInput.onkeydown = (ev) => {
-        if (ev.key === "Enter") {
-          ev.preventDefault();
-          commitCustomInput();
-        }
-      };
-      customRow.append(customLabel, customInput);
-      const modeRow = document.createElement("label");
-      modeRow.style.display = "flex";
-      modeRow.style.alignItems = "center";
-      modeRow.style.gap = "6px";
-      modeRow.style.fontSize = "11px";
-      modeRow.style.opacity = "0.9";
-      const modeToggle = document.createElement("input");
-      modeToggle.type = "checkbox";
-      modeToggle.dataset.scaleModeSlot = String(idx);
-      modeToggle._currentMode = currentMode;
-      modeToggle.checked = currentMode === "custom";
-      const modeText = document.createElement("span");
-      modeText.textContent = "Use custom scale";
-      const syncValueLabel = () => {
-        sizeValue.textContent = currentMode === "custom" ? `${currentScale.toFixed(2)}x` : `${currentPct}%`;
-        sizeValue._currentPct = currentPct;
-      };
-      const syncControlState = () => {
-        const showPercent = currentMode !== "custom";
-        modeToggle._currentMode = currentMode;
-        slider._currentMode = currentMode;
-        slider.disabled = !showPercent;
-        sliderRow.style.display = showPercent ? "" : "none";
-        customRow.style.display = showPercent ? "none" : "flex";
-      };
-      modeToggle.onchange = () => {
-        currentMode = modeToggle.checked ? "custom" : "percent";
-        currentItemSlotModes[modeKey] = {
-          ...currentItemSlotModes[modeKey] || {},
-          [idx]: currentMode
-        };
-        if (currentMode === "custom") {
-          queuePatch({ targetScale: currentScale });
-        } else {
-          const clamped = clampCustomScale(species, currentScale);
-          currentScale = clamped;
-          customInput._currentScale = clamped;
-          customInput.value = String(clamped);
-          const pctVal = computePercentFromScale(species, clamped);
-          currentPct = pctVal;
-          slider._currentPct = pctVal;
-          slider.value = String(pctVal);
-          queuePatch({ targetScale: clamped });
-        }
-        syncControlState();
-        syncValueLabel();
-        if (applyAll) syncApplyAllControls();
-        if (applyAll) {
-          applyModeToAll(currentMode, currentScale, currentPct);
-        }
-      };
-      const installGameKeyBlocker = (inp) => {
-        const stop2 = (ev) => {
-          ev.stopImmediatePropagation?.();
-          ev.stopPropagation();
-        };
-        const attach = () => {
-          window.addEventListener("keydown", stop2, true);
-          window.addEventListener("keyup", stop2, true);
-        };
-        const detach = () => {
-          window.removeEventListener("keydown", stop2, true);
-          window.removeEventListener("keyup", stop2, true);
-        };
-        inp.addEventListener("focus", attach);
-        inp.addEventListener("blur", detach);
-        inp.addEventListener("keydown", stop2);
-      };
-      const installCharGuard = (inp) => {
-        const allowed = /* @__PURE__ */ new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "."]);
-        inp.addEventListener("keydown", (ev) => {
-          if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-          const k = ev.key;
-          if (["Backspace", "Delete", "Tab", "Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(k)) {
-            return;
-          }
-          if (k.length === 1 && !allowed.has(k)) {
-            ev.preventDefault();
-          }
-        });
-        inp.addEventListener("input", () => {
-          const cleaned = inp.value.replace(/[^0-9.-]/g, "");
-          if (cleaned !== inp.value) inp.value = cleaned;
-        });
-      };
-      installGameKeyBlocker(customInput);
-      installCharGuard(customInput);
-      modeRow.append(modeToggle, modeText);
-      slider.disabled = currentMode === "custom";
-      sliderRow.style.display = currentMode === "custom" ? "none" : "";
-      customRow.style.display = currentMode === "custom" ? "flex" : "none";
-      syncControlState();
-      syncValueLabel();
-      const mutWrap = document.createElement("div");
-      mutWrap.style.display = "grid";
-      mutWrap.style.gap = "6px";
-      const mutTitle = document.createElement("div");
-      mutTitle.textContent = "Mutations";
-      mutTitle.style.fontSize = "11px";
-      mutTitle.style.opacity = "0.85";
-      const mutRow = document.createElement("div");
-      mutRow.style.display = "flex";
-      mutRow.style.flexWrap = "wrap";
-      mutRow.style.gap = "6px";
-      mutRow.style.alignItems = "center";
-      const mutations = Array.isArray(slot?.mutations) ? slot.mutations.slice() : [];
-      const mutationKeys = Object.keys(mutationCatalog || {});
-      const applyMutationsPatch = (nextMutations) => {
-        const copy2 = nextMutations.slice();
-        mutations.length = 0;
-        mutations.push(...copy2);
-        void updateGardenObjectAtCurrentTile((obj) => {
-          if (obj?.objectType !== "plant") return obj;
-          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
-          if (applyAll) {
-            for (let i = 0; i < nextSlots.length; i++) {
-              nextSlots[i] = { ...nextSlots[i] || {}, mutations: copy2.slice() };
-            }
-          } else {
-            nextSlots[idx] = { ...nextSlots[idx] || {}, mutations: copy2.slice() };
-          }
-          return { ...obj, slots: nextSlots };
-        }).then(() => {
-          renderMutations();
-        });
-      };
-      const styleLetter = (target, mutId) => {
-        const color = mutationColorMap[mutId];
-        if (!color) return;
-        if (color.startsWith("linear-gradient")) {
-          target.style.backgroundImage = color;
-          target.style.backgroundClip = "text";
-          target.style.webkitBackgroundClip = "text";
-          target.style.color = "transparent";
-          target.style.webkitTextFillColor = "transparent";
-        } else {
-          target.style.color = color;
-        }
-      };
-      const getLetter = (mutId) => {
-        const def = mutationCatalog[mutId] || {};
-        const src = def.name || mutId || "?";
-        return String(src).charAt(0).toUpperCase();
-      };
-      const renderMutations = () => {
-        mutRow.innerHTML = "";
-        for (const mutId of mutations) {
-          const tag = document.createElement("span");
-          Object.assign(tag.style, {
-            borderRadius: "999px",
-            padding: "3px 8px",
-            fontSize: "11px",
-            fontWeight: "700",
-            border: "1px solid #2c3643",
-            background: "rgba(10,14,20,0.9)",
-            cursor: "pointer"
-          });
-          const letterSpan = document.createElement("span");
-          letterSpan.textContent = getLetter(mutId);
-          letterSpan.style.fontWeight = "900";
-          styleLetter(letterSpan, mutId);
-          tag.title = "Remove mutation";
-          tag.onclick = () => {
-            const next = mutations.filter((m) => m !== mutId);
-            applyMutationsPatch(next);
-          };
-          tag.appendChild(letterSpan);
-          mutRow.appendChild(tag);
-        }
-        if (mutations.length < mutationKeys.length) {
-          const toggleBtn = document.createElement("button");
-          toggleBtn.type = "button";
-          toggleBtn.textContent = "+";
-          Object.assign(toggleBtn.style, {
-            width: "28px",
-            height: "28px",
-            borderRadius: "50%",
-            border: "1px solid #2c3643",
-            background: "rgba(10,14,20,0.9)",
-            color: "#e7eef7",
-            fontWeight: "900",
-            fontSize: "16px",
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center"
-          });
-          toggleBtn.onclick = () => {
-            const isOpen = dropdown.style.display !== "none";
-            dropdown.style.display = isOpen ? "none" : "grid";
-            toggleBtn.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
-          };
-          mutRow.appendChild(toggleBtn);
-        }
-      };
-      const dropdown = document.createElement("div");
-      dropdown.style.display = "none";
-      dropdown.style.gridTemplateColumns = "repeat(auto-fill, minmax(90px, 1fr))";
-      dropdown.style.gap = "6px";
-      dropdown.style.padding = "6px";
-      dropdown.style.border = "1px solid #2c3643";
-      dropdown.style.borderRadius = "8px";
-      dropdown.style.background = "rgba(8,12,18,0.9)";
-      for (const mutKey of mutationKeys) {
-        const def = mutationCatalog[mutKey] || {};
-        const storedId = mutKey === "Amberlit" ? "Ambershine" : mutKey;
-        const isActive = Array.isArray(slot.mutations) && slot.mutations.includes(storedId);
-        if (isActive) continue;
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = def.name || mutKey || "?";
-        Object.assign(btn.style, {
-          padding: "6px 8px",
-          borderRadius: "8px",
-          border: isActive ? "1px solid #55d38a" : "1px solid #2c3643",
-          background: isActive ? "rgba(85,211,138,0.22)" : "rgba(10,14,20,0.9)",
-          color: "#e7eef7",
-          fontSize: "11px",
-          fontWeight: "700",
-          cursor: "pointer",
-          textAlign: "left"
-        });
-        const color = mutationColorMap[storedId];
-        if (color) {
-          btn.style.color = color.startsWith("linear-gradient") ? "#e7eef7" : color;
-          if (color.startsWith("linear-gradient")) {
-            btn.style.backgroundImage = color;
-            btn.style.backgroundClip = "text";
-            btn.style.webkitBackgroundClip = "text";
-            btn.style.color = "transparent";
-            btn.style.webkitTextFillColor = "transparent";
-          }
-        }
-        btn.onclick = () => {
-          const has = Array.isArray(slot.mutations) && slot.mutations.includes(storedId);
-          const next = has ? (slot.mutations || []).filter((x) => x !== storedId) : [...slot.mutations || [], storedId];
-          applyMutationsPatch(next);
-        };
-        dropdown.appendChild(btn);
-      }
-      mutWrap.append(mutTitle, mutRow, dropdown);
-      renderMutations();
-      box.append(sizeRow, modeRow, sliderRow, customRow, mutWrap);
-      slotsList.appendChild(box);
-    });
-    const showSlotControls = maxSlots > 1;
-    if (showSlotControls) {
-      const slotHeader = document.createElement("div");
-      slotHeader.style.display = "flex";
-      slotHeader.style.alignItems = "center";
-      slotHeader.style.justifyContent = "space-between";
-      slotHeader.style.fontSize = "12px";
-      slotHeader.style.opacity = "0.9";
-      slotHeader.style.gap = "8px";
-      const slotCount = document.createElement("span");
-      slotCount.textContent = `Slots ${slots.length}/${maxSlots}`;
-      const slotBtnWrap = document.createElement("div");
-      slotBtnWrap.style.display = "flex";
-      slotBtnWrap.style.gap = "6px";
-      slotBtnWrap.style.alignItems = "center";
-      const makeCircleBtn = (text) => {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.textContent = text;
-        Object.assign(b.style, {
-          width: "28px",
-          height: "28px",
-          borderRadius: "50%",
-          border: "1px solid #2b3441",
-          background: "rgba(16,21,28,0.9)",
-          color: "#e7eef7",
-          cursor: "pointer",
-          fontSize: "14px",
-          fontWeight: "600",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center"
-        });
-        return b;
-      };
-      const btnAdd = makeCircleBtn("+");
-      const btnRemove = makeCircleBtn("-");
-      const updateSlotHeaderState = () => {
-        slotCount.textContent = `Slots ${slots.length}/${maxSlots}`;
-        btnAdd.disabled = slots.length >= maxSlots;
-        btnRemove.disabled = slots.length <= 1;
-        btnAdd.style.opacity = btnAdd.disabled ? "0.4" : "1";
-        btnRemove.style.opacity = btnRemove.disabled ? "0.4" : "1";
-      };
-      updateSlotHeaderState();
-      const makeDefaultSlot = () => ({
-        species,
-        startTime: FIXED_SLOT_START,
-        endTime: FIXED_SLOT_END,
-        targetScale: computeTargetScaleFromPercent(species, 100),
-        mutations: []
-      });
-      btnAdd.onclick = () => {
-        if (slots.length >= maxSlots) return;
-        void updateGardenObjectAtCurrentTile((obj) => {
-          if (obj?.objectType !== "plant") return obj;
-          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
-          if (nextSlots.length >= maxSlots) return obj;
-          nextSlots.push(makeDefaultSlot());
-          return { ...obj, slots: nextSlots };
-        }).then((ok) => {
-          if (ok) renderCurrentItemOverlay();
-        });
-      };
-      btnRemove.onclick = () => {
-        if (slots.length <= 1) return;
-        void updateGardenObjectAtCurrentTile((obj) => {
-          if (obj?.objectType !== "plant") return obj;
-          const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice(0, Math.max(1, obj.slots.length - 1)) : [];
-          return { ...obj, slots: nextSlots };
-        }).then((ok) => {
-          if (ok) renderCurrentItemOverlay();
-        });
-      };
-      slotBtnWrap.append(btnRemove, btnAdd);
-      slotHeader.append(slotCount, slotBtnWrap);
-      content.appendChild(slotHeader);
-      content.appendChild(applyAllRow);
-    }
-    content.appendChild(slotsList);
-    const applyModeToAll = (mode, refScale, refPct) => {
-      slotsList.querySelectorAll("input[data-scale-mode-slot]").forEach((chk) => {
-        chk.checked = mode === "custom";
-        chk._currentMode = mode;
-      });
-      slotsList.querySelectorAll("input[data-slot-idx]").forEach((s) => {
-        s._currentMode = mode;
-        s.disabled = mode === "custom";
-        s.style.opacity = mode === "custom" ? "0.45" : "1";
-        if (mode === "percent") {
-          s.value = String(s._currentPct ?? refPct);
-        }
-      });
-      slotsList.querySelectorAll("[data-slider-row-slot]").forEach((row) => {
-        row.style.display = mode === "custom" ? "none" : "";
-        row._currentMode = mode;
-      });
-      slotsList.querySelectorAll("[data-custom-row-slot]").forEach((row) => {
-        row.style.display = mode === "custom" ? "flex" : "none";
-        row._currentMode = mode;
-      });
-      slotsList.querySelectorAll("input[data-scale-input-slot]").forEach((inp) => {
-        if (mode === "custom") {
-          inp.value = String(inp._currentScale ?? refScale);
-        }
-      });
-      slotsList.querySelectorAll("[data-size-label]").forEach((lab) => {
-        const pctVal = lab._currentPct ?? refPct;
-        lab.textContent = mode === "custom" ? `${refScale.toFixed(2)}x` : `${pctVal}%`;
-      });
-      const map2 = currentItemSlotModes[modeKey] || {};
-      for (let i = 0; i < slots.length; i++) map2[i] = mode;
-      currentItemSlotModes[modeKey] = map2;
-    };
-  }
-  function renderSideList() {
-    if (!sideListWrap) return;
-    const applySelectionStyle = (btn, selected) => {
-      btn.style.border = "1px solid " + (selected ? "#4a6fa5" : "#2b3441");
-      btn.style.background = selected ? "rgba(74,111,165,0.18)" : "rgba(24,30,39,0.9)";
-      btn.style.fontWeight = selected ? "700" : "600";
-    };
-    const selectedId = getSelectedId();
-    const entries = getSideEntries();
-    const sig = `${currentSideMode}:${JSON.stringify(entries)}`;
-    const existingList = sideListWrap.querySelector('[data-editor-side-list="list"]');
-    if (existingList && existingList.dataset.sig === sig) {
-      existingList.querySelectorAll("button[data-id]").forEach((btn) => {
-        applySelectionStyle(btn, btn.dataset.id === selectedId);
-      });
-      return;
-    }
-    sideListWrap.innerHTML = "";
-    const list = document.createElement("div");
-    list.dataset.editorSideList = "list";
-    list.dataset.sig = sig;
-    list.style.display = "grid";
-    list.style.gap = "4px";
-    const makeItem = (key2, label2, selected) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.dataset.id = key2;
-      Object.assign(btn.style, {
-        width: "100%",
-        display: "grid",
-        gridTemplateColumns: "auto 1fr",
-        alignItems: "center",
-        gap: "8px",
-        padding: "8px",
-        borderRadius: "8px",
-        color: "#e7eef7",
-        cursor: "pointer"
-      });
-      applySelectionStyle(btn, selected);
-      const icon = createSelectionIcon(
-        getSideSpriteKind() === "Decor" ? "decor" : "plants",
-        label2,
-        26,
-        key2
-      );
-      const labelEl = document.createElement("span");
-      labelEl.textContent = label2;
-      labelEl.style.textAlign = "left";
-      labelEl.style.overflow = "hidden";
-      labelEl.style.textOverflow = "ellipsis";
-      labelEl.style.whiteSpace = "nowrap";
-      btn.onclick = () => {
-        setSelectedId(key2);
-        renderSideList();
-        renderSideDetails();
-      };
-      btn.append(icon, labelEl);
-      return btn;
-    };
-    for (const it of entries) {
-      const isSelected = selectedId === it.id;
-      list.appendChild(makeItem(it.id, it.label, isSelected));
-    }
-    if (!list.childElementCount) {
-      const empty = document.createElement("div");
-      empty.style.opacity = "0.7";
-      empty.textContent = "No entries.";
-      sideListWrap.appendChild(empty);
-      return;
-    }
-    sideListWrap.appendChild(list);
-  }
-  function renderSideDetails() {
-    if (!sideRightWrap) return;
-    sideRightWrap.innerHTML = "";
-    const content = document.createElement("div");
-    content.style.display = "grid";
-    content.style.gap = "10px";
-    content.style.minHeight = "0";
-    content.style.overflow = "auto";
-    content.style.alignContent = "flex-start";
-    content.style.justifyItems = "center";
-    const actionBar = document.createElement("div");
-    actionBar.style.display = "grid";
-    actionBar.style.gap = "6px";
-    actionBar.style.justifyItems = "start";
-    actionBar.style.marginTop = "4px";
-    const selId = getSelectedId();
-    if (!selId) {
-      const empty = document.createElement("div");
-      empty.style.opacity = "0.7";
-      empty.style.textAlign = "center";
-      empty.textContent = "Select an item on the left.";
-      content.appendChild(empty);
-      sideRightWrap.append(content, actionBar);
-      return;
-    }
-    const entry = getSideEntry(selId);
-    const label2 = getSideEntryLabel(selId, entry);
-    const infoRow = document.createElement("div");
-    infoRow.style.display = "grid";
-    infoRow.style.gridTemplateColumns = "auto 1fr";
-    infoRow.style.alignItems = "center";
-    infoRow.style.gap = "10px";
-    infoRow.dataset.editorInfoRow = "true";
-    infoRow.dataset.selId = selId;
-    const existingInfo = sideRightWrap.querySelector("[data-editor-info-row]");
-    const existingIcon = existingInfo?.querySelector("[data-editor-info-icon]");
-    const existingLabel = existingInfo?.querySelector("[data-editor-info-label]");
-    const icon = existingIcon && existingInfo?.dataset.selId === selId ? existingIcon : (() => {
-      const el2 = createSelectionIcon(
-        getSideSpriteKind() === "Decor" ? "decor" : "plants",
-        label2,
-        48,
-        selId
-      );
-      el2.dataset.editorInfoIcon = "true";
-      return el2;
-    })();
-    const nameEl = existingLabel && existingInfo?.dataset.selId === selId ? existingLabel : (() => {
-      const el2 = document.createElement("div");
-      el2.dataset.editorInfoLabel = "true";
-      el2.style.fontWeight = "700";
-      el2.style.fontSize = "15px";
-      el2.style.whiteSpace = "nowrap";
-      el2.style.overflow = "hidden";
-      el2.style.textOverflow = "ellipsis";
-      return el2;
-    })();
-    nameEl.textContent = label2;
-    infoRow.append(icon, nameEl);
-    content.appendChild(infoRow);
-    if (currentSideMode === "plants") {
-      const maxSlots = getMaxSlotsForSpecies(selId);
-      const slotsState = ensureEditorStateForSpecies(selId);
-      const slotsConfig = slotsState.slots;
-      const applyAll = slotsState.applyAll;
-      const slotsPanel = document.createElement("div");
-      slotsPanel.style.display = "grid";
-      slotsPanel.style.gap = "6px";
-      slotsPanel.style.marginTop = "6px";
-      slotsPanel.style.width = "100%";
-      if (maxSlots > 1) {
-        const headerRow = document.createElement("div");
-        headerRow.style.display = "flex";
-        headerRow.style.justifyContent = "space-between";
-        headerRow.style.alignItems = "center";
-        headerRow.style.fontSize = "12px";
-        headerRow.style.opacity = "0.9";
-        const headerLabel = document.createElement("span");
-        headerLabel.textContent = "Slots";
-        const headerRight = document.createElement("div");
-        headerRight.style.display = "flex";
-        headerRight.style.gap = "6px";
-        headerRight.style.alignItems = "center";
-        const countLabel = document.createElement("span");
-        countLabel.textContent = `${slotsConfig.length}/${maxSlots}`;
-        const btnAdd = document.createElement("button");
-        btnAdd.type = "button";
-        btnAdd.textContent = "+";
-        Object.assign(btnAdd.style, {
-          width: "28px",
-          height: "28px",
-          borderRadius: "50%",
-          border: "1px solid #2b3441",
-          background: "rgba(16,21,28,0.9)",
-          color: "#e7eef7",
-          cursor: "pointer",
-          fontSize: "14px",
-          fontWeight: "600"
-        });
-        btnAdd.onclick = () => {
-          const state3 = ensureEditorStateForSpecies(selId);
-          const current = state3.slots;
-          if (current.length >= maxSlots) return;
-          const defaultScale = computeTargetScaleFromPercent(selId, 100);
-          editorPlantSlotsState = {
-            ...state3,
-            species: selId,
-            slots: [
-              ...current,
-              {
-                enabled: true,
-                sizePercent: 100,
-                customScale: defaultScale,
-                sizeMode: "percent",
-                mutations: []
-              }
-            ]
-          };
-          renderSideDetails();
-        };
-        const btnRemove = document.createElement("button");
-        btnRemove.type = "button";
-        btnRemove.textContent = "-";
-        Object.assign(btnRemove.style, {
-          width: "28px",
-          height: "28px",
-          borderRadius: "50%",
-          border: "1px solid #2b3441",
-          background: "rgba(220,80,80,0.18)",
-          color: "#e7eef7",
-          cursor: "pointer",
-          fontSize: "14px",
-          fontWeight: "600"
-        });
-        btnRemove.onclick = () => {
-          const state3 = ensureEditorStateForSpecies(selId);
-          const current = state3.slots;
-          if (current.length <= 1) return;
-          editorPlantSlotsState = {
-            ...state3,
-            species: selId,
-            slots: current.slice(0, current.length - 1)
-          };
-          renderSideDetails();
-        };
-        headerRight.append(countLabel, btnRemove, btnAdd);
-        headerRow.append(headerLabel, headerRight);
-        slotsPanel.appendChild(headerRow);
-      }
-      if (maxSlots > 1) {
-        const applyAllRow = document.createElement("label");
-        applyAllRow.style.display = "flex";
-        applyAllRow.style.alignItems = "center";
-        applyAllRow.style.gap = "6px";
-        applyAllRow.style.fontSize = "12px";
-        applyAllRow.style.opacity = "0.9";
-        const applyToggle = document.createElement("input");
-        applyToggle.type = "checkbox";
-        applyToggle.checked = applyAll;
-        applyToggle.onchange = () => {
-          editorPlantSlotsState.applyAll = applyToggle.checked;
-          renderSideDetails();
-        };
-        const applyLabel = document.createElement("span");
-        applyLabel.textContent = "Edit all slots together";
-        applyAllRow.append(applyToggle, applyLabel);
-        slotsPanel.appendChild(applyAllRow);
-      }
-      const list = document.createElement("div");
-      list.style.display = "grid";
-      list.style.gap = "6px";
-      slotsConfig.forEach((cfg, idx) => {
-        const slotBox = document.createElement("div");
-        Object.assign(slotBox.style, {
-          border: "1px solid #2c3643",
-          borderRadius: "8px",
-          padding: "8px",
-          background: "rgba(10,14,20,0.9)",
-          display: "grid",
-          gap: "6px"
-        });
-        const initialPct = clampSizePercent(Number.isFinite(cfg.sizePercent) ? cfg.sizePercent : 100);
-        const baseScaleFromPct = computeTargetScaleFromPercent(selId, initialPct);
-        const initialCustomScale = normalizeCustomScale(
-          selId,
-          Number.isFinite(cfg.customScale) ? cfg.customScale : baseScaleFromPct
-        );
-        let currentMode = cfg.sizeMode === "custom" ? "custom" : "percent";
-        let currentPct = initialPct;
-        let currentScale = currentMode === "custom" ? initialCustomScale : baseScaleFromPct;
-        let percentMemory = currentPct;
-        let customText = String(currentScale);
-        const sizeRow = document.createElement("div");
-        sizeRow.style.display = "flex";
-        sizeRow.style.justifyContent = "space-between";
-        sizeRow.style.alignItems = "center";
-        sizeRow.style.fontSize = "11px";
-        sizeRow.style.opacity = "0.85";
-        const sizeName = document.createElement("span");
-        sizeName.textContent = "Size";
-        const sizeValue = document.createElement("span");
-        sizeValue.dataset.sizeLabel = String(idx);
-        sizeRow.append(sizeName, sizeValue);
-        const modeRow = document.createElement("label");
-        modeRow.style.display = "flex";
-        modeRow.style.alignItems = "center";
-        modeRow.style.gap = "6px";
-        modeRow.style.fontSize = "11px";
-        modeRow.style.opacity = "0.9";
-        const modeToggle = document.createElement("input");
-        modeToggle.type = "checkbox";
-        modeToggle.dataset.scaleMode = String(idx);
-        modeToggle.checked = currentMode === "custom";
-        const modeText = document.createElement("span");
-        modeText.textContent = "Use custom scale";
-        modeRow.append(modeToggle, modeText);
-        const slider = document.createElement("input");
-        slider.type = "range";
-        slider.min = "50";
-        slider.max = "100";
-        slider.step = "1";
-        slider.value = String(currentPct);
-        slider.dataset.slotIdx = String(idx);
-        Object.assign(slider.style, {
-          width: "100%",
-          cursor: "pointer"
-        });
-        const customRow = document.createElement("div");
-        customRow.style.display = "flex";
-        customRow.style.alignItems = "center";
-        customRow.style.gap = "6px";
-        customRow.style.fontSize = "11px";
-        customRow.style.opacity = "0.9";
-        customRow.dataset.customRow = String(idx);
-        const customLabel = document.createElement("span");
-        customLabel.textContent = "Custom scale";
-        const customInput = document.createElement("input");
-        customInput.type = "text";
-        customInput.inputMode = "decimal";
-        customInput.autocomplete = "off";
-        customInput.value = customText;
-        customInput.dataset.scaleInput = String(idx);
-        Object.assign(customInput.style, {
-          width: "90px",
-          padding: "4px 6px",
-          borderRadius: "6px",
-          border: "1px solid #2c3643",
-          background: "rgba(10,14,20,0.9)",
-          color: "#e7eef7"
-        });
-        customRow.append(customLabel, customInput);
-        const installGameKeyBlocker = (inp) => {
-          const stop2 = (ev) => {
-            ev.stopImmediatePropagation?.();
-            ev.stopPropagation();
-          };
-          const attach = () => {
-            window.addEventListener("keydown", stop2, true);
-            window.addEventListener("keyup", stop2, true);
-          };
-          const detach = () => {
-            window.removeEventListener("keydown", stop2, true);
-            window.removeEventListener("keyup", stop2, true);
-          };
-          inp.addEventListener("focus", attach);
-          inp.addEventListener("blur", detach);
-          inp.addEventListener("keydown", stop2);
-        };
-        installGameKeyBlocker(customInput);
-        const formatScaleLabel = (val) => `${val.toFixed(2)}x`;
-        const formatScaleInput = (val) => val.toFixed(2);
-        const parseInputNumber = (el2) => {
-          const raw = el2.value;
-          if (raw === "" || raw == null) return null;
-          const normalized = raw.replace(",", ".").replace(/\s+/g, "");
-          const n = Number(normalized);
-          return Number.isFinite(n) ? n : null;
-        };
-        const installCharGuard = (inp) => {
-          const allowed = /* @__PURE__ */ new Set(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "-", "."]);
-          inp.addEventListener("keydown", (ev) => {
-            if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-            const k = ev.key;
-            if (k === "Backspace" || k === "Delete" || k === "Tab" || k === "Enter" || k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown" || k === "Home" || k === "End") {
-              return;
-            }
-            if (k.length === 1 && !allowed.has(k)) {
-              ev.preventDefault();
-            }
-          });
-          inp.addEventListener("input", () => {
-            const cleaned = inp.value.replace(/[^0-9.-]/g, "");
-            if (cleaned !== inp.value) {
-              inp.value = cleaned;
-            }
-            customText = inp.value;
-          });
-        };
-        installCharGuard(customInput);
-        const syncValueLabel = () => {
-          sizeValue.textContent = currentMode === "custom" ? formatScaleLabel(currentScale) : `${currentPct}%`;
-        };
-        const syncControlState = () => {
-          const showPercentMode = currentMode !== "custom";
-          slider.disabled = currentMode === "custom";
-          slider.style.opacity = currentMode === "custom" ? "0.45" : "1";
-          customInput.disabled = currentMode !== "custom";
-          customInput.style.opacity = currentMode === "custom" ? "1" : "0.5";
-          slider.style.display = showPercentMode ? "" : "none";
-          customRow.style.display = showPercentMode ? "none" : "flex";
-        };
-        const syncApplyAll = () => {
-          if (!applyAll || !sideRightWrap) return;
-          const showPercentMode = currentMode !== "custom";
-          sideRightWrap.querySelectorAll("input[data-slot-idx]").forEach((s) => {
-            s.value = String(currentPct);
-            s.disabled = currentMode === "custom";
-            s.style.opacity = currentMode === "custom" ? "0.45" : "1";
-            s.style.display = showPercentMode ? "" : "none";
-          });
-          sideRightWrap.querySelectorAll("input[data-scale-input]").forEach((inp) => {
-            if (currentMode === "custom") {
-              inp.value = customText;
-            } else {
-              inp.value = formatScaleInput(currentScale);
-            }
-            inp.disabled = currentMode !== "custom";
-            inp.style.opacity = currentMode === "custom" ? "1" : "0.5";
-          });
-          sideRightWrap.querySelectorAll("input[data-scale-mode]").forEach((chk) => {
-            chk.checked = currentMode === "custom";
-          });
-          sideRightWrap.querySelectorAll("[data-size-label]").forEach((lab) => {
-            lab.textContent = currentMode === "custom" ? formatScaleLabel(currentScale) : `${currentPct}%`;
-          });
-          sideRightWrap.querySelectorAll("[data-scale-row]").forEach((row) => {
-            row.remove();
-          });
-          sideRightWrap.querySelectorAll("[data-custom-row]").forEach((row) => {
-            row.style.display = showPercentMode ? "none" : "flex";
-          });
-        };
-        const applySlotPatch = (patch) => {
-          const base = ensureEditorStateForSpecies(selId).slots;
-          editorPlantSlotsState = {
-            ...editorPlantSlotsState,
-            species: selId,
-            slots: base.map((c, i) => {
-              if (!applyAll && i !== idx) return c;
-              return { ...c, sizeMode: currentMode, ...patch };
-            })
-          };
-        };
-        const updatePercent = (nextPct) => {
-          const pct = clampSizePercent(nextPct);
-          currentPct = pct;
-          percentMemory = pct;
-          slider.value = String(pct);
-          if (currentMode !== "custom") {
-            currentScale = computeTargetScaleFromPercent(selId, pct);
-          }
-          applySlotPatch({
-            sizePercent: pct,
-            ...currentMode !== "custom" ? { customScale: currentScale } : {}
-          });
-          syncValueLabel();
-          syncApplyAll();
-        };
-        const updateCustomScale = (nextScale, rawText) => {
-          const normalized = normalizeCustomScale(selId, nextScale);
-          currentScale = normalized;
-          if (typeof rawText === "string") customText = rawText;
-          else customText = customInput.value;
-          applySlotPatch({ customScale: normalized });
-          syncValueLabel();
-          syncApplyAll();
-        };
-        slider.oninput = () => {
-          updatePercent(Number(slider.value));
-        };
-        customInput.oninput = () => {
-          const raw = customInput.value;
-          customText = raw;
-          const n = parseInputNumber(customInput);
-          if (n == null) return;
-          updateCustomScale(n, raw);
-        };
-        modeToggle.onchange = () => {
-          currentMode = modeToggle.checked ? "custom" : "percent";
-          if (currentMode === "custom") {
-            percentMemory = currentPct;
-            currentScale = normalizeCustomScale(selId, currentScale || computeTargetScaleFromPercent(selId, currentPct));
-            customText = customInput.value || String(currentScale);
-            applySlotPatch({ customScale: currentScale });
-          } else {
-            const restoredPct = clampSizePercent(percentMemory);
-            currentPct = restoredPct;
-            slider.value = String(restoredPct);
-            applySlotPatch({ sizePercent: restoredPct });
-          }
-          syncControlState();
-          syncValueLabel();
-          syncApplyAll();
-        };
-        syncControlState();
-        syncValueLabel();
-        const mutWrap = document.createElement("div");
-        mutWrap.style.display = "grid";
-        mutWrap.style.gap = "6px";
-        const mutTitle = document.createElement("div");
-        mutTitle.textContent = "Mutations";
-        mutTitle.style.fontSize = "11px";
-        mutTitle.style.opacity = "0.85";
-        const toggleMutBtn = document.createElement("button");
-        toggleMutBtn.type = "button";
-        toggleMutBtn.textContent = "+";
-        Object.assign(toggleMutBtn.style, {
-          width: "28px",
-          height: "28px",
-          borderRadius: "50%",
-          border: "1px solid #2c3643",
-          background: "rgba(10,14,20,0.9)",
-          color: "#e7eef7",
-          fontWeight: "900",
-          fontSize: "16px",
-          cursor: "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center"
-        });
-        const activeRow = document.createElement("div");
-        activeRow.style.display = "flex";
-        activeRow.style.flexWrap = "wrap";
-        activeRow.style.gap = "6px";
-        activeRow.style.alignItems = "center";
-        const mutDropdown = document.createElement("div");
-        mutDropdown.style.display = "none";
-        mutDropdown.style.gridTemplateColumns = "repeat(auto-fill, minmax(90px, 1fr))";
-        mutDropdown.style.gap = "6px";
-        mutDropdown.style.padding = "6px";
-        mutDropdown.style.border = "1px solid #2c3643";
-        mutDropdown.style.borderRadius = "8px";
-        mutDropdown.style.background = "rgba(8,12,18,0.9)";
-        const mutationKeys = Object.keys(mutationCatalog || {});
-        const renderActiveTags = () => {
-          activeRow.innerHTML = "";
-          const active = Array.isArray(cfg.mutations) ? cfg.mutations : [];
-          const allKeys = mutationKeys.map((k) => k === "Amberlit" ? "Ambershine" : k);
-          const allSelected = allKeys.every((k) => active.includes(k));
-          const styleLetter = (target, mutId) => {
-            const color = mutationColorMap[mutId];
-            if (!color) return;
-            if (color.startsWith("linear-gradient")) {
-              target.style.backgroundImage = color;
-              target.style.backgroundClip = "text";
-              target.style.webkitBackgroundClip = "text";
-              target.style.color = "transparent";
-              target.style.webkitTextFillColor = "transparent";
-            } else {
-              target.style.color = color;
-            }
-          };
-          const getLetter = (mutId) => {
-            const def = mutationCatalog[mutId] || {};
-            const src = def.name || mutId || "?";
-            return String(src).charAt(0).toUpperCase();
-          };
-          for (const mutId of active) {
-            const tag = document.createElement("span");
-            Object.assign(tag.style, {
-              borderRadius: "999px",
-              padding: "3px 8px",
-              fontSize: "11px",
-              fontWeight: "700",
-              border: "1px solid #2c3643",
-              background: "rgba(10,14,20,0.9)",
-              cursor: "pointer"
-            });
-            const letterSpan = document.createElement("span");
-            letterSpan.textContent = getLetter(mutId);
-            letterSpan.style.fontWeight = "900";
-            styleLetter(letterSpan, mutId);
-            tag.title = "Remove mutation";
-            tag.onclick = () => {
-              const base = ensureEditorStateForSpecies(selId).slots;
-              editorPlantSlotsState = {
-                ...editorPlantSlotsState,
-                species: selId,
-                slots: applyAll ? base.map((c) => {
-                  const prev = Array.isArray(c.mutations) ? c.mutations : [];
-                  const next = prev.filter((m) => m !== mutId);
-                  return { ...c, mutations: next };
-                }) : base.map((c, i) => {
-                  if (i !== idx) return c;
-                  const prev = Array.isArray(c.mutations) ? c.mutations : [];
-                  const next = prev.filter((m) => m !== mutId);
-                  return { ...c, mutations: next };
-                })
-              };
-              renderSideDetails();
-            };
-            tag.appendChild(letterSpan);
-            activeRow.appendChild(tag);
-          }
-          if (!allSelected) {
-            activeRow.appendChild(toggleMutBtn);
-          }
-        };
-        const setDropdownOpen = (open) => {
-          mutDropdown.style.display = open ? "grid" : "none";
-          toggleMutBtn.style.background = open ? "rgba(32,42,56,0.8)" : "rgba(10,14,20,0.9)";
-        };
-        toggleMutBtn.onclick = () => {
-          const isOpen = mutDropdown.style.display !== "none";
-          setDropdownOpen(!isOpen);
-        };
-        for (const mutKey of mutationKeys) {
-          const def = mutationCatalog[mutKey] || {};
-          const storedId = mutKey === "Amberlit" ? "Ambershine" : mutKey;
-          const isActive = Array.isArray(cfg.mutations) && cfg.mutations.includes(storedId);
-          if (isActive) continue;
-          const btn2 = document.createElement("button");
-          btn2.type = "button";
-          btn2.textContent = def.name || mutKey || "?";
-          Object.assign(btn2.style, {
-            padding: "6px 8px",
-            borderRadius: "8px",
-            border: isActive ? "1px solid #55d38a" : "1px solid #2c3643",
-            background: isActive ? "rgba(85,211,138,0.22)" : "rgba(10,14,20,0.9)",
-            color: "#e7eef7",
-            fontSize: "11px",
-            fontWeight: "700",
-            cursor: "pointer",
-            textAlign: "left"
-          });
-          const color = mutationColorMap[storedId];
-          if (color) {
-            btn2.style.color = color.startsWith("linear-gradient") ? "#e7eef7" : color;
-            if (color.startsWith("linear-gradient")) {
-              btn2.style.backgroundImage = color;
-              btn2.style.backgroundClip = "text";
-              btn2.style.webkitBackgroundClip = "text";
-              btn2.style.color = "transparent";
-              btn2.style.webkitTextFillColor = "transparent";
-            }
-          }
-          btn2.onclick = () => {
-            const base = ensureEditorStateForSpecies(selId).slots;
-            editorPlantSlotsState = {
-              ...editorPlantSlotsState,
-              species: selId,
-              slots: applyAll ? base.map((c) => {
-                const prev = Array.isArray(c.mutations) ? c.mutations : [];
-                const has = prev.includes(storedId);
-                const next = has ? prev.filter((x) => x !== storedId) : [...prev, storedId];
-                return { ...c, mutations: next };
-              }) : base.map((c, i) => {
-                if (i !== idx) return c;
-                const prev = Array.isArray(c.mutations) ? c.mutations : [];
-                const has = prev.includes(storedId);
-                const next = has ? prev.filter((x) => x !== storedId) : [...prev, storedId];
-                return { ...c, mutations: next };
-              })
-            };
-            renderSideDetails();
-          };
-          mutDropdown.appendChild(btn2);
-        }
-        mutWrap.append(mutTitle, activeRow, mutDropdown);
-        renderActiveTags();
-        setDropdownOpen(false);
-        slotBox.append(sizeRow, modeRow, slider, customRow, mutWrap);
-        list.appendChild(slotBox);
-      });
-      slotsPanel.appendChild(list);
-      content.appendChild(slotsPanel);
-    }
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "Add to inventory";
-    Object.assign(btn.style, {
-      width: "100%",
-      padding: "8px 10px",
-      borderRadius: "8px",
-      border: "1px solid #2b3441",
-      background: "linear-gradient(180deg, rgba(42,154,255,0.12), rgba(30,91,181,0.35))",
-      color: "#e7eef7",
-      fontWeight: "700",
-      cursor: "pointer"
-    });
-    btn.onclick = () => {
-      console.log("[EditorService] addSelectedItemToInventory click", {
-        mode: currentSideMode,
-        id: selId
-      });
-      void addSelectedItemToInventory();
-    };
-    actionBar.appendChild(btn);
-    sideRightWrap.append(content, actionBar);
-  }
-  function compareSlotKeys(a, b) {
-    const ai = Number(a);
-    const bi = Number(b);
-    if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
-    return a.localeCompare(b);
-  }
-  function findPlayerSlot(slots, playerId2, opts = {}) {
-    if (!slots || typeof slots !== "object") return null;
-    const isMatch = (slot) => slot && String(slot.playerId || slot.id || "") === String(playerId2);
-    if (Array.isArray(slots)) {
-      const arr = slots;
-      for (let i = 0; i < arr.length; i++) {
-        if (isMatch(arr[i])) {
-          return { isArray: true, matchSlot: arr[i], matchIndex: i, entries: null, slotsArray: arr };
-        }
-      }
-      return null;
-    }
-    const entries = Object.entries(slots);
-    if (opts.sortObject) entries.sort(([a], [b]) => compareSlotKeys(a, b));
-    for (let i = 0; i < entries.length; i++) {
-      const [, s] = entries[i];
-      if (isMatch(s)) {
-        return { isArray: false, matchSlot: s, matchIndex: i, entries, slotsArray: null };
-      }
-    }
-    return null;
-  }
-  function slotMatchToIndex(meta) {
-    if (meta.isArray) return meta.matchIndex;
-    const entry = meta.entries?.[meta.matchIndex];
-    const k = entry ? entry[0] : null;
-    const n = Number(k);
-    return Number.isFinite(n) ? n : 0;
-  }
-  function rebuildUserSlots(meta, buildSlot) {
-    if (meta.isArray) {
-      const nextSlots = (meta.slotsArray || []).slice();
-      nextSlots[meta.matchIndex] = buildSlot(meta.matchSlot);
-      return nextSlots;
-    }
-    const nextEntries = (meta.entries || []).map(
-      ([k, s], idx) => idx === meta.matchIndex ? [k, buildSlot(s)] : [k, s]
-    );
-    return Object.fromEntries(nextEntries);
-  }
-  function buildStateWithUserSlots(cur, userSlots) {
-    return {
-      ...cur || {},
-      child: {
-        ...cur?.child || {},
-        data: {
-          ...cur?.child?.data || {},
-          userSlots
-        }
-      }
-    };
-  }
-  async function withPatchedWrite(patch, op) {
-    if (!patch) {
-      await op();
-      return;
-    }
-    const { atom, readKey, origRead, writeKey, origWrite } = patch;
-    const savedRead = atom[readKey];
-    const savedWrite = writeKey ? atom[writeKey] : void 0;
-    try {
-      atom[readKey] = origRead;
-      if (writeKey && origWrite) atom[writeKey] = origWrite;
-      await op();
-    } finally {
-      atom[readKey] = savedRead;
-      if (writeKey) atom[writeKey] = savedWrite;
-    }
-  }
-  async function setStateAtom(next) {
-    console.log("[EditorService] setStateAtom attempt", {
-      hasPatch: !!statePatch
-    });
-    await withPatchedWrite(statePatch, async () => {
-      try {
-        await Atoms.root.state.set(next);
-        console.log("[EditorService] setStateAtom success");
-      } catch (err) {
-        console.log("[EditorService] setStateAtom failed", err);
-        throw err;
-      }
-    });
-  }
-  async function addSelectedItemToInventory() {
-    const selId = getSelectedId();
-    if (!selId) return;
-    if (currentSideMode === "decor") {
-      console.log("[EditorService] addSelectedItemToInventory decor", selId);
-      await addDecorToInventory(selId);
-    } else {
-      console.log("[EditorService] addSelectedItemToInventory plant", selId);
-      await addPlantToInventory(selId);
-    }
-  }
-  async function removeSelectedInventoryItem() {
-    try {
-      const pid = await getPlayerId();
-      if (!pid) return false;
-      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
-      const inventoryVal = await Atoms.inventory.myInventory.get();
-      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items.slice() : [];
-      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
-        return false;
-      }
-      items.splice(selectedIndex, 1);
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      const slotMatch = findPlayerSlot(slots, pid);
-      if (!slotMatch) return false;
-      const slotData = slotMatch.matchSlot?.data || {};
-      const slotInv = slotData.inventory || {};
-      const favorited = Array.isArray(slotInv.favoritedItemIds) ? slotInv.favoritedItemIds.filter((id) => items.some((it) => it?.id === id)) : void 0;
-      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
-        const data = slot?.data || {};
-        return {
-          ...slot || {},
-          data: {
-            ...data,
-            inventory: {
-              ...slotInv || {},
-              items,
-              ...favorited ? { favoritedItemIds: favorited } : {}
-            }
-          }
-        };
-      });
-      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = nextState;
-      stateOriginalValue = nextState;
-      await setStateAtom(nextState);
-      const newIdx = Math.max(0, Math.min(items.length - 1, selectedIndex));
-      try {
-        await Atoms.inventory.myValidatedSelectedItemIndex.set(newIdx);
-      } catch {
-      }
-      return true;
-    } catch (err) {
-      console.log("[EditorService] removeSelectedInventoryItem failed", err);
-      return false;
-    }
-  }
-  async function addTileObjectToInventory(tileObject) {
-    try {
-      const pid = await getPlayerId();
-      if (!pid || !tileObject) return false;
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      const slotMatch = findPlayerSlot(slots, pid);
-      if (!slotMatch) return false;
-      const slotData = slotMatch.matchSlot?.data || {};
-      const inv = slotData.inventory;
-      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
-      if (tileObject.objectType === "plant") {
-        const plantItem = {
-          itemType: "Plant",
-          species: tileObject.species,
-          id: tileObject.id,
-          slots: Array.isArray(tileObject.slots) ? JSON.parse(JSON.stringify(tileObject.slots)) : [],
-          plantedAt: tileObject.plantedAt,
-          maturedAt: tileObject.maturedAt
-        };
-        items.push(plantItem);
-      } else if (tileObject.objectType === "decor") {
-        items.push({
-          itemType: "Decor",
-          decorId: tileObject.decorId,
-          quantity: 1,
-          rotation: typeof tileObject.rotation === "number" ? tileObject.rotation : 0
-        });
-      } else {
-        return false;
-      }
-      const slotInv = slotData.inventory || {};
-      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
-        const data = slot?.data || {};
-        return {
-          ...slot || {},
-          data: {
-            ...data,
-            inventory: { ...slotInv || {}, items }
-          }
-        };
-      });
-      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = nextState;
-      stateOriginalValue = nextState;
-      await setStateAtom(nextState);
-      try {
-        await Atoms.inventory.myValidatedSelectedItemIndex.set(items.length - 1);
-      } catch {
-      }
-      return true;
-    } catch (err) {
-      console.log("[EditorService] addTileObjectToInventory failed", err);
-      return false;
-    }
-  }
-  async function addDecorToInventory(decorId) {
-    try {
-      console.log("[EditorService] addDecorToInventory", decorId);
-      const pid = await getPlayerId();
-      if (!pid) {
-        console.log("[EditorService] addDecorToInventory: no playerId");
-        return;
-      }
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      if (!slots || typeof slots !== "object") {
-        console.log("[EditorService] addDecorToInventory: no userSlots");
-        return;
-      }
-      const slotMatch = findPlayerSlot(slots, pid);
-      if (!slotMatch) {
-        console.log("[EditorService] addDecorToInventory: player slot not found");
-        return;
-      }
-      const slotData = slotMatch.matchSlot.data || {};
-      const inv = slotData.inventory;
-      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
-      console.log("[EditorService] decor before add", { itemsLen: items.length });
-      items.push({
-        itemType: "Decor",
-        decorId,
-        quantity: 1
-      });
-      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
-        const slotDataInner = slot?.data || {};
-        const slotInv = slotDataInner.inventory;
-        return {
-          ...slot || {},
-          data: {
-            ...slotDataInner,
-            inventory: { ...slotInv || {}, items }
-          }
-        };
-      });
-      const next = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = next;
-      stateOriginalValue = next;
-      try {
-        await setStateAtom(next);
-      } catch (err) {
-        console.log("[EditorService] stateAtom set failed (decor)", err);
-      }
-      console.log("[EditorService] decor after add", { itemsLen: items.length });
-      console.log("[EditorService] decor added", { decorId });
-    } catch (err) {
-      console.log("[EditorService] failed to add decor", err);
-    }
-  }
-  async function addPlantToInventory(species) {
-    try {
-      console.log("[EditorService] addPlantToInventory", species);
-      const pid = await getPlayerId();
-      if (!pid) {
-        console.log("[EditorService] addPlantToInventory: no playerId");
-        return;
-      }
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      if (!slots || typeof slots !== "object") {
-        console.log("[EditorService] addPlantToInventory: no userSlots");
-        return;
-      }
-      const slotMatch = findPlayerSlot(slots, pid);
-      if (!slotMatch) {
-        console.log("[EditorService] addPlantToInventory: player slot not found");
-        return;
-      }
-      const slotData = slotMatch.matchSlot.data || {};
-      const inv = slotData.inventory;
-      const items = Array.isArray(inv?.items) ? inv.items.slice() : [];
-      const entry = plantCatalog?.[species] ?? {};
-      const plantDef = entry?.plant ?? {};
-      const isMultipleHarvest = plantDef?.harvestType === "Multiple";
-      console.log("[EditorService] plant before add", { itemsLen: items.length, isMultipleHarvest });
-      const maxSlots = getMaxSlotsForSpecies(species);
-      const slotsConfig = editorPlantSlotsState.species === species ? editorPlantSlotsState.slots.slice(0, maxSlots) : ensureEditorSlotsForSpecies(species).slice(0, maxSlots);
-      const slotsArr = [];
-      for (const cfg of slotsConfig) {
-        if (!cfg.enabled) continue;
-        const targetScale = resolveSlotTargetScale(species, cfg);
-        const mutations = Array.isArray(cfg.mutations) ? cfg.mutations.slice() : [];
-        slotsArr.push({
-          species,
-          startTime: 1760866288723,
-          endTime: 1760867858782,
-          targetScale,
-          mutations
-        });
-      }
-      const slotCount = slotsArr.length;
-      const newItem = {
-        id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `plant-${Math.random().toString(16).slice(2)}`,
-        itemType: "Plant",
-        species,
-        slots: slotsArr,
-        plantedAt: 1760779438723,
-        maturedAt: 1760865838723
-      };
-      if (!isMultipleHarvest) {
-        newItem.name = entry?.crop?.name ?? plantDef?.name ?? species;
-      }
-      items.push(newItem);
-      const nextUserSlots = rebuildUserSlots(slotMatch, (slot) => {
-        const slotDataInner = slot?.data || {};
-        const slotInv = slotDataInner.inventory;
-        return {
-          ...slot || {},
-          data: {
-            ...slotDataInner,
-            inventory: { ...slotInv || {}, items }
-          }
-        };
-      });
-      const next = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = next;
-      stateOriginalValue = next;
-      try {
-        await setStateAtom(next);
-      } catch (err) {
-        console.log("[EditorService] stateAtom set failed (plant)", err);
-      }
-      console.log("[EditorService] plant after add", { itemsLen: items.length + 1 });
-      console.log("[EditorService] plant added", {
-        species,
-        isMultipleHarvest,
-        slotCount
-      });
-    } catch (err) {
-      console.log("[EditorService] failed to add plant", err);
-    }
-  }
-  function notify(enabled) {
-    listeners4.forEach((cb) => {
-      try {
-        cb(enabled);
-      } catch {
-      }
-    });
-  }
-  function applyState(enabled, opts = {}) {
-    const next = !!enabled;
-    const changed = next !== currentEnabled;
-    if (next && overlaysVisible) showOverlay();
-    else hideOverlay();
-    if (next && overlaysVisible) showSideOverlay();
-    else hideSideOverlay();
-    if (next && overlaysVisible) showCurrentItemOverlay();
-    else hideCurrentItemOverlay();
-    if (next && !currentEnabled) {
-      void logGardenTilesForEditor();
-      void snapshotAndClearGardenForEditor();
-      void freezeStateAtom();
-    } else if (!next && currentEnabled) {
-      void restoreGardenSnapshotForEditor();
-      void unfreezeStateAtom();
-    }
-    currentEnabled = next;
-    if (opts.persist !== false) persist(next);
-    if (changed && opts.emit !== false) notify(next);
-  }
-  var EditorService = {
-    init() {
-      installEditorKeybindsOnce();
-      applyState(currentEnabled, { persist: false, emit: false });
-    },
-    isEnabled() {
-      return currentEnabled;
-    },
-    setEnabled(enabled) {
-      applyState(enabled, { persist: true, emit: true });
-    },
-    onChange(listener) {
-      listeners4.add(listener);
-      return () => listeners4.delete(listener);
-    },
-    onSavedGardensChange(listener) {
-      savedGardensListeners.add(listener);
-      return () => savedGardensListeners.delete(listener);
-    }
-  };
-  var EMPTY_GARDEN = { tileObjects: {}, boardwalkTileObjects: {} };
-  function isGardenEmpty(val) {
-    const tiles = val?.tileObjects;
-    const boards = val?.boardwalkTileObjects;
-    const isEmptyObj = (o) => o && typeof o === "object" && Object.keys(o).length === 0;
-    return isEmptyObj(tiles) && isEmptyObj(boards);
-  }
-  function makeEmptyGarden() {
-    return { ...EMPTY_GARDEN };
-  }
-  function sanitizeGarden(val) {
-    const tileObjects = val && typeof val === "object" && typeof val.tileObjects === "object" ? val.tileObjects : {};
-    const boardwalkTileObjects = val && typeof val === "object" && typeof val.boardwalkTileObjects === "object" ? val.boardwalkTileObjects : {};
-    return {
-      tileObjects: { ...tileObjects },
-      boardwalkTileObjects: { ...boardwalkTileObjects }
-    };
-  }
-  function readSavedGardens() {
-    try {
-      const parsed = readAriesPath(ARIES_SAVED_GARDENS_PATH);
-      const arr = Array.isArray(parsed) ? parsed : [];
-      return arr.map((g) => ({
-        id: String(g?.id || ""),
-        name: String(g?.name || "Untitled"),
-        createdAt: Number(g?.createdAt) || Date.now(),
-        garden: sanitizeGarden(g?.garden || {})
-      })).filter((g) => !!g.id);
-    } catch {
-      return [];
-    }
-  }
-  function writeSavedGardens(list) {
-    try {
-      writeAriesPath(ARIES_SAVED_GARDENS_PATH, list || []);
-    } catch {
-      return;
-    }
-    notifySavedGardensChanged();
-  }
-  async function getGardenForPlayer(playerId2) {
-    try {
-      if (!playerId2) return null;
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      const slotMatch = findPlayerSlot(slots, playerId2, { sortObject: true });
-      if (!slotMatch || !slotMatch.matchSlot) return null;
-      const g = slotMatch.matchSlot?.data?.garden;
-      return sanitizeGarden(g || {});
-    } catch {
-      return null;
-    }
-  }
-  async function setCurrentGarden(nextGarden) {
-    try {
-      const pid = await getPlayerId();
-      if (!pid) return false;
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const slots = cur?.child?.data?.userSlots;
-      const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
-      if (!slotMatch || !slotMatch.matchSlot) return false;
-      const userSlotIdx = slotMatchToIndex(slotMatch);
-      const updatedSlot = {
-        ...slotMatch.matchSlot,
-        data: {
-          ...slotMatch.matchSlot?.data || {},
-          garden: sanitizeGarden(nextGarden)
-        }
-      };
-      const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
-      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = nextState;
-      stateOriginalValue = nextState;
-      await setStateAtom(nextState);
-      try {
-        await applyGardenToTos(nextGarden, userSlotIdx);
-      } catch {
-      }
-      return true;
-    } catch (err) {
-      console.log("[EditorService] setCurrentGarden failed", err);
-      return false;
-    }
-  }
-  async function applyFriendGardenPreview(garden2) {
-    if (!garden2 || typeof garden2 !== "object") return false;
-    try {
-      const pid = await getPlayerId();
-      if (!pid) return false;
-      const cur = await Atoms.root.state.get().catch(() => null);
-      if (!cur) return false;
-      const slots = cur?.child?.data?.userSlots;
-      const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
-      if (!slotMatch || !slotMatch.matchSlot) return false;
-      const userSlotIdx = slotMatchToIndex(slotMatch);
-      const prevGarden = slotMatch.matchSlot?.data?.garden ? sanitizeGarden(slotMatch.matchSlot.data.garden) : makeEmptyGarden();
-      friendGardenBackup = { garden: prevGarden, userSlotIdx };
-      const updatedSlot = {
-        ...slotMatch.matchSlot,
-        data: {
-          ...slotMatch.matchSlot?.data || {},
-          garden: sanitizeGarden(garden2)
-        }
-      };
-      const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
-      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-      await setStateAtom(nextState);
-      try {
-        await applyGardenToTos(garden2, userSlotIdx);
-      } catch {
-      }
-      friendGardenPreviewActive = true;
-      return true;
-    } catch (error) {
-      console.error("[EditorService] applyFriendGardenPreview failed", error);
-      friendGardenPreviewActive = false;
-      return false;
-    }
-  }
-  async function clearFriendGardenPreview() {
-    if (!friendGardenPreviewActive) return false;
-    friendGardenPreviewActive = false;
-    try {
-      const backup = friendGardenBackup;
-      friendGardenBackup = null;
-      if (backup) {
-        const pid = await getPlayerId();
-        if (pid) {
-          const cur = await Atoms.root.state.get().catch(() => null);
-          const slots = cur?.child?.data?.userSlots;
-          const slotMatch = findPlayerSlot(slots, pid, { sortObject: true });
-          if (slotMatch && slotMatch.matchSlot) {
-            const updatedSlot = {
-              ...slotMatch.matchSlot,
-              data: {
-                ...slotMatch.matchSlot?.data || {},
-                garden: sanitizeGarden(backup.garden)
-              }
-            };
-            const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
-            const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-            await setStateAtom(nextState);
-            try {
-              await applyGardenToTos(backup.garden, backup.userSlotIdx);
-            } catch {
-            }
-          }
-        }
-      }
-      return true;
-    } catch (error) {
-      console.error("[EditorService] clearFriendGardenPreview failed", error);
-      return false;
-    }
-  }
-  function listSavedGardens() {
-    return readSavedGardens();
-  }
-  async function saveCurrentGarden(name, playerId2) {
-    const pid = playerId2 || await getPlayerId();
-    if (!pid) return null;
-    const garden2 = await getGardenForPlayer(pid);
-    if (!garden2) return null;
-    const now2 = Date.now();
-    const all = readSavedGardens();
-    const baseName = name?.trim() || "Untitled";
-    const makeUniqueName = (base, existing) => {
-      let idx = 1;
-      let candidate = base;
-      const set2 = new Set(existing);
-      while (set2.has(candidate)) {
-        candidate = `${base} (${idx})`;
-        idx += 1;
-      }
-      return candidate;
-    };
-    const existingIdx = all.findIndex((g) => g.name === baseName);
-    let finalName = baseName;
-    let reuseId = null;
-    if (existingIdx >= 0) {
-      const canConfirm = typeof window !== "undefined" && typeof window.confirm === "function";
-      const overwrite = canConfirm ? window.confirm(`A garden named "${baseName}" already exists. Overwrite it?`) : false;
-      if (overwrite) {
-        reuseId = all[existingIdx]?.id || null;
-      } else {
-        finalName = makeUniqueName(baseName, all.map((g) => g.name));
-      }
-    }
-    const saved = {
-      id: reuseId || `${now2}-${Math.random().toString(16).slice(2)}`,
-      name: finalName,
-      createdAt: now2,
-      garden: garden2
-    };
-    let updated = [];
-    if (reuseId) {
-      updated = all.map((g) => g.id === reuseId ? saved : g);
-    } else {
-      all.unshift(saved);
-      updated = all.slice(0, 50);
-    }
-    writeSavedGardens(updated);
-    return saved;
-  }
-  async function loadSavedGarden(id) {
-    if (!id) return false;
-    const all = readSavedGardens();
-    const found = all.find((g) => g.id === id);
-    if (!found) return false;
-    return setCurrentGarden(found.garden);
-  }
-  function deleteSavedGarden(id) {
-    if (!id) return false;
-    const all = readSavedGardens();
-    const next = all.filter((g) => g.id !== id);
-    if (next.length === all.length) return false;
-    writeSavedGardens(next);
-    return true;
-  }
-  function exportSavedGarden(id) {
-    if (!id) return null;
-    const all = readSavedGardens();
-    const found = all.find((g) => g.id === id);
-    if (!found) return null;
-    return JSON.stringify(found.garden, null, 2);
-  }
-  async function importGarden(name, raw) {
-    if (!raw) return null;
-    try {
-      const parsed = JSON.parse(raw);
-      const garden2 = sanitizeGarden(parsed);
-      const now2 = Date.now();
-      const saved = {
-        id: `${now2}-${Math.random().toString(16).slice(2)}`,
-        name: name?.trim() || "Imported garden",
-        createdAt: now2,
-        garden: garden2
-      };
-      const all = readSavedGardens();
-      all.unshift(saved);
-      writeSavedGardens(all.slice(0, 50));
-      return saved;
-    } catch {
-      return null;
-    }
-  }
-  async function getPlayerId() {
-    try {
-      const id = await Atoms.player.playerId.get();
-      return typeof id === "string" && id ? id : null;
-    } catch {
-      return null;
-    }
-  }
-  function buildClearedState(state3, playerId2) {
-    const slots = state3?.child?.data?.userSlots;
-    const slotMatch = findPlayerSlot(slots, playerId2, { sortObject: true });
-    if (!slotMatch || !slotMatch.matchSlot || typeof slotMatch.matchSlot !== "object") {
-      return { next: state3, changed: false };
-    }
-    const garden2 = slotMatch.matchSlot?.data?.garden;
-    const inventory = slotMatch.matchSlot?.data?.inventory;
-    const hasInventory = inventory && typeof inventory === "object";
-    const gardenChanged = !isGardenEmpty(garden2);
-    const invChanged = hasInventory && (Array.isArray(inventory.items) ? inventory.items.length > 0 : true ? inventory?.inventory?.items?.length > 0 : false);
-    if (!gardenChanged && !invChanged) return { next: state3, changed: false };
-    const updatedSlot = {
-      ...slotMatch.matchSlot,
-      data: {
-        ...slotMatch.matchSlot?.data || {},
-        garden: makeEmptyGarden(),
-        petSlots: buildEmptyPetSlots(slotMatch.matchSlot?.data?.petSlots),
-        ...hasInventory ? { inventory: { ...inventory || {}, items: [], favoritedItemIds: [] } } : {}
-      }
-    };
-    const nextUserSlots = rebuildUserSlots(slotMatch, () => updatedSlot);
-    const nextState = buildStateWithUserSlots(state3, nextUserSlots);
-    return { next: nextState, changed: true };
-  }
-  async function buildClearedStateSnapshot(playerId2) {
-    try {
-      const cur = await Atoms.root.state.get();
-      const { next } = buildClearedState(cur, playerId2);
-      return next;
-    } catch {
-      return null;
-    }
-  }
-  var savedGardenSnapshot = null;
-  async function readUserSlotIdx() {
-    try {
-      const store = await ensureStore().catch(() => null);
-      const atom = store ? getAtomByLabel("myUserSlotIdxAtom") : null;
-      const raw = atom ? store?.get(atom) : null;
-      if (typeof raw === "number" && Number.isFinite(raw)) return raw;
-    } catch {
-    }
-    return 0;
-  }
-  async function collectCurrentUserGardenTiles() {
-    const [mapData, userSlotIdx] = await Promise.all([
-      Atoms.root.map.get().catch(() => null),
-      readUserSlotIdx()
-    ]);
-    const cols = Number(mapData?.cols);
-    if (!mapData || !Number.isFinite(cols)) return null;
-    const clone = (v) => {
-      try {
-        return JSON.parse(JSON.stringify(v));
-      } catch {
-        return v;
-      }
-    };
-    const toPos = (gidx) => ({
-      x: gidx % cols,
-      y: Math.floor(gidx / cols)
-    });
-    const stateVal = await Atoms.root.state.get().catch(() => null);
-    const slots = stateVal?.child?.data?.userSlots;
-    const garden2 = Array.isArray(slots) ? slots?.[userSlotIdx]?.data?.garden : slots?.[String(userSlotIdx)]?.data?.garden;
-    const dirtObjs = garden2?.tileObjects || {};
-    const boardObjs = garden2?.boardwalkTileObjects || {};
-    const dirt = Object.entries(mapData?.globalTileIdxToDirtTile || {}).filter(([, v]) => v && typeof v === "object" && v.userSlotIdx === userSlotIdx).map(([k, v]) => {
-      const gidx = Number(k);
-      const pos = toPos(gidx);
-      const localIdx = Number(v?.dirtTileIdx ?? -1);
-      return {
-        type: "dirt",
-        globalIdx: gidx,
-        localIdx,
-        obj: clone(dirtObjs?.[String(localIdx)] ?? null),
-        ...pos
-      };
-    });
-    const boardwalk = Object.entries(mapData?.globalTileIdxToBoardwalk || {}).filter(([, v]) => v && typeof v === "object" && v.userSlotIdx === userSlotIdx).map(([k, v]) => {
-      const gidx = Number(k);
-      const pos = toPos(gidx);
-      const localIdx = Number(v?.boardwalkTileIdx ?? -1);
-      return {
-        type: "boardwalk",
-        globalIdx: gidx,
-        localIdx,
-        obj: clone(boardObjs?.[String(localIdx)] ?? null),
-        ...pos
-      };
-    });
-    const tiles = [...dirt, ...boardwalk].sort((a, b) => a.globalIdx - b.globalIdx);
-    return { userSlotIdx, dirt, boardwalk, tiles };
-  }
-  async function resolveTileCoords(tileType, userSlotIdx, localTileIndex) {
-    const mapData = await Atoms.root.map.get().catch(() => null);
-    const cols = Number(mapData?.cols);
-    if (!mapData || !Number.isFinite(cols)) return null;
-    const entries = tileType === "Dirt" ? Object.entries(mapData?.globalTileIdxToDirtTile || {}) : Object.entries(mapData?.globalTileIdxToBoardwalk || {});
-    for (const [gidxStr, v] of entries) {
-      const info = v;
-      if (!info || typeof info !== "object") continue;
-      const slotOk = Number(info.userSlotIdx) === userSlotIdx;
-      const localOk = tileType === "Dirt" ? Number(info.dirtTileIdx) === localTileIndex : Number(info.boardwalkTileIdx) === localTileIndex;
-      if (slotOk && localOk) {
-        const gidx = Number(gidxStr);
-        if (!Number.isFinite(gidx)) continue;
-        return { x: gidx % cols, y: Math.floor(gidx / cols) };
-      }
-    }
-    return null;
-  }
-  function injectTileObjectRaw(tx, ty, obj) {
-    try {
-      const info = tos.getTileObject(tx, ty, { ensureView: true });
-      const tv = info?.tileView;
-      if (!tv || typeof tv.onDataChanged !== "function") return false;
-      const cloned = (() => {
-        try {
-          return JSON.parse(JSON.stringify(obj));
-        } catch {
-          return obj;
-        }
-      })();
-      tv.onDataChanged(cloned);
-      const status = tos.getStatus();
-      const ctx2 = status.engine?.reusableContext;
-      if (ctx2 && typeof tv.update === "function") {
-        try {
-          tv.update(ctx2);
-        } catch {
-        }
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  async function applyGardenToTos(garden2, userSlotIdx) {
-    if (!tos.isReady()) return;
-    const mapData = await Atoms.root.map.get().catch(() => null);
-    const cols = Number(mapData?.cols);
-    if (!mapData || !Number.isFinite(cols)) return;
-    const dirtEntries = Object.entries(mapData?.globalTileIdxToDirtTile || {}).filter(
-      ([, v]) => v?.userSlotIdx === userSlotIdx
-    );
-    const boardEntries = Object.entries(mapData?.globalTileIdxToBoardwalk || {}).filter(
-      ([, v]) => v?.userSlotIdx === userSlotIdx
-    );
-    const applyEntry = (entry, type) => {
-      const [gidxStr, v] = entry;
-      const gidx = Number(gidxStr);
-      if (!Number.isFinite(gidx)) return;
-      const x = gidx % cols;
-      const y = Math.floor(gidx / cols);
-      const localIdx = type === "Dirt" ? Number(v?.dirtTileIdx ?? -1) : Number(v?.boardwalkTileIdx ?? -1);
-      const obj = type === "Dirt" ? (garden2.tileObjects || {})[String(localIdx)] : (garden2.boardwalkTileObjects || {})[String(localIdx)];
-      if (!obj) {
-        tos.setTileEmpty(x, y, { ensureView: true, forceUpdate: true });
-        return;
-      }
-      injectTileObjectRaw(x, y, obj);
-      const typ = obj.objectType;
-      if (typ === "plant") {
-        tos.setTilePlant(x, y, {
-          species: obj.species,
-          plantedAt: obj.plantedAt,
-          maturedAt: obj.maturedAt,
-          slots: obj.slots
-        }, { ensureView: true, forceUpdate: true });
-      } else if (typ === "decor") {
-        tos.setTileDecor(x, y, { rotation: obj.rotation }, { ensureView: true, forceUpdate: true });
-      } else if (typ === "egg") {
-        tos.setTileEgg(x, y, { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt }, { ensureView: true, forceUpdate: true });
-      } else {
-        tos.setTileEmpty(x, y, { ensureView: true, forceUpdate: true });
-      }
-    };
-    dirtEntries.forEach((e) => applyEntry(e, "Dirt"));
-    boardEntries.forEach((e) => applyEntry(e, "Boardwalk"));
-  }
-  async function snapshotAndClearGardenForEditor() {
-    if (!tos.isReady()) {
-      console.log("[EditorService] snapshot skipped: tos not ready");
-      return;
-    }
-    const info = await collectCurrentUserGardenTiles();
-    if (!info) {
-      console.log("[EditorService] snapshot skipped: map/user slot not ready");
-      return;
-    }
-    savedGardenSnapshot = info.tiles.map((t) => ({ x: t.x, y: t.y, obj: t.obj }));
-    for (const t of savedGardenSnapshot) {
-      try {
-        tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
-      } catch (err) {
-        console.log("[EditorService] clear tile failed", { x: t.x, y: t.y, err });
-      }
-    }
-  }
-  async function restoreGardenSnapshotForEditor() {
-    if (!tos.isReady()) {
-      console.log("[EditorService] restore skipped: tos not ready");
-      return;
-    }
-    const snapshot = savedGardenSnapshot;
-    if (!snapshot) return;
-    for (const t of snapshot) {
-      const obj = t.obj;
-      try {
-        if (!obj) {
-          tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
-          continue;
-        }
-        const typ = obj?.objectType;
-        if (typ === "plant") {
-          const patch = {
-            species: obj.species,
-            plantedAt: obj.plantedAt,
-            maturedAt: obj.maturedAt,
-            slots: obj.slots
-          };
-          injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTilePlant(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
-        } else if (typ === "decor") {
-          const patch = { rotation: obj.rotation };
-          injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTileDecor(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
-        } else if (typ === "egg") {
-          const patch = { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt };
-          injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTileEgg(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
-        } else {
-          tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
-        }
-      } catch (err) {
-        const ok = obj ? injectTileObjectRaw(t.x, t.y, obj) : false;
-        if (!ok) {
-          console.log("[EditorService] restore tile failed", { x: t.x, y: t.y, err });
-        }
-      }
-    }
-    savedGardenSnapshot = null;
-  }
-  async function logGardenTilesForEditor() {
-    try {
-      const info = await collectCurrentUserGardenTiles();
-      if (!info) {
-        console.log("[EditorService] garden tiles: map/user slot not ready");
-        return;
-      }
-      console.log("[EditorService] garden tiles (for setTileEmpty)", {
-        userSlotIdx: info.userSlotIdx,
-        total: info.tiles.length,
-        dirtCount: info.dirt.length,
-        boardwalkCount: info.boardwalk.length,
-        tiles: info.tiles
-      });
-    } catch (err) {
-      console.log("[EditorService] garden tiles log failed", err);
-    }
-  }
-  async function logSelectedInventoryItemWithTile() {
-    try {
-      const store = await ensureStore().catch(() => null);
-      let tileType;
-      let localTileIndex;
-      if (store) {
-        const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
-        if (!tileAtom) {
-          console.log("[EditorService] logSelectedInventoryItemWithTile: no myCurrentGardenTileAtom");
-        } else {
-          const tileVal = store.get(tileAtom);
-          tileType = tileVal?.tileType;
-          localTileIndex = tileVal?.localTileIndex;
-        }
-      } else {
-        console.log("[EditorService] logSelectedInventoryItemWithTile: no jotai store");
-      }
-      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
-      const inventoryVal = await Atoms.inventory.myInventory.get();
-      const rotation = await Atoms.inventory.mySelectedItemRotation.get();
-      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items : [];
-      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
-        console.log("[EditorService] logSelectedInventoryItemWithTile: invalid selected index", {
-          selectedIndex,
-          itemsLen: items.length
-        });
-        return;
-      }
-      const selectedItem = items[selectedIndex];
-      console.log("[EditorService] selected item placement debug", {
-        tileType,
-        localTileIndex,
-        selectedIndex,
-        rotation,
-        item: selectedItem
-      });
-    } catch (err) {
-      console.log("[EditorService] logSelectedInventoryItemWithTile failed", err);
-    }
-  }
-  async function placeSelectedItemInGardenAtCurrentTile() {
-    try {
-      const store = await ensureStore().catch(() => null);
-      if (!store) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: no jotai store");
-        return;
-      }
-      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
-      if (!tileAtom) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: no myCurrentGardenTileAtom");
-        return;
-      }
-      const tileVal = store.get(tileAtom);
-      if (!tileVal) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: tileVal is null");
-        return;
-      }
-      const tileType = tileVal.tileType;
-      const localTileIndex = tileVal.localTileIndex;
-      const userSlotIdxRaw = tileVal.userSlotIdx;
-      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
-      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: invalid localTileIndex", {
-          localTileIndex
-        });
-        return;
-      }
-      const selectedIndex = await Atoms.inventory.myValidatedSelectedItemIndex.get();
-      const inventoryVal = await Atoms.inventory.myInventory.get();
-      const rotation = await Atoms.inventory.mySelectedItemRotation.get();
-      const items = Array.isArray(inventoryVal?.items) ? inventoryVal.items : [];
-      if (selectedIndex == null || typeof selectedIndex !== "number" || selectedIndex < 0 || selectedIndex >= items.length) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: invalid selected index", {
-          selectedIndex,
-          itemsLen: items.length
-        });
-        return;
-      }
-      const selectedItem = items[selectedIndex];
-      if (selectedItem?.itemType !== "Plant" && selectedItem?.itemType !== "Decor") {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: unsupported itemType", {
-          itemType: selectedItem?.itemType
-        });
-        return;
-      }
-      let tileObject;
-      if (selectedItem.itemType === "Plant") {
-        tileObject = {
-          objectType: "plant",
-          species: selectedItem.species,
-          slots: Array.isArray(selectedItem.slots) ? selectedItem.slots : [],
-          plantedAt: selectedItem.plantedAt,
-          maturedAt: selectedItem.maturedAt
-        };
-      } else if (selectedItem.itemType === "Decor") {
-        tileObject = {
-          objectType: "decor",
-          decorId: selectedItem.decorId,
-          // rotation depuis lâatom, fallback sur ce quâaurait dÃ©jÃ  lâitem (au cas oÃ¹)
-          rotation: typeof rotation === "number" ? rotation : selectedItem.rotation ?? 0
-        };
-      }
-      if (!tileObject) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: failed to build tileObject");
-        return;
-      }
-      const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
-      if (!coords) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: cannot resolve coords", {
-          tileType,
-          localTileIndex,
-          userSlotIdx
-        });
-        return;
-      }
-      if (!tos.isReady()) {
-        console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile: tos not ready");
-        return;
-      }
-      injectTileObjectRaw(coords.x, coords.y, tileObject);
-      if (tileObject.objectType === "plant") {
-        tos.setTilePlant(coords.x, coords.y, {
-          species: tileObject.species,
-          plantedAt: tileObject.plantedAt,
-          maturedAt: tileObject.maturedAt,
-          slots: tileObject.slots
-        }, { ensureView: true, forceUpdate: true });
-      } else if (tileObject.objectType === "decor") {
-        tos.setTileDecor(coords.x, coords.y, { rotation: tileObject.rotation }, { ensureView: true, forceUpdate: true });
-      }
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const userSlots = cur?.child?.data?.userSlots;
-      if (userSlots && typeof userSlots === "object") {
-        const isArray = Array.isArray(userSlots);
-        const matchSlot = isArray ? userSlots[userSlotIdx] : userSlots[String(userSlotIdx)];
-        if (matchSlot) {
-          const slotData = matchSlot.data || {};
-          const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
-          const garden2 = {
-            tileObjects: { ...prevGarden.tileObjects || {} },
-            boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
-          };
-          const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
-          const tileKey = String(localTileIndex);
-          const nextTargetMap = { ...garden2[targetKey], [tileKey]: tileObject };
-          const nextGarden = {
-            tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
-            boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
-          };
-          const updatedSlot = {
-            ...matchSlot,
-            data: {
-              ...slotData,
-              garden: nextGarden
-            }
-          };
-          const nextUserSlots = isArray ? (() => {
-            const nextSlots = userSlots.slice();
-            nextSlots[userSlotIdx] = updatedSlot;
-            return nextSlots;
-          })() : {
-            ...userSlots,
-            [String(userSlotIdx)]: updatedSlot
-          };
-          const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-          stateFrozenValue = nextState;
-          stateOriginalValue = nextState;
-          try {
-            await setStateAtom(nextState);
-          } catch {
-          }
-        }
-      }
-      console.log("[EditorService] placed item in garden (tos)", {
-        tileType,
-        localTileIndex,
-        userSlotIdx,
-        selectedIndex,
-        itemType: selectedItem.itemType,
-        species: selectedItem.species,
-        decorId: selectedItem.decorId,
-        rotation,
-        coords
-      });
-    } catch (err) {
-      console.log("[EditorService] placeSelectedItemInGardenAtCurrentTile failed", err);
-    }
-  }
-  async function removeGardenObjectAtCurrentTile() {
-    try {
-      const store = await ensureStore().catch(() => null);
-      if (!store) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: no jotai store");
-        return false;
-      }
-      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
-      if (!tileAtom) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: no myCurrentGardenTileAtom");
-        return false;
-      }
-      const tileVal = store.get(tileAtom);
-      if (!tileVal) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: tileVal is null");
-        return false;
-      }
-      const tileType = tileVal.tileType;
-      const localTileIndex = tileVal.localTileIndex;
-      const userSlotIdxRaw = tileVal.userSlotIdx;
-      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
-      if (localTileIndex == null || !Number.isFinite(localTileIndex)) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: invalid localTileIndex", {
-          localTileIndex
-        });
-        return false;
-      }
-      const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
-      if (!coords) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: cannot resolve coords", {
-          tileType,
-          localTileIndex,
-          userSlotIdx
-        });
-        return false;
-      }
-      if (!tos.isReady()) {
-        console.log("[EditorService] removeItemFromGardenAtCurrentTile: tos not ready");
-        return false;
-      }
-      tos.setTileEmpty(coords.x, coords.y, { ensureView: true, forceUpdate: true });
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const userSlots = cur?.child?.data?.userSlots;
-      if (userSlots && typeof userSlots === "object") {
-        const isArray = Array.isArray(userSlots);
-        const matchSlot = isArray ? userSlots[userSlotIdx] : userSlots[String(userSlotIdx)];
-        if (matchSlot) {
-          const slotData = matchSlot.data || {};
-          const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
-          const garden2 = {
-            tileObjects: { ...prevGarden.tileObjects || {} },
-            boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
-          };
-          const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
-          const tileKey = String(localTileIndex);
-          const currentTargetMap = garden2[targetKey] || {};
-          const nextTargetMap = { ...currentTargetMap };
-          delete nextTargetMap[tileKey];
-          const nextGarden = {
-            tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
-            boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
-          };
-          const updatedSlot = {
-            ...matchSlot,
-            data: {
-              ...slotData,
-              garden: nextGarden
-            }
-          };
-          const nextUserSlots = isArray ? (() => {
-            const nextSlots = userSlots.slice();
-            nextSlots[userSlotIdx] = updatedSlot;
-            return nextSlots;
-          })() : {
-            ...userSlots,
-            [String(userSlotIdx)]: updatedSlot
-          };
-          const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-          stateFrozenValue = nextState;
-          stateOriginalValue = nextState;
-          try {
-            await setStateAtom(nextState);
-          } catch {
-          }
-        }
-      }
-      console.log("[EditorService] removed item from garden (tos + state)", {
-        tileType,
-        localTileIndex,
-        userSlotIdx,
-        coords
-      });
-      return true;
-    } catch (err) {
-      console.log("[EditorService] removeItemFromGardenAtCurrentTile failed", err);
-      return false;
-    }
-  }
-  async function removeItemFromGardenAtCurrentTile() {
-    void removeGardenObjectAtCurrentTile();
-  }
-  async function removeDecorFromGardenAtCurrentTile() {
-    void removeGardenObjectAtCurrentTile();
-  }
-  async function updateGardenObjectAtCurrentTile(updater) {
-    try {
-      const store = await ensureStore().catch(() => null);
-      if (!store) return false;
-      const tileAtom = getAtomByLabel("myCurrentGardenTileAtom");
-      if (!tileAtom) return false;
-      const tileVal = store.get(tileAtom);
-      if (!tileVal) return false;
-      const tileType = tileVal.tileType;
-      const localTileIndex = tileVal.localTileIndex;
-      const userSlotIdxRaw = tileVal.userSlotIdx;
-      const userSlotIdx = typeof userSlotIdxRaw === "number" && Number.isFinite(userSlotIdxRaw) ? userSlotIdxRaw : 0;
-      if (localTileIndex == null || !Number.isFinite(localTileIndex)) return false;
-      const cur = stateFrozenValue ?? await Atoms.root.state.get();
-      const userSlots = cur?.child?.data?.userSlots;
-      if (!userSlots || typeof userSlots !== "object") return false;
-      const isArray = Array.isArray(userSlots);
-      let matchSlot;
-      if (isArray) {
-        matchSlot = userSlots[userSlotIdx];
-      } else {
-        const key2 = String(userSlotIdx);
-        matchSlot = userSlots[key2];
-      }
-      if (!matchSlot) return false;
-      const slotData = matchSlot.data || {};
-      const prevGarden = slotData.garden && typeof slotData.garden === "object" ? slotData.garden : makeEmptyGarden();
-      const garden2 = {
-        tileObjects: { ...prevGarden.tileObjects || {} },
-        boardwalkTileObjects: { ...prevGarden.boardwalkTileObjects || {} }
-      };
-      const targetKey = tileType === "Dirt" ? "tileObjects" : "boardwalkTileObjects";
-      const tileKey = String(localTileIndex);
-      const currentTargetMap = garden2[targetKey] || {};
-      const currentObj = currentTargetMap[tileKey];
-      if (!currentObj) return false;
-      const nextObj = updater(currentObj);
-      const nextTargetMap = { ...currentTargetMap, [tileKey]: nextObj };
-      const nextGarden = {
-        tileObjects: targetKey === "tileObjects" ? nextTargetMap : garden2.tileObjects,
-        boardwalkTileObjects: targetKey === "boardwalkTileObjects" ? nextTargetMap : garden2.boardwalkTileObjects
-      };
-      const updatedSlot = {
-        ...matchSlot,
-        data: {
-          ...slotData,
-          garden: nextGarden
-        }
-      };
-      const nextUserSlots = isArray ? (() => {
-        const nextSlots = userSlots.slice();
-        nextSlots[userSlotIdx] = updatedSlot;
-        return nextSlots;
-      })() : {
-        ...userSlots,
-        [String(userSlotIdx)]: updatedSlot
-      };
-      const nextState = buildStateWithUserSlots(cur, nextUserSlots);
-      stateFrozenValue = nextState;
-      stateOriginalValue = nextState;
-      await setStateAtom(nextState);
-      try {
-        const coords = await resolveTileCoords(tileType, userSlotIdx, localTileIndex);
-        if (coords && tos.isReady()) {
-          injectTileObjectRaw(coords.x, coords.y, nextObj);
-          if (nextObj.objectType === "plant") {
-            tos.setTilePlant(coords.x, coords.y, {
-              species: nextObj.species,
-              plantedAt: nextObj.plantedAt,
-              maturedAt: nextObj.maturedAt,
-              slots: nextObj.slots
-            }, { ensureView: true, forceUpdate: true });
-          } else if (nextObj.objectType === "decor") {
-            tos.setTileDecor(coords.x, coords.y, { rotation: nextObj.rotation }, { ensureView: true, forceUpdate: true });
-          } else if (nextObj.objectType === "egg") {
-            tos.setTileEgg(coords.x, coords.y, {
-              plantedAt: nextObj.plantedAt,
-              maturedAt: nextObj.maturedAt
-            }, { ensureView: true, forceUpdate: true });
-          }
-        }
-      } catch {
-      }
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  function clampSizePercent(sizePercent) {
-    const pctRaw = Number.isFinite(sizePercent) ? sizePercent : 100;
-    return Math.max(50, Math.min(100, Math.round(pctRaw)));
-  }
-  function getScaleBoundsForSpecies(species) {
-    if (!species) return { minScale: 1, maxScale: 1 };
-    const entry = plantCatalog[species];
-    const maxScaleRaw = Number(entry?.crop?.maxScale);
-    const maxScale = Number.isFinite(maxScaleRaw) && maxScaleRaw > 1 ? maxScaleRaw : 1;
-    return { minScale: 1, maxScale };
-  }
-  function clampCustomScale(species, scale) {
-    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
-    if (!Number.isFinite(scale)) return minScale;
-    const upper = Math.max(minScale, maxScale);
-    return Math.max(minScale, Math.min(upper, scale));
-  }
-  function normalizeCustomScale(species, scale) {
-    if (!Number.isFinite(scale)) return 1;
-    return scale;
-  }
-  function computeTargetScaleFromPercent(species, sizePercent) {
-    const pct = clampSizePercent(sizePercent);
-    if (!species) return 1;
-    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
-    if (!maxScale || maxScale <= minScale) return minScale;
-    const t = (pct - 50) / 50;
-    return minScale + t * (maxScale - minScale);
-  }
-  function computePercentFromScale(species, targetScale) {
-    const { minScale, maxScale } = getScaleBoundsForSpecies(species);
-    if (!maxScale || maxScale <= minScale) return 100;
-    const clamped = clampCustomScale(species, targetScale);
-    const pct = 50 + (clamped - minScale) / (maxScale - minScale) * 50;
-    return clampSizePercent(pct);
-  }
-  function resolveSlotTargetScale(species, cfg) {
-    if (cfg.sizeMode === "custom") {
-      return normalizeCustomScale(species, cfg.customScale);
-    }
-    return computeTargetScaleFromPercent(species, cfg.sizePercent);
-  }
-  var editorPlantSlotsState = {
-    species: null,
-    slots: [],
-    applyAll: false
-  };
-  function getMaxSlotsForSpecies(species) {
-    const entry = plantCatalog[species];
-    const plantDef = entry?.plant ?? {};
-    const isMultipleHarvest = plantDef?.harvestType === "Multiple";
-    const slotOffsets = Array.isArray(plantDef.slotOffsets) ? plantDef.slotOffsets : [];
-    if (isMultipleHarvest && slotOffsets.length > 0) return slotOffsets.length;
-    return 1;
-  }
-  function ensureEditorSlotsForSpecies(species) {
-    const maxSlots = getMaxSlotsForSpecies(species);
-    if (editorPlantSlotsState.species !== species) {
-      const defaultScale = computeTargetScaleFromPercent(species, 100);
-      editorPlantSlotsState = {
-        species,
-        slots: Array.from({ length: maxSlots }, () => ({
-          enabled: true,
-          sizePercent: 100,
-          customScale: defaultScale,
-          sizeMode: "percent",
-          mutations: []
-        })),
-        applyAll: false
-      };
-      return editorPlantSlotsState.slots;
-    }
-    let slots = editorPlantSlotsState.slots.slice(0, maxSlots);
-    if (!slots.length) {
-      const defaultScale = computeTargetScaleFromPercent(species, 100);
-      slots = [
-        {
-          enabled: true,
-          sizePercent: 100,
-          customScale: defaultScale,
-          sizeMode: "percent",
-          mutations: []
-        }
-      ];
-    }
-    slots = slots.map((slot) => {
-      const pct = clampSizePercent(slot.sizePercent);
-      const mode = slot.sizeMode === "custom" ? "custom" : "percent";
-      const fallbackScale = computeTargetScaleFromPercent(species, pct);
-      const customScale = normalizeCustomScale(
-        species,
-        Number.isFinite(slot.customScale) ? slot.customScale : fallbackScale
-      );
-      const sizePercent = mode === "custom" ? computePercentFromScale(species, customScale) : pct;
-      return {
-        enabled: slot.enabled !== false,
-        sizePercent,
-        customScale,
-        sizeMode: mode,
-        mutations: Array.isArray(slot.mutations) ? slot.mutations : []
-      };
-    });
-    editorPlantSlotsState = { ...editorPlantSlotsState, slots, applyAll: !!editorPlantSlotsState.applyAll };
-    return slots;
-  }
-  function ensureEditorStateForSpecies(species) {
-    ensureEditorSlotsForSpecies(species);
-    if (editorPlantSlotsState.applyAll == null) {
-      editorPlantSlotsState.applyAll = false;
-    }
-    return editorPlantSlotsState;
-  }
-  function findReadKey(atom) {
-    if (atom && typeof atom.read === "function") return "read";
-    for (const k of Object.keys(atom || {})) {
-      const v = atom[k];
-      if (typeof v === "function" && k !== "write" && k !== "onMount" && k !== "toString") {
-        const ar = v.length;
-        if (ar === 1 || ar === 2) return k;
-      }
-    }
-    throw new Error("stateAtom read() not found");
-  }
-  function findWriteKey(atom) {
-    if (atom && typeof atom.write === "function") return "write";
-    for (const k of Object.keys(atom || {})) {
-      const v = atom[k];
-      if (typeof v === "function" && k !== "read" && k !== "onMount" && k !== "toString") {
-        const ar = v.length;
-        if (ar >= 2) return k;
-      }
-    }
-    return null;
-  }
-  async function freezeStateAtom() {
-    await ensureStore().catch(() => {
-    });
-    const pid = await getPlayerId();
-    if (!pid) return;
-    const atom = getAtomByLabel("stateAtom");
-    if (!atom) return;
-    try {
-      stateOriginalValue = await Atoms.root.state.get();
-    } catch {
-      stateOriginalValue = null;
-    }
-    const frozen = await buildClearedStateSnapshot(pid);
-    if (!frozen) return;
-    try {
-      await Atoms.root.state.set(frozen);
-    } catch {
-    }
-    stateFrozenValue = frozen;
-    if (statePatch && statePatch.atom === atom) return;
-    let readKey;
-    try {
-      readKey = findReadKey(atom);
-    } catch {
-      return;
-    }
-    const origRead = atom[readKey];
-    const writeKey = findWriteKey(atom) || void 0;
-    const origWrite = writeKey ? atom[writeKey] : void 0;
-    atom[readKey] = () => stateFrozenValue;
-    if (writeKey) {
-      atom[writeKey] = () => stateFrozenValue;
-    }
-    statePatch = { atom, readKey, origRead, writeKey, origWrite };
-  }
-  function unfreezeStateAtom() {
-    if (statePatch) {
-      try {
-        statePatch.atom[statePatch.readKey] = statePatch.origRead;
-        if (statePatch.writeKey && statePatch.origWrite) {
-          statePatch.atom[statePatch.writeKey] = statePatch.origWrite;
-        }
-      } catch {
-      }
-    }
-    statePatch = null;
-    stateFrozenValue = null;
-    if (stateOriginalValue != null) {
-      try {
-        void Atoms.root.state.set(stateOriginalValue);
-      } catch {
-      }
-    }
-    stateOriginalValue = null;
-  }
-  function buildEmptyPetSlots(prev) {
-    if (Array.isArray(prev)) return [];
-    if (prev && typeof prev === "object") return {};
-    return [];
-  }
-  shareGlobal("qwsLogSelectedInventoryItemWithTile", () => {
-    void logSelectedInventoryItemWithTile();
-  });
-  shareGlobal("qwsPlaceSelectedItemInGardenAtCurrentTile", () => {
-    void placeSelectedItemInGardenAtCurrentTile();
-  });
-  shareGlobal("qwsRemoveItemFromGardenAtCurrentTile", () => {
-    void removeItemFromGardenAtCurrentTile();
-  });
-  shareGlobal("qwsRemoveDecorFromGardenAtCurrentTile", () => {
-    void removeDecorFromGardenAtCurrentTile();
-  });
-  shareGlobal("qwsEditorListSavedGardens", () => {
-    return listSavedGardens();
-  });
-  shareGlobal("qwsEditorSaveGarden", async (name) => {
-    return await saveCurrentGarden(name || "Untitled");
-  });
-  shareGlobal("qwsEditorClearGarden", async () => {
-    const empty = makeEmptyGarden();
-    return await setCurrentGarden(empty);
-  });
-  shareGlobal("qwsEditorLoadGarden", async (id) => {
-    return await loadSavedGarden(id);
-  });
-  shareGlobal("qwsEditorSaveGardenForPlayer", async (playerId2, name) => {
-    return await saveCurrentGarden(name || "Untitled", playerId2);
-  });
-  shareGlobal("qwsEditorDeleteGarden", (id) => {
-    return deleteSavedGarden(id);
-  });
-  shareGlobal("qwsEditorExportGarden", (id) => {
-    return exportSavedGarden(id);
-  });
-  shareGlobal("qwsEditorImportGarden", async (name, raw) => {
-    return await importGarden(name, raw);
-  });
-  shareGlobal("qwsEditorPreviewFriendGarden", async (garden2) => {
-    return await applyFriendGardenPreview(garden2);
-  });
-  shareGlobal("qwsEditorClearFriendGardenPreview", async () => {
-    return await clearFriendGardenPreview();
-  });
-  function installEditorKeybindsOnce() {
-    if (editorKeybindsInstalled || typeof window === "undefined") return;
-    editorKeybindsInstalled = true;
-    window.addEventListener(
-      "keydown",
-      (ev) => {
-        if (shouldIgnoreKeydown(ev)) return;
-        if (eventMatchesKeybind("editor.toggle-overlays", ev)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          if (!currentEnabled) return;
-          overlaysVisible = !overlaysVisible;
-          if (overlaysVisible) {
-            showOverlay();
-            showSideOverlay();
-            showCurrentItemOverlay();
-          } else {
-            hideOverlay();
-            hideSideOverlay();
-            hideCurrentItemOverlay();
-          }
-          return;
-        }
-        if (!currentEnabled) return;
-        if (eventMatchesKeybind("editor.place-remove", ev)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const alreadyHeld = editorActionHeld;
-          editorActionHeld = true;
-          void handleEditorPlaceRemove(ev, alreadyHeld);
-          return;
-        }
-        if (eventMatchesKeybind("editor.delete-inventory", ev)) {
-          ev.preventDefault();
-          ev.stopPropagation();
-          void removeSelectedInventoryItem();
-        }
-      },
-      true
-    );
-    window.addEventListener(
-      "keyup",
-      (ev) => {
-        const isSyntheticRF = ev?.__inGameHotkeysRapidSynthetic__ === true;
-        if (isSyntheticRF) return;
-        if (!currentEnabled) return;
-        if (eventMatchesKeybind("editor.place-remove", ev)) {
-          editorActionHeld = false;
-          lastEditorPressStartTs = 0;
-          lastEditorPlaceRemoveTs = 0;
-          lastEditorFirstFired = false;
-          lastEditorTileKey = null;
-          lastEditorTileType = void 0;
-          lastEditorFirstActionTs = 0;
-        }
-      },
-      true
-    );
-  }
-  async function hasSelectedInventoryItem() {
-    try {
-      const inv = await Atoms.inventory.myInventory.get();
-      const idx = await Atoms.inventory.myValidatedSelectedItemIndex.get();
-      const items = Array.isArray(inv?.items) ? inv.items : [];
-      return typeof idx === "number" && !!items[idx];
-    } catch {
-      return false;
-    }
-  }
-  async function handleEditorPlaceRemove(ev, isHeld = false) {
-    const now2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
-    if (!isHeld || lastEditorPressStartTs === 0) {
-      lastEditorPressStartTs = now2;
-      lastEditorPlaceRemoveTs = 0;
-      lastEditorFirstFired = false;
-      lastEditorTileKey = null;
-      lastEditorTileType = void 0;
-      lastEditorFirstActionTs = 0;
-    }
-    const { tileObject, tileKey, tileType } = await readCurrentTileContext();
-    const hasSelection = await hasSelectedInventoryItem();
-    const wantsRemove = !!tileObject;
-    const wantsPlace = !tileObject && hasSelection;
-    if (!wantsRemove && !wantsPlace) return;
-    const tileKeyStr = `${tileType ?? "?"}|${tileKey ?? "none"}`;
-    const sameTile = tileKeyStr === `${lastEditorTileType ?? "?"}|${lastEditorTileKey ?? "none"}`;
-    if (!sameTile) {
-      lastEditorTileKey = tileKey ?? null;
-      lastEditorTileType = tileType;
-      lastEditorFirstFired = false;
-      lastEditorPlaceRemoveTs = 0;
-      lastEditorPressStartTs = now2;
-      lastEditorFirstActionTs = 0;
-    }
-    const elapsedSincePress = now2 - lastEditorPressStartTs;
-    if (!lastEditorFirstFired) {
-      lastEditorFirstFired = true;
-      lastEditorPlaceRemoveTs = now2;
-      lastEditorFirstActionTs = now2;
-    } else {
-      const sinceFirstAction = lastEditorFirstActionTs > 0 ? now2 - lastEditorFirstActionTs : elapsedSincePress;
-      const gateMs = sinceFirstAction < EDITOR_PLACE_REMOVE_FIRST_DELAY_MS ? EDITOR_PLACE_REMOVE_FIRST_DELAY_MS : EDITOR_PLACE_REMOVE_REPEAT_MS;
-      if (now2 - lastEditorPlaceRemoveTs < gateMs) {
-        return;
-      }
-      lastEditorPlaceRemoveTs = now2;
-    }
-    if (wantsRemove) {
-      if (tileObject?.objectType === "plant") {
-        await removeItemFromGardenAtCurrentTile();
-        void triggerEditorAnimation("dig");
-        return;
-      }
-      if (tileObject?.objectType === "decor") {
-        await removeDecorFromGardenAtCurrentTile();
-        void triggerEditorAnimation("dig");
-        return;
-      }
-    }
-    if (wantsPlace) {
-      await placeSelectedItemInGardenAtCurrentTile();
-      void triggerEditorAnimation("dropObject");
-    }
   }
 
   // src/ui/menus/editor.ts
