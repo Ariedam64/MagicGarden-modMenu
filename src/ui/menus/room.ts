@@ -22,6 +22,7 @@ import {
   type PublicRoomStatus,
   type PublicRoomPlayer,
 } from "../../services/room";
+import { plantCatalog } from "../../data/hardcoded-data.clean";
 
 const ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
 
@@ -425,7 +426,7 @@ function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
 
 const DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
 // Discord room IDs follow the shape `I-<19 digits>-<type>-<18+ digits>[-<18+ digits>]`.
-const DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/;
+const DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/i;
 
 function getPublicRoomCategory(roomId: string): "Discord" | "Web" {
   return DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
@@ -1349,6 +1350,43 @@ function formatRoomNameForDisplay(room: PublicRoomStatus): string {
   return room.name;
 }
 
+type GuildPlantBadge = {
+  plantId: string;
+  predicate: (guildId: string) => boolean;
+};
+
+const DISCORD_GUILD_ID_REGEX = /^i-\d{17,19}-[a-z]{2,3}-(\d{17,19})(?:-\d{17,19})?$/i;
+const GUILD_PLANT_BADGES: GuildPlantBadge[] = Object.entries(plantCatalog as Record<string, any>)
+  .map(([plantId, entry]) => {
+    const fn = (entry as any)?.seed?.getCanSpawnInGuild;
+    if (typeof fn !== "function") return null;
+    return { plantId, predicate: fn as (guildId: string) => boolean };
+  })
+  .filter((v): v is GuildPlantBadge => Boolean(v));
+
+function extractDiscordGuildId(roomId: string): string | null {
+  const match = DISCORD_GUILD_ID_REGEX.exec(roomId);
+  if (match) return match[1];
+
+  const parts = roomId.split("-");
+  if (parts.length >= 4 && /^i$/i.test(parts[0])) {
+    return parts[3] || null;
+  }
+  return null;
+}
+
+function getGuildPlantBadgesForRoom(roomId: string): string[] {
+  const guildId = extractDiscordGuildId(roomId);
+  if (!guildId || !GUILD_PLANT_BADGES.length) return [];
+  const badges: string[] = [];
+  for (const entry of GUILD_PLANT_BADGES) {
+    try {
+      if (entry.predicate(guildId)) badges.push(entry.plantId);
+    } catch {}
+  }
+  return badges;
+}
+
 function createRoomEntry(
   room: PublicRoomStatus,
   ui: Menu,
@@ -1363,6 +1401,10 @@ function createRoomEntry(
   const currentRoomCode = getCurrentRoomCode();
   const isCurrentRoom = currentRoomCode === room.idRoom;
   const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
+  const plantBadges =
+    room.category === "Discord"
+      ? getGuildPlantBadgesForRoom(room.idRoom || room.name)
+      : [];
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -1728,6 +1770,12 @@ function createRoomEntry(
 
   if (isDiscord) {
     addBadge("Discord activity", "#facc15", "rgba(251, 191, 36, 0.12)");
+  }
+
+  if (room.category === "Discord" && plantBadges.length) {
+    for (const badge of plantBadges) {
+      addBadge(badge, "#93c5fd", "rgba(147, 197, 253, 0.14)");
+    }
   }
 
   if (badgeRow.childElementCount > 0) {

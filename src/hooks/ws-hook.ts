@@ -17,12 +17,16 @@ import { getAtomByLabel, jGet, jSet } from "../store/jotai";
 import type { GardenState, PlantSlotTiming } from "../store/atoms";
 import { detectEnvironment } from "../utils/api";
 import { MiscService } from "../services/misc";
+import { EditorService } from "../services/editor";
 
 type WsCloseListener = (ev: CloseEvent, ws: WebSocket) => void;
 
 const wsCloseListeners: WsCloseListener[] = [];
 let versionReloadScheduled = false;
 let autoRecoTimer: number | null = null;
+let autoRecoCountdownInterval: number | null = null;
+type AutoRecoOverlay = { update: (ms: number) => void; destroy: () => void };
+let autoRecoOverlay: AutoRecoOverlay | null = null;
 
 function onWebSocketClose(cb: WsCloseListener): () => void {
   wsCloseListeners.push(cb);
@@ -73,21 +77,96 @@ function isSupersededSessionClose(ev: CloseEvent): boolean {
   return /superseded/i.test(reason) || /newer user session/i.test(reason);
 }
 
+function ensureAutoRecoOverlayStyle() {
+  const STYLE_ID = "mgAutoRecoOverlayStyle";
+  if (document.getElementById(STYLE_ID)) return;
+  const css = `
+    #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
+    #mgAutoRecoOverlay .title { font-size: 24px; font-weight: 900; letter-spacing: .02em; margin: 0 0 8px 0; }
+    #mgAutoRecoOverlay .subtitle { font-size: 14px; opacity: .85; margin: 0 0 14px 0; }
+    #mgAutoRecoOverlay .btn { margin-top: 6px; padding: 10px 16px; border-radius: 999px; border: 1px solid #7aa2ff; background: #1a2644; color: #fff; font-weight: 700; cursor: pointer; }
+    #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
+  `;
+  const style = document.createElement("style");
+  style.id = STYLE_ID;
+  style.textContent = css;
+  document.documentElement.appendChild(style);
+}
+
+function createAutoRecoOverlay(initialMs: number, onReconnectNow: () => void): AutoRecoOverlay {
+  ensureAutoRecoOverlayStyle();
+  const existing = document.getElementById("mgAutoRecoOverlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "mgAutoRecoOverlay";
+  overlay.innerHTML = `
+    <div class="box" role="dialog" aria-label="Auto reconnect status">
+      <div class="title">Auto reconnect</div>
+      <div class="subtitle auto-reco-subtitle">The game will reconnect soon.</div>
+      <button class="btn" type="button">Reconnect now</button>
+    </div>
+  `;
+  const subtitle = overlay.querySelector(".auto-reco-subtitle") as HTMLElement | null;
+  const btn = overlay.querySelector("button.btn") as HTMLButtonElement | null;
+
+  const render = (ms: number) => {
+    if (!subtitle) return;
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    const unit = seconds <= 1 ? "second" : "seconds";
+    subtitle.textContent = `The game will reconnect in ${seconds} ${unit}...`;
+  };
+
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      onReconnectNow();
+    });
+  }
+
+  document.documentElement.appendChild(overlay);
+  render(initialMs);
+
+  return {
+    update: render,
+    destroy: () => {
+      try { overlay.remove(); } catch {}
+    },
+  };
+}
+
+function clearAutoRecoOverlayAndCountdown() {
+  if (autoRecoCountdownInterval !== null) {
+    clearInterval(autoRecoCountdownInterval);
+    autoRecoCountdownInterval = null;
+  }
+  if (autoRecoOverlay) {
+    try { autoRecoOverlay.destroy(); } catch {}
+    autoRecoOverlay = null;
+  }
+}
+
 function startAutoReconnectOnSuperseded() {
   onWebSocketClose((ev) => {
     if (!isSupersededSessionClose(ev)) return;
     if (!MiscService.readAutoRecoEnabled(false)) return;
 
-    const delayMs = MiscService.getAutoRecoDelayMs();
-
     if (autoRecoTimer !== null) {
       clearTimeout(autoRecoTimer);
       autoRecoTimer = null;
     }
+    clearAutoRecoOverlayAndCountdown();
 
-    autoRecoTimer = window.setTimeout(() => {
+    const delayMs = MiscService.getAutoRecoDelayMs();
+
+    const runReconnect = () => {
       autoRecoTimer = null;
-      if (!MiscService.readAutoRecoEnabled(false)) return;
+      if (!MiscService.readAutoRecoEnabled(false)) {
+        clearAutoRecoOverlayAndCountdown();
+        return;
+      }
+      clearAutoRecoOverlayAndCountdown();
       try {
         const conn = (pageWindow as any).MagicCircle_RoomConnection;
         const connect = conn?.connect;
@@ -97,6 +176,31 @@ function startAutoReconnectOnSuperseded() {
       } catch (error) {
         console.warn("[MagicGarden] Auto reco failed:", error);
       }
+    };
+
+    const triggerManualReconnect = () => {
+      if (autoRecoTimer !== null) {
+        clearTimeout(autoRecoTimer);
+        autoRecoTimer = null;
+      }
+      runReconnect();
+    };
+
+    if (delayMs > 0) {
+      autoRecoOverlay = createAutoRecoOverlay(delayMs, triggerManualReconnect);
+      let remainingMs = delayMs;
+      autoRecoCountdownInterval = window.setInterval(() => {
+        remainingMs -= 1000;
+        if (remainingMs < 0) remainingMs = 0;
+        if (autoRecoOverlay) autoRecoOverlay.update(remainingMs);
+        if (remainingMs <= 0) {
+          clearAutoRecoOverlayAndCountdown();
+        }
+      }, 1000);
+    }
+
+    autoRecoTimer = window.setTimeout(() => {
+      runReconnect();
     }, delayMs);
   });
 }
@@ -153,6 +257,28 @@ export function installPageWebSocketHook() {
     return !!existing;
   }
 
+  function scheduleRoomConnectionFallback() {
+    const FALLBACK_DELAY_MS = 5000;
+    const win = pageWindow || (typeof window !== "undefined" ? window : null);
+    if (!win) return;
+
+    win.setTimeout(() => {
+      try {
+        if (hasSharedQuinoaWS()) return;
+        const conn =
+          (win as any).MagicCircle_RoomConnection ||
+          readSharedGlobal<any>("MagicCircle_RoomConnection");
+        const ws: WebSocket | undefined = conn?.currentWebSocket;
+        if (ws && ws.readyState === NativeWS.OPEN) {
+          setQWS(ws, "room-connection-fallback");
+        }
+      } catch (error) {
+        console.warn("[MagicGarden] Room connection WS fallback failed", error);
+      }
+    }, FALLBACK_DELAY_MS);
+  }
+
+  scheduleRoomConnectionFallback();
   installHarvestCropInterceptor();
 }
 
@@ -453,6 +579,9 @@ function installHarvestCropInterceptor() {
     //return { kind: "drop" };
   });
 
+
+
+
   registerMessageInterceptor("RemoveGardenObject", (message) => {
     StatsService.incrementGardenStat("totalDestroyed");
   });
@@ -483,6 +612,21 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("PickupDecor", () => {
+    if (EditorService.isEnabled()) {
+      try {
+        const removeFn =
+          readSharedGlobal<() => void>("qwsRemoveDecorFromGardenAtCurrentTile") ||
+          (pageWindow as any).qwsRemoveDecorFromGardenAtCurrentTile;
+        if (typeof removeFn === "function") {
+          console.log("[PickupDecor][Editor] intercept -> local remove");
+          removeFn();
+          return { kind: "drop" };
+        }
+      } catch (err) {
+        console.log("[PickupDecor][Editor] remove interceptor error", err);
+      }
+    }
+
     const decorLocked = lockerRestrictionsService.isDecorPickupLocked();
     if (decorLocked) {
       console.log("[PickupDecor] Blocked by decor picker");

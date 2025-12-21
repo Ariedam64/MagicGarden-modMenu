@@ -5,6 +5,7 @@ import { Atoms } from "../../store/atoms";
 
 /* ---------------- helpers ---------------- */
 const formatShortDuration = (seconds: number) => {
+  if (seconds <= 0) return "Instant";
   const sec = Math.max(0, Math.round(seconds));
   if (sec < 60) return `${sec} s`;
   const m = Math.floor(sec / 60);
@@ -72,7 +73,7 @@ export async function renderMiscMenu(container: HTMLElement) {
     const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
     const sliderLabel = ui.label("Reconnect after");
     sliderLabel.style.margin = "0";
-    const slider = ui.slider(30, 300, 30, initialSeconds) as HTMLInputElement;
+    const slider = ui.slider(0, 300, 30, initialSeconds) as HTMLInputElement;
     slider.style.flex = "1";
     const sliderValue = document.createElement("div");
     sliderValue.style.minWidth = "72px";
@@ -86,7 +87,7 @@ export async function renderMiscMenu(container: HTMLElement) {
     hint.style.lineHeight = "1.35";
 
     const clampSeconds = (value: number) =>
-      Math.max(30, Math.min(300, Math.round(value / 30) * 30));
+      Math.max(0, Math.min(300, Math.round(value / 30) * 30));
 
     const syncToggle = () => {
       const on = !!toggle.checked;

@@ -15,7 +15,7 @@ const PATH_GHOST_DELAY = "misc.ghostDelayMs";
 const DEFAULT_DELAY_MS = 50;
 const PATH_AUTO_RECO_ENABLED = "misc.autoRecoEnabled";
 const PATH_AUTO_RECO_DELAY = "misc.autoRecoDelayMs";
-const AUTO_RECO_MIN_MS = 30_000;
+const AUTO_RECO_MIN_MS = 0;
 const AUTO_RECO_MAX_MS = 5 * 60_000;
 const AUTO_RECO_DEFAULT_MS = 60_000;
 
@@ -50,8 +50,10 @@ export const setGhostDelayMs = (n: number) => {
   }
 };
 
-const clampAutoRecoDelay = (ms: number) =>
-  Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, Math.floor(ms || AUTO_RECO_DEFAULT_MS)));
+const clampAutoRecoDelay = (ms: number) => {
+  const safeMs = Number.isFinite(ms) ? Math.floor(ms) : AUTO_RECO_DEFAULT_MS;
+  return Math.min(AUTO_RECO_MAX_MS, Math.max(AUTO_RECO_MIN_MS, safeMs));
+};
 
 export const readAutoRecoEnabled = (def = false): boolean => {
   try {

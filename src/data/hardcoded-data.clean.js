@@ -2328,7 +2328,7 @@ export const decorCatalog = {
   MarbleFountain: {
     tileRef: tileRefsDecor.MarbleFountain,
     name: "Marble Fountain",
-    coinPrice: 4500000000, creditPrice: 449, rarity: rarity.Rare,
+    coinPrice: 450000000, creditPrice: 449, rarity: rarity.Rare,
     baseTileScale: 1.5, isOneTimePurchase: false, nudgeY: -0.30
   },
 
