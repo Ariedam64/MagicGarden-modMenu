@@ -211,6 +211,10 @@ export function injectSellAllPetsOnce(options: Omit<InjectOptions, 'observeHisto
 export async function runSellAllPetsFlow(
   logger: (...args: unknown[]) => void = () => {}
 ): Promise<void> {
+  try {
+    logger('sell-all-pets:log-items');
+  } catch {}
+  await PlayerService.logItems();
   const pets = await runDefaultSellAllPetsAction(logger);
   if (pets.length === 0) return;
   await sellPetsFromInventory(pets, logger);
@@ -251,9 +255,8 @@ export async function getUnfavoritedInventoryPets(): Promise<InventoryPetItem[]>
 
 function createDefaultClickHandler(logger: (...args: unknown[]) => void) {
   return async () => {
-    const pets = await runDefaultSellAllPetsAction(logger);
-    if (pets.length === 0) return;
-    await sellPetsFromInventory(pets, logger);
+    try { logger('sell-all-pets:click'); } catch {}
+    await runSellAllPetsFlow(logger);
   };
 }
 

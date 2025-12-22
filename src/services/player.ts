@@ -255,6 +255,10 @@ export const PlayerService = {
     try { sendToGame({ type: "PlantSeed", slot, species }); } catch (err) {  }
   },
 
+  async logItems() {
+    try { sendToGame({ type: "LogItems"}); } catch (err) {  }
+  },
+
   async sellAllCrops() {
     try { sendToGame({ type: "SellAllCrops" }); } catch (err) {  }
   },

@@ -72,7 +72,9 @@ function startAutoReloadOnVersionExpired() {
 }
 
 function isSupersededSessionClose(ev: CloseEvent): boolean {
-  if (ev?.code !== 4250) return false;
+  if (!ev) return false;
+  if (ev.code === 4300) return true;
+  if (ev.code !== 4250) return false;
   const reason = ev?.reason || "";
   return /superseded/i.test(reason) || /newer user session/i.test(reason);
 }
