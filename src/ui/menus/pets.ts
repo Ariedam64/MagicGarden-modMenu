@@ -24,7 +24,7 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
   const is = (prefix: string) =>
     key.startsWith(prefix) || base === prefix.toLowerCase();
 
-  // Celestials / événements spéciaux
+  // Celestials / événements spéciauxa
   if (is("MoonKisser")) {
     return {
       bg: "rgba(250,166,35,0.9)",
@@ -193,6 +193,67 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
 
   let invCacheMap: Map<string, InventoryPet> | null = null;
   const lastRenderedSlotIds: (string | null)[] = [null, null, null];
+
+  const miniSpriteCache = new Map<string, string>();
+
+  const mkMiniIcon = (pet: InventoryPet | null): HTMLElement => {
+    const size = 18;
+    const holder = document.createElement("div");
+    Object.assign(holder.style, {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: "6px",
+      background: "#161b22",
+      border: "1px solid #ffffff10",
+      display: "grid",
+      placeItems: "center",
+      overflow: "hidden",
+      boxShadow: "0 1px 0 #000 inset",
+      fontSize: "10px",
+      color: "#e2e8f0",
+    } as CSSStyleDeclaration);
+
+    if (!pet) {
+      holder.style.opacity = "0.35";
+      holder.textContent = "·";
+      return holder;
+    }
+
+    const species = pet.petSpecies || "";
+    const mutKey = Array.isArray(pet.mutations) ? pet.mutations.join(",") : "";
+    const cacheKey = `${species}|${mutKey}`;
+
+    const applyImg = (dataUrl: string) => {
+      const img = document.createElement("img");
+      img.src = dataUrl;
+      img.width = size;
+      img.height = size;
+      img.alt = "";
+      img.draggable = false;
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+      img.style.objectFit = "contain";
+      img.style.imageRendering = "auto";
+      holder.replaceChildren(img);
+    };
+
+    const cached = miniSpriteCache.get(cacheKey);
+    if (cached) {
+      applyImg(cached);
+      return holder;
+    }
+
+    attachSpriteIcon(holder, ["pet"], species, size, "pet-team-mini", {
+      mutations: pet.mutations,
+      onSpriteApplied: (img) => {
+        miniSpriteCache.set(cacheKey, img.src);
+      },
+      onNoSpriteFound: () => {
+        holder.textContent = (species || pet.name || "pet").charAt(0).toUpperCase();
+      },
+    });
+    return holder;
+  };
 
   function applySubtleBorder(btn: HTMLButtonElement, hex: string, alpha = 0.22) {
     const toRgba = (h: string, a: number) => {
@@ -380,6 +441,16 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
   }
 
   // re-render list items
+  function updateSelectedVisuals() {
+    const children = Array.from(teamList.children) as HTMLElement[];
+    children.forEach((el) => {
+      const id = el.dataset.teamId || "";
+      el.style.background = id === selectedId ? "#2a313a" : "#1f2328";
+    });
+
+    updateSelectedVisuals();
+  }
+
   async function refreshTeamList(skipDetectActive = false) {
     if (!skipDetectActive) {
       await refreshActiveIds();
@@ -406,6 +477,7 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
       const item = document.createElement("div");
       const isActive = t.id === activeTeamId;
       item.dataset.index = String(idx);
+      item.dataset.teamId = t.id;
       item.textContent = "";
       item.style.height = "36px";
       item.style.lineHeight = "36px";
@@ -436,13 +508,34 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
       label.style.overflow = "hidden";
       label.style.textOverflow = "ellipsis";
       label.style.whiteSpace = "nowrap";
+      label.style.flex = "1 1 0";
+      const minis = document.createElement("div");
+      minis.style.display = "flex";
+      minis.style.gap = "4px";
+      minis.style.alignItems = "center";
+      minis.style.marginLeft = "auto";
+      const map = invCacheMap ?? new Map<string, InventoryPet>();
+      const slots = Array.isArray(t.slots) ? t.slots.slice(0, 3) : [];
+      slots.forEach((id) => {
+        const pet = id != null ? map.get(String(id)) ?? null : null;
+        minis.appendChild(mkMiniIcon(pet));
+      });
+      if (slots.length < 3) {
+        for (let i = slots.length; i < 3; i += 1) minis.appendChild(mkMiniIcon(null));
+      }
 
-      item.append(dot, label);
+      item.append(dot, label, minis);
 
       const grab = document.createElement("span");
       grab.className = "qmm-grab";
       grab.title = "Drag to reorder";
-      grab.innerHTML = "&#8942;";
+      grab.setAttribute("aria-label", "Drag to reorder");
+      grab.innerHTML = "";
+      for (let i = 0; i < 6; i += 1) {
+        const dot = document.createElement("span");
+        dot.className = "qmm-grab-dot";
+        grab.appendChild(dot);
+      }
       grab.draggable = true;
 
       item.onmouseenter = () => (item.style.borderColor = "#6aa1");
@@ -641,19 +734,6 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
   btnUseTeam.onmouseleave = () => (btnUseTeam.style.borderColor = "#4445");
   btnUseTeam.disabled = true;
 
-  const btnSave = document.createElement("button");
-  btnSave.id = "pets.teams.save";
-  btnSave.textContent = "💾 Save";
-  btnSave.style.padding = "6px 10px";
-  btnSave.style.borderRadius = "8px";
-  btnSave.style.border = "1px solid #4445";
-  btnSave.style.background = "#1f2328";
-  btnSave.style.color = "#e7eef7";
-  btnSave.style.cursor = "pointer";
-  btnSave.onmouseenter = () => (btnSave.style.borderColor = "#6aa1");
-  btnSave.onmouseleave = () => (btnSave.style.borderColor = "#4445");
-  btnSave.disabled = true;
-
   header.append(headerTitle, btnUseTeam);
   right.appendChild(header);
 
@@ -677,9 +757,7 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
     (nameInput as any).id = "pets.teams.editor.name";
     (nameInput as HTMLInputElement).style.flex = "1";
     (nameInput as HTMLInputElement).style.minWidth = "0";
-    btnSave.style.marginLeft = "auto";
-    btnSave.style.padding = "6px 10px";
-    r.append(nameInput, btnSave);
+    r.append(nameInput);
     card.appendChild(framed("🏷️ Team name", r));
     return { nameInput: nameInput as HTMLInputElement };
   })();
@@ -857,18 +935,26 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
 
       const setIcon = (species?: string, mutations?: string[]) => {
         const speciesLabel = String(species ?? "").trim();
-        iconWrap.replaceChildren();
         if (!speciesLabel) {
+          iconWrap.replaceChildren();
+          iconWrap.dataset.iconKey = "";
           useEmojiFallback();
           return;
         }
-        const span = document.createElement("span");
-        span.textContent = speciesLabel.charAt(0).toUpperCase() || "\u0110Y?\xf3";
-        span.style.fontSize = `${Math.max(ICON - 6, 12)}px`;
-        span.setAttribute("aria-hidden", "true");
-        iconWrap.appendChild(span);
+
+        const mutKey = Array.isArray(mutations) ? mutations.join(",") : "";
+        const key = `${speciesLabel}|${mutKey}`;
+        if (iconWrap.dataset.iconKey === key && iconWrap.querySelector("img")) {
+          return;
+        }
+        iconWrap.dataset.iconKey = key;
+
         attachSpriteIcon(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
           mutations,
+          onNoSpriteFound: () => {
+            iconWrap.replaceChildren();
+            useEmojiFallback();
+          },
         });
       };
 
@@ -1066,7 +1152,6 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
     secSlots.btnClear.disabled = !has;
     secSlots.btnUseCurrent.disabled = !has;
     btnUseTeam.disabled = !has;
-    btnSave.disabled = !has;
 
 
     if (has) {
@@ -1092,18 +1177,25 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
     await repaintSlots(team!);
   }
 
-  // events: name change
-  secName.nameInput.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter") (ev.currentTarget as HTMLInputElement).blur();
-  });
-  secName.nameInput.addEventListener("blur", () => {
+  // events: name change (auto-save)
+  const saveNameNow = () => {
     const t = getSelectedTeam();
     if (!t) return;
     const nextName = secName.nameInput.value.trim();
-    if (nextName !== t.name) {
-      PetsService.saveTeam({ id: t.id, name: nextName });
+    if (nextName === t.name) return;
+    t.name = nextName;
+    PetsService.saveTeam({ id: t.id, name: nextName });
+    refreshTeamList(true);
+  };
+
+  secName.nameInput.addEventListener("input", () => saveNameNow());
+  secName.nameInput.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      (ev.currentTarget as HTMLInputElement).blur();
+      saveNameNow();
     }
   });
+  secName.nameInput.addEventListener("blur", () => saveNameNow());
 
   // Use current active
   secSlots.btnUseCurrent.onclick = async () => {
@@ -1125,16 +1217,6 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
     if (!t) return;
     PetsService.saveTeam({ id: t.id, slots: [null, null, null] });
     await repaintSlots(t);
-  };
-
-  // Save button (optionnel – auto-save déjà actif)
-  btnSave.onclick = () => {
-    const t = getSelectedTeam();
-    if (!t) return;
-    const name = secName.nameInput.value.trim();
-    const slots = t.slots.slice(0, 3);
-    PetsService.saveTeam({ id: t.id, name, slots });
-    void repaintSlots(t);
   };
 
   function sameSet(a: string[], b: string[]) {
@@ -1338,6 +1420,62 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
   let abilityFilter = "";
   let sortDir: "asc" | "desc" = "desc";
   let q = "";
+  const petSpriteCache = new Map<string, string>();
+
+  const mkPetIcon = (log: UILog) => {
+    const size = 22;
+    const holder = document.createElement("div");
+    Object.assign(holder.style, {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: "8px",
+      background: "#161b22",
+      border: "1px solid #ffffff10",
+      display: "grid",
+      placeItems: "center",
+      overflow: "hidden",
+      boxShadow: "0 1px 0 #000 inset",
+      fontSize: "11px",
+      color: "#e2e8f0",
+      flex: "0 0 auto",
+    } as CSSStyleDeclaration);
+
+    const species = String(log.species || "").trim();
+    const cacheKey = species;
+
+    const applyImg = (src: string) => {
+      const img = document.createElement("img");
+      img.src = src;
+      img.width = size;
+      img.height = size;
+      img.alt = "";
+      img.draggable = false;
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+      img.style.objectFit = "contain";
+      img.style.imageRendering = "auto";
+      holder.replaceChildren(img);
+    };
+
+    const cached = cacheKey && petSpriteCache.get(cacheKey);
+    if (cached) {
+      applyImg(cached);
+      return holder;
+    }
+
+    const letter = (log.petName || species || "pet").charAt(0).toUpperCase();
+    holder.textContent = letter || "🐾";
+
+    if (species) {
+      attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
+        onSpriteApplied: (img) => {
+          petSpriteCache.set(cacheKey, img.src);
+        },
+      });
+    }
+
+    return holder;
+  };
 
   // helpers simples
   function rebuildAbilityOptions() {
@@ -1389,7 +1527,17 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     if (hasDate) time.appendChild(dateLine);
     time.appendChild(timeLine);
     const petLabel = (log.petName || log.species || "Pet");
-    const pet  = cell(petLabel, "center");
+    const pet  = cell("", "center");
+    pet.style.flexDirection = "row";
+    pet.style.alignItems = "center";
+    pet.style.gap = "8px";
+    const petIcon = mkPetIcon(log);
+    const petText = document.createElement("span");
+    petText.textContent = petLabel;
+    petText.style.whiteSpace = "nowrap";
+    petText.style.overflow = "hidden";
+    petText.style.textOverflow = "ellipsis";
+    pet.append(petIcon, petText);
     const abName = cell(log.abilityName || log.abilityId, "center");
     const detText = typeof log.data === "string" ? log.data : (() => { try { return JSON.stringify(log.data); } catch { return ""; } })();
     const det  = cell(detText, "left");

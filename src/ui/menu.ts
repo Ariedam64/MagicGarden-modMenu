@@ -2146,9 +2146,17 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
   .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
 
-/* ta poignée, inchangé */
-.qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
+/* drag handle */
+.qmm-grab {
+  margin-left:auto; opacity:.8; cursor:grab; user-select:none;
+  display:grid; grid-template-columns:repeat(2, 3px); grid-template-rows:repeat(3, 3px);
+  gap:2px; padding:4px 3px; align-content:center; justify-content:center;
+}
 .qmm-grab:active { cursor:grabbing; }
+.qmm-grab-dot {
+  width:3px; height:3px; border-radius:999px;
+  background:rgba(255,255,255,.82); box-shadow:0 0 0 1px #0005 inset;
+}
 .qmm-dragging { opacity:.6; }
 
 /* items animables */

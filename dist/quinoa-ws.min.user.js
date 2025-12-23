@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.11
+// @version      2.99.15
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6065,6 +6065,12 @@
       } catch (err) {
       }
     },
+    async logItems() {
+      try {
+        sendToGame({ type: "LogItems" });
+      } catch (err) {
+      }
+    },
     async sellAllCrops() {
       try {
         sendToGame({ type: "SellAllCrops" });
@@ -10306,9 +10312,17 @@
   .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
   .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
 
-/* ta poign\xE9e, inchang\xE9 */
-.qmm-grab { margin-left:auto; opacity:.8; cursor:grab; user-select:none; }
+/* drag handle */
+.qmm-grab {
+  margin-left:auto; opacity:.8; cursor:grab; user-select:none;
+  display:grid; grid-template-columns:repeat(2, 3px); grid-template-rows:repeat(3, 3px);
+  gap:2px; padding:4px 3px; align-content:center; justify-content:center;
+}
 .qmm-grab:active { cursor:grabbing; }
+.qmm-grab-dot {
+  width:3px; height:3px; border-radius:999px;
+  background:rgba(255,255,255,.82); box-shadow:0 0 0 1px #0005 inset;
+}
 .qmm-dragging { opacity:.6; }
 
 /* items animables */
@@ -15977,7 +15991,9 @@
     });
   }
   function isSupersededSessionClose(ev) {
-    if (ev?.code !== 4250) return false;
+    if (!ev) return false;
+    if (ev.code === 4300) return true;
+    if (ev.code !== 4250) return false;
     const reason = ev?.reason || "";
     return /superseded/i.test(reason) || /newer user session/i.test(reason);
   }
@@ -18567,6 +18583,11 @@
   }
   async function runSellAllPetsFlow(logger = () => {
   }) {
+    try {
+      logger("sell-all-pets:log-items");
+    } catch {
+    }
+    await PlayerService.logItems();
     const pets = await runDefaultSellAllPetsAction(logger);
     if (pets.length === 0) return;
     await sellPetsFromInventory(pets, logger);
@@ -18595,9 +18616,11 @@
   }
   function createDefaultClickHandler(logger) {
     return async () => {
-      const pets = await runDefaultSellAllPetsAction(logger);
-      if (pets.length === 0) return;
-      await sellPetsFromInventory(pets, logger);
+      try {
+        logger("sell-all-pets:click");
+      } catch {
+      }
+      await runSellAllPetsFlow(logger);
     };
   }
   async function runDefaultSellAllPetsAction(logger) {
@@ -37778,6 +37801,60 @@ next: ${next}`;
     let draggingHeight = 0;
     let invCacheMap = null;
     const lastRenderedSlotIds = [null, null, null];
+    const miniSpriteCache = /* @__PURE__ */ new Map();
+    const mkMiniIcon = (pet) => {
+      const size = 18;
+      const holder = document.createElement("div");
+      Object.assign(holder.style, {
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "6px",
+        background: "#161b22",
+        border: "1px solid #ffffff10",
+        display: "grid",
+        placeItems: "center",
+        overflow: "hidden",
+        boxShadow: "0 1px 0 #000 inset",
+        fontSize: "10px",
+        color: "#e2e8f0"
+      });
+      if (!pet) {
+        holder.style.opacity = "0.35";
+        holder.textContent = "\xB7";
+        return holder;
+      }
+      const species = pet.petSpecies || "";
+      const mutKey = Array.isArray(pet.mutations) ? pet.mutations.join(",") : "";
+      const cacheKey = `${species}|${mutKey}`;
+      const applyImg = (dataUrl) => {
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.width = size;
+        img.height = size;
+        img.alt = "";
+        img.draggable = false;
+        img.style.width = `${size}px`;
+        img.style.height = `${size}px`;
+        img.style.objectFit = "contain";
+        img.style.imageRendering = "auto";
+        holder.replaceChildren(img);
+      };
+      const cached = miniSpriteCache.get(cacheKey);
+      if (cached) {
+        applyImg(cached);
+        return holder;
+      }
+      attachSpriteIcon(holder, ["pet"], species, size, "pet-team-mini", {
+        mutations: pet.mutations,
+        onSpriteApplied: (img) => {
+          miniSpriteCache.set(cacheKey, img.src);
+        },
+        onNoSpriteFound: () => {
+          holder.textContent = (species || pet.name || "pet").charAt(0).toUpperCase();
+        }
+      });
+      return holder;
+    };
     function applySubtleBorder(btn, hex, alpha = 0.22) {
       const toRgba = (h, a) => {
         const m = h.replace("#", "");
@@ -37947,6 +38024,14 @@ next: ${next}`;
       } catch {
       }
     }
+    function updateSelectedVisuals() {
+      const children = Array.from(teamList.children);
+      children.forEach((el2) => {
+        const id = el2.dataset.teamId || "";
+        el2.style.background = id === selectedId ? "#2a313a" : "#1f2328";
+      });
+      updateSelectedVisuals();
+    }
     async function refreshTeamList(skipDetectActive = false) {
       if (!skipDetectActive) {
         await refreshActiveIds();
@@ -37970,6 +38055,7 @@ next: ${next}`;
         const item = document.createElement("div");
         const isActive = t.id === activeTeamId;
         item.dataset.index = String(idx);
+        item.dataset.teamId = t.id;
         item.textContent = "";
         item.style.height = "36px";
         item.style.lineHeight = "36px";
@@ -37998,11 +38084,32 @@ next: ${next}`;
         label2.style.overflow = "hidden";
         label2.style.textOverflow = "ellipsis";
         label2.style.whiteSpace = "nowrap";
-        item.append(dot, label2);
+        label2.style.flex = "1 1 0";
+        const minis = document.createElement("div");
+        minis.style.display = "flex";
+        minis.style.gap = "4px";
+        minis.style.alignItems = "center";
+        minis.style.marginLeft = "auto";
+        const map2 = invCacheMap ?? /* @__PURE__ */ new Map();
+        const slots = Array.isArray(t.slots) ? t.slots.slice(0, 3) : [];
+        slots.forEach((id) => {
+          const pet = id != null ? map2.get(String(id)) ?? null : null;
+          minis.appendChild(mkMiniIcon(pet));
+        });
+        if (slots.length < 3) {
+          for (let i = slots.length; i < 3; i += 1) minis.appendChild(mkMiniIcon(null));
+        }
+        item.append(dot, label2, minis);
         const grab = document.createElement("span");
         grab.className = "qmm-grab";
         grab.title = "Drag to reorder";
-        grab.innerHTML = "&#8942;";
+        grab.setAttribute("aria-label", "Drag to reorder");
+        grab.innerHTML = "";
+        for (let i = 0; i < 6; i += 1) {
+          const dot2 = document.createElement("span");
+          dot2.className = "qmm-grab-dot";
+          grab.appendChild(dot2);
+        }
         grab.draggable = true;
         item.onmouseenter = () => item.style.borderColor = "#6aa1";
         item.onmouseleave = () => item.style.borderColor = "#ffffff15";
@@ -38174,18 +38281,6 @@ next: ${next}`;
     btnUseTeam.onmouseenter = () => btnUseTeam.style.borderColor = "#6aa1";
     btnUseTeam.onmouseleave = () => btnUseTeam.style.borderColor = "#4445";
     btnUseTeam.disabled = true;
-    const btnSave = document.createElement("button");
-    btnSave.id = "pets.teams.save";
-    btnSave.textContent = "\u{1F4BE} Save";
-    btnSave.style.padding = "6px 10px";
-    btnSave.style.borderRadius = "8px";
-    btnSave.style.border = "1px solid #4445";
-    btnSave.style.background = "#1f2328";
-    btnSave.style.color = "#e7eef7";
-    btnSave.style.cursor = "pointer";
-    btnSave.onmouseenter = () => btnSave.style.borderColor = "#6aa1";
-    btnSave.onmouseleave = () => btnSave.style.borderColor = "#4445";
-    btnSave.disabled = true;
     header.append(headerTitle, btnUseTeam);
     right.appendChild(header);
     const card = document.createElement("div");
@@ -38206,9 +38301,7 @@ next: ${next}`;
       nameInput.id = "pets.teams.editor.name";
       nameInput.style.flex = "1";
       nameInput.style.minWidth = "0";
-      btnSave.style.marginLeft = "auto";
-      btnSave.style.padding = "6px 10px";
-      r.append(nameInput, btnSave);
+      r.append(nameInput);
       card.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
       return { nameInput };
     })();
@@ -38363,18 +38456,24 @@ next: ${next}`;
         };
         const setIcon = (species, mutations) => {
           const speciesLabel = String(species ?? "").trim();
-          iconWrap.replaceChildren();
           if (!speciesLabel) {
+            iconWrap.replaceChildren();
+            iconWrap.dataset.iconKey = "";
             useEmojiFallback();
             return;
           }
-          const span = document.createElement("span");
-          span.textContent = speciesLabel.charAt(0).toUpperCase() || "\u0110Y?\xF3";
-          span.style.fontSize = `${Math.max(ICON - 6, 12)}px`;
-          span.setAttribute("aria-hidden", "true");
-          iconWrap.appendChild(span);
+          const mutKey = Array.isArray(mutations) ? mutations.join(",") : "";
+          const key2 = `${speciesLabel}|${mutKey}`;
+          if (iconWrap.dataset.iconKey === key2 && iconWrap.querySelector("img")) {
+            return;
+          }
+          iconWrap.dataset.iconKey = key2;
           attachSpriteIcon(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
-            mutations
+            mutations,
+            onNoSpriteFound: () => {
+              iconWrap.replaceChildren();
+              useEmojiFallback();
+            }
           });
         };
         const left2 = document.createElement("div");
@@ -38547,7 +38646,6 @@ next: ${next}`;
       secSlots.btnClear.disabled = !has;
       secSlots.btnUseCurrent.disabled = !has;
       btnUseTeam.disabled = !has;
-      btnSave.disabled = !has;
       if (has) {
         const saved = PetsService.getTeamSearch(team.id) || "";
         const m = saved.match(/^(ab|sp):\s*(.*)$/i);
@@ -38566,17 +38664,23 @@ next: ${next}`;
       secName.nameInput.value = String(team.name || "");
       await repaintSlots(team);
     }
-    secName.nameInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") ev.currentTarget.blur();
-    });
-    secName.nameInput.addEventListener("blur", () => {
+    const saveNameNow = () => {
       const t = getSelectedTeam();
       if (!t) return;
       const nextName = secName.nameInput.value.trim();
-      if (nextName !== t.name) {
-        PetsService.saveTeam({ id: t.id, name: nextName });
+      if (nextName === t.name) return;
+      t.name = nextName;
+      PetsService.saveTeam({ id: t.id, name: nextName });
+      refreshTeamList(true);
+    };
+    secName.nameInput.addEventListener("input", () => saveNameNow());
+    secName.nameInput.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.currentTarget.blur();
+        saveNameNow();
       }
     });
+    secName.nameInput.addEventListener("blur", () => saveNameNow());
     secSlots.btnUseCurrent.onclick = async () => {
       const t = getSelectedTeam();
       if (!t) return;
@@ -38595,14 +38699,6 @@ next: ${next}`;
       if (!t) return;
       PetsService.saveTeam({ id: t.id, slots: [null, null, null] });
       await repaintSlots(t);
-    };
-    btnSave.onclick = () => {
-      const t = getSelectedTeam();
-      if (!t) return;
-      const name = secName.nameInput.value.trim();
-      const slots = t.slots.slice(0, 3);
-      PetsService.saveTeam({ id: t.id, name, slots });
-      void repaintSlots(t);
     };
     function sameSet(a, b) {
       if (a.length !== b.length) return false;
@@ -38774,6 +38870,55 @@ next: ${next}`;
     let abilityFilter = "";
     let sortDir = "desc";
     let q = "";
+    const petSpriteCache = /* @__PURE__ */ new Map();
+    const mkPetIcon = (log2) => {
+      const size = 22;
+      const holder = document.createElement("div");
+      Object.assign(holder.style, {
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "8px",
+        background: "#161b22",
+        border: "1px solid #ffffff10",
+        display: "grid",
+        placeItems: "center",
+        overflow: "hidden",
+        boxShadow: "0 1px 0 #000 inset",
+        fontSize: "11px",
+        color: "#e2e8f0",
+        flex: "0 0 auto"
+      });
+      const species = String(log2.species || "").trim();
+      const cacheKey = species;
+      const applyImg = (src) => {
+        const img = document.createElement("img");
+        img.src = src;
+        img.width = size;
+        img.height = size;
+        img.alt = "";
+        img.draggable = false;
+        img.style.width = `${size}px`;
+        img.style.height = `${size}px`;
+        img.style.objectFit = "contain";
+        img.style.imageRendering = "auto";
+        holder.replaceChildren(img);
+      };
+      const cached = cacheKey && petSpriteCache.get(cacheKey);
+      if (cached) {
+        applyImg(cached);
+        return holder;
+      }
+      const letter = (log2.petName || species || "pet").charAt(0).toUpperCase();
+      holder.textContent = letter || "\u{1F43E}";
+      if (species) {
+        attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
+          onSpriteApplied: (img) => {
+            petSpriteCache.set(cacheKey, img.src);
+          }
+        });
+      }
+      return holder;
+    };
     function rebuildAbilityOptions() {
       const current = selAbility.value;
       selAbility.innerHTML = "";
@@ -38821,7 +38966,17 @@ next: ${next}`;
       if (hasDate) time.appendChild(dateLine);
       time.appendChild(timeLine);
       const petLabel = log2.petName || log2.species || "Pet";
-      const pet = cell(petLabel, "center");
+      const pet = cell("", "center");
+      pet.style.flexDirection = "row";
+      pet.style.alignItems = "center";
+      pet.style.gap = "8px";
+      const petIcon = mkPetIcon(log2);
+      const petText = document.createElement("span");
+      petText.textContent = petLabel;
+      petText.style.whiteSpace = "nowrap";
+      petText.style.overflow = "hidden";
+      petText.style.textOverflow = "ellipsis";
+      pet.append(petIcon, petText);
       const abName = cell(log2.abilityName || log2.abilityId, "center");
       const detText = typeof log2.data === "string" ? log2.data : (() => {
         try {
