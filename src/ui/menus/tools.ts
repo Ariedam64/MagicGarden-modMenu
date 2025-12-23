@@ -1,7 +1,7 @@
 // src/ui/menus/tools.ts
 import { Menu } from "../menu";
 import { toastSimple } from "../toast";
-import { ToolsService, type ExternalTool } from "../../services/tools";
+import { ToolsService, openLink, type ExternalTool } from "../../services/tools";
 
 function createTagPill(label: string): HTMLElement {
   const pill = document.createElement("span");
@@ -21,14 +21,52 @@ function createTagPill(label: string): HTMLElement {
 }
 
 function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
-  const title = `${tool.icon ? `${tool.icon} ` : ""}${tool.title}`;
-  const card = ui.card(title, { tone: "muted", align: "stretch" });
+  const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
+  const card = ui.card("", { tone: "muted", align: "stretch" });
   card.root.style.width = "100%";
 
   const body = card.body;
   body.style.display = "grid";
   body.style.gap = "10px";
   body.style.justifyItems = "stretch";
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.alignItems = "center";
+  header.style.gap = "10px";
+
+  if (isIconUrl) {
+    const img = document.createElement("img");
+    img.src = tool.icon!;
+    img.alt = `${tool.title} icon`;
+    img.style.width = "22px";
+    img.style.height = "22px";
+    img.style.objectFit = "contain";
+    img.style.borderRadius = "0";
+    img.style.border = "none";
+    img.style.background = "none";
+    img.style.padding = "0";
+    img.style.margin = "0";
+    img.style.boxShadow = "none";
+    img.style.display = "block";
+    img.style.flexShrink = "0";
+    img.style.mixBlendMode = "screen";
+    img.style.isolation = "isolate";
+    header.appendChild(img);
+  } else if (tool.icon) {
+    const iconSpan = document.createElement("span");
+    iconSpan.textContent = tool.icon;
+    iconSpan.style.fontSize = "18px";
+    header.appendChild(iconSpan);
+  }
+
+  const titleText = document.createElement("span");
+  titleText.textContent = tool.title;
+  titleText.style.fontSize = "15px";
+  titleText.style.fontWeight = "700";
+  header.appendChild(titleText);
+
+  body.appendChild(header);
 
   const description = document.createElement("p");
   description.textContent = tool.description;
@@ -39,36 +77,200 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
   description.style.textAlign = "left";
   body.appendChild(description);
 
-  if (tool.tags?.length) {
+  if (tool.tags?.length || tool.creators?.length) {
+    const metaRow = document.createElement("div");
+    metaRow.style.display = "flex";
+    metaRow.style.flexWrap = "wrap";
+    metaRow.style.alignItems = "center";
+    metaRow.style.justifyContent = "space-between";
+    metaRow.style.gap = "10px";
+
     const tags = document.createElement("div");
     tags.style.display = "flex";
     tags.style.flexWrap = "wrap";
     tags.style.gap = "6px";
     tags.style.opacity = "0.85";
-    tool.tags.forEach(tag => tags.appendChild(createTagPill(tag)));
-    body.appendChild(tags);
+    if (tool.tags?.length) {
+      tool.tags.forEach(tag => tags.appendChild(createTagPill(tag)));
+    }
+    metaRow.appendChild(tags);
+
+    if (tool.creators?.length) {
+      const creators = document.createElement("div");
+      creators.style.display = "flex";
+      creators.style.flexWrap = "wrap";
+      creators.style.gap = "6px";
+
+      tool.creators.forEach(creatorInfo => {
+        const chip = document.createElement("div");
+        chip.style.display = "inline-flex";
+        chip.style.alignItems = "center";
+        chip.style.gap = "8px";
+        chip.style.padding = "4px 8px";
+        chip.style.background = "#ffffff0c";
+        chip.style.border = "1px solid #ffffff18";
+        chip.style.borderRadius = "999px";
+
+        if (creatorInfo.avatar) {
+          const avatar = document.createElement("img");
+          avatar.src = creatorInfo.avatar;
+          avatar.alt = creatorInfo.name;
+          avatar.style.width = "26px";
+          avatar.style.height = "26px";
+          avatar.style.borderRadius = "999px";
+          avatar.style.objectFit = "cover";
+          avatar.style.border = "1px solid #ffffff22";
+          chip.appendChild(avatar);
+        }
+
+        const name = document.createElement("span");
+        name.textContent = creatorInfo.name;
+        name.style.fontSize = "12px";
+        name.style.fontWeight = "600";
+        chip.appendChild(name);
+
+        creators.appendChild(chip);
+      });
+
+      metaRow.appendChild(creators);
+    }
+
+    body.appendChild(metaRow);
   }
 
-  const actions = ui.flexRow({ gap: 8, justify: "end", fullWidth: true });
-  actions.style.marginTop = "4px";
+  const actionsRow = ui.flexRow({ gap: 8, justify: "end", fullWidth: true });
+  actionsRow.style.marginTop = "4px";
 
-  const openBtn = ui.btn("Open tool", {
-    variant: "primary",
-    icon: "🔗",
-    fullWidth: true,
-    title: "Open the tool in a new tab",
-  });
-  openBtn.style.flex = "1 1 auto";
-  openBtn.style.minWidth = "0";
-  openBtn.onclick = () => {
-    const ok = ToolsService.open(tool);
-    if (!ok) {
-      void toastSimple("Unable to open link", "Please open the address manually.", "error");
-    }
+  const shouldShowInlinePreview = tool.showInlinePreview ?? false;
+  const openInlinePreview = (url: string, title?: string) => {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(0,0,0,0.72)";
+    overlay.style.backdropFilter = "blur(4px)";
+    overlay.style.zIndex = "9999";
+    overlay.style.display = "grid";
+    overlay.style.placeItems = "center";
+    overlay.style.padding = "20px";
+
+    const box = document.createElement("div");
+    box.style.position = "relative";
+    box.style.maxWidth = "90vw";
+    box.style.maxHeight = "90vh";
+    box.style.background = "#0f1318";
+    box.style.border = "1px solid #ffffff22";
+    box.style.borderRadius = "12px";
+    box.style.boxShadow = "0 20px 50px rgba(0,0,0,0.45)";
+    box.style.overflow = "hidden";
+
+    const close = document.createElement("button");
+    close.textContent = "✕";
+    close.style.position = "absolute";
+    close.style.top = "8px";
+    close.style.right = "8px";
+    close.style.border = "1px solid #ffffff33";
+    close.style.borderRadius = "8px";
+    close.style.background = "#0009";
+    close.style.color = "#fff";
+    close.style.width = "32px";
+    close.style.height = "32px";
+    close.style.cursor = "pointer";
+    close.style.fontSize = "16px";
+    close.style.lineHeight = "1";
+    close.style.display = "grid";
+    close.style.placeItems = "center";
+    close.style.zIndex = "2";
+    close.onclick = () => overlay.remove();
+
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = title ?? tool.title;
+    img.style.display = "block";
+    img.style.maxWidth = "100%";
+    img.style.maxHeight = "90vh";
+    img.style.objectFit = "contain";
+    img.style.transition = "transform 200ms ease";
+    img.style.cursor = "zoom-in";
+
+    let zoomed = false;
+    let lastOrigin = "center center";
+    const toggleZoom = (event?: MouseEvent) => {
+      if (!zoomed && event) {
+        const rect = img.getBoundingClientRect();
+        const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1) * 100;
+        const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1) * 100;
+        lastOrigin = `${x}% ${y}%`;
+        img.style.transformOrigin = lastOrigin;
+      }
+      zoomed = !zoomed;
+      img.style.transform = zoomed ? "scale(1.8)" : "scale(1)";
+      img.style.cursor = zoomed ? "zoom-out" : "zoom-in";
+    };
+    img.onclick = (event) => {
+      event.stopPropagation();
+      toggleZoom(event);
+    };
+
+    box.append(close, img);
+    overlay.appendChild(box);
+    overlay.onclick = (ev) => {
+      if (ev.target === overlay) overlay.remove();
+    };
+
+    document.body.appendChild(overlay);
+  };
+  const showActionToast = () => {
+    void toastSimple("Unable to open link", "Please open the address manually.", "error");
   };
 
-  actions.append(openBtn);
-  body.appendChild(actions);
+  if (tool.actions?.length) {
+    actionsRow.style.display = "grid";
+    actionsRow.style.width = "100%";
+    actionsRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(140px, 1fr))";
+    actionsRow.style.alignItems = "stretch";
+    actionsRow.style.justifyContent = "stretch";
+    tool.actions.forEach(action => {
+      const actionBtn = ui.btn(action.label, {
+        variant: "primary",
+        title: `Open ${action.label}`,
+      });
+      actionBtn.style.flex = "1 1 0";
+      actionBtn.style.minWidth = "0";
+      actionBtn.onclick = () => {
+        if (action.showInlinePreview) {
+          openInlinePreview(action.url, action.label);
+          return;
+        }
+        const ok = openLink(action.url);
+        if (!ok) {
+          showActionToast();
+        }
+      };
+      actionsRow.append(actionBtn);
+    });
+  } else {
+    const openBtn = ui.btn("Open tool", {
+      variant: "primary",
+      icon: "🔗",
+      fullWidth: true,
+      title: "Open the tool in a new tab",
+    });
+    openBtn.style.flex = "1 1 auto";
+    openBtn.style.minWidth = "0";
+    openBtn.onclick = () => {
+      if (shouldShowInlinePreview) {
+        openInlinePreview(tool.url, tool.title);
+      } else {
+        const ok = ToolsService.open(tool);
+        if (!ok) {
+          showActionToast();
+        }
+      }
+    };
+    actionsRow.append(openBtn);
+  }
+
+  body.appendChild(actionsRow);
 
   return card.root;
 }
@@ -85,7 +287,7 @@ export async function renderToolsMenu(container: HTMLElement) {
   view.style.alignItems = "center"; // centre le wrapper (au lieu de stretch)
   view.style.padding = "8px";
   view.style.width = "100%";
-  view.style.maxHeight = "54vh";
+  view.style.maxHeight = "70vh";
   view.style.overflowY = "auto";
   view.style.overflowX = "auto"; // sécurité si écran < largeur fixe
 
@@ -191,6 +393,7 @@ export async function renderToolsMenu(container: HTMLElement) {
       empty.style.fontSize = "13px";
       empty.style.opacity = "0.75";
       empty.style.textAlign = "center";
+      empty.style.gridColumn = "1 / -1";
       cardsContainer.appendChild(empty);
       return;
     }
@@ -242,8 +445,8 @@ export async function renderToolsMenu(container: HTMLElement) {
   wrapper.appendChild(filterSection);
 
   cardsContainer = document.createElement("div");
-  cardsContainer.style.display = "flex";
-  cardsContainer.style.flexDirection = "column";
+  cardsContainer.style.display = "grid";
+  cardsContainer.style.gridTemplateColumns = "repeat(auto-fit, minmax(320px, 1fr))";
   cardsContainer.style.gap = "12px";
 
   renderList();

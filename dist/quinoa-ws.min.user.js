@@ -40249,68 +40249,186 @@ next: ${next}`;
   // src/services/tools.ts
   var TOOL_LIST = [
     {
+      id: "aries-mod-intro",
+      title: "Arie's Mod introduction",
+      description: "Visual guide for the mod with the main features highlighted",
+      url: "https://cdn.discordapp.com/attachments/1447656208730423406/1447937786777829426/ARIES_user_guide_2.9.0.jpg?ex=694be5a5&is=694a9425&hm=5ea8a32fda8a6e0e1964c23b1d6068a1a14f86525cfbff8d105276ec59edd1c3&",
+      icon: "",
+      showInlinePreview: true,
+      tags: ["guide", "mod"],
+      creators: [
+        {
+          name: "Bella",
+          avatar: "https://cdn.discordapp.com/avatars/1400054123969380354/241dfc8a181b9e4b9dab6f1ac4f7567a.webp"
+        }
+      ]
+    },
+    {
       id: "wiki",
       title: "Magic Garden Wiki",
       description: "Community-curated documentation for plants, mechanics, weather, and more.",
-      url: "https://magicgarden.fandom.com/wiki/MagicCircle_Wiki",
-      icon: "\u{1F4DA}",
-      tags: ["guide"]
+      url: "https://magicgarden.wiki/Main_Page",
+      icon: "https://magicgarden.wiki/circle_favicon.webp",
+      tags: ["guide", "utility"],
+      creators: [
+        {
+          name: "Community"
+        }
+      ]
+    },
+    {
+      id: "qpm",
+      title: "QPM Mod Menu",
+      description: "Mod/userscript focused on game stats, adding pet analytics, inventory helpers and shop/weather tracking",
+      url: "",
+      icon: "",
+      tags: ["mod"],
+      actions: [
+        {
+          label: "Github",
+          url: "https://github.com/ryandt2305-cpu/QPM-GR/"
+        },
+        {
+          label: "Install",
+          url: "https://github.com/ryandt2305-cpu/QPM-GR/raw/refs/heads/master/dist/QPM.user.js"
+        }
+      ],
+      creators: [
+        {
+          name: "Tokyo",
+          avatar: "https://cdn.discordapp.com/avatars/511094276613210122/c2af3c8ff2123724ba49b7e897d0ce97.png"
+        }
+      ]
     },
     {
       id: "calculator",
-      title: "Magic Garden Calculator",
-      description: "Numerous optimisation statistics at your fingertips.",
+      title: "Daserix' Magic Garden Calculators",
+      description: "Calculate crop value based on size and mutations, with garden import for total optimisation stats",
       url: "https://daserix.github.io/magic-garden-calculator/",
-      icon: "\u{1F9EE}",
-      tags: ["calculator"]
+      icon: "https://daserix.github.io/magic-garden-calculator/assets/Logo-BIQTiA9U.webp",
+      tags: ["utility"],
+      creators: [
+        {
+          name: "Daserix",
+          avatar: "https://cdn.discordapp.com/avatars/266245650662817793/09de28b070e0a107eb1bea1fe015afc3.webp"
+        }
+      ]
     },
     {
       id: "mgtools",
       title: "MGTools",
-      description: "Utility scripts designed to streamline your time in Magic Garden.",
-      url: "https://github.com/Myke247/MGTools/",
-      icon: "\u{1F6E0}\uFE0F",
-      tags: ["utility"]
+      description: "Mod/userscript adding pet management, ability tracking, calculators, timers, and a customizable UI",
+      url: "",
+      actions: [
+        {
+          label: "Discord",
+          url: "https://discord.gg/qFpQ436HZc"
+        },
+        {
+          label: "Github",
+          url: "https://github.com/Myke247/MGTools/"
+        },
+        {
+          label: "Install",
+          url: "https://github.com/Umm12many/MGTools-M/raw/refs/heads/main/MGTools.user.js"
+        }
+      ],
+      icon: "https://cdn.discordapp.com/icons/1428162440297840640/23c0c05e578d5eb307febb4b562626e9.webp",
+      tags: ["mod"],
+      creators: [
+        {
+          name: "Myke",
+          avatar: "https://cdn.discordapp.com/avatars/184699074543484928/ca44cd2f0f3002b2455a9805986eeac9.webp"
+        },
+        {
+          name: "Normie",
+          avatar: "https://cdn.discordapp.com/avatars/375367702094544898/ebd1ef1279c16a4ab8e73ee9fbd70148.png"
+        }
+      ]
     },
     {
-      id: "pet-revenue",
-      title: "Pet Revenue Planner",
-      description: "Forecast the extra income your pets generate, showing $/min and per-boost gains so you can decide which pets and crops to prioritize.",
-      url: "https://docs.google.com/spreadsheets/d/1tG1LIEsXQlNRxaN2pySkwwN688_eCLgGIil_xRaPnBo/edit?gid=1430710045#gid=1430710045",
-      icon: "\u{1F43E}",
-      tags: ["calculator"]
+      id: "mg-android",
+      title: "Magic Garden Android App",
+      description: "Basic Android companion app for Magic Garden (early build, not actively maintained)",
+      url: "https://appdistribution.firebase.dev/i/cde454c6e9eb5f30",
+      icon: "",
+      tags: ["android"],
+      creators: [
+        {
+          name: "Umm12many",
+          avatar: "https://cdn.discordapp.com/avatars/925833066310672465/ad6f0f9d27e1a4b1acebf6987b3d7c39.png"
+        }
+      ]
     },
     {
-      id: "dollar-hour",
-      title: "$ per Hour Calculators",
-      description: "Estimate your gold per hour: select a crop, apply weather and friend/pet boosts, set the duration, and get an instant $/h result.",
-      url: "https://docs.google.com/spreadsheets/d/1ZYikURs-vBMfTQCU_fFbl25CITBrjsEZePxWc-DqOm8/edit?gid=689506777#gid=689506777",
-      icon: "\u{1F4B8}",
-      tags: ["calculator"]
+      id: "mg-android-notifier",
+      title: "Magic Garden Notifier",
+      description: "Android app that sends push notifications/alarms when selected shop items restock, with configurable thresholds and background monitoring",
+      url: "",
+      icon: "https://media.discordapp.net/attachments/1434668481999278262/1434668482225635348/ic_launcher.webp?ex=694bbe65&is=694a6ce5&hm=a3c6dc6135bfd34f08bbc9fe7ad259df8dd1b5b5f66681871e20288a0bfb0e2a&=&format=webp",
+      tags: ["utility", "android"],
+      actions: [
+        {
+          label: "Github",
+          url: "https://github.com/Daserix/magic-garden-notifier-releases"
+        },
+        {
+          label: "Install",
+          url: "https://github.com/Daserix/magic-garden-notifier-releases/releases/download/v1.1.0/mg-notifier-1.1.0.apk"
+        }
+      ],
+      creators: [
+        {
+          name: "Daserix",
+          avatar: "https://cdn.discordapp.com/avatars/266245650662817793/09de28b070e0a107eb1bea1fe015afc3.png"
+        }
+      ]
     },
     {
-      id: "should-i-invest",
-      title: "Should I Invest?",
-      description: "Instant ROI calculator, select crop, weather, mutation, size, and boost to see if it\u2019s worth it.",
-      url: "https://docs.google.com/spreadsheets/d/1PyKd9NG3GsocFmCgwQ01ZQ783ADzcim5LS5XLSLJtqI/edit",
-      icon: "\u{1F914}",
-      tags: ["calculator"]
+      id: "guide-1b",
+      title: "Making Your First 1B",
+      description: "Beginner-friendly step-by-step guide to earning your first 1B coins, covering early crop choices, key pets, and long-term strategy",
+      url: "https://media.discordapp.net/attachments/1440335065686212679/1449729352454504569/MG_Coin_Milestones_w_watermark.jpg?ex=694bd2ac&is=694a812c&hm=6c7281fbe93d9beaca0bd68a4b4d9c1b78fe6bf4571db7e69d2ab71958e6471f&=&format=webp&width=1697&height=864",
+      icon: "",
+      showInlinePreview: true,
+      tags: ["guide"],
+      creators: [
+        {
+          name: "Bella",
+          avatar: "https://cdn.discordapp.com/avatars/1400054123969380354/241dfc8a181b9e4b9dab6f1ac4f7567a.png"
+        }
+      ]
     },
     {
-      id: "matrixes",
-      title: "Matrixes Reference",
-      description: "A reference matrix that compares and ranks each plant\u2019s $/h across all buffs and combos, with quick pick/freeze/gold suggestions.",
-      url: "https://docs.google.com/spreadsheets/d/1gUdu8LBFbkN7CJzqX_nDwLW9nxdIks-0jRJTrUI19U4/edit?gid=1450892699#gid=1450892699",
-      icon: "\u{1F9E9}",
-      tags: ["reference"]
-    },
-    {
-      id: "beginners-guide",
-      title: "Beginner's Guide Snapshot",
-      description: "A concise visual cheat sheet to get new gardeners up to speed quickly.",
-      url: "https://i.imgur.com/7IHU0RJ.png",
-      icon: "\u{1F331}",
-      tags: ["guide", "beginner"]
+      id: "visual-guides",
+      title: "Visual guides",
+      description: "Visual guides covering crops/multiplier stacking and pet info (eggs, hatch rates, abilities), plus beginner tips to avoid common mistakes",
+      url: "",
+      icon: "",
+      tags: ["guide"],
+      actions: [
+        {
+          label: "Crops & Multipliers",
+          url: "https://media.discordapp.net/attachments/1450530376618606703/1450530377960521940/1.png?ex=694b70ef&is=694a1f6f&hm=43570b63f49958620c0e2a319eb8313cc302b92be259d461d304b2b3ce5cc1a0&=&format=webp&quality=lossless&width=605&height=864",
+          showInlinePreview: true
+        },
+        {
+          label: "Pets",
+          url: "https://media.discordapp.net/attachments/1450530376618606703/1450530379026006159/2.png?ex=694b70ef&is=694a1f6f&hm=a62d103275a7a8a3cc0761f91a723368395f4e85b6ab99b7ce9875089e05e838&=&format=webp&quality=lossless&width=605&height=864",
+          showInlinePreview: true
+        },
+        {
+          label: "Winter event",
+          url: "https://media.discordapp.net/attachments/1450530376618606703/1451774246073401438/complete_comprehensive_visual_guide1.png?ex=694c02e0&is=694ab160&hm=ba748d54ec12452f150e3db26e27a35bd6cb8d10fc7efa335187f7ddc3c675b9&=&format=webp&quality=lossless&width=677&height=968",
+          showInlinePreview: true
+        }
+      ],
+      creators: [
+        {
+          name: "Foraged Rituals",
+          avatar: "https://cdn.discordapp.com/avatars/1065631808072450164/40be204333c0f3f7c5f3ce1d8636ff77.png"
+        }
+      ]
     }
   ];
   var TOOL_TAGS = Array.from(
@@ -40323,7 +40441,9 @@ next: ${next}`;
   function cloneTool(tool) {
     return {
       ...tool,
-      tags: tool.tags ? [...tool.tags] : void 0
+      tags: tool.tags ? [...tool.tags] : void 0,
+      actions: tool.actions ? tool.actions.map((action2) => ({ ...action2 })) : void 0,
+      showInlinePreview: tool.showInlinePreview
     };
   }
   function resolve(tool) {
@@ -40351,6 +40471,9 @@ next: ${next}`;
     } catch {
       return false;
     }
+  }
+  function openLink(url) {
+    return openUrl(url);
   }
   var ToolsService = {
     list() {
@@ -40393,13 +40516,47 @@ next: ${next}`;
     return pill;
   }
   function renderToolCard(ui, tool) {
-    const title = `${tool.icon ? `${tool.icon} ` : ""}${tool.title}`;
-    const card = ui.card(title, { tone: "muted", align: "stretch" });
+    const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
+    const card = ui.card("", { tone: "muted", align: "stretch" });
     card.root.style.width = "100%";
     const body = card.body;
     body.style.display = "grid";
     body.style.gap = "10px";
     body.style.justifyItems = "stretch";
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.alignItems = "center";
+    header.style.gap = "10px";
+    if (isIconUrl) {
+      const img = document.createElement("img");
+      img.src = tool.icon;
+      img.alt = `${tool.title} icon`;
+      img.style.width = "22px";
+      img.style.height = "22px";
+      img.style.objectFit = "contain";
+      img.style.borderRadius = "0";
+      img.style.border = "none";
+      img.style.background = "none";
+      img.style.padding = "0";
+      img.style.margin = "0";
+      img.style.boxShadow = "none";
+      img.style.display = "block";
+      img.style.flexShrink = "0";
+      img.style.mixBlendMode = "screen";
+      img.style.isolation = "isolate";
+      header.appendChild(img);
+    } else if (tool.icon) {
+      const iconSpan = document.createElement("span");
+      iconSpan.textContent = tool.icon;
+      iconSpan.style.fontSize = "18px";
+      header.appendChild(iconSpan);
+    }
+    const titleText = document.createElement("span");
+    titleText.textContent = tool.title;
+    titleText.style.fontSize = "15px";
+    titleText.style.fontWeight = "700";
+    header.appendChild(titleText);
+    body.appendChild(header);
     const description = document.createElement("p");
     description.textContent = tool.description;
     description.style.margin = "0";
@@ -40408,33 +40565,182 @@ next: ${next}`;
     description.style.opacity = "0.9";
     description.style.textAlign = "left";
     body.appendChild(description);
-    if (tool.tags?.length) {
+    if (tool.tags?.length || tool.creators?.length) {
+      const metaRow = document.createElement("div");
+      metaRow.style.display = "flex";
+      metaRow.style.flexWrap = "wrap";
+      metaRow.style.alignItems = "center";
+      metaRow.style.justifyContent = "space-between";
+      metaRow.style.gap = "10px";
       const tags = document.createElement("div");
       tags.style.display = "flex";
       tags.style.flexWrap = "wrap";
       tags.style.gap = "6px";
       tags.style.opacity = "0.85";
-      tool.tags.forEach((tag) => tags.appendChild(createTagPill(tag)));
-      body.appendChild(tags);
-    }
-    const actions = ui.flexRow({ gap: 8, justify: "end", fullWidth: true });
-    actions.style.marginTop = "4px";
-    const openBtn = ui.btn("Open tool", {
-      variant: "primary",
-      icon: "\u{1F517}",
-      fullWidth: true,
-      title: "Open the tool in a new tab"
-    });
-    openBtn.style.flex = "1 1 auto";
-    openBtn.style.minWidth = "0";
-    openBtn.onclick = () => {
-      const ok = ToolsService.open(tool);
-      if (!ok) {
-        void toastSimple("Unable to open link", "Please open the address manually.", "error");
+      if (tool.tags?.length) {
+        tool.tags.forEach((tag) => tags.appendChild(createTagPill(tag)));
       }
+      metaRow.appendChild(tags);
+      if (tool.creators?.length) {
+        const creators = document.createElement("div");
+        creators.style.display = "flex";
+        creators.style.flexWrap = "wrap";
+        creators.style.gap = "6px";
+        tool.creators.forEach((creatorInfo) => {
+          const chip = document.createElement("div");
+          chip.style.display = "inline-flex";
+          chip.style.alignItems = "center";
+          chip.style.gap = "8px";
+          chip.style.padding = "4px 8px";
+          chip.style.background = "#ffffff0c";
+          chip.style.border = "1px solid #ffffff18";
+          chip.style.borderRadius = "999px";
+          if (creatorInfo.avatar) {
+            const avatar = document.createElement("img");
+            avatar.src = creatorInfo.avatar;
+            avatar.alt = creatorInfo.name;
+            avatar.style.width = "26px";
+            avatar.style.height = "26px";
+            avatar.style.borderRadius = "999px";
+            avatar.style.objectFit = "cover";
+            avatar.style.border = "1px solid #ffffff22";
+            chip.appendChild(avatar);
+          }
+          const name = document.createElement("span");
+          name.textContent = creatorInfo.name;
+          name.style.fontSize = "12px";
+          name.style.fontWeight = "600";
+          chip.appendChild(name);
+          creators.appendChild(chip);
+        });
+        metaRow.appendChild(creators);
+      }
+      body.appendChild(metaRow);
+    }
+    const actionsRow = ui.flexRow({ gap: 8, justify: "end", fullWidth: true });
+    actionsRow.style.marginTop = "4px";
+    const shouldShowInlinePreview = tool.showInlinePreview ?? false;
+    const openInlinePreview = (url, title) => {
+      const overlay = document.createElement("div");
+      overlay.style.position = "fixed";
+      overlay.style.inset = "0";
+      overlay.style.background = "rgba(0,0,0,0.72)";
+      overlay.style.backdropFilter = "blur(4px)";
+      overlay.style.zIndex = "9999";
+      overlay.style.display = "grid";
+      overlay.style.placeItems = "center";
+      overlay.style.padding = "20px";
+      const box = document.createElement("div");
+      box.style.position = "relative";
+      box.style.maxWidth = "90vw";
+      box.style.maxHeight = "90vh";
+      box.style.background = "#0f1318";
+      box.style.border = "1px solid #ffffff22";
+      box.style.borderRadius = "12px";
+      box.style.boxShadow = "0 20px 50px rgba(0,0,0,0.45)";
+      box.style.overflow = "hidden";
+      const close = document.createElement("button");
+      close.textContent = "\u2715";
+      close.style.position = "absolute";
+      close.style.top = "8px";
+      close.style.right = "8px";
+      close.style.border = "1px solid #ffffff33";
+      close.style.borderRadius = "8px";
+      close.style.background = "#0009";
+      close.style.color = "#fff";
+      close.style.width = "32px";
+      close.style.height = "32px";
+      close.style.cursor = "pointer";
+      close.style.fontSize = "16px";
+      close.style.lineHeight = "1";
+      close.style.display = "grid";
+      close.style.placeItems = "center";
+      close.style.zIndex = "2";
+      close.onclick = () => overlay.remove();
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = title ?? tool.title;
+      img.style.display = "block";
+      img.style.maxWidth = "100%";
+      img.style.maxHeight = "90vh";
+      img.style.objectFit = "contain";
+      img.style.transition = "transform 200ms ease";
+      img.style.cursor = "zoom-in";
+      let zoomed = false;
+      let lastOrigin = "center center";
+      const toggleZoom = (event) => {
+        if (!zoomed && event) {
+          const rect = img.getBoundingClientRect();
+          const x = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1) * 100;
+          const y = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1) * 100;
+          lastOrigin = `${x}% ${y}%`;
+          img.style.transformOrigin = lastOrigin;
+        }
+        zoomed = !zoomed;
+        img.style.transform = zoomed ? "scale(1.8)" : "scale(1)";
+        img.style.cursor = zoomed ? "zoom-out" : "zoom-in";
+      };
+      img.onclick = (event) => {
+        event.stopPropagation();
+        toggleZoom(event);
+      };
+      box.append(close, img);
+      overlay.appendChild(box);
+      overlay.onclick = (ev) => {
+        if (ev.target === overlay) overlay.remove();
+      };
+      document.body.appendChild(overlay);
     };
-    actions.append(openBtn);
-    body.appendChild(actions);
+    const showActionToast = () => {
+      void toastSimple("Unable to open link", "Please open the address manually.", "error");
+    };
+    if (tool.actions?.length) {
+      actionsRow.style.display = "grid";
+      actionsRow.style.width = "100%";
+      actionsRow.style.gridTemplateColumns = "repeat(auto-fit, minmax(140px, 1fr))";
+      actionsRow.style.alignItems = "stretch";
+      actionsRow.style.justifyContent = "stretch";
+      tool.actions.forEach((action2) => {
+        const actionBtn = ui.btn(action2.label, {
+          variant: "primary",
+          title: `Open ${action2.label}`
+        });
+        actionBtn.style.flex = "1 1 0";
+        actionBtn.style.minWidth = "0";
+        actionBtn.onclick = () => {
+          if (action2.showInlinePreview) {
+            openInlinePreview(action2.url, action2.label);
+            return;
+          }
+          const ok = openLink(action2.url);
+          if (!ok) {
+            showActionToast();
+          }
+        };
+        actionsRow.append(actionBtn);
+      });
+    } else {
+      const openBtn = ui.btn("Open tool", {
+        variant: "primary",
+        icon: "\u{1F517}",
+        fullWidth: true,
+        title: "Open the tool in a new tab"
+      });
+      openBtn.style.flex = "1 1 auto";
+      openBtn.style.minWidth = "0";
+      openBtn.onclick = () => {
+        if (shouldShowInlinePreview) {
+          openInlinePreview(tool.url, tool.title);
+        } else {
+          const ok = ToolsService.open(tool);
+          if (!ok) {
+            showActionToast();
+          }
+        }
+      };
+      actionsRow.append(openBtn);
+    }
+    body.appendChild(actionsRow);
     return card.root;
   }
   async function renderToolsMenu(container) {
@@ -40448,7 +40754,7 @@ next: ${next}`;
     view.style.alignItems = "center";
     view.style.padding = "8px";
     view.style.width = "100%";
-    view.style.maxHeight = "54vh";
+    view.style.maxHeight = "70vh";
     view.style.overflowY = "auto";
     view.style.overflowX = "auto";
     const WRAPPER_WIDTH = 720;
@@ -40538,6 +40844,7 @@ next: ${next}`;
         empty.style.fontSize = "13px";
         empty.style.opacity = "0.75";
         empty.style.textAlign = "center";
+        empty.style.gridColumn = "1 / -1";
         cardsContainer.appendChild(empty);
         return;
       }
@@ -40582,8 +40889,8 @@ next: ${next}`;
     filterSection.appendChild(filterControls);
     wrapper.appendChild(filterSection);
     cardsContainer = document.createElement("div");
-    cardsContainer.style.display = "flex";
-    cardsContainer.style.flexDirection = "column";
+    cardsContainer.style.display = "grid";
+    cardsContainer.style.gridTemplateColumns = "repeat(auto-fit, minmax(320px, 1fr))";
     cardsContainer.style.gap = "12px";
     renderList();
     refreshButtonStates();
