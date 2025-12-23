@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.11
+// @version      2.99.13
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -6062,6 +6062,12 @@
     async plantSeed(slot, species) {
       try {
         sendToGame({ type: "PlantSeed", slot, species });
+      } catch (err) {
+      }
+    },
+    async logItems() {
+      try {
+        sendToGame({ type: "LogItems" });
       } catch (err) {
       }
     },
@@ -15977,7 +15983,9 @@
     });
   }
   function isSupersededSessionClose(ev) {
-    if (ev?.code !== 4250) return false;
+    if (!ev) return false;
+    if (ev.code === 4300) return true;
+    if (ev.code !== 4250) return false;
     const reason = ev?.reason || "";
     return /superseded/i.test(reason) || /newer user session/i.test(reason);
   }
@@ -18567,6 +18575,11 @@
   }
   async function runSellAllPetsFlow(logger = () => {
   }) {
+    try {
+      logger("sell-all-pets:log-items");
+    } catch {
+    }
+    await PlayerService.logItems();
     const pets = await runDefaultSellAllPetsAction(logger);
     if (pets.length === 0) return;
     await sellPetsFromInventory(pets, logger);
@@ -18595,9 +18608,11 @@
   }
   function createDefaultClickHandler(logger) {
     return async () => {
-      const pets = await runDefaultSellAllPetsAction(logger);
-      if (pets.length === 0) return;
-      await sellPetsFromInventory(pets, logger);
+      try {
+        logger("sell-all-pets:click");
+      } catch {
+      }
+      await runSellAllPetsFlow(logger);
     };
   }
   async function runDefaultSellAllPetsAction(logger) {
