@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.16
+// @version      2.99.17
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -19,6 +19,7 @@
 // @grant        GM_download
 // @connect      ariesmod-api.ariedam.fr
 // @connect      magicgarden.gg
+// @connect      imgur.com
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -40261,7 +40262,7 @@ next: ${next}`;
       id: "aries-mod-intro",
       title: "Arie's Mod introduction",
       description: "Visual guide for the mod with the main features highlighted",
-      url: "https://cdn.discordapp.com/attachments/1447656208730423406/1447937786777829426/ARIES_user_guide_2.9.0.jpg?ex=694be5a5&is=694a9425&hm=5ea8a32fda8a6e0e1964c23b1d6068a1a14f86525cfbff8d105276ec59edd1c3&",
+      url: "https://i.imgur.com/LZL6zPj.jpeg",
       icon: "",
       showInlinePreview: true,
       tags: ["guide", "mod"],
@@ -40277,7 +40278,7 @@ next: ${next}`;
       title: "Magic Garden Wiki",
       description: "Community-curated documentation for plants, mechanics, weather, and more.",
       url: "https://magicgarden.wiki/Main_Page",
-      icon: "https://magicgarden.wiki/circle_favicon.webp",
+      icon: "https://i.imgur.com/0LXKEzh.png",
       tags: ["guide", "utility"],
       creators: [
         {
@@ -40314,7 +40315,7 @@ next: ${next}`;
       title: "Daserix' Magic Garden Calculators",
       description: "Calculate crop value based on size and mutations, with garden import for total optimisation stats",
       url: "https://daserix.github.io/magic-garden-calculator/",
-      icon: "https://daserix.github.io/magic-garden-calculator/assets/Logo-BIQTiA9U.webp",
+      icon: "https://i.imgur.com/xXPqRgK.png",
       tags: ["utility"],
       creators: [
         {
@@ -40397,7 +40398,7 @@ next: ${next}`;
       id: "guide-1b",
       title: "Making Your First 1B",
       description: "Beginner-friendly step-by-step guide to earning your first 1B coins, covering early crop choices, key pets, and long-term strategy",
-      url: "https://media.discordapp.net/attachments/1440335065686212679/1449729352454504569/MG_Coin_Milestones_w_watermark.jpg?ex=694bd2ac&is=694a812c&hm=6c7281fbe93d9beaca0bd68a4b4d9c1b78fe6bf4571db7e69d2ab71958e6471f&=&format=webp&width=1697&height=864",
+      url: "https://i.imgur.com/gs6Karj.png",
       icon: "",
       showInlinePreview: true,
       tags: ["guide"],
@@ -40418,17 +40419,17 @@ next: ${next}`;
       actions: [
         {
           label: "Crops & Multipliers",
-          url: "https://media.discordapp.net/attachments/1450530376618606703/1450530377960521940/1.png?ex=694b70ef&is=694a1f6f&hm=43570b63f49958620c0e2a319eb8313cc302b92be259d461d304b2b3ce5cc1a0&=&format=webp&quality=lossless&width=605&height=864",
+          url: "https://i.imgur.com/86TuVYh.jpeg",
           showInlinePreview: true
         },
         {
           label: "Pets",
-          url: "https://media.discordapp.net/attachments/1450530376618606703/1450530379026006159/2.png?ex=694b70ef&is=694a1f6f&hm=a62d103275a7a8a3cc0761f91a723368395f4e85b6ab99b7ce9875089e05e838&=&format=webp&quality=lossless&width=605&height=864",
+          url: "https://i.imgur.com/bx2qX8i.jpeg",
           showInlinePreview: true
         },
         {
           label: "Winter event",
-          url: "https://media.discordapp.net/attachments/1450530376618606703/1451774246073401438/complete_comprehensive_visual_guide1.png?ex=694c02e0&is=694ab160&hm=ba748d54ec12452f150e3db26e27a35bd6cb8d10fc7efa335187f7ddc3c675b9&=&format=webp&quality=lossless&width=677&height=968",
+          url: "https://i.imgur.com/Ew9xBk6.jpeg",
           showInlinePreview: true
         }
       ],
@@ -40525,6 +40526,38 @@ next: ${next}`;
     return pill;
   }
   function renderToolCard(ui, tool) {
+    async function fetchImageBlob(url) {
+      if (typeof GM_xmlhttpRequest === "function") {
+        try {
+          return await new Promise((resolve2, reject) => {
+            GM_xmlhttpRequest({
+              method: "GET",
+              url,
+              responseType: "blob",
+              timeout: 15e3,
+              onload: (response) => {
+                const blob = response.response;
+                if (response.status >= 200 && response.status < 300 && blob instanceof Blob) {
+                  resolve2(blob);
+                } else {
+                  reject(new Error(`GM_xmlhttpRequest failed: ${response.status}`));
+                }
+              },
+              onerror: () => reject(new Error("GM_xmlhttpRequest error")),
+              ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout")),
+              onabort: () => reject(new Error("GM_xmlhttpRequest aborted"))
+            });
+          });
+        } catch (error) {
+          console.warn("[Tools] GM_xmlhttpRequest failed, fallback to fetch", error);
+        }
+      }
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} while loading ${url}`);
+      }
+      return await res.blob();
+    }
     const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
     const card = ui.card("", { tone: "muted", align: "stretch" });
     card.root.style.width = "100%";
@@ -40538,7 +40571,6 @@ next: ${next}`;
     header.style.gap = "10px";
     if (isIconUrl) {
       const img = document.createElement("img");
-      img.src = tool.icon;
       img.alt = `${tool.title} icon`;
       img.style.width = "22px";
       img.style.height = "22px";
@@ -40554,6 +40586,19 @@ next: ${next}`;
       img.style.mixBlendMode = "screen";
       img.style.isolation = "isolate";
       header.appendChild(img);
+      void (async () => {
+        try {
+          const blob = await fetchImageBlob(tool.icon);
+          const objectUrl = URL.createObjectURL(blob);
+          img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+          };
+          img.src = objectUrl;
+        } catch (error) {
+          console.warn("[Tools] Unable to load icon via GM, fallback to direct src", error);
+          img.src = tool.icon;
+        }
+      })();
     } else if (tool.icon) {
       const iconSpan = document.createElement("span");
       iconSpan.textContent = tool.icon;
@@ -40630,6 +40675,10 @@ next: ${next}`;
     actionsRow.style.marginTop = "4px";
     const shouldShowInlinePreview = tool.showInlinePreview ?? false;
     const openInlinePreview = (url, title) => {
+      let objectUrl;
+      let zoomed = false;
+      let lastOrigin = "center center";
+      let closed = false;
       const overlay = document.createElement("div");
       overlay.style.position = "fixed";
       overlay.style.inset = "0";
@@ -40665,9 +40714,19 @@ next: ${next}`;
       close.style.display = "grid";
       close.style.placeItems = "center";
       close.style.zIndex = "2";
-      close.onclick = () => overlay.remove();
+      close.onclick = () => {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        closed = true;
+        overlay.remove();
+      };
+      const status = document.createElement("div");
+      status.textContent = "Loading preview...";
+      status.style.padding = "14px 18px";
+      status.style.fontSize = "13px";
+      status.style.opacity = "0.85";
       const img = document.createElement("img");
-      img.src = url;
       img.alt = title ?? tool.title;
       img.style.display = "block";
       img.style.maxWidth = "100%";
@@ -40675,8 +40734,7 @@ next: ${next}`;
       img.style.objectFit = "contain";
       img.style.transition = "transform 200ms ease";
       img.style.cursor = "zoom-in";
-      let zoomed = false;
-      let lastOrigin = "center center";
+      img.style.display = "none";
       const toggleZoom = (event) => {
         if (!zoomed && event) {
           const rect = img.getBoundingClientRect();
@@ -40693,12 +40751,31 @@ next: ${next}`;
         event.stopPropagation();
         toggleZoom(event);
       };
-      box.append(close, img);
+      box.append(close, status, img);
       overlay.appendChild(box);
       overlay.onclick = (ev) => {
-        if (ev.target === overlay) overlay.remove();
+        if (ev.target === overlay) {
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+          }
+          closed = true;
+          overlay.remove();
+        }
       };
       document.body.appendChild(overlay);
+      void fetchImageBlob(url).then((blob) => {
+        if (closed) return;
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+        status.remove();
+        img.style.display = "block";
+      }).catch((error) => {
+        if (closed) return;
+        console.warn("[Tools] Unable to load preview", error);
+        status.textContent = "Unable to load preview. Please open the link manually.";
+        status.style.color = "#ffb3b3";
+        img.style.display = "none";
+      });
     };
     const showActionToast = () => {
       void toastSimple("Unable to open link", "Please open the address manually.", "error");

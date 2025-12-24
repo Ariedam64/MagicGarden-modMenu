@@ -3,6 +3,22 @@ import { Menu } from "../menu";
 import { toastSimple } from "../toast";
 import { ToolsService, openLink, type ExternalTool } from "../../services/tools";
 
+declare const GM_xmlhttpRequest:
+  | ((
+      details: {
+        method: "GET";
+        url: string;
+        responseType?: "arraybuffer" | "blob" | "json" | "text";
+        headers?: Record<string, string>;
+        timeout?: number;
+        onload?: (response: { status: number; responseText: string; response: any }) => void;
+        onerror?: () => void;
+        ontimeout?: () => void;
+        onabort?: () => void;
+      },
+    ) => void)
+  | undefined;
+
 function createTagPill(label: string): HTMLElement {
   const pill = document.createElement("span");
   pill.textContent = label;
@@ -21,6 +37,40 @@ function createTagPill(label: string): HTMLElement {
 }
 
 function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
+  async function fetchImageBlob(url: string): Promise<Blob> {
+    if (typeof GM_xmlhttpRequest === "function") {
+      try {
+        return await new Promise<Blob>((resolve, reject) => {
+          GM_xmlhttpRequest({
+            method: "GET",
+            url,
+            responseType: "blob",
+            timeout: 15000,
+            onload: response => {
+              const blob = response.response as Blob;
+              if (response.status >= 200 && response.status < 300 && blob instanceof Blob) {
+                resolve(blob);
+              } else {
+                reject(new Error(`GM_xmlhttpRequest failed: ${response.status}`));
+              }
+            },
+            onerror: () => reject(new Error("GM_xmlhttpRequest error")),
+            ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout")),
+            onabort: () => reject(new Error("GM_xmlhttpRequest aborted")),
+          });
+        });
+      } catch (error) {
+        console.warn("[Tools] GM_xmlhttpRequest failed, fallback to fetch", error);
+      }
+    }
+
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} while loading ${url}`);
+    }
+    return await res.blob();
+  }
+
   const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
   const card = ui.card("", { tone: "muted", align: "stretch" });
   card.root.style.width = "100%";
@@ -37,7 +87,6 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
 
   if (isIconUrl) {
     const img = document.createElement("img");
-    img.src = tool.icon!;
     img.alt = `${tool.title} icon`;
     img.style.width = "22px";
     img.style.height = "22px";
@@ -53,6 +102,20 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
     img.style.mixBlendMode = "screen";
     img.style.isolation = "isolate";
     header.appendChild(img);
+
+    void (async () => {
+      try {
+        const blob = await fetchImageBlob(tool.icon!);
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+        };
+        img.src = objectUrl;
+      } catch (error) {
+        console.warn("[Tools] Unable to load icon via GM, fallback to direct src", error);
+        img.src = tool.icon!;
+      }
+    })();
   } else if (tool.icon) {
     const iconSpan = document.createElement("span");
     iconSpan.textContent = tool.icon;
@@ -143,6 +206,11 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
 
   const shouldShowInlinePreview = tool.showInlinePreview ?? false;
   const openInlinePreview = (url: string, title?: string) => {
+    let objectUrl: string | undefined;
+    let zoomed = false;
+    let lastOrigin = "center center";
+    let closed = false;
+
     const overlay = document.createElement("div");
     overlay.style.position = "fixed";
     overlay.style.inset = "0";
@@ -180,10 +248,21 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
     close.style.display = "grid";
     close.style.placeItems = "center";
     close.style.zIndex = "2";
-    close.onclick = () => overlay.remove();
+    close.onclick = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      closed = true;
+      overlay.remove();
+    };
+
+    const status = document.createElement("div");
+    status.textContent = "Loading preview...";
+    status.style.padding = "14px 18px";
+    status.style.fontSize = "13px";
+    status.style.opacity = "0.85";
 
     const img = document.createElement("img");
-    img.src = url;
     img.alt = title ?? tool.title;
     img.style.display = "block";
     img.style.maxWidth = "100%";
@@ -191,9 +270,8 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
     img.style.objectFit = "contain";
     img.style.transition = "transform 200ms ease";
     img.style.cursor = "zoom-in";
+    img.style.display = "none";
 
-    let zoomed = false;
-    let lastOrigin = "center center";
     const toggleZoom = (event?: MouseEvent) => {
       if (!zoomed && event) {
         const rect = img.getBoundingClientRect();
@@ -211,13 +289,35 @@ function renderToolCard(ui: Menu, tool: ExternalTool): HTMLElement {
       toggleZoom(event);
     };
 
-    box.append(close, img);
+    box.append(close, status, img);
     overlay.appendChild(box);
     overlay.onclick = (ev) => {
-      if (ev.target === overlay) overlay.remove();
+      if (ev.target === overlay) {
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
+        closed = true;
+        overlay.remove();
+      }
     };
 
     document.body.appendChild(overlay);
+
+    void fetchImageBlob(url)
+      .then(blob => {
+        if (closed) return;
+        objectUrl = URL.createObjectURL(blob);
+        img.src = objectUrl;
+        status.remove();
+        img.style.display = "block";
+      })
+      .catch(error => {
+        if (closed) return;
+        console.warn("[Tools] Unable to load preview", error);
+        status.textContent = "Unable to load preview. Please open the link manually.";
+        status.style.color = "#ffb3b3";
+        img.style.display = "none";
+      });
   };
   const showActionToast = () => {
     void toastSimple("Unable to open link", "Please open the address manually.", "error");

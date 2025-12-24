@@ -30,7 +30,7 @@ const TOOL_LIST: ExternalTool[] = [
     id: "aries-mod-intro",
     title: "Arie's Mod introduction",
     description: "Visual guide for the mod with the main features highlighted",
-    url: "https://cdn.discordapp.com/attachments/1447656208730423406/1447937786777829426/ARIES_user_guide_2.9.0.jpg?ex=694be5a5&is=694a9425&hm=5ea8a32fda8a6e0e1964c23b1d6068a1a14f86525cfbff8d105276ec59edd1c3&",
+    url: "https://i.imgur.com/LZL6zPj.jpeg",
     icon: "",
     showInlinePreview: true,
     tags: ["guide", "mod"],
@@ -46,7 +46,7 @@ const TOOL_LIST: ExternalTool[] = [
     title: "Magic Garden Wiki",
     description: "Community-curated documentation for plants, mechanics, weather, and more.",
     url: "https://magicgarden.wiki/Main_Page",
-    icon: "https://magicgarden.wiki/circle_favicon.webp",
+    icon: "https://i.imgur.com/0LXKEzh.png",
     tags: ["guide", "utility"],
     creators: [
       {
@@ -83,7 +83,7 @@ const TOOL_LIST: ExternalTool[] = [
     title: "Daserix' Magic Garden Calculators",
     description: "Calculate crop value based on size and mutations, with garden import for total optimisation stats",
     url: "https://daserix.github.io/magic-garden-calculator/",
-    icon: "https://daserix.github.io/magic-garden-calculator/assets/Logo-BIQTiA9U.webp",
+    icon: "https://i.imgur.com/xXPqRgK.png",
     tags: ["utility"],
     creators: [
       {
@@ -166,7 +166,7 @@ const TOOL_LIST: ExternalTool[] = [
     id: "guide-1b",
     title: "Making Your First 1B",
     description: "Beginner-friendly step-by-step guide to earning your first 1B coins, covering early crop choices, key pets, and long-term strategy",
-    url: "https://media.discordapp.net/attachments/1440335065686212679/1449729352454504569/MG_Coin_Milestones_w_watermark.jpg?ex=694bd2ac&is=694a812c&hm=6c7281fbe93d9beaca0bd68a4b4d9c1b78fe6bf4571db7e69d2ab71958e6471f&=&format=webp&width=1697&height=864",
+    url: "https://i.imgur.com/gs6Karj.png",
     icon: "",
     showInlinePreview: true,
     tags: ["guide"],
@@ -187,17 +187,17 @@ const TOOL_LIST: ExternalTool[] = [
     actions: [
       {
         label: "Crops & Multipliers",
-        url: "https://media.discordapp.net/attachments/1450530376618606703/1450530377960521940/1.png?ex=694b70ef&is=694a1f6f&hm=43570b63f49958620c0e2a319eb8313cc302b92be259d461d304b2b3ce5cc1a0&=&format=webp&quality=lossless&width=605&height=864",
+        url: "https://i.imgur.com/86TuVYh.jpeg",
         showInlinePreview: true,
       },
       {
         label: "Pets",
-        url: "https://media.discordapp.net/attachments/1450530376618606703/1450530379026006159/2.png?ex=694b70ef&is=694a1f6f&hm=a62d103275a7a8a3cc0761f91a723368395f4e85b6ab99b7ce9875089e05e838&=&format=webp&quality=lossless&width=605&height=864",
+        url: "https://i.imgur.com/bx2qX8i.jpeg",
         showInlinePreview: true,
       },
       {
         label: "Winter event",
-        url: "https://media.discordapp.net/attachments/1450530376618606703/1451774246073401438/complete_comprehensive_visual_guide1.png?ex=694c02e0&is=694ab160&hm=ba748d54ec12452f150e3db26e27a35bd6cb8d10fc7efa335187f7ddc3c675b9&=&format=webp&quality=lossless&width=677&height=968",
+        url: "https://i.imgur.com/Ew9xBk6.jpeg",
         showInlinePreview: true,
       }
     ],
