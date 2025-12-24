@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.15
+// @version      2.99.16
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -18118,6 +18118,7 @@
             petId: entry.petId,
             species: entry.species ?? null,
             name: entry.name ?? null,
+            mutations: Array.isArray(entry.mutations) ? entry.mutations.slice() : void 0,
             abilityId: entry.abilityId,
             abilityName: entry.abilityName,
             data: entry.data,
@@ -18140,10 +18141,13 @@
           const abilityId = typeof item.abilityId === "string" ? String(item.abilityId) : "";
           const performedAt = Number(item.performedAt) || 0;
           if (!abilityId || !performedAt) continue;
+          const mutsRaw = item.mutations;
+          const mutations = Array.isArray(mutsRaw) ? mutsRaw.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
           restored.push({
             petId: typeof item.petId === "string" ? String(item.petId) : "",
             species: typeof item.species === "string" && item.species ? String(item.species) : void 0,
             name: typeof item.name === "string" && item.name ? String(item.name) : void 0,
+            mutations: mutations && mutations.length ? mutations : void 0,
             abilityId,
             abilityName: typeof item.abilityName === "string" && item.abilityName ? String(item.abilityName) : abilityId,
             data: typeof item.data === "string" ? String(item.data) : item.data,
@@ -18345,6 +18349,7 @@
           petId,
           species: pet?.petSpecies || void 0,
           name: pet?.name ?? void 0,
+          mutations: Array.isArray(pet?.mutations) ? pet.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0,
           abilityId: abilityIdStr,
           abilityName: abilityDisplayName(abilityId),
           data: formatDetails(abilityIdStr, entry.data),
@@ -38889,7 +38894,9 @@ next: ${next}`;
         flex: "0 0 auto"
       });
       const species = String(log2.species || "").trim();
-      const cacheKey = species;
+      const mutations = Array.isArray(log2.mutations) ? log2.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : [];
+      const mutKey = mutations.length ? mutations.map((m) => m.toLowerCase()).sort().join(",") : "";
+      const cacheKey = mutKey ? `${species}|${mutKey}` : species;
       const applyImg = (src) => {
         const img = document.createElement("img");
         img.src = src;
@@ -38903,7 +38910,7 @@ next: ${next}`;
         img.style.imageRendering = "auto";
         holder.replaceChildren(img);
       };
-      const cached = cacheKey && petSpriteCache.get(cacheKey);
+      const cached = cacheKey ? petSpriteCache.get(cacheKey) : void 0;
       if (cached) {
         applyImg(cached);
         return holder;
@@ -38912,6 +38919,7 @@ next: ${next}`;
       holder.textContent = letter || "\u{1F43E}";
       if (species) {
         attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
+          mutations,
           onSpriteApplied: (img) => {
             petSpriteCache.set(cacheKey, img.src);
           }
@@ -39070,6 +39078,7 @@ next: ${next}`;
             petId: e.petId,
             petName: e.name ?? null,
             species: e.species ?? null,
+            mutations: Array.isArray(e.mutations) ? e.mutations.slice() : void 0,
             abilityId: e.abilityId,
             abilityName: e.abilityName,
             data: e.data,

@@ -1407,6 +1407,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     petId: string;
     petName: string | null | undefined;
     species: string | null | undefined;
+    mutations?: string[];
     abilityId: string;
     abilityName: string;
     data: any;                 // déjà formatté string par le service
@@ -1441,7 +1442,11 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
     } as CSSStyleDeclaration);
 
     const species = String(log.species || "").trim();
-    const cacheKey = species;
+    const mutations = Array.isArray(log.mutations)
+      ? log.mutations.map((m) => String(m ?? "").trim()).filter(Boolean)
+      : [];
+    const mutKey = mutations.length ? mutations.map(m => m.toLowerCase()).sort().join(",") : "";
+    const cacheKey = mutKey ? `${species}|${mutKey}` : species;
 
     const applyImg = (src: string) => {
       const img = document.createElement("img");
@@ -1457,7 +1462,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
       holder.replaceChildren(img);
     };
 
-    const cached = cacheKey && petSpriteCache.get(cacheKey);
+    const cached = cacheKey ? petSpriteCache.get(cacheKey) : undefined;
     if (cached) {
       applyImg(cached);
       return holder;
@@ -1468,6 +1473,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
 
     if (species) {
       attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
+        mutations,
         onSpriteApplied: (img) => {
           petSpriteCache.set(cacheKey, img.src);
         },
@@ -1634,6 +1640,7 @@ function renderLogsTab(view: HTMLElement, ui: Menu) {
           petId: e.petId,
           petName: e.name ?? null,
           species: e.species ?? null,
+          mutations: Array.isArray(e.mutations) ? e.mutations.slice() : undefined,
           abilityId: e.abilityId,
           abilityName: e.abilityName,
           data: e.data,

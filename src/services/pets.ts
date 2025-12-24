@@ -1449,6 +1449,7 @@ export const PetsService = {
           petId: entry.petId,
           species: entry.species ?? null,
           name: entry.name ?? null,
+          mutations: Array.isArray(entry.mutations) ? entry.mutations.slice() : undefined,
           abilityId: entry.abilityId,
           abilityName: entry.abilityName,
           data: entry.data,
@@ -1470,10 +1471,15 @@ export const PetsService = {
         const abilityId = typeof (item as any).abilityId === "string" ? String((item as any).abilityId) : "";
         const performedAt = Number((item as any).performedAt) || 0;
         if (!abilityId || !performedAt) continue;
+        const mutsRaw = (item as any).mutations;
+        const mutations = Array.isArray(mutsRaw)
+          ? mutsRaw.map((m: any) => String(m ?? "").trim()).filter(Boolean)
+          : undefined;
         restored.push({
           petId: typeof (item as any).petId === "string" ? String((item as any).petId) : "",
           species: typeof (item as any).species === "string" && (item as any).species ? String((item as any).species) : undefined,
           name: typeof (item as any).name === "string" && (item as any).name ? String((item as any).name) : undefined,
+          mutations: mutations && mutations.length ? mutations : undefined,
           abilityId,
           abilityName: typeof (item as any).abilityName === "string" && (item as any).abilityName
             ? String((item as any).abilityName)
@@ -1723,6 +1729,9 @@ export const PetsService = {
         petId,
         species: pet?.petSpecies || undefined,
         name: pet?.name ?? undefined,
+        mutations: Array.isArray(pet?.mutations)
+          ? pet.mutations.map(m => String(m ?? "").trim()).filter(Boolean)
+          : undefined,
         abilityId: abilityIdStr,
         abilityName: abilityDisplayName(abilityId),
         data: formatDetails(abilityIdStr, (entry as any).data),
@@ -1754,6 +1763,7 @@ export type AbilityLogEntry = {
   petId: string;
   species?: string;
   name?: string | null;
+  mutations?: string[];
   abilityId: string;
   abilityName: string;
   data?: any;
