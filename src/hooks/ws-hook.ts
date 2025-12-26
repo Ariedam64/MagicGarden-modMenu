@@ -48,6 +48,16 @@ function isVersionExpiredClose(ev: CloseEvent): boolean {
   return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
 }
 
+function getRoomConnectionSocket(): WebSocket | null {
+  try {
+    const rc = (pageWindow as any).MagicCircle_RoomConnection;
+    if (!rc) return null;
+    return (rc.ws || rc.socket || rc.currentWebSocket) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function startAutoReloadOnVersionExpired() {
   onWebSocketClose((ev) => {
     if (!isVersionExpiredClose(ev)) return;
@@ -73,10 +83,15 @@ function startAutoReloadOnVersionExpired() {
 
 function isSupersededSessionClose(ev: CloseEvent): boolean {
   if (!ev) return false;
-  if (ev.code === 4300) return true;
-  if (ev.code !== 4250) return false;
   const reason = ev?.reason || "";
-  return /superseded/i.test(reason) || /newer user session/i.test(reason);
+  const reasonLc = reason.toLowerCase();
+  if (ev.code === 4300 && reasonLc.includes("heartbeat")) {
+    return false;
+  }
+  return (
+    ev.code === 4300 ||
+    (ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason)))
+  );
 }
 
 function ensureAutoRecoOverlayStyle() {
@@ -150,8 +165,12 @@ function clearAutoRecoOverlayAndCountdown() {
 }
 
 function startAutoReconnectOnSuperseded() {
-  onWebSocketClose((ev) => {
+  onWebSocketClose((ev, ws) => {
     if (!isSupersededSessionClose(ev)) return;
+    const rcSocket = getRoomConnectionSocket();
+    if (rcSocket && ws && ws !== rcSocket) {
+      return;
+    }
     if (!MiscService.readAutoRecoEnabled(false)) return;
 
     if (autoRecoTimer !== null) {
