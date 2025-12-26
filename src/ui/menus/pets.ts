@@ -166,6 +166,15 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
     };
   }
 
+  // Cold mutations granters
+  if (is("SnowGranter")) {
+    return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+  }
+
+  if (is("FrostGranter")) {
+    return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+  }
+
   // Couleur neutre par défaut (même que le jeu)
   return {
     bg: "rgba(100,100,100,0.9)",

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.17
+// @version      2.99.19
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15970,6 +15970,15 @@
   function isVersionExpiredClose(ev) {
     return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
   }
+  function getRoomConnectionSocket() {
+    try {
+      const rc = pageWindow.MagicCircle_RoomConnection;
+      if (!rc) return null;
+      return (rc.ws || rc.socket || rc.currentWebSocket) ?? null;
+    } catch {
+      return null;
+    }
+  }
   function startAutoReloadOnVersionExpired() {
     onWebSocketClose((ev) => {
       if (!isVersionExpiredClose(ev)) return;
@@ -15993,10 +16002,12 @@
   }
   function isSupersededSessionClose(ev) {
     if (!ev) return false;
-    if (ev.code === 4300) return true;
-    if (ev.code !== 4250) return false;
     const reason = ev?.reason || "";
-    return /superseded/i.test(reason) || /newer user session/i.test(reason);
+    const reasonLc = reason.toLowerCase();
+    if (ev.code === 4300 && reasonLc.includes("heartbeat")) {
+      return false;
+    }
+    return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
     const STYLE_ID3 = "mgAutoRecoOverlayStyle";
@@ -16067,8 +16078,12 @@
     }
   }
   function startAutoReconnectOnSuperseded() {
-    onWebSocketClose((ev) => {
+    onWebSocketClose((ev, ws) => {
       if (!isSupersededSessionClose(ev)) return;
+      const rcSocket = getRoomConnectionSocket();
+      if (rcSocket && ws && ws !== rcSocket) {
+        return;
+      }
       if (!MiscService.readAutoRecoEnabled(false)) return;
       if (autoRecoTimer !== null) {
         clearTimeout(autoRecoTimer);
@@ -16842,6 +16857,7 @@
   var unsubPrevHotkey = null;
   var orderedTeamIds = [];
   var lastUsedTeamId = null;
+  var _lastTeamHotkeyAt = 0;
   function syncTeamHotkey(teamId) {
     const hk = getKeybind(getPetTeamActionId(teamId));
     if (hk) TEAM_HK_MAP.set(teamId, hk);
@@ -16871,7 +16887,15 @@
   }
   function normalizeTeamList(teams) {
     if (!Array.isArray(teams)) return [];
-    return teams.map((t) => ({ id: String(t?.id ?? ""), name: t?.name ?? null })).filter((t) => t.id.length > 0);
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const t of teams) {
+      const id = String(t?.id ?? "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name: t?.name ?? null });
+    }
+    return out;
   }
   function ensureLastUsedTeamIsValid() {
     if (!orderedTeamIds.length) {
@@ -16881,18 +16905,6 @@
     if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
       lastUsedTeamId = orderedTeamIds[0] ?? null;
     }
-  }
-  function adjacentTeam(direction) {
-    if (!orderedTeamIds.length) return null;
-    if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
-      return direction === 1 ? orderedTeamIds[0] ?? null : orderedTeamIds[orderedTeamIds.length - 1] ?? null;
-    }
-    if (orderedTeamIds.length === 1) return orderedTeamIds[0] ?? null;
-    const currentIndex2 = orderedTeamIds.indexOf(lastUsedTeamId);
-    let nextIndex = currentIndex2 + direction;
-    if (nextIndex < 0) nextIndex = orderedTeamIds.length - 1;
-    if (nextIndex >= orderedTeamIds.length) nextIndex = 0;
-    return orderedTeamIds[nextIndex] ?? null;
   }
   function markTeamAsUsed(teamId) {
     lastUsedTeamId = teamId ? String(teamId) : null;
@@ -16943,15 +16955,28 @@
     if (window[FLAG]) return;
     window.addEventListener(
       "keydown",
-      (e) => {
+      async (e) => {
         if (shouldIgnoreKeydown(e)) return;
+        const teamsList = orderedTeamIds.slice();
+        if (!teamsList.length) return;
+        const activeTid = await _currentActiveTeamId();
+        if (activeTid && teamsList.includes(activeTid)) {
+          lastUsedTeamId = activeTid;
+        } else if (!lastUsedTeamId || !teamsList.includes(lastUsedTeamId)) {
+          lastUsedTeamId = teamsList[0] ?? null;
+        }
+        ensureLastUsedTeamIsValid();
         const useTeam = (teamId) => {
           if (!teamId) return;
           markTeamAsUsed(teamId);
           onUseTeam(teamId);
+          _lastTeamHotkeyAt = Date.now();
         };
         if (hkPrevTeam && matchHotkey(e, hkPrevTeam)) {
-          const target = adjacentTeam(-1);
+          const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[teamsList.length - 1] ?? null;
+          const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+          const nextIdx = curIdx >= 0 ? (curIdx - 1 + teamsList.length) % teamsList.length : teamsList.length - 1;
+          const target = teamsList[nextIdx] ?? null;
           if (target) {
             e.preventDefault();
             e.stopPropagation();
@@ -16960,7 +16985,10 @@
           }
         }
         if (hkNextTeam && matchHotkey(e, hkNextTeam)) {
-          const target = adjacentTeam(1);
+          const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[0] ?? null;
+          const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+          const nextIdx = curIdx >= 0 ? (curIdx + 1) % teamsList.length : 0;
+          const target = teamsList[nextIdx] ?? null;
           if (target) {
             e.preventDefault();
             e.stopPropagation();
@@ -17040,14 +17068,34 @@
       abilities: Array.isArray(p.abilities) ? p.abilities.slice() : []
     };
   }
+  function _dedupeTeams(arr) {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const t of Array.isArray(arr) ? arr : []) {
+      const id = String(t?.id || "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const slots = Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null];
+      out.push({ ...t, id, slots });
+    }
+    return out;
+  }
   function loadTeams() {
     const arr = readAriesPath(PATH_PETS_TEAMS) ?? [];
     if (!Array.isArray(arr)) return [];
-    return arr.map((t) => ({
+    const mapped = arr.map((t) => ({
       id: String(t?.id || ""),
       name: String(t?.name || "Team"),
       slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
     })).filter((t) => t.id);
+    const unique = _dedupeTeams(mapped);
+    if (unique.length !== mapped.length) {
+      try {
+        saveTeams(unique);
+      } catch {
+      }
+    }
+    return unique;
   }
   function saveTeams(arr) {
     writeAriesPath(PATH_PETS_TEAMS, arr);
@@ -17068,6 +17116,32 @@
   }
   var _teams = loadTeams();
   var _teamSearch = _loadTeamSearchMap();
+  function _teamIdFromSlots(ids) {
+    const wanted = new Set(ids.map((id) => String(id || "")).filter(Boolean));
+    if (!wanted.size) return null;
+    for (const team of _teams) {
+      const slots = (Array.isArray(team?.slots) ? team.slots : []).map((id) => String(id || "")).filter(Boolean);
+      if (slots.length !== wanted.size) continue;
+      const set2 = new Set(slots);
+      let ok = true;
+      for (const id of wanted) {
+        if (!set2.has(id)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return team.id;
+    }
+    return null;
+  }
+  async function _currentActiveTeamId() {
+    try {
+      const slots = await _getActivePetSlotIds();
+      return _teamIdFromSlots(slots);
+    } catch {
+      return null;
+    }
+  }
   var _invRaw = null;
   var _activeRaw = [];
   var _hutchRaw = [];
@@ -17292,7 +17366,9 @@
     }
     return null;
   }
+  var _lastAutofeedAttemptAt = /* @__PURE__ */ new Map();
   var _belowThreshold = /* @__PURE__ */ new Map();
+  var AUTOF_FEED_MIN_INTERVAL_MS = 2e3;
   var DEFAULT_OVERRIDE = { enabled: false, thresholdPct: 10, crops: {} };
   var DEFAULT_UI = { selectedPetId: null };
   var _currentPets = [];
@@ -17363,14 +17439,15 @@
     if (!petId) return;
     const ov = PetsService.getOverride(petId);
     if (!ov.enabled) {
-      _belowThreshold.set(petId, false);
+      _lastAutofeedAttemptAt.delete(petId);
       return;
     }
     const hungerPct = PetsService.getHungerPctFor(pet);
     const thresholdPct = Math.max(1, Math.min(100, ov.thresholdPct | 0 || 10));
-    const previouslyBelow = _belowThreshold.get(petId) === true;
     const nowBelow = hungerPct < thresholdPct;
-    if (nowBelow && !previouslyBelow) {
+    const now2 = Date.now();
+    const lastAttempt = _lastAutofeedAttemptAt.get(petId) || 0;
+    if (nowBelow && now2 - lastAttempt >= AUTOF_FEED_MIN_INTERVAL_MS) {
       let allowedSet;
       try {
         allowedSet = await PetsService.getPetAllowedCrops(petId);
@@ -17408,8 +17485,11 @@
         chosenItem: chosen,
         didUnfavorite
       });
+      _lastAutofeedAttemptAt.set(petId, now2);
     }
-    _belowThreshold.set(petId, nowBelow);
+    if (!nowBelow) {
+      _lastAutofeedAttemptAt.delete(petId);
+    }
   }
   async function _evaluateAll() {
     const arr = Array.isArray(_currentPets) ? _currentPets : [];
@@ -17760,11 +17840,11 @@
       return _inventoryItemToPet(items[selIndex]);
     },
     /* ------------------------- Team switching ------------------------- */
-    async useTeam(teamId) {
+    async useTeam(teamId, opts) {
       const t = this.getTeams().find((tt) => tt.id === teamId) || null;
       if (!t) throw new Error("Team not found");
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      return _equipPetIds(targetInvIds, { markTeamId: teamId });
+      return _equipPetIds(targetInvIds, { markTeamId: teamId, markUsed: opts?.markUsed });
     },
     async usePetIds(targetInvIds) {
       return _equipPetIds(targetInvIds, { markTeamId: null });
@@ -18114,6 +18194,12 @@
             const hasFrozen = muts.some((m) => typeof m === "string" && m.toLowerCase() === "frozen");
             return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
           }
+          case "SnowGranter":
+          case "FrostGranter": {
+            const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+            const crop = label2(d["cropName"], cropFromSlot ?? "crop");
+            return `${crop}`;
+          }
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII": {
             const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
@@ -18450,8 +18536,10 @@
   async function _equipPetIds(targetInvIdsRaw, opts) {
     const markId = (opts?.markTeamId ?? null) || null;
     const targetInvIds = (Array.isArray(targetInvIdsRaw) ? targetInvIdsRaw : []).map((v) => String(v || "")).filter((v) => v.length > 0).slice(0, 3);
+    const markResolved = markId ?? _teamIdFromSlots(targetInvIds) ?? null;
+    const shouldMark = opts?.markUsed !== false && !!markResolved;
     if (!targetInvIds.length) {
-      if (markId) markTeamAsUsed(markId);
+      if (shouldMark) markTeamAsUsed(markResolved);
       return { swapped: 0, placed: 0, skipped: 0 };
     }
     const targetSet = new Set(targetInvIds);
@@ -18492,7 +18580,7 @@
           await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.");
         } catch {
         }
-        if (markId) markTeamAsUsed(markId);
+        if (shouldMark) markTeamAsUsed(markResolved);
         return { swapped: 0, placed: 0, skipped: targetInvIds.length };
       }
     }
@@ -18528,7 +18616,7 @@
                   await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error");
                 } catch {
                 }
-                if (markId) markTeamAsUsed(markId);
+                if (shouldMark) markTeamAsUsed(markResolved);
                 return { swapped, placed, skipped };
               }
             } catch {
@@ -18536,7 +18624,7 @@
                 await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error");
               } catch {
               }
-              if (markId) markTeamAsUsed(markId);
+              if (shouldMark) markTeamAsUsed(markResolved);
               return { swapped, placed, skipped };
             }
           } else {
@@ -18544,7 +18632,7 @@
               await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error");
             } catch {
             }
-            if (markId) markTeamAsUsed(markId);
+            if (shouldMark) markTeamAsUsed(markResolved);
             return { swapped, placed, skipped };
           }
         }
@@ -18622,7 +18710,7 @@
       await _waitForHutchState((set2) => targetInvIds.every((id) => !set2.has(id)), 3e3);
     } catch {
     }
-    if (markId) markTeamAsUsed(markId);
+    if (shouldMark) markTeamAsUsed(markResolved);
     return res;
   }
   async function _applyTeam(targetInvIds) {
@@ -38031,6 +38119,12 @@ next: ${next}`;
         bg: "rgba(102,204,216,0.9)",
         hover: "rgba(102,204,216,1)"
       };
+    }
+    if (is("SnowGranter")) {
+      return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+    }
+    if (is("FrostGranter")) {
+      return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
     }
     return {
       bg: "rgba(100,100,100,0.9)",

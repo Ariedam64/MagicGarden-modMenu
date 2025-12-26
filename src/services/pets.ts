@@ -87,6 +87,7 @@ let unsubNextHotkey: (() => void) | null = null;
 let unsubPrevHotkey: (() => void) | null = null;
 let orderedTeamIds: string[] = [];
 let lastUsedTeamId: string | null = null;
+let _lastTeamHotkeyAt = 0;
 
 export type TeamLite = { id: string; name?: string | null };
 
@@ -123,7 +124,15 @@ function ensureLegacyTeamHotkeyMigration(teamId: string): void {
 
 function normalizeTeamList(teams: TeamLite[]): TeamLite[] {
   if (!Array.isArray(teams)) return [];
-  return teams.map(t => ({ id: String(t?.id ?? ""), name: t?.name ?? null })).filter(t => t.id.length > 0);
+  const seen = new Set<string>();
+  const out: TeamLite[] = [];
+  for (const t of teams) {
+    const id = String(t?.id ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name: t?.name ?? null });
+  }
+  return out;
 }
 
 function ensureLastUsedTeamIsValid(): void {
@@ -198,16 +207,33 @@ export function installPetTeamHotkeysOnce(onUseTeam: (teamId: string) => void) {
   if ((window as any)[FLAG]) return;
   window.addEventListener(
     "keydown",
-    (e) => {
+    async (e) => {
       if (shouldIgnoreKeydown(e)) return;
+
+      const teamsList = orderedTeamIds.slice();
+      if (!teamsList.length) return;
+
+      // Anchor the pointer to the actual active team if possible
+      const activeTid = await _currentActiveTeamId();
+      if (activeTid && teamsList.includes(activeTid)) {
+        lastUsedTeamId = activeTid;
+      } else if (!lastUsedTeamId || !teamsList.includes(lastUsedTeamId)) {
+        lastUsedTeamId = teamsList[0] ?? null;
+      }
+      ensureLastUsedTeamIsValid();
+
       const useTeam = (teamId: string | null) => {
         if (!teamId) return;
         markTeamAsUsed(teamId);
         onUseTeam(teamId);
+        _lastTeamHotkeyAt = Date.now();
       };
 
       if (hkPrevTeam && matchHotkey(e, hkPrevTeam)) {
-        const target = adjacentTeam(-1);
+        const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[teamsList.length - 1] ?? null;
+        const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+        const nextIdx = curIdx >= 0 ? (curIdx - 1 + teamsList.length) % teamsList.length : teamsList.length - 1;
+        const target = teamsList[nextIdx] ?? null;
         if (target) {
           e.preventDefault();
           e.stopPropagation();
@@ -217,7 +243,10 @@ export function installPetTeamHotkeysOnce(onUseTeam: (teamId: string) => void) {
       }
 
       if (hkNextTeam && matchHotkey(e, hkNextTeam)) {
-        const target = adjacentTeam(1);
+        const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[0] ?? null;
+        const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+        const nextIdx = curIdx >= 0 ? (curIdx + 1) % teamsList.length : 0;
+        const target = teamsList[nextIdx] ?? null;
         if (target) {
           e.preventDefault();
           e.stopPropagation();
@@ -349,10 +378,25 @@ function _invPetToRawItem(p: InventoryPet): any {
 
 /* ----------------------------- LS helpers (teams & UI) ----------------------------- */
 
+function _dedupeTeams<T extends { id: string; slots?: (string | null)[]; name?: string | null }>(arr: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const t of Array.isArray(arr) ? arr : []) {
+    const id = String(t?.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const slots = Array.isArray(t?.slots)
+      ? (t.slots.slice(0, 3).map((x: unknown) => (x ? String(x) : null)) as (string | null)[])
+      : [null, null, null];
+    out.push({ ...(t as any), id, slots });
+  }
+  return out;
+}
+
 function loadTeams(): PetTeam[] {
   const arr = readAriesPath<PetTeam[]>(PATH_PETS_TEAMS) ?? [];
   if (!Array.isArray(arr)) return [];
-  return arr
+  const mapped = arr
     .map((t) => ({
       id: String(t?.id || ""),
       name: String(t?.name || "Team"),
@@ -361,6 +405,11 @@ function loadTeams(): PetTeam[] {
         : [null, null, null],
     }))
     .filter(t => t.id);
+  const unique = _dedupeTeams(mapped);
+  if (unique.length !== mapped.length) {
+    try { saveTeams(unique); } catch {}
+  }
+  return unique;
 }
 function saveTeams(arr: PetTeam[]) {
   writeAriesPath(PATH_PETS_TEAMS, arr);
@@ -387,6 +436,35 @@ function _notifyTeams() {
   _teamSubs.forEach(fn => { try { fn(snap); } catch {} });
 }
 let _teamSearch: Record<string, string> = _loadTeamSearchMap();
+
+function _teamIdFromSlots(ids: string[]): string | null {
+  const wanted = new Set(ids.map(id => String(id || "")).filter(Boolean));
+  if (!wanted.size) return null;
+  for (const team of _teams) {
+    const slots = (Array.isArray(team?.slots) ? team.slots : []).map(id => String(id || "")).filter(Boolean);
+    if (slots.length !== wanted.size) continue;
+    const set = new Set(slots);
+    let ok = true;
+    for (const id of wanted) { if (!set.has(id)) { ok = false; break; } }
+    if (ok) return team.id;
+  }
+  return null;
+}
+
+async function _currentActiveTeamId(): Promise<string | null> {
+  try {
+    const slots = await _getActivePetSlotIds();
+    return _teamIdFromSlots(slots);
+  } catch { return null; }
+}
+
+async function _syncLastUsedFromActive(): Promise<void> {
+  try {
+    const slots = await _getActivePetSlotIds();
+    const tid = _teamIdFromSlots(slots);
+    if (tid) lastUsedTeamId = tid;
+  } catch {}
+}
 
 /* --------------------------------- Inventory cache/watchers -------------------------------- */
 
@@ -598,7 +676,9 @@ async function _waitValidatedInventoryIndex(timeoutMs = 20000): Promise<number |
 
 /* -------------------------- Autofeed (per-pet overrides) -------------------------- */
 
-const _belowThreshold = new Map<string, boolean>();
+const _lastAutofeedAttemptAt = new Map<string, number>();
+const _belowThreshold = new Map<string, boolean>(); // tracks pets that were below their threshold in the last evaluation
+const AUTOF_FEED_MIN_INTERVAL_MS = 2000;
 const DEFAULT_OVERRIDE: PetOverride = { enabled: false, thresholdPct: 10, crops: {} };
 const DEFAULT_UI: PetsUIState = { selectedPetId: null };
 
@@ -668,15 +748,19 @@ async function _evaluatePet(pet: PetInfo) {
   if (!petId) return;
 
   const ov = PetsService.getOverride(petId);
-  if (!ov.enabled) { _belowThreshold.set(petId, false); return; }
+  if (!ov.enabled) {
+    _lastAutofeedAttemptAt.delete(petId);
+    return;
+  }
 
   const hungerPct = PetsService.getHungerPctFor(pet);
   const thresholdPct = Math.max(1, Math.min(100, (ov.thresholdPct | 0) || 10));
 
-  const previouslyBelow = _belowThreshold.get(petId) === true;
   const nowBelow = hungerPct < thresholdPct;
+  const now = Date.now();
+  const lastAttempt = _lastAutofeedAttemptAt.get(petId) || 0;
 
-  if (nowBelow && !previouslyBelow) {
+  if (nowBelow && now - lastAttempt >= AUTOF_FEED_MIN_INTERVAL_MS) {
     // allowed crops for this pet
     let allowedSet: Set<string>;
     try { allowedSet = await PetsService.getPetAllowedCrops(petId); }
@@ -716,9 +800,12 @@ async function _evaluatePet(pet: PetInfo) {
       chosenItem: chosen,
       didUnfavorite,
     });
+    _lastAutofeedAttemptAt.set(petId, now);
   }
 
-  _belowThreshold.set(petId, nowBelow);
+  if (!nowBelow) {
+    _lastAutofeedAttemptAt.delete(petId);
+  }
 }
 async function _evaluateAll() {
   const arr = Array.isArray(_currentPets) ? _currentPets : [];
@@ -1089,142 +1176,21 @@ export const PetsService = {
   },
 
   /* ------------------------- Team switching ------------------------- */
-  async useTeam(teamId: string): Promise<{ swapped: number; placed: number; skipped: number }> {
+  async useTeam(teamId: string, opts?: { markUsed?: boolean }): Promise<{ swapped: number; placed: number; skipped: number }> {
     const t = this.getTeams().find(tt => tt.id === teamId) || null;
     if (!t) throw new Error("Team not found");
     const targetInvIds = (t.slots || [])
       .filter((x): x is string => typeof x === "string" && x.length > 0)
       .slice(0, 3);
+    return _equipPetIds(targetInvIds, { markTeamId: teamId, markUsed: opts?.markUsed });
+  },
 
-    const targetSet = new Set<string>(targetInvIds);
+  async usePetIds(targetInvIds: string[]): Promise<{ swapped: number; placed: number; skipped: number }> {
+    return _equipPetIds(targetInvIds, { markTeamId: null });
+  },
 
-    // 1) Snapshot current active pets
-    let activeSlots = await _getActivePetSlotIds();
-
-    // 2) Hutch capacity snapshot
-    const HUTCH_MAX = 25;
-    let hutchCount = (() => { try { return Number(myNumPetHutchItems.get()); } catch { return 0; } })() as any;
-    try { hutchCount = Number(await myNumPetHutchItems.get()); } catch { hutchCount = 0; }
-    let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : 0));
-
-    // No bulk evacuation; we will handle swap+store per pet to keep flow
-
-    // 3) Ensure target pets are in inventory (retrieve from hutch if needed)
-    let hutchItemsSet: Set<string> = new Set();
-    try {
-      const hutchItems = await myPetHutchPetItems.get();
-      if (Array.isArray(hutchItems)) {
-        hutchItemsSet = new Set(hutchItems.map((it: any) => String(it?.id ?? "")));
-      }
-    } catch {}
-
-    // 3.b If pets are missing from active and live in Hutch, ensure we can retrieve them even with limited inventory space
-    const missingFromActive = targetInvIds.filter(id => !activeSlots.includes(id));
-    const missingFromHutch = missingFromActive.filter(id => hutchItemsSet.has(id));
-
-    // If we must retrieve from Hutch but have no inventory space and no Hutch space to juggle, abort with toast
-    if (missingFromHutch.length > 0) {
-      let invFull = false;
-      try { invFull = !!(await isMyInventoryAtMaxLength.get()); } catch { invFull = false; }
-      if (invFull && freeHutch <= 0) {
-        try { await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full."); } catch {}
-        markTeamAsUsed(teamId);
-        return { swapped: 0, placed: 0, skipped: targetInvIds.length };
-      }
-    }
-
-    // Iteratively retrieve from Hutch and equip (swap or place) with minimal clicks
-    let swapped = 0, placed = 0, skipped = 0;
-    for (const invId of targetInvIds) {
-      const isAlreadyActive = activeSlots.includes(invId);
-      if (isAlreadyActive) { skipped++; continue; }
-
-      const livesInHutch = hutchItemsSet.has(invId);
-      if (livesInHutch) {
-        // Ensure one free inventory slot
-        let invFull = false;
-        try { invFull = !!(await isMyInventoryAtMaxLength.get()); } catch { invFull = false; }
-        if (invFull) {
-          // Try to free by moving a non-target inventory pet into Hutch if space
-          if (freeHutch > 0) {
-            try {
-              const invPets = await this.getInventoryPets();
-              const invPet = (Array.isArray(invPets) ? invPets : []).find(p => {
-                const id = String(p?.id || "");
-                return id && !hutchItemsSet.has(id) && !activeSlots.includes(id) && !targetSet.has(id);
-              });
-              if (invPet) {
-                await PlayerService.putItemInStorage(invPet.id, "PetHutch");
-                freeHutch = Math.max(0, freeHutch - 1);
-              } else {
-                // No candidate to free space
-                try { await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error"); } catch {}
-                markTeamAsUsed(teamId);
-                return { swapped, placed, skipped };
-              }
-            } catch {
-              try { await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error"); } catch {}
-              markTeamAsUsed(teamId);
-              return { swapped, placed, skipped };
-            }
-          } else {
-            try { await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error"); } catch {}
-            markTeamAsUsed(teamId);
-            return { swapped, placed, skipped };
-          }
-        }
-
-        // Retrieve from Hutch (this increases available Hutch space by 1)
-        try { await PlayerService.retrieveItemFromStorage(invId, "PetHutch"); hutchItemsSet.delete(invId); freeHutch = Math.min(25, freeHutch + 1); } catch { continue; }
-      }
-
-      // Prefer swapping out a non-target active if any, else place
-      const offTargetActive = activeSlots.find(id => !targetSet.has(id));
-      if (offTargetActive) {
-        try {
-          await PlayerService.swapPet(offTargetActive, invId);
-          swapped++;
-          // After swap, offTargetActive becomes inventory item; move it into Hutch if possible to keep flow
-          if (freeHutch > 0) {
-            try { await PlayerService.putItemInStorage(offTargetActive, "PetHutch"); freeHutch = Math.max(0, freeHutch - 1); } catch {}
-          }
-          // Update active set snapshot
-          activeSlots = activeSlots.filter(x => x !== offTargetActive);
-          activeSlots.push(invId);
-        } catch {
-          // fallback to place
-          try { await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64); placed++; activeSlots.push(invId); } catch {}
-        }
-      } else {
-        try { await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64); placed++; activeSlots.push(invId); } catch {}
-      }
-    }
-
-    // After equipping targets, if target has fewer pets than current actives,
-    // move remaining non-target actives into the Hutch when there is space.
-    try {
-      // refresh hutch free slots before cleanup
-      try { hutchCount = Number(await myNumPetHutchItems.get()); } catch {}
-      freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : 0));
-
-      let leftovers = activeSlots.filter(id => !targetSet.has(id));
-      for (const slotId of leftovers) {
-        if (freeHutch <= 0) break;
-        try {
-          await PlayerService.storePet(slotId);
-          await PlayerService.putItemInStorage(slotId, "PetHutch");
-          freeHutch = Math.max(0, freeHutch - 1);
-          activeSlots = activeSlots.filter(x => x !== slotId);
-        } catch {
-          // ignore failures; leave as is
-        }
-      }
-    } catch {}
-
-    // Final tidy pass to ensure exact targets are active (handles pets already in inventory)
-    const res = await _applyTeam(targetInvIds);
-    markTeamAsUsed(teamId);
-    return res;
+  async getActivePetIds(): Promise<string[]> {
+    return _getActivePetSlotIds();
   },
 
   /* ------------------------- Ability logs ------------------------- */
@@ -1610,10 +1576,16 @@ export const PetsService = {
           const muts = Array.isArray((d as any).mutations)
             ? (d as any).mutations
             : Array.isArray((d as any).growSlot?.mutations)
-              ? (d as any).growSlot.mutations
-              : [];
+            ? (d as any).growSlot.mutations
+            : [];
           const hasFrozen = muts.some((m: unknown) => typeof m === "string" && m.toLowerCase() === "frozen");
           return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
+        }
+        case "SnowGranter":
+        case "FrostGranter": {
+          const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+          const crop = label(d["cropName"], cropFromSlot ?? "crop");
+          return `${crop}`;
         }
 
         case "ProduceScaleBoost":
@@ -1793,7 +1765,317 @@ async function _getActivePetSlotIds(): Promise<string[]> {
   } catch { return []; }
 }
 
+async function _waitForActivePetsMatch(targetIds: string[], timeoutMs = 5000): Promise<boolean> {
+  const wanted = new Set(targetIds.map(id => String(id || "")).filter(Boolean));
+  if (!wanted.size) return true;
+  const snapshotMatches = async () => {
+    try {
+      const cur = await Atoms.pets.myPetInfos.get();
+      const set = new Set<string>((Array.isArray(cur) ? cur : []).map((p: any) => String(p?.slot?.id || "")).filter(Boolean));
+      return [...wanted].every(id => set.has(id));
+    } catch { return false; }
+  };
+  if (await snapshotMatches()) return true;
+
+  return new Promise<boolean>((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    let unsub: (() => void) | null = null;
+    let pendingUnsub: Promise<(() => void)> | null = null;
+    let stopped = false;
+    const doUnsub = (fn?: (() => void) | null) => { if (fn) { try { fn(); } catch {} } };
+    const stop = (ok: boolean) => {
+      if (stopped) return;
+      stopped = true;
+      if (unsub) { doUnsub(unsub); }
+      else if (pendingUnsub) { pendingUnsub.then(fn => doUnsub(fn)).catch(() => {}); }
+      resolve(ok);
+    };
+    const check = async (state?: any) => {
+      const set = new Set<string>((Array.isArray(state) ? state : []).map((p: any) => String(p?.slot?.id || "")).filter(Boolean));
+      if ([...wanted].every(id => set.has(id))) { stop(true); }
+      else if (Date.now() >= deadline) { stop(false); }
+    };
+    try {
+      const res = Atoms.pets.myPetInfos.onChange((state: any) => { void check(state); });
+      if (typeof res === "function") { unsub = res; }
+      else if (res && typeof (res as any).then === "function") {
+        pendingUnsub = res as Promise<() => void>;
+        pendingUnsub.then(fn => { unsub = fn; if (stopped) { doUnsub(fn); } }).catch(() => {});
+      }
+    } catch {
+      stop(false);
+      return;
+    }
+    void check();
+    setTimeout(() => stop(false), timeoutMs + 50);
+  });
+}
+
+async function _waitForInventoryState(
+  predicate: (ids: Set<string>) => boolean,
+  timeoutMs = 4000
+): Promise<boolean> {
+  const snapshotMatches = async () => {
+    try {
+      const cur = await Atoms.inventory.myInventory.get();
+      const set = new Set<string>(
+        (Array.isArray(cur?.items) ? cur.items : Array.isArray(cur) ? cur : [])
+          .map((p: any) => String(p?.id || ""))
+          .filter(Boolean),
+      );
+      return predicate(set);
+    } catch { return false; }
+  };
+  if (await snapshotMatches()) return true;
+
+  return new Promise<boolean>((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    let unsub: (() => void) | null = null;
+    let pendingUnsub: Promise<(() => void)> | null = null;
+    let stopped = false;
+    const doUnsub = (fn?: (() => void) | null) => { if (fn) { try { fn(); } catch {} } };
+    const stop = (ok: boolean) => {
+      if (stopped) return;
+      stopped = true;
+      if (unsub) { doUnsub(unsub); }
+      else if (pendingUnsub) { pendingUnsub.then(fn => doUnsub(fn)).catch(() => {}); }
+      resolve(ok);
+    };
+    const check = async (state?: any) => {
+      const set = new Set<string>(
+        (Array.isArray(state?.items) ? state.items : Array.isArray(state) ? state : [])
+          .map((p: any) => String(p?.id || ""))
+          .filter(Boolean),
+      );
+      if (predicate(set)) { stop(true); }
+      else if (Date.now() >= deadline) { stop(false); }
+    };
+    try {
+      const res = Atoms.inventory.myInventory.onChange((state: any) => { void check(state); });
+      if (typeof res === "function") { unsub = res; }
+      else if (res && typeof (res as any).then === "function") {
+        pendingUnsub = res as Promise<() => void>;
+        pendingUnsub.then(fn => { unsub = fn; if (stopped) { doUnsub(fn); } }).catch(() => {});
+      }
+    } catch {
+      stop(false);
+      return;
+    }
+    void check();
+    setTimeout(() => stop(false), timeoutMs + 50);
+  });
+}
+
+async function _waitForHutchState(
+  predicate: (ids: Set<string>) => boolean,
+  timeoutMs = 4000
+): Promise<boolean> {
+  const snapshotMatches = async () => {
+    try {
+      const cur = await myPetHutchPetItems.get();
+      const set = new Set<string>(
+        (Array.isArray(cur) ? cur : [])
+          .map((p: any) => String(p?.id || ""))
+          .filter(Boolean),
+      );
+      return predicate(set);
+    } catch { return false; }
+  };
+  if (await snapshotMatches()) return true;
+
+  return new Promise<boolean>((resolve) => {
+    const deadline = Date.now() + timeoutMs;
+    let unsub: (() => void) | null = null;
+    let pendingUnsub: Promise<(() => void)> | null = null;
+    let stopped = false;
+    const doUnsub = (fn?: (() => void) | null) => { if (fn) { try { fn(); } catch {} } };
+    const stop = (ok: boolean) => {
+      if (stopped) return;
+      stopped = true;
+      if (unsub) { doUnsub(unsub); }
+      else if (pendingUnsub) { pendingUnsub.then(fn => doUnsub(fn)).catch(() => {}); }
+      resolve(ok);
+    };
+    const check = async (state?: any) => {
+      const set = new Set<string>(
+        (Array.isArray(state) ? state : [])
+          .map((p: any) => String(p?.id || ""))
+          .filter(Boolean),
+      );
+      if (predicate(set)) { stop(true); }
+      else if (Date.now() >= deadline) { stop(false); }
+    };
+    try {
+      const res = myPetHutchPetItems.onChange((state: any) => { void check(state); });
+      if (typeof res === "function") { unsub = res; }
+      else if (res && typeof (res as any).then === "function") {
+        pendingUnsub = res as Promise<() => void>;
+        pendingUnsub.then(fn => { unsub = fn; if (stopped) { doUnsub(fn); } }).catch(() => {});
+      }
+    } catch {
+      stop(false);
+      return;
+    }
+    void check();
+    setTimeout(() => stop(false), timeoutMs + 50);
+  });
+}
+
 /* --------------------------------- Team switching --------------------------------- */
+type EquipPetOpts = { markTeamId?: string | null; markUsed?: boolean };
+
+async function _equipPetIds(
+  targetInvIdsRaw: string[],
+  opts?: EquipPetOpts
+): Promise<{ swapped: number; placed: number; skipped: number }> {
+  const markId = (opts?.markTeamId ?? null) || null;
+  const targetInvIds = (Array.isArray(targetInvIdsRaw) ? targetInvIdsRaw : [])
+    .map(v => String(v || ""))
+    .filter(v => v.length > 0)
+    .slice(0, 3);
+  const markResolved = markId ?? _teamIdFromSlots(targetInvIds) ?? null;
+  const shouldMark = opts?.markUsed !== false && !!markResolved;
+
+  if (!targetInvIds.length) {
+    if (shouldMark) markTeamAsUsed(markResolved);
+    return { swapped: 0, placed: 0, skipped: 0 };
+  }
+
+  const targetSet = new Set<string>(targetInvIds);
+
+  // 1) Snapshot current active pets
+  let activeSlots = await _getActivePetSlotIds();
+
+  // 2) Hutch capacity snapshot
+  const HUTCH_MAX = 25;
+  let hutchCount = (() => { try { return Number(myNumPetHutchItems.get()); } catch { return 0; } })() as any;
+  try { hutchCount = Number(await myNumPetHutchItems.get()); } catch { hutchCount = 0; }
+  let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : 0));
+
+  // 3) Ensure target pets are in inventory (retrieve from hutch if needed)
+  let hutchItemsSet: Set<string> = new Set();
+  try {
+    const hutchItems = await myPetHutchPetItems.get();
+    if (Array.isArray(hutchItems)) {
+      hutchItemsSet = new Set(hutchItems.map((it: any) => String(it?.id ?? "")));
+    }
+  } catch {}
+
+  const missingFromActive = targetInvIds.filter(id => !activeSlots.includes(id));
+  const missingFromHutch = missingFromActive.filter(id => hutchItemsSet.has(id));
+
+  // If we must retrieve from Hutch but have no inventory space and no Hutch space to juggle, abort with toast
+  if (missingFromHutch.length > 0) {
+    let invFull = false;
+    try { invFull = !!(await isMyInventoryAtMaxLength.get()); } catch { invFull = false; }
+    if (invFull && freeHutch <= 0) {
+      try { await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full."); } catch {}
+      if (shouldMark) markTeamAsUsed(markResolved);
+      return { swapped: 0, placed: 0, skipped: targetInvIds.length };
+    }
+  }
+
+  // Iteratively retrieve from Hutch and equip (swap or place) with minimal clicks
+  let swapped = 0, placed = 0, skipped = 0;
+  for (const invId of targetInvIds) {
+    const isAlreadyActive = activeSlots.includes(invId);
+    if (isAlreadyActive) { skipped++; continue; }
+
+    const livesInHutch = hutchItemsSet.has(invId);
+    if (livesInHutch) {
+      // Ensure one free inventory slot
+      let invFull = false;
+      try { invFull = !!(await isMyInventoryAtMaxLength.get()); } catch { invFull = false; }
+      if (invFull) {
+        // Try to free by moving a non-target inventory pet into Hutch if space
+        if (freeHutch > 0) {
+          try {
+            const invPets = await PetsService.getInventoryPets();
+              const invPet = (Array.isArray(invPets) ? invPets : []).find(p => {
+                const id = String(p?.id || "");
+                return id && !hutchItemsSet.has(id) && !activeSlots.includes(id) && !targetSet.has(id);
+              });
+              if (invPet) {
+              await PlayerService.putItemInStorage(invPet.id, "PetHutch");
+              freeHutch = Math.max(0, freeHutch - 1);
+              void _waitForHutchState(set => set.has(String(invPet.id)), 3000);
+              } else {
+                // No candidate to free space
+                try { await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error"); } catch {}
+                if (shouldMark) markTeamAsUsed(markResolved);
+                return { swapped, placed, skipped };
+              }
+            } catch {
+              try { await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error"); } catch {}
+              if (shouldMark) markTeamAsUsed(markResolved);
+              return { swapped, placed, skipped };
+            }
+          } else {
+            try { await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error"); } catch {}
+            if (shouldMark) markTeamAsUsed(markResolved);
+            return { swapped, placed, skipped };
+          }
+        }
+
+      // Retrieve from Hutch (this increases available Hutch space by 1)
+      try { await PlayerService.retrieveItemFromStorage(invId, "PetHutch"); hutchItemsSet.delete(invId); freeHutch = Math.min(25, freeHutch + 1); } catch { continue; }
+      void _waitForHutchState(set => !set.has(String(invId)), 3000);
+    }
+
+    // Prefer swapping out a non-target active if any, else place
+    const offTargetActive = activeSlots.find(id => !targetSet.has(id));
+    if (offTargetActive) {
+      try {
+        await PlayerService.swapPet(offTargetActive, invId);
+        swapped++;
+        // After swap, offTargetActive becomes inventory item; move it into Hutch if possible to keep flow
+        if (freeHutch > 0) {
+          try { await PlayerService.putItemInStorage(offTargetActive, "PetHutch"); freeHutch = Math.max(0, freeHutch - 1); } catch {}
+          void _waitForHutchState(set => set.has(String(offTargetActive)), 3000);
+        }
+        // Update active set snapshot
+        activeSlots = activeSlots.filter(x => x !== offTargetActive);
+        activeSlots.push(invId);
+      } catch {
+        // fallback to place
+        try { await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64); placed++; activeSlots.push(invId); } catch {}
+      }
+    } else {
+      try { await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64); placed++; activeSlots.push(invId); } catch {}
+    }
+  }
+
+  // After equipping targets, if target has fewer pets than current actives,
+  // move remaining non-target actives into the Hutch when there is space.
+  try {
+    // refresh hutch free slots before cleanup
+    try { hutchCount = Number(await myNumPetHutchItems.get()); } catch {}
+    freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? (hutchCount as number) : 0));
+
+    const leftovers = activeSlots.filter(id => !targetSet.has(id));
+      for (const slotId of leftovers) {
+        if (freeHutch <= 0) break;
+        try {
+          await PlayerService.storePet(slotId);
+          await PlayerService.putItemInStorage(slotId, "PetHutch");
+          freeHutch = Math.max(0, freeHutch - 1);
+          activeSlots = activeSlots.filter(x => x !== slotId);
+          void _waitForHutchState(set => set.has(String(slotId)), 3000);
+        } catch {
+          // ignore failures; leave as is
+        }
+      }
+  } catch {}
+
+  // Final tidy pass to ensure exact targets are active (handles pets already in inventory)
+  const res = await _applyTeam(targetInvIds);
+  try { await _waitForActivePetsMatch(targetInvIds, 5000); } catch {}
+  try { await _waitForInventoryState(set => targetInvIds.every(id => set.has(id)), 3000); } catch {}
+  try { await _waitForHutchState(set => targetInvIds.every(id => !set.has(id)), 3000); } catch {}
+  if (shouldMark) markTeamAsUsed(markResolved);
+  return res;
+}
+
 async function _applyTeam(targetInvIds: string[]): Promise<{ swapped: number; placed: number; skipped: number }> {
   let activeSlots = await _getActivePetSlotIds();
 
