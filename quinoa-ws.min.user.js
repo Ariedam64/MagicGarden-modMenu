@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.17
+// @version      2.99.18
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -15970,6 +15970,15 @@
   function isVersionExpiredClose(ev) {
     return ev?.code === 4710 || /Version\s*Expired/i.test(ev?.reason || "");
   }
+  function getRoomConnectionSocket() {
+    try {
+      const rc = pageWindow.MagicCircle_RoomConnection;
+      if (!rc) return null;
+      return (rc.ws || rc.socket || rc.currentWebSocket) ?? null;
+    } catch {
+      return null;
+    }
+  }
   function startAutoReloadOnVersionExpired() {
     onWebSocketClose((ev) => {
       if (!isVersionExpiredClose(ev)) return;
@@ -15993,10 +16002,12 @@
   }
   function isSupersededSessionClose(ev) {
     if (!ev) return false;
-    if (ev.code === 4300) return true;
-    if (ev.code !== 4250) return false;
     const reason = ev?.reason || "";
-    return /superseded/i.test(reason) || /newer user session/i.test(reason);
+    const reasonLc = reason.toLowerCase();
+    if (ev.code === 4300 && reasonLc.includes("heartbeat")) {
+      return false;
+    }
+    return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
     const STYLE_ID3 = "mgAutoRecoOverlayStyle";
@@ -16067,8 +16078,12 @@
     }
   }
   function startAutoReconnectOnSuperseded() {
-    onWebSocketClose((ev) => {
+    onWebSocketClose((ev, ws) => {
       if (!isSupersededSessionClose(ev)) return;
+      const rcSocket = getRoomConnectionSocket();
+      if (rcSocket && ws && ws !== rcSocket) {
+        return;
+      }
       if (!MiscService.readAutoRecoEnabled(false)) return;
       if (autoRecoTimer !== null) {
         clearTimeout(autoRecoTimer);
