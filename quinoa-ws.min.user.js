@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.18
+// @version      2.99.19
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -16857,6 +16857,7 @@
   var unsubPrevHotkey = null;
   var orderedTeamIds = [];
   var lastUsedTeamId = null;
+  var _lastTeamHotkeyAt = 0;
   function syncTeamHotkey(teamId) {
     const hk = getKeybind(getPetTeamActionId(teamId));
     if (hk) TEAM_HK_MAP.set(teamId, hk);
@@ -16886,7 +16887,15 @@
   }
   function normalizeTeamList(teams) {
     if (!Array.isArray(teams)) return [];
-    return teams.map((t) => ({ id: String(t?.id ?? ""), name: t?.name ?? null })).filter((t) => t.id.length > 0);
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const t of teams) {
+      const id = String(t?.id ?? "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name: t?.name ?? null });
+    }
+    return out;
   }
   function ensureLastUsedTeamIsValid() {
     if (!orderedTeamIds.length) {
@@ -16896,18 +16905,6 @@
     if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
       lastUsedTeamId = orderedTeamIds[0] ?? null;
     }
-  }
-  function adjacentTeam(direction) {
-    if (!orderedTeamIds.length) return null;
-    if (!lastUsedTeamId || !orderedTeamIds.includes(lastUsedTeamId)) {
-      return direction === 1 ? orderedTeamIds[0] ?? null : orderedTeamIds[orderedTeamIds.length - 1] ?? null;
-    }
-    if (orderedTeamIds.length === 1) return orderedTeamIds[0] ?? null;
-    const currentIndex2 = orderedTeamIds.indexOf(lastUsedTeamId);
-    let nextIndex = currentIndex2 + direction;
-    if (nextIndex < 0) nextIndex = orderedTeamIds.length - 1;
-    if (nextIndex >= orderedTeamIds.length) nextIndex = 0;
-    return orderedTeamIds[nextIndex] ?? null;
   }
   function markTeamAsUsed(teamId) {
     lastUsedTeamId = teamId ? String(teamId) : null;
@@ -16958,15 +16955,28 @@
     if (window[FLAG]) return;
     window.addEventListener(
       "keydown",
-      (e) => {
+      async (e) => {
         if (shouldIgnoreKeydown(e)) return;
+        const teamsList = orderedTeamIds.slice();
+        if (!teamsList.length) return;
+        const activeTid = await _currentActiveTeamId();
+        if (activeTid && teamsList.includes(activeTid)) {
+          lastUsedTeamId = activeTid;
+        } else if (!lastUsedTeamId || !teamsList.includes(lastUsedTeamId)) {
+          lastUsedTeamId = teamsList[0] ?? null;
+        }
+        ensureLastUsedTeamIsValid();
         const useTeam = (teamId) => {
           if (!teamId) return;
           markTeamAsUsed(teamId);
           onUseTeam(teamId);
+          _lastTeamHotkeyAt = Date.now();
         };
         if (hkPrevTeam && matchHotkey(e, hkPrevTeam)) {
-          const target = adjacentTeam(-1);
+          const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[teamsList.length - 1] ?? null;
+          const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+          const nextIdx = curIdx >= 0 ? (curIdx - 1 + teamsList.length) % teamsList.length : teamsList.length - 1;
+          const target = teamsList[nextIdx] ?? null;
           if (target) {
             e.preventDefault();
             e.stopPropagation();
@@ -16975,7 +16985,10 @@
           }
         }
         if (hkNextTeam && matchHotkey(e, hkNextTeam)) {
-          const target = adjacentTeam(1);
+          const baseId = lastUsedTeamId && teamsList.includes(lastUsedTeamId) ? lastUsedTeamId : teamsList[0] ?? null;
+          const curIdx = baseId ? teamsList.indexOf(baseId) : -1;
+          const nextIdx = curIdx >= 0 ? (curIdx + 1) % teamsList.length : 0;
+          const target = teamsList[nextIdx] ?? null;
           if (target) {
             e.preventDefault();
             e.stopPropagation();
@@ -17055,14 +17068,34 @@
       abilities: Array.isArray(p.abilities) ? p.abilities.slice() : []
     };
   }
+  function _dedupeTeams(arr) {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const t of Array.isArray(arr) ? arr : []) {
+      const id = String(t?.id || "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const slots = Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null];
+      out.push({ ...t, id, slots });
+    }
+    return out;
+  }
   function loadTeams() {
     const arr = readAriesPath(PATH_PETS_TEAMS) ?? [];
     if (!Array.isArray(arr)) return [];
-    return arr.map((t) => ({
+    const mapped = arr.map((t) => ({
       id: String(t?.id || ""),
       name: String(t?.name || "Team"),
       slots: Array.isArray(t?.slots) ? t.slots.slice(0, 3).map((x) => x ? String(x) : null) : [null, null, null]
     })).filter((t) => t.id);
+    const unique = _dedupeTeams(mapped);
+    if (unique.length !== mapped.length) {
+      try {
+        saveTeams(unique);
+      } catch {
+      }
+    }
+    return unique;
   }
   function saveTeams(arr) {
     writeAriesPath(PATH_PETS_TEAMS, arr);
@@ -17083,6 +17116,32 @@
   }
   var _teams = loadTeams();
   var _teamSearch = _loadTeamSearchMap();
+  function _teamIdFromSlots(ids) {
+    const wanted = new Set(ids.map((id) => String(id || "")).filter(Boolean));
+    if (!wanted.size) return null;
+    for (const team of _teams) {
+      const slots = (Array.isArray(team?.slots) ? team.slots : []).map((id) => String(id || "")).filter(Boolean);
+      if (slots.length !== wanted.size) continue;
+      const set2 = new Set(slots);
+      let ok = true;
+      for (const id of wanted) {
+        if (!set2.has(id)) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return team.id;
+    }
+    return null;
+  }
+  async function _currentActiveTeamId() {
+    try {
+      const slots = await _getActivePetSlotIds();
+      return _teamIdFromSlots(slots);
+    } catch {
+      return null;
+    }
+  }
   var _invRaw = null;
   var _activeRaw = [];
   var _hutchRaw = [];
@@ -17307,7 +17366,9 @@
     }
     return null;
   }
+  var _lastAutofeedAttemptAt = /* @__PURE__ */ new Map();
   var _belowThreshold = /* @__PURE__ */ new Map();
+  var AUTOF_FEED_MIN_INTERVAL_MS = 2e3;
   var DEFAULT_OVERRIDE = { enabled: false, thresholdPct: 10, crops: {} };
   var DEFAULT_UI = { selectedPetId: null };
   var _currentPets = [];
@@ -17378,14 +17439,15 @@
     if (!petId) return;
     const ov = PetsService.getOverride(petId);
     if (!ov.enabled) {
-      _belowThreshold.set(petId, false);
+      _lastAutofeedAttemptAt.delete(petId);
       return;
     }
     const hungerPct = PetsService.getHungerPctFor(pet);
     const thresholdPct = Math.max(1, Math.min(100, ov.thresholdPct | 0 || 10));
-    const previouslyBelow = _belowThreshold.get(petId) === true;
     const nowBelow = hungerPct < thresholdPct;
-    if (nowBelow && !previouslyBelow) {
+    const now2 = Date.now();
+    const lastAttempt = _lastAutofeedAttemptAt.get(petId) || 0;
+    if (nowBelow && now2 - lastAttempt >= AUTOF_FEED_MIN_INTERVAL_MS) {
       let allowedSet;
       try {
         allowedSet = await PetsService.getPetAllowedCrops(petId);
@@ -17423,8 +17485,11 @@
         chosenItem: chosen,
         didUnfavorite
       });
+      _lastAutofeedAttemptAt.set(petId, now2);
     }
-    _belowThreshold.set(petId, nowBelow);
+    if (!nowBelow) {
+      _lastAutofeedAttemptAt.delete(petId);
+    }
   }
   async function _evaluateAll() {
     const arr = Array.isArray(_currentPets) ? _currentPets : [];
@@ -17775,164 +17840,17 @@
       return _inventoryItemToPet(items[selIndex]);
     },
     /* ------------------------- Team switching ------------------------- */
-    async useTeam(teamId) {
+    async useTeam(teamId, opts) {
       const t = this.getTeams().find((tt) => tt.id === teamId) || null;
       if (!t) throw new Error("Team not found");
       const targetInvIds = (t.slots || []).filter((x) => typeof x === "string" && x.length > 0).slice(0, 3);
-      const targetSet = new Set(targetInvIds);
-      let activeSlots = await _getActivePetSlotIds();
-      const HUTCH_MAX = 25;
-      let hutchCount = (() => {
-        try {
-          return Number(myNumPetHutchItems.get());
-        } catch {
-          return 0;
-        }
-      })();
-      try {
-        hutchCount = Number(await myNumPetHutchItems.get());
-      } catch {
-        hutchCount = 0;
-      }
-      let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
-      let hutchItemsSet = /* @__PURE__ */ new Set();
-      try {
-        const hutchItems = await myPetHutchPetItems.get();
-        if (Array.isArray(hutchItems)) {
-          hutchItemsSet = new Set(hutchItems.map((it) => String(it?.id ?? "")));
-        }
-      } catch {
-      }
-      const missingFromActive = targetInvIds.filter((id) => !activeSlots.includes(id));
-      const missingFromHutch = missingFromActive.filter((id) => hutchItemsSet.has(id));
-      if (missingFromHutch.length > 0) {
-        let invFull = false;
-        try {
-          invFull = !!await isMyInventoryAtMaxLength.get();
-        } catch {
-          invFull = false;
-        }
-        if (invFull && freeHutch <= 0) {
-          try {
-            await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.");
-          } catch {
-          }
-          markTeamAsUsed(teamId);
-          return { swapped: 0, placed: 0, skipped: targetInvIds.length };
-        }
-      }
-      let swapped = 0, placed = 0, skipped = 0;
-      for (const invId of targetInvIds) {
-        const isAlreadyActive = activeSlots.includes(invId);
-        if (isAlreadyActive) {
-          skipped++;
-          continue;
-        }
-        const livesInHutch = hutchItemsSet.has(invId);
-        if (livesInHutch) {
-          let invFull = false;
-          try {
-            invFull = !!await isMyInventoryAtMaxLength.get();
-          } catch {
-            invFull = false;
-          }
-          if (invFull) {
-            if (freeHutch > 0) {
-              try {
-                const invPets = await this.getInventoryPets();
-                const invPet = (Array.isArray(invPets) ? invPets : []).find((p) => {
-                  const id = String(p?.id || "");
-                  return id && !hutchItemsSet.has(id) && !activeSlots.includes(id) && !targetSet.has(id);
-                });
-                if (invPet) {
-                  await PlayerService.putItemInStorage(invPet.id, "PetHutch");
-                  freeHutch = Math.max(0, freeHutch - 1);
-                } else {
-                  try {
-                    await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error");
-                  } catch {
-                  }
-                  markTeamAsUsed(teamId);
-                  return { swapped, placed, skipped };
-                }
-              } catch {
-                try {
-                  await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error");
-                } catch {
-                }
-                markTeamAsUsed(teamId);
-                return { swapped, placed, skipped };
-              }
-            } else {
-              try {
-                await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error");
-              } catch {
-              }
-              markTeamAsUsed(teamId);
-              return { swapped, placed, skipped };
-            }
-          }
-          try {
-            await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
-            hutchItemsSet.delete(invId);
-            freeHutch = Math.min(25, freeHutch + 1);
-          } catch {
-            continue;
-          }
-        }
-        const offTargetActive = activeSlots.find((id) => !targetSet.has(id));
-        if (offTargetActive) {
-          try {
-            await PlayerService.swapPet(offTargetActive, invId);
-            swapped++;
-            if (freeHutch > 0) {
-              try {
-                await PlayerService.putItemInStorage(offTargetActive, "PetHutch");
-                freeHutch = Math.max(0, freeHutch - 1);
-              } catch {
-              }
-            }
-            activeSlots = activeSlots.filter((x) => x !== offTargetActive);
-            activeSlots.push(invId);
-          } catch {
-            try {
-              await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
-              placed++;
-              activeSlots.push(invId);
-            } catch {
-            }
-          }
-        } else {
-          try {
-            await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
-            placed++;
-            activeSlots.push(invId);
-          } catch {
-          }
-        }
-      }
-      try {
-        try {
-          hutchCount = Number(await myNumPetHutchItems.get());
-        } catch {
-        }
-        freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
-        let leftovers = activeSlots.filter((id) => !targetSet.has(id));
-        for (const slotId of leftovers) {
-          if (freeHutch <= 0) break;
-          try {
-            await PlayerService.storePet(slotId);
-            await PlayerService.putItemInStorage(slotId, "PetHutch");
-            freeHutch = Math.max(0, freeHutch - 1);
-            activeSlots = activeSlots.filter((x) => x !== slotId);
-          } catch {
-          }
-        }
-      } catch {
-      }
-      const res = await _applyTeam(targetInvIds);
-      markTeamAsUsed(teamId);
-      return res;
+      return _equipPetIds(targetInvIds, { markTeamId: teamId, markUsed: opts?.markUsed });
+    },
+    async usePetIds(targetInvIds) {
+      return _equipPetIds(targetInvIds, { markTeamId: null });
+    },
+    async getActivePetIds() {
+      return _getActivePetSlotIds();
     },
     /* ------------------------- Ability logs ------------------------- */
     _logs: [],
@@ -18276,6 +18194,12 @@
             const hasFrozen = muts.some((m) => typeof m === "string" && m.toLowerCase() === "frozen");
             return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
           }
+          case "SnowGranter":
+          case "FrostGranter": {
+            const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
+            const crop = label2(d["cropName"], cropFromSlot ?? "crop");
+            return `${crop}`;
+          }
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII": {
             const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
@@ -18397,6 +18321,397 @@
     } catch {
       return [];
     }
+  }
+  async function _waitForActivePetsMatch(targetIds, timeoutMs = 5e3) {
+    const wanted = new Set(targetIds.map((id) => String(id || "")).filter(Boolean));
+    if (!wanted.size) return true;
+    const snapshotMatches = async () => {
+      try {
+        const cur = await Atoms.pets.myPetInfos.get();
+        const set2 = new Set((Array.isArray(cur) ? cur : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
+        return [...wanted].every((id) => set2.has(id));
+      } catch {
+        return false;
+      }
+    };
+    if (await snapshotMatches()) return true;
+    return new Promise((resolve2) => {
+      const deadline = Date.now() + timeoutMs;
+      let unsub = null;
+      let pendingUnsub = null;
+      let stopped = false;
+      const doUnsub = (fn) => {
+        if (fn) {
+          try {
+            fn();
+          } catch {
+          }
+        }
+      };
+      const stop2 = (ok) => {
+        if (stopped) return;
+        stopped = true;
+        if (unsub) {
+          doUnsub(unsub);
+        } else if (pendingUnsub) {
+          pendingUnsub.then((fn) => doUnsub(fn)).catch(() => {
+          });
+        }
+        resolve2(ok);
+      };
+      const check = async (state3) => {
+        const set2 = new Set((Array.isArray(state3) ? state3 : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
+        if ([...wanted].every((id) => set2.has(id))) {
+          stop2(true);
+        } else if (Date.now() >= deadline) {
+          stop2(false);
+        }
+      };
+      try {
+        const res = Atoms.pets.myPetInfos.onChange((state3) => {
+          void check(state3);
+        });
+        if (typeof res === "function") {
+          unsub = res;
+        } else if (res && typeof res.then === "function") {
+          pendingUnsub = res;
+          pendingUnsub.then((fn) => {
+            unsub = fn;
+            if (stopped) {
+              doUnsub(fn);
+            }
+          }).catch(() => {
+          });
+        }
+      } catch {
+        stop2(false);
+        return;
+      }
+      void check();
+      setTimeout(() => stop2(false), timeoutMs + 50);
+    });
+  }
+  async function _waitForInventoryState(predicate, timeoutMs = 4e3) {
+    const snapshotMatches = async () => {
+      try {
+        const cur = await Atoms.inventory.myInventory.get();
+        const set2 = new Set(
+          (Array.isArray(cur?.items) ? cur.items : Array.isArray(cur) ? cur : []).map((p) => String(p?.id || "")).filter(Boolean)
+        );
+        return predicate(set2);
+      } catch {
+        return false;
+      }
+    };
+    if (await snapshotMatches()) return true;
+    return new Promise((resolve2) => {
+      const deadline = Date.now() + timeoutMs;
+      let unsub = null;
+      let pendingUnsub = null;
+      let stopped = false;
+      const doUnsub = (fn) => {
+        if (fn) {
+          try {
+            fn();
+          } catch {
+          }
+        }
+      };
+      const stop2 = (ok) => {
+        if (stopped) return;
+        stopped = true;
+        if (unsub) {
+          doUnsub(unsub);
+        } else if (pendingUnsub) {
+          pendingUnsub.then((fn) => doUnsub(fn)).catch(() => {
+          });
+        }
+        resolve2(ok);
+      };
+      const check = async (state3) => {
+        const set2 = new Set(
+          (Array.isArray(state3?.items) ? state3.items : Array.isArray(state3) ? state3 : []).map((p) => String(p?.id || "")).filter(Boolean)
+        );
+        if (predicate(set2)) {
+          stop2(true);
+        } else if (Date.now() >= deadline) {
+          stop2(false);
+        }
+      };
+      try {
+        const res = Atoms.inventory.myInventory.onChange((state3) => {
+          void check(state3);
+        });
+        if (typeof res === "function") {
+          unsub = res;
+        } else if (res && typeof res.then === "function") {
+          pendingUnsub = res;
+          pendingUnsub.then((fn) => {
+            unsub = fn;
+            if (stopped) {
+              doUnsub(fn);
+            }
+          }).catch(() => {
+          });
+        }
+      } catch {
+        stop2(false);
+        return;
+      }
+      void check();
+      setTimeout(() => stop2(false), timeoutMs + 50);
+    });
+  }
+  async function _waitForHutchState(predicate, timeoutMs = 4e3) {
+    const snapshotMatches = async () => {
+      try {
+        const cur = await myPetHutchPetItems.get();
+        const set2 = new Set(
+          (Array.isArray(cur) ? cur : []).map((p) => String(p?.id || "")).filter(Boolean)
+        );
+        return predicate(set2);
+      } catch {
+        return false;
+      }
+    };
+    if (await snapshotMatches()) return true;
+    return new Promise((resolve2) => {
+      const deadline = Date.now() + timeoutMs;
+      let unsub = null;
+      let pendingUnsub = null;
+      let stopped = false;
+      const doUnsub = (fn) => {
+        if (fn) {
+          try {
+            fn();
+          } catch {
+          }
+        }
+      };
+      const stop2 = (ok) => {
+        if (stopped) return;
+        stopped = true;
+        if (unsub) {
+          doUnsub(unsub);
+        } else if (pendingUnsub) {
+          pendingUnsub.then((fn) => doUnsub(fn)).catch(() => {
+          });
+        }
+        resolve2(ok);
+      };
+      const check = async (state3) => {
+        const set2 = new Set(
+          (Array.isArray(state3) ? state3 : []).map((p) => String(p?.id || "")).filter(Boolean)
+        );
+        if (predicate(set2)) {
+          stop2(true);
+        } else if (Date.now() >= deadline) {
+          stop2(false);
+        }
+      };
+      try {
+        const res = myPetHutchPetItems.onChange((state3) => {
+          void check(state3);
+        });
+        if (typeof res === "function") {
+          unsub = res;
+        } else if (res && typeof res.then === "function") {
+          pendingUnsub = res;
+          pendingUnsub.then((fn) => {
+            unsub = fn;
+            if (stopped) {
+              doUnsub(fn);
+            }
+          }).catch(() => {
+          });
+        }
+      } catch {
+        stop2(false);
+        return;
+      }
+      void check();
+      setTimeout(() => stop2(false), timeoutMs + 50);
+    });
+  }
+  async function _equipPetIds(targetInvIdsRaw, opts) {
+    const markId = (opts?.markTeamId ?? null) || null;
+    const targetInvIds = (Array.isArray(targetInvIdsRaw) ? targetInvIdsRaw : []).map((v) => String(v || "")).filter((v) => v.length > 0).slice(0, 3);
+    const markResolved = markId ?? _teamIdFromSlots(targetInvIds) ?? null;
+    const shouldMark = opts?.markUsed !== false && !!markResolved;
+    if (!targetInvIds.length) {
+      if (shouldMark) markTeamAsUsed(markResolved);
+      return { swapped: 0, placed: 0, skipped: 0 };
+    }
+    const targetSet = new Set(targetInvIds);
+    let activeSlots = await _getActivePetSlotIds();
+    const HUTCH_MAX = 25;
+    let hutchCount = (() => {
+      try {
+        return Number(myNumPetHutchItems.get());
+      } catch {
+        return 0;
+      }
+    })();
+    try {
+      hutchCount = Number(await myNumPetHutchItems.get());
+    } catch {
+      hutchCount = 0;
+    }
+    let freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
+    let hutchItemsSet = /* @__PURE__ */ new Set();
+    try {
+      const hutchItems = await myPetHutchPetItems.get();
+      if (Array.isArray(hutchItems)) {
+        hutchItemsSet = new Set(hutchItems.map((it) => String(it?.id ?? "")));
+      }
+    } catch {
+    }
+    const missingFromActive = targetInvIds.filter((id) => !activeSlots.includes(id));
+    const missingFromHutch = missingFromActive.filter((id) => hutchItemsSet.has(id));
+    if (missingFromHutch.length > 0) {
+      let invFull = false;
+      try {
+        invFull = !!await isMyInventoryAtMaxLength.get();
+      } catch {
+        invFull = false;
+      }
+      if (invFull && freeHutch <= 0) {
+        try {
+          await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.");
+        } catch {
+        }
+        if (shouldMark) markTeamAsUsed(markResolved);
+        return { swapped: 0, placed: 0, skipped: targetInvIds.length };
+      }
+    }
+    let swapped = 0, placed = 0, skipped = 0;
+    for (const invId of targetInvIds) {
+      const isAlreadyActive = activeSlots.includes(invId);
+      if (isAlreadyActive) {
+        skipped++;
+        continue;
+      }
+      const livesInHutch = hutchItemsSet.has(invId);
+      if (livesInHutch) {
+        let invFull = false;
+        try {
+          invFull = !!await isMyInventoryAtMaxLength.get();
+        } catch {
+          invFull = false;
+        }
+        if (invFull) {
+          if (freeHutch > 0) {
+            try {
+              const invPets = await PetsService.getInventoryPets();
+              const invPet = (Array.isArray(invPets) ? invPets : []).find((p) => {
+                const id = String(p?.id || "");
+                return id && !hutchItemsSet.has(id) && !activeSlots.includes(id) && !targetSet.has(id);
+              });
+              if (invPet) {
+                await PlayerService.putItemInStorage(invPet.id, "PetHutch");
+                freeHutch = Math.max(0, freeHutch - 1);
+                void _waitForHutchState((set2) => set2.has(String(invPet.id)), 3e3);
+              } else {
+                try {
+                  await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error");
+                } catch {
+                }
+                if (shouldMark) markTeamAsUsed(markResolved);
+                return { swapped, placed, skipped };
+              }
+            } catch {
+              try {
+                await toastSimple("Inventory Full", "Cannot equip team: failed to free up a slot.", "error");
+              } catch {
+              }
+              if (shouldMark) markTeamAsUsed(markResolved);
+              return { swapped, placed, skipped };
+            }
+          } else {
+            try {
+              await toastSimple("Inventory Full", "Cannot equip team: required pets are in the Pet Hutch and your inventory is full.", "error");
+            } catch {
+            }
+            if (shouldMark) markTeamAsUsed(markResolved);
+            return { swapped, placed, skipped };
+          }
+        }
+        try {
+          await PlayerService.retrieveItemFromStorage(invId, "PetHutch");
+          hutchItemsSet.delete(invId);
+          freeHutch = Math.min(25, freeHutch + 1);
+        } catch {
+          continue;
+        }
+        void _waitForHutchState((set2) => !set2.has(String(invId)), 3e3);
+      }
+      const offTargetActive = activeSlots.find((id) => !targetSet.has(id));
+      if (offTargetActive) {
+        try {
+          await PlayerService.swapPet(offTargetActive, invId);
+          swapped++;
+          if (freeHutch > 0) {
+            try {
+              await PlayerService.putItemInStorage(offTargetActive, "PetHutch");
+              freeHutch = Math.max(0, freeHutch - 1);
+            } catch {
+            }
+            void _waitForHutchState((set2) => set2.has(String(offTargetActive)), 3e3);
+          }
+          activeSlots = activeSlots.filter((x) => x !== offTargetActive);
+          activeSlots.push(invId);
+        } catch {
+          try {
+            await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
+            placed++;
+            activeSlots.push(invId);
+          } catch {
+          }
+        }
+      } else {
+        try {
+          await PlayerService.placePet(invId, { x: 0, y: 0 }, "Boardwalk", 64);
+          placed++;
+          activeSlots.push(invId);
+        } catch {
+        }
+      }
+    }
+    try {
+      try {
+        hutchCount = Number(await myNumPetHutchItems.get());
+      } catch {
+      }
+      freeHutch = Math.max(0, HUTCH_MAX - (Number.isFinite(hutchCount) ? hutchCount : 0));
+      const leftovers = activeSlots.filter((id) => !targetSet.has(id));
+      for (const slotId of leftovers) {
+        if (freeHutch <= 0) break;
+        try {
+          await PlayerService.storePet(slotId);
+          await PlayerService.putItemInStorage(slotId, "PetHutch");
+          freeHutch = Math.max(0, freeHutch - 1);
+          activeSlots = activeSlots.filter((x) => x !== slotId);
+          void _waitForHutchState((set2) => set2.has(String(slotId)), 3e3);
+        } catch {
+        }
+      }
+    } catch {
+    }
+    const res = await _applyTeam(targetInvIds);
+    try {
+      await _waitForActivePetsMatch(targetInvIds, 5e3);
+    } catch {
+    }
+    try {
+      await _waitForInventoryState((set2) => targetInvIds.every((id) => set2.has(id)), 3e3);
+    } catch {
+    }
+    try {
+      await _waitForHutchState((set2) => targetInvIds.every((id) => !set2.has(id)), 3e3);
+    } catch {
+    }
+    if (shouldMark) markTeamAsUsed(markResolved);
+    return res;
   }
   async function _applyTeam(targetInvIds) {
     let activeSlots = await _getActivePetSlotIds();
@@ -37804,6 +38119,12 @@ next: ${next}`;
         bg: "rgba(102,204,216,0.9)",
         hover: "rgba(102,204,216,1)"
       };
+    }
+    if (is("SnowGranter")) {
+      return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+    }
+    if (is("FrostGranter")) {
+      return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
     }
     return {
       bg: "rgba(100,100,100,0.9)",
