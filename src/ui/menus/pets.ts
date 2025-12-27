@@ -40,18 +40,18 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
   }
 
   // Boosts de production / croissance / œufs / âge / taille / XP
-  if (is("ProduceScaleBoost")) {
-    // I & II
+  if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
+    // I & II (+ Snowy)
     return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
   }
 
-  if (is("PlantGrowthBoost")) {
-    // I & II
+  if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
+    // I & II (+ Snowy)
     return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
   }
 
-  if (is("EggGrowthBoost")) {
-    // I, II_NEW, II (III en jeu)
+  if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
+    // I, II_NEW, II (III en jeu) + Snowy
     return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
   }
 
@@ -65,19 +65,19 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
     return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
   }
 
-  if (is("PetXpBoost")) {
-    // I & II
+  if (is("PetXpBoost") || is("SnowyPetXpBoost")) {
+    // I & II (+ Snowy)
     return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
   }
 
   // Faim / regen faim
-  if (is("HungerBoost")) {
-    // I & II
+  if (is("HungerBoost") || is("SnowyHungerBoost")) {
+    // I & II (+ Snowy)
     return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
   }
 
-  if (is("HungerRestore")) {
-    // I & II
+  if (is("HungerRestore") || is("SnowyHungerRestore")) {
+    // I & II (+ Snowy)
     return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
   }
 
@@ -87,8 +87,8 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
     return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
   }
 
-  // Coin Finder (I, II, III)
-  if (is("CoinFinder")) {
+  // Coin Finder (I, II, III + Snowy)
+  if (is("CoinFinder") || is("SnowyCoinFinder")) {
     return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
   }
 

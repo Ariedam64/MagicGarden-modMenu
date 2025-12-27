@@ -1215,7 +1215,8 @@ export const PetsService = {
     switch (abilityId as keyof typeof petAbilities) {
       case "CoinFinderI":
       case "CoinFinderII":
-      case "CoinFinderIII": {
+      case "CoinFinderIII":
+      case "SnowyCoinFinder": {
         const value = data["coinsFound"] ?? data["coins"] ?? 0;
         return num(value);
       }
@@ -1231,9 +1232,21 @@ export const PetsService = {
       case "ProduceEater":
         return num(data["sellPrice"] ?? 0);
 
+      case "ProduceScaleBoost":
+      case "ProduceScaleBoostII":
+      case "SnowyCropSizeBoost": {
+        const inc =
+          data["scaleIncreasePercentage"] ??
+          data["cropScaleIncreasePercentage"] ??
+          base["scaleIncreasePercentage"] ??
+          0;
+        return num(inc);
+      }
+
       case "EggGrowthBoost":
       case "EggGrowthBoostII_NEW":
-      case "EggGrowthBoostII":{
+      case "EggGrowthBoostII":
+      case "SnowyEggGrowthBoost": {
         const minutes =
           data["eggGrowthTimeReductionMinutes"] ??
           data["minutesReduced"] ??
@@ -1244,7 +1257,8 @@ export const PetsService = {
       }
 
       case "PlantGrowthBoost":
-      case "PlantGrowthBoostII": {
+      case "PlantGrowthBoostII":
+      case "SnowyPlantGrowthBoost": {
         const minutes =
           data["minutesReduced"] ??
           data["reductionMinutes"] ??
@@ -1255,6 +1269,7 @@ export const PetsService = {
       }
 
       case "PetXpBoost":
+      case "SnowyPetXpBoost":
       case "PetXpBoostII": {
         const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
         return num(xp);
@@ -1273,13 +1288,24 @@ export const PetsService = {
       }
 
       case "HungerRestore":
-      case "HungerRestoreII": {
+      case "HungerRestoreII":
+      case "SnowyHungerRestore": {
         const amount =
           data["hungerRestoreAmount"] ??
           data["hungerRestoredPercentage"] ??
           base["hungerRestorePercentage"] ??
           0;
         return num(amount);
+      }
+
+      case "HungerBoost":
+      case "HungerBoostII":
+      case "SnowyHungerBoost": {
+        const pct =
+          data["hungerDepletionRateDecreasePercentage"] ??
+          base["hungerDepletionRateDecreasePercentage"] ??
+          0;
+        return num(pct);
       }
 
       default:
@@ -1510,7 +1536,8 @@ export const PetsService = {
       switch (abilityId as keyof typeof petAbilities) {
         case "CoinFinderI":
         case "CoinFinderII":
-        case "CoinFinderIII": {
+        case "CoinFinderIII":
+        case "SnowyCoinFinder": {
           const coins = d["coinsFound"] ?? d["coins"] ?? base["baseMaxCoinsFindable"];
           return coins != null ? `+ ${fmtInt(coins)} coins` : "Coins found";
         }
@@ -1524,7 +1551,8 @@ export const PetsService = {
         }
 
         case "HungerRestore":
-        case "HungerRestoreII": {
+        case "HungerRestoreII":
+        case "SnowyHungerRestore": {
           const whoRaw = d["petName"];
           const who = label(whoRaw === "itself" ? "itself" : whoRaw, "pet");
           const amount = d["hungerRestoreAmount"];
@@ -1589,7 +1617,8 @@ export const PetsService = {
         }
 
         case "ProduceScaleBoost":
-        case "ProduceScaleBoostII": {
+        case "ProduceScaleBoostII":
+        case "SnowyCropSizeBoost": {
           const inc =
             d["scaleIncreasePercentage"] ??
             d["cropScaleIncreasePercentage"] ??
@@ -1607,7 +1636,8 @@ export const PetsService = {
 
         case "EggGrowthBoost":
         case "EggGrowthBoostII_NEW":
-        case "EggGrowthBoostII": {
+        case "EggGrowthBoostII":
+        case "SnowyEggGrowthBoost": {
           const mins =
             d["minutesReduced"] ??
             d["eggGrowthTimeReductionMinutes"] ??
@@ -1615,12 +1645,14 @@ export const PetsService = {
           return mins != null ? `- ${fmtMin1(mins)}` : "Egg growth reduced";
         }
         case "PlantGrowthBoost":
-        case "PlantGrowthBoostII": {
+        case "PlantGrowthBoostII":
+        case "SnowyPlantGrowthBoost": {
           const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
           return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
         }
 
         case "PetXpBoost":
+        case "SnowyPetXpBoost":
         case "PetXpBoostII": {
           const xp = d["bonusXp"] ?? base["bonusXp"];
           return `+ ${fmtInt(xp)} XP`;
@@ -1640,7 +1672,8 @@ export const PetsService = {
         }
 
         case "HungerBoost":
-        case "HungerBoostII": {
+        case "HungerBoostII":
+        case "SnowyHungerBoost": {
           const pct = base["hungerDepletionRateDecreasePercentage"];
           return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
         }

@@ -1735,6 +1735,15 @@ export const petAbilities = {
     baseProbability: 0.4,
     baseParameters: { scaleIncreasePercentage: 10 }
   },
+  SnowyCropSizeBoost: {
+    name: "Snowy Crop Size Boost",
+    trigger: "continuous",
+    baseProbability: 0.8,
+    baseParameters: {
+      scaleIncreasePercentage: 12,
+      requiredWeather: "Frost"
+    }
+  },
 
   DoubleHarvest: {
     name: "Double Harvest",
@@ -1810,6 +1819,15 @@ export const petAbilities = {
     baseProbability: 27,
     baseParameters: { plantGrowthReductionMinutes: 5 }
   },
+  SnowyPlantGrowthBoost: {
+    name: "Snowy Plant Growth Boost",
+    trigger: "continuous",
+    baseProbability: 40,
+    baseParameters: {
+      plantGrowthReductionMinutes: 6,
+      requiredWeather: "Frost"
+    }
+  },
 
   ProduceMutationBoost: {
     name: "Crop Mutation Boost I",
@@ -1882,6 +1900,15 @@ export const petAbilities = {
     baseProbability: 27,
     baseParameters: { eggGrowthTimeReductionMinutes: 11 }
   },
+  SnowyEggGrowthBoost: {
+    name: "Snowy Egg Growth Boost",
+    trigger: "continuous",
+    baseProbability: 35,
+    baseParameters: {
+      eggGrowthTimeReductionMinutes: 10,
+      requiredWeather: "Frost"
+    }
+  },
 
   PetAgeBoost: {
     name: "Hatch XP Boost I",
@@ -1927,6 +1954,15 @@ export const petAbilities = {
     baseProbability: 35,
     baseParameters: { bonusXp: 400 }
   },
+  SnowyPetXpBoost: {
+    name: "Snowy XP Boost",
+    trigger: "continuous",
+    baseProbability: 30,
+    baseParameters: {
+      bonusXp: 300,
+      requiredWeather: "Frost"
+    }
+  },
 
   HungerRestore: {
     name: "Hunger Restore I",
@@ -1942,6 +1978,15 @@ export const petAbilities = {
     baseProbability: 14,
     baseParameters: { hungerRestorePercentage: 35 }
   },
+  SnowyHungerRestore: {
+    name: "Snowy Hunger Restore",
+    trigger: "continuous",
+    baseProbability: 20,
+    baseParameters: {
+      hungerRestorePercentage: 38,
+      requiredWeather: "Frost"
+    }
+  },
 
   HungerBoost: {
     name: "Hunger Boost I",
@@ -1954,6 +1999,14 @@ export const petAbilities = {
     description: "Reduces the hunger depletion rate of active pets",
     trigger: "continuous",
     baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+  },
+  SnowyHungerBoost: {
+    name: "Snowy Hunger Boost",
+    trigger: "continuous",
+    baseParameters: {
+      hungerDepletionRateDecreasePercentage: 30,
+      requiredWeather: "Frost"
+    }
   },
 
   PetRefund: {
@@ -1999,6 +2052,15 @@ export const petAbilities = {
     trigger: "continuous",
     baseProbability: 6,
     baseParameters: { baseMaxCoinsFindable: 10_000_000 }
+  },
+  SnowyCoinFinder: {
+    name: "Snowy Coin Finder",
+    trigger: "continuous",
+    baseProbability: 15,
+    baseParameters: {
+      baseMaxCoinsFindable: 5_000_000,
+      requiredWeather: "Frost"
+    }
   },
 
   SeedFinderI: {

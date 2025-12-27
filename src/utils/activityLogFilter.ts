@@ -11,6 +11,14 @@ type ActionKey =
   | "feed"
   | "hatch"
   | "water"
+  | "coinFinder"
+  | "seedFinder"
+  | "double"
+  | "eggGrowth"
+  | "plantGrowth"
+  | "granter"
+  | "kisser"
+  | "refund"
   | "boost"
   | "remove"
   | "other"
@@ -33,6 +41,14 @@ const ACTION_ORDER: ActionKey[] = [
   "feed",
   "hatch",
   "water",
+  "coinFinder",
+  "seedFinder",
+  "double",
+  "eggGrowth",
+  "plantGrowth",
+  "granter",
+  "kisser",
+  "refund",
   "boost",
   "remove",
   "other",
@@ -47,6 +63,14 @@ const ACTION_LABELS: Record<string, string> = {
   feed: "Feed",
   hatch: "Hatch",
   water: "Water",
+  coinFinder: "Coin Finder",
+  seedFinder: "Seed Finder",
+  double: "Double",
+  eggGrowth: "Egg Growth",
+  plantGrowth: "Plant Growth",
+  granter: "Granters",
+  kisser: "Kissers",
+  refund: "Refunds",
   boost: "Boosts",
   remove: "Remove",
   other: "Other",
@@ -75,45 +99,64 @@ const ACTION_MAP: Record<string, ActionKey> = {
   mutationPotion: "boost",
   ProduceScaleBoost: "boost",
   ProduceScaleBoostII: "boost",
-  DoubleHarvest: "boost",
-  DoubleHatch: "boost",
+  DoubleHarvest: "double",
+  DoubleHatch: "double",
   ProduceEater: "boost",
   SellBoostI: "boost",
   SellBoostII: "boost",
   SellBoostIII: "boost",
   SellBoostIV: "boost",
   ProduceRefund: "boost",
-  PlantGrowthBoost: "boost",
-  PlantGrowthBoostII: "boost",
+  PlantGrowthBoost: "plantGrowth",
+  PlantGrowthBoostII: "plantGrowth",
+  SnowyPlantGrowthBoost: "plantGrowth",
   HungerRestore: "boost",
   HungerRestoreII: "boost",
-  GoldGranter: "boost",
-  RainbowGranter: "boost",
-  RainDance: "boost",
+  SnowyHungerRestore: "boost",
+  GoldGranter: "granter",
+  RainbowGranter: "granter",
+  RainDance: "granter",
+  SnowGranter: "granter",
+  FrostGranter: "granter",
   PetXpBoost: "boost",
   PetXpBoostII: "boost",
-  EggGrowthBoost: "boost",
-  EggGrowthBoostII_NEW: "boost",
-  EggGrowthBoostII: "boost",
+  SnowyPetXpBoost: "boost",
+  SnowyEggGrowthBoost: "eggGrowth",
+  EggGrowthBoost: "eggGrowth",
+  EggGrowthBoostII_NEW: "eggGrowth",
+  EggGrowthBoostII: "eggGrowth",
   PetAgeBoost: "boost",
   PetAgeBoostII: "boost",
-  CoinFinderI: "boost",
-  CoinFinderII: "boost",
-  CoinFinderIII: "boost",
-  SeedFinderI: "boost",
-  SeedFinderII: "boost",
-  SeedFinderIII: "boost",
-  SeedFinderIV: "boost",
+  CoinFinderI: "coinFinder",
+  CoinFinderII: "coinFinder",
+  CoinFinderIII: "coinFinder",
+  SnowyCoinFinder: "coinFinder",
+  SnowyCropSizeBoost: "boost",
+  SnowyHungerBoost: "boost",
+  SeedFinderI: "seedFinder",
+  SeedFinderII: "seedFinder",
+  SeedFinderIII: "seedFinder",
+  SeedFinderIV: "seedFinder",
   PetHatchSizeBoost: "boost",
   PetHatchSizeBoostII: "boost",
-  MoonKisser: "boost",
-  DawnKisser: "boost",
-  PetRefund: "boost",
-  PetRefundII: "boost",
+  MoonKisser: "kisser",
+  DawnKisser: "kisser",
+  PetRefund: "refund",
+  PetRefundII: "refund",
 };
 const ACTION_MAP_LOWER: Record<string, ActionKey> = Object.fromEntries(
   Object.entries(ACTION_MAP).map(([k, v]) => [k.toLowerCase(), v])
 ) as Record<string, ActionKey>;
+
+function normalizeAbilityAction(raw: string): ActionKey | null {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return null;
+  let key = trimmed.replace(/^Snowy/i, "");
+  key = key.replace(/_NEW$/i, "");
+  key = key.replace(/(?:[_-]?(?:I|II|III|IV|V|VI|VII|VIII|IX|X)|\d+)$/i, "");
+  key = key.replace(/[_-]+$/g, "");
+  return key ? (key as ActionKey) : null;
+}
 
 const PATTERNS: Array<{ key: ActionKey; re: RegExp }> = [
   { key: "found", re: /\bfound\b/i },
@@ -125,7 +168,16 @@ const PATTERNS: Array<{ key: ActionKey; re: RegExp }> = [
   { key: "feed", re: /\bfed\b/i },
   { key: "hatch", re: /\bhatched?\b/i },
   { key: "remove", re: /\b(remove|removed|delete)\b/i },
-  { key: "boost", re: /\b(boost|potion|refund|granter|growth|restock|spin)\b/i },
+  // Ability-derived buckets (fallback when no data-action is set)
+  { key: "coinFinder", re: /\b(coin\s*finder|coins?\s+found)\b/i },
+  { key: "seedFinder", re: /\b(seed\s*finder|seeds?\s+found)\b/i },
+  { key: "double", re: /\b(double\s+(harvest|hatch)|extra\s+(crop|pet))\b/i },
+  { key: "eggGrowth", re: /\b(egg\s*growth|hatch\s*time|hatch\s*speed)\b/i },
+  { key: "plantGrowth", re: /\b((plant|crop)\s*growth)\b/i },
+  { key: "granter", re: /\b(granter|granted|granting)\b/i },
+  { key: "kisser", re: /\b(kisser|kissed)\b/i },
+  { key: "refund", re: /\b(refund|refunded)\b/i },
+  { key: "boost", re: /\b(boost|potion|refund|growth|restock|spin)\b/i },
 ];
 
 let started = false;
@@ -259,8 +311,18 @@ function classifyEntry(entry: HTMLElement): ActionKey {
 
 function normalizeAction(raw: string): ActionKey {
   const lowered = raw.toLowerCase();
-  if (ACTION_MAP[raw as keyof typeof ACTION_MAP]) return ACTION_MAP[raw as keyof typeof ACTION_MAP];
-  if (ACTION_MAP_LOWER[lowered as keyof typeof ACTION_MAP_LOWER]) return ACTION_MAP_LOWER[lowered as keyof typeof ACTION_MAP_LOWER];
+  const mapped = ACTION_MAP[raw as keyof typeof ACTION_MAP];
+  const mappedLower = ACTION_MAP_LOWER[lowered as keyof typeof ACTION_MAP_LOWER];
+  const abilityKey = normalizeAbilityAction(raw);
+  if (mapped) {
+    if (mapped === "boost" && abilityKey) return abilityKey;
+    return mapped;
+  }
+  if (mappedLower) {
+    if (mappedLower === "boost" && abilityKey) return abilityKey;
+    return mappedLower;
+  }
+  if (abilityKey) return abilityKey;
   for (const { key, re } of PATTERNS) {
     if (re.test(lowered)) return key;
   }
@@ -316,7 +378,18 @@ function updateButtons(buttons: HTMLElement): void {
 }
 
 function getActionLabel(action: ActionKey): string {
-  return ACTION_LABELS[action] ?? action.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+  const preset = ACTION_LABELS[action];
+  if (preset) return preset;
+  const spaced = String(action || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!spaced) return String(action || "");
+  return spaced
+    .split(" ")
+    .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
 }
 
 function loadPersistedFilter(): ActionKey | null {
