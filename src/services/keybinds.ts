@@ -382,7 +382,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
       {
         id: getPetTeamActionId(team.id),
         sectionId: PET_SECTION_ID,
-        label: `Use team â€” ${labelName}`,
+        label: `Use team — ${labelName}`,
         defaultHotkey: null,
       },
       null

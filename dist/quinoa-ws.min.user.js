@@ -10963,6 +10963,12 @@
           allowClear: true
         },
         {
+          id: "game.journal",
+          label: "\u{1F4D4} Journal",
+          defaultHotkey: null,
+          allowClear: true
+        },
+        {
           id: "game.move-up",
           label: "\u2B06 Move up",
           defaultHotkey: { code: "KeyW" }
@@ -11148,7 +11154,7 @@
         {
           id: getPetTeamActionId(team.id),
           sectionId: PET_SECTION_ID,
-          label: `Use team \u2014 ${labelName}`,
+          label: `Use team \xE2\u20AC\u201D ${labelName}`,
           defaultHotkey: null
         },
         null
@@ -19427,6 +19433,33 @@
         event.preventDefault();
         event.stopPropagation();
         void togglePetHutchModal();
+      },
+      true
+    );
+  }
+
+  // src/services/journalKeybind.ts
+  var ACTION_ID2 = "game.journal";
+  var journalKeybindsInstalled = false;
+  async function toggleJournalModal() {
+    try {
+      const current = await Atoms.ui.activeModal.get();
+      const next = current === JOURNAL_MODAL_ID ? null : JOURNAL_MODAL_ID;
+      await Atoms.ui.activeModal.set(next);
+    } catch {
+    }
+  }
+  function installJournalKeybindsOnce() {
+    if (journalKeybindsInstalled || typeof window === "undefined") return;
+    journalKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown(event)) return;
+        if (!eventMatchesKeybind(ACTION_ID2, event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void toggleJournalModal();
       },
       true
     );
@@ -29346,6 +29379,7 @@
     installSellKeybindsOnce();
     installPetHutchKeybindsOnce();
     installGameKeybindsOnce();
+    installJournalKeybindsOnce();
     (async () => {
       try {
         setTeamsForHotkeys(PetsService.getTeams());
