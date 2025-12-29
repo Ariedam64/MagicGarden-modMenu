@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.19
+// @version      2.99.20
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -3104,6 +3104,15 @@
       baseProbability: 0.4,
       baseParameters: { scaleIncreasePercentage: 10 }
     },
+    SnowyCropSizeBoost: {
+      name: "Snowy Crop Size Boost",
+      trigger: "continuous",
+      baseProbability: 0.8,
+      baseParameters: {
+        scaleIncreasePercentage: 12,
+        requiredWeather: "Frost"
+      }
+    },
     DoubleHarvest: {
       name: "Double Harvest",
       description: "Chance to duplicate harvested crops",
@@ -3174,6 +3183,15 @@
       baseProbability: 27,
       baseParameters: { plantGrowthReductionMinutes: 5 }
     },
+    SnowyPlantGrowthBoost: {
+      name: "Snowy Plant Growth Boost",
+      trigger: "continuous",
+      baseProbability: 40,
+      baseParameters: {
+        plantGrowthReductionMinutes: 6,
+        requiredWeather: "Frost"
+      }
+    },
     ProduceMutationBoost: {
       name: "Crop Mutation Boost I",
       description: "Increases the chance of garden crops gaining mutations",
@@ -3242,6 +3260,15 @@
       baseProbability: 27,
       baseParameters: { eggGrowthTimeReductionMinutes: 11 }
     },
+    SnowyEggGrowthBoost: {
+      name: "Snowy Egg Growth Boost",
+      trigger: "continuous",
+      baseProbability: 35,
+      baseParameters: {
+        eggGrowthTimeReductionMinutes: 10,
+        requiredWeather: "Frost"
+      }
+    },
     PetAgeBoost: {
       name: "Hatch XP Boost I",
       description: "Hatched pets start with bonus XP",
@@ -3284,6 +3311,15 @@
       baseProbability: 35,
       baseParameters: { bonusXp: 400 }
     },
+    SnowyPetXpBoost: {
+      name: "Snowy XP Boost",
+      trigger: "continuous",
+      baseProbability: 30,
+      baseParameters: {
+        bonusXp: 300,
+        requiredWeather: "Frost"
+      }
+    },
     HungerRestore: {
       name: "Hunger Restore I",
       description: "Restores the hunger of a random active pet",
@@ -3298,6 +3334,15 @@
       baseProbability: 14,
       baseParameters: { hungerRestorePercentage: 35 }
     },
+    SnowyHungerRestore: {
+      name: "Snowy Hunger Restore",
+      trigger: "continuous",
+      baseProbability: 20,
+      baseParameters: {
+        hungerRestorePercentage: 38,
+        requiredWeather: "Frost"
+      }
+    },
     HungerBoost: {
       name: "Hunger Boost I",
       description: "Reduces the hunger depletion rate of active pets",
@@ -3309,6 +3354,14 @@
       description: "Reduces the hunger depletion rate of active pets",
       trigger: "continuous",
       baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+    },
+    SnowyHungerBoost: {
+      name: "Snowy Hunger Boost",
+      trigger: "continuous",
+      baseParameters: {
+        hungerDepletionRateDecreasePercentage: 30,
+        requiredWeather: "Frost"
+      }
     },
     PetRefund: {
       name: "Pet Refund I",
@@ -3351,6 +3404,15 @@
       trigger: "continuous",
       baseProbability: 6,
       baseParameters: { baseMaxCoinsFindable: 1e7 }
+    },
+    SnowyCoinFinder: {
+      name: "Snowy Coin Finder",
+      trigger: "continuous",
+      baseProbability: 15,
+      baseParameters: {
+        baseMaxCoinsFindable: 5e6,
+        requiredWeather: "Frost"
+      }
     },
     SeedFinderI: {
       name: "Seed Finder I",
@@ -17871,7 +17933,8 @@
       switch (abilityId) {
         case "CoinFinderI":
         case "CoinFinderII":
-        case "CoinFinderIII": {
+        case "CoinFinderIII":
+        case "SnowyCoinFinder": {
           const value = data["coinsFound"] ?? data["coins"] ?? 0;
           return num(value);
         }
@@ -17884,18 +17947,27 @@
         }
         case "ProduceEater":
           return num(data["sellPrice"] ?? 0);
+        case "ProduceScaleBoost":
+        case "ProduceScaleBoostII":
+        case "SnowyCropSizeBoost": {
+          const inc = data["scaleIncreasePercentage"] ?? data["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"] ?? 0;
+          return num(inc);
+        }
         case "EggGrowthBoost":
         case "EggGrowthBoostII_NEW":
-        case "EggGrowthBoostII": {
+        case "EggGrowthBoostII":
+        case "SnowyEggGrowthBoost": {
           const minutes = data["eggGrowthTimeReductionMinutes"] ?? data["minutesReduced"] ?? data["reductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PlantGrowthBoost":
-        case "PlantGrowthBoostII": {
+        case "PlantGrowthBoostII":
+        case "SnowyPlantGrowthBoost": {
           const minutes = data["minutesReduced"] ?? data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base["plantGrowthReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PetXpBoost":
+        case "SnowyPetXpBoost":
         case "PetXpBoostII": {
           const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
           return num(xp);
@@ -17911,9 +17983,16 @@
           return num(strength);
         }
         case "HungerRestore":
-        case "HungerRestoreII": {
+        case "HungerRestoreII":
+        case "SnowyHungerRestore": {
           const amount = data["hungerRestoreAmount"] ?? data["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"] ?? 0;
           return num(amount);
+        }
+        case "HungerBoost":
+        case "HungerBoostII":
+        case "SnowyHungerBoost": {
+          const pct = data["hungerDepletionRateDecreasePercentage"] ?? base["hungerDepletionRateDecreasePercentage"] ?? 0;
+          return num(pct);
         }
         default:
           return 0;
@@ -18134,7 +18213,8 @@
         switch (abilityId) {
           case "CoinFinderI":
           case "CoinFinderII":
-          case "CoinFinderIII": {
+          case "CoinFinderIII":
+          case "SnowyCoinFinder": {
             const coins = d["coinsFound"] ?? d["coins"] ?? base["baseMaxCoinsFindable"];
             return coins != null ? `+ ${fmtInt(coins)} coins` : "Coins found";
           }
@@ -18146,7 +18226,8 @@
             return `x1 ${seed}`;
           }
           case "HungerRestore":
-          case "HungerRestoreII": {
+          case "HungerRestoreII":
+          case "SnowyHungerRestore": {
             const whoRaw = d["petName"];
             const who = label2(whoRaw === "itself" ? "itself" : whoRaw, "pet");
             const amount = d["hungerRestoreAmount"];
@@ -18201,7 +18282,8 @@
             return `${crop}`;
           }
           case "ProduceScaleBoost":
-          case "ProduceScaleBoostII": {
+          case "ProduceScaleBoostII":
+          case "SnowyCropSizeBoost": {
             const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
             return inc != null ? `+ ${fmtPct0(inc)}` : "Crop size boosted";
           }
@@ -18214,16 +18296,19 @@
           }
           case "EggGrowthBoost":
           case "EggGrowthBoostII_NEW":
-          case "EggGrowthBoostII": {
+          case "EggGrowthBoostII":
+          case "SnowyEggGrowthBoost": {
             const mins = d["minutesReduced"] ?? d["eggGrowthTimeReductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"];
             return mins != null ? `- ${fmtMin1(mins)}` : "Egg growth reduced";
           }
           case "PlantGrowthBoost":
-          case "PlantGrowthBoostII": {
+          case "PlantGrowthBoostII":
+          case "SnowyPlantGrowthBoost": {
             const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
             return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
           }
           case "PetXpBoost":
+          case "SnowyPetXpBoost":
           case "PetXpBoostII": {
             const xp = d["bonusXp"] ?? base["bonusXp"];
             return `+ ${fmtInt(xp)} XP`;
@@ -18242,7 +18327,8 @@
             return pct != null ? `+ ${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
           }
           case "HungerBoost":
-          case "HungerBoostII": {
+          case "HungerBoostII":
+          case "SnowyHungerBoost": {
             const pct = base["hungerDepletionRateDecreasePercentage"];
             return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
           }
@@ -27714,6 +27800,14 @@
     "feed",
     "hatch",
     "water",
+    "coinFinder",
+    "seedFinder",
+    "double",
+    "eggGrowth",
+    "plantGrowth",
+    "granter",
+    "kisser",
+    "refund",
     "boost",
     "remove",
     "other"
@@ -27728,6 +27822,14 @@
     feed: "Feed",
     hatch: "Hatch",
     water: "Water",
+    coinFinder: "Coin Finder",
+    seedFinder: "Seed Finder",
+    double: "Double",
+    eggGrowth: "Egg Growth",
+    plantGrowth: "Plant Growth",
+    granter: "Granters",
+    kisser: "Kissers",
+    refund: "Refunds",
     boost: "Boosts",
     remove: "Remove",
     other: "Other"
@@ -27755,45 +27857,63 @@
     mutationPotion: "boost",
     ProduceScaleBoost: "boost",
     ProduceScaleBoostII: "boost",
-    DoubleHarvest: "boost",
-    DoubleHatch: "boost",
+    DoubleHarvest: "double",
+    DoubleHatch: "double",
     ProduceEater: "boost",
     SellBoostI: "boost",
     SellBoostII: "boost",
     SellBoostIII: "boost",
     SellBoostIV: "boost",
     ProduceRefund: "boost",
-    PlantGrowthBoost: "boost",
-    PlantGrowthBoostII: "boost",
+    PlantGrowthBoost: "plantGrowth",
+    PlantGrowthBoostII: "plantGrowth",
+    SnowyPlantGrowthBoost: "plantGrowth",
     HungerRestore: "boost",
     HungerRestoreII: "boost",
-    GoldGranter: "boost",
-    RainbowGranter: "boost",
-    RainDance: "boost",
+    SnowyHungerRestore: "boost",
+    GoldGranter: "granter",
+    RainbowGranter: "granter",
+    RainDance: "granter",
+    SnowGranter: "granter",
+    FrostGranter: "granter",
     PetXpBoost: "boost",
     PetXpBoostII: "boost",
-    EggGrowthBoost: "boost",
-    EggGrowthBoostII_NEW: "boost",
-    EggGrowthBoostII: "boost",
+    SnowyPetXpBoost: "boost",
+    SnowyEggGrowthBoost: "eggGrowth",
+    EggGrowthBoost: "eggGrowth",
+    EggGrowthBoostII_NEW: "eggGrowth",
+    EggGrowthBoostII: "eggGrowth",
     PetAgeBoost: "boost",
     PetAgeBoostII: "boost",
-    CoinFinderI: "boost",
-    CoinFinderII: "boost",
-    CoinFinderIII: "boost",
-    SeedFinderI: "boost",
-    SeedFinderII: "boost",
-    SeedFinderIII: "boost",
-    SeedFinderIV: "boost",
+    CoinFinderI: "coinFinder",
+    CoinFinderII: "coinFinder",
+    CoinFinderIII: "coinFinder",
+    SnowyCoinFinder: "coinFinder",
+    SnowyCropSizeBoost: "boost",
+    SnowyHungerBoost: "boost",
+    SeedFinderI: "seedFinder",
+    SeedFinderII: "seedFinder",
+    SeedFinderIII: "seedFinder",
+    SeedFinderIV: "seedFinder",
     PetHatchSizeBoost: "boost",
     PetHatchSizeBoostII: "boost",
-    MoonKisser: "boost",
-    DawnKisser: "boost",
-    PetRefund: "boost",
-    PetRefundII: "boost"
+    MoonKisser: "kisser",
+    DawnKisser: "kisser",
+    PetRefund: "refund",
+    PetRefundII: "refund"
   };
   var ACTION_MAP_LOWER = Object.fromEntries(
     Object.entries(ACTION_MAP).map(([k, v]) => [k.toLowerCase(), v])
   );
+  function normalizeAbilityAction(raw) {
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return null;
+    let key2 = trimmed.replace(/^Snowy/i, "");
+    key2 = key2.replace(/_NEW$/i, "");
+    key2 = key2.replace(/(?:[_-]?(?:I|II|III|IV|V|VI|VII|VIII|IX|X)|\d+)$/i, "");
+    key2 = key2.replace(/[_-]+$/g, "");
+    return key2 ? key2 : null;
+  }
   var PATTERNS = [
     { key: "found", re: /\bfound\b/i },
     { key: "buy", re: /\b(bought|purchas(e|ed))\b/i },
@@ -27804,7 +27924,16 @@
     { key: "feed", re: /\bfed\b/i },
     { key: "hatch", re: /\bhatched?\b/i },
     { key: "remove", re: /\b(remove|removed|delete)\b/i },
-    { key: "boost", re: /\b(boost|potion|refund|granter|growth|restock|spin)\b/i }
+    // Ability-derived buckets (fallback when no data-action is set)
+    { key: "coinFinder", re: /\b(coin\s*finder|coins?\s+found)\b/i },
+    { key: "seedFinder", re: /\b(seed\s*finder|seeds?\s+found)\b/i },
+    { key: "double", re: /\b(double\s+(harvest|hatch)|extra\s+(crop|pet))\b/i },
+    { key: "eggGrowth", re: /\b(egg\s*growth|hatch\s*time|hatch\s*speed)\b/i },
+    { key: "plantGrowth", re: /\b((plant|crop)\s*growth)\b/i },
+    { key: "granter", re: /\b(granter|granted|granting)\b/i },
+    { key: "kisser", re: /\b(kisser|kissed)\b/i },
+    { key: "refund", re: /\b(refund|refunded)\b/i },
+    { key: "boost", re: /\b(boost|potion|refund|growth|restock|spin)\b/i }
   ];
   var started3 = false;
   var activeFilter = loadPersistedFilter() ?? "all";
@@ -27910,8 +28039,18 @@
   }
   function normalizeAction(raw) {
     const lowered = raw.toLowerCase();
-    if (ACTION_MAP[raw]) return ACTION_MAP[raw];
-    if (ACTION_MAP_LOWER[lowered]) return ACTION_MAP_LOWER[lowered];
+    const mapped = ACTION_MAP[raw];
+    const mappedLower = ACTION_MAP_LOWER[lowered];
+    const abilityKey = normalizeAbilityAction(raw);
+    if (mapped) {
+      if (mapped === "boost" && abilityKey) return abilityKey;
+      return mapped;
+    }
+    if (mappedLower) {
+      if (mappedLower === "boost" && abilityKey) return abilityKey;
+      return mappedLower;
+    }
+    if (abilityKey) return abilityKey;
     for (const { key: key2, re } of PATTERNS) {
       if (re.test(lowered)) return key2;
     }
@@ -27959,7 +28098,11 @@
     });
   }
   function getActionLabel(action2) {
-    return ACTION_LABELS[action2] ?? action2.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+    const preset = ACTION_LABELS[action2];
+    if (preset) return preset;
+    const spaced = String(action2 || "").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!spaced) return String(action2 || "");
+    return spaced.split(" ").map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(" ");
   }
   function loadPersistedFilter() {
     try {
@@ -38042,13 +38185,13 @@ next: ${next}`;
         hover: "rgba(162,92,242,1)"
       };
     }
-    if (is("ProduceScaleBoost")) {
+    if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
       return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
     }
-    if (is("PlantGrowthBoost")) {
+    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
       return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
     }
-    if (is("EggGrowthBoost")) {
+    if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
       return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
     }
     if (is("PetAgeBoost")) {
@@ -38057,19 +38200,19 @@ next: ${next}`;
     if (is("PetHatchSizeBoost")) {
       return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
     }
-    if (is("PetXpBoost")) {
+    if (is("PetXpBoost") || is("SnowyPetXpBoost")) {
       return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
     }
-    if (is("HungerBoost")) {
+    if (is("HungerBoost") || is("SnowyHungerBoost")) {
       return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
     }
-    if (is("HungerRestore")) {
+    if (is("HungerRestore") || is("SnowyHungerRestore")) {
       return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
     }
     if (is("SellBoost")) {
       return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
     }
-    if (is("CoinFinder")) {
+    if (is("CoinFinder") || is("SnowyCoinFinder")) {
       return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
     }
     if (is("SeedFinder")) {
