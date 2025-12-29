@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.22
+// @version      2.99.23
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11154,7 +11154,7 @@
         {
           id: getPetTeamActionId(team.id),
           sectionId: PET_SECTION_ID,
-          label: `Use team \xE2\u20AC\u201D ${labelName}`,
+          label: `Use team \u2014 ${labelName}`,
           defaultHotkey: null
         },
         null
