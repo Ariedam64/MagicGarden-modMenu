@@ -16,6 +16,7 @@ export type KeybindId =
   | "sell.sell-all-pets"
   | "game.action"
   | "game.inventory"
+  | "game.journal"
   | "game.pet-hutch"
   | "game.move-up"
   | "game.move-down"
@@ -161,6 +162,12 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
       {
         id: "game.pet-hutch",
         label: "🏠 Pet hutch",
+        defaultHotkey: null,
+        allowClear: true,
+      },
+      {
+        id: "game.journal",
+        label: "📔 Journal",
         defaultHotkey: null,
         allowClear: true,
       },
@@ -375,7 +382,7 @@ export function updatePetKeybinds(teams: PetTeamKeybindInfo[]): void {
       {
         id: getPetTeamActionId(team.id),
         sectionId: PET_SECTION_ID,
-        label: `Use team — ${labelName}`,
+        label: `Use team â€” ${labelName}`,
         defaultHotkey: null,
       },
       null

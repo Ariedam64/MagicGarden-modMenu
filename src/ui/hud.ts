@@ -5,6 +5,7 @@ import { PetsService, installPetTeamHotkeysOnce, setTeamsForHotkeys } from "../s
 import { ShopsService, installShopKeybindsOnce } from "../services/shops";
 import { installSellKeybindsOnce } from "../services/sell";
 import { installPetHutchKeybindsOnce } from "../services/petHutchKeybind";
+import { installJournalKeybindsOnce } from "../services/journalKeybind";
 import {
   getKeybind,
   getKeybindLabel,
@@ -1053,6 +1054,7 @@ export function initWatchers(){
     installSellKeybindsOnce();
     installPetHutchKeybindsOnce();
     installGameKeybindsOnce();
+    installJournalKeybindsOnce();
     (async () => {
         try { setTeamsForHotkeys(PetsService.getTeams()); } catch {}
         try {
