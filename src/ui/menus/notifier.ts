@@ -270,7 +270,7 @@ const applyRuleState = (
 ) => {
   const gearBtn = ruleCell?.querySelector<HTMLButtonElement>("button[data-role='rule']") ?? null;
   const hint = itemCell.querySelector<HTMLDivElement>('[data-role="rule-hint"]');
-  const hasRule = !!(rule && (rule.sound || rule.playbackMode || rule.stopMode || rule.loopIntervalMs != null));
+  const hasRule = !!(rule && (rule.sound || rule.volume != null || rule.playbackMode || rule.stopMode || rule.loopIntervalMs != null));
   const summary = hasRule ? formatRuleSummary(rule) : "";
   if (gearBtn) {
     gearBtn.dataset.active = hasRule ? "1" : "0";
@@ -469,6 +469,46 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
   soundField.append(soundLabel, soundSelect);
   pop.appendChild(soundField);
 
+  const baseVolume = Math.max(0, Math.min(1, defaults.volume || 0));
+  const defaultVolumePct = Math.round(baseVolume * 100);
+  const volumeField = document.createElement("div");
+  volumeField.className = "qws-rule-field";
+  const volumeLabel = document.createElement("label");
+  volumeLabel.textContent = "Volume";
+  const volumeWrap = document.createElement("div");
+  volumeWrap.style.display = "flex";
+  volumeWrap.style.alignItems = "center";
+  volumeWrap.style.gap = "10px";
+  const volumeRange = document.createElement("input");
+  volumeRange.type = "range";
+  volumeRange.min = "0";
+  volumeRange.max = "100";
+  volumeRange.step = "1";
+  volumeRange.style.width = "100%";
+  const volumeValue = document.createElement("span");
+  volumeValue.style.minWidth = "38px";
+  volumeValue.style.textAlign = "right";
+  const applyVolumeDisplay = (value: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(value)));
+    volumeRange.value = String(clamped);
+    volumeValue.textContent = `${clamped}%`;
+  };
+  const initialVolume = current?.volume != null ? current.volume : baseVolume;
+  applyVolumeDisplay(Math.round(Math.max(0, Math.min(1, initialVolume)) * 100));
+  volumeRange.addEventListener("input", () => {
+    const raw = Number(volumeRange.value);
+    const clamped = Number.isFinite(raw) ? Math.max(0, Math.min(100, Math.round(raw))) : defaultVolumePct;
+    applyVolumeDisplay(clamped);
+  });
+  const volumeHint = document.createElement("div");
+  volumeHint.textContent = `Default: ${defaultVolumePct}%`;
+  volumeHint.style.opacity = "0.7";
+  volumeHint.style.fontSize = "11px";
+  volumeHint.style.marginTop = "4px";
+  volumeWrap.append(volumeRange, volumeValue);
+  volumeField.append(volumeLabel, volumeWrap, volumeHint);
+  pop.appendChild(volumeField);
+
   const modeField = document.createElement("div");
   modeField.className = "qws-rule-field";
   const modeLabel = document.createElement("label");
@@ -592,7 +632,7 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
   updateLoopVisibility();
 
   const hint = document.createElement("div");
-  hint.textContent = "Leave fields empty to inherit global defaults.";
+  hint.textContent = "Use defaults by leaving values unchanged (matching the default volume keeps it inherited).";
   hint.style.opacity = "0.7";
   hint.style.fontSize = "12px";
   pop.appendChild(hint);
@@ -616,6 +656,8 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
     const modeRaw = modeSelect.value || "";
     const stopRaw = stopSelect?.value || "";
     const intervalRaw = intervalInput.value?.trim();
+    const volRaw = Math.max(0, Math.min(100, parseInt(volumeRange.value || "", 10) || 0));
+    const volRatio = volRaw / 100;
 
     let playbackMode = modeRaw === "oneshot" || modeRaw === "loop" ? (modeRaw as PlaybackMode) : null;
     if (playbackMode === defaults.mode) playbackMode = null;
@@ -637,12 +679,18 @@ const openRuleEditor = (ui: Menu, row: RuleEditorRow, anchor: HTMLElement) => {
       }
     }
 
+    let volume: number | null = null;
+    if (Math.abs(volRatio - baseVolume) > 0.001) {
+      volume = Math.max(0, Math.min(1, volRatio));
+    }
+
     if (allowPurchase && !playbackMode && defaults.mode !== "loop" && (stopMode != null || loopIntervalMs != null)) {
       playbackMode = "loop";
     }
 
     NotifierService.setRule(row.id, {
       sound,
+      volume,
       playbackMode,
       stopMode,
       loopIntervalMs,

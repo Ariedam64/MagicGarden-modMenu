@@ -277,6 +277,9 @@ class OverlayBarebone {
     if (!rule) return null;
     const overrides: TriggerOverrides = {};
     if (rule.sound) overrides.sound = rule.sound;
+    if (rule.volume != null && Number.isFinite(rule.volume)) {
+      overrides.volume = Math.max(0, Math.min(1, Number(rule.volume)));
+    }
     if (rule.playbackMode === "loop" || rule.playbackMode === "oneshot") {
       overrides.mode = rule.playbackMode;
     }
@@ -301,9 +304,12 @@ class OverlayBarebone {
     for (const id of ids) {
       const overrides = this.buildTriggerOverrides(this.rulesById.get(id)) ?? {};
       const mode = this.resolvePlaybackMode(id);
-      const soundKey = overrides.sound
+      const soundKeyBase = overrides.sound
         ? `sound:${overrides.sound.trim().toLowerCase()}`
         : "sound:__default__";
+      const vol = overrides.volume;
+      const volKey = vol != null ? `vol:${Math.round(Math.max(0, Math.min(1, vol)) * 1000)}` : "vol:__default__";
+      const soundKey = `${soundKeyBase}|${volKey}`;
       entries.push({ id, overrides, mode, soundKey });
     }
 

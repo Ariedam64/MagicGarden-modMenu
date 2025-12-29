@@ -41,6 +41,8 @@ export type NotifierState = {
 
 export type NotifierRule = {
   sound?: string | null;
+  /** Volume override (0..1). If omitted, uses context defaults. */
+  volume?: number | null;
   playbackMode?: PlaybackMode | null;
   stopMode?: "manual" | "purchase" | null;
   stopRepeats?: number | null;
@@ -162,6 +164,10 @@ export const formatRuleSummary = (rule?: NotifierRule | null): string => {
       ? rule.sound
       : (rule.sound.length > 32 ? `${rule.sound.slice(0, 29)}…` : rule.sound);
     parts.push(`Sound: ${label}`);
+  }
+  if (rule.volume != null) {
+    const pct = Math.round(Math.max(0, Math.min(1, Number(rule.volume))) * 100);
+    parts.push(`Volume: ${pct}%`);
   }
   if (rule.playbackMode === "oneshot") parts.push("Mode: One-shot");
   else if (rule.playbackMode === "loop") parts.push("Mode: Loop");
@@ -482,6 +488,7 @@ let _contextDefaultsLoaded = false;
 
 type InternalRule = {
   sound?: string;
+  volume?: number;
   playbackMode?: PlaybackMode;
   stopMode?: "manual" | "purchase";
   stopRepeats?: number;
@@ -521,6 +528,7 @@ function _ensureRulesLoaded() {
 function _normalizeRule(raw: any): InternalRule | null {
   const patch: Partial<NotifierRule> = {};
   if (_hasOwn.call(raw ?? {}, "sound")) patch.sound = raw?.sound ?? null;
+  if (_hasOwn.call(raw ?? {}, "volume")) patch.volume = raw?.volume ?? null;
   if (_hasOwn.call(raw ?? {}, "playbackMode")) patch.playbackMode = raw?.playbackMode ?? null;
   if (_hasOwn.call(raw ?? {}, "stopMode")) patch.stopMode = raw?.stopMode ?? null;
   if (_hasOwn.call(raw ?? {}, "stopRepeats")) patch.stopRepeats = raw?.stopRepeats ?? null;
@@ -692,6 +700,7 @@ function _buildWeatherOverrides(id: string): TriggerOverrides {
   const overrides: TriggerOverrides = {};
   const rule = _rules.get(id);
   if (rule?.sound) overrides.sound = rule.sound;
+  if (rule?.volume != null) overrides.volume = rule.volume;
   overrides.mode = "oneshot";
   return overrides;
 }
@@ -752,6 +761,7 @@ function _rulesEqual(a: InternalRule | undefined | null, b: InternalRule | undef
   if (!a || !b) return false;
   return (
     a.sound === b.sound &&
+    a.volume === b.volume &&
     a.playbackMode === b.playbackMode &&
     a.stopMode === b.stopMode &&
     a.loopIntervalMs === b.loopIntervalMs
@@ -762,6 +772,15 @@ function _sanitizeSound(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function _sanitizeVolume(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return undefined;
+  const normalized = num > 1 ? num / 100 : num;
+  const clamped = Math.max(0, Math.min(1, normalized));
+  return clamped;
 }
 
 function _sanitizePlaybackMode(value: unknown): PlaybackMode | undefined {
@@ -792,6 +811,12 @@ function _mergeRule(prev: InternalRule | undefined, patch: Partial<NotifierRule>
     const s = _sanitizeSound((patch as any).sound);
     if (s) next.sound = s;
     else delete next.sound;
+  }
+
+  if (_hasOwn.call(patch, "volume")) {
+    const vol = _sanitizeVolume((patch as any).volume);
+    if (vol != null) next.volume = vol;
+    else delete next.volume;
   }
 
   if (_hasOwn.call(patch, "playbackMode")) {
@@ -826,6 +851,7 @@ function _rulesSnapshot(): Record<string, NotifierRule> {
   for (const [id, rule] of _rules.entries()) {
     out[id] = {
       ...(rule.sound ? { sound: rule.sound } : {}),
+      ...(rule.volume != null ? { volume: rule.volume } : {}),
       ...(rule.playbackMode ? { playbackMode: rule.playbackMode } : {}),
       ...(rule.stopMode ? { stopMode: rule.stopMode } : {}),
       ...(rule.loopIntervalMs != null ? { loopIntervalMs: rule.loopIntervalMs } : {}),
@@ -1364,6 +1390,7 @@ export const NotifierService = {
     if (!rule) return null;
     return {
       ...(rule.sound ? { sound: rule.sound } : {}),
+      ...(rule.volume != null ? { volume: rule.volume } : {}),
       ...(rule.playbackMode ? { playbackMode: rule.playbackMode } : {}),
       ...(rule.stopMode ? { stopMode: rule.stopMode } : {}),
       ...(rule.loopIntervalMs != null ? { loopIntervalMs: rule.loopIntervalMs } : {}),

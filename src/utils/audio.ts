@@ -35,6 +35,7 @@ export type TriggerOverrides = {
   mode?: PlaybackMode | null;
   stop?: StopConfig | null;
   loopIntervalMs?: number | null;
+  volume?: number | null;
 };
 
 type LoopState = {
@@ -48,6 +49,8 @@ type LoopState = {
   context: AudioContextKey;
   baseStop: StopConfig;
   baseLoopInterval: number;
+  baseVolume: number;
+  volumeOverride?: number | null;
   volume: number;
 };
 
@@ -561,7 +564,10 @@ export class AudioNotifier {
       if (this.volume === next) return;
       this.volume = next;
     }
-    this.forEachLoop(context, (st) => { st.volume = next; });
+    this.forEachLoop(context, (st) => {
+      st.baseVolume = next;
+      if (st.volumeOverride == null) st.volume = next;
+    });
     this.persistSettings();
   }
   getVolume(context: AudioContextKey = "shops") {
@@ -711,6 +717,12 @@ export class AudioNotifier {
       if (raw.mode === "repeat") return { mode: "manual" };
       return { mode: "manual" };
     };
+    const normalizeVolume = (raw: unknown): number | null => {
+      if (raw == null) return null;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return null;
+      return clamp01(n);
+    };
 
     const sound = normalizeSound(overrides.sound ?? null);
     const baseMode = this.getPlaybackMode(context);
@@ -725,11 +737,13 @@ export class AudioNotifier {
       : { mode: "manual" as const };
     const baseLoopInterval = this.getLoopInterval(context);
     const baseVolume = this.getVolume(context);
+    const volumeOverride = normalizeVolume(overrides.volume ?? null);
+    const effectiveVolume = volumeOverride ?? baseVolume;
 
     if (mode === "oneshot") {
       this.stopLoop(key);
       const du = this.resolveToDataUrl(sound ?? null, context);
-      this.enqueueOneshot({ key, dataUrl: du, volume: baseVolume, context });
+      this.enqueueOneshot({ key, dataUrl: du, volume: effectiveVolume, context });
       return;
     }
 
@@ -750,7 +764,9 @@ export class AudioNotifier {
       context,
       baseStop,
       baseLoopInterval,
-      volume: baseVolume,
+      baseVolume,
+      volumeOverride,
+      volume: effectiveVolume,
     };
     this.loops.set(key, state);
     this.scheduleNext(state, 0);
