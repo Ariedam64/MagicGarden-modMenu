@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.24
+// @version      2.99.25
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -39975,7 +39975,7 @@ next: ${next}`;
       const hint = document.createElement("div");
       hint.style.opacity = "0.8";
       hint.style.fontSize = "12px";
-      hint.textContent = "Blocks actions that would add a new inventory entry at 99/100.";
+      hint.textContent = "Blocks actions that would add a new inventory entry at 99/100. Mostly useful for pet swapping.";
       toggle.addEventListener("change", () => {
         MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
       });
