@@ -6766,6 +6766,7 @@
   var AUTO_RECO_MIN_MS = 0;
   var AUTO_RECO_MAX_MS = 5 * 6e4;
   var AUTO_RECO_DEFAULT_MS = 6e4;
+  var PATH_KEEP_INVENTORY_SLOT_FREE = "misc.keepInventorySlotFree";
   var readGhostEnabled = (def = false) => {
     try {
       const stored = readAriesPath(PATH_GHOST_MODE);
@@ -6832,6 +6833,23 @@
     const v = clampAutoRecoDelay(ms);
     try {
       writeAriesPath(PATH_AUTO_RECO_DELAY, v);
+    } catch {
+    }
+  };
+  var readInventorySlotReserveEnabled = (def = false) => {
+    try {
+      const stored = readAriesPath(PATH_KEEP_INVENTORY_SLOT_FREE);
+      if (typeof stored === "boolean") return stored;
+      if (stored === "1" || stored === 1) return true;
+      if (stored === "0" || stored === 0) return false;
+      return !!stored;
+    } catch {
+      return def;
+    }
+  };
+  var writeInventorySlotReserveEnabled = (on) => {
+    try {
+      writeAriesPath(PATH_KEEP_INVENTORY_SLOT_FREE, !!on);
     } catch {
     }
   };
@@ -8022,6 +8040,8 @@
     writeAutoRecoEnabled,
     getAutoRecoDelayMs,
     setAutoRecoDelayMs,
+    readInventorySlotReserveEnabled,
+    writeInventorySlotReserveEnabled,
     // seeds
     getMySeedInventory,
     openSeedInventoryPreview,
@@ -16381,6 +16401,41 @@
     let friendBonusPercent = null;
     let friendBonusFromPlayers = null;
     let latestEggId = null;
+    let latestInventoryCount = 0;
+    const inventorySeeds = /* @__PURE__ */ new Set();
+    const inventoryDecors = /* @__PURE__ */ new Set();
+    const inventoryEggs = /* @__PURE__ */ new Set();
+    const inventoryTools = /* @__PURE__ */ new Set();
+    const INVENTORY_BLOCK_AT = 99;
+    const refreshInventorySnapshot = (raw) => {
+      const items = extractInventoryItems(raw);
+      latestInventoryCount = items.length;
+      inventorySeeds.clear();
+      inventoryDecors.clear();
+      inventoryEggs.clear();
+      inventoryTools.clear();
+      for (const entry of items) {
+        if (!entry || typeof entry !== "object") continue;
+        const source = entry.item && typeof entry.item === "object" ? entry.item : entry;
+        if (!source || typeof source !== "object") continue;
+        const type = String(source.itemType ?? source.data?.itemType ?? "").toLowerCase();
+        if (type === "seed" && source.species) inventorySeeds.add(String(source.species));
+        if (type === "decor" && source.decorId) inventoryDecors.add(String(source.decorId));
+        if (type === "egg" && source.eggId) inventoryEggs.add(String(source.eggId));
+        if (type === "tool" && source.toolId) inventoryTools.add(String(source.toolId));
+      }
+    };
+    const shouldBlockNewInventoryEntry = () => MiscService.readInventorySlotReserveEnabled(false) && latestInventoryCount >= INVENTORY_BLOCK_AT;
+    const shouldBlockPurchase = (kind, id) => {
+      if (!shouldBlockNewInventoryEntry()) return false;
+      if (id == null) return true;
+      const key2 = String(id);
+      if (!key2) return true;
+      if (kind === "seed") return !inventorySeeds.has(key2);
+      if (kind === "decor") return !inventoryDecors.has(key2);
+      if (kind === "egg") return !inventoryEggs.has(key2);
+      return !inventoryTools.has(key2);
+    };
     void (async () => {
       try {
         latestGardenState = await Atoms.data.garden.get() ?? null;
@@ -16400,6 +16455,16 @@
       try {
         await Atoms.data.myCurrentGardenObject.onChange((next) => {
           latestEggId = extractEggId(next);
+        });
+      } catch {
+      }
+      try {
+        refreshInventorySnapshot(await Atoms.inventory.myInventory.get());
+      } catch {
+      }
+      try {
+        await Atoms.inventory.myInventory.onChange((next) => {
+          refreshInventorySnapshot(next);
         });
       } catch {
       }
@@ -16430,6 +16495,10 @@
     })();
     const resolveFriendBonusPercent = () => friendBonusPercent ?? friendBonusFromPlayers ?? null;
     registerMessageInterceptor("HarvestCrop", (message) => {
+      if (shouldBlockNewInventoryEntry()) {
+        console.log("[HarvestCrop] Blocked by inventory reserve");
+        return { kind: "drop" };
+      }
       const slot = message.slot;
       const slotsIndex = message.slotsIndex;
       if (!Number.isInteger(slot) || !Number.isInteger(slotsIndex)) {
@@ -16506,16 +16575,42 @@
       StatsService.incrementGardenStat("totalPlanted");
     });
     registerMessageInterceptor("PurchaseDecor", (message) => {
+      const decorId = message?.decorId ?? message?.id;
+      if (shouldBlockPurchase("decor", decorId)) {
+        console.log("[PurchaseDecor] Blocked by inventory reserve", { decorId });
+        return { kind: "drop" };
+      }
       StatsService.incrementShopStat("decorBought");
     });
     registerMessageInterceptor("PurchaseSeed", (message) => {
+      const species = message?.species ?? message?.id;
+      if (shouldBlockPurchase("seed", species)) {
+        console.log("[PurchaseSeed] Blocked by inventory reserve", { species });
+        return { kind: "drop" };
+      }
       StatsService.incrementShopStat("seedsBought");
     });
     registerMessageInterceptor("PurchaseEgg", (message) => {
+      const eggId = message?.eggId ?? message?.id;
+      if (shouldBlockPurchase("egg", eggId)) {
+        console.log("[PurchaseEgg] Blocked by inventory reserve", { eggId });
+        return { kind: "drop" };
+      }
       StatsService.incrementShopStat("eggsBought");
     });
     registerMessageInterceptor("PurchaseTool", (message) => {
+      const toolId = message?.toolId ?? message?.id;
+      if (shouldBlockPurchase("tool", toolId)) {
+        console.log("[PurchaseTool] Blocked by inventory reserve", { toolId });
+        return { kind: "drop" };
+      }
       StatsService.incrementShopStat("toolsBought");
+    });
+    registerMessageInterceptor("PickupObject", () => {
+      if (shouldBlockNewInventoryEntry()) {
+        console.log("[PickupObject] Blocked by inventory reserve");
+        return { kind: "drop" };
+      }
     });
     registerMessageInterceptor("PickupDecor", () => {
       if (EditorService.isEnabled()) {
@@ -16537,6 +16632,10 @@
       }
     });
     registerMessageInterceptor("HatchEgg", () => {
+      if (shouldBlockNewInventoryEntry()) {
+        console.log("[HatchEgg] Blocked by inventory reserve");
+        return { kind: "drop" };
+      }
       const locked = lockerRestrictionsService.isEggLocked(latestEggId);
       if (locked) {
         console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });
@@ -39858,6 +39957,31 @@ next: ${next}`;
       card.body.append(row);
       return card.root;
     })();
+    const secInventoryReserve = (() => {
+      const card = ui.card("Inventory slot reserve", { tone: "muted", align: "center" });
+      card.root.style.maxWidth = "440px";
+      card.body.style.display = "grid";
+      card.body.style.gap = "8px";
+      const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
+      const toggleWrap = document.createElement("div");
+      toggleWrap.style.display = "inline-flex";
+      toggleWrap.style.alignItems = "center";
+      toggleWrap.style.gap = "8px";
+      const toggleLabel = ui.label("Keep 1 slot free");
+      toggleLabel.style.margin = "0";
+      const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false));
+      toggleWrap.append(toggleLabel, toggle);
+      row.append(toggleWrap);
+      const hint = document.createElement("div");
+      hint.style.opacity = "0.8";
+      hint.style.fontSize = "12px";
+      hint.textContent = "Blocks actions that would add a new inventory entry at 99/100.";
+      toggle.addEventListener("change", () => {
+        MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
+      });
+      card.body.append(row, hint);
+      return card.root;
+    })();
     const secSeed = (() => {
       const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
       grid.style.gridTemplateColumns = "1fr";
@@ -40250,7 +40374,7 @@ next: ${next}`;
     content.style.display = "grid";
     content.style.gap = "8px";
     content.style.justifyItems = "center";
-    content.append(secAutoReco, secPlayer, secSeed, secDecor);
+    content.append(secAutoReco, secPlayer, secInventoryReserve, secSeed, secDecor);
     view.appendChild(content);
     view.__cleanup__ = () => {
       try {
