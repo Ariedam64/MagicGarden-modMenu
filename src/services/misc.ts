@@ -18,6 +18,7 @@ const PATH_AUTO_RECO_DELAY = "misc.autoRecoDelayMs";
 const AUTO_RECO_MIN_MS = 0;
 const AUTO_RECO_MAX_MS = 5 * 60_000;
 const AUTO_RECO_DEFAULT_MS = 60_000;
+const PATH_KEEP_INVENTORY_SLOT_FREE = "misc.keepInventorySlotFree";
 
 export const readGhostEnabled = (def = false): boolean => {
   try {
@@ -78,6 +79,22 @@ export const getAutoRecoDelayMs = (): number => {
 export const setAutoRecoDelayMs = (ms: number) => {
   const v = clampAutoRecoDelay(ms);
   try { writeAriesPath(PATH_AUTO_RECO_DELAY, v); } catch {}
+};
+
+export const readInventorySlotReserveEnabled = (def = false): boolean => {
+  try {
+    const stored = readAriesPath<unknown>(PATH_KEEP_INVENTORY_SLOT_FREE);
+    if (typeof stored === "boolean") return stored;
+    if (stored === "1" || stored === 1) return true;
+    if (stored === "0" || stored === 0) return false;
+    return !!stored;
+  } catch {
+    return def;
+  }
+};
+
+export const writeInventorySlotReserveEnabled = (on: boolean) => {
+  try { writeAriesPath(PATH_KEEP_INVENTORY_SLOT_FREE, !!on); } catch {}
 };
 
 /* ========================================================================== */
@@ -1479,7 +1496,8 @@ export const MiscService = {
   writeAutoRecoEnabled,
   getAutoRecoDelayMs,
   setAutoRecoDelayMs,
-
+  readInventorySlotReserveEnabled,
+  writeInventorySlotReserveEnabled,
   // seeds
   getMySeedInventory,
   openSeedInventoryPreview,

@@ -25,7 +25,13 @@ export type AriesStorage = {
   room?: { customRooms?: unknown };
   locker?: { restrictions?: unknown; state?: unknown };
   notifier?: { prefs?: unknown; rules?: unknown; weatherPrefs?: unknown; loopDefaults?: unknown };
-  misc?: { ghostMode?: unknown; ghostDelayMs?: unknown; autoRecoEnabled?: unknown; autoRecoDelayMs?: unknown };
+  misc?: {
+    ghostMode?: unknown;
+    ghostDelayMs?: unknown;
+    autoRecoEnabled?: unknown;
+    autoRecoDelayMs?: unknown;
+    keepInventorySlotFree?: unknown;
+  };
   hud?: { pos?: unknown; collapsed?: unknown; hidden?: unknown; windows?: Record<string, unknown> };
   menu?: { activeTabs?: Record<string, string> };
   inventory?: { sortKey?: unknown; sortDirection?: unknown; showValues?: unknown };

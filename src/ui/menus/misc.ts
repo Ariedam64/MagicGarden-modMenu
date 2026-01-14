@@ -177,6 +177,37 @@ export async function renderMiscMenu(container: HTMLElement) {
     return card.root;
   })();
 
+  /* ===== Section: Inventory slot reserve ===== */
+  const secInventoryReserve = (() => {
+    const card = ui.card("Inventory slot reserve", { tone: "muted", align: "center" });
+    card.root.style.maxWidth = "440px";
+    card.body.style.display = "grid";
+    card.body.style.gap = "8px";
+
+    const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
+    const toggleWrap = document.createElement("div");
+    toggleWrap.style.display = "inline-flex";
+    toggleWrap.style.alignItems = "center";
+    toggleWrap.style.gap = "8px";
+    const toggleLabel = ui.label("Keep 1 slot free");
+    toggleLabel.style.margin = "0";
+    const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false)) as HTMLInputElement;
+    toggleWrap.append(toggleLabel, toggle as unknown as HTMLElement);
+    row.append(toggleWrap);
+
+    const hint = document.createElement("div");
+    hint.style.opacity = "0.8";
+    hint.style.fontSize = "12px";
+    hint.textContent = "Blocks actions that would add a new inventory entry at 99/100. Mostly useful for pet swapping.";
+
+    toggle.addEventListener("change", () => {
+      MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
+    });
+
+    card.body.append(row, hint);
+    return card.root;
+  })();
+
   /* ===== Section: Seed deleter ===== */
   const secSeed = (() => {
     const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
@@ -592,7 +623,7 @@ export async function renderMiscMenu(container: HTMLElement) {
   content.style.display = "grid";
   content.style.gap = "8px";
   content.style.justifyItems = "center";
-  content.append(secAutoReco, secPlayer, secSeed, secDecor);
+  content.append(secAutoReco, secPlayer, secInventoryReserve, secSeed, secDecor);
 
   view.appendChild(content);
 

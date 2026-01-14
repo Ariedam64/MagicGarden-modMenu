@@ -474,6 +474,47 @@ function installHarvestCropInterceptor() {
   let friendBonusPercent: number | null = null;
   let friendBonusFromPlayers: number | null = null;
   let latestEggId: string | null = null;
+  let latestInventoryCount = 0;
+  const inventorySeeds = new Set<string>();
+  const inventoryDecors = new Set<string>();
+  const inventoryEggs = new Set<string>();
+  const inventoryTools = new Set<string>();
+  const INVENTORY_BLOCK_AT = 99;
+
+  const refreshInventorySnapshot = (raw: any) => {
+    const items = extractInventoryItems(raw);
+    latestInventoryCount = items.length;
+    inventorySeeds.clear();
+    inventoryDecors.clear();
+    inventoryEggs.clear();
+    inventoryTools.clear();
+    for (const entry of items) {
+      if (!entry || typeof entry !== "object") continue;
+      const source = (entry as any).item && typeof (entry as any).item === "object"
+        ? (entry as any).item
+        : entry;
+      if (!source || typeof source !== "object") continue;
+      const type = String(source.itemType ?? source.data?.itemType ?? "").toLowerCase();
+      if (type === "seed" && source.species) inventorySeeds.add(String(source.species));
+      if (type === "decor" && source.decorId) inventoryDecors.add(String(source.decorId));
+      if (type === "egg" && source.eggId) inventoryEggs.add(String(source.eggId));
+      if (type === "tool" && source.toolId) inventoryTools.add(String(source.toolId));
+    }
+  };
+
+  const shouldBlockNewInventoryEntry = () =>
+    MiscService.readInventorySlotReserveEnabled(false) && latestInventoryCount >= INVENTORY_BLOCK_AT;
+
+  const shouldBlockPurchase = (kind: "seed" | "decor" | "egg" | "tool", id: unknown) => {
+    if (!shouldBlockNewInventoryEntry()) return false;
+    if (id == null) return true;
+    const key = String(id);
+    if (!key) return true;
+    if (kind === "seed") return !inventorySeeds.has(key);
+    if (kind === "decor") return !inventoryDecors.has(key);
+    if (kind === "egg") return !inventoryEggs.has(key);
+    return !inventoryTools.has(key);
+  };
 
   void (async () => {
     try {
@@ -491,6 +532,14 @@ function installHarvestCropInterceptor() {
     try {
       await Atoms.data.myCurrentGardenObject.onChange((next) => {
         latestEggId = extractEggId(next);
+      });
+    } catch {}
+    try {
+      refreshInventorySnapshot(await Atoms.inventory.myInventory.get());
+    } catch {}
+    try {
+      await Atoms.inventory.myInventory.onChange((next) => {
+        refreshInventorySnapshot(next);
       });
     } catch {}
   })();
@@ -520,6 +569,10 @@ function installHarvestCropInterceptor() {
     friendBonusPercent ?? friendBonusFromPlayers ?? null;
 
   registerMessageInterceptor("HarvestCrop", (message) => {
+    if (shouldBlockNewInventoryEntry()) {
+      console.log("[HarvestCrop] Blocked by inventory reserve");
+      return { kind: "drop" };
+    }
     const slot = message.slot;
     const slotsIndex = message.slotsIndex;
 
@@ -617,19 +670,46 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("PurchaseDecor", (message) => {
+    const decorId = message?.decorId ?? message?.id;
+    if (shouldBlockPurchase("decor", decorId)) {
+      console.log("[PurchaseDecor] Blocked by inventory reserve", { decorId });
+      return { kind: "drop" };
+    }
     StatsService.incrementShopStat("decorBought");
   });
 
   registerMessageInterceptor("PurchaseSeed", (message) => {
+    const species = message?.species ?? message?.id;
+    if (shouldBlockPurchase("seed", species)) {
+      console.log("[PurchaseSeed] Blocked by inventory reserve", { species });
+      return { kind: "drop" };
+    }
     StatsService.incrementShopStat("seedsBought");
   });
 
   registerMessageInterceptor("PurchaseEgg", (message) => {
+    const eggId = message?.eggId ?? message?.id;
+    if (shouldBlockPurchase("egg", eggId)) {
+      console.log("[PurchaseEgg] Blocked by inventory reserve", { eggId });
+      return { kind: "drop" };
+    }
     StatsService.incrementShopStat("eggsBought");
   });
 
   registerMessageInterceptor("PurchaseTool", (message) => {
+    const toolId = message?.toolId ?? message?.id;
+    if (shouldBlockPurchase("tool", toolId)) {
+      console.log("[PurchaseTool] Blocked by inventory reserve", { toolId });
+      return { kind: "drop" };
+    }
     StatsService.incrementShopStat("toolsBought");
+  });
+
+  registerMessageInterceptor("PickupObject", () => {
+    if (shouldBlockNewInventoryEntry()) {
+      console.log("[PickupObject] Blocked by inventory reserve");
+      return { kind: "drop" };
+    }
   });
 
   registerMessageInterceptor("PickupDecor", () => {
@@ -656,6 +736,10 @@ function installHarvestCropInterceptor() {
   });
 
   registerMessageInterceptor("HatchEgg", () => {
+    if (shouldBlockNewInventoryEntry()) {
+      console.log("[HatchEgg] Blocked by inventory reserve");
+      return { kind: "drop" };
+    }
     const locked = lockerRestrictionsService.isEggLocked(latestEggId);
     if (locked) {
       console.log("[HatchEgg] Blocked by egg locker", { eggId: latestEggId });

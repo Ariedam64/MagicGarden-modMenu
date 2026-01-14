@@ -226,7 +226,8 @@ export const tileRefsPets = {
   SnowFox: 31,
   Stoat: 32,
   WhiteCaribou: 33,
-  WinterEgg: 34
+  WinterEgg: 34,
+  SnowEgg: 35
 }
 
 export const tileRefsMutations = {
@@ -318,7 +319,8 @@ export const tileRefsDecor = {
     ColoredStringLightsSideways: 95,
     StringLights: 96,
     StringLightsSideways: 97,
-    PetHutch: 30
+    PetHutch: 30,
+    DecorShed: 98
 };
 
 export const plantCatalog = {
@@ -1504,7 +1506,7 @@ export const eggCatalog = {
   WinterEgg: {
     tileRef: tileRefsPets.WinterEgg,
     name: "Winter Egg",
-    coinPrice: 80_000_000,
+    coinPrice: 8e8,
     creditPrice: 199,
     rarity: rarity.Legendary,
     initialTileScale: 0.3,
@@ -1513,6 +1515,20 @@ export const eggCatalog = {
     faunaSpawnWeights: { SnowFox: 75, Stoat: 20, WhiteCaribou: 5 },
     expiryDate: new Date("2026-01-12T01:00:00.000Z"),
   },
+  SnowEgg: {
+        tileRef: tileRefsPets.SnowEgg,
+        name: "Snow Egg",
+        coinPrice: 2e8,
+        creditPrice: 269,
+        rarity: rarity.Legendary,
+        secondsToHatch: 43200,
+        faunaSpawnWeights: {
+            SnowFox: 75,
+            Stoat: 20,
+            WhiteCaribou: 5
+        },
+        requiredWeather: "Frost"
+    },
 };
 
 export const petCatalog = {
@@ -2432,6 +2448,12 @@ export const decorCatalog = {
     name: "Pet Hutch",
     coinPrice: 80000000000, creditPrice: 499, rarity: rarity.Divine,
     baseTileScale: 2.1, isOneTimePurchase: true, nudgeY: -0.45
+  },
+  DecorShed: {
+    tileRef: tileRefsDecor.DecorShed,
+    name: "Decor Shed",
+    coinPrice: 60000000000, creditPrice: 399, rarity: rarity.Divine,
+    baseTileScale: 1, isOneTimePurchase: true
   },
 
   MiniWizardTower: {
