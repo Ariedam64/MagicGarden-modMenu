@@ -1506,7 +1506,7 @@ export const eggCatalog = {
   WinterEgg: {
     tileRef: tileRefsPets.WinterEgg,
     name: "Winter Egg",
-    coinPrice: 8e8,
+    coinPrice: 8e7,
     creditPrice: 199,
     rarity: rarity.Legendary,
     initialTileScale: 0.3,

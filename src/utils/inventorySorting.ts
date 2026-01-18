@@ -1,7 +1,7 @@
 // inventorySorting.ts
 // Inventory Sorting helpers + UI (TypeScript, vanilla DOM)
 
-import { Atoms } from "../store/atoms";
+import { Atoms, myPetHutchPetItems } from "../store/atoms";
 import {
   coin,
   decorCatalog,
@@ -282,6 +282,10 @@ const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
 // Updated items container to match new inventory DOM (inside the main content area)
 const INVENTORY_ITEM_CARD_SELECTORS = ['.css-vmnhaw', '.css-1avy1fz'];
 const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-zo8r2v';
+const INVENTORY_NOISE_SELECTOR = '.McFlex.css-1tkifdd, .chakra-text.css-glp3xv';
+const INVENTORY_STRENGTH_WRAPPER_SELECTOR = '.McFlex.css-15lpbqz';
+const INVENTORY_STRENGTH_TEXT_SELECTOR = '.chakra-text.css-wqvsdi';
+const INVENTORY_FAVORITE_BUTTON_SELECTOR = 'button.chakra-button.css-1iytwn1';
 const INVENTORY_ITEM_CARD_SELECTOR = INVENTORY_ITEM_CARD_SELECTORS.join(', ');
 const INVENTORY_VALUE_CONTAINER_SELECTOR = '.McFlex.css-1p00rng';
 const INVENTORY_VALUE_ELEMENT_CLASS = 'tm-inventory-item-value';
@@ -889,7 +893,112 @@ const getInventoryCardElement = (element: HTMLElement): HTMLElement | null => {
   return element.querySelector<HTMLElement>(INVENTORY_ITEM_CARD_SELECTOR);
 };
 
+const clearInventoryNoiseText = (container: Element): void => {
+  if (!(container instanceof HTMLElement)) return;
+  const nodes = Array.from(container.querySelectorAll<HTMLElement>(INVENTORY_NOISE_SELECTOR));
+  for (const node of nodes) {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+    while (textNode) {
+      if (textNode.textContent) {
+        textNode.textContent = '';
+      }
+      textNode = walker.nextNode();
+    }
+  }
+};
+
+const findAncestorWithDescendant = (
+  start: HTMLElement,
+  selector: string
+): HTMLElement | null => {
+  let current: HTMLElement | null = start;
+  while (current) {
+    if (current.querySelector(selector)) return current;
+    current = current.parentElement;
+  }
+  return null;
+};
+
+const alignInventoryStrengthText = (card: HTMLElement): void => {
+  const strengthWrap = card.querySelector<HTMLElement>(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  if (!strengthWrap) return;
+
+  const baseTransformKey = 'tmStrengthBaseTransform';
+  const existingBase = strengthWrap.dataset[baseTransformKey];
+  if (existingBase == null) {
+    strengthWrap.dataset[baseTransformKey] = strengthWrap.style.transform ?? '';
+  }
+
+  const baseTransform = strengthWrap.dataset[baseTransformKey] ?? '';
+  strengthWrap.style.transform = baseTransform;
+
+  const textEl = strengthWrap.querySelector<HTMLElement>(INVENTORY_STRENGTH_TEXT_SELECTOR);
+  if (!textEl) return;
+
+  const datasetIsMax = strengthWrap.dataset[TM_STRENGTH_IS_MAX_DATASET_KEY];
+  const shouldAlign =
+    datasetIsMax === '0' ||
+    datasetIsMax === '1' ||
+    (datasetIsMax == null && !!textEl.textContent && textEl.textContent.includes('/'));
+
+  if (!shouldAlign) {
+    if (strengthWrap.style.pointerEvents) {
+      strengthWrap.style.pointerEvents = '';
+    }
+    return;
+  }
+
+  const container =
+    findAncestorWithDescendant(strengthWrap, INVENTORY_FAVORITE_BUTTON_SELECTOR) ??
+    findAncestorWithDescendant(card, INVENTORY_FAVORITE_BUTTON_SELECTOR);
+  if (!container) return;
+
+  const favoriteButton = container.querySelector<HTMLElement>(INVENTORY_FAVORITE_BUTTON_SELECTOR);
+  if (!favoriteButton) return;
+
+  const anchor =
+    favoriteButton.querySelector<HTMLElement>('svg') ??
+    favoriteButton.querySelector<HTMLElement>('.chakra-icon') ??
+    favoriteButton;
+
+  const containerRect = container.getBoundingClientRect();
+  if (!containerRect.width) return;
+
+  // Align max badge to the left border of the card row.
+  const GAP_PX_NON_MAX = 7;
+  const GAP_PX_MAX = 5;
+  let deltaX: number | null = null;
+  if (datasetIsMax === '1') {
+    const badge = textEl.querySelector<HTMLElement>(`.${TM_STRENGTH_BADGE_CLASS}`);
+    const badgeRect = badge?.getBoundingClientRect();
+    if (badgeRect && badgeRect.width) {
+      deltaX = containerRect.left + GAP_PX_MAX - badgeRect.left;
+    }
+  }
+
+  if (deltaX == null) {
+    const anchorRect = anchor.getBoundingClientRect();
+    const textRect = textEl.getBoundingClientRect();
+    if (!anchorRect.width || !textRect.width) return;
+    // Align the right edge of the STR text to the left edge of the favorite icon.
+    deltaX = anchorRect.left - textRect.right - GAP_PX_NON_MAX;
+  }
+  if (!Number.isFinite(deltaX)) return;
+
+  strengthWrap.style.transform = baseTransform
+    ? `${baseTransform} translateX(${Math.round(deltaX)}px)`
+    : `translateX(${Math.round(deltaX)}px)`;
+
+  textEl.style.margin = '0';
+
+  if (strengthWrap.style.pointerEvents) {
+    strengthWrap.style.pointerEvents = '';
+  }
+};
+
 function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
+  clearInventoryNoiseText(container);
   const entries: InventoryDomEntry[] = [];
   const children = Array.from(container.children) as Element[];
 
@@ -898,6 +1007,7 @@ function getInventoryDomEntries(container: Element): InventoryDomEntry[] {
 
     const card = getInventoryCardElement(child);
     if (card) {
+      alignInventoryStrengthText(card);
       entries.push({ wrapper: child, card });
     }
   }
@@ -944,6 +1054,145 @@ const getInventoryItemValue = (item: any): number | null => {
   }
   return null;
 };
+
+const parseStrengthValue = (value: string): number | null => {
+  const match = value.match(/(\d+)/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+// ✅ MODIF: structure DOM stable pour STR (label + current + max)
+const TM_STRENGTH_LABEL_CLASS = 'tm-strength__label';
+const TM_STRENGTH_CURRENT_CLASS = 'tm-strength__current';
+const TM_STRENGTH_MAX_CLASS = 'tm-strength__max';
+const TM_STRENGTH_BADGE_CLASS = 'tm-strength__badge';
+const TM_STRENGTH_IS_MAX_DATASET_KEY = 'tmStrengthIsMax';
+const PET_HUTCH_HEADER_TEXT = 'Pets in Hutch';
+const PET_INVENTORY_HEADER_TEXT = 'Pets in Inventory';
+const PET_NAME_SELECTOR = '.McFlex.css-1lpag07 .chakra-text';
+const PET_HUTCH_ROOT_SELECTOR = '.McGrid.css-3c49ba';
+const PET_HUTCH_LIST_SELECTOR = '.McGrid.css-1nv2ym8 .McFlex.css-1tgchvv';
+const PET_HUTCH_INVENTORY_LIST_SELECTOR = '.McGrid.css-1nv2ym8 .McFlex.css-gui45t';
+
+interface StrengthTextParts {
+  label: HTMLSpanElement;
+  current: HTMLSpanElement;
+  max: HTMLSpanElement;
+}
+
+const ensureStrengthBadge = (textEl: HTMLElement, beforeEl: HTMLElement): HTMLSpanElement => {
+  let badge = textEl.querySelector<HTMLSpanElement>(`.${TM_STRENGTH_BADGE_CLASS}`);
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = TM_STRENGTH_BADGE_CLASS;
+    badge.textContent = 'MAX';
+    Object.assign(badge.style, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 3px',
+      marginRight: '0',
+      borderRadius: '3px',
+      fontSize: '0.5rem',
+      lineHeight: '1',
+      fontWeight: '700',
+      color: 'var(--chakra-colors-Yellow-Magic, #F3D32B)',
+      backgroundColor: 'rgba(243, 211, 43, 0.25)',
+    });
+  }
+  if (badge.parentElement !== textEl) {
+    textEl.insertBefore(badge, beforeEl);
+  }
+  return badge;
+};
+
+const ensureStrengthTextParts = (textEl: HTMLElement): StrengthTextParts => {
+  let label = textEl.querySelector<HTMLSpanElement>(`.${TM_STRENGTH_LABEL_CLASS}`);
+  let current = textEl.querySelector<HTMLSpanElement>(`.${TM_STRENGTH_CURRENT_CLASS}`);
+  let max = textEl.querySelector<HTMLSpanElement>(`.${TM_STRENGTH_MAX_CLASS}`);
+
+  if (!label || !current || !max) {
+    textEl.textContent = '';
+
+    label = document.createElement('span');
+    label.className = TM_STRENGTH_LABEL_CLASS;
+
+    current = document.createElement('span');
+    current.className = TM_STRENGTH_CURRENT_CLASS;
+
+    max = document.createElement('span');
+    max.className = TM_STRENGTH_MAX_CLASS;
+
+    textEl.append(label, current, max);
+  }
+
+  return { label, current, max };
+};
+
+// ✅ MODIF: STR max = "STR 85" visuellement, sans shift
+function updateInventoryCardStrengthText(card: HTMLElement, item: any): void {
+  const strengthWrap = card.querySelector<HTMLElement>(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  if (!strengthWrap) return;
+
+  const textEl = strengthWrap.querySelector<HTMLElement>(INVENTORY_STRENGTH_TEXT_SELECTOR);
+  if (!textEl) return;
+
+  
+
+  const info = getPetStrengthInfo(item);
+  if (!info) return;
+
+  const { strength, maxStrength } = info;
+  if (!Number.isFinite(maxStrength) || maxStrength <= 0) return;
+
+  const existingText = textEl.textContent ?? "";
+  const currentStrength =
+    parseStrengthValue(existingText) ??
+    (Number.isFinite(strength) ? Math.round(strength) : null);
+  if (currentStrength == null) return;
+
+  const roundedMax = Math.round(maxStrength);
+  if (!Number.isFinite(roundedMax) || roundedMax <= 0) return;
+
+  const safeCurrent = clampNumber(currentStrength, 0, roundedMax);
+  const isMax = safeCurrent >= roundedMax;
+
+  const parts = ensureStrengthTextParts(textEl);
+
+  if (parts.label.textContent !== "STR ") {
+    parts.label.textContent = "STR ";
+  }
+
+  const nextCurrent = String(safeCurrent);
+  if (parts.current.textContent !== nextCurrent) {
+    parts.current.textContent = nextCurrent;
+  }
+  parts.current.style.setProperty('color', '#ffffff', 'important');
+  parts.current.style.setProperty('font-weight', '700', 'important');
+
+  if (isMax) {
+    ensureStrengthBadge(textEl, parts.label);
+    if (parts.max.textContent) {
+      parts.max.textContent = '';
+    }
+    parts.max.style.display = 'none';
+    parts.max.style.visibility = '';
+  } else {
+    textEl.querySelector(`.${TM_STRENGTH_BADGE_CLASS}`)?.remove();
+    const nextMax = `/${roundedMax}`;
+    if (parts.max.textContent !== nextMax) {
+      parts.max.textContent = nextMax;
+    }
+    parts.max.style.display = '';
+    parts.max.style.visibility = '';
+    parts.max.style.setProperty('font-weight', '700', 'important');
+  }
+
+  parts.current.style.textShadow = '';
+
+  strengthWrap.dataset[TM_STRENGTH_IS_MAX_DATASET_KEY] = isMax ? '1' : '0';
+}
 
 const getValueSummaryElement = (wrap: HTMLElement | null): HTMLSpanElement | null => {
   if (!wrap) return null;
@@ -1388,6 +1637,128 @@ const readNestedNumberField = (item: any, field: string): number | null =>
     return null;
   });
 
+const findSectionContainerByHeaderText = (headerText: string): HTMLElement | null => {
+  if (typeof document === "undefined") return null;
+  const headers = Array.from(document.querySelectorAll<HTMLElement>("p.chakra-text"));
+  const header = headers.find((el) => (el.textContent ?? "").trim() === headerText) ?? null;
+  if (!header) return null;
+
+  let current: HTMLElement | null = header;
+  while (current && current !== document.body) {
+    const next = current.nextElementSibling as HTMLElement | null;
+    if (next && next.querySelector(INVENTORY_ITEM_CARD_SELECTOR)) {
+      return next;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
+const getPetCardName = (card: HTMLElement): string =>
+  normalize(card.querySelector<HTMLElement>(PET_NAME_SELECTOR)?.textContent ?? "");
+
+const getPetNameCandidates = (item: any): string[] => {
+  const candidates = new Set<string>();
+  const name = readNestedStringField(item, "name");
+  if (name) candidates.add(normalize(name));
+  const species =
+    readNestedStringField(item, "petSpecies") ?? readNestedStringField(item, "species");
+  if (species) candidates.add(normalize(species));
+  return Array.from(candidates);
+};
+
+const isPetItem = (item: any): boolean => {
+  const rawType = typeof item?.itemType === "string" ? item.itemType : "";
+  if (rawType.trim().toLowerCase() === "pet") return true;
+  const species =
+    readNestedStringField(item, "petSpecies") ?? readNestedStringField(item, "species");
+  return !!species;
+};
+
+const applyPetItemsToContainer = (container: HTMLElement | null, items: any[]): void => {
+  if (!container) return;
+  const entries = getInventoryDomEntries(container);
+  if (!entries.length) return;
+
+  const petItems = (Array.isArray(items) ? items : []).filter(isPetItem);
+  if (!petItems.length) return;
+  console.log(
+    "[InventorySorting] Hutch apply",
+    { container: container.className, entries: entries.length, items: petItems.length }
+  );
+
+  const used = new Set<number>();
+  for (const entry of entries) {
+    const cardName = getPetCardName(entry.card);
+    let matchIndex = -1;
+
+    if (cardName) {
+      for (let i = 0; i < petItems.length; i += 1) {
+        if (used.has(i)) continue;
+        const candidates = getPetNameCandidates(petItems[i]);
+        if (candidates.includes(cardName)) {
+          matchIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (matchIndex < 0) {
+      for (let i = 0; i < petItems.length; i += 1) {
+        if (!used.has(i)) {
+          matchIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (matchIndex < 0) continue;
+    used.add(matchIndex);
+    updateInventoryCardStrengthText(entry.card, petItems[matchIndex]);
+    alignInventoryStrengthText(entry.card);
+  }
+};
+
+const updatePetHutchSections = async (): Promise<void> => {
+  try {
+    const root =
+      document.querySelector<HTMLElement>(PET_HUTCH_ROOT_SELECTOR) ?? document.body;
+    const hutchContainer =
+      root.querySelector<HTMLElement>(PET_HUTCH_LIST_SELECTOR) ??
+      findSectionContainerByHeaderText(PET_HUTCH_HEADER_TEXT);
+    const inventoryContainer =
+      root.querySelector<HTMLElement>(PET_HUTCH_INVENTORY_LIST_SELECTOR) ??
+      findSectionContainerByHeaderText(PET_INVENTORY_HEADER_TEXT);
+    console.log("[InventorySorting] Hutch detect", {
+      root: root.className,
+      hutchContainer: hutchContainer?.className ?? null,
+      inventoryContainer: inventoryContainer?.className ?? null,
+    });
+    if (!hutchContainer && !inventoryContainer) return;
+
+    const [hutchItemsRaw, inventoryRaw] = await Promise.all([
+      myPetHutchPetItems.get().catch(() => []),
+      Atoms.inventory.myInventory.get().catch(() => null),
+    ]);
+
+    const hutchItems = Array.isArray(hutchItemsRaw) ? hutchItemsRaw : [];
+    const inventoryItems = Array.isArray((inventoryRaw as any)?.items)
+      ? (inventoryRaw as any).items
+      : Array.isArray(inventoryRaw)
+      ? inventoryRaw
+      : [];
+    console.log("[InventorySorting] Hutch data", {
+      hutchItems: hutchItems.length,
+      inventoryItems: inventoryItems.length,
+    });
+
+    applyPetItemsToContainer(hutchContainer, hutchItems);
+    applyPetItemsToContainer(inventoryContainer, inventoryItems);
+  } catch (error) {
+    console.warn("[InventorySorting] Impossible de mettre a jour les pets du hutch", error);
+  }
+};
+
 const PET_STATS_BY_SPECIES = (() => {
   const map = new Map<string, { maxScale: number; hoursToMature: number }>();
   const register = (key: unknown, maxScale: number, hoursToMature: number) => {
@@ -1418,7 +1789,9 @@ const lookupPetStats = (
   return PET_STATS_BY_SPECIES.get(normalized) ?? null;
 };
 
-const getPetStrength = (item: any): number | null => {
+const getPetStrengthInfo = (
+  item: any
+): { strength: number; maxStrength: number } | null => {
   if (!item || typeof item !== "object") return null;
 
   const rawType = typeof item.itemType === "string" ? item.itemType : "";
@@ -1466,8 +1839,15 @@ const getPetStrength = (item: any): number | null => {
       ? Math.floor(((clampedScale - minScale) / scaleDenominator) * 20 + 80)
       : 80;
 
-  const combined = xpComponent + scaleComponent - 30;
-  return clampNumber(combined, 0, 100);
+  const maxStrength = clampNumber(scaleComponent, 0, 100);
+  const combined = xpComponent + maxStrength - 30;
+  const strength = clampNumber(combined, 0, maxStrength);
+  return { strength, maxStrength };
+};
+
+const getPetStrength = (item: any): number | null => {
+  const info = getPetStrengthInfo(item);
+  return info ? info.strength : null;
 };
 
 const compareByNameThenTypeThenId = (a: any, b: any): number => {
@@ -1793,6 +2173,8 @@ function createDefaultApplySorting(
       if (!entry || usedEntries.has(entry)) continue;
       const value = getInventoryItemValue(item);
       updateInventoryCardValue(entry.card, value);
+      updateInventoryCardStrengthText(entry.card, item);
+      alignInventoryStrengthText(entry.card);
       desiredEntries.push(entry);
       usedEntries.add(entry);
     }
@@ -2431,6 +2813,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let lastComputedFilterContextKey: string | null = null;
   let stopFilterContextListener: (() => void) | null = null;
   let lastRenderedInventoryEntryCount: number | null = null;
+  let noiseObserver: MutationObserver | null = null;
+  let noiseObserverContainer: HTMLElement | null = null;
 
   const updateDomSnapshotForGrid = (target: Element | null) => {
     if (!target) {
@@ -2454,6 +2838,31 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     Promise.resolve(applySorting(target, sortKey, direction)).then(() => {
       updateDomSnapshotForGrid(target);
     });
+
+  const ensureNoiseObserver = () => {
+    if (noiseObserver) return;
+    noiseObserver = new MutationObserver(() => {
+      if (noiseObserverContainer) {
+        clearInventoryNoiseText(noiseObserverContainer);
+      }
+    });
+  };
+
+  const observeNoiseContainer = (container: HTMLElement | null) => {
+    if (noiseObserverContainer === container) return;
+    if (noiseObserver) {
+      noiseObserver.disconnect();
+    }
+    noiseObserverContainer = container;
+    if (!container) return;
+    ensureNoiseObserver();
+    noiseObserver?.observe(container, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    clearInventoryNoiseText(container);
+  };
 
   const obs = new MutationObserver((muts) => {
     const relevant = muts.some((m) =>
@@ -2483,6 +2892,9 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       stopFilterContextListener();
       stopFilterContextListener = null;
     }
+    if (!grid) {
+      observeNoiseContainer(null);
+    }
     if (grid) {
       obs.observe(grid, {
         subtree: true,
@@ -2507,6 +2919,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         update();
       }
     }
+    refreshPetHutch();
   });
 
   const resolveGrid = (): Element | null => {
@@ -2605,6 +3018,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
       cfg.checkboxLabelSelector
     );
     const container = getInventoryItemsContainer(targetGrid);
+    observeNoiseContainer(container);
     const currentEntries = container ? getInventoryDomEntries(container) : [];
     const inventoryEntryCountChanged =
       lastRenderedInventoryEntryCount === null ||
@@ -2700,7 +3114,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
 
     const sortChanged =
       appliedSortKey !== lastAppliedSortKey || appliedDirection !== lastAppliedDirection;
-    const shouldApplySorting = sortChanged || (filtersChanged && domChangedSinceLastSort);
+    const shouldApplySorting = sortChanged || domChangedSinceLastSort;
 
     if (shouldApplySorting) {
       lastAppliedSortKey = appliedSortKey;
@@ -2722,6 +3136,9 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   };
 
   const refresh = debounce(update, 120);
+  const refreshPetHutch = debounce(() => {
+    void updatePetHutchSections();
+  }, 120);
 
   const changeHandler = (e: Event) => {
     const target = e.target as Element | null;
@@ -2760,6 +3177,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     document.addEventListener('change', changeHandler, true);
     document.addEventListener('input', changeHandler, true);
     update();
+    refreshPetHutch();
   };
 
   startObservers();
@@ -2768,6 +3186,9 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     destroy() {
       obs.disconnect();
       bodyObserver.disconnect();
+      noiseObserver?.disconnect();
+      noiseObserver = null;
+      noiseObserverContainer = null;
       document.removeEventListener('change', changeHandler, true);
       document.removeEventListener('input', changeHandler, true);
       if (stopValueSummaryListener) {
@@ -2922,7 +3343,9 @@ export function startInventorySortingObserver(
     if (controller) return controller;
     if (waitForGrid) {
       const selector = cfg.gridSelector ?? DEFAULTS.gridSelector;
-      if (!document.querySelector(selector)) {
+      const hasGrid = !!document.querySelector(selector);
+      const hasHutch = !!document.querySelector(PET_HUTCH_ROOT_SELECTOR);
+      if (!hasGrid && !hasHutch) {
         return null;
       }
     }

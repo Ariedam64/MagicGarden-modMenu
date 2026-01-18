@@ -1773,6 +1773,9 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   text-overflow:ellipsis;
   white-space:nowrap;
 }
+.qmm .stats-pet__total-label{
+  font-weight:700;
+}
 .qmm .stats-pet__total-value{
   font-weight:700;
 }

@@ -936,6 +936,13 @@ function createPetTotalValueCell(total: number): StatListCell {
   return { content: value, align: "center" };
 }
 
+function createPetTotalsLabelCell(label: string): StatListCell {
+  const value = document.createElement("span");
+  value.className = "stats-pet__total-label";
+  value.textContent = label;
+  return { content: value };
+}
+
 function renderPetSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot) {
   const card = createCollapsibleCard(ui, "🐾 Pets", {
     subtitle: "Hatching overview",
@@ -976,10 +983,16 @@ function renderPetSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot) {
     ];
 
     const rows: StatListCell[][] = [];
+    let totalNormal = 0;
+    let totalGold = 0;
+    let totalRainbow = 0;
 
     for (const species of speciesList) {
       const key = species.toLowerCase();
       const counts = stats.pets.hatchedByType[key] ?? { normal: 0, gold: 0, rainbow: 0 };
+      totalNormal += counts.normal;
+      totalGold += counts.gold;
+      totalRainbow += counts.rainbow;
       const total = counts.normal + counts.gold + counts.rainbow;
       rows.push([
         createPetSpeciesCell(species),
@@ -989,6 +1002,15 @@ function renderPetSection(ui: Menu, root: HTMLElement, stats: StatsSnapshot) {
         createPetTotalValueCell(total),
       ]);
     }
+
+    const totalAll = totalNormal + totalGold + totalRainbow;
+    rows.push([
+      createPetTotalsLabelCell("Total"),
+      createPetTotalValueCell(totalNormal),
+      createPetTotalValueCell(totalGold),
+      createPetTotalValueCell(totalRainbow),
+      createPetTotalValueCell(totalAll),
+    ]);
 
     content.appendChild(createStatList(columns, rows));
     group.appendChild(content);

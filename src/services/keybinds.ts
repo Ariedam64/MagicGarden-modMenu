@@ -18,6 +18,7 @@ export type KeybindId =
   | "game.inventory"
   | "game.journal"
   | "game.pet-hutch"
+  | "game.decor-shed"
   | "game.move-up"
   | "game.move-down"
   | "game.move-left"
@@ -162,6 +163,12 @@ const SECTION_CONFIG: KeybindSectionConfig[] = [
       {
         id: "game.pet-hutch",
         label: "🏠 Pet hutch",
+        defaultHotkey: null,
+        allowClear: true,
+      },
+      {
+        id: "game.decor-shed",
+        label: "🧴 Decor shed",
         defaultHotkey: null,
         allowClear: true,
       },
