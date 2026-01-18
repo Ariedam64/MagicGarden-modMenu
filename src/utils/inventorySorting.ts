@@ -282,7 +282,8 @@ const INVENTORY_BASE_INDEX_DATASET_KEY = 'tmInventoryBaseIndex';
 // Updated items container to match new inventory DOM (inside the main content area)
 const INVENTORY_ITEM_CARD_SELECTORS = ['.css-vmnhaw', '.css-1avy1fz'];
 const INVENTORY_ITEMS_CONTAINER_SELECTOR = '.McFlex.css-zo8r2v';
-const INVENTORY_NOISE_SELECTOR = '.McFlex.css-1tkifdd, .chakra-text.css-glp3xv';
+const INVENTORY_NOISE_SELECTOR =
+  '.McFlex.css-1tkifdd, .chakra-text.css-glp3xv, .chakra-text.css-repqgl, .chakra-text.css-ah6ymv';
 const INVENTORY_STRENGTH_WRAPPER_SELECTOR = '.McFlex.css-15lpbqz';
 const INVENTORY_STRENGTH_TEXT_SELECTOR = '.chakra-text.css-wqvsdi';
 const INVENTORY_FAVORITE_BUTTON_SELECTOR = 'button.chakra-button.css-1iytwn1';
@@ -1081,6 +1082,51 @@ interface StrengthTextParts {
   max: HTMLSpanElement;
 }
 
+type StrengthBadgeTone = 'normal' | 'gold' | 'rainbow';
+const RAINBOW_BADGE_TEXT_GRADIENT =
+  'linear-gradient(90deg, #ff6b6b 0%, #ffd86f 25%, #6bff8f 50%, #6bc7ff 75%, #b86bff 100%)';
+const getPetMutationTone = (item: any): StrengthBadgeTone => {
+  const mutations = getInventoryItemMutations(item);
+  if (!mutations.length) return 'normal';
+  const seen = new Set(mutations.map((mutation) => mutation.toLowerCase()));
+  if (seen.has('rainbow')) return 'rainbow';
+  if (seen.has('gold') || seen.has('golden')) return 'gold';
+  return 'normal';
+};
+
+const applyStrengthBadgeTone = (badge: HTMLSpanElement, tone: StrengthBadgeTone): void => {
+  if (badge.dataset.tmStrengthTone === tone) return;
+  badge.dataset.tmStrengthTone = tone;
+  badge.style.backgroundImage = '';
+  badge.style.backgroundColor = '';
+  badge.style.color = '';
+  badge.style.backgroundClip = '';
+  badge.style.webkitBackgroundClip = '';
+  badge.style.backgroundOrigin = '';
+  badge.style.webkitTextFillColor = '';
+  badge.style.fontWeight = '700';
+
+  switch (tone) {
+    case 'rainbow':
+      badge.style.color = 'transparent';
+      badge.style.backgroundImage = `linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)), ${RAINBOW_BADGE_TEXT_GRADIENT}`;
+      badge.style.backgroundClip = 'padding-box, text';
+      badge.style.webkitBackgroundClip = 'padding-box, text';
+      badge.style.backgroundOrigin = 'padding-box, text';
+      badge.style.webkitTextFillColor = 'transparent';
+      break;
+    case 'gold':
+      badge.style.color = 'var(--chakra-colors-Yellow-Magic, #F3D32B)';
+      badge.style.backgroundColor = 'rgba(243, 211, 43, 0.25)';
+      break;
+    default:
+      badge.style.color = '#8fd3ff';
+      badge.style.backgroundColor = 'rgba(79, 166, 255, 0.28)';
+      break;
+  }
+};
+
+
 const ensureStrengthBadge = (textEl: HTMLElement, beforeEl: HTMLElement): HTMLSpanElement => {
   let badge = textEl.querySelector<HTMLSpanElement>(`.${TM_STRENGTH_BADGE_CLASS}`);
   if (!badge) {
@@ -1157,6 +1203,7 @@ function updateInventoryCardStrengthText(card: HTMLElement, item: any): void {
 
   const safeCurrent = clampNumber(currentStrength, 0, roundedMax);
   const isMax = safeCurrent >= roundedMax;
+  const mutationTone = getPetMutationTone(item);
 
   const parts = ensureStrengthTextParts(textEl);
 
@@ -1172,7 +1219,8 @@ function updateInventoryCardStrengthText(card: HTMLElement, item: any): void {
   parts.current.style.setProperty('font-weight', '700', 'important');
 
   if (isMax) {
-    ensureStrengthBadge(textEl, parts.label);
+    const badge = ensureStrengthBadge(textEl, parts.label);
+    applyStrengthBadgeTone(badge, mutationTone);
     if (parts.max.textContent) {
       parts.max.textContent = '';
     }
@@ -1189,7 +1237,7 @@ function updateInventoryCardStrengthText(card: HTMLElement, item: any): void {
     parts.max.style.setProperty('font-weight', '700', 'important');
   }
 
-  parts.current.style.textShadow = '';
+  parts.max.style.setProperty('color', '#ffffff', 'important');
 
   strengthWrap.dataset[TM_STRENGTH_IS_MAX_DATASET_KEY] = isMax ? '1' : '0';
 }
