@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.31
+// @version      2.99.35
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -17045,6 +17045,7 @@
 
   // src/services/pets.ts
   var PATH_PETS_OVERRIDES = "pets.overrides";
+  var PATH_PETS_INSTANT_FEED = "pets.instantFeed";
   var PATH_PETS_UI = "pets.ui";
   var PATH_PETS_TEAMS = "pets.teams";
   var PATH_PETS_TEAM_SEARCH = "pets.teamSearch";
@@ -17572,6 +17573,7 @@
   var AUTOF_FEED_MIN_INTERVAL_MS = 2e3;
   var DEFAULT_OVERRIDE = { enabled: false, thresholdPct: 10, crops: {} };
   var DEFAULT_UI = { selectedPetId: null };
+  var DEFAULT_INSTANT_FEED = { crops: {} };
   var _currentPets = [];
   var _userTriggerCb = null;
   function saveOverrides(map2) {
@@ -17579,6 +17581,13 @@
   }
   function loadOverrides() {
     const obj = readAriesPath(PATH_PETS_OVERRIDES);
+    return obj && typeof obj === "object" ? obj : {};
+  }
+  function saveInstantFeedOverrides(map2) {
+    writeAriesPath(PATH_PETS_INSTANT_FEED, map2);
+  }
+  function loadInstantFeedOverrides() {
+    const obj = readAriesPath(PATH_PETS_INSTANT_FEED);
     return obj && typeof obj === "object" ? obj : {};
   }
   function saveUIState(next) {
@@ -17594,6 +17603,12 @@
     return {
       enabled: !!src.enabled,
       thresholdPct: Math.min(100, Math.max(1, Number(src.thresholdPct) || DEFAULT_OVERRIDE.thresholdPct)),
+      crops: { ...src.crops || {} }
+    };
+  }
+  function cloneInstantFeedOverride(o) {
+    const src = o ?? DEFAULT_INSTANT_FEED;
+    return {
       crops: { ...src.crops || {} }
     };
   }
@@ -17784,6 +17799,37 @@
       const pet = await findPetById(petId);
       const species = pet?.slot?.petSpecies || "";
       const compatibles = this.getCompatibleCropsForSpecies(species);
+      const allowed = /* @__PURE__ */ new Set();
+      for (const c of compatibles) {
+        const rule = ov.crops[c];
+        if (rule ? !!rule.allowed : true) allowed.add(c);
+      }
+      return allowed;
+    },
+    /* ------------------------- Instant feed (per-species) ------------------------- */
+    getInstantFeedOverride(species) {
+      const key2 = _canonicalSpecies(String(species || ""));
+      const all = loadInstantFeedOverrides();
+      return cloneInstantFeedOverride(all[key2]);
+    },
+    isInstantFeedCropAllowed(species, crop) {
+      const ov = this.getInstantFeedOverride(species);
+      const rule = ov.crops[crop];
+      return rule ? !!rule.allowed : true;
+    },
+    setInstantFeedCropAllowed(species, crop, allowed) {
+      const key2 = _canonicalSpecies(String(species || ""));
+      const all = loadInstantFeedOverrides();
+      const cur = cloneInstantFeedOverride(all[key2]);
+      cur.crops[crop] = { allowed: !!allowed };
+      all[key2] = cur;
+      saveInstantFeedOverrides(all);
+      return cloneInstantFeedOverride(cur);
+    },
+    getInstantFeedAllowedCrops(species) {
+      const key2 = _canonicalSpecies(String(species || ""));
+      const compatibles = this.getCompatibleCropsForSpecies(key2);
+      const ov = this.getInstantFeedOverride(key2);
       const allowed = /* @__PURE__ */ new Set();
       for (const c of compatibles) {
         const rule = ov.crops[c];
@@ -23223,7 +23269,13 @@
   // src/utils/petPanelEnhancer.ts
   var PANEL_SELECTOR = ".css-1rszi55";
   var FEED_BUTTON_CLASS = "tm-feed-from-inventory-btn";
+  var FEED_FROM_INVENTORY_BUTTON_CLASS = "tm-feed-from-inventory-select-btn";
   var FEED_ROW_CLASS = "tm-feed-from-inventory-row";
+  var PATH_PETS_PANEL_BUTTONS = "pets.panelButtons";
+  var DEFAULT_PANEL_BUTTONS = {
+    instantFeed: true,
+    feedFromInventory: true
+  };
   var started = false;
   function startPetPanelEnhancer() {
     if (started) return;
@@ -23236,6 +23288,33 @@
       enhancePanel(node);
     });
   }
+  function getPetPanelButtonSettings() {
+    const raw = readAriesPath(PATH_PETS_PANEL_BUTTONS);
+    return {
+      instantFeed: raw?.instantFeed !== false,
+      feedFromInventory: raw?.feedFromInventory !== false
+    };
+  }
+  function setPetPanelButtonSettings(patch) {
+    const merged = {
+      ...DEFAULT_PANEL_BUTTONS,
+      ...getPetPanelButtonSettings(),
+      ...patch || {}
+    };
+    writeAriesPath(PATH_PETS_PANEL_BUTTONS, merged);
+    return merged;
+  }
+  function applyPetPanelButtonVisibility(scope) {
+    if (typeof document === "undefined") return;
+    const root = scope ?? document;
+    const { instantFeed, feedFromInventory } = getPetPanelButtonSettings();
+    const instantBtn = root.querySelector(`.${FEED_BUTTON_CLASS}`);
+    if (instantBtn) instantBtn.style.display = instantFeed ? "" : "none";
+    const inventoryBtn = root.querySelector(`.${FEED_FROM_INVENTORY_BUTTON_CLASS}`);
+    if (inventoryBtn) inventoryBtn.style.display = feedFromInventory ? "" : "none";
+    const row = root.querySelector(`.${FEED_ROW_CLASS}`);
+    if (row) row.style.display = instantFeed || feedFromInventory ? "" : "none";
+  }
   function enhancePanel(root) {
     try {
       ensureFeedButton(root);
@@ -23244,7 +23323,10 @@
     }
   }
   function ensureFeedButton(root) {
-    if (root.querySelector(`.${FEED_BUTTON_CLASS}`)) return;
+    if (root.querySelector(`.${FEED_BUTTON_CLASS}`)) {
+      applyPetPanelButtonVisibility(root);
+      return;
+    }
     const templateBtn = root.querySelector("button.chakra-button");
     const btn = createStyledButton(templateBtn, "INSTANT FEED");
     btn.classList.add(FEED_BUTTON_CLASS);
@@ -23276,6 +23358,7 @@
       templateBtn,
       "FEED FROM INVENTORY"
     );
+    feedFromInventoryBtn.classList.add(FEED_FROM_INVENTORY_BUTTON_CLASS);
     feedFromInventoryBtn.style.width = "100%";
     feedFromInventoryBtn.style.minWidth = "100%";
     feedFromInventoryBtn.style.alignContent = "center";
@@ -23300,6 +23383,7 @@
     } else {
       root.appendChild(row);
     }
+    applyPetPanelButtonVisibility(root);
   }
   function createStyledButton(template, label2) {
     const btn = document.createElement("button");
@@ -23334,10 +23418,13 @@
         return;
       }
       const species = String(pet?.slot?.petSpecies || "");
-      const compatibleList = PetsService.getCompatibleCropsForSpecies(species) ?? [];
-      const compatible = new Set(compatibleList.map((item) => String(item || "")));
-      if (!compatible.size) {
-        await toastSimple("Feed from inventory", "No compatible crops for this pet.", "info");
+      const allowed = PetsService.getInstantFeedAllowedCrops(species);
+      if (!allowed.size) {
+        await toastSimple(
+          "Feed from inventory",
+          "No allowed crops for this pet. Check the Feeding tab.",
+          "info"
+        );
         return;
       }
       const inventory = await PlayerService.getCropInventoryState();
@@ -23345,7 +23432,7 @@
       const favoriteSet = await PlayerService.getFavoriteIdSet().catch(() => /* @__PURE__ */ new Set());
       const chosen = items.find((item) => {
         const speciesId = String(item?.species || "");
-        if (!speciesId || !compatible.has(speciesId)) return false;
+        if (!speciesId || !allowed.has(speciesId)) return false;
         const id = String(item?.id || "");
         return id && !favoriteSet.has(id);
       });
@@ -39933,6 +40020,223 @@ next: ${next}`;
       };
     })();
   }
+  function renderFeedingTab(view, ui) {
+    view.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.style.display = "grid";
+    wrap.style.gridTemplateColumns = "minmax(220px, 280px) minmax(0, 1fr)";
+    wrap.style.gap = "10px";
+    wrap.style.alignItems = "stretch";
+    wrap.style.height = "54vh";
+    wrap.style.minHeight = "0";
+    view.appendChild(wrap);
+    const left = document.createElement("div");
+    left.style.display = "flex";
+    left.style.flexDirection = "column";
+    left.style.height = "100%";
+    left.style.minHeight = "0";
+    wrap.appendChild(left);
+    const vtabs = ui.vtabs({
+      emptyText: "No pets found.",
+      fillAvailableHeight: true,
+      renderItem: (item, btn) => {
+        btn.innerHTML = "";
+        btn.style.gridTemplateColumns = "24px 1fr auto";
+        btn.style.gap = "10px";
+        const size = 22;
+        const iconWrap = document.createElement("div");
+        Object.assign(iconWrap.style, {
+          width: `${size}px`,
+          height: `${size}px`,
+          borderRadius: "6px",
+          background: "#161b22",
+          border: "1px solid #ffffff10",
+          display: "grid",
+          placeItems: "center",
+          overflow: "hidden",
+          boxShadow: "0 1px 0 #000 inset",
+          fontSize: "11px",
+          color: "#e2e8f0"
+        });
+        const label2 = String(item.title || "Pet");
+        iconWrap.textContent = label2.charAt(0).toUpperCase();
+        attachSpriteIcon(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
+          onNoSpriteFound: () => {
+            iconWrap.textContent = label2.charAt(0).toUpperCase();
+          }
+        });
+        const textWrap = document.createElement("div");
+        textWrap.style.display = "flex";
+        textWrap.style.flexDirection = "column";
+        textWrap.style.gap = "2px";
+        textWrap.style.minWidth = "0";
+        const titleEl = document.createElement("div");
+        titleEl.textContent = label2;
+        titleEl.style.whiteSpace = "nowrap";
+        titleEl.style.overflow = "hidden";
+        titleEl.style.textOverflow = "ellipsis";
+        textWrap.appendChild(titleEl);
+        const rarity2 = String(item.rarity || "").trim();
+        const badge = rarity2 ? rarityBadge(rarity2) : null;
+        if (badge) {
+          badge.style.margin = "0";
+          badge.style.alignSelf = "center";
+        }
+        btn.append(iconWrap, textWrap);
+        if (badge) btn.appendChild(badge);
+      }
+    });
+    vtabs.root.style.flex = "1 1 auto";
+    vtabs.root.style.minHeight = "0";
+    left.appendChild(vtabs.root);
+    const right = document.createElement("div");
+    right.style.display = "flex";
+    right.style.flexDirection = "column";
+    right.style.gap = "10px";
+    right.style.minHeight = "0";
+    wrap.appendChild(right);
+    const panelCard = document.createElement("div");
+    panelCard.style.border = "1px solid #4445";
+    panelCard.style.borderRadius = "10px";
+    panelCard.style.padding = "10px";
+    panelCard.style.background = "#0f1318";
+    panelCard.style.display = "flex";
+    panelCard.style.flexDirection = "column";
+    panelCard.style.gap = "8px";
+    right.appendChild(panelCard);
+    const panelTitle = document.createElement("div");
+    panelTitle.textContent = "Pet panel buttons";
+    panelTitle.style.fontWeight = "600";
+    panelCard.appendChild(panelTitle);
+    const panelBody = document.createElement("div");
+    panelBody.style.display = "flex";
+    panelBody.style.flexDirection = "column";
+    panelBody.style.gap = "6px";
+    panelCard.appendChild(panelBody);
+    const settings = getPetPanelButtonSettings();
+    const addToggle = (label2, key2, checked) => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.justifyContent = "space-between";
+      row.style.gap = "10px";
+      row.style.padding = "4px 0";
+      const text = document.createElement("div");
+      text.textContent = label2;
+      text.style.fontSize = "13px";
+      const sw = ui.switch(checked);
+      sw.addEventListener("change", () => {
+        const next = setPetPanelButtonSettings({ [key2]: sw.checked });
+        sw.checked = next[key2];
+        applyPetPanelButtonVisibility();
+      });
+      row.append(text, sw);
+      panelBody.appendChild(row);
+    };
+    addToggle("Show Instant Feed button", "instantFeed", settings.instantFeed);
+    addToggle("Show Feed from Inventory button", "feedFromInventory", settings.feedFromInventory);
+    const card = document.createElement("div");
+    card.style.border = "1px solid #4445";
+    card.style.borderRadius = "10px";
+    card.style.padding = "10px";
+    card.style.background = "#0f1318";
+    card.style.display = "grid";
+    card.style.gridTemplateRows = "auto 1fr";
+    card.style.minHeight = "0";
+    right.appendChild(card);
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.flexDirection = "column";
+    header.style.gap = "4px";
+    header.style.marginBottom = "8px";
+    card.appendChild(header);
+    const title = document.createElement("div");
+    title.textContent = "Instant feed options";
+    title.style.fontWeight = "600";
+    header.appendChild(title);
+    const subtitle = document.createElement("div");
+    subtitle.textContent = "Allow or block crops for the Instant Feed button.";
+    subtitle.style.opacity = "0.7";
+    subtitle.style.fontSize = "12px";
+    header.appendChild(subtitle);
+    const body = document.createElement("div");
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "6px";
+    body.style.overflow = "auto";
+    body.style.minHeight = "0";
+    card.appendChild(body);
+    const petItems = Object.keys(petCatalog).map((species) => {
+      const entry = petCatalog[species];
+      const name = String(entry?.name || species);
+      return {
+        id: species,
+        title: name,
+        rarity: entry?.rarity
+      };
+    });
+    vtabs.setItems(petItems);
+    if (petItems.length) vtabs.select(petItems[0].id);
+    const renderCrops = (species) => {
+      body.innerHTML = "";
+      if (!species) {
+        const empty = document.createElement("div");
+        empty.textContent = "Select a pet to configure instant feed crops.";
+        empty.style.opacity = "0.75";
+        body.appendChild(empty);
+        return;
+      }
+      const compatibles = PetsService.getCompatibleCropsForSpecies(species) ?? [];
+      const seen = /* @__PURE__ */ new Set();
+      const list = compatibles.map((c) => String(c || "")).filter((c) => c && !seen.has(c) && seen.add(c));
+      if (!list.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No compatible crops for this pet.";
+        empty.style.opacity = "0.75";
+        body.appendChild(empty);
+        return;
+      }
+      const cropEntries = list.map((crop) => {
+        const entry = plantCatalog[crop];
+        const name = String(entry?.name || crop);
+        return { crop, name };
+      }).sort((a, b) => a.name.localeCompare(b.name));
+      cropEntries.forEach(({ crop, name }) => {
+        const row = document.createElement("div");
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "1fr auto";
+        row.style.alignItems = "center";
+        row.style.gap = "8px";
+        row.style.padding = "6px 4px";
+        row.style.borderBottom = "1px solid #ffffff12";
+        const labelWrap = document.createElement("div");
+        labelWrap.style.display = "flex";
+        labelWrap.style.flexDirection = "column";
+        labelWrap.style.gap = "2px";
+        const nameEl = document.createElement("div");
+        nameEl.textContent = name;
+        nameEl.style.fontSize = "13px";
+        labelWrap.appendChild(nameEl);
+        if (name !== crop) {
+          const idEl = document.createElement("div");
+          idEl.textContent = crop;
+          idEl.style.fontSize = "11px";
+          idEl.style.opacity = "0.6";
+          labelWrap.appendChild(idEl);
+        }
+        const sw = ui.switch(PetsService.isInstantFeedCropAllowed(species, crop));
+        sw.addEventListener("change", () => {
+          PetsService.setInstantFeedCropAllowed(species, crop, sw.checked);
+        });
+        row.append(labelWrap, sw);
+        body.appendChild(row);
+      });
+    };
+    vtabs.onSelect((id) => {
+      renderCrops(id);
+    });
+    renderCrops(petItems[0]?.id ?? null);
+  }
   function renderLogsTab(view, ui) {
     view.innerHTML = "";
     const wrap = document.createElement("div");
@@ -40261,6 +40565,7 @@ next: ${next}`;
     const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     ui.addTab("manager", "\u{1F9F0} Manager", (view) => renderManagerTab(view, ui));
+    ui.addTab("feeding", "Feeding", (view) => renderFeedingTab(view, ui));
     ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 

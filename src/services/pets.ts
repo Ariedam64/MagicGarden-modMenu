@@ -63,6 +63,12 @@ export type PetOverride = {
 
 export type PetOverridesMap = Record<string, PetOverride>;
 
+export type InstantFeedOverride = {
+  crops: Record<string, { allowed: boolean }>;
+};
+
+export type InstantFeedOverridesMap = Record<string, InstantFeedOverride>;
+
 export type PetsUIState = {
   selectedPetId: string | null;
 };
@@ -71,6 +77,7 @@ type PetImgEntry = { img64?: { normal?: string; gold?: string; rainbow?: string 
 type PetCatalogLoose = Record<string, PetImgEntry>;
 
 const PATH_PETS_OVERRIDES = "pets.overrides";
+const PATH_PETS_INSTANT_FEED = "pets.instantFeed";
 const PATH_PETS_UI = "pets.ui";
 const PATH_PETS_TEAMS = "pets.teams";
 const PATH_PETS_TEAM_SEARCH = "pets.teamSearch";
@@ -681,6 +688,7 @@ const _belowThreshold = new Map<string, boolean>(); // tracks pets that were bel
 const AUTOF_FEED_MIN_INTERVAL_MS = 2000;
 const DEFAULT_OVERRIDE: PetOverride = { enabled: false, thresholdPct: 10, crops: {} };
 const DEFAULT_UI: PetsUIState = { selectedPetId: null };
+const DEFAULT_INSTANT_FEED: InstantFeedOverride = { crops: {} };
 
 let _currentPets: PetInfo[] = [];
 let _userTriggerCb: ((t: AutofeedTrigger) => void) | null = null;
@@ -690,6 +698,13 @@ function saveOverrides(map: PetOverridesMap) {
 }
 function loadOverrides(): PetOverridesMap {
   const obj = readAriesPath<PetOverridesMap>(PATH_PETS_OVERRIDES);
+  return obj && typeof obj === "object" ? obj : {};
+}
+function saveInstantFeedOverrides(map: InstantFeedOverridesMap) {
+  writeAriesPath(PATH_PETS_INSTANT_FEED, map);
+}
+function loadInstantFeedOverrides(): InstantFeedOverridesMap {
+  const obj = readAriesPath<InstantFeedOverridesMap>(PATH_PETS_INSTANT_FEED);
   return obj && typeof obj === "object" ? obj : {};
 }
 function saveUIState(next: PetsUIState) {
@@ -705,6 +720,12 @@ function cloneOverride(o?: PetOverride): PetOverride {
   return {
     enabled: !!src.enabled,
     thresholdPct: Math.min(100, Math.max(1, Number(src.thresholdPct) || DEFAULT_OVERRIDE.thresholdPct)),
+    crops: { ...(src.crops || {}) },
+  };
+}
+function cloneInstantFeedOverride(o?: InstantFeedOverride): InstantFeedOverride {
+  const src = o ?? DEFAULT_INSTANT_FEED;
+  return {
     crops: { ...(src.crops || {}) },
   };
 }
@@ -890,6 +911,38 @@ export const PetsService = {
     for (const c of compatibles) {
       const rule = ov.crops[c];
       if (rule ? !!rule.allowed : true) allowed.add(c); // default: allowed
+    }
+    return allowed;
+  },
+
+  /* ------------------------- Instant feed (per-species) ------------------------- */
+  getInstantFeedOverride(species: string): InstantFeedOverride {
+    const key = _canonicalSpecies(String(species || ""));
+    const all = loadInstantFeedOverrides();
+    return cloneInstantFeedOverride(all[key]);
+  },
+  isInstantFeedCropAllowed(species: string, crop: string): boolean {
+    const ov = this.getInstantFeedOverride(species);
+    const rule = ov.crops[crop];
+    return rule ? !!rule.allowed : true;
+  },
+  setInstantFeedCropAllowed(species: string, crop: string, allowed: boolean): InstantFeedOverride {
+    const key = _canonicalSpecies(String(species || ""));
+    const all = loadInstantFeedOverrides();
+    const cur = cloneInstantFeedOverride(all[key]);
+    cur.crops[crop] = { allowed: !!allowed };
+    all[key] = cur;
+    saveInstantFeedOverrides(all);
+    return cloneInstantFeedOverride(cur);
+  },
+  getInstantFeedAllowedCrops(species: string): Set<string> {
+    const key = _canonicalSpecies(String(species || ""));
+    const compatibles = this.getCompatibleCropsForSpecies(key);
+    const ov = this.getInstantFeedOverride(key);
+    const allowed = new Set<string>();
+    for (const c of compatibles) {
+      const rule = ov.crops[c];
+      if (rule ? !!rule.allowed : true) allowed.add(c);
     }
     return allowed;
   },

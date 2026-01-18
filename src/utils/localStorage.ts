@@ -15,6 +15,8 @@ export type AriesStorage = {
   stats?: unknown;
   pets?: {
     overrides?: unknown;
+    instantFeed?: unknown;
+    panelButtons?: unknown;
     ui?: unknown;
     teams?: unknown;
     teamSearch?: unknown;

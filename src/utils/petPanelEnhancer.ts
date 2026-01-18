@@ -3,13 +3,26 @@ import { Atoms } from "../store/atoms";
 import { PetsService, clearHandSelection } from "../services/pets";
 import { PlayerService, type PetInfo } from "../services/player";
 import { closeInventoryPanel, fakeInventoryShow, isInventoryOpen } from "../services/fakeModal";
+import { readAriesPath, writeAriesPath } from "./localStorage";
 import { toastSimple } from "../ui/toast";
 
 const PANEL_SELECTOR = ".css-1rszi55";
 const LOG_BUTTON_CLASS = "tm-pet-log-crops-btn";
 const FEED_BUTTON_CLASS = "tm-feed-from-inventory-btn";
+const FEED_FROM_INVENTORY_BUTTON_CLASS = "tm-feed-from-inventory-select-btn";
 const FEED_ROW_CLASS = "tm-feed-from-inventory-row";
 const LOG_ROW_CLASS = "tm-pet-log-row";
+const PATH_PETS_PANEL_BUTTONS = "pets.panelButtons";
+
+type PetPanelButtonsSettings = {
+  instantFeed: boolean;
+  feedFromInventory: boolean;
+};
+
+const DEFAULT_PANEL_BUTTONS: PetPanelButtonsSettings = {
+  instantFeed: true,
+  feedFromInventory: true,
+};
 
 let started = false;
 
@@ -27,6 +40,39 @@ export function startPetPanelEnhancer(): void {
   });
 }
 
+export function getPetPanelButtonSettings(): PetPanelButtonsSettings {
+  const raw = readAriesPath<Partial<PetPanelButtonsSettings>>(PATH_PETS_PANEL_BUTTONS);
+  return {
+    instantFeed: raw?.instantFeed !== false,
+    feedFromInventory: raw?.feedFromInventory !== false,
+  };
+}
+
+export function setPetPanelButtonSettings(patch: Partial<PetPanelButtonsSettings>): PetPanelButtonsSettings {
+  const merged: PetPanelButtonsSettings = {
+    ...DEFAULT_PANEL_BUTTONS,
+    ...getPetPanelButtonSettings(),
+    ...(patch || {}),
+  };
+  writeAriesPath(PATH_PETS_PANEL_BUTTONS, merged);
+  return merged;
+}
+
+export function applyPetPanelButtonVisibility(scope?: ParentNode): void {
+  if (typeof document === "undefined") return;
+  const root = scope ?? document;
+  const { instantFeed, feedFromInventory } = getPetPanelButtonSettings();
+
+  const instantBtn = root.querySelector<HTMLElement>(`.${FEED_BUTTON_CLASS}`);
+  if (instantBtn) instantBtn.style.display = instantFeed ? "" : "none";
+
+  const inventoryBtn = root.querySelector<HTMLElement>(`.${FEED_FROM_INVENTORY_BUTTON_CLASS}`);
+  if (inventoryBtn) inventoryBtn.style.display = feedFromInventory ? "" : "none";
+
+  const row = root.querySelector<HTMLElement>(`.${FEED_ROW_CLASS}`);
+  if (row) row.style.display = instantFeed || feedFromInventory ? "" : "none";
+}
+
 function enhancePanel(root: HTMLElement): void {
   try {
     ensureFeedButton(root);
@@ -36,7 +82,10 @@ function enhancePanel(root: HTMLElement): void {
 }
 
 function ensureFeedButton(root: HTMLElement): void {
-  if (root.querySelector(`.${FEED_BUTTON_CLASS}`)) return;
+  if (root.querySelector(`.${FEED_BUTTON_CLASS}`)) {
+    applyPetPanelButtonVisibility(root);
+    return;
+  }
 
   const templateBtn = root.querySelector<HTMLButtonElement>("button.chakra-button");
   const btn = createStyledButton(templateBtn, "INSTANT FEED");
@@ -72,6 +121,7 @@ function ensureFeedButton(root: HTMLElement): void {
     templateBtn,
     "FEED FROM INVENTORY",
   );
+  feedFromInventoryBtn.classList.add(FEED_FROM_INVENTORY_BUTTON_CLASS);
   feedFromInventoryBtn.style.width = "100%";
   feedFromInventoryBtn.style.minWidth = "100%";
   feedFromInventoryBtn.style.alignContent = "center";
@@ -100,6 +150,8 @@ function ensureFeedButton(root: HTMLElement): void {
   } else {
     root.appendChild(row);
   }
+
+  applyPetPanelButtonVisibility(root);
 }
 
 function createStyledButton(template: HTMLButtonElement | null, label: string): HTMLButtonElement {
@@ -182,11 +234,14 @@ async function handleFeedClick(btn: HTMLButtonElement): Promise<void> {
     }
 
     const species = String(pet?.slot?.petSpecies || "");
-    const compatibleList = PetsService.getCompatibleCropsForSpecies(species) ?? [];
-    const compatible = new Set(compatibleList.map((item) => String(item || "")));
+    const allowed = PetsService.getInstantFeedAllowedCrops(species);
 
-    if (!compatible.size) {
-      await toastSimple("Feed from inventory", "No compatible crops for this pet.", "info");
+    if (!allowed.size) {
+      await toastSimple(
+        "Feed from inventory",
+        "No allowed crops for this pet. Check the Feeding tab.",
+        "info",
+      );
       return;
     }
 
@@ -196,7 +251,7 @@ async function handleFeedClick(btn: HTMLButtonElement): Promise<void> {
 
     const chosen = items.find((item) => {
       const speciesId = String((item as any)?.species || "");
-      if (!speciesId || !compatible.has(speciesId)) return false;
+      if (!speciesId || !allowed.has(speciesId)) return false;
       const id = String((item as any)?.id || "");
       return id && !favoriteSet.has(id);
     }) as any;

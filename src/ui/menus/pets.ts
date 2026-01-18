@@ -10,6 +10,13 @@ import type { PetInfo } from "../../services/player";
 import type { PetTeam } from "../../services/pets";
 import { onActivePetsStructuralChangeNow } from "../../store/atoms";
 import { attachSpriteIcon } from "../spriteIconCache";
+import {
+  applyPetPanelButtonVisibility,
+  getPetPanelButtonSettings,
+  setPetPanelButtonSettings,
+} from "../../utils/petPanelEnhancer";
+import { rarityBadge } from "./notifier";
+import { petCatalog, plantCatalog } from "../../data/hardcoded-data.clean";
 
 /* ================== petits helpers UI (mêmes vibes que garden) ================== */
 
@@ -1315,6 +1322,274 @@ function renderManagerTab(view: HTMLElement, ui: Menu) {
 }
 
 
+/* ================== Onglet: Feeding ================== */
+
+function renderFeedingTab(view: HTMLElement, ui: Menu) {
+  view.innerHTML = "";
+
+  const wrap = document.createElement("div");
+  wrap.style.display = "grid";
+  wrap.style.gridTemplateColumns = "minmax(220px, 280px) minmax(0, 1fr)";
+  wrap.style.gap = "10px";
+  wrap.style.alignItems = "stretch";
+  wrap.style.height = "54vh";
+  wrap.style.minHeight = "0";
+  view.appendChild(wrap);
+
+    const left = document.createElement("div");
+    left.style.display = "flex";
+    left.style.flexDirection = "column";
+    left.style.height = "100%";
+    left.style.minHeight = "0";
+    wrap.appendChild(left);
+
+  const vtabs = ui.vtabs({
+    emptyText: "No pets found.",
+    fillAvailableHeight: true,
+    renderItem: (item, btn) => {
+      btn.innerHTML = "";
+        btn.style.gridTemplateColumns = "24px 1fr auto";
+      btn.style.gap = "10px";
+
+      const size = 22;
+      const iconWrap = document.createElement("div");
+      Object.assign(iconWrap.style, {
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "6px",
+        background: "#161b22",
+        border: "1px solid #ffffff10",
+        display: "grid",
+        placeItems: "center",
+        overflow: "hidden",
+        boxShadow: "0 1px 0 #000 inset",
+        fontSize: "11px",
+        color: "#e2e8f0",
+      } as CSSStyleDeclaration);
+
+      const label = String(item.title || "Pet");
+      iconWrap.textContent = label.charAt(0).toUpperCase();
+      attachSpriteIcon(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
+        onNoSpriteFound: () => {
+          iconWrap.textContent = label.charAt(0).toUpperCase();
+        },
+      });
+
+      const textWrap = document.createElement("div");
+      textWrap.style.display = "flex";
+      textWrap.style.flexDirection = "column";
+      textWrap.style.gap = "2px";
+      textWrap.style.minWidth = "0";
+
+      const titleEl = document.createElement("div");
+      titleEl.textContent = label;
+      titleEl.style.whiteSpace = "nowrap";
+      titleEl.style.overflow = "hidden";
+      titleEl.style.textOverflow = "ellipsis";
+      textWrap.appendChild(titleEl);
+
+        const rarity = String((item as PetItem).rarity || "").trim();
+        const badge = rarity ? rarityBadge(rarity) : null;
+        if (badge) {
+          badge.style.margin = "0";
+          badge.style.alignSelf = "center";
+        }
+
+        btn.append(iconWrap, textWrap);
+        if (badge) btn.appendChild(badge);
+      },
+    });
+    vtabs.root.style.flex = "1 1 auto";
+    vtabs.root.style.minHeight = "0";
+    left.appendChild(vtabs.root);
+
+  const right = document.createElement("div");
+  right.style.display = "flex";
+  right.style.flexDirection = "column";
+  right.style.gap = "10px";
+  right.style.minHeight = "0";
+  wrap.appendChild(right);
+
+  const panelCard = document.createElement("div");
+  panelCard.style.border = "1px solid #4445";
+  panelCard.style.borderRadius = "10px";
+  panelCard.style.padding = "10px";
+  panelCard.style.background = "#0f1318";
+  panelCard.style.display = "flex";
+  panelCard.style.flexDirection = "column";
+  panelCard.style.gap = "8px";
+  right.appendChild(panelCard);
+
+  const panelTitle = document.createElement("div");
+  panelTitle.textContent = "Pet panel buttons";
+  panelTitle.style.fontWeight = "600";
+  panelCard.appendChild(panelTitle);
+
+  const panelBody = document.createElement("div");
+  panelBody.style.display = "flex";
+  panelBody.style.flexDirection = "column";
+  panelBody.style.gap = "6px";
+  panelCard.appendChild(panelBody);
+
+  const settings = getPetPanelButtonSettings();
+  const addToggle = (
+    label: string,
+    key: "instantFeed" | "feedFromInventory",
+    checked: boolean,
+  ) => {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.justifyContent = "space-between";
+    row.style.gap = "10px";
+    row.style.padding = "4px 0";
+
+    const text = document.createElement("div");
+    text.textContent = label;
+    text.style.fontSize = "13px";
+
+    const sw = ui.switch(checked) as HTMLInputElement;
+    sw.addEventListener("change", () => {
+      const next = setPetPanelButtonSettings({ [key]: sw.checked });
+      sw.checked = next[key];
+      applyPetPanelButtonVisibility();
+    });
+
+    row.append(text, sw);
+    panelBody.appendChild(row);
+  };
+
+  addToggle("Show Instant Feed button", "instantFeed", settings.instantFeed);
+  addToggle("Show Feed from Inventory button", "feedFromInventory", settings.feedFromInventory);
+
+  const card = document.createElement("div");
+  card.style.border = "1px solid #4445";
+  card.style.borderRadius = "10px";
+  card.style.padding = "10px";
+  card.style.background = "#0f1318";
+  card.style.display = "grid";
+  card.style.gridTemplateRows = "auto 1fr";
+  card.style.minHeight = "0";
+  right.appendChild(card);
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.flexDirection = "column";
+  header.style.gap = "4px";
+  header.style.marginBottom = "8px";
+  card.appendChild(header);
+
+  const title = document.createElement("div");
+  title.textContent = "Instant feed options";
+  title.style.fontWeight = "600";
+  header.appendChild(title);
+
+  const subtitle = document.createElement("div");
+  subtitle.textContent = "Allow or block crops for the Instant Feed button.";
+  subtitle.style.opacity = "0.7";
+  subtitle.style.fontSize = "12px";
+  header.appendChild(subtitle);
+
+  const body = document.createElement("div");
+  body.style.display = "flex";
+  body.style.flexDirection = "column";
+  body.style.gap = "6px";
+  body.style.overflow = "auto";
+  body.style.minHeight = "0";
+  card.appendChild(body);
+
+    type PetItem = { id: string; title: string; rarity?: string };
+    const petItems: PetItem[] = Object.keys(petCatalog as Record<string, any>)
+      .map((species) => {
+        const entry = (petCatalog as Record<string, any>)[species];
+        const name = String(entry?.name || species);
+        return {
+          id: species,
+          title: name,
+          rarity: entry?.rarity,
+        };
+      });
+
+  vtabs.setItems(petItems);
+  if (petItems.length) vtabs.select(petItems[0].id);
+
+  const renderCrops = (species: string | null) => {
+    body.innerHTML = "";
+    if (!species) {
+      const empty = document.createElement("div");
+      empty.textContent = "Select a pet to configure instant feed crops.";
+      empty.style.opacity = "0.75";
+      body.appendChild(empty);
+      return;
+    }
+
+    const compatibles = PetsService.getCompatibleCropsForSpecies(species) ?? [];
+    const seen = new Set<string>();
+    const list = compatibles
+      .map((c) => String(c || ""))
+      .filter((c) => c && !seen.has(c) && seen.add(c));
+
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "No compatible crops for this pet.";
+      empty.style.opacity = "0.75";
+      body.appendChild(empty);
+      return;
+    }
+
+    const cropEntries = list
+      .map((crop) => {
+        const entry = (plantCatalog as Record<string, any>)[crop];
+        const name = String(entry?.name || crop);
+        return { crop, name };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    cropEntries.forEach(({ crop, name }) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "1fr auto";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+      row.style.padding = "6px 4px";
+      row.style.borderBottom = "1px solid #ffffff12";
+
+      const labelWrap = document.createElement("div");
+      labelWrap.style.display = "flex";
+      labelWrap.style.flexDirection = "column";
+      labelWrap.style.gap = "2px";
+
+      const nameEl = document.createElement("div");
+      nameEl.textContent = name;
+      nameEl.style.fontSize = "13px";
+      labelWrap.appendChild(nameEl);
+
+      if (name !== crop) {
+        const idEl = document.createElement("div");
+        idEl.textContent = crop;
+        idEl.style.fontSize = "11px";
+        idEl.style.opacity = "0.6";
+        labelWrap.appendChild(idEl);
+      }
+
+      const sw = ui.switch(PetsService.isInstantFeedCropAllowed(species, crop)) as HTMLInputElement;
+      sw.addEventListener("change", () => {
+        PetsService.setInstantFeedCropAllowed(species, crop, sw.checked);
+      });
+
+      row.append(labelWrap, sw);
+      body.appendChild(row);
+    });
+  };
+
+  vtabs.onSelect((id) => {
+    renderCrops(id);
+  });
+
+  renderCrops(petItems[0]?.id ?? null);
+}
+
+
 /* ================== Onglet: Logs (nouveau) ================== */
 
 function renderLogsTab(view: HTMLElement, ui: Menu) {
@@ -1683,5 +1958,6 @@ export function renderPetsMenu(root: HTMLElement) {
   ui.mount(root);
 
   ui.addTab("manager", "🧰 Manager", (view) => renderManagerTab(view, ui));
+  ui.addTab("feeding", "Feeding", (view) => renderFeedingTab(view, ui));
   ui.addTab("logs", "📝 Logs", (view) => renderLogsTab(view, ui));
 }
