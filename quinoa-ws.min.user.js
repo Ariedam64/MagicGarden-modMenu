@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.35
+// @version      2.99.36
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -40565,7 +40565,7 @@ next: ${next}`;
     const ui = new Menu({ id: "pets", compact: true, windowSelector: ".qws-win" });
     ui.mount(root);
     ui.addTab("manager", "\u{1F9F0} Manager", (view) => renderManagerTab(view, ui));
-    ui.addTab("feeding", "Feeding", (view) => renderFeedingTab(view, ui));
+    ui.addTab("feeding", "\u{1F356} Feeding", (view) => renderFeedingTab(view, ui));
     ui.addTab("logs", "\u{1F4DD} Logs", (view) => renderLogsTab(view, ui));
   }
 
