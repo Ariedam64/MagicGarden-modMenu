@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.25
+// @version      2.99.28
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1550,7 +1550,8 @@
     SnowFox: 31,
     Stoat: 32,
     WhiteCaribou: 33,
-    WinterEgg: 34
+    WinterEgg: 34,
+    SnowEgg: 35
   };
   var tileRefsMutations = {
     Wet: 1,
@@ -1639,7 +1640,8 @@
     ColoredStringLightsSideways: 95,
     StringLights: 96,
     StringLightsSideways: 97,
-    PetHutch: 30
+    PetHutch: 30,
+    DecorShed: 98
   };
   var plantCatalog = {
     Carrot: {
@@ -2793,6 +2795,20 @@
       secondsToHatch: 43200,
       faunaSpawnWeights: { SnowFox: 75, Stoat: 20, WhiteCaribou: 5 },
       expiryDate: /* @__PURE__ */ new Date("2026-01-12T01:00:00.000Z")
+    },
+    SnowEgg: {
+      tileRef: tileRefsPets.SnowEgg,
+      name: "Snow Egg",
+      coinPrice: 2e8,
+      creditPrice: 269,
+      rarity: rarity.Legendary,
+      secondsToHatch: 43200,
+      faunaSpawnWeights: {
+        SnowFox: 75,
+        Stoat: 20,
+        WhiteCaribou: 5
+      },
+      requiredWeather: "Frost"
     }
   };
   var petCatalog = {
@@ -3877,6 +3893,15 @@
       baseTileScale: 2.1,
       isOneTimePurchase: true,
       nudgeY: -0.45
+    },
+    DecorShed: {
+      tileRef: tileRefsDecor.DecorShed,
+      name: "Decor Shed",
+      coinPrice: 6e10,
+      creditPrice: 399,
+      rarity: rarity.Divine,
+      baseTileScale: 1,
+      isOneTimePurchase: true
     },
     MiniWizardTower: {
       tileRef: tileRefsDecor.MiniWizardTower,
