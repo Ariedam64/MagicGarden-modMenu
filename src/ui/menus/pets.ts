@@ -1958,6 +1958,6 @@ export function renderPetsMenu(root: HTMLElement) {
   ui.mount(root);
 
   ui.addTab("manager", "🧰 Manager", (view) => renderManagerTab(view, ui));
-  ui.addTab("feeding", "Feeding", (view) => renderFeedingTab(view, ui));
+  ui.addTab("feeding", "🍖 Feeding", (view) => renderFeedingTab(view, ui));
   ui.addTab("logs", "📝 Logs", (view) => renderLogsTab(view, ui));
 }

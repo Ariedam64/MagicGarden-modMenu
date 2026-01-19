@@ -1075,6 +1075,7 @@ const PET_NAME_SELECTOR = '.McFlex.css-1lpag07 .chakra-text';
 const PET_HUTCH_ROOT_SELECTOR = '.McGrid.css-3c49ba';
 const PET_HUTCH_LIST_SELECTOR = '.McGrid.css-1nv2ym8 .McFlex.css-1tgchvv';
 const PET_HUTCH_INVENTORY_LIST_SELECTOR = '.McGrid.css-1nv2ym8 .McFlex.css-gui45t';
+const PET_HUTCH_VISIBILITY_STYLE = 'visibility';
 
 interface StrengthTextParts {
   label: HTMLSpanElement;
@@ -1767,22 +1768,42 @@ const applyPetItemsToContainer = (container: HTMLElement | null, items: any[]): 
   }
 };
 
-const updatePetHutchSections = async (): Promise<void> => {
+const setPetHutchContainersHidden = (containers: Array<HTMLElement | null>, hidden: boolean): void => {
+  for (const container of containers) {
+    if (!container) continue;
+    if (hidden) {
+      container.style.setProperty(PET_HUTCH_VISIBILITY_STYLE, 'hidden');
+    } else {
+      container.style.removeProperty(PET_HUTCH_VISIBILITY_STYLE);
+    }
+  }
+};
+
+const updatePetHutchSections = async (
+  options: { hideDuringUpdate?: boolean } = {}
+): Promise<boolean> => {
+  const hideDuringUpdate = options.hideDuringUpdate === true;
+  const root =
+    document.querySelector<HTMLElement>(PET_HUTCH_ROOT_SELECTOR) ?? document.body;
+  const hutchContainer =
+    root.querySelector<HTMLElement>(PET_HUTCH_LIST_SELECTOR) ??
+    findSectionContainerByHeaderText(PET_HUTCH_HEADER_TEXT);
+  const inventoryContainer =
+    root.querySelector<HTMLElement>(PET_HUTCH_INVENTORY_LIST_SELECTOR) ??
+    findSectionContainerByHeaderText(PET_INVENTORY_HEADER_TEXT);
+  const containers = [hutchContainer, inventoryContainer];
+  if (!hutchContainer && !inventoryContainer) return false;
+
+  if (hideDuringUpdate) {
+    setPetHutchContainersHidden(containers, true);
+  }
+
   try {
-    const root =
-      document.querySelector<HTMLElement>(PET_HUTCH_ROOT_SELECTOR) ?? document.body;
-    const hutchContainer =
-      root.querySelector<HTMLElement>(PET_HUTCH_LIST_SELECTOR) ??
-      findSectionContainerByHeaderText(PET_HUTCH_HEADER_TEXT);
-    const inventoryContainer =
-      root.querySelector<HTMLElement>(PET_HUTCH_INVENTORY_LIST_SELECTOR) ??
-      findSectionContainerByHeaderText(PET_INVENTORY_HEADER_TEXT);
     console.log("[InventorySorting] Hutch detect", {
       root: root.className,
       hutchContainer: hutchContainer?.className ?? null,
       inventoryContainer: inventoryContainer?.className ?? null,
     });
-    if (!hutchContainer && !inventoryContainer) return;
 
     const [hutchItemsRaw, inventoryRaw] = await Promise.all([
       myPetHutchPetItems.get().catch(() => []),
@@ -1802,8 +1823,14 @@ const updatePetHutchSections = async (): Promise<void> => {
 
     applyPetItemsToContainer(hutchContainer, hutchItems);
     applyPetItemsToContainer(inventoryContainer, inventoryItems);
+    return true;
   } catch (error) {
     console.warn("[InventorySorting] Impossible de mettre a jour les pets du hutch", error);
+    return false;
+  } finally {
+    if (hideDuringUpdate) {
+      setPetHutchContainersHidden(containers, false);
+    }
   }
 };
 
@@ -2863,6 +2890,8 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   let lastRenderedInventoryEntryCount: number | null = null;
   let noiseObserver: MutationObserver | null = null;
   let noiseObserverContainer: HTMLElement | null = null;
+  let lastPetHutchRoot: HTMLElement | null = null;
+  let petHutchNeedsInit = true;
 
   const updateDomSnapshotForGrid = (target: Element | null) => {
     if (!target) {
@@ -2967,6 +2996,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
         update();
       }
     }
+    maybeInitPetHutch();
     refreshPetHutch();
   });
 
@@ -3187,6 +3217,22 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
   const refreshPetHutch = debounce(() => {
     void updatePetHutchSections();
   }, 120);
+  const maybeInitPetHutch = () => {
+    const root = document.querySelector<HTMLElement>(PET_HUTCH_ROOT_SELECTOR);
+    if (!root) {
+      lastPetHutchRoot = null;
+      petHutchNeedsInit = true;
+      return;
+    }
+    if (root !== lastPetHutchRoot) {
+      lastPetHutchRoot = root;
+      petHutchNeedsInit = true;
+    }
+    if (!petHutchNeedsInit) return;
+    void updatePetHutchSections({ hideDuringUpdate: true }).then((applied) => {
+      if (applied) petHutchNeedsInit = false;
+    });
+  };
 
   const changeHandler = (e: Event) => {
     const target = e.target as Element | null;
@@ -3225,6 +3271,7 @@ export function attachInventorySorting(userConfig: Partial<InventorySortingConfi
     document.addEventListener('change', changeHandler, true);
     document.addEventListener('input', changeHandler, true);
     update();
+    maybeInitPetHutch();
     refreshPetHutch();
   };
 
