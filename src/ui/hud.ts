@@ -828,7 +828,6 @@ export function mountHUD(opts?: HUDOptions) {
 
   function insertModMenuToggleButton() {
     const button = document.createElement("button");
-    button.className = "chakra-button css-3ryuu8"
     button.innerText = "🔮"
     button.onclick = toggleHUDHidden;
     
@@ -843,6 +842,8 @@ export function mountHUD(opts?: HUDOptions) {
       return;
     };
     buttonGrid.appendChild(button);
+    // Match the class name of the previous button
+    button.className = button.previousElementSibling?.className || "";
   }
   // Wait for the SystemHeader element to be created before inserting button
   const systemHeaderObserver = new MutationObserver((_, observer) => {
