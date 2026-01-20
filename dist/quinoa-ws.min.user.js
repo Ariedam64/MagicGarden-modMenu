@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.37
+// @version      2.99.38
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -27323,7 +27323,8 @@
           searchQuery,
           entryCount: entries.length,
           baseItems: filteredItems.slice(),
-          entryByBaseIndex: /* @__PURE__ */ new Map()
+          entryByBaseIndex: /* @__PURE__ */ new Map(),
+          lastSortKey: state3?.lastSortKey ?? null
         };
         entries.forEach((entry, index) => {
           newState.entryByBaseIndex.set(index, entry);
@@ -27334,6 +27335,39 @@
         console.warn("[InventorySorting] Impossible de r\xE9cup\xE9rer myInventory pour le tri DOM", error);
         return null;
       }
+    };
+    const rebaseStateToDomOrder = (state3, entries) => {
+      if (entries.length !== state3.baseItems.length) return false;
+      const reordered = [];
+      const used = /* @__PURE__ */ new Set();
+      for (const entry of entries) {
+        const baseIndex = readBaseIndex(entry);
+        if (baseIndex == null || baseIndex < 0 || baseIndex >= state3.baseItems.length) {
+          return false;
+        }
+        if (used.has(baseIndex)) {
+          return false;
+        }
+        used.add(baseIndex);
+        reordered.push(state3.baseItems[baseIndex]);
+      }
+      if (reordered.length !== state3.baseItems.length) return false;
+      let changed = false;
+      for (let i = 0; i < reordered.length; i++) {
+        if (reordered[i] !== state3.baseItems[i]) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return false;
+      state3.baseItems = reordered;
+      assignBaseIndexesToEntries(entries);
+      state3.entryByBaseIndex.clear();
+      entries.forEach((entry, index) => {
+        state3.entryByBaseIndex.set(index, entry);
+      });
+      state3.entryCount = entries.length;
+      return true;
     };
     return async (grid, sortKey, direction) => {
       if (typeof document === "undefined") return;
@@ -27349,6 +27383,10 @@
       const searchQuery = getNormalizedInventorySearchQuery(grid);
       const state3 = await ensureState(grid, filters, entries, searchQuery);
       if (!state3) return;
+      const previousSortKey = state3.lastSortKey;
+      if ((!sortKey || sortKey === "none") && previousSortKey === "none") {
+        rebaseStateToDomOrder(state3, entries);
+      }
       const baseIndexByItem = /* @__PURE__ */ new Map();
       state3.baseItems.forEach((item, index) => {
         baseIndexByItem.set(item, index);
@@ -27375,11 +27413,16 @@
         );
         return;
       }
-      const fragment = document.createDocumentFragment();
-      desiredEntries.forEach((entry) => {
-        fragment.appendChild(entry.wrapper);
-      });
-      container.appendChild(fragment);
+      const alreadyOrdered = desiredEntries.every(
+        (entry, index) => entry.wrapper === entries[index]?.wrapper
+      );
+      if (!alreadyOrdered) {
+        const fragment = document.createDocumentFragment();
+        desiredEntries.forEach((entry) => {
+          fragment.appendChild(entry.wrapper);
+        });
+        container.appendChild(fragment);
+      }
       state3.entryByBaseIndex.clear();
       desiredEntries.forEach((entry) => {
         const baseIndex = readBaseIndex(entry);
@@ -27387,6 +27430,7 @@
           state3.entryByBaseIndex.set(baseIndex, entry);
         }
       });
+      state3.lastSortKey = sortKey;
     };
   }
   function getActiveFiltersFromGrid(grid, checkboxSelector, checkboxLabelSelector) {

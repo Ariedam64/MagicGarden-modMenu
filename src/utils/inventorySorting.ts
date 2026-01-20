@@ -338,6 +338,7 @@ interface InventoryDomSortState {
   entryCount: number;
   baseItems: any[];
   entryByBaseIndex: Map<number, InventoryDomEntry>;
+  lastSortKey: SortKey | null;
 }
 
 // -------------------- Utils (exportés quand utiles) --------------------
@@ -2190,6 +2191,7 @@ function createDefaultApplySorting(
         entryCount: entries.length,
         baseItems: filteredItems.slice(),
         entryByBaseIndex: new Map<number, InventoryDomEntry>(),
+        lastSortKey: state?.lastSortKey ?? null,
       };
 
       entries.forEach((entry, index) => {
@@ -2202,6 +2204,48 @@ function createDefaultApplySorting(
       console.warn("[InventorySorting] Impossible de récupérer myInventory pour le tri DOM", error);
       return null;
     }
+  };
+
+  const rebaseStateToDomOrder = (
+    state: InventoryDomSortState,
+    entries: InventoryDomEntry[]
+  ): boolean => {
+    if (entries.length !== state.baseItems.length) return false;
+
+    const reordered: any[] = [];
+    const used = new Set<number>();
+
+    for (const entry of entries) {
+      const baseIndex = readBaseIndex(entry);
+      if (baseIndex == null || baseIndex < 0 || baseIndex >= state.baseItems.length) {
+        return false;
+      }
+      if (used.has(baseIndex)) {
+        return false;
+      }
+      used.add(baseIndex);
+      reordered.push(state.baseItems[baseIndex]);
+    }
+
+    if (reordered.length !== state.baseItems.length) return false;
+
+    let changed = false;
+    for (let i = 0; i < reordered.length; i++) {
+      if (reordered[i] !== state.baseItems[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return false;
+
+    state.baseItems = reordered;
+    assignBaseIndexesToEntries(entries);
+    state.entryByBaseIndex.clear();
+    entries.forEach((entry, index) => {
+      state.entryByBaseIndex.set(index, entry);
+    });
+    state.entryCount = entries.length;
+    return true;
   };
 
 
@@ -2223,6 +2267,11 @@ function createDefaultApplySorting(
 
     const state = await ensureState(grid, filters, entries, searchQuery);
     if (!state) return;
+
+    const previousSortKey = state.lastSortKey;
+    if ((!sortKey || sortKey === "none") && previousSortKey === "none") {
+      rebaseStateToDomOrder(state, entries);
+    }
 
     const baseIndexByItem = new Map<any, number>();
     state.baseItems.forEach((item, index) => {
@@ -2261,11 +2310,17 @@ function createDefaultApplySorting(
       return;
     }
 
-    const fragment = document.createDocumentFragment();
-    desiredEntries.forEach((entry) => {
-      fragment.appendChild(entry.wrapper);
-    });
-    container.appendChild(fragment);
+    const alreadyOrdered = desiredEntries.every(
+      (entry, index) => entry.wrapper === entries[index]?.wrapper
+    );
+
+    if (!alreadyOrdered) {
+      const fragment = document.createDocumentFragment();
+      desiredEntries.forEach((entry) => {
+        fragment.appendChild(entry.wrapper);
+      });
+      container.appendChild(fragment);
+    }
 
     state.entryByBaseIndex.clear();
     desiredEntries.forEach((entry) => {
@@ -2274,6 +2329,7 @@ function createDefaultApplySorting(
         state.entryByBaseIndex.set(baseIndex, entry);
       }
     });
+    state.lastSortKey = sortKey;
   };
 }
 
