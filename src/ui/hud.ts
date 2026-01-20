@@ -7,6 +7,7 @@ import { installSellKeybindsOnce } from "../services/sell";
 import { installPetHutchKeybindsOnce } from "../services/petHutchKeybind";
 import { installJournalKeybindsOnce } from "../services/journalKeybind";
 import { installDecorShedKeybindsOnce } from "../services/decorShedKeybind";
+import { PetAlertService } from "../services/pet-alerts";
 import {
   getKeybind,
   getKeybindLabel,
@@ -1071,6 +1072,7 @@ export function initWatchers(){
           });
         } catch {}
       await PetsService.startAbilityLogsWatcher()
+       try { await PetAlertService.start(); } catch {}
       await startActivityLogHistoryWatcher()
       startActivityLogFilter();
       await renderOverlay()
