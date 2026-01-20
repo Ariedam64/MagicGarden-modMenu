@@ -15,7 +15,7 @@ The userscript injects a floating HUD called **Arie's Mod** with draggable windo
 ## 🚀 Installation (players)
 
 1. Install a userscript manager (Tampermonkey is the one I target).
-2. Open the [script installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/dist/quinoa-ws.min.user.js) and let your manager install it.
+2. Open the [script installer](https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js) and let your manager install it.
 3. Reload the game on either **https://magicgarden.gg** or within the Discord activity. The HUD pops up in the bottom-right corner when the websocket connects.
 
 ## 🛠️ Installation (developers / tinkerers)
@@ -48,14 +48,19 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Toggle follow modes (you and your pets) directly from the panel.
 - Activity log viewer fetches up to 500 events per player and adds sorting so you can reorder the history fast.
 
+### 👫 Friends
+- Friend system backed by the mod's API: send/accept/reject friend requests, see online status and which room they're in.
+- View friend gardens, inventory, stats with privacy controls so you decide what friends can see.
+- Search for players across all public rooms and join their room with one click.
+
 ### 🐾 Pets
 - Manage pet teams with drag & drop, custom icons, and quick duplication.
 - Apply teams instantly, edit abilities, and push the setup into hotkeys for swapping.
 - Live inventory fetcher keeps slot previews and ability badges accurate.
-- Pet Panel Enhancer injects **FEED INSTANT** and **FEED FROM INVENTORY** buttons
+- Pet Panel Enhancer injects **FEED INSTANT** and **FEED FROM INVENTORY** buttons.
 
 ### 🏠 Room
-- Two tabs: 🌐 Public Rooms (auto-refresh every 10 s with category/player filters) and ⭐ Custom Rooms (your saved quick joins).
+- Three tabs: 🌐 Public Rooms (auto-refresh every 10 s with category/player filters), ⭐ Custom Rooms (your saved quick joins), and 🔍 Search Player (find players across public rooms).
 - Discord users get a safety notice when direct joins are blocked inside activities.
 - Scrollable cards highlight capacity, tags, and join actions.
 
@@ -75,6 +80,10 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Each card offers an "Open tool" button that tries to launch in a new tab (with graceful fallback toast on failure).
 - Global shop helpers add **Buy All** controls to each vendor panel and a **Sell All Pets** shortcut.
 
+### 🧮 Calculator
+- Crop value calculator: pick a crop, size, mutations, and friend bonus to get min/max sell prices.
+- Mutation visualizer to avoid mistakes and real-time sprite preview.
+
 ### 🧩 Misc
 - Player ghost movement toggle with adjustable delay to move silently.
 - Seed and decor deleter workflows to bulk-select items, review totals, and delete/clear in one place.
@@ -90,6 +99,15 @@ Each panel lives in `src/ui/menus/*` and is rendered through the shared `Menu` h
 - Rebind every supported action through hotkey capture buttons, including modifier-only shortcuts.
 - Toggle hold detection per action, reset to defaults, or clear bindings entirely.
 - Updates propagate instantly to the game and to the HUD toggle behaviour.
+
+### ⚙️ Settings
+- Centralized configuration for mod features: HUD theme, notification preferences, performance options.
+- Privacy settings to control API data sharing, friend visibility, and activity log access.
+- Storage management to clear cache, export/import settings, or reset to defaults.
+
+### ✏️ Editor
+- Advanced dev tools: spawn items in inventory, edit player state, quick testing scenarios.
+- Developer utilities for mod development and debugging.
 
 ### 🔧 Debug
 - Websocket inspector with live feed, replay buffer, and quick resend helpers.
@@ -110,6 +128,13 @@ Skip installation steps and jump into usage. Open the HUD with `ALT + X` or `INS
 - Teleport to the player or jump into their garden.
 - Inspect inventory, journal, stats, and activity log; these views are read-only and cannot give you items.
 - Follow keeps you right behind the target; Pet follow sends your pets to trail them.
+
+### Friends menu
+- Send friend requests to players, accept/reject incoming requests, or remove friends.
+- See real-time online status and which room your friends are in.
+- View friend gardens, inventory, stats (respects their privacy settings).
+- Privacy tab lets you control what data friends can see: garden, inventory, stats, journal, activity log.
+- Search tab scans all public rooms to find a player and join their room.
 
 ### Room menu
 - Three tabs. **Public Rooms** lists 100+ public rooms you can join directly on the web version (magicgarden.gg / magiccircle.gg / starweaver.org). Discord Activity cannot join directly. View who is inside, sort, and refresh.
@@ -142,16 +167,31 @@ Skip installation steps and jump into usage. Open the HUD with `ALT + X` or `INS
 - **Pets**: warns when a pet's food drops below a threshold.
 - **Audio**: add custom sounds and set defaults for shop/weather/pet alerts.
 
-### Mic menu
+### Settings menu
+- **General**: customize HUD theme, notification preferences, performance options.
+- **Privacy**: control what data is shared with the API backend, toggle friend visibility, activity log access.
+- **Storage**: clear cached data, export/import your settings, reset to defaults.
+
+### Misc menu
 - **Ghost**: fly through the map (speed adjustable) and pass through walls.
 - **Seed deleter**: click **Select seeds**, choose seeds/quantities in selection mode, confirm, then **Delete** once sure.
 - **Decor deleter**: same flow but requires a shovel and an empty plot or edge slot.
+- **Inventory sorter**: enhanced sorting with direction, value display, filtered totals, and persistence.
+
+### Editor menu
+- **Item spawning**: add items directly to inventory for testing/debugging.
+- **State editing**: modify player state values.
+- **Testing tools**: quick access to common test scenarios.
 
 ### Debug menu
 - Jotai explorer: list atoms, inspect one, and update it (all atoms are writable). **Live atom** records an atom state over time.
 - Sprite viewer: browse sprites and variants (gold/rainbow).
 - Audio player: preview many in-game sounds.
 - Websocket inspector: live traffic viewer with filters; copy, edit, or replay messages.
+
+## 🔌 Backend API
+
+The mod uses a small VPS backend (`ariesmod-api.ariedam.fr`) to power the friend system and cross-player features. Right now it handles around 400 daily users. The API syncs player state every 60 seconds (smart deduplication to avoid spam), manages friend requests/lists, and serves public room discovery. All API features are opt-in via the Settings menu privacy controls. You can disable data sharing entirely if you just want local-only features.
 
 ## 🤝 Compatibility notes
 
