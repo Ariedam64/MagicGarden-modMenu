@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.36
+// @version      2.99.37
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26482,6 +26482,7 @@
   var PET_HUTCH_ROOT_SELECTOR = ".McGrid.css-3c49ba";
   var PET_HUTCH_LIST_SELECTOR = ".McGrid.css-1nv2ym8 .McFlex.css-1tgchvv";
   var PET_HUTCH_INVENTORY_LIST_SELECTOR = ".McGrid.css-1nv2ym8 .McFlex.css-gui45t";
+  var PET_HUTCH_VISIBILITY_STYLE = "visibility";
   var RAINBOW_BADGE_TEXT_GRADIENT = "linear-gradient(90deg, #ff6b6b 0%, #ffd86f 25%, #6bff8f 50%, #6bc7ff 75%, #b86bff 100%)";
   var getPetMutationTone = (item) => {
     const mutations = getInventoryItemMutations(item);
@@ -27022,17 +27023,32 @@
       alignInventoryStrengthText(entry.card);
     }
   };
-  var updatePetHutchSections = async () => {
+  var setPetHutchContainersHidden = (containers, hidden) => {
+    for (const container of containers) {
+      if (!container) continue;
+      if (hidden) {
+        container.style.setProperty(PET_HUTCH_VISIBILITY_STYLE, "hidden");
+      } else {
+        container.style.removeProperty(PET_HUTCH_VISIBILITY_STYLE);
+      }
+    }
+  };
+  var updatePetHutchSections = async (options = {}) => {
+    const hideDuringUpdate = options.hideDuringUpdate === true;
+    const root = document.querySelector(PET_HUTCH_ROOT_SELECTOR) ?? document.body;
+    const hutchContainer = root.querySelector(PET_HUTCH_LIST_SELECTOR) ?? findSectionContainerByHeaderText(PET_HUTCH_HEADER_TEXT);
+    const inventoryContainer = root.querySelector(PET_HUTCH_INVENTORY_LIST_SELECTOR) ?? findSectionContainerByHeaderText(PET_INVENTORY_HEADER_TEXT);
+    const containers = [hutchContainer, inventoryContainer];
+    if (!hutchContainer && !inventoryContainer) return false;
+    if (hideDuringUpdate) {
+      setPetHutchContainersHidden(containers, true);
+    }
     try {
-      const root = document.querySelector(PET_HUTCH_ROOT_SELECTOR) ?? document.body;
-      const hutchContainer = root.querySelector(PET_HUTCH_LIST_SELECTOR) ?? findSectionContainerByHeaderText(PET_HUTCH_HEADER_TEXT);
-      const inventoryContainer = root.querySelector(PET_HUTCH_INVENTORY_LIST_SELECTOR) ?? findSectionContainerByHeaderText(PET_INVENTORY_HEADER_TEXT);
       console.log("[InventorySorting] Hutch detect", {
         root: root.className,
         hutchContainer: hutchContainer?.className ?? null,
         inventoryContainer: inventoryContainer?.className ?? null
       });
-      if (!hutchContainer && !inventoryContainer) return;
       const [hutchItemsRaw, inventoryRaw] = await Promise.all([
         myPetHutchPetItems.get().catch(() => []),
         Atoms.inventory.myInventory.get().catch(() => null)
@@ -27045,8 +27061,14 @@
       });
       applyPetItemsToContainer(hutchContainer, hutchItems);
       applyPetItemsToContainer(inventoryContainer, inventoryItems);
+      return true;
     } catch (error) {
       console.warn("[InventorySorting] Impossible de mettre a jour les pets du hutch", error);
+      return false;
+    } finally {
+      if (hideDuringUpdate) {
+        setPetHutchContainersHidden(containers, false);
+      }
     }
   };
   var PET_STATS_BY_SPECIES = (() => {
@@ -27843,6 +27865,8 @@
     let lastRenderedInventoryEntryCount = null;
     let noiseObserver = null;
     let noiseObserverContainer = null;
+    let lastPetHutchRoot = null;
+    let petHutchNeedsInit = true;
     const updateDomSnapshotForGrid = (target) => {
       if (!target) {
         lastSortedDomSnapshot = null;
@@ -27932,6 +27956,7 @@
           update();
         }
       }
+      maybeInitPetHutch();
       refreshPetHutch();
     });
     const resolveGrid = () => {
@@ -28115,6 +28140,22 @@
     const refreshPetHutch = debounce(() => {
       void updatePetHutchSections();
     }, 120);
+    const maybeInitPetHutch = () => {
+      const root = document.querySelector(PET_HUTCH_ROOT_SELECTOR);
+      if (!root) {
+        lastPetHutchRoot = null;
+        petHutchNeedsInit = true;
+        return;
+      }
+      if (root !== lastPetHutchRoot) {
+        lastPetHutchRoot = root;
+        petHutchNeedsInit = true;
+      }
+      if (!petHutchNeedsInit) return;
+      void updatePetHutchSections({ hideDuringUpdate: true }).then((applied) => {
+        if (applied) petHutchNeedsInit = false;
+      });
+    };
     const changeHandler = (e) => {
       const target = e.target;
       if (!target) return;
@@ -28143,6 +28184,7 @@
       document.addEventListener("change", changeHandler, true);
       document.addEventListener("input", changeHandler, true);
       update();
+      maybeInitPetHutch();
       refreshPetHutch();
     };
     startObservers();
