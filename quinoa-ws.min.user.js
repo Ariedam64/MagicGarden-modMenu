@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.38
+// @version      2.99.39
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -20666,6 +20666,178 @@
     volume: 0.7
   });
 
+  // src/services/pet-alerts.ts
+  var clampPct2 = (v) => Math.max(1, Math.min(100, Math.round(v)));
+  var prefs = {
+    globalEnabled: true,
+    generalEnabled: false,
+    defaultThresholdPct: 25,
+    pets: {}
+  };
+  var started = false;
+  var unsubPets = null;
+  var lastPets = [];
+  var seenBelow = /* @__PURE__ */ new Map();
+  function loadPrefs() {
+    try {
+      const parsed = readAriesPath("pets.alerts");
+      if (parsed && typeof parsed === "object") {
+        prefs = {
+          globalEnabled: parsed.globalEnabled !== false,
+          generalEnabled: !!parsed.generalEnabled,
+          defaultThresholdPct: clampPct2(parsed.defaultThresholdPct ?? prefs.defaultThresholdPct),
+          pets: typeof parsed.pets === "object" && parsed.pets ? parsed.pets : {}
+        };
+      }
+    } catch {
+    }
+    return prefs;
+  }
+  function savePrefs() {
+    try {
+      writeAriesPath("pets.alerts", prefs);
+    } catch {
+    }
+  }
+  function prefFor(petId) {
+    const baseThreshold = clampPct2(prefs.defaultThresholdPct);
+    if (prefs.generalEnabled) {
+      return { enabled: prefs.globalEnabled !== false, thresholdPct: baseThreshold };
+    }
+    if (!petId) return { enabled: false, thresholdPct: baseThreshold };
+    const entry = prefs.pets[petId] ?? {};
+    const enabled = entry.enabled ?? false;
+    const thresholdPct = clampPct2(entry.thresholdPct ?? baseThreshold);
+    return { enabled, thresholdPct };
+  }
+  async function triggerAlert(key2) {
+    try {
+      await audio.trigger(key2, {}, "pets");
+    } catch {
+    }
+  }
+  function evaluatePet(pet) {
+    const petId = String(pet?.slot?.id || "");
+    if (!petId || !prefs.globalEnabled) {
+      seenBelow.set(petId, false);
+      return;
+    }
+    const { enabled, thresholdPct } = prefFor(petId);
+    const hungerPct = PetsService.getHungerPctFor(pet);
+    const below = enabled && Number.isFinite(hungerPct) && hungerPct < thresholdPct;
+    const wasBelow = seenBelow.get(petId) === true;
+    const loopKey = prefs.generalEnabled ? "pets:general" : `pet:${petId}`;
+    const mode = audio.getPlaybackMode?.("pets") ?? "oneshot";
+    if (below) {
+      if (mode === "loop") {
+        void triggerAlert(loopKey);
+      } else if (!wasBelow) {
+        void triggerAlert(loopKey);
+      }
+    } else {
+      try {
+        audio.stopLoop(loopKey);
+      } catch {
+      }
+    }
+    seenBelow.set(petId, below);
+  }
+  async function evaluateAll(pets = null) {
+    const list = pets ?? lastPets;
+    for (const pet of Array.isArray(list) ? list : []) {
+      try {
+        evaluatePet(pet);
+      } catch {
+      }
+    }
+  }
+  async function ensureStarted() {
+    if (started) return;
+    loadPrefs();
+    try {
+      unsubPets = await PetsService.onPetsChangeNow((arr) => {
+        lastPets = Array.isArray(arr) ? arr.slice(0, 3) : [];
+        void evaluateAll(lastPets);
+      });
+    } catch {
+      unsubPets = null;
+    }
+    started = true;
+  }
+  function stop() {
+    try {
+      unsubPets?.();
+    } catch {
+    }
+    unsubPets = null;
+    started = false;
+    seenBelow.clear();
+  }
+  var PetAlertService = {
+    async start() {
+      await ensureStarted();
+      return () => stop();
+    },
+    isGlobalEnabled() {
+      return prefs.globalEnabled !== false;
+    },
+    setGlobalEnabled(on) {
+      prefs.globalEnabled = !!on;
+      if (!on) seenBelow.clear();
+      savePrefs();
+    },
+    isGeneralEnabled() {
+      return !!prefs.generalEnabled;
+    },
+    setGeneralEnabled(on) {
+      prefs.generalEnabled = !!on;
+      savePrefs();
+      void this.refreshNow();
+    },
+    getGeneralThresholdPct() {
+      return clampPct2(prefs.defaultThresholdPct);
+    },
+    setGeneralThresholdPct(pct) {
+      const next = clampPct2(pct);
+      prefs.defaultThresholdPct = next;
+      savePrefs();
+      void this.refreshNow();
+      return next;
+    },
+    getDefaultThresholdPct() {
+      return clampPct2(prefs.defaultThresholdPct);
+    },
+    setDefaultThresholdPct(pct) {
+      const next = clampPct2(pct);
+      prefs.defaultThresholdPct = next;
+      savePrefs();
+      return next;
+    },
+    isPetEnabled(petId) {
+      return prefFor(petId).enabled;
+    },
+    setPetEnabled(petId, on) {
+      if (!petId) return;
+      prefs.pets[petId] = { ...prefs.pets[petId] || {}, enabled: !!on };
+      savePrefs();
+      void evaluateAll();
+    },
+    getPetThresholdPct(petId) {
+      return prefFor(petId).thresholdPct;
+    },
+    setPetThresholdPct(petId, pct) {
+      if (!petId) return this.getDefaultThresholdPct();
+      const next = clampPct2(pct);
+      prefs.pets[petId] = { ...prefs.pets[petId] || {}, thresholdPct: next };
+      savePrefs();
+      void evaluateAll();
+      return next;
+    },
+    async refreshNow() {
+      await evaluateAll();
+    }
+  };
+
   // src/services/notifier.ts
   var PATH_NOTIFIER_PREFS = "notifier.prefs";
   var PATH_NOTIFIER_RULES = "notifier.rules";
@@ -23276,10 +23448,10 @@
     instantFeed: true,
     feedFromInventory: true
   };
-  var started = false;
+  var started2 = false;
   function startPetPanelEnhancer() {
-    if (started) return;
-    started = true;
+    if (started2) return;
+    started2 = true;
     if (typeof document === "undefined") {
       return;
     }
@@ -25106,7 +25278,7 @@
   }
 
   // src/utils/inventorySelectionLogger.ts
-  var started2 = false;
+  var started3 = false;
   var cachedItems = [];
   var currentIndex = null;
   var lastLoggedQuantity = void 0;
@@ -25266,8 +25438,8 @@
     }
   }
   async function startSelectedInventoryQuantityLogger() {
-    if (started2) return;
-    started2 = true;
+    if (started3) return;
+    started3 = true;
     cachedItems = normalizeItems(await readInventory());
     currentIndex = await readSelectedIndex();
     logQuantity(true);
@@ -28705,11 +28877,11 @@
     { key: "refund", re: /\b(refund|refunded)\b/i },
     { key: "boost", re: /\b(boost|potion|refund|growth|restock|spin)\b/i }
   ];
-  var started3 = false;
+  var started4 = false;
   var activeFilter = loadPersistedFilter() ?? "all";
   function startActivityLogFilter() {
-    if (started3 || typeof document === "undefined") return;
-    started3 = true;
+    if (started4 || typeof document === "undefined") return;
+    started4 = true;
     ensureStyles();
     onAdded(
       (el2) => el2 instanceof HTMLElement && el2.matches("p.chakra-text") && /activity\s*log/i.test(el2.textContent || ""),
@@ -30105,6 +30277,10 @@
       } catch {
       }
       await PetsService.startAbilityLogsWatcher();
+      try {
+        await PetAlertService.start();
+      } catch {
+      }
       await startActivityLogHistoryWatcher();
       startActivityLogFilter();
       await renderOverlay();
@@ -35596,178 +35772,6 @@ next: ${next}`;
     });
     ui.mount(container);
   }
-
-  // src/services/pet-alerts.ts
-  var clampPct2 = (v) => Math.max(1, Math.min(100, Math.round(v)));
-  var prefs = {
-    globalEnabled: true,
-    generalEnabled: false,
-    defaultThresholdPct: 25,
-    pets: {}
-  };
-  var started4 = false;
-  var unsubPets = null;
-  var lastPets = [];
-  var seenBelow = /* @__PURE__ */ new Map();
-  function loadPrefs() {
-    try {
-      const parsed = readAriesPath("pets.alerts");
-      if (parsed && typeof parsed === "object") {
-        prefs = {
-          globalEnabled: parsed.globalEnabled !== false,
-          generalEnabled: !!parsed.generalEnabled,
-          defaultThresholdPct: clampPct2(parsed.defaultThresholdPct ?? prefs.defaultThresholdPct),
-          pets: typeof parsed.pets === "object" && parsed.pets ? parsed.pets : {}
-        };
-      }
-    } catch {
-    }
-    return prefs;
-  }
-  function savePrefs() {
-    try {
-      writeAriesPath("pets.alerts", prefs);
-    } catch {
-    }
-  }
-  function prefFor(petId) {
-    const baseThreshold = clampPct2(prefs.defaultThresholdPct);
-    if (prefs.generalEnabled) {
-      return { enabled: prefs.globalEnabled !== false, thresholdPct: baseThreshold };
-    }
-    if (!petId) return { enabled: false, thresholdPct: baseThreshold };
-    const entry = prefs.pets[petId] ?? {};
-    const enabled = entry.enabled ?? false;
-    const thresholdPct = clampPct2(entry.thresholdPct ?? baseThreshold);
-    return { enabled, thresholdPct };
-  }
-  async function triggerAlert(key2) {
-    try {
-      await audio.trigger(key2, {}, "pets");
-    } catch {
-    }
-  }
-  function evaluatePet(pet) {
-    const petId = String(pet?.slot?.id || "");
-    if (!petId || !prefs.globalEnabled) {
-      seenBelow.set(petId, false);
-      return;
-    }
-    const { enabled, thresholdPct } = prefFor(petId);
-    const hungerPct = PetsService.getHungerPctFor(pet);
-    const below = enabled && Number.isFinite(hungerPct) && hungerPct < thresholdPct;
-    const wasBelow = seenBelow.get(petId) === true;
-    const loopKey = prefs.generalEnabled ? "pets:general" : `pet:${petId}`;
-    const mode = audio.getPlaybackMode?.("pets") ?? "oneshot";
-    if (below) {
-      if (mode === "loop") {
-        void triggerAlert(loopKey);
-      } else if (!wasBelow) {
-        void triggerAlert(loopKey);
-      }
-    } else {
-      try {
-        audio.stopLoop(loopKey);
-      } catch {
-      }
-    }
-    seenBelow.set(petId, below);
-  }
-  async function evaluateAll(pets = null) {
-    const list = pets ?? lastPets;
-    for (const pet of Array.isArray(list) ? list : []) {
-      try {
-        evaluatePet(pet);
-      } catch {
-      }
-    }
-  }
-  async function ensureStarted() {
-    if (started4) return;
-    loadPrefs();
-    try {
-      unsubPets = await PetsService.onPetsChangeNow((arr) => {
-        lastPets = Array.isArray(arr) ? arr.slice(0, 3) : [];
-        void evaluateAll(lastPets);
-      });
-    } catch {
-      unsubPets = null;
-    }
-    started4 = true;
-  }
-  function stop() {
-    try {
-      unsubPets?.();
-    } catch {
-    }
-    unsubPets = null;
-    started4 = false;
-    seenBelow.clear();
-  }
-  var PetAlertService = {
-    async start() {
-      await ensureStarted();
-      return () => stop();
-    },
-    isGlobalEnabled() {
-      return prefs.globalEnabled !== false;
-    },
-    setGlobalEnabled(on) {
-      prefs.globalEnabled = !!on;
-      if (!on) seenBelow.clear();
-      savePrefs();
-    },
-    isGeneralEnabled() {
-      return !!prefs.generalEnabled;
-    },
-    setGeneralEnabled(on) {
-      prefs.generalEnabled = !!on;
-      savePrefs();
-      void this.refreshNow();
-    },
-    getGeneralThresholdPct() {
-      return clampPct2(prefs.defaultThresholdPct);
-    },
-    setGeneralThresholdPct(pct) {
-      const next = clampPct2(pct);
-      prefs.defaultThresholdPct = next;
-      savePrefs();
-      void this.refreshNow();
-      return next;
-    },
-    getDefaultThresholdPct() {
-      return clampPct2(prefs.defaultThresholdPct);
-    },
-    setDefaultThresholdPct(pct) {
-      const next = clampPct2(pct);
-      prefs.defaultThresholdPct = next;
-      savePrefs();
-      return next;
-    },
-    isPetEnabled(petId) {
-      return prefFor(petId).enabled;
-    },
-    setPetEnabled(petId, on) {
-      if (!petId) return;
-      prefs.pets[petId] = { ...prefs.pets[petId] || {}, enabled: !!on };
-      savePrefs();
-      void evaluateAll();
-    },
-    getPetThresholdPct(petId) {
-      return prefFor(petId).thresholdPct;
-    },
-    setPetThresholdPct(petId, pct) {
-      if (!petId) return this.getDefaultThresholdPct();
-      const next = clampPct2(pct);
-      prefs.pets[petId] = { ...prefs.pets[petId] || {}, thresholdPct: next };
-      savePrefs();
-      void evaluateAll();
-      return next;
-    },
-    async refreshNow() {
-      await evaluateAll();
-    }
-  };
 
   // src/ui/menus/notifier.ts
   var rulePopover = null;
