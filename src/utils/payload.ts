@@ -11,6 +11,7 @@ import {
 } from "./supabase";
 import { getFriendSettings, onFriendSettingsChange } from "./friendSettings";
 import { readAriesPath } from "./localStorage";
+import { getLocalVersion } from "./version";
 import { PlayersService } from "../services/players";
 
 export type PlayerPrivacyPayload = {
@@ -28,6 +29,7 @@ export type PlayerStatePayload = {
   playerId: string | null;
   playerName: string | null;
   avatarUrl: string | null;
+  modVersion: string | null;
   coins: number | null;
   room: {
     id: string | null;
@@ -353,10 +355,16 @@ export async function buildPlayerStatePayload(
       slot?.data?.journal ??
       null;
 
+    const localVersion = getLocalVersion();
+    const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
+    console.log("MOD VERSION: ", modVersion)
+
+
     const payload: PlayerStatePayload = {
       playerId: playerId != null ? String(playerId) : null,
       playerName: privacy.showProfile ? playerName : null,
       avatarUrl: privacy.showProfile ? avatarUrl : null,
+      modVersion: modVersion,
       coins: privacy.showCoins ? coinsRaw : null,
       room: {
         id: roomId,
@@ -699,3 +707,4 @@ export function stopPlayerStateReporting(): void {
   clearInterval(payloadReportingTimer);
   payloadReportingTimer = null;
 }
+

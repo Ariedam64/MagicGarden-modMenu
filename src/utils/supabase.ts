@@ -68,6 +68,7 @@ export interface PlayerView {
   coins: number | null;
   room: any | null;
   hasModInstalled: boolean;
+  modVersion?: string | null;
   isOnline: boolean;
   lastEventAt: string | null;
   privacy: PlayerPrivacyPayload;
