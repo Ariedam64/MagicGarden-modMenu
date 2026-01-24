@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.40
+// @version      2.99.41
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1440,7 +1440,14 @@
     Squash: 60,
     PineTree: 61,
     Poinsettia: 62,
-    Shrub: 63
+    Shrub: 63,
+    CabbagePlant: 64,
+    Cabbage: 65,
+    BabyBeet: 66,
+    Beet: 67,
+    Gentian: 68,
+    VioletCort: 69,
+    DragonFruitTree: 70
   };
   var tileRefsTallPlants = {
     Bamboo: 1,
@@ -1495,7 +1502,11 @@
     Chrysanthemum: 49,
     Squash: 50,
     Pinecone: 51,
-    Poinsettia: 52
+    Poinsettia: 52,
+    VioletCort: 53,
+    Cabbage: 54,
+    Beet: 55,
+    Gentian: 56
   };
   var tileRefsItems = {
     Coin: 1,
@@ -1511,6 +1522,7 @@
     FrozenPotion: 18,
     DawnlitPotion: 19,
     AmberlitPotion: 20,
+    CropCleanser: 21,
     JournalStamp: 22,
     Donut: 23,
     ToolsRestocked: 24,
@@ -1586,6 +1598,7 @@
     WoodStool: 63,
     WoodArch: 33,
     WoodArchSide: 43,
+    WoodPergola: 73,
     WoodBridge: 34,
     WoodBridgeSideways: 44,
     WoodOwl: 53,
@@ -1641,7 +1654,8 @@
     StringLights: 96,
     StringLightsSideways: 97,
     PetHutch: 30,
-    DecorShed: 98
+    DecorShed: 98,
+    SeedSilo: 99
   };
   var plantCatalog = {
     Carrot: {
@@ -1664,6 +1678,36 @@
         baseSellPrice: 20,
         baseWeight: 0.1,
         baseTileScale: 0.6,
+        maxScale: 3
+      }
+    },
+    Cabbage: {
+      seed: {
+        tileRef: tileRefsSeeds.Cabbage,
+        name: "Cabbage Seed",
+        coinPrice: 30,
+        creditPrice: 12,
+        rarity: rarity.Common
+      },
+      plant: {
+        tileRef: tileRefsPlants.CabbagePlant,
+        name: "Cabbage Plant",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{
+          x: 0,
+          y: -0.05,
+          rotation: 0
+        }],
+        secondsToMature: 45,
+        baseTileScale: 1,
+        rotateSlotOffsetsRandomly: false
+      },
+      crop: {
+        tileRef: tileRefsPlants.Cabbage,
+        name: "Cabbage",
+        baseSellPrice: 42,
+        baseWeight: 1,
+        baseTileScale: 0.8,
         maxScale: 3
       }
     },
@@ -1720,6 +1764,29 @@
         baseWeight: 1.5,
         baseTileScale: 0.7,
         maxScale: 2.5
+      }
+    },
+    Beet: {
+      seed: {
+        tileRef: tileRefsSeeds.Beet,
+        name: "Beet Seed",
+        coinPrice: 210,
+        creditPrice: 25,
+        rarity: rarity.Common
+      },
+      plant: {
+        tileRef: tileRefsPlants.BabyBeet,
+        name: "Beet Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 0.7
+      },
+      crop: {
+        tileRef: tileRefsPlants.Beet,
+        name: "Beet",
+        baseSellPrice: 350,
+        baseWeight: 0.3,
+        baseTileScale: 0.2,
+        maxScale: 3
       }
     },
     FavaBean: {
@@ -2022,11 +2089,90 @@
         maxScale: 2.75
       }
     },
+    Pear: {
+      seed: {
+        tileRef: tileRefsSeeds.Pear,
+        name: "Pear Seed",
+        coinPrice: 6e3,
+        creditPrice: 122,
+        rarity: rarity.Rare
+      },
+      plant: {
+        tileRef: tileRefsPlants.Tree,
+        name: "Pear Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [{
+          x: -0.5,
+          y: -1,
+          rotation: 0
+        }, {
+          x: -0.35,
+          y: -0.4,
+          rotation: 0
+        }, {
+          x: 0.1,
+          y: -0.45,
+          rotation: 0
+        }, {
+          x: 0,
+          y: -0.9,
+          rotation: 0
+        }, {
+          x: 0.4,
+          y: -0.7,
+          rotation: 0
+        }, {
+          x: 0.5,
+          y: -1.1,
+          rotation: 0
+        }, {
+          x: -0.3,
+          y: 1.2,
+          rotation: 0
+        }],
+        secondsToMature: 360 * 60,
+        baseTileScale: 3,
+        rotateSlotOffsetsRandomly: true,
+        tileTransformOrigin: "bottom",
+        nudgeY: -0.25
+      },
+      crop: {
+        tileRef: tileRefsPlants.Pear,
+        name: "Pear",
+        baseSellPrice: 250,
+        baseWeight: 0.17,
+        baseTileScale: 0.5,
+        maxScale: 2
+      }
+    },
+    Gentian: {
+      seed: {
+        tileRef: tileRefsSeeds.Gentian,
+        name: "Gentian Seed",
+        coinPrice: 9e3,
+        creditPrice: 30,
+        rarity: rarity.Rare
+      },
+      plant: {
+        tileRef: tileRefsPlants.Gentian,
+        name: "Gentian Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 0.5
+      },
+      crop: {
+        tileRef: tileRefsPlants.Gentian,
+        name: "Gentian",
+        baseSellPrice: 1e4,
+        baseWeight: 0.02,
+        baseTileScale: 0.5,
+        maxScale: 3
+      }
+    },
     Coconut: {
       seed: {
         tileRef: tileRefsSeeds.Coconut,
         name: "Coconut Seed",
-        coinPrice: 6e3,
+        coinPrice: 1e4,
         creditPrice: 235,
         rarity: rarity.Legendary
       },
@@ -2058,11 +2204,34 @@
         maxScale: 3
       }
     },
+    PineTree: {
+      seed: {
+        tileRef: tileRefsSeeds.Pinecone,
+        name: "Pinecone",
+        coinPrice: 12e3,
+        creditPrice: 30,
+        rarity: rarity.Legendary
+      },
+      plant: {
+        tileRef: tileRefsPlants.PineTree,
+        name: "Pine Tree",
+        harvestType: harvestType.Single,
+        baseTileScale: 1.5
+      },
+      crop: {
+        tileRef: tileRefsPlants.PineTree,
+        name: "Pine Tree",
+        baseSellPrice: 15e3,
+        baseWeight: 1e3,
+        baseTileScale: 1.5,
+        maxScale: 3.5
+      }
+    },
     Banana: {
       seed: {
         tileRef: tileRefsSeeds.Banana,
         name: "Banana Seed",
-        coinPrice: 7500,
+        coinPrice: 15e3,
         creditPrice: 199,
         rarity: rarity.Legendary,
         getCanSpawnInGuild: (guildId) => {
@@ -2096,29 +2265,6 @@
         baseWeight: 0.12,
         baseTileScale: 0.5,
         maxScale: 1.7
-      }
-    },
-    PineTree: {
-      seed: {
-        tileRef: tileRefsSeeds.Pinecone,
-        name: "Pinecone",
-        coinPrice: 12e3,
-        creditPrice: 30,
-        rarity: rarity.Legendary
-      },
-      plant: {
-        tileRef: tileRefsPlants.PineTree,
-        name: "Pine Tree",
-        harvestType: harvestType.Single,
-        baseTileScale: 1.5
-      },
-      crop: {
-        tileRef: tileRefsPlants.PineTree,
-        name: "Pine Tree",
-        baseSellPrice: 15e3,
-        baseWeight: 1e3,
-        baseTileScale: 1.5,
-        maxScale: 3.5
       }
     },
     Lily: {
@@ -2357,6 +2503,29 @@
         baseWeight: 0.02,
         baseTileScale: 0.3,
         maxScale: 2
+      }
+    },
+    VioletCort: {
+      seed: {
+        tileRef: tileRefsSeeds.VioletCort,
+        name: "Violet Cort Spore",
+        coinPrice: 52e4,
+        creditPrice: 530,
+        rarity: rarity.Mythic
+      },
+      plant: {
+        tileRef: tileRefsPlants.VioletCort,
+        name: "Violet Cort Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 0.55
+      },
+      crop: {
+        tileRef: tileRefsPlants.VioletCort,
+        name: "Violet Cort",
+        baseSellPrice: 6e5,
+        baseWeight: 2,
+        baseTileScale: 0.65,
+        maxScale: 3.5
       }
     },
     Chrysanthemum: {
@@ -2787,7 +2956,7 @@
     WinterEgg: {
       tileRef: tileRefsPets.WinterEgg,
       name: "Winter Egg",
-      coinPrice: 8e7,
+      coinPrice: 8e8,
       creditPrice: 199,
       rarity: rarity.Legendary,
       initialTileScale: 0.3,
@@ -3530,6 +3699,16 @@
       description: "Adds the Rainbow mutation to a crop in your garden. SINGLE USE.",
       isOneTimePurchase: true,
       baseTileScale: 1
+    },
+    CropCleanser: {
+      tileRef: tileRefsItems.CropCleanser,
+      name: "Crop Cleanser",
+      coinPrice: 8e4,
+      creditPrice: 7,
+      rarity: rarity.Common,
+      isOneTimePurchase: false,
+      baseTileScale: 1,
+      maxInventoryQuantity: 99
     }
   };
   var decorCatalog = {
@@ -3657,6 +3836,15 @@
       baseTileScale: 1.5,
       isOneTimePurchase: false,
       nudgeY: -0.47
+    },
+    WoodPergola: {
+      tileRef: tileRefsDecor.WoodPergola,
+      name: "Wood Pergola",
+      coinPrice: 3e4,
+      creditPrice: 30,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false
     },
     StoneCaribou: {
       tileRef: tileRefsDecor.StoneCaribou,
@@ -3899,6 +4087,15 @@
       name: "Decor Shed",
       coinPrice: 6e10,
       creditPrice: 399,
+      rarity: rarity.Divine,
+      baseTileScale: 1,
+      isOneTimePurchase: true
+    },
+    SeedSilo: {
+      tileRef: tileRefsDecor.SeedSilo,
+      name: "Seed Silo",
+      coinPrice: 1e11,
+      creditPrice: 699,
       rarity: rarity.Divine,
       baseTileScale: 1,
       isOneTimePurchase: true
@@ -11013,6 +11210,12 @@
         {
           id: "game.decor-shed",
           label: "\u{1F9F4} Decor shed",
+          defaultHotkey: null,
+          allowClear: true
+        },
+        {
+          id: "game.seed-silo",
+          label: "\u{1F33E} Seed Silo",
           defaultHotkey: null,
           allowClear: true
         },
@@ -19667,6 +19870,34 @@
         event.preventDefault();
         event.stopPropagation();
         void toggleDecorShedModal();
+      },
+      true
+    );
+  }
+
+  // src/services/seedSiloKeybind.ts
+  var ACTION_ID4 = "game.seed-silo";
+  var SEED_SILO_MODAL_ID = "seedSilo";
+  var seedSiloKeybindsInstalled = false;
+  async function toggleSeedSiloModal() {
+    try {
+      const current = await Atoms.ui.activeModal.get();
+      const next = current === SEED_SILO_MODAL_ID ? null : SEED_SILO_MODAL_ID;
+      await Atoms.ui.activeModal.set(next);
+    } catch {
+    }
+  }
+  function installSeedSiloKeybindsOnce() {
+    if (seedSiloKeybindsInstalled || typeof window === "undefined") return;
+    seedSiloKeybindsInstalled = true;
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (shouldIgnoreKeydown(event)) return;
+        if (!eventMatchesKeybind(ACTION_ID4, event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void toggleSeedSiloModal();
       },
       true
     );
@@ -30251,6 +30482,7 @@
     installPetHutchKeybindsOnce();
     installGameKeybindsOnce();
     installJournalKeybindsOnce();
+    installSeedSiloKeybindsOnce();
     installDecorShedKeybindsOnce();
     (async () => {
       try {
