@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.41
+// @version      2.99.42
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -21639,7 +21639,8 @@
   var _unsubToolInv = null;
   var TOOL_CAPS = {
     Shovel: 1,
-    WateringCan: 99
+    WateringCan: 99,
+    CropCleanser: 99
   };
   function _isToolCapReached(toolId) {
     const cap = TOOL_CAPS[toolId];
