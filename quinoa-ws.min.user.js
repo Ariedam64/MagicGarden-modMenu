@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.39
+// @version      2.99.40
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -47542,10 +47542,14 @@ next: ${next}`;
       const persistedActivityLog = readAriesPath("activityLog.history");
       const activityLog = Array.isArray(persistedActivityLog) ? persistedActivityLog : normalizeActivityLog(slotData);
       const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
+      const localVersion = getLocalVersion();
+      const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
+      console.log("MOD VERSION: ", modVersion);
       const payload = {
         playerId: playerId2 != null ? String(playerId2) : null,
         playerName: privacy.showProfile ? playerName : null,
         avatarUrl: privacy.showProfile ? avatarUrl : null,
+        modVersion,
         coins: privacy.showCoins ? coinsRaw : null,
         room: {
           id: roomId,
