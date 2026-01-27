@@ -6,21 +6,40 @@ export type LockerRestrictionsState = {
   eggLocks: Record<string, boolean>;
   /** When true, decor pickup (PlaceDecor) is blocked. */
   decorPickupLocked: boolean;
+  /** Rules for Sell All Pets confirmation. */
+  sellAllPets: SellAllPetsRules;
 };
 
 import { readAriesPath, writeAriesPath } from "../utils/localStorage";
 
 const ARIES_LOCKER_RESTRICTIONS_PATH = "locker.restrictions";
 
+export type SellAllPetsRules = {
+  enabled: boolean;
+  protectGold: boolean;
+  protectRainbow: boolean;
+  protectMaxStr: boolean;
+  maxStrThreshold: number;
+};
+
 const clampPercent = (value: number): number => Math.max(0, Math.min(50, Math.round(value)));
 
 const roundToStep = (value: number, step: number): number =>
   Math.round(value / step) * step;
 
+const DEFAULT_SELL_ALL_PETS_RULES: SellAllPetsRules = {
+  enabled: true,
+  protectGold: true,
+  protectRainbow: true,
+  protectMaxStr: true,
+  maxStrThreshold: 95,
+};
+
 const DEFAULT_STATE: LockerRestrictionsState = {
   minRequiredPlayers: 1,
   eggLocks: {},
   decorPickupLocked: false,
+  sellAllPets: { ...DEFAULT_SELL_ALL_PETS_RULES },
 };
 
 export const FRIEND_BONUS_STEP = 10;
@@ -44,6 +63,21 @@ const sanitizeEggLocks = (raw: any): Record<string, boolean> => {
     out[key] = value === true;
   }
   return out;
+};
+
+const sanitizeSellAllPetsRules = (raw: any): SellAllPetsRules => {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_SELL_ALL_PETS_RULES };
+  const maxStrRaw = Number(raw.maxStrThreshold);
+  const maxStrThreshold = Number.isFinite(maxStrRaw)
+    ? Math.max(0, Math.min(100, Math.round(maxStrRaw)))
+    : DEFAULT_SELL_ALL_PETS_RULES.maxStrThreshold;
+  return {
+    enabled: raw.enabled !== false,
+    protectGold: raw.protectGold !== false,
+    protectRainbow: raw.protectRainbow !== false,
+    protectMaxStr: raw.protectMaxStr !== false,
+    maxStrThreshold,
+  };
 };
 
 export function friendBonusPercentFromMultiplier(raw: unknown): number | null {
@@ -94,7 +128,8 @@ class LockerRestrictionsService {
       const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
       const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
       const decorPickupLocked = parsed?.decorPickupLocked === true;
-      this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked };
+      const sellAllPets = sanitizeSellAllPetsRules(parsed?.sellAllPets);
+      this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked, sellAllPets };
     } catch {
       this.state = { ...DEFAULT_STATE };
     }
@@ -121,6 +156,27 @@ class LockerRestrictionsService {
 
   getState(): LockerRestrictionsState {
     return { ...this.state };
+  }
+
+  getSellAllPetsRules(): SellAllPetsRules {
+    return { ...(this.state.sellAllPets ?? DEFAULT_SELL_ALL_PETS_RULES) };
+  }
+
+  setSellAllPetsRules(next: Partial<SellAllPetsRules>): void {
+    const current = this.getSellAllPetsRules();
+    const merged = { ...current, ...next };
+    const sanitized = sanitizeSellAllPetsRules(merged);
+    const prev = this.state.sellAllPets;
+    const same =
+      prev?.enabled === sanitized.enabled &&
+      prev?.protectGold === sanitized.protectGold &&
+      prev?.protectRainbow === sanitized.protectRainbow &&
+      prev?.protectMaxStr === sanitized.protectMaxStr &&
+      prev?.maxStrThreshold === sanitized.maxStrThreshold;
+    if (same) return;
+    this.state = { ...this.state, sellAllPets: sanitized };
+    this.save();
+    this.emit();
   }
 
   setMinRequiredPlayers(value: number): void {

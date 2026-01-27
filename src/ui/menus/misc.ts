@@ -47,39 +47,159 @@ export async function renderMiscMenu(container: HTMLElement) {
   const view = ui.root.querySelector(".qmm-views") as HTMLElement;
   view.innerHTML = "";
   view.style.display = "grid";
-  view.style.gap = "8px";
   view.style.minHeight = "0";
   view.style.justifyItems = "center";
+  view.style.padding = "8px 0";
 
-  /* ===== Section: Auto reco ===== */
-  const secAutoReco = (() => {
-    const card = ui.card("🔄 Auto reconnect on session conflict", { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "480px";
+  const applyStyles = <T extends HTMLElement>(el: T, styles: Partial<CSSStyleDeclaration>): T => {
+    Object.assign(el.style, styles);
+    return el;
+  };
+
+  const createPill = (text: string) => {
+    const pill = applyStyles(document.createElement("div"), {
+      padding: "3px 8px",
+      borderRadius: "999px",
+      border: "1px solid #2b3340",
+      background: "#141b22",
+      fontSize: "12px",
+      fontWeight: "600",
+      color: "#dbe7ff",
+      whiteSpace: "nowrap",
+    });
+    pill.textContent = text;
+    return pill;
+  };
+
+  const createSettingRow = (title: string, description: string | null, control: HTMLElement) => {
+    const row = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 1fr) auto",
+      alignItems: "center",
+      gap: "12px",
+      padding: "10px 12px",
+      border: "1px solid #2b3340",
+      borderRadius: "10px",
+      background: "#0f1318",
+    });
+
+    const text = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "2px",
+    });
+
+    const titleEl = document.createElement("div");
+    titleEl.textContent = title;
+    titleEl.style.fontWeight = "600";
+    titleEl.style.fontSize = "13px";
+    text.appendChild(titleEl);
+
+    if (description) {
+      const desc = document.createElement("div");
+      desc.textContent = description;
+      desc.style.fontSize = "12px";
+      desc.style.opacity = "0.72";
+      text.appendChild(desc);
+    }
+
+    const controls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      gap: "8px",
+      flexWrap: "wrap",
+    });
+    controls.appendChild(control);
+
+    row.append(text, controls);
+    return { row, controls };
+  };
+
+  const styleCard = (card: ReturnType<typeof ui.card>) => {
+    card.root.style.width = "100%";
+    card.root.style.maxWidth = "100%";
+    card.root.style.minWidth = "0";
     card.body.style.display = "grid";
     card.body.style.gap = "10px";
+  };
 
-    const header = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-    const toggleWrap = document.createElement("div");
-    toggleWrap.style.display = "inline-flex";
-    toggleWrap.style.alignItems = "center";
-    toggleWrap.style.gap = "8px";
-    const toggleLabel = ui.label("Activate");
-    toggleLabel.style.margin = "0";
+  const header = applyStyles(document.createElement("div"), {
+    width: "100%",
+    maxWidth: "1040px",
+    display: "grid",
+    gap: "4px",
+    padding: "10px 14px",
+    borderRadius: "12px",
+    border: "1px solid #2b3340",
+    background: "linear-gradient(135deg, #1c222b 0%, #121820 100%)",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+  });
+
+  const headerTitle = document.createElement("div");
+  headerTitle.textContent = "Misc controls";
+  headerTitle.style.fontSize = "16px";
+  headerTitle.style.fontWeight = "700";
+
+  const headerSubtitle = document.createElement("div");
+  headerSubtitle.textContent = "Utility toggles and bulk tools.";
+  headerSubtitle.style.fontSize = "12.5px";
+  headerSubtitle.style.opacity = "0.75";
+
+  header.append(headerTitle, headerSubtitle);
+
+  const page = applyStyles(document.createElement("div"), {
+    width: "100%",
+    maxWidth: "1040px",
+    display: "grid",
+    gap: "12px",
+    alignItems: "start",
+  });
+
+  const grid = applyStyles(document.createElement("div"), {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: "12px",
+    width: "100%",
+    alignItems: "start",
+  });
+
+/* ===== Section: Auto reco ===== */
+  const secAutoReco = (() => {
+    const card = ui.card("Auto reconnect", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Reconnect automatically when the session is kicked.",
+    });
+    styleCard(card);
+
     const toggle = ui.switch(MiscService.readAutoRecoEnabled(false)) as HTMLInputElement;
-    toggleWrap.append(toggleLabel, toggle as unknown as HTMLElement);
-    header.append(toggleWrap);
+    const toggleRow = createSettingRow(
+      "Enabled",
+      "Attempts to log back in after a session conflict.",
+      toggle,
+    );
 
     const initialSeconds = Math.round(MiscService.getAutoRecoDelayMs() / 1000);
-    const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
-    const sliderLabel = ui.label("Reconnect after");
-    sliderLabel.style.margin = "0";
     const slider = ui.slider(0, 300, 30, initialSeconds) as HTMLInputElement;
-    slider.style.flex = "1";
-    const sliderValue = document.createElement("div");
+    slider.style.width = "100%";
+    const sliderValue = createPill(formatShortDuration(initialSeconds));
     sliderValue.style.minWidth = "72px";
-    sliderValue.style.textAlign = "right";
-    sliderValue.textContent = formatShortDuration(initialSeconds);
-    sliderRow.append(sliderLabel, slider, sliderValue);
+    sliderValue.style.textAlign = "center";
+
+    const sliderControl = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "1fr auto",
+      gap: "8px",
+      alignItems: "center",
+      minWidth: "220px",
+    });
+    sliderControl.append(slider, sliderValue);
+
+    const sliderRow = createSettingRow(
+      "Delay",
+      "Wait time before reconnecting.",
+      sliderControl,
+    );
 
     const hint = document.createElement("div");
     hint.style.opacity = "0.8";
@@ -112,46 +232,39 @@ export async function renderMiscMenu(container: HTMLElement) {
 
     syncToggle();
 
-    card.body.append(header, sliderRow, hint);
+    card.body.append(toggleRow.row, sliderRow.row, hint);
     return card.root;
   })();
 
-  /* ===== Section: Player controls (Ghost + Delay on same line) ===== */
+/* ===== Section: Player controls ===== */
   const secPlayer = (() => {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.gap = "12px";
-    row.style.flexWrap = "wrap";
-
-    const pair = (labelText: string, controlEl: HTMLElement, labelId?: string) => {
-      const wrap = document.createElement("div");
-      wrap.style.display = "inline-flex";
-      wrap.style.alignItems = "center";
-      wrap.style.gap = "6px";
-
-      const lab = ui.label(labelText);
-      lab.style.fontSize = "13px";
-      lab.style.margin = "0";
-      lab.style.justifySelf = "start";
-      if (labelId) (lab as any).id = labelId;
-
-      wrap.append(lab, controlEl);
-      return wrap;
-    };
+    const card = ui.card("Player controls", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Movement helpers for walking and testing.",
+    });
+    styleCard(card);
 
     const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false)) as HTMLInputElement;
     (ghostSwitch as any).id = "player.ghostMode";
-    const ghostPair = pair("Ghost", ghostSwitch as unknown as HTMLElement, "label.ghost");
 
     const delayInput = ui.inputNumber(10, 1000, 5, 50) as HTMLInputElement;
     (delayInput as any).id = "player.moveDelay";
     const delayWrap = ((delayInput as any).wrap ?? delayInput) as HTMLElement;
     (delayWrap as any).style && ((delayWrap as any).style.margin = "0");
     (delayInput as any).style && ((delayInput as any).style.width = "84px");
-    const delayPair = pair("Delay (ms)", delayWrap, "label.delay");
 
-    row.append(ghostPair, delayPair);
+    const ghostRow = createSettingRow(
+      "Ghost mode",
+      "Ignores collisions while you move.",
+      ghostSwitch as unknown as HTMLElement,
+    );
+
+    const delayRow = createSettingRow(
+      "Move delay (ms)",
+      "Lower values feel faster.",
+      delayWrap,
+    );
 
     const ghost = MiscService.createGhostController();
     delayInput.value = String(MiscService.getGhostDelayMs());
@@ -169,103 +282,103 @@ export async function renderMiscMenu(container: HTMLElement) {
       on ? ghost.start() : ghost.stop();
     };
 
-    (row as any).__cleanup__ = () => { try { ghost.stop(); } catch {} };
+    (card.root as any).__cleanup__ = () => { try { ghost.stop(); } catch {} };
 
-    const card = ui.card("🎮 Player controls", { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "440px";
-    card.body.append(row);
+    card.body.append(ghostRow.row, delayRow.row);
     return card.root;
   })();
-
-  /* ===== Section: Inventory slot reserve ===== */
+ /* ===== Section: Inventory slot reserve ===== */
   const secInventoryReserve = (() => {
-    const card = ui.card("Inventory slot reserve", { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "440px";
-    card.body.style.display = "grid";
-    card.body.style.gap = "8px";
+    const card = ui.card("Inventory guard", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Keep a slot open for swaps and bulk actions.",
+    });
+    styleCard(card);
 
-    const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-    const toggleWrap = document.createElement("div");
-    toggleWrap.style.display = "inline-flex";
-    toggleWrap.style.alignItems = "center";
-    toggleWrap.style.gap = "8px";
-    const toggleLabel = ui.label("Keep 1 slot free");
-    toggleLabel.style.margin = "0";
     const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false)) as HTMLInputElement;
-    toggleWrap.append(toggleLabel, toggle as unknown as HTMLElement);
-    row.append(toggleWrap);
-
-    const hint = document.createElement("div");
-    hint.style.opacity = "0.8";
-    hint.style.fontSize = "12px";
-    hint.textContent = "Blocks actions that would add a new inventory entry at 99/100. Mostly useful for pet swapping.";
+    const row = createSettingRow(
+      "Keep 1 slot free",
+      "Blocks actions that would add a new inventory entry at 99/100.",
+      toggle,
+    );
 
     toggle.addEventListener("change", () => {
       MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
     });
 
-    card.body.append(row, hint);
+    card.body.append(row.row);
     return card.root;
   })();
+/* ===== Section: Storage auto-store ===== */
+  const secStorage = (() => {
+    const card = ui.card("Storage auto-store", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Move items into storage when a matching stack already exists.",
+    });
+    styleCard(card);
 
-  /* ===== Section: Seed deleter ===== */
+    const seedToggle = ui.switch(MiscService.readAutoStoreSeedSiloEnabled(false)) as HTMLInputElement;
+    const seedRow = createSettingRow(
+      "Seed Silo",
+      "Auto-store seeds when the species already exists in the silo.",
+      seedToggle,
+    );
+
+    const decorToggle = ui.switch(MiscService.readAutoStoreDecorShedEnabled(false)) as HTMLInputElement;
+    const decorRow = createSettingRow(
+      "Decor Shed",
+      "Auto-store decor when the item already exists in the shed.",
+      decorToggle,
+    );
+
+    seedToggle.addEventListener("change", () => {
+      MiscService.setAutoStoreSeedSiloEnabled(!!seedToggle.checked);
+    });
+
+    decorToggle.addEventListener("change", () => {
+      MiscService.setAutoStoreDecorShedEnabled(!!decorToggle.checked);
+    });
+
+    card.body.append(seedRow.row, decorRow.row);
+    return card.root;
+  })();
+ /* ===== Section: Seed deleter ===== */
   const secSeed = (() => {
-    const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
-    grid.style.gridTemplateColumns = "1fr";
+    const grid = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "10px",
+    });
 
-    const selRow = document.createElement("div");
-    selRow.style.display = "flex";
-    selRow.style.alignItems = "center";
-    selRow.style.justifyContent = "flex-start";
-    selRow.style.gap = "8px";
-    selRow.style.gridColumn = "1 / -1";
-
-    const selLabel = ui.label("Selected");
-    selLabel.style.fontSize = "13px";
-    selLabel.style.margin = "0";
-
-    const selValue = document.createElement("div");
+    const selValue = createPill("0 species - 0 seeds");
     selValue.id = "misc.seedDeleter.summary";
-    selValue.style.fontSize = "13px";
-    selValue.style.opacity = "0.9";
-    selValue.textContent = "0 species - 0 seeds";
-
-    selRow.append(selLabel, selValue);
-    grid.append(selRow);
-
-    const actionsRow = document.createElement("div");
-    actionsRow.style.display = "flex";
-    actionsRow.style.alignItems = "center";
-    actionsRow.style.gap = "8px";
-    actionsRow.style.justifyContent = "flex-start";
-    actionsRow.style.gridColumn = "1 / -1";
-
-    const actLabel = ui.label("Actions");
-    actLabel.style.fontSize = "13px";
-    actLabel.style.margin = "0";
+    const summaryRow = createSettingRow(
+      "Selected",
+      "Review the current seed selection before deleting.",
+      selValue,
+    );
+    grid.append(summaryRow.row);
 
     const actions = ui.flexRow({ gap: 6 });
+    actions.style.flexWrap = "wrap";
     const btnSelect = ui.btn("Select seeds", { variant: "primary", size: "sm" });
     const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
     const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
 
     actions.append(btnSelect, btnDelete, btnClear);
-    actionsRow.append(actLabel, actions);
-    grid.append(actionsRow);
+    const actionsRow = createSettingRow(
+      "Actions",
+      "Pick, clear, or delete the selected seeds.",
+      actions,
+    );
+    grid.append(actionsRow.row);
 
-    const statusLabel = ui.label("Status");
-    statusLabel.style.fontSize = "13px";
-    statusLabel.style.margin = "0";
-    statusLabel.style.justifySelf = "start";
-
-    const statusLine = document.createElement("div");
-    statusLine.style.fontSize = "13px";
+    const statusLine = createPill("Idle");
     statusLine.style.fontWeight = "600";
-    statusLine.style.color = "#f9f9f9";
-    statusLine.style.whiteSpace = "nowrap";
-    statusLine.textContent = "Idle";
 
     const controlRow = ui.flexRow({ gap: 6 });
+    controlRow.style.flexWrap = "wrap";
     const btnPause = ui.btn("Pause", { size: "sm" });
     const btnPlay = ui.btn("Play", { size: "sm" });
     const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
@@ -274,14 +387,30 @@ export async function renderMiscMenu(container: HTMLElement) {
     btnStop.onclick = () => { MiscService.cancelSeedDeletion(); updateSeedControlState(); };
     controlRow.append(btnPause, btnPlay, btnStop);
 
-    const seedStatus = { species: "—", done: 0, total: 0, remaining: 0 };
+    const statusControls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    });
+    statusControls.append(controlRow, statusLine);
+
+    const statusRow = createSettingRow(
+      "Status",
+      "Pause or stop the current delete flow.",
+      statusControls,
+    );
+    grid.append(statusRow.row);
+
+    const seedStatus = { species: "-", done: 0, total: 0, remaining: 0 };
     const describeSeedStatus = () => {
       const running = MiscService.isSeedDeletionRunning();
       const paused = MiscService.isSeedDeletionPaused();
-      const target = seedStatus.species || "—";
+      const target = seedStatus.species || "-";
       const base = `${target} (${seedStatus.done}/${seedStatus.total})`;
       if (!running) return "Idle";
-      return paused ? `Paused · ${base}` : base;
+      return paused ? `Paused - ${base}` : base;
     };
     const updateSeedStatusUI = () => {
       statusLine.textContent = describeSeedStatus();
@@ -318,7 +447,7 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSeedControlState();
     };
     const onSeedComplete = () => {
-      seedStatus.species = "—";
+      seedStatus.species = "-";
       seedStatus.done = 0;
       seedStatus.total = 0;
       seedStatus.remaining = 0;
@@ -342,14 +471,6 @@ export async function renderMiscMenu(container: HTMLElement) {
 
     updateSeedStatusUI();
     updateSeedControlState();
-
-    const statusRow = document.createElement("div");
-    statusRow.style.display = "flex";
-    statusRow.style.alignItems = "center";
-    statusRow.style.gap = "8px";
-    statusRow.style.gridColumn = "1 / -1";
-    statusRow.append(statusLabel, controlRow, statusLine);
-    grid.append(statusRow);
 
     function readSelection() {
       const sel = MiscService.getCurrentSeedSelection?.() || [];
@@ -404,8 +525,12 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
 
-    const card = ui.card("Seed deleter", { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "440px";
+    const card = ui.card("Seed deleter", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Bulk delete seeds from inventory.",
+    });
+    styleCard(card);
     card.body.append(grid);
     (card.root as any).__cleanup__ = () => {
       clearSeedSummaryTimer();
@@ -413,65 +538,41 @@ export async function renderMiscMenu(container: HTMLElement) {
     };
     return card.root;
   })();
-  /* ===== Section: Decor deleter ===== */
+/* ===== Section: Decor deleter ===== */
   const secDecor = (() => {
-    const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
-    grid.style.gridTemplateColumns = "1fr";
+    const grid = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "10px",
+    });
 
-    const selRow = document.createElement("div");
-    selRow.style.display = "flex";
-    selRow.style.alignItems = "center";
-    selRow.style.justifyContent = "flex-start";
-    selRow.style.gap = "8px";
-    selRow.style.gridColumn = "1 / -1";
-
-    const selLabel = ui.label("Selected");
-    selLabel.style.fontSize = "13px";
-    selLabel.style.margin = "0";
-
-    const selValue = document.createElement("div");
+    const selValue = createPill("0 decor - 0 items");
     selValue.id = "misc.decorDeleter.summary";
-    selValue.style.fontSize = "13px";
-    selValue.style.opacity = "0.9";
-    selValue.textContent = "0 decor - 0 items";
-
-    selRow.append(selLabel, selValue);
-    grid.append(selRow);
-
-    const actionsRow = document.createElement("div");
-    actionsRow.style.display = "flex";
-    actionsRow.style.alignItems = "center";
-    actionsRow.style.gap = "8px";
-    actionsRow.style.justifyContent = "flex-start";
-    actionsRow.style.gridColumn = "1 / -1";
-
-    const actLabel = ui.label("Actions");
-    actLabel.style.fontSize = "13px";
-    actLabel.style.margin = "0";
+    const summaryRow = createSettingRow(
+      "Selected",
+      "Review the current decor selection before deleting.",
+      selValue,
+    );
+    grid.append(summaryRow.row);
 
     const actions = ui.flexRow({ gap: 6 });
+    actions.style.flexWrap = "wrap";
     const btnSelect = ui.btn("Select decor", { variant: "primary", size: "sm" });
     const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
     const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
 
     actions.append(btnSelect, btnDelete, btnClear);
-    actionsRow.append(actLabel, actions);
-    grid.append(actionsRow);
+    const actionsRow = createSettingRow(
+      "Actions",
+      "Pick, clear, or delete the selected decor.",
+      actions,
+    );
+    grid.append(actionsRow.row);
 
-
-    const statusLabel = ui.label("Status");
-    statusLabel.style.fontSize = "13px";
-    statusLabel.style.margin = "0";
-    statusLabel.style.justifySelf = "start";
-
-    const statusLine = document.createElement("div");
-    statusLine.style.fontSize = "13px";
+    const statusLine = createPill("Idle");
     statusLine.style.fontWeight = "600";
-    statusLine.style.color = "#f9f9f9";
-    statusLine.style.whiteSpace = "nowrap";
-    statusLine.textContent = "Idle";
 
     const controlRow = ui.flexRow({ gap: 6 });
+    controlRow.style.flexWrap = "wrap";
     const btnPause = ui.btn("Pause", { size: "sm" });
     const btnPlay = ui.btn("Play", { size: "sm" });
     const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
@@ -480,14 +581,30 @@ export async function renderMiscMenu(container: HTMLElement) {
     btnStop.onclick = () => { MiscService.cancelDecorDeletion(); updateDecorControlState(); };
     controlRow.append(btnPause, btnPlay, btnStop);
 
-    const decorStatus = { name: "—", done: 0, total: 0, remaining: 0 };
+    const statusControls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      flexWrap: "wrap",
+      justifyContent: "flex-end",
+    });
+    statusControls.append(controlRow, statusLine);
+
+    const statusRow = createSettingRow(
+      "Status",
+      "Pause or stop the current delete flow.",
+      statusControls,
+    );
+    grid.append(statusRow.row);
+
+    const decorStatus = { name: "-", done: 0, total: 0, remaining: 0 };
     const describeDecorStatus = () => {
       const running = MiscService.isDecorDeletionRunning();
       const paused = MiscService.isDecorDeletionPaused();
-      const target = decorStatus.name || "—";
+      const target = decorStatus.name || "-";
       const base = `${target} (${decorStatus.done}/${decorStatus.total})`;
       if (!running) return "Idle";
-      return paused ? `Paused · ${base}` : base;
+      return paused ? `Paused - ${base}` : base;
     };
     const updateDecorStatusUI = () => {
       statusLine.textContent = describeDecorStatus();
@@ -511,7 +628,7 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateDecorControlState();
     };
     const onDecorComplete = () => {
-      decorStatus.name = "—";
+      decorStatus.name = "-";
       decorStatus.done = 0;
       decorStatus.total = 0;
       decorStatus.remaining = 0;
@@ -549,14 +666,6 @@ export async function renderMiscMenu(container: HTMLElement) {
       decorSummaryTimer = window.setTimeout(() => updateSummaryUI(), 1000);
     };
 
-    const statusRow = document.createElement("div");
-    statusRow.style.display = "flex";
-    statusRow.style.alignItems = "center";
-    statusRow.style.gap = "8px";
-    statusRow.style.gridColumn = "1 / -1";
-    statusRow.append(statusLabel, controlRow, statusLine);
-    grid.append(statusRow);
-
     function readSelection() {
       const sel = MiscService.getCurrentDecorSelection?.() || [];
       const decorCount = sel.length;
@@ -575,7 +684,7 @@ export async function renderMiscMenu(container: HTMLElement) {
           ? Date.now() + estimateMs
           : null;
       const estimateText = buildEstimateSentence(totalQty, decorDelayMs, finishTimestamp);
-      selValue.textContent = decorCount + " decor - " + formatNum(totalQty) + " items" + estimateText;
+      selValue.textContent = `${decorCount} decor - ${formatNum(totalQty)} items${estimateText}`;
       const has = decorCount > 0 && totalQty > 0;
       ui.setButtonEnabled(btnDelete, has);
       ui.setButtonEnabled(btnClear, has);
@@ -610,8 +719,12 @@ export async function renderMiscMenu(container: HTMLElement) {
       updateSummaryUI();
     };
 
-    const card = ui.card("Decor deleter", { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "440px";
+    const card = ui.card("Decor deleter", {
+      tone: "muted",
+      align: "stretch",
+      subtitle: "Bulk delete decor from inventory.",
+    });
+    styleCard(card);
     card.body.append(grid);
     (card.root as any).__cleanup__ = () => {
       clearDecorSummaryTimer();
@@ -619,13 +732,12 @@ export async function renderMiscMenu(container: HTMLElement) {
     };
     return card.root;
   })();
-  const content = document.createElement("div");
-  content.style.display = "grid";
-  content.style.gap = "8px";
-  content.style.justifyItems = "center";
-  content.append(secAutoReco, secPlayer, secInventoryReserve, secSeed, secDecor);
+  secSeed.style.gridColumn = "1 / -1";
+  secDecor.style.gridColumn = "1 / -1";
 
-  view.appendChild(content);
+  grid.append(secAutoReco, secPlayer, secInventoryReserve, secStorage, secSeed, secDecor);
+  page.append(header, grid);
+  view.appendChild(page);
 
   (view as any).__cleanup__ = () => {
     try { (secPlayer as any).__cleanup__?.(); } catch {}
@@ -633,3 +745,11 @@ export async function renderMiscMenu(container: HTMLElement) {
     try { (secDecor as any).__cleanup__?.(); } catch {}
   };
 }
+
+
+
+
+
+
+
+

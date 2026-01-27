@@ -917,6 +917,7 @@ let _unsubToolInv: null | (() => void) = null;
 const TOOL_CAPS: Record<string, number> = {
   Shovel: 1,
   WateringCan: 99,
+  CropCleanser: 99,
 };
 
 function _isToolCapReached(toolId: string): boolean {

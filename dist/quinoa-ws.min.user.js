@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.41
+// @version      2.99.42
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1187,6 +1187,8 @@
   var myToolInventory = makeAtom("myToolInventoryAtom");
   var myEggInventory = makeAtom("myEggInventoryAtom");
   var myDecorInventory = makeAtom("myDecorInventoryAtom");
+  var mySeedSiloItems = makeAtom("mySeedSiloItemsAtom");
+  var myDecorShedItems = makeAtom("myDecorShedItemsAtom");
   var myPetInfos = makeAtom("myPetInfosAtom");
   var myPetSlotInfos = makeAtom("myPetSlotInfosAtom");
   var totalPetSellPrice = makeAtom("totalPetSellPriceAtom");
@@ -1316,6 +1318,8 @@
       myToolInventory,
       myEggInventory,
       myDecorInventory,
+      mySeedSiloItems,
+      myDecorShedItems,
       favoriteIds,
       mySelectedItemName,
       mySelectedItemRotation,
@@ -5834,10 +5838,18 @@
   var ARIES_LOCKER_RESTRICTIONS_PATH = "locker.restrictions";
   var clampPercent2 = (value) => Math.max(0, Math.min(50, Math.round(value)));
   var roundToStep = (value, step) => Math.round(value / step) * step;
+  var DEFAULT_SELL_ALL_PETS_RULES = {
+    enabled: true,
+    protectGold: true,
+    protectRainbow: true,
+    protectMaxStr: true,
+    maxStrThreshold: 95
+  };
   var DEFAULT_STATE = {
     minRequiredPlayers: 1,
     eggLocks: {},
-    decorPickupLocked: false
+    decorPickupLocked: false,
+    sellAllPets: { ...DEFAULT_SELL_ALL_PETS_RULES }
   };
   var FRIEND_BONUS_STEP = 10;
   var FRIEND_BONUS_MAX = 50;
@@ -5857,6 +5869,18 @@
       out[key2] = value === true;
     }
     return out;
+  };
+  var sanitizeSellAllPetsRules = (raw) => {
+    if (!raw || typeof raw !== "object") return { ...DEFAULT_SELL_ALL_PETS_RULES };
+    const maxStrRaw = Number(raw.maxStrThreshold);
+    const maxStrThreshold = Number.isFinite(maxStrRaw) ? Math.max(0, Math.min(100, Math.round(maxStrRaw))) : DEFAULT_SELL_ALL_PETS_RULES.maxStrThreshold;
+    return {
+      enabled: raw.enabled !== false,
+      protectGold: raw.protectGold !== false,
+      protectRainbow: raw.protectRainbow !== false,
+      protectMaxStr: raw.protectMaxStr !== false,
+      maxStrThreshold
+    };
   };
   function friendBonusPercentFromMultiplier(raw) {
     const n = Number(raw);
@@ -5895,7 +5919,8 @@
         const players = sanitizePlayers(Number(parsed?.minRequiredPlayers ?? parsed?.minFriendBonusPct));
         const eggLocks = sanitizeEggLocks(parsed?.eggLocks);
         const decorPickupLocked = parsed?.decorPickupLocked === true;
-        this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked };
+        const sellAllPets = sanitizeSellAllPetsRules(parsed?.sellAllPets);
+        this.state = { minRequiredPlayers: players, eggLocks, decorPickupLocked, sellAllPets };
       } catch {
         this.state = { ...DEFAULT_STATE };
       }
@@ -5917,6 +5942,20 @@
     }
     getState() {
       return { ...this.state };
+    }
+    getSellAllPetsRules() {
+      return { ...this.state.sellAllPets ?? DEFAULT_SELL_ALL_PETS_RULES };
+    }
+    setSellAllPetsRules(next) {
+      const current = this.getSellAllPetsRules();
+      const merged = { ...current, ...next };
+      const sanitized = sanitizeSellAllPetsRules(merged);
+      const prev = this.state.sellAllPets;
+      const same = prev?.enabled === sanitized.enabled && prev?.protectGold === sanitized.protectGold && prev?.protectRainbow === sanitized.protectRainbow && prev?.protectMaxStr === sanitized.protectMaxStr && prev?.maxStrThreshold === sanitized.maxStrThreshold;
+      if (same) return;
+      this.state = { ...this.state, sellAllPets: sanitized };
+      this.save();
+      this.emit();
     }
     setMinRequiredPlayers(value) {
       const players = sanitizePlayers(value);
@@ -6989,6 +7028,8 @@
   var AUTO_RECO_MAX_MS = 5 * 6e4;
   var AUTO_RECO_DEFAULT_MS = 6e4;
   var PATH_KEEP_INVENTORY_SLOT_FREE = "misc.keepInventorySlotFree";
+  var PATH_AUTO_STORE_SEED_SILO_ENABLED = "misc.autoStoreSeedSiloEnabled";
+  var PATH_AUTO_STORE_DECOR_SHED_ENABLED = "misc.autoStoreDecorShedEnabled";
   var readGhostEnabled = (def = false) => {
     try {
       const stored = readAriesPath(PATH_GHOST_MODE);
@@ -7073,6 +7114,28 @@
     try {
       writeAriesPath(PATH_KEEP_INVENTORY_SLOT_FREE, !!on);
     } catch {
+    }
+  };
+  var readAutoStoreSeedSiloEnabled = (def = false) => {
+    try {
+      const stored = readAriesPath(PATH_AUTO_STORE_SEED_SILO_ENABLED);
+      if (typeof stored === "boolean") return stored;
+      if (stored === "1" || stored === 1) return true;
+      if (stored === "0" || stored === 0) return false;
+      return !!stored;
+    } catch {
+      return def;
+    }
+  };
+  var readAutoStoreDecorShedEnabled = (def = false) => {
+    try {
+      const stored = readAriesPath(PATH_AUTO_STORE_DECOR_SHED_ENABLED);
+      if (typeof stored === "boolean") return stored;
+      if (stored === "1" || stored === 1) return true;
+      if (stored === "0" || stored === 0) return false;
+      return !!stored;
+    } catch {
+      return def;
     }
   };
   function createGhostController() {
@@ -7183,6 +7246,239 @@
         return DELAY_MS;
       }
     };
+  }
+  var normalizeStorageKey = (value) => typeof value === "string" ? value.trim() : "";
+  var normalizeStorageQty = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  };
+  var buildQtyMap = (raw, getKey) => {
+    const map2 = /* @__PURE__ */ new Map();
+    const list = Array.isArray(raw) ? raw : [];
+    for (const item of list) {
+      const key2 = getKey(item);
+      if (!key2) continue;
+      const qty = normalizeStorageQty(item?.quantity);
+      if (qty <= 0) continue;
+      map2.set(key2, (map2.get(key2) ?? 0) + qty);
+    }
+    return map2;
+  };
+  var buildKeySet = (raw, getKey) => {
+    const set2 = /* @__PURE__ */ new Set();
+    const list = Array.isArray(raw) ? raw : [];
+    for (const item of list) {
+      const key2 = getKey(item);
+      if (!key2) continue;
+      const qty = normalizeStorageQty(item?.quantity);
+      if (qty <= 0) continue;
+      set2.add(key2);
+    }
+    return set2;
+  };
+  var diffIncreases = (prev, next) => {
+    const out = [];
+    for (const [key2, qty] of next) {
+      const before = prev.get(key2) ?? 0;
+      if (qty > before) out.push(key2);
+    }
+    return out;
+  };
+  var seedKeyFromItem = (item) => normalizeStorageKey(item?.species);
+  var decorKeyFromItem = (item) => normalizeStorageKey(item?.decorId);
+  var autoSeedSiloEnabled = readAutoStoreSeedSiloEnabled(false);
+  var autoDecorShedEnabled = readAutoStoreDecorShedEnabled(false);
+  var seedSiloItems = /* @__PURE__ */ new Set();
+  var seedInventoryQty = /* @__PURE__ */ new Map();
+  var seedSiloQueue = /* @__PURE__ */ new Set();
+  var seedSiloBusy = false;
+  var seedInvUnsub = null;
+  var seedSiloUnsub = null;
+  var decorShedItems = /* @__PURE__ */ new Set();
+  var decorInventoryQty = /* @__PURE__ */ new Map();
+  var decorShedQueue = /* @__PURE__ */ new Set();
+  var decorShedBusy = false;
+  var decorInvUnsub = null;
+  var decorShedUnsub = null;
+  function queueSeedSiloStore(keys) {
+    for (const key2 of keys) if (key2) seedSiloQueue.add(key2);
+    void flushSeedSiloQueue();
+  }
+  async function flushSeedSiloQueue() {
+    if (seedSiloBusy || !autoSeedSiloEnabled) return;
+    seedSiloBusy = true;
+    try {
+      while (seedSiloQueue.size && autoSeedSiloEnabled) {
+        const batch = Array.from(seedSiloQueue);
+        seedSiloQueue.clear();
+        for (const species of batch) {
+          if (!autoSeedSiloEnabled) return;
+          if (!seedSiloItems.has(species)) continue;
+          try {
+            await PlayerService.putItemInStorage(species, "SeedSilo");
+          } catch {
+          }
+        }
+      }
+    } finally {
+      seedSiloBusy = false;
+    }
+  }
+  async function startSeedSiloAutoStore() {
+    if (seedInvUnsub || seedSiloUnsub) return;
+    if (typeof window === "undefined") return;
+    try {
+      seedSiloItems = buildKeySet(await mySeedSiloItems.get(), seedKeyFromItem);
+    } catch {
+    }
+    try {
+      seedInventoryQty = buildQtyMap(await Atoms.inventory.mySeedInventory.get(), seedKeyFromItem);
+    } catch {
+    }
+    try {
+      seedSiloUnsub = await mySeedSiloItems.onChange((next) => {
+        seedSiloItems = buildKeySet(next, seedKeyFromItem);
+      });
+    } catch {
+      seedSiloUnsub = null;
+    }
+    try {
+      seedInvUnsub = await Atoms.inventory.mySeedInventory.onChange((next) => {
+        if (!autoSeedSiloEnabled) return;
+        const nextMap = buildQtyMap(next, seedKeyFromItem);
+        const increased = diffIncreases(seedInventoryQty, nextMap);
+        seedInventoryQty = nextMap;
+        if (increased.length) queueSeedSiloStore(increased);
+      });
+    } catch {
+      seedInvUnsub = null;
+    }
+  }
+  function stopSeedSiloAutoStore() {
+    try {
+      seedInvUnsub?.();
+    } catch {
+    }
+    try {
+      seedSiloUnsub?.();
+    } catch {
+    }
+    seedInvUnsub = null;
+    seedSiloUnsub = null;
+    seedSiloQueue.clear();
+    seedSiloBusy = false;
+    seedSiloItems.clear();
+    seedInventoryQty.clear();
+  }
+  function queueDecorShedStore(keys) {
+    for (const key2 of keys) if (key2) decorShedQueue.add(key2);
+    void flushDecorShedQueue();
+  }
+  async function flushDecorShedQueue() {
+    if (decorShedBusy || !autoDecorShedEnabled) return;
+    decorShedBusy = true;
+    try {
+      while (decorShedQueue.size && autoDecorShedEnabled) {
+        const batch = Array.from(decorShedQueue);
+        decorShedQueue.clear();
+        for (const decorId of batch) {
+          if (!autoDecorShedEnabled) return;
+          if (!decorShedItems.has(decorId)) continue;
+          try {
+            await PlayerService.putItemInStorage(decorId, "DecorShed");
+          } catch {
+          }
+        }
+      }
+    } finally {
+      decorShedBusy = false;
+    }
+  }
+  async function startDecorShedAutoStore() {
+    if (decorInvUnsub || decorShedUnsub) return;
+    if (typeof window === "undefined") return;
+    try {
+      decorShedItems = buildKeySet(await myDecorShedItems.get(), decorKeyFromItem);
+    } catch {
+    }
+    try {
+      decorInventoryQty = buildQtyMap(await Atoms.inventory.myDecorInventory.get(), decorKeyFromItem);
+    } catch {
+    }
+    try {
+      decorShedUnsub = await myDecorShedItems.onChange((next) => {
+        decorShedItems = buildKeySet(next, decorKeyFromItem);
+      });
+    } catch {
+      decorShedUnsub = null;
+    }
+    try {
+      decorInvUnsub = await Atoms.inventory.myDecorInventory.onChange((next) => {
+        if (!autoDecorShedEnabled) return;
+        const nextMap = buildQtyMap(next, decorKeyFromItem);
+        const increased = diffIncreases(decorInventoryQty, nextMap);
+        decorInventoryQty = nextMap;
+        if (increased.length) queueDecorShedStore(increased);
+      });
+    } catch {
+      decorInvUnsub = null;
+    }
+  }
+  function stopDecorShedAutoStore() {
+    try {
+      decorInvUnsub?.();
+    } catch {
+    }
+    try {
+      decorShedUnsub?.();
+    } catch {
+    }
+    decorInvUnsub = null;
+    decorShedUnsub = null;
+    decorShedQueue.clear();
+    decorShedBusy = false;
+    decorShedItems.clear();
+    decorInventoryQty.clear();
+  }
+  function setAutoStoreSeedSiloEnabled(on) {
+    const next = !!on;
+    autoSeedSiloEnabled = next;
+    try {
+      writeAriesPath(PATH_AUTO_STORE_SEED_SILO_ENABLED, next);
+    } catch {
+    }
+    if (next) {
+      void (async () => {
+        await startSeedSiloAutoStore();
+        const keys = Array.from(seedInventoryQty.keys()).filter((k) => seedSiloItems.has(k));
+        if (keys.length) queueSeedSiloStore(keys);
+      })();
+    } else {
+      stopSeedSiloAutoStore();
+    }
+  }
+  function setAutoStoreDecorShedEnabled(on) {
+    const next = !!on;
+    autoDecorShedEnabled = next;
+    try {
+      writeAriesPath(PATH_AUTO_STORE_DECOR_SHED_ENABLED, next);
+    } catch {
+    }
+    if (next) {
+      void (async () => {
+        await startDecorShedAutoStore();
+        const keys = Array.from(decorInventoryQty.keys()).filter((k) => decorShedItems.has(k));
+        if (keys.length) queueDecorShedStore(keys);
+      })();
+    } else {
+      stopDecorShedAutoStore();
+    }
+  }
+  if (autoSeedSiloEnabled) {
+    void startSeedSiloAutoStore();
+  }
+  if (autoDecorShedEnabled) {
+    void startDecorShedAutoStore();
   }
   var selectedMap = /* @__PURE__ */ new Map();
   var seedStockByName = /* @__PURE__ */ new Map();
@@ -8264,6 +8560,10 @@
     setAutoRecoDelayMs,
     readInventorySlotReserveEnabled,
     writeInventorySlotReserveEnabled,
+    readAutoStoreSeedSiloEnabled,
+    setAutoStoreSeedSiloEnabled,
+    readAutoStoreDecorShedEnabled,
+    setAutoStoreDecorShedEnabled,
     // seeds
     getMySeedInventory,
     openSeedInventoryPreview,
@@ -19301,8 +19601,692 @@
     }
   };
 
+  // src/utils/petCalcul.ts
+  var SEC_PER_HOUR = 3600;
+  var XP_STRENGTH_MAX = 30;
+  var BASE_STRENGTH_FLOOR = 30;
+  var getCatalogEntry = (species) => {
+    if (!species) return null;
+    const entry = petCatalog[species];
+    return entry ?? null;
+  };
+  var getMutationEntry = (mutation) => {
+    if (!mutation) return null;
+    const entry = mutationCatalog[mutation];
+    return entry ?? null;
+  };
+  var getTargetScale = (pet) => {
+    const raw = pet?.targetScale;
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
+  };
+  var getXp = (pet) => {
+    const raw = pet?.xp;
+    return typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, raw) : 0;
+  };
+  var getPetMaxStrength = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const maxScale = typeof entry.maxScale === "number" && entry.maxScale > 1 ? entry.maxScale : 1;
+    const targetScale = getTargetScale(pet);
+    const ratio = maxScale > 1 ? (targetScale - 1) / (maxScale - 1) : 0;
+    const raw = ratio * 20 + 80;
+    const strength = Math.floor(Number.isFinite(raw) ? raw : 0);
+    return Math.max(strength, 0);
+  };
+  var getBaseStrength = (maxStrength) => {
+    const base = maxStrength - BASE_STRENGTH_FLOOR;
+    return Math.max(base, 0);
+  };
+  var getPetStrength = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const hoursToMature = typeof entry.hoursToMature === "number" && entry.hoursToMature > 0 ? entry.hoursToMature : 1;
+    const maxStrength = getPetMaxStrength(pet);
+    if (maxStrength <= 0) return 0;
+    const xpRate = getXp(pet) / (hoursToMature * SEC_PER_HOUR);
+    const xpComponent = Math.min(Math.floor(xpRate * XP_STRENGTH_MAX), XP_STRENGTH_MAX);
+    const baseStrength = getBaseStrength(maxStrength);
+    const strength = Math.min(baseStrength + xpComponent, maxStrength);
+    return Math.max(strength, 0);
+  };
+  var getPetCoinMultiplier = (pet) => {
+    const mutations = Array.isArray(pet?.mutations) ? pet.mutations : [];
+    return mutations.reduce((acc, mutation) => {
+      const entry = getMutationEntry(mutation);
+      const multiplier = entry?.coinMultiplier;
+      if (typeof multiplier === "number" && Number.isFinite(multiplier) && multiplier > 0) {
+        return acc * multiplier;
+      }
+      return acc;
+    }, 1);
+  };
+  var getPetValue = (pet) => {
+    const entry = getCatalogEntry(pet?.petSpecies ?? "");
+    if (!entry) return 0;
+    const maturitySellPrice = typeof entry.maturitySellPrice === "number" ? entry.maturitySellPrice : 0;
+    const maxStrength = getPetMaxStrength(pet);
+    if (maxStrength <= 0) return 0;
+    const strength = getPetStrength(pet);
+    const targetScale = getTargetScale(pet);
+    const coinMultiplier = getPetCoinMultiplier(pet);
+    const raw = maturitySellPrice * (strength / maxStrength) * targetScale * coinMultiplier;
+    if (!Number.isFinite(raw)) return 0;
+    return Math.round(Math.max(raw, 0));
+  };
+  var getPetInfo = (pet) => ({
+    value: getPetValue(pet),
+    strength: getPetStrength(pet),
+    maxStrength: getPetMaxStrength(pet),
+    coinMultiplier: getPetCoinMultiplier(pet)
+  });
+
+  // src/utils/calculators.ts
+  var key = (s) => String(s ?? "").trim();
+  function resolveSpeciesKey(species) {
+    const wanted = key(species).toLowerCase();
+    if (!wanted) return null;
+    for (const k of Object.keys(plantCatalog)) {
+      if (k.toLowerCase() === wanted) return k;
+    }
+    return null;
+  }
+  function findAnySellPriceNode(obj) {
+    if (!obj || typeof obj !== "object") return null;
+    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
+      return obj.baseSellPrice;
+    }
+    for (const k of ["produce", "crop", "item", "items", "data"]) {
+      if (obj[k]) {
+        const v = findAnySellPriceNode(obj[k]);
+        if (v != null) return v;
+      }
+    }
+    try {
+      const seen = /* @__PURE__ */ new Set();
+      const stack = [obj];
+      while (stack.length) {
+        const cur = stack.pop();
+        if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+        seen.add(cur);
+        if (typeof cur.baseSellPrice === "number") {
+          const v = cur.baseSellPrice;
+          if (Number.isFinite(v)) return v;
+        }
+        for (const v of Object.values(cur)) if (v && typeof v === "object") stack.push(v);
+      }
+    } catch {
+    }
+    return null;
+  }
+  function defaultGetBasePrice(species) {
+    const spKey = resolveSpeciesKey(species);
+    if (!spKey) return null;
+    const node = plantCatalog[spKey];
+    const cands = [
+      node?.produce?.baseSellPrice,
+      node?.crop?.baseSellPrice,
+      node?.item?.baseSellPrice,
+      node?.items?.Produce?.baseSellPrice
+    ].filter((v) => typeof v === "number" && Number.isFinite(v));
+    if (cands.length) return cands[0];
+    return findAnySellPriceNode(node);
+  }
+  function applyRounding(v, mode = "round") {
+    switch (mode) {
+      case "floor":
+        return Math.floor(v);
+      case "ceil":
+        return Math.ceil(v);
+      case "none":
+        return v;
+      case "round":
+      default:
+        return Math.round(v);
+    }
+  }
+  function friendBonusMultiplier2(playersInRoom) {
+    if (!Number.isFinite(playersInRoom)) return 1;
+    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
+    return 1 + (n - 1) * 0.1;
+  }
+  var COLOR_MULT = {
+    Gold: 25,
+    Rainbow: 50
+  };
+  var WEATHER_MULT = {
+    Wet: 2,
+    Chilled: 2,
+    Frozen: 10
+  };
+  var TIME_MULT = {
+    Dawnlit: 2,
+    Dawnbound: 3,
+    Amberlit: 5,
+    Amberbound: 6
+  };
+  var WEATHER_TIME_COMBO = {
+    "Wet+Dawnlit": 3,
+    "Chilled+Dawnlit": 3,
+    "Wet+Dawnbound": 4,
+    "Chilled+Dawnbound": 4,
+    "Wet+Amberlit": 6,
+    "Chilled+Amberlit": 6,
+    "Wet+Amberbound": 7,
+    "Chilled+Amberbound": 7,
+    "Frozen+Dawnlit": 11,
+    "Frozen+Dawnbound": 12,
+    "Frozen+Amberlit": 14,
+    "Frozen+Amberbound": 15
+  };
+  function isColor(m) {
+    return m === "Gold" || m === "Rainbow";
+  }
+  function isWeather(m) {
+    return m === "Wet" || m === "Chilled" || m === "Frozen";
+  }
+  function isTime(m) {
+    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
+  }
+  function normalizeMutationName(m) {
+    const s = key(m).toLowerCase();
+    if (!s) return "";
+    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
+    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+    if (s === "gold") return "Gold";
+    if (s === "rainbow") return "Rainbow";
+    if (s === "wet") return "Wet";
+    if (s === "chilled") return "Chilled";
+    if (s === "frozen") return "Frozen";
+    if (s === "dawnlit") return "Dawnlit";
+    if (s === "dawnbound") return "Dawnbound";
+    if (s === "amberlit") return "Amberlit";
+    if (s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
+    if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
+    return m;
+  }
+  function computeColorMultiplier(mutations) {
+    if (!Array.isArray(mutations)) return 1;
+    let best = 1;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isColor(m)) {
+        const mult = COLOR_MULT[m];
+        if (mult > best) best = mult;
+      }
+    }
+    return best;
+  }
+  function pickWeather(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isWeather(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function pickTime(mutations) {
+    if (!Array.isArray(mutations)) return null;
+    let pick = null;
+    for (const raw of mutations) {
+      const m = normalizeMutationName(raw);
+      if (isTime(m)) {
+        if (pick == null) {
+          pick = m;
+          continue;
+        }
+        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+      }
+    }
+    return pick;
+  }
+  function computeWeatherTimeMultiplier(weather2, time) {
+    if (!weather2 && !time) return 1;
+    if (weather2 && !time) return WEATHER_MULT[weather2];
+    if (!weather2 && time) return TIME_MULT[time];
+    const k = `${weather2}+${time}`;
+    const combo = WEATHER_TIME_COMBO[k];
+    if (typeof combo === "number") return combo;
+    return Math.max(WEATHER_MULT[weather2], TIME_MULT[time]);
+  }
+  function mutationsMultiplier(mutations) {
+    const color = computeColorMultiplier(mutations);
+    const weather2 = pickWeather(mutations);
+    const time = pickTime(mutations);
+    const wt = computeWeatherTimeMultiplier(weather2, time);
+    return color * wt;
+  }
+  function estimateProduceValue(species, scale, mutations, opts) {
+    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
+    const sXform = opts?.scaleTransform ?? ((_, s) => s);
+    const round = opts?.rounding ?? "round";
+    const base = getBase(species);
+    if (!(Number.isFinite(base) && base > 0)) return 0;
+    const sc = Number(scale);
+    if (!Number.isFinite(sc) || sc <= 0) return 0;
+    const effScale = sXform(species, sc);
+    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
+    const mutMult = mutationsMultiplier(mutations);
+    const friendsMult = friendBonusMultiplier2(opts?.friendPlayers);
+    const pre = base * effScale * mutMult * friendsMult;
+    const out = Math.max(0, applyRounding(pre, round));
+    return out;
+  }
+  function valueFromInventoryProduce(item, opts, playersInRoom) {
+    if (!item || item.itemType !== "Produce") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
+  }
+  function valueFromGardenSlot(slot, opts, playersInRoom) {
+    if (!slot) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
+  }
+  function valueFromGardenPlant(plant, opts, playersInRoom) {
+    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
+    return sum;
+  }
+  function sumInventoryValue(items, opts, playersInRoom) {
+    if (!Array.isArray(items)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const it of items) {
+      if (it?.itemType === "Produce") {
+        sum += valueFromInventoryProduce(it, merged);
+      }
+    }
+    return sum;
+  }
+  function sumGardenValue(garden2, opts, playersInRoom) {
+    if (!garden2 || typeof garden2 !== "object") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const k of Object.keys(garden2)) {
+      const p = garden2[k];
+      if (p?.objectType === "plant") {
+        sum += valueFromGardenPlant(p, merged);
+      }
+    }
+    return sum;
+  }
+  var DefaultPricing = Object.freeze({
+    getBasePrice: defaultGetBasePrice,
+    rounding: "round"
+  });
+
+  // src/utils/inventoryValue.ts
+  var INVENTORY_VALUE_CATEGORIES = [
+    {
+      itemType: "Seed",
+      identifierKey: "species",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = plantCatalog[identifier];
+        const price = entry?.seed?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "seeds",
+      emptyLogMessage: "[InventorySorting] Aucune seed trouv\xE9e dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        species: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Tool",
+      identifierKey: "toolId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = toolCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "tools",
+      emptyLogMessage: "[InventorySorting] Aucun tool trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        toolId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Egg",
+      identifierKey: "eggId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = eggCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "eggs",
+      emptyLogMessage: "[InventorySorting] Aucun egg trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        eggId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    },
+    {
+      itemType: "Decor",
+      identifierKey: "decorId",
+      resolveCoinPrice: (identifier) => {
+        if (!identifier) return null;
+        const entry = decorCatalog[identifier];
+        const price = entry?.coinPrice;
+        return getFiniteNumber(price);
+      },
+      logKey: "decors",
+      emptyLogMessage: "[InventorySorting] Aucun decor trouv\xE9 dans l'inventaire pour le calcul de valeur.",
+      createEntry: (identifier, quantity, coinPrice, value) => ({
+        decorId: identifier,
+        quantity,
+        coinPrice,
+        value
+      })
+    }
+  ];
+  var currentSnapshot = null;
+  var watcherPromise = null;
+  var unsubscribe = null;
+  var computeCounter = 0;
+  var listeners4 = /* @__PURE__ */ new Set();
+  function getFiniteNumber(value) {
+    if (typeof value === "number") {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+  function extractItems(inventory) {
+    if (!inventory || typeof inventory !== "object") return null;
+    const items = inventory.items;
+    if (!Array.isArray(items)) return [];
+    return items;
+  }
+  function toNormalizedIdentifier(raw) {
+    if (typeof raw === "string") {
+      const trimmed = raw.trim();
+      return trimmed ? trimmed : null;
+    }
+    if (typeof raw === "number") {
+      return Number.isFinite(raw) ? String(raw) : null;
+    }
+    return null;
+  }
+  function getInventoryValueCategoryByItemType(itemType) {
+    return INVENTORY_VALUE_CATEGORIES.find((config) => config.itemType === itemType);
+  }
+  function computeInventoryItemValue(item, context = {}) {
+    if (!item || typeof item !== "object") return null;
+    const rawType = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+    if (!rawType) return null;
+    switch (rawType) {
+      case "Pet": {
+        const info = getPetInfo(item);
+        const value = info.value;
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+      }
+      case "Plant": {
+        const slots = Array.isArray(item?.slots) ? item.slots : [];
+        const playersInRoom = context.playersInRoom ?? void 0;
+        let total = 0;
+        for (const slot of slots) {
+          const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
+          const rawTarget = slot?.targetScale;
+          const target = Number.isFinite(rawTarget) ? rawTarget : Number(rawTarget);
+          const targetScale = Number.isFinite(target) ? target : null;
+          const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
+          if (!slotSpecies || targetScale == null) continue;
+          const value = estimateProduceValue(slotSpecies, targetScale, mutations, {
+            friendPlayers: playersInRoom
+          });
+          if (typeof value === "number" && Number.isFinite(value)) {
+            total += value;
+          }
+        }
+        return total;
+      }
+      case "Produce": {
+        const playersInRoom = context.playersInRoom ?? void 0;
+        const value = valueFromInventoryProduce(item, void 0, playersInRoom);
+        return typeof value === "number" && Number.isFinite(value) ? value : null;
+      }
+      default: {
+        const category = getInventoryValueCategoryByItemType(rawType);
+        if (!category) return null;
+        const identifier = toNormalizedIdentifier(item?.[category.identifierKey]);
+        const quantity = getFiniteNumber(item?.quantity);
+        const coinPrice = category.resolveCoinPrice(identifier);
+        if (quantity == null || coinPrice == null) return null;
+        const value = coinPrice * quantity;
+        return Number.isFinite(value) ? value : null;
+      }
+    }
+  }
+  function computePetValues(items) {
+    const pets = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Pet";
+    });
+    const entries = pets.map((pet) => {
+      const info = getPetInfo(pet);
+      const id = typeof pet?.id === "string" ? pet.id : null;
+      const name = typeof pet?.name === "string" && pet.name.trim() ? pet.name : null;
+      const species = typeof pet?.petSpecies === "string" ? pet.petSpecies : null;
+      return {
+        id,
+        name,
+        petSpecies: species,
+        value: info.value,
+        strength: info.strength,
+        maxStrength: info.maxStrength,
+        coinMultiplier: info.coinMultiplier
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return { totalValue, pets: entries };
+  }
+  function computePlantValues(items, playersInRoom) {
+    const plants = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Plant";
+    });
+    const entries = plants.map((plant) => {
+      const id = typeof plant?.id === "string" ? plant.id : null;
+      const species = typeof plant?.species === "string" ? plant.species : null;
+      const plantedAt = Number.isFinite(plant?.plantedAt) ? plant.plantedAt : null;
+      const maturedAt = Number.isFinite(plant?.maturedAt) ? plant.maturedAt : null;
+      const slots = Array.isArray(plant?.slots) ? plant.slots : [];
+      const slotEntries = slots.map((slot) => {
+        const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
+        const targetScaleRaw = slot?.targetScale;
+        const targetScale = Number.isFinite(targetScaleRaw) ? targetScaleRaw : Number(targetScaleRaw);
+        const scaleValue = Number.isFinite(targetScale) ? targetScale : null;
+        const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
+        const value2 = slotSpecies && scaleValue != null ? estimateProduceValue(slotSpecies, scaleValue, mutations, {
+          friendPlayers: playersInRoom
+        }) : 0;
+        return {
+          species: slotSpecies,
+          targetScale: scaleValue,
+          mutations,
+          value: value2
+        };
+      });
+      const value = slotEntries.reduce(
+        (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+        0
+      );
+      return {
+        id,
+        species,
+        plantedAt,
+        maturedAt,
+        value,
+        slots: slotEntries
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return {
+      totalValue,
+      playersInRoom: Number.isFinite(playersInRoom) ? playersInRoom : null,
+      plants: entries
+    };
+  }
+  function computeCropValues(items, playersInRoom) {
+    const crops = items.filter((item) => {
+      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+      return type === "Produce";
+    });
+    const entries = crops.map((crop) => {
+      const id = typeof crop?.id === "string" ? crop.id : null;
+      const species = typeof crop?.species === "string" ? crop.species : null;
+      const rawScale = crop?.scale;
+      const scale = Number.isFinite(rawScale) ? rawScale : Number(rawScale);
+      const scaleValue = Number.isFinite(scale) ? scale : null;
+      const mutations = Array.isArray(crop?.mutations) ? crop.mutations.filter((m) => typeof m === "string") : [];
+      const value = valueFromInventoryProduce(crop, void 0, playersInRoom);
+      return {
+        id,
+        species,
+        scale: scaleValue,
+        mutations,
+        value
+      };
+    });
+    const totalValue = entries.reduce(
+      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
+      0
+    );
+    return { totalValue, crops: entries };
+  }
+  function computeMiscValues(items) {
+    const aggregated = {
+      seeds: { totalValue: 0, items: [] },
+      tools: { totalValue: 0, items: [] },
+      eggs: { totalValue: 0, items: [] },
+      decors: { totalValue: 0, items: [] }
+    };
+    for (const config of INVENTORY_VALUE_CATEGORIES) {
+      const filteredItems = items.filter((item) => {
+        const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
+        return type === config.itemType;
+      });
+      const entries = filteredItems.map((item) => {
+        const rawIdentifier = item?.[config.identifierKey];
+        const identifier = toNormalizedIdentifier(rawIdentifier);
+        const rawQuantity = item?.quantity;
+        const quantity = getFiniteNumber(rawQuantity);
+        const coinPrice = config.resolveCoinPrice(identifier);
+        const value = quantity != null && coinPrice != null ? coinPrice * quantity : null;
+        return config.createEntry(identifier, quantity, coinPrice, value);
+      });
+      const totalValue = entries.reduce((acc, entry) => {
+        const entryValue = entry.value;
+        return typeof entryValue === "number" && Number.isFinite(entryValue) ? acc + entryValue : acc;
+      }, 0);
+      aggregated[config.logKey] = { totalValue, items: entries };
+    }
+    return aggregated;
+  }
+  async function resolvePlayersInRoom() {
+    try {
+      const rawPlayers = await Atoms.server.numPlayers.get();
+      return Number.isFinite(rawPlayers) ? rawPlayers : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  async function computeSnapshotFromInventory(inventory) {
+    const items = extractItems(inventory);
+    if (items === null) return null;
+    const safeItems = items ?? [];
+    const playersInRoom = await resolvePlayersInRoom();
+    return {
+      pets: computePetValues(safeItems),
+      plants: computePlantValues(safeItems, playersInRoom),
+      crops: computeCropValues(safeItems, playersInRoom),
+      misc: computeMiscValues(safeItems)
+    };
+  }
+  function notifyListeners(snapshot) {
+    for (const listener of listeners4) {
+      try {
+        listener(snapshot);
+      } catch (error) {
+        console.warn("[InventoryValue] Listener error", error);
+      }
+    }
+  }
+  async function refreshSnapshot(nextInventory) {
+    const computeId = ++computeCounter;
+    try {
+      const snapshot = await computeSnapshotFromInventory(nextInventory);
+      if (computeId !== computeCounter) return;
+      currentSnapshot = snapshot;
+      notifyListeners(currentSnapshot);
+    } catch (error) {
+      if (computeId !== computeCounter) return;
+      currentSnapshot = null;
+      console.warn("[InventoryValue] Impossible de calculer la valeur de l'inventaire", error);
+    }
+  }
+  async function ensureInventoryValueWatcher() {
+    if (watcherPromise) return watcherPromise;
+    watcherPromise = (async () => {
+      try {
+        const inventory = await Atoms.inventory.myInventory.get();
+        await refreshSnapshot(inventory);
+      } catch (error) {
+        currentSnapshot = null;
+        console.warn("[InventoryValue] Impossible de r\xE9cup\xE9rer l'inventaire initial", error);
+      }
+      try {
+        unsubscribe = await Atoms.inventory.myInventory.onChange((next) => {
+          void refreshSnapshot(next);
+        });
+      } catch (error) {
+        console.warn("[InventoryValue] Impossible de s'abonner \xE0 myInventory", error);
+      }
+    })();
+    return watcherPromise;
+  }
+  function getInventoryValueSnapshot() {
+    return currentSnapshot;
+  }
+  function onInventoryValueChange(listener) {
+    listeners4.add(listener);
+    return () => {
+      listeners4.delete(listener);
+    };
+  }
+
   // src/utils/sellAllPets.ts
   var SELL_ALL_PETS_EVENT = "sell-all-pets:list";
+  var SELL_ALL_PETS_DRY_RUN = false;
+  var SELL_ALL_PETS_CONFIRM_MODAL_ID = "tm-sellallpets-confirm";
   var DEFAULT_THEME = {
     text: "var(--chakra-colors-Neutral-TrueWhite, #FFFFFF)",
     bg: "var(--chakra-colors-Blue-Magic, #0067B4)",
@@ -19462,12 +20446,38 @@
       }
       return;
     }
+    if (!await confirmHighValuePetSale(toSell, logger)) {
+      try {
+        logger("sell-pets:cancelled");
+      } catch {
+      }
+      try {
+        toastSimple("Sell all Pets", "Sale cancelled.", "info");
+      } catch {
+      }
+      return;
+    }
     const failures = [];
     let sold = 0;
-    const totalValue = await computeTotalPetSellValue(toSell, logger);
+    const totalValue = computeTotalPetSellValueFromInventory(toSell);
     try {
       logger("sell-pets:total-value", { attempted: toSell.length, totalValue });
     } catch {
+    }
+    if (SELL_ALL_PETS_DRY_RUN) {
+      try {
+        logger("sell-pets:dry-run", { attempted: toSell.length, totalValue });
+      } catch {
+      }
+      try {
+        toastSimple("Sell all Pets", `Dry run: ${toSell.length} pets detected (no sale).`, "info");
+      } catch {
+      }
+      try {
+        globalThis.__sellAllPetsResult = { attempted: toSell.length, sold: 0, failures: [] };
+      } catch {
+      }
+      return;
     }
     for (const pet of toSell) {
       try {
@@ -19514,87 +20524,229 @@
     } catch {
     }
   }
-  async function computeTotalPetSellValue(pets, logger) {
+  function computeTotalPetSellValueFromInventory(pets) {
     if (!pets.length) return "";
-    const selectionSnapshot = await captureInventorySelection();
     let total = 0;
     for (const pet of pets) {
-      const index = getInventoryIndex(pet);
-      if (index === null) continue;
-      try {
-        await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(index);
-      } catch (error) {
-        try {
-          logger("sell-pet:selection-error", { id: pet.id, index, error, pet });
-        } catch {
-        }
-        continue;
-      }
-      const value = await readSellPriceForSelection(index, pet, logger);
-      if (value !== null) {
+      const value = computeInventoryItemValue(pet);
+      if (typeof value === "number" && Number.isFinite(value)) {
         total += value;
       }
     }
-    await restoreInventorySelection(selectionSnapshot, logger);
     return total.toLocaleString("en-US");
   }
-  async function captureInventorySelection() {
-    try {
-      const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
-      if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
-        return { value, valid: true };
+  async function confirmHighValuePetSale(pets, logger) {
+    const rules = lockerRestrictionsService.getSellAllPetsRules();
+    if (!rules?.enabled) return true;
+    const mutationProtect = /* @__PURE__ */ new Set();
+    if (rules.protectGold) mutationProtect.add("gold");
+    if (rules.protectRainbow) mutationProtect.add("rainbow");
+    const maxStrThreshold = Number.isFinite(rules.maxStrThreshold) ? Math.max(0, Math.min(100, Math.round(rules.maxStrThreshold))) : 0;
+    const checkMaxStr = !!rules.protectMaxStr;
+    if (mutationProtect.size === 0 && !checkMaxStr) return true;
+    const flagged = [];
+    for (const pet of pets) {
+      const rawMutations = Array.isArray(pet?.mutations) ? pet.mutations : [];
+      const mutations = rawMutations.filter((m) => typeof m === "string");
+      const foundMutations = mutationProtect.size ? mutations.map((m) => m.toLowerCase()).filter((m) => mutationProtect.has(m)).map((m) => m === "gold" ? "Gold" : "Rainbow") : [];
+      const hasMutation = foundMutations.length > 0;
+      const maxStrength = getPetInfo(pet)?.maxStrength;
+      const strongEnough = checkMaxStr && typeof maxStrength === "number" && Number.isFinite(maxStrength) ? maxStrength >= maxStrThreshold : false;
+      if (!hasMutation && !strongEnough) continue;
+      const reasons = [];
+      if (hasMutation) {
+        for (const mut of Array.from(new Set(foundMutations))) {
+          reasons.push(`Mutation: ${mut}`);
+        }
       }
-      if (value === null) {
-        return { value: null, valid: true };
+      if (strongEnough) {
+        reasons.push(`Max STR: ${Math.floor(maxStrength ?? 0)}`);
       }
-    } catch {
+      flagged.push({
+        pet,
+        reasons,
+        maxStrength: typeof maxStrength === "number" && Number.isFinite(maxStrength) ? maxStrength : null,
+        mutations
+      });
     }
-    return { value: null, valid: false };
-  }
-  async function restoreInventorySelection(snapshot, logger) {
-    if (!snapshot.valid) return;
-    try {
-      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(snapshot.value);
-    } catch (error) {
+    if (flagged.length === 0) return true;
+    if (!isBrowser()) {
       try {
-        logger("sell-pet:selection-restore-error", error);
+        logger("sell-pets:confirm-unavailable", { flagged: flagged.length });
+      } catch {
+      }
+      return false;
+    }
+    const confirmed = await showSellAllPetsConfirmModal(flagged);
+    if (!confirmed) {
+      try {
+        logger("sell-pets:confirm-cancelled", { flagged: flagged.length });
       } catch {
       }
     }
+    return confirmed;
   }
-  function getInventoryIndex(pet) {
-    const idx = pet.inventoryIndex;
-    if (typeof idx === "number" && Number.isInteger(idx) && idx >= 0) return idx;
-    return null;
-  }
-  async function readSellPriceForSelection(index, pet, logger, attempts = 3, delayMs = 50) {
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      try {
-        const value = await Atoms.pets.totalPetSellPrice.get();
-        const numericValue = Number(value);
-        if (Number.isFinite(numericValue)) {
-          return numericValue;
-        }
-      } catch (error) {
-        if (attempt === attempts - 1) {
-          try {
-            logger("sell-pet:price-read-error", { id: pet.id, index, error, pet });
-          } catch {
-          }
-        }
+  function showSellAllPetsConfirmModal(flagged) {
+    return new Promise((resolve2) => {
+      if (!isBrowser()) {
+        resolve2(false);
+        return;
       }
-      if (attempt < attempts - 1) {
-        await delay2(delayMs);
+      const existing = document.getElementById(SELL_ALL_PETS_CONFIRM_MODAL_ID);
+      if (existing) existing.remove();
+      const overlay = document.createElement("div");
+      overlay.id = SELL_ALL_PETS_CONFIRM_MODAL_ID;
+      overlay.style.position = "fixed";
+      overlay.style.inset = "0";
+      overlay.style.zIndex = "2147483647";
+      overlay.style.display = "flex";
+      overlay.style.alignItems = "center";
+      overlay.style.justifyContent = "center";
+      overlay.style.background = "rgba(0,0,0,0.6)";
+      const box = document.createElement("div");
+      box.style.minWidth = "320px";
+      box.style.maxWidth = "520px";
+      box.style.background = "#0f1318";
+      box.style.color = "#ffffff";
+      box.style.border = "1px solid rgba(255,255,255,0.15)";
+      box.style.borderRadius = "14px";
+      box.style.boxShadow = "0 12px 40px rgba(0,0,0,0.45)";
+      box.style.padding = "18px 20px";
+      box.style.display = "grid";
+      box.style.gap = "12px";
+      box.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+      const title = document.createElement("div");
+      title.textContent = "Confirm sell all pets";
+      title.style.fontSize = "18px";
+      title.style.fontWeight = "800";
+      const body = document.createElement("div");
+      body.textContent = "The following pets match protected rules:";
+      body.style.opacity = "0.9";
+      body.style.fontSize = "13px";
+      body.style.lineHeight = "1.4";
+      const list = document.createElement("div");
+      list.style.display = "grid";
+      list.style.gap = "8px";
+      list.style.maxHeight = "260px";
+      list.style.overflow = "auto";
+      list.style.paddingRight = "4px";
+      const buildPetRow = (entry) => {
+        const row = document.createElement("div");
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "48px 1fr";
+        row.style.gap = "10px";
+        row.style.alignItems = "center";
+        row.style.padding = "6px 8px";
+        row.style.border = "1px solid rgba(255,255,255,0.08)";
+        row.style.borderRadius = "10px";
+        row.style.background = "rgba(255,255,255,0.03)";
+        const imgWrap = document.createElement("div");
+        imgWrap.style.width = "48px";
+        imgWrap.style.height = "48px";
+        imgWrap.style.borderRadius = "10px";
+        imgWrap.style.background = "rgba(255,255,255,0.08)";
+        imgWrap.style.display = "flex";
+        imgWrap.style.alignItems = "center";
+        imgWrap.style.justifyContent = "center";
+        imgWrap.style.overflow = "hidden";
+        const label2 = entry.pet.petSpecies || entry.pet.name || "Pet";
+        const fallback = document.createElement("div");
+        fallback.textContent = String(label2).slice(0, 2).toUpperCase();
+        fallback.style.fontSize = "12px";
+        fallback.style.fontWeight = "700";
+        imgWrap.appendChild(fallback);
+        const species = String(entry.pet.petSpecies || "").trim();
+        const mutations = Array.isArray(entry.mutations) ? entry.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : [];
+        if (species) {
+          attachSpriteIcon(
+            imgWrap,
+            ["pet"],
+            [species, entry.pet.name || ""],
+            48,
+            "sell-all-pets-confirm",
+            {
+              mutations
+            }
+          );
+        }
+        const info = document.createElement("div");
+        info.style.display = "grid";
+        info.style.gap = "4px";
+        const name = document.createElement("div");
+        name.textContent = entry.pet.name ? `${entry.pet.name} (${entry.pet.petSpecies ?? "Pet"})` : entry.pet.petSpecies ?? "Pet";
+        name.style.fontWeight = "700";
+        name.style.fontSize = "13px";
+        const reasons = document.createElement("div");
+        reasons.style.display = "flex";
+        reasons.style.flexWrap = "wrap";
+        reasons.style.gap = "6px";
+        for (const reason of entry.reasons) {
+          const chip = document.createElement("div");
+          chip.textContent = reason;
+          chip.style.fontSize = "11px";
+          chip.style.padding = "2px 6px";
+          chip.style.borderRadius = "999px";
+          chip.style.background = "rgba(122,162,255,0.2)";
+          chip.style.border = "1px solid rgba(122,162,255,0.4)";
+          chip.style.color = "#dbe7ff";
+          reasons.appendChild(chip);
+        }
+        info.append(name, reasons);
+        row.append(imgWrap, info);
+        return row;
+      };
+      for (const entry of flagged) {
+        list.appendChild(buildPetRow(entry));
       }
-    }
-    try {
-      logger("sell-pet:price-missing", { id: pet.id, index, pet });
-    } catch {
-    }
-    return null;
-  }
-  function delay2(ms) {
-    return new Promise((resolve2) => setTimeout(resolve2, ms));
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.justifyContent = "flex-end";
+      actions.style.gap = "8px";
+      const btnCancel = document.createElement("button");
+      btnCancel.type = "button";
+      btnCancel.textContent = "Cancel";
+      btnCancel.style.padding = "8px 12px";
+      btnCancel.style.borderRadius = "10px";
+      btnCancel.style.border = "1px solid rgba(255,255,255,0.2)";
+      btnCancel.style.background = "transparent";
+      btnCancel.style.color = "#ffffff";
+      btnCancel.style.cursor = "pointer";
+      const btnConfirm = document.createElement("button");
+      btnConfirm.type = "button";
+      btnConfirm.textContent = "Sell";
+      btnConfirm.style.padding = "8px 14px";
+      btnConfirm.style.borderRadius = "10px";
+      btnConfirm.style.border = "1px solid rgba(122,162,255,0.7)";
+      btnConfirm.style.background = "#1a2644";
+      btnConfirm.style.color = "#ffffff";
+      btnConfirm.style.cursor = "pointer";
+      btnConfirm.style.fontWeight = "700";
+      let settled = false;
+      const close = (value) => {
+        if (settled) return;
+        settled = true;
+        overlay.remove();
+        document.removeEventListener("keydown", onKeyDown, true);
+        resolve2(value);
+      };
+      const onKeyDown = (ev) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          close(false);
+        }
+      };
+      btnCancel.addEventListener("click", () => close(false));
+      btnConfirm.addEventListener("click", () => close(true));
+      overlay.addEventListener("click", (ev) => {
+        if (ev.target === overlay) close(false);
+      });
+      actions.append(btnCancel, btnConfirm);
+      box.append(title, body, list, actions);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+      document.addEventListener("keydown", onKeyDown, true);
+      btnConfirm.focus();
+    });
   }
   function safeInvokeClick(handler, ev, ctx2, logger) {
     try {
@@ -21639,7 +22791,8 @@
   var _unsubToolInv = null;
   var TOOL_CAPS = {
     Shovel: 1,
-    WateringCan: 99
+    WateringCan: 99,
+    CropCleanser: 99
   };
   function _isToolCapReached(toolId) {
     const cap = TOOL_CAPS[toolId];
@@ -24088,7 +25241,7 @@
   async function waitForHungerIncrease(petId, previousPct, options = {}) {
     const { initialDelay = 0, timeout = HUNGER_TIMEOUT_MS, interval = HUNGER_POLL_INTERVAL_MS } = options;
     if (initialDelay > 0) {
-      await delay3(initialDelay);
+      await delay2(initialDelay);
     }
     const start2 = typeof performance !== "undefined" && typeof performance.now === "function" ? performance.now() : Date.now();
     let lastResult = null;
@@ -24105,11 +25258,11 @@
         return lastResult;
       }
       if (interval > 0) {
-        await delay3(interval);
+        await delay2(interval);
       }
     }
   }
-  function delay3(ms) {
+  function delay2(ms) {
     return new Promise((resolve2) => setTimeout(resolve2, ms));
   }
   async function waitForFakeInventorySelection(timeoutMs = 2e4) {
@@ -24132,249 +25285,6 @@
     }
     return null;
   }
-
-  // src/utils/calculators.ts
-  var key = (s) => String(s ?? "").trim();
-  function resolveSpeciesKey(species) {
-    const wanted = key(species).toLowerCase();
-    if (!wanted) return null;
-    for (const k of Object.keys(plantCatalog)) {
-      if (k.toLowerCase() === wanted) return k;
-    }
-    return null;
-  }
-  function findAnySellPriceNode(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (typeof obj.baseSellPrice === "number" && Number.isFinite(obj.baseSellPrice)) {
-      return obj.baseSellPrice;
-    }
-    for (const k of ["produce", "crop", "item", "items", "data"]) {
-      if (obj[k]) {
-        const v = findAnySellPriceNode(obj[k]);
-        if (v != null) return v;
-      }
-    }
-    try {
-      const seen = /* @__PURE__ */ new Set();
-      const stack = [obj];
-      while (stack.length) {
-        const cur = stack.pop();
-        if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-        seen.add(cur);
-        if (typeof cur.baseSellPrice === "number") {
-          const v = cur.baseSellPrice;
-          if (Number.isFinite(v)) return v;
-        }
-        for (const v of Object.values(cur)) if (v && typeof v === "object") stack.push(v);
-      }
-    } catch {
-    }
-    return null;
-  }
-  function defaultGetBasePrice(species) {
-    const spKey = resolveSpeciesKey(species);
-    if (!spKey) return null;
-    const node = plantCatalog[spKey];
-    const cands = [
-      node?.produce?.baseSellPrice,
-      node?.crop?.baseSellPrice,
-      node?.item?.baseSellPrice,
-      node?.items?.Produce?.baseSellPrice
-    ].filter((v) => typeof v === "number" && Number.isFinite(v));
-    if (cands.length) return cands[0];
-    return findAnySellPriceNode(node);
-  }
-  function applyRounding(v, mode = "round") {
-    switch (mode) {
-      case "floor":
-        return Math.floor(v);
-      case "ceil":
-        return Math.ceil(v);
-      case "none":
-        return v;
-      case "round":
-      default:
-        return Math.round(v);
-    }
-  }
-  function friendBonusMultiplier2(playersInRoom) {
-    if (!Number.isFinite(playersInRoom)) return 1;
-    const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
-    return 1 + (n - 1) * 0.1;
-  }
-  var COLOR_MULT = {
-    Gold: 25,
-    Rainbow: 50
-  };
-  var WEATHER_MULT = {
-    Wet: 2,
-    Chilled: 2,
-    Frozen: 10
-  };
-  var TIME_MULT = {
-    Dawnlit: 2,
-    Dawnbound: 3,
-    Amberlit: 5,
-    Amberbound: 6
-  };
-  var WEATHER_TIME_COMBO = {
-    "Wet+Dawnlit": 3,
-    "Chilled+Dawnlit": 3,
-    "Wet+Dawnbound": 4,
-    "Chilled+Dawnbound": 4,
-    "Wet+Amberlit": 6,
-    "Chilled+Amberlit": 6,
-    "Wet+Amberbound": 7,
-    "Chilled+Amberbound": 7,
-    "Frozen+Dawnlit": 11,
-    "Frozen+Dawnbound": 12,
-    "Frozen+Amberlit": 14,
-    "Frozen+Amberbound": 15
-  };
-  function isColor(m) {
-    return m === "Gold" || m === "Rainbow";
-  }
-  function isWeather(m) {
-    return m === "Wet" || m === "Chilled" || m === "Frozen";
-  }
-  function isTime(m) {
-    return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
-  }
-  function normalizeMutationName(m) {
-    const s = key(m).toLowerCase();
-    if (!s) return "";
-    if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
-    if (s === "dawn" || s === "dawnlight") return "Dawnlit";
-    if (s === "gold") return "Gold";
-    if (s === "rainbow") return "Rainbow";
-    if (s === "wet") return "Wet";
-    if (s === "chilled") return "Chilled";
-    if (s === "frozen") return "Frozen";
-    if (s === "dawnlit") return "Dawnlit";
-    if (s === "dawnbound") return "Dawnbound";
-    if (s === "amberlit") return "Amberlit";
-    if (s === "dawncharged" || s === "dawnradiant" || s === "dawn-radiant" || s === "dawn charged") return "Dawnbound";
-    if (s === "amberbound" || s === "ambercharged" || s === "amberradiant" || s === "amber-radiant" || s === "amber charged") return "Amberbound";
-    return m;
-  }
-  function computeColorMultiplier(mutations) {
-    if (!Array.isArray(mutations)) return 1;
-    let best = 1;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isColor(m)) {
-        const mult = COLOR_MULT[m];
-        if (mult > best) best = mult;
-      }
-    }
-    return best;
-  }
-  function pickWeather(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isWeather(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function pickTime(mutations) {
-    if (!Array.isArray(mutations)) return null;
-    let pick = null;
-    for (const raw of mutations) {
-      const m = normalizeMutationName(raw);
-      if (isTime(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
-      }
-    }
-    return pick;
-  }
-  function computeWeatherTimeMultiplier(weather2, time) {
-    if (!weather2 && !time) return 1;
-    if (weather2 && !time) return WEATHER_MULT[weather2];
-    if (!weather2 && time) return TIME_MULT[time];
-    const k = `${weather2}+${time}`;
-    const combo = WEATHER_TIME_COMBO[k];
-    if (typeof combo === "number") return combo;
-    return Math.max(WEATHER_MULT[weather2], TIME_MULT[time]);
-  }
-  function mutationsMultiplier(mutations) {
-    const color = computeColorMultiplier(mutations);
-    const weather2 = pickWeather(mutations);
-    const time = pickTime(mutations);
-    const wt = computeWeatherTimeMultiplier(weather2, time);
-    return color * wt;
-  }
-  function estimateProduceValue(species, scale, mutations, opts) {
-    const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
-    const sXform = opts?.scaleTransform ?? ((_, s) => s);
-    const round = opts?.rounding ?? "round";
-    const base = getBase(species);
-    if (!(Number.isFinite(base) && base > 0)) return 0;
-    const sc = Number(scale);
-    if (!Number.isFinite(sc) || sc <= 0) return 0;
-    const effScale = sXform(species, sc);
-    if (!Number.isFinite(effScale) || effScale <= 0) return 0;
-    const mutMult = mutationsMultiplier(mutations);
-    const friendsMult = friendBonusMultiplier2(opts?.friendPlayers);
-    const pre = base * effScale * mutMult * friendsMult;
-    const out = Math.max(0, applyRounding(pre, round));
-    return out;
-  }
-  function valueFromInventoryProduce(item, opts, playersInRoom) {
-    if (!item || item.itemType !== "Produce") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(item.species, item.scale, item.mutations, merged);
-  }
-  function valueFromGardenSlot(slot, opts, playersInRoom) {
-    if (!slot) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    return estimateProduceValue(slot.species, slot.targetScale, slot.mutations, merged);
-  }
-  function valueFromGardenPlant(plant, opts, playersInRoom) {
-    if (!plant || plant.objectType !== "plant" || !Array.isArray(plant.slots)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
-    return sum;
-  }
-  function sumInventoryValue(items, opts, playersInRoom) {
-    if (!Array.isArray(items)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const it of items) {
-      if (it?.itemType === "Produce") {
-        sum += valueFromInventoryProduce(it, merged);
-      }
-    }
-    return sum;
-  }
-  function sumGardenValue(garden2, opts, playersInRoom) {
-    if (!garden2 || typeof garden2 !== "object") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const k of Object.keys(garden2)) {
-      const p = garden2[k];
-      if (p?.objectType === "plant") {
-        sum += valueFromGardenPlant(p, merged);
-      }
-    }
-    return sum;
-  }
-  var DefaultPricing = Object.freeze({
-    getBasePrice: defaultGetBasePrice,
-    rounding: "round"
-  });
 
   // src/utils/cropPrice.ts
   var isPlantObject2 = (o) => !!o && o.objectType === "plant";
@@ -25693,445 +26603,6 @@
       });
     } catch (error) {
     }
-  }
-
-  // src/utils/petCalcul.ts
-  var SEC_PER_HOUR = 3600;
-  var XP_STRENGTH_MAX = 30;
-  var BASE_STRENGTH_FLOOR = 30;
-  var getCatalogEntry = (species) => {
-    if (!species) return null;
-    const entry = petCatalog[species];
-    return entry ?? null;
-  };
-  var getMutationEntry = (mutation) => {
-    if (!mutation) return null;
-    const entry = mutationCatalog[mutation];
-    return entry ?? null;
-  };
-  var getTargetScale = (pet) => {
-    const raw = pet?.targetScale;
-    return typeof raw === "number" && Number.isFinite(raw) ? raw : 1;
-  };
-  var getXp = (pet) => {
-    const raw = pet?.xp;
-    return typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, raw) : 0;
-  };
-  var getPetMaxStrength = (pet) => {
-    const entry = getCatalogEntry(pet?.petSpecies ?? "");
-    if (!entry) return 0;
-    const maxScale = typeof entry.maxScale === "number" && entry.maxScale > 1 ? entry.maxScale : 1;
-    const targetScale = getTargetScale(pet);
-    const ratio = maxScale > 1 ? (targetScale - 1) / (maxScale - 1) : 0;
-    const raw = ratio * 20 + 80;
-    const strength = Math.floor(Number.isFinite(raw) ? raw : 0);
-    return Math.max(strength, 0);
-  };
-  var getBaseStrength = (maxStrength) => {
-    const base = maxStrength - BASE_STRENGTH_FLOOR;
-    return Math.max(base, 0);
-  };
-  var getPetStrength = (pet) => {
-    const entry = getCatalogEntry(pet?.petSpecies ?? "");
-    if (!entry) return 0;
-    const hoursToMature = typeof entry.hoursToMature === "number" && entry.hoursToMature > 0 ? entry.hoursToMature : 1;
-    const maxStrength = getPetMaxStrength(pet);
-    if (maxStrength <= 0) return 0;
-    const xpRate = getXp(pet) / (hoursToMature * SEC_PER_HOUR);
-    const xpComponent = Math.min(Math.floor(xpRate * XP_STRENGTH_MAX), XP_STRENGTH_MAX);
-    const baseStrength = getBaseStrength(maxStrength);
-    const strength = Math.min(baseStrength + xpComponent, maxStrength);
-    return Math.max(strength, 0);
-  };
-  var getPetCoinMultiplier = (pet) => {
-    const mutations = Array.isArray(pet?.mutations) ? pet.mutations : [];
-    return mutations.reduce((acc, mutation) => {
-      const entry = getMutationEntry(mutation);
-      const multiplier = entry?.coinMultiplier;
-      if (typeof multiplier === "number" && Number.isFinite(multiplier) && multiplier > 0) {
-        return acc * multiplier;
-      }
-      return acc;
-    }, 1);
-  };
-  var getPetValue = (pet) => {
-    const entry = getCatalogEntry(pet?.petSpecies ?? "");
-    if (!entry) return 0;
-    const maturitySellPrice = typeof entry.maturitySellPrice === "number" ? entry.maturitySellPrice : 0;
-    const maxStrength = getPetMaxStrength(pet);
-    if (maxStrength <= 0) return 0;
-    const strength = getPetStrength(pet);
-    const targetScale = getTargetScale(pet);
-    const coinMultiplier = getPetCoinMultiplier(pet);
-    const raw = maturitySellPrice * (strength / maxStrength) * targetScale * coinMultiplier;
-    if (!Number.isFinite(raw)) return 0;
-    return Math.round(Math.max(raw, 0));
-  };
-  var getPetInfo = (pet) => ({
-    value: getPetValue(pet),
-    strength: getPetStrength(pet),
-    maxStrength: getPetMaxStrength(pet),
-    coinMultiplier: getPetCoinMultiplier(pet)
-  });
-
-  // src/utils/inventoryValue.ts
-  var INVENTORY_VALUE_CATEGORIES = [
-    {
-      itemType: "Seed",
-      identifierKey: "species",
-      resolveCoinPrice: (identifier) => {
-        if (!identifier) return null;
-        const entry = plantCatalog[identifier];
-        const price = entry?.seed?.coinPrice;
-        return getFiniteNumber(price);
-      },
-      logKey: "seeds",
-      emptyLogMessage: "[InventorySorting] Aucune seed trouv\xE9e dans l'inventaire pour le calcul de valeur.",
-      createEntry: (identifier, quantity, coinPrice, value) => ({
-        species: identifier,
-        quantity,
-        coinPrice,
-        value
-      })
-    },
-    {
-      itemType: "Tool",
-      identifierKey: "toolId",
-      resolveCoinPrice: (identifier) => {
-        if (!identifier) return null;
-        const entry = toolCatalog[identifier];
-        const price = entry?.coinPrice;
-        return getFiniteNumber(price);
-      },
-      logKey: "tools",
-      emptyLogMessage: "[InventorySorting] Aucun tool trouv\xE9 dans l'inventaire pour le calcul de valeur.",
-      createEntry: (identifier, quantity, coinPrice, value) => ({
-        toolId: identifier,
-        quantity,
-        coinPrice,
-        value
-      })
-    },
-    {
-      itemType: "Egg",
-      identifierKey: "eggId",
-      resolveCoinPrice: (identifier) => {
-        if (!identifier) return null;
-        const entry = eggCatalog[identifier];
-        const price = entry?.coinPrice;
-        return getFiniteNumber(price);
-      },
-      logKey: "eggs",
-      emptyLogMessage: "[InventorySorting] Aucun egg trouv\xE9 dans l'inventaire pour le calcul de valeur.",
-      createEntry: (identifier, quantity, coinPrice, value) => ({
-        eggId: identifier,
-        quantity,
-        coinPrice,
-        value
-      })
-    },
-    {
-      itemType: "Decor",
-      identifierKey: "decorId",
-      resolveCoinPrice: (identifier) => {
-        if (!identifier) return null;
-        const entry = decorCatalog[identifier];
-        const price = entry?.coinPrice;
-        return getFiniteNumber(price);
-      },
-      logKey: "decors",
-      emptyLogMessage: "[InventorySorting] Aucun decor trouv\xE9 dans l'inventaire pour le calcul de valeur.",
-      createEntry: (identifier, quantity, coinPrice, value) => ({
-        decorId: identifier,
-        quantity,
-        coinPrice,
-        value
-      })
-    }
-  ];
-  var currentSnapshot = null;
-  var watcherPromise = null;
-  var unsubscribe = null;
-  var computeCounter = 0;
-  var listeners4 = /* @__PURE__ */ new Set();
-  function getFiniteNumber(value) {
-    if (typeof value === "number") {
-      return Number.isFinite(value) ? value : null;
-    }
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-  }
-  function extractItems(inventory) {
-    if (!inventory || typeof inventory !== "object") return null;
-    const items = inventory.items;
-    if (!Array.isArray(items)) return [];
-    return items;
-  }
-  function toNormalizedIdentifier(raw) {
-    if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      return trimmed ? trimmed : null;
-    }
-    if (typeof raw === "number") {
-      return Number.isFinite(raw) ? String(raw) : null;
-    }
-    return null;
-  }
-  function getInventoryValueCategoryByItemType(itemType) {
-    return INVENTORY_VALUE_CATEGORIES.find((config) => config.itemType === itemType);
-  }
-  function computeInventoryItemValue(item, context = {}) {
-    if (!item || typeof item !== "object") return null;
-    const rawType = typeof item?.itemType === "string" ? item.itemType.trim() : "";
-    if (!rawType) return null;
-    switch (rawType) {
-      case "Pet": {
-        const info = getPetInfo(item);
-        const value = info.value;
-        return typeof value === "number" && Number.isFinite(value) ? value : null;
-      }
-      case "Plant": {
-        const slots = Array.isArray(item?.slots) ? item.slots : [];
-        const playersInRoom = context.playersInRoom ?? void 0;
-        let total = 0;
-        for (const slot of slots) {
-          const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
-          const rawTarget = slot?.targetScale;
-          const target = Number.isFinite(rawTarget) ? rawTarget : Number(rawTarget);
-          const targetScale = Number.isFinite(target) ? target : null;
-          const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
-          if (!slotSpecies || targetScale == null) continue;
-          const value = estimateProduceValue(slotSpecies, targetScale, mutations, {
-            friendPlayers: playersInRoom
-          });
-          if (typeof value === "number" && Number.isFinite(value)) {
-            total += value;
-          }
-        }
-        return total;
-      }
-      case "Produce": {
-        const playersInRoom = context.playersInRoom ?? void 0;
-        const value = valueFromInventoryProduce(item, void 0, playersInRoom);
-        return typeof value === "number" && Number.isFinite(value) ? value : null;
-      }
-      default: {
-        const category = getInventoryValueCategoryByItemType(rawType);
-        if (!category) return null;
-        const identifier = toNormalizedIdentifier(item?.[category.identifierKey]);
-        const quantity = getFiniteNumber(item?.quantity);
-        const coinPrice = category.resolveCoinPrice(identifier);
-        if (quantity == null || coinPrice == null) return null;
-        const value = coinPrice * quantity;
-        return Number.isFinite(value) ? value : null;
-      }
-    }
-  }
-  function computePetValues(items) {
-    const pets = items.filter((item) => {
-      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
-      return type === "Pet";
-    });
-    const entries = pets.map((pet) => {
-      const info = getPetInfo(pet);
-      const id = typeof pet?.id === "string" ? pet.id : null;
-      const name = typeof pet?.name === "string" && pet.name.trim() ? pet.name : null;
-      const species = typeof pet?.petSpecies === "string" ? pet.petSpecies : null;
-      return {
-        id,
-        name,
-        petSpecies: species,
-        value: info.value,
-        strength: info.strength,
-        maxStrength: info.maxStrength,
-        coinMultiplier: info.coinMultiplier
-      };
-    });
-    const totalValue = entries.reduce(
-      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
-      0
-    );
-    return { totalValue, pets: entries };
-  }
-  function computePlantValues(items, playersInRoom) {
-    const plants = items.filter((item) => {
-      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
-      return type === "Plant";
-    });
-    const entries = plants.map((plant) => {
-      const id = typeof plant?.id === "string" ? plant.id : null;
-      const species = typeof plant?.species === "string" ? plant.species : null;
-      const plantedAt = Number.isFinite(plant?.plantedAt) ? plant.plantedAt : null;
-      const maturedAt = Number.isFinite(plant?.maturedAt) ? plant.maturedAt : null;
-      const slots = Array.isArray(plant?.slots) ? plant.slots : [];
-      const slotEntries = slots.map((slot) => {
-        const slotSpecies = typeof slot?.species === "string" ? slot.species : null;
-        const targetScaleRaw = slot?.targetScale;
-        const targetScale = Number.isFinite(targetScaleRaw) ? targetScaleRaw : Number(targetScaleRaw);
-        const scaleValue = Number.isFinite(targetScale) ? targetScale : null;
-        const mutations = Array.isArray(slot?.mutations) ? slot.mutations.filter((m) => typeof m === "string") : [];
-        const value2 = slotSpecies && scaleValue != null ? estimateProduceValue(slotSpecies, scaleValue, mutations, {
-          friendPlayers: playersInRoom
-        }) : 0;
-        return {
-          species: slotSpecies,
-          targetScale: scaleValue,
-          mutations,
-          value: value2
-        };
-      });
-      const value = slotEntries.reduce(
-        (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
-        0
-      );
-      return {
-        id,
-        species,
-        plantedAt,
-        maturedAt,
-        value,
-        slots: slotEntries
-      };
-    });
-    const totalValue = entries.reduce(
-      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
-      0
-    );
-    return {
-      totalValue,
-      playersInRoom: Number.isFinite(playersInRoom) ? playersInRoom : null,
-      plants: entries
-    };
-  }
-  function computeCropValues(items, playersInRoom) {
-    const crops = items.filter((item) => {
-      const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
-      return type === "Produce";
-    });
-    const entries = crops.map((crop) => {
-      const id = typeof crop?.id === "string" ? crop.id : null;
-      const species = typeof crop?.species === "string" ? crop.species : null;
-      const rawScale = crop?.scale;
-      const scale = Number.isFinite(rawScale) ? rawScale : Number(rawScale);
-      const scaleValue = Number.isFinite(scale) ? scale : null;
-      const mutations = Array.isArray(crop?.mutations) ? crop.mutations.filter((m) => typeof m === "string") : [];
-      const value = valueFromInventoryProduce(crop, void 0, playersInRoom);
-      return {
-        id,
-        species,
-        scale: scaleValue,
-        mutations,
-        value
-      };
-    });
-    const totalValue = entries.reduce(
-      (acc, entry) => acc + (Number.isFinite(entry.value) ? entry.value : 0),
-      0
-    );
-    return { totalValue, crops: entries };
-  }
-  function computeMiscValues(items) {
-    const aggregated = {
-      seeds: { totalValue: 0, items: [] },
-      tools: { totalValue: 0, items: [] },
-      eggs: { totalValue: 0, items: [] },
-      decors: { totalValue: 0, items: [] }
-    };
-    for (const config of INVENTORY_VALUE_CATEGORIES) {
-      const filteredItems = items.filter((item) => {
-        const type = typeof item?.itemType === "string" ? item.itemType.trim() : "";
-        return type === config.itemType;
-      });
-      const entries = filteredItems.map((item) => {
-        const rawIdentifier = item?.[config.identifierKey];
-        const identifier = toNormalizedIdentifier(rawIdentifier);
-        const rawQuantity = item?.quantity;
-        const quantity = getFiniteNumber(rawQuantity);
-        const coinPrice = config.resolveCoinPrice(identifier);
-        const value = quantity != null && coinPrice != null ? coinPrice * quantity : null;
-        return config.createEntry(identifier, quantity, coinPrice, value);
-      });
-      const totalValue = entries.reduce((acc, entry) => {
-        const entryValue = entry.value;
-        return typeof entryValue === "number" && Number.isFinite(entryValue) ? acc + entryValue : acc;
-      }, 0);
-      aggregated[config.logKey] = { totalValue, items: entries };
-    }
-    return aggregated;
-  }
-  async function resolvePlayersInRoom() {
-    try {
-      const rawPlayers = await Atoms.server.numPlayers.get();
-      return Number.isFinite(rawPlayers) ? rawPlayers : void 0;
-    } catch {
-      return void 0;
-    }
-  }
-  async function computeSnapshotFromInventory(inventory) {
-    const items = extractItems(inventory);
-    if (items === null) return null;
-    const safeItems = items ?? [];
-    const playersInRoom = await resolvePlayersInRoom();
-    return {
-      pets: computePetValues(safeItems),
-      plants: computePlantValues(safeItems, playersInRoom),
-      crops: computeCropValues(safeItems, playersInRoom),
-      misc: computeMiscValues(safeItems)
-    };
-  }
-  function notifyListeners(snapshot) {
-    for (const listener of listeners4) {
-      try {
-        listener(snapshot);
-      } catch (error) {
-        console.warn("[InventoryValue] Listener error", error);
-      }
-    }
-  }
-  async function refreshSnapshot(nextInventory) {
-    const computeId = ++computeCounter;
-    try {
-      const snapshot = await computeSnapshotFromInventory(nextInventory);
-      if (computeId !== computeCounter) return;
-      currentSnapshot = snapshot;
-      notifyListeners(currentSnapshot);
-    } catch (error) {
-      if (computeId !== computeCounter) return;
-      currentSnapshot = null;
-      console.warn("[InventoryValue] Impossible de calculer la valeur de l'inventaire", error);
-    }
-  }
-  async function ensureInventoryValueWatcher() {
-    if (watcherPromise) return watcherPromise;
-    watcherPromise = (async () => {
-      try {
-        const inventory = await Atoms.inventory.myInventory.get();
-        await refreshSnapshot(inventory);
-      } catch (error) {
-        currentSnapshot = null;
-        console.warn("[InventoryValue] Impossible de r\xE9cup\xE9rer l'inventaire initial", error);
-      }
-      try {
-        unsubscribe = await Atoms.inventory.myInventory.onChange((next) => {
-          void refreshSnapshot(next);
-        });
-      } catch (error) {
-        console.warn("[InventoryValue] Impossible de s'abonner \xE0 myInventory", error);
-      }
-    })();
-    return watcherPromise;
-  }
-  function getInventoryValueSnapshot() {
-    return currentSnapshot;
-  }
-  function onInventoryValueChange(listener) {
-    listeners4.add(listener);
-    return () => {
-      listeners4.delete(listener);
-    };
   }
 
   // src/utils/inventorySorting.ts
@@ -34335,6 +34806,70 @@ next: ${next}`;
     });
     eggCard.body.append(eggList);
     layout.append(eggCard.root);
+    const sellPetsCard = ui.card("Sell all pets protections", { align: "stretch" });
+    sellPetsCard.root.style.width = "100%";
+    const sellPetsIntro = document.createElement("div");
+    sellPetsIntro.textContent = "Show a confirmation modal when protected pets are detected.";
+    sellPetsIntro.style.fontSize = "12.5px";
+    sellPetsIntro.style.opacity = "0.8";
+    const sellPetsGrid = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "10px",
+      marginTop: "6px"
+    });
+    const createRuleRow = (title, subtitle) => {
+      const row = applyStyles(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "12px",
+        padding: "8px 10px",
+        border: "1px solid #4445",
+        borderRadius: "10px",
+        background: "#0f1318"
+      });
+      const text = applyStyles(document.createElement("div"), {
+        display: "grid",
+        gap: "2px"
+      });
+      const titleEl = document.createElement("div");
+      titleEl.textContent = title;
+      titleEl.style.fontWeight = "600";
+      titleEl.style.fontSize = "13px";
+      text.appendChild(titleEl);
+      if (subtitle) {
+        const sub = document.createElement("div");
+        sub.textContent = subtitle;
+        sub.style.fontSize = "12px";
+        sub.style.opacity = "0.75";
+        text.appendChild(sub);
+      }
+      const controls = applyStyles(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px"
+      });
+      row.append(text, controls);
+      return { row, controls };
+    };
+    const sellRulesInitial = lockerRestrictionsService.getSellAllPetsRules();
+    const sellEnableToggle = ui.switch(sellRulesInitial.enabled);
+    const sellEnableRow = createRuleRow("Enable protection rules");
+    sellEnableRow.controls.append(sellEnableToggle);
+    const sellGoldToggle = ui.switch(sellRulesInitial.protectGold);
+    const sellGoldRow = createRuleRow("Protect Gold mutation");
+    sellGoldRow.controls.append(sellGoldToggle);
+    const sellRainbowToggle = ui.switch(sellRulesInitial.protectRainbow);
+    const sellRainbowRow = createRuleRow("Protect Rainbow mutation");
+    sellRainbowRow.controls.append(sellRainbowToggle);
+    const sellMaxStrToggle = ui.switch(sellRulesInitial.protectMaxStr);
+    const sellMaxStrInput = ui.inputNumber(0, 100, 1, sellRulesInitial.maxStrThreshold);
+    const sellMaxStrWrap = sellMaxStrInput.wrap;
+    const sellMaxStrRow = createRuleRow("Protect pets with Max STR");
+    sellMaxStrRow.controls.append(sellMaxStrToggle, sellMaxStrWrap);
+    sellPetsGrid.append(sellEnableRow.row, sellGoldRow.row, sellRainbowRow.row, sellMaxStrRow.row);
+    sellPetsCard.body.append(sellPetsIntro, sellPetsGrid);
+    layout.append(sellPetsCard.root);
     const LOCKED_ICON = "\u{1F512}";
     const UNLOCKED_ICON = "\u{1F513}";
     const eggRowCache = /* @__PURE__ */ new Map();
@@ -34415,6 +34950,35 @@ next: ${next}`;
       slider.value = String(pct);
       sliderValue.textContent = `+${pct}%`;
     };
+    const clampMaxStr = (value) => {
+      if (!Number.isFinite(value)) return 0;
+      return Math.max(0, Math.min(100, Math.round(value)));
+    };
+    const setRuleRowDisabled = (row, disabled) => {
+      row.style.opacity = disabled ? "0.6" : "1";
+    };
+    const refreshSellAllPetsControls = () => {
+      const rules = lockerRestrictionsService.getSellAllPetsRules();
+      const enabled = rules.enabled !== false;
+      const protectGold = rules.protectGold !== false;
+      const protectRainbow = rules.protectRainbow !== false;
+      const protectMaxStr = rules.protectMaxStr !== false;
+      setCheck(sellEnableToggle, enabled);
+      setCheck(sellGoldToggle, protectGold);
+      setCheck(sellRainbowToggle, protectRainbow);
+      setCheck(sellMaxStrToggle, protectMaxStr);
+      sellMaxStrInput.value = String(clampMaxStr(rules.maxStrThreshold));
+      sellGoldToggle.disabled = !enabled;
+      sellRainbowToggle.disabled = !enabled;
+      sellMaxStrToggle.disabled = !enabled;
+      const maxStrDisabled = !enabled || !protectMaxStr;
+      sellMaxStrInput.disabled = maxStrDisabled;
+      sellMaxStrWrap.style.opacity = maxStrDisabled ? "0.6" : "1";
+      sellMaxStrWrap.style.pointerEvents = maxStrDisabled ? "none" : "auto";
+      setRuleRowDisabled(sellGoldRow.row, !enabled);
+      setRuleRowDisabled(sellRainbowRow.row, !enabled);
+      setRuleRowDisabled(sellMaxStrRow.row, !enabled);
+    };
     const setStatusTone = (tone) => {
       const palette = tone === "success" ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" } : tone === "warn" ? { bg: "#321616", border: "#c74343", color: "#fca5a5" } : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
       statusBadge.style.background = palette.bg;
@@ -34449,12 +35013,33 @@ next: ${next}`;
     };
     slider.addEventListener("input", () => handleSliderInput(false));
     slider.addEventListener("change", () => handleSliderInput(true));
+    sellEnableToggle.addEventListener("change", () => {
+      const enabled = !!sellEnableToggle.checked;
+      lockerRestrictionsService.setSellAllPetsRules({ enabled });
+      refreshSellAllPetsControls();
+    });
+    sellGoldToggle.addEventListener("change", () => {
+      lockerRestrictionsService.setSellAllPetsRules({ protectGold: !!sellGoldToggle.checked });
+    });
+    sellRainbowToggle.addEventListener("change", () => {
+      lockerRestrictionsService.setSellAllPetsRules({ protectRainbow: !!sellRainbowToggle.checked });
+    });
+    sellMaxStrToggle.addEventListener("change", () => {
+      lockerRestrictionsService.setSellAllPetsRules({ protectMaxStr: !!sellMaxStrToggle.checked });
+      refreshSellAllPetsControls();
+    });
+    sellMaxStrInput.addEventListener("change", () => {
+      const next = clampMaxStr(Number(sellMaxStrInput.value));
+      sellMaxStrInput.value = String(next);
+      lockerRestrictionsService.setSellAllPetsRules({ maxStrThreshold: next });
+    });
     const syncFromService = (next) => {
       state3 = { ...next };
       setCheck(decorToggle, state3.decorPickupLocked);
       updateSliderValue(friendBonusPercentFromPlayers(state3.minRequiredPlayers) ?? 0);
       updateStatus();
       renderEggList();
+      refreshSellAllPetsControls();
     };
     const attachSubscriptions = async () => {
       if (subsAttached) return;
@@ -38442,15 +39027,15 @@ next: ${next}`;
         }
       }
     }
-    const [seedInventoryQty, toolInventoryQty, eggInventoryQty, decorInventoryQty] = await Promise.all([
+    const [seedInventoryQty2, toolInventoryQty, eggInventoryQty, decorInventoryQty2] = await Promise.all([
       readInventoryQuantity(mySeedInventory, "seed"),
       readInventoryQuantity(myToolInventory, "tool"),
       readInventoryQuantity(myEggInventory, "egg"),
       readInventoryQuantity(myDecorInventory, "decor")
     ]);
-    seedsBought += seedInventoryQty;
+    seedsBought += seedInventoryQty2;
     eggsBought += eggInventoryQty;
-    decorBought += decorInventoryQty;
+    decorBought += decorInventoryQty2;
     toolsBought += toolInventoryQty;
     if (seedsBought <= 0 && eggsBought <= 0 && decorBought <= 0 && toolsBought <= 0) return;
     StatsService.update((draft) => {
@@ -40924,35 +41509,138 @@ next: ${next}`;
     const view = ui.root.querySelector(".qmm-views");
     view.innerHTML = "";
     view.style.display = "grid";
-    view.style.gap = "8px";
     view.style.minHeight = "0";
     view.style.justifyItems = "center";
-    const secAutoReco = (() => {
-      const card = ui.card("\u{1F504} Auto reconnect on session conflict", { tone: "muted", align: "center" });
-      card.root.style.maxWidth = "480px";
+    view.style.padding = "8px 0";
+    const applyStyles3 = (el2, styles) => {
+      Object.assign(el2.style, styles);
+      return el2;
+    };
+    const createPill = (text) => {
+      const pill = applyStyles3(document.createElement("div"), {
+        padding: "3px 8px",
+        borderRadius: "999px",
+        border: "1px solid #2b3340",
+        background: "#141b22",
+        fontSize: "12px",
+        fontWeight: "600",
+        color: "#dbe7ff",
+        whiteSpace: "nowrap"
+      });
+      pill.textContent = text;
+      return pill;
+    };
+    const createSettingRow = (title, description, control) => {
+      const row = applyStyles3(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        alignItems: "center",
+        gap: "12px",
+        padding: "10px 12px",
+        border: "1px solid #2b3340",
+        borderRadius: "10px",
+        background: "#0f1318"
+      });
+      const text = applyStyles3(document.createElement("div"), {
+        display: "grid",
+        gap: "2px"
+      });
+      const titleEl = document.createElement("div");
+      titleEl.textContent = title;
+      titleEl.style.fontWeight = "600";
+      titleEl.style.fontSize = "13px";
+      text.appendChild(titleEl);
+      if (description) {
+        const desc = document.createElement("div");
+        desc.textContent = description;
+        desc.style.fontSize = "12px";
+        desc.style.opacity = "0.72";
+        text.appendChild(desc);
+      }
+      const controls = applyStyles3(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: "8px",
+        flexWrap: "wrap"
+      });
+      controls.appendChild(control);
+      row.append(text, controls);
+      return { row, controls };
+    };
+    const styleCard = (card) => {
+      card.root.style.width = "100%";
+      card.root.style.maxWidth = "100%";
+      card.root.style.minWidth = "0";
       card.body.style.display = "grid";
       card.body.style.gap = "10px";
-      const header = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-      const toggleWrap = document.createElement("div");
-      toggleWrap.style.display = "inline-flex";
-      toggleWrap.style.alignItems = "center";
-      toggleWrap.style.gap = "8px";
-      const toggleLabel = ui.label("Activate");
-      toggleLabel.style.margin = "0";
+    };
+    const header = applyStyles3(document.createElement("div"), {
+      width: "100%",
+      maxWidth: "1040px",
+      display: "grid",
+      gap: "4px",
+      padding: "10px 14px",
+      borderRadius: "12px",
+      border: "1px solid #2b3340",
+      background: "linear-gradient(135deg, #1c222b 0%, #121820 100%)",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.35)"
+    });
+    const headerTitle = document.createElement("div");
+    headerTitle.textContent = "Misc controls";
+    headerTitle.style.fontSize = "16px";
+    headerTitle.style.fontWeight = "700";
+    const headerSubtitle = document.createElement("div");
+    headerSubtitle.textContent = "Utility toggles and bulk tools.";
+    headerSubtitle.style.fontSize = "12.5px";
+    headerSubtitle.style.opacity = "0.75";
+    header.append(headerTitle, headerSubtitle);
+    const page = applyStyles3(document.createElement("div"), {
+      width: "100%",
+      maxWidth: "1040px",
+      display: "grid",
+      gap: "12px",
+      alignItems: "start"
+    });
+    const grid = applyStyles3(document.createElement("div"), {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+      gap: "12px",
+      width: "100%",
+      alignItems: "start"
+    });
+    const secAutoReco = (() => {
+      const card = ui.card("Auto reconnect", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Reconnect automatically when the session is kicked."
+      });
+      styleCard(card);
       const toggle = ui.switch(MiscService.readAutoRecoEnabled(false));
-      toggleWrap.append(toggleLabel, toggle);
-      header.append(toggleWrap);
+      const toggleRow = createSettingRow(
+        "Enabled",
+        "Attempts to log back in after a session conflict.",
+        toggle
+      );
       const initialSeconds = Math.round(MiscService.getAutoRecoDelayMs() / 1e3);
-      const sliderRow = ui.flexRow({ align: "center", gap: 10, justify: "between", fullWidth: true });
-      const sliderLabel = ui.label("Reconnect after");
-      sliderLabel.style.margin = "0";
       const slider = ui.slider(0, 300, 30, initialSeconds);
-      slider.style.flex = "1";
-      const sliderValue = document.createElement("div");
+      slider.style.width = "100%";
+      const sliderValue = createPill(formatShortDuration(initialSeconds));
       sliderValue.style.minWidth = "72px";
-      sliderValue.style.textAlign = "right";
-      sliderValue.textContent = formatShortDuration(initialSeconds);
-      sliderRow.append(sliderLabel, slider, sliderValue);
+      sliderValue.style.textAlign = "center";
+      const sliderControl = applyStyles3(document.createElement("div"), {
+        display: "grid",
+        gridTemplateColumns: "1fr auto",
+        gap: "8px",
+        alignItems: "center",
+        minWidth: "220px"
+      });
+      sliderControl.append(slider, sliderValue);
+      const sliderRow = createSettingRow(
+        "Delay",
+        "Wait time before reconnecting.",
+        sliderControl
+      );
       const hint = document.createElement("div");
       hint.style.opacity = "0.8";
       hint.style.fontSize = "12px";
@@ -40975,38 +41663,33 @@ next: ${next}`;
       slider.addEventListener("input", () => updateSlider(Number(slider.value), false));
       slider.addEventListener("change", () => updateSlider(Number(slider.value), true));
       syncToggle();
-      card.body.append(header, sliderRow, hint);
+      card.body.append(toggleRow.row, sliderRow.row, hint);
       return card.root;
     })();
     const secPlayer = (() => {
-      const row = document.createElement("div");
-      row.style.display = "flex";
-      row.style.alignItems = "center";
-      row.style.gap = "12px";
-      row.style.flexWrap = "wrap";
-      const pair = (labelText, controlEl, labelId) => {
-        const wrap = document.createElement("div");
-        wrap.style.display = "inline-flex";
-        wrap.style.alignItems = "center";
-        wrap.style.gap = "6px";
-        const lab = ui.label(labelText);
-        lab.style.fontSize = "13px";
-        lab.style.margin = "0";
-        lab.style.justifySelf = "start";
-        if (labelId) lab.id = labelId;
-        wrap.append(lab, controlEl);
-        return wrap;
-      };
+      const card = ui.card("Player controls", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Movement helpers for walking and testing."
+      });
+      styleCard(card);
       const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false));
       ghostSwitch.id = "player.ghostMode";
-      const ghostPair = pair("Ghost", ghostSwitch, "label.ghost");
       const delayInput = ui.inputNumber(10, 1e3, 5, 50);
       delayInput.id = "player.moveDelay";
       const delayWrap = delayInput.wrap ?? delayInput;
       delayWrap.style && (delayWrap.style.margin = "0");
       delayInput.style && (delayInput.style.width = "84px");
-      const delayPair = pair("Delay (ms)", delayWrap, "label.delay");
-      row.append(ghostPair, delayPair);
+      const ghostRow = createSettingRow(
+        "Ghost mode",
+        "Ignores collisions while you move.",
+        ghostSwitch
+      );
+      const delayRow = createSettingRow(
+        "Move delay (ms)",
+        "Lower values feel faster.",
+        delayWrap
+      );
       const ghost = MiscService.createGhostController();
       delayInput.value = String(MiscService.getGhostDelayMs());
       delayInput.addEventListener("change", () => {
@@ -41021,88 +41704,91 @@ next: ${next}`;
         MiscService.writeGhostEnabled(on);
         on ? ghost.start() : ghost.stop();
       };
-      row.__cleanup__ = () => {
+      card.root.__cleanup__ = () => {
         try {
           ghost.stop();
         } catch {
         }
       };
-      const card = ui.card("\u{1F3AE} Player controls", { tone: "muted", align: "center" });
-      card.root.style.maxWidth = "440px";
-      card.body.append(row);
+      card.body.append(ghostRow.row, delayRow.row);
       return card.root;
     })();
     const secInventoryReserve = (() => {
-      const card = ui.card("Inventory slot reserve", { tone: "muted", align: "center" });
-      card.root.style.maxWidth = "440px";
-      card.body.style.display = "grid";
-      card.body.style.gap = "8px";
-      const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-      const toggleWrap = document.createElement("div");
-      toggleWrap.style.display = "inline-flex";
-      toggleWrap.style.alignItems = "center";
-      toggleWrap.style.gap = "8px";
-      const toggleLabel = ui.label("Keep 1 slot free");
-      toggleLabel.style.margin = "0";
+      const card = ui.card("Inventory guard", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Keep a slot open for swaps and bulk actions."
+      });
+      styleCard(card);
       const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false));
-      toggleWrap.append(toggleLabel, toggle);
-      row.append(toggleWrap);
-      const hint = document.createElement("div");
-      hint.style.opacity = "0.8";
-      hint.style.fontSize = "12px";
-      hint.textContent = "Blocks actions that would add a new inventory entry at 99/100. Mostly useful for pet swapping.";
+      const row = createSettingRow(
+        "Keep 1 slot free",
+        "Blocks actions that would add a new inventory entry at 99/100.",
+        toggle
+      );
       toggle.addEventListener("change", () => {
         MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
       });
-      card.body.append(row, hint);
+      card.body.append(row.row);
+      return card.root;
+    })();
+    const secStorage = (() => {
+      const card = ui.card("Storage auto-store", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Move items into storage when a matching stack already exists."
+      });
+      styleCard(card);
+      const seedToggle = ui.switch(MiscService.readAutoStoreSeedSiloEnabled(false));
+      const seedRow = createSettingRow(
+        "Seed Silo",
+        "Auto-store seeds when the species already exists in the silo.",
+        seedToggle
+      );
+      const decorToggle = ui.switch(MiscService.readAutoStoreDecorShedEnabled(false));
+      const decorRow = createSettingRow(
+        "Decor Shed",
+        "Auto-store decor when the item already exists in the shed.",
+        decorToggle
+      );
+      seedToggle.addEventListener("change", () => {
+        MiscService.setAutoStoreSeedSiloEnabled(!!seedToggle.checked);
+      });
+      decorToggle.addEventListener("change", () => {
+        MiscService.setAutoStoreDecorShedEnabled(!!decorToggle.checked);
+      });
+      card.body.append(seedRow.row, decorRow.row);
       return card.root;
     })();
     const secSeed = (() => {
-      const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
-      grid.style.gridTemplateColumns = "1fr";
-      const selRow = document.createElement("div");
-      selRow.style.display = "flex";
-      selRow.style.alignItems = "center";
-      selRow.style.justifyContent = "flex-start";
-      selRow.style.gap = "8px";
-      selRow.style.gridColumn = "1 / -1";
-      const selLabel = ui.label("Selected");
-      selLabel.style.fontSize = "13px";
-      selLabel.style.margin = "0";
-      const selValue = document.createElement("div");
+      const grid2 = applyStyles3(document.createElement("div"), {
+        display: "grid",
+        gap: "10px"
+      });
+      const selValue = createPill("0 species - 0 seeds");
       selValue.id = "misc.seedDeleter.summary";
-      selValue.style.fontSize = "13px";
-      selValue.style.opacity = "0.9";
-      selValue.textContent = "0 species - 0 seeds";
-      selRow.append(selLabel, selValue);
-      grid.append(selRow);
-      const actionsRow = document.createElement("div");
-      actionsRow.style.display = "flex";
-      actionsRow.style.alignItems = "center";
-      actionsRow.style.gap = "8px";
-      actionsRow.style.justifyContent = "flex-start";
-      actionsRow.style.gridColumn = "1 / -1";
-      const actLabel = ui.label("Actions");
-      actLabel.style.fontSize = "13px";
-      actLabel.style.margin = "0";
+      const summaryRow = createSettingRow(
+        "Selected",
+        "Review the current seed selection before deleting.",
+        selValue
+      );
+      grid2.append(summaryRow.row);
       const actions = ui.flexRow({ gap: 6 });
+      actions.style.flexWrap = "wrap";
       const btnSelect = ui.btn("Select seeds", { variant: "primary", size: "sm" });
       const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
       const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
       actions.append(btnSelect, btnDelete, btnClear);
-      actionsRow.append(actLabel, actions);
-      grid.append(actionsRow);
-      const statusLabel = ui.label("Status");
-      statusLabel.style.fontSize = "13px";
-      statusLabel.style.margin = "0";
-      statusLabel.style.justifySelf = "start";
-      const statusLine = document.createElement("div");
-      statusLine.style.fontSize = "13px";
+      const actionsRow = createSettingRow(
+        "Actions",
+        "Pick, clear, or delete the selected seeds.",
+        actions
+      );
+      grid2.append(actionsRow.row);
+      const statusLine = createPill("Idle");
       statusLine.style.fontWeight = "600";
-      statusLine.style.color = "#f9f9f9";
-      statusLine.style.whiteSpace = "nowrap";
-      statusLine.textContent = "Idle";
       const controlRow = ui.flexRow({ gap: 6 });
+      controlRow.style.flexWrap = "wrap";
       const btnPause = ui.btn("Pause", { size: "sm" });
       const btnPlay = ui.btn("Play", { size: "sm" });
       const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
@@ -41119,14 +41805,28 @@ next: ${next}`;
         updateSeedControlState();
       };
       controlRow.append(btnPause, btnPlay, btnStop);
-      const seedStatus = { species: "\u2014", done: 0, total: 0, remaining: 0 };
+      const statusControls = applyStyles3(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        flexWrap: "wrap",
+        justifyContent: "flex-end"
+      });
+      statusControls.append(controlRow, statusLine);
+      const statusRow = createSettingRow(
+        "Status",
+        "Pause or stop the current delete flow.",
+        statusControls
+      );
+      grid2.append(statusRow.row);
+      const seedStatus = { species: "-", done: 0, total: 0, remaining: 0 };
       const describeSeedStatus = () => {
         const running = MiscService.isSeedDeletionRunning();
         const paused = MiscService.isSeedDeletionPaused();
-        const target = seedStatus.species || "\u2014";
+        const target = seedStatus.species || "-";
         const base = `${target} (${seedStatus.done}/${seedStatus.total})`;
         if (!running) return "Idle";
-        return paused ? `Paused \xB7 ${base}` : base;
+        return paused ? `Paused - ${base}` : base;
       };
       const updateSeedStatusUI = () => {
         statusLine.textContent = describeSeedStatus();
@@ -41161,7 +41861,7 @@ next: ${next}`;
         updateSeedControlState();
       };
       const onSeedComplete = () => {
-        seedStatus.species = "\u2014";
+        seedStatus.species = "-";
         seedStatus.done = 0;
         seedStatus.total = 0;
         seedStatus.remaining = 0;
@@ -41184,13 +41884,6 @@ next: ${next}`;
       };
       updateSeedStatusUI();
       updateSeedControlState();
-      const statusRow = document.createElement("div");
-      statusRow.style.display = "flex";
-      statusRow.style.alignItems = "center";
-      statusRow.style.gap = "8px";
-      statusRow.style.gridColumn = "1 / -1";
-      statusRow.append(statusLabel, controlRow, statusLine);
-      grid.append(statusRow);
       function readSelection() {
         const sel = MiscService.getCurrentSeedSelection?.() || [];
         const speciesCount = sel.length;
@@ -41242,9 +41935,13 @@ next: ${next}`;
         seedEstimatedFinish = null;
         updateSummaryUI();
       };
-      const card = ui.card("Seed deleter", { tone: "muted", align: "center" });
-      card.root.style.maxWidth = "440px";
-      card.body.append(grid);
+      const card = ui.card("Seed deleter", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Bulk delete seeds from inventory."
+      });
+      styleCard(card);
+      card.body.append(grid2);
       card.root.__cleanup__ = () => {
         clearSeedSummaryTimer();
         cleanupSeedListeners();
@@ -41252,51 +41949,34 @@ next: ${next}`;
       return card.root;
     })();
     const secDecor = (() => {
-      const grid = ui.formGrid({ columnGap: 6, rowGap: 6 });
-      grid.style.gridTemplateColumns = "1fr";
-      const selRow = document.createElement("div");
-      selRow.style.display = "flex";
-      selRow.style.alignItems = "center";
-      selRow.style.justifyContent = "flex-start";
-      selRow.style.gap = "8px";
-      selRow.style.gridColumn = "1 / -1";
-      const selLabel = ui.label("Selected");
-      selLabel.style.fontSize = "13px";
-      selLabel.style.margin = "0";
-      const selValue = document.createElement("div");
+      const grid2 = applyStyles3(document.createElement("div"), {
+        display: "grid",
+        gap: "10px"
+      });
+      const selValue = createPill("0 decor - 0 items");
       selValue.id = "misc.decorDeleter.summary";
-      selValue.style.fontSize = "13px";
-      selValue.style.opacity = "0.9";
-      selValue.textContent = "0 decor - 0 items";
-      selRow.append(selLabel, selValue);
-      grid.append(selRow);
-      const actionsRow = document.createElement("div");
-      actionsRow.style.display = "flex";
-      actionsRow.style.alignItems = "center";
-      actionsRow.style.gap = "8px";
-      actionsRow.style.justifyContent = "flex-start";
-      actionsRow.style.gridColumn = "1 / -1";
-      const actLabel = ui.label("Actions");
-      actLabel.style.fontSize = "13px";
-      actLabel.style.margin = "0";
+      const summaryRow = createSettingRow(
+        "Selected",
+        "Review the current decor selection before deleting.",
+        selValue
+      );
+      grid2.append(summaryRow.row);
       const actions = ui.flexRow({ gap: 6 });
+      actions.style.flexWrap = "wrap";
       const btnSelect = ui.btn("Select decor", { variant: "primary", size: "sm" });
       const btnDelete = ui.btn("Delete", { variant: "danger", size: "sm", disabled: true });
       const btnClear = ui.btn("Clear", { size: "sm", disabled: true });
       actions.append(btnSelect, btnDelete, btnClear);
-      actionsRow.append(actLabel, actions);
-      grid.append(actionsRow);
-      const statusLabel = ui.label("Status");
-      statusLabel.style.fontSize = "13px";
-      statusLabel.style.margin = "0";
-      statusLabel.style.justifySelf = "start";
-      const statusLine = document.createElement("div");
-      statusLine.style.fontSize = "13px";
+      const actionsRow = createSettingRow(
+        "Actions",
+        "Pick, clear, or delete the selected decor.",
+        actions
+      );
+      grid2.append(actionsRow.row);
+      const statusLine = createPill("Idle");
       statusLine.style.fontWeight = "600";
-      statusLine.style.color = "#f9f9f9";
-      statusLine.style.whiteSpace = "nowrap";
-      statusLine.textContent = "Idle";
       const controlRow = ui.flexRow({ gap: 6 });
+      controlRow.style.flexWrap = "wrap";
       const btnPause = ui.btn("Pause", { size: "sm" });
       const btnPlay = ui.btn("Play", { size: "sm" });
       const btnStop = ui.btn("Stop", { size: "sm", variant: "ghost" });
@@ -41313,14 +41993,28 @@ next: ${next}`;
         updateDecorControlState();
       };
       controlRow.append(btnPause, btnPlay, btnStop);
-      const decorStatus = { name: "\u2014", done: 0, total: 0, remaining: 0 };
+      const statusControls = applyStyles3(document.createElement("div"), {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        flexWrap: "wrap",
+        justifyContent: "flex-end"
+      });
+      statusControls.append(controlRow, statusLine);
+      const statusRow = createSettingRow(
+        "Status",
+        "Pause or stop the current delete flow.",
+        statusControls
+      );
+      grid2.append(statusRow.row);
+      const decorStatus = { name: "-", done: 0, total: 0, remaining: 0 };
       const describeDecorStatus = () => {
         const running = MiscService.isDecorDeletionRunning();
         const paused = MiscService.isDecorDeletionPaused();
-        const target = decorStatus.name || "\u2014";
+        const target = decorStatus.name || "-";
         const base = `${target} (${decorStatus.done}/${decorStatus.total})`;
         if (!running) return "Idle";
-        return paused ? `Paused \xB7 ${base}` : base;
+        return paused ? `Paused - ${base}` : base;
       };
       const updateDecorStatusUI = () => {
         statusLine.textContent = describeDecorStatus();
@@ -41343,7 +42037,7 @@ next: ${next}`;
         updateDecorControlState();
       };
       const onDecorComplete = () => {
-        decorStatus.name = "\u2014";
+        decorStatus.name = "-";
         decorStatus.done = 0;
         decorStatus.total = 0;
         decorStatus.remaining = 0;
@@ -41378,13 +42072,6 @@ next: ${next}`;
         clearDecorSummaryTimer();
         decorSummaryTimer = window.setTimeout(() => updateSummaryUI(), 1e3);
       };
-      const statusRow = document.createElement("div");
-      statusRow.style.display = "flex";
-      statusRow.style.alignItems = "center";
-      statusRow.style.gap = "8px";
-      statusRow.style.gridColumn = "1 / -1";
-      statusRow.append(statusLabel, controlRow, statusLine);
-      grid.append(statusRow);
       function readSelection() {
         const sel = MiscService.getCurrentDecorSelection?.() || [];
         const decorCount = sel.length;
@@ -41399,7 +42086,7 @@ next: ${next}`;
         const isRunning = MiscService.isDecorDeletionRunning();
         const finishTimestamp = isRunning ? decorEstimatedFinish : estimateMs > 0 ? Date.now() + estimateMs : null;
         const estimateText = buildEstimateSentence(totalQty, decorDelayMs, finishTimestamp);
-        selValue.textContent = decorCount + " decor - " + formatNum2(totalQty) + " items" + estimateText;
+        selValue.textContent = `${decorCount} decor - ${formatNum2(totalQty)} items${estimateText}`;
         const has = decorCount > 0 && totalQty > 0;
         ui.setButtonEnabled(btnDelete, has);
         ui.setButtonEnabled(btnClear, has);
@@ -41436,21 +42123,24 @@ next: ${next}`;
         }
         updateSummaryUI();
       };
-      const card = ui.card("Decor deleter", { tone: "muted", align: "center" });
-      card.root.style.maxWidth = "440px";
-      card.body.append(grid);
+      const card = ui.card("Decor deleter", {
+        tone: "muted",
+        align: "stretch",
+        subtitle: "Bulk delete decor from inventory."
+      });
+      styleCard(card);
+      card.body.append(grid2);
       card.root.__cleanup__ = () => {
         clearDecorSummaryTimer();
         cleanupDecorListeners();
       };
       return card.root;
     })();
-    const content = document.createElement("div");
-    content.style.display = "grid";
-    content.style.gap = "8px";
-    content.style.justifyItems = "center";
-    content.append(secAutoReco, secPlayer, secInventoryReserve, secSeed, secDecor);
-    view.appendChild(content);
+    secSeed.style.gridColumn = "1 / -1";
+    secDecor.style.gridColumn = "1 / -1";
+    grid.append(secAutoReco, secPlayer, secInventoryReserve, secStorage, secSeed, secDecor);
+    page.append(header, grid);
+    view.appendChild(page);
     view.__cleanup__ = () => {
       try {
         secPlayer.__cleanup__?.();
@@ -48503,7 +49193,7 @@ next: ${next}`;
       }
     });
   };
-  var delay4 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  var delay3 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   async function warmupSpritesFromAtlases(atlasJsons, blobs) {
     const FRAME_YIELD_EVERY = 6;
     const MAX_CHUNK_MS = 10;
@@ -48588,7 +49278,7 @@ next: ${next}`;
       } catch (err) {
         lastError = err;
       }
-      await delay4(120);
+      await delay3(120);
     }
     throw lastError ?? new Error("Version not found.");
   }
@@ -48738,7 +49428,7 @@ next: ${next}`;
           throw err;
         }
         console.warn("[MG SpriteCatalog] retrying game version detection...");
-        await delay4(200);
+        await delay3(200);
       }
     }
     const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;

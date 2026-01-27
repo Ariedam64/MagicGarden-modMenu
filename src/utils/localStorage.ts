@@ -33,6 +33,8 @@ export type AriesStorage = {
     autoRecoEnabled?: unknown;
     autoRecoDelayMs?: unknown;
     keepInventorySlotFree?: unknown;
+    autoStoreSeedSiloEnabled?: unknown;
+    autoStoreDecorShedEnabled?: unknown;
   };
   hud?: { pos?: unknown; collapsed?: unknown; hidden?: unknown; windows?: Record<string, unknown> };
   menu?: { activeTabs?: Record<string, string> };

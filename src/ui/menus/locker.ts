@@ -1819,6 +1819,80 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   eggCard.body.append(eggList);
   layout.append(eggCard.root);
 
+  /* Sell all pets protections */
+  const sellPetsCard = ui.card("Sell all pets protections", { align: "stretch" });
+  sellPetsCard.root.style.width = "100%";
+
+  const sellPetsIntro = document.createElement("div");
+  sellPetsIntro.textContent = "Show a confirmation modal when protected pets are detected.";
+  sellPetsIntro.style.fontSize = "12.5px";
+  sellPetsIntro.style.opacity = "0.8";
+
+  const sellPetsGrid = applyStyles(document.createElement("div"), {
+    display: "grid",
+    gap: "10px",
+    marginTop: "6px",
+  });
+
+  const createRuleRow = (title: string, subtitle?: string) => {
+    const row = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "12px",
+      padding: "8px 10px",
+      border: "1px solid #4445",
+      borderRadius: "10px",
+      background: "#0f1318",
+    });
+    const text = applyStyles(document.createElement("div"), {
+      display: "grid",
+      gap: "2px",
+    });
+    const titleEl = document.createElement("div");
+    titleEl.textContent = title;
+    titleEl.style.fontWeight = "600";
+    titleEl.style.fontSize = "13px";
+    text.appendChild(titleEl);
+    if (subtitle) {
+      const sub = document.createElement("div");
+      sub.textContent = subtitle;
+      sub.style.fontSize = "12px";
+      sub.style.opacity = "0.75";
+      text.appendChild(sub);
+    }
+    const controls = applyStyles(document.createElement("div"), {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+    });
+    row.append(text, controls);
+    return { row, controls };
+  };
+
+  const sellRulesInitial = lockerRestrictionsService.getSellAllPetsRules();
+  const sellEnableToggle = ui.switch(sellRulesInitial.enabled);
+  const sellEnableRow = createRuleRow("Enable protection rules");
+  sellEnableRow.controls.append(sellEnableToggle);
+
+  const sellGoldToggle = ui.switch(sellRulesInitial.protectGold);
+  const sellGoldRow = createRuleRow("Protect Gold mutation");
+  sellGoldRow.controls.append(sellGoldToggle);
+
+  const sellRainbowToggle = ui.switch(sellRulesInitial.protectRainbow);
+  const sellRainbowRow = createRuleRow("Protect Rainbow mutation");
+  sellRainbowRow.controls.append(sellRainbowToggle);
+
+  const sellMaxStrToggle = ui.switch(sellRulesInitial.protectMaxStr);
+  const sellMaxStrInput = ui.inputNumber(0, 100, 1, sellRulesInitial.maxStrThreshold);
+  const sellMaxStrWrap = (sellMaxStrInput as any).wrap as HTMLElement;
+  const sellMaxStrRow = createRuleRow("Protect pets with Max STR");
+  sellMaxStrRow.controls.append(sellMaxStrToggle, sellMaxStrWrap);
+
+  sellPetsGrid.append(sellEnableRow.row, sellGoldRow.row, sellRainbowRow.row, sellMaxStrRow.row);
+  sellPetsCard.body.append(sellPetsIntro, sellPetsGrid);
+  layout.append(sellPetsCard.root);
+
   const LOCKED_ICON = "🔒";
   const UNLOCKED_ICON = "🔓";
   const eggRowCache = new Map<
@@ -1921,6 +1995,42 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
     sliderValue.textContent = `+${pct}%`;
   };
 
+  const clampMaxStr = (value: number) => {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, Math.round(value)));
+  };
+
+  const setRuleRowDisabled = (row: HTMLElement, disabled: boolean) => {
+    row.style.opacity = disabled ? "0.6" : "1";
+  };
+
+  const refreshSellAllPetsControls = () => {
+    const rules = lockerRestrictionsService.getSellAllPetsRules();
+    const enabled = rules.enabled !== false;
+    const protectGold = rules.protectGold !== false;
+    const protectRainbow = rules.protectRainbow !== false;
+    const protectMaxStr = rules.protectMaxStr !== false;
+
+    setCheck(sellEnableToggle, enabled);
+    setCheck(sellGoldToggle, protectGold);
+    setCheck(sellRainbowToggle, protectRainbow);
+    setCheck(sellMaxStrToggle, protectMaxStr);
+    sellMaxStrInput.value = String(clampMaxStr(rules.maxStrThreshold));
+
+    sellGoldToggle.disabled = !enabled;
+    sellRainbowToggle.disabled = !enabled;
+    sellMaxStrToggle.disabled = !enabled;
+
+    const maxStrDisabled = !enabled || !protectMaxStr;
+    sellMaxStrInput.disabled = maxStrDisabled;
+    sellMaxStrWrap.style.opacity = maxStrDisabled ? "0.6" : "1";
+    sellMaxStrWrap.style.pointerEvents = maxStrDisabled ? "none" : "auto";
+
+    setRuleRowDisabled(sellGoldRow.row, !enabled);
+    setRuleRowDisabled(sellRainbowRow.row, !enabled);
+    setRuleRowDisabled(sellMaxStrRow.row, !enabled);
+  };
+
   const setStatusTone = (tone: "success" | "warn" | "info") => {
     const palette =
       tone === "success"
@@ -1970,12 +2080,38 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   slider.addEventListener("input", () => handleSliderInput(false));
   slider.addEventListener("change", () => handleSliderInput(true));
 
+  sellEnableToggle.addEventListener("change", () => {
+    const enabled = !!sellEnableToggle.checked;
+    lockerRestrictionsService.setSellAllPetsRules({ enabled });
+    refreshSellAllPetsControls();
+  });
+
+  sellGoldToggle.addEventListener("change", () => {
+    lockerRestrictionsService.setSellAllPetsRules({ protectGold: !!sellGoldToggle.checked });
+  });
+
+  sellRainbowToggle.addEventListener("change", () => {
+    lockerRestrictionsService.setSellAllPetsRules({ protectRainbow: !!sellRainbowToggle.checked });
+  });
+
+  sellMaxStrToggle.addEventListener("change", () => {
+    lockerRestrictionsService.setSellAllPetsRules({ protectMaxStr: !!sellMaxStrToggle.checked });
+    refreshSellAllPetsControls();
+  });
+
+  sellMaxStrInput.addEventListener("change", () => {
+    const next = clampMaxStr(Number(sellMaxStrInput.value));
+    sellMaxStrInput.value = String(next);
+    lockerRestrictionsService.setSellAllPetsRules({ maxStrThreshold: next });
+  });
+
   const syncFromService = (next: typeof state) => {
     state = { ...next };
     setCheck(decorToggle, state.decorPickupLocked);
     updateSliderValue(friendBonusPercentFromPlayers(state.minRequiredPlayers) ?? 0);
     updateStatus();
     renderEggList();
+    refreshSellAllPetsControls();
   };
 
   const attachSubscriptions = async () => {

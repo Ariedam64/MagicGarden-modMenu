@@ -4,6 +4,10 @@ import { PlayerService } from "../services/player";
 import { toastSimple } from "../ui/toast";
 import { audioPlayer } from "../core/audioPlayer";
 import { StatsService } from "../services/stats";
+import { computeInventoryItemValue } from "./inventoryValue";
+import { getPetInfo } from "./petCalcul";
+import { attachSpriteIcon } from "../ui/spriteIconCache";
+import { lockerRestrictionsService } from "../services/lockerRestrictions";
 
 /* =============================================================================
  * Inject a styled "Sell all Pets" button next to a detected "Sell X" button
@@ -39,6 +43,9 @@ export type SellAllPetsEventDetail = {
 };
 
 export const SELL_ALL_PETS_EVENT = "sell-all-pets:list" as const;
+
+const SELL_ALL_PETS_DRY_RUN = false;
+const SELL_ALL_PETS_CONFIRM_MODAL_ID = "tm-sellallpets-confirm";
 
 export interface ThemeColors {
   text: string;
@@ -292,11 +299,24 @@ async function sellPetsFromInventory(
     return;
   }
 
+  if (!(await confirmHighValuePetSale(toSell, logger))) {
+    try { logger('sell-pets:cancelled'); } catch {}
+    try { toastSimple("Sell all Pets", "Sale cancelled.", "info"); } catch {}
+    return;
+  }
+
   const failures: { pet: InventoryPetItem; error: unknown }[] = [];
   let sold = 0;
 
-  const totalValue = await computeTotalPetSellValue(toSell, logger);
+  const totalValue = computeTotalPetSellValueFromInventory(toSell);
   try { logger('sell-pets:total-value', { attempted: toSell.length, totalValue }); } catch {}
+
+  if (SELL_ALL_PETS_DRY_RUN) {
+    try { logger('sell-pets:dry-run', { attempted: toSell.length, totalValue }); } catch {}
+    try { toastSimple("Sell all Pets", `Dry run: ${toSell.length} pets detected (no sale).`, "info"); } catch {}
+    try { (globalThis as any).__sellAllPetsResult = { attempted: toSell.length, sold: 0, failures: [] }; } catch {}
+    return;
+  }
 
   for (const pet of toSell) {
     try { logger('sell-pet:start', { id: pet.id, pet }); } catch {}
@@ -335,101 +355,280 @@ async function sellPetsFromInventory(
   try { logger('sell-pets:complete', { attempted: toSell.length, sold, failures }); } catch {}
 }
 
-async function computeTotalPetSellValue(
-  pets: InventoryPetItem[],
-  logger: (...args: unknown[]) => void
-): Promise<string> {
+function computeTotalPetSellValueFromInventory(pets: InventoryPetItem[]): string {
   if (!pets.length) return "";
-
-  const selectionSnapshot = await captureInventorySelection();
   let total = 0;
-
   for (const pet of pets) {
-    const index = getInventoryIndex(pet);
-    if (index === null) continue;
-
-    try {
-      await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(index);
-    } catch (error) {
-      try { logger('sell-pet:selection-error', { id: pet.id, index, error, pet }); } catch {}
-      continue;
-    }
-
-    const value = await readSellPriceForSelection(index, pet, logger);
-    if (value !== null) {
+    const value = computeInventoryItemValue(pet);
+    if (typeof value === "number" && Number.isFinite(value)) {
       total += value;
     }
   }
-
-  await restoreInventorySelection(selectionSnapshot, logger);
-
   return total.toLocaleString("en-US");
 }
 
-type InventorySelectionSnapshot = { value: number | null; valid: boolean };
+type FlaggedPet = {
+  pet: InventoryPetItem;
+  reasons: string[];
+  maxStrength: number | null;
+  mutations: string[];
+};
 
-async function captureInventorySelection(): Promise<InventorySelectionSnapshot> {
-  try {
-    const value = await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.get();
-    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
-      return { value, valid: true };
-    }
-    if (value === null) {
-      return { value: null, valid: true };
-    }
-  } catch {}
-  return { value: null, valid: false };
-}
-
-async function restoreInventorySelection(
-  snapshot: InventorySelectionSnapshot,
+async function confirmHighValuePetSale(
+  pets: InventoryPetItem[],
   logger: (...args: unknown[]) => void
-): Promise<void> {
-  if (!snapshot.valid) return;
-  try {
-    await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(snapshot.value);
-  } catch (error) {
-    try { logger('sell-pet:selection-restore-error', error); } catch {}
-  }
-}
+): Promise<boolean> {
+  const rules = lockerRestrictionsService.getSellAllPetsRules();
+  if (!rules?.enabled) return true;
 
-function getInventoryIndex(pet: InventoryPetItem): number | null {
-  const idx = pet.inventoryIndex;
-  if (typeof idx === 'number' && Number.isInteger(idx) && idx >= 0) return idx;
-  return null;
-}
+  const mutationProtect = new Set<string>();
+  if (rules.protectGold) mutationProtect.add("gold");
+  if (rules.protectRainbow) mutationProtect.add("rainbow");
 
-async function readSellPriceForSelection(
-  index: number,
-  pet: InventoryPetItem,
-  logger: (...args: unknown[]) => void,
-  attempts = 3,
-  delayMs = 50
-): Promise<number | null> {
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      const value = await Atoms.pets.totalPetSellPrice.get();
-      const numericValue = Number(value);
-      if (Number.isFinite(numericValue)) {
-        return numericValue;
-      }
-    } catch (error) {
-      if (attempt === attempts - 1) {
-        try { logger('sell-pet:price-read-error', { id: pet.id, index, error, pet }); } catch {}
+  const maxStrThreshold = Number.isFinite(rules.maxStrThreshold)
+    ? Math.max(0, Math.min(100, Math.round(rules.maxStrThreshold)))
+    : 0;
+  const checkMaxStr = !!rules.protectMaxStr;
+
+  if (mutationProtect.size === 0 && !checkMaxStr) return true;
+
+  const flagged: FlaggedPet[] = [];
+  for (const pet of pets) {
+    const rawMutations = Array.isArray(pet?.mutations) ? pet.mutations : [];
+    const mutations = rawMutations.filter((m): m is string => typeof m === "string");
+    const foundMutations = mutationProtect.size
+      ? mutations
+        .map((m) => m.toLowerCase())
+        .filter((m) => mutationProtect.has(m))
+        .map((m) => (m === "gold" ? "Gold" : "Rainbow"))
+      : [];
+    const hasMutation = foundMutations.length > 0;
+    const maxStrength = getPetInfo(pet as any)?.maxStrength;
+    const strongEnough = checkMaxStr && typeof maxStrength === "number" && Number.isFinite(maxStrength)
+      ? maxStrength >= maxStrThreshold
+      : false;
+
+    if (!hasMutation && !strongEnough) continue;
+
+    const reasons: string[] = [];
+    if (hasMutation) {
+      for (const mut of Array.from(new Set(foundMutations))) {
+        reasons.push(`Mutation: ${mut}`);
       }
     }
-
-    if (attempt < attempts - 1) {
-      await delay(delayMs);
+    if (strongEnough) {
+      reasons.push(`Max STR: ${Math.floor(maxStrength ?? 0)}`);
     }
+
+    flagged.push({
+      pet,
+      reasons,
+      maxStrength: typeof maxStrength === "number" && Number.isFinite(maxStrength) ? maxStrength : null,
+      mutations,
+    });
   }
 
-  try { logger('sell-pet:price-missing', { id: pet.id, index, pet }); } catch {}
-  return null;
+  if (flagged.length === 0) return true;
+
+  if (!isBrowser()) {
+    try { logger('sell-pets:confirm-unavailable', { flagged: flagged.length }); } catch {}
+    return false;
+  }
+
+  const confirmed = await showSellAllPetsConfirmModal(flagged);
+  if (!confirmed) {
+    try { logger('sell-pets:confirm-cancelled', { flagged: flagged.length }); } catch {}
+  }
+  return confirmed;
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function showSellAllPetsConfirmModal(flagged: FlaggedPet[]): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!isBrowser()) {
+      resolve(false);
+      return;
+    }
+
+    const existing = document.getElementById(SELL_ALL_PETS_CONFIRM_MODAL_ID);
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = SELL_ALL_PETS_CONFIRM_MODAL_ID;
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.zIndex = "2147483647";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.background = "rgba(0,0,0,0.6)";
+
+    const box = document.createElement("div");
+    box.style.minWidth = "320px";
+    box.style.maxWidth = "520px";
+    box.style.background = "#0f1318";
+    box.style.color = "#ffffff";
+    box.style.border = "1px solid rgba(255,255,255,0.15)";
+    box.style.borderRadius = "14px";
+    box.style.boxShadow = "0 12px 40px rgba(0,0,0,0.45)";
+    box.style.padding = "18px 20px";
+    box.style.display = "grid";
+    box.style.gap = "12px";
+    box.style.fontFamily = "system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif";
+
+    const title = document.createElement("div");
+    title.textContent = "Confirm sell all pets";
+    title.style.fontSize = "18px";
+    title.style.fontWeight = "800";
+
+    const body = document.createElement("div");
+    body.textContent = "The following pets match protected rules:";
+    body.style.opacity = "0.9";
+    body.style.fontSize = "13px";
+    body.style.lineHeight = "1.4";
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "8px";
+    list.style.maxHeight = "260px";
+    list.style.overflow = "auto";
+    list.style.paddingRight = "4px";
+
+    const buildPetRow = (entry: FlaggedPet) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "48px 1fr";
+      row.style.gap = "10px";
+      row.style.alignItems = "center";
+      row.style.padding = "6px 8px";
+      row.style.border = "1px solid rgba(255,255,255,0.08)";
+      row.style.borderRadius = "10px";
+      row.style.background = "rgba(255,255,255,0.03)";
+
+      const imgWrap = document.createElement("div");
+      imgWrap.style.width = "48px";
+      imgWrap.style.height = "48px";
+      imgWrap.style.borderRadius = "10px";
+      imgWrap.style.background = "rgba(255,255,255,0.08)";
+      imgWrap.style.display = "flex";
+      imgWrap.style.alignItems = "center";
+      imgWrap.style.justifyContent = "center";
+      imgWrap.style.overflow = "hidden";
+
+      const label = entry.pet.petSpecies || entry.pet.name || "Pet";
+      const fallback = document.createElement("div");
+      fallback.textContent = String(label).slice(0, 2).toUpperCase();
+      fallback.style.fontSize = "12px";
+      fallback.style.fontWeight = "700";
+      imgWrap.appendChild(fallback);
+
+      const species = String(entry.pet.petSpecies || "").trim();
+      const mutations = Array.isArray(entry.mutations)
+        ? entry.mutations.map((m) => String(m ?? "").trim()).filter(Boolean)
+        : [];
+
+      if (species) {
+        attachSpriteIcon(
+          imgWrap,
+          ["pet"],
+          [species, entry.pet.name || ""],
+          48,
+          "sell-all-pets-confirm",
+          {
+            mutations,
+          },
+        );
+      }
+
+      const info = document.createElement("div");
+      info.style.display = "grid";
+      info.style.gap = "4px";
+
+      const name = document.createElement("div");
+      name.textContent = entry.pet.name ? `${entry.pet.name} (${entry.pet.petSpecies ?? "Pet"})` : (entry.pet.petSpecies ?? "Pet");
+      name.style.fontWeight = "700";
+      name.style.fontSize = "13px";
+
+      const reasons = document.createElement("div");
+      reasons.style.display = "flex";
+      reasons.style.flexWrap = "wrap";
+      reasons.style.gap = "6px";
+
+      for (const reason of entry.reasons) {
+        const chip = document.createElement("div");
+        chip.textContent = reason;
+        chip.style.fontSize = "11px";
+        chip.style.padding = "2px 6px";
+        chip.style.borderRadius = "999px";
+        chip.style.background = "rgba(122,162,255,0.2)";
+        chip.style.border = "1px solid rgba(122,162,255,0.4)";
+        chip.style.color = "#dbe7ff";
+        reasons.appendChild(chip);
+      }
+
+      info.append(name, reasons);
+      row.append(imgWrap, info);
+      return row;
+    };
+
+    for (const entry of flagged) {
+      list.appendChild(buildPetRow(entry));
+    }
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.justifyContent = "flex-end";
+    actions.style.gap = "8px";
+
+    const btnCancel = document.createElement("button");
+    btnCancel.type = "button";
+    btnCancel.textContent = "Cancel";
+    btnCancel.style.padding = "8px 12px";
+    btnCancel.style.borderRadius = "10px";
+    btnCancel.style.border = "1px solid rgba(255,255,255,0.2)";
+    btnCancel.style.background = "transparent";
+    btnCancel.style.color = "#ffffff";
+    btnCancel.style.cursor = "pointer";
+
+    const btnConfirm = document.createElement("button");
+    btnConfirm.type = "button";
+    btnConfirm.textContent = "Sell";
+    btnConfirm.style.padding = "8px 14px";
+    btnConfirm.style.borderRadius = "10px";
+    btnConfirm.style.border = "1px solid rgba(122,162,255,0.7)";
+    btnConfirm.style.background = "#1a2644";
+    btnConfirm.style.color = "#ffffff";
+    btnConfirm.style.cursor = "pointer";
+    btnConfirm.style.fontWeight = "700";
+
+    let settled = false;
+    const close = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      overlay.remove();
+      document.removeEventListener("keydown", onKeyDown, true);
+      resolve(value);
+    };
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        close(false);
+      }
+    };
+
+    btnCancel.addEventListener("click", () => close(false));
+    btnConfirm.addEventListener("click", () => close(true));
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) close(false);
+    });
+
+    actions.append(btnCancel, btnConfirm);
+    box.append(title, body, list, actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    document.addEventListener("keydown", onKeyDown, true);
+    btnConfirm.focus();
+  });
 }
 
 function safeInvokeClick(

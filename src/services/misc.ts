@@ -1,7 +1,7 @@
 // src/services/misc.ts
 import { PlayerService } from "./player";
 import { decorCatalog, plantCatalog } from "../data/hardcoded-data.clean";
-import { Atoms } from "../store/atoms";
+import { Atoms, myDecorShedItems, mySeedSiloItems } from "../store/atoms";
 import { fakeInventoryShow, isInventoryPanelOpen, waitInventoryPanelClosed, fakeInventoryHide } from "./fakeModal";
 import { toastSimple } from "../ui/toast";
 import { readAriesPath, writeAriesPath } from "../utils/localStorage";
@@ -19,6 +19,8 @@ const AUTO_RECO_MIN_MS = 0;
 const AUTO_RECO_MAX_MS = 5 * 60_000;
 const AUTO_RECO_DEFAULT_MS = 60_000;
 const PATH_KEEP_INVENTORY_SLOT_FREE = "misc.keepInventorySlotFree";
+const PATH_AUTO_STORE_SEED_SILO_ENABLED = "misc.autoStoreSeedSiloEnabled";
+const PATH_AUTO_STORE_DECOR_SHED_ENABLED = "misc.autoStoreDecorShedEnabled";
 
 export const readGhostEnabled = (def = false): boolean => {
   try {
@@ -95,6 +97,30 @@ export const readInventorySlotReserveEnabled = (def = false): boolean => {
 
 export const writeInventorySlotReserveEnabled = (on: boolean) => {
   try { writeAriesPath(PATH_KEEP_INVENTORY_SLOT_FREE, !!on); } catch {}
+};
+
+export const readAutoStoreSeedSiloEnabled = (def = false): boolean => {
+  try {
+    const stored = readAriesPath<unknown>(PATH_AUTO_STORE_SEED_SILO_ENABLED);
+    if (typeof stored === "boolean") return stored;
+    if (stored === "1" || stored === 1) return true;
+    if (stored === "0" || stored === 0) return false;
+    return !!stored;
+  } catch {
+    return def;
+  }
+};
+
+export const readAutoStoreDecorShedEnabled = (def = false): boolean => {
+  try {
+    const stored = readAriesPath<unknown>(PATH_AUTO_STORE_DECOR_SHED_ENABLED);
+    if (typeof stored === "boolean") return stored;
+    if (stored === "1" || stored === 1) return true;
+    if (stored === "0" || stored === 0) return false;
+    return !!stored;
+  } catch {
+    return def;
+  }
 };
 
 /* ========================================================================== */
@@ -227,6 +253,234 @@ export type DecorItem = {
   id?: string;
 };
 export type InventoryShape = { items: any[]; favoritedItemIds?: string[] };
+
+/* ========================================================================== */
+/*                             AUTO STORAGE LOGIC                             */
+/* ========================================================================== */
+
+const normalizeStorageKey = (value: unknown): string =>
+  (typeof value === "string" ? value.trim() : "");
+
+const normalizeStorageQty = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+};
+
+const buildQtyMap = (raw: unknown, getKey: (item: any) => string): Map<string, number> => {
+  const map = new Map<string, number>();
+  const list = Array.isArray(raw) ? raw : [];
+  for (const item of list) {
+    const key = getKey(item);
+    if (!key) continue;
+    const qty = normalizeStorageQty(item?.quantity);
+    if (qty <= 0) continue;
+    map.set(key, (map.get(key) ?? 0) + qty);
+  }
+  return map;
+};
+
+const buildKeySet = (raw: unknown, getKey: (item: any) => string): Set<string> => {
+  const set = new Set<string>();
+  const list = Array.isArray(raw) ? raw : [];
+  for (const item of list) {
+    const key = getKey(item);
+    if (!key) continue;
+    const qty = normalizeStorageQty(item?.quantity);
+    if (qty <= 0) continue;
+    set.add(key);
+  }
+  return set;
+};
+
+const diffIncreases = (prev: Map<string, number>, next: Map<string, number>): string[] => {
+  const out: string[] = [];
+  for (const [key, qty] of next) {
+    const before = prev.get(key) ?? 0;
+    if (qty > before) out.push(key);
+  }
+  return out;
+};
+
+const seedKeyFromItem = (item: any) => normalizeStorageKey(item?.species);
+const decorKeyFromItem = (item: any) => normalizeStorageKey(item?.decorId);
+
+let autoSeedSiloEnabled = readAutoStoreSeedSiloEnabled(false);
+let autoDecorShedEnabled = readAutoStoreDecorShedEnabled(false);
+
+let seedSiloItems = new Set<string>();
+let seedInventoryQty = new Map<string, number>();
+let seedSiloQueue = new Set<string>();
+let seedSiloBusy = false;
+let seedInvUnsub: (() => void) | null = null;
+let seedSiloUnsub: (() => void) | null = null;
+
+let decorShedItems = new Set<string>();
+let decorInventoryQty = new Map<string, number>();
+let decorShedQueue = new Set<string>();
+let decorShedBusy = false;
+let decorInvUnsub: (() => void) | null = null;
+let decorShedUnsub: (() => void) | null = null;
+
+function queueSeedSiloStore(keys: string[]) {
+  for (const key of keys) if (key) seedSiloQueue.add(key);
+  void flushSeedSiloQueue();
+}
+
+async function flushSeedSiloQueue() {
+  if (seedSiloBusy || !autoSeedSiloEnabled) return;
+  seedSiloBusy = true;
+  try {
+    while (seedSiloQueue.size && autoSeedSiloEnabled) {
+      const batch = Array.from(seedSiloQueue);
+      seedSiloQueue.clear();
+      for (const species of batch) {
+        if (!autoSeedSiloEnabled) return;
+        if (!seedSiloItems.has(species)) continue;
+        try { await PlayerService.putItemInStorage(species, "SeedSilo"); } catch {}
+      }
+    }
+  } finally {
+    seedSiloBusy = false;
+  }
+}
+
+async function startSeedSiloAutoStore() {
+  if (seedInvUnsub || seedSiloUnsub) return;
+  if (typeof window === "undefined") return;
+
+  try { seedSiloItems = buildKeySet(await mySeedSiloItems.get(), seedKeyFromItem); } catch {}
+  try { seedInventoryQty = buildQtyMap(await Atoms.inventory.mySeedInventory.get(), seedKeyFromItem); } catch {}
+
+  try {
+    seedSiloUnsub = await mySeedSiloItems.onChange((next) => {
+      seedSiloItems = buildKeySet(next, seedKeyFromItem);
+    });
+  } catch {
+    seedSiloUnsub = null;
+  }
+
+  try {
+    seedInvUnsub = await Atoms.inventory.mySeedInventory.onChange((next) => {
+      if (!autoSeedSiloEnabled) return;
+      const nextMap = buildQtyMap(next, seedKeyFromItem);
+      const increased = diffIncreases(seedInventoryQty, nextMap);
+      seedInventoryQty = nextMap;
+      if (increased.length) queueSeedSiloStore(increased);
+    });
+  } catch {
+    seedInvUnsub = null;
+  }
+}
+
+function stopSeedSiloAutoStore() {
+  try { seedInvUnsub?.(); } catch {}
+  try { seedSiloUnsub?.(); } catch {}
+  seedInvUnsub = null;
+  seedSiloUnsub = null;
+  seedSiloQueue.clear();
+  seedSiloBusy = false;
+  seedSiloItems.clear();
+  seedInventoryQty.clear();
+}
+
+function queueDecorShedStore(keys: string[]) {
+  for (const key of keys) if (key) decorShedQueue.add(key);
+  void flushDecorShedQueue();
+}
+
+async function flushDecorShedQueue() {
+  if (decorShedBusy || !autoDecorShedEnabled) return;
+  decorShedBusy = true;
+  try {
+    while (decorShedQueue.size && autoDecorShedEnabled) {
+      const batch = Array.from(decorShedQueue);
+      decorShedQueue.clear();
+      for (const decorId of batch) {
+        if (!autoDecorShedEnabled) return;
+        if (!decorShedItems.has(decorId)) continue;
+        try { await PlayerService.putItemInStorage(decorId, "DecorShed"); } catch {}
+      }
+    }
+  } finally {
+    decorShedBusy = false;
+  }
+}
+
+async function startDecorShedAutoStore() {
+  if (decorInvUnsub || decorShedUnsub) return;
+  if (typeof window === "undefined") return;
+
+  try { decorShedItems = buildKeySet(await myDecorShedItems.get(), decorKeyFromItem); } catch {}
+  try { decorInventoryQty = buildQtyMap(await Atoms.inventory.myDecorInventory.get(), decorKeyFromItem); } catch {}
+
+  try {
+    decorShedUnsub = await myDecorShedItems.onChange((next) => {
+      decorShedItems = buildKeySet(next, decorKeyFromItem);
+    });
+  } catch {
+    decorShedUnsub = null;
+  }
+
+  try {
+    decorInvUnsub = await Atoms.inventory.myDecorInventory.onChange((next) => {
+      if (!autoDecorShedEnabled) return;
+      const nextMap = buildQtyMap(next, decorKeyFromItem);
+      const increased = diffIncreases(decorInventoryQty, nextMap);
+      decorInventoryQty = nextMap;
+      if (increased.length) queueDecorShedStore(increased);
+    });
+  } catch {
+    decorInvUnsub = null;
+  }
+}
+
+function stopDecorShedAutoStore() {
+  try { decorInvUnsub?.(); } catch {}
+  try { decorShedUnsub?.(); } catch {}
+  decorInvUnsub = null;
+  decorShedUnsub = null;
+  decorShedQueue.clear();
+  decorShedBusy = false;
+  decorShedItems.clear();
+  decorInventoryQty.clear();
+}
+
+export function setAutoStoreSeedSiloEnabled(on: boolean) {
+  const next = !!on;
+  autoSeedSiloEnabled = next;
+  try { writeAriesPath(PATH_AUTO_STORE_SEED_SILO_ENABLED, next); } catch {}
+  if (next) {
+    void (async () => {
+      await startSeedSiloAutoStore();
+      const keys = Array.from(seedInventoryQty.keys()).filter((k) => seedSiloItems.has(k));
+      if (keys.length) queueSeedSiloStore(keys);
+    })();
+  } else {
+    stopSeedSiloAutoStore();
+  }
+}
+
+export function setAutoStoreDecorShedEnabled(on: boolean) {
+  const next = !!on;
+  autoDecorShedEnabled = next;
+  try { writeAriesPath(PATH_AUTO_STORE_DECOR_SHED_ENABLED, next); } catch {}
+  if (next) {
+    void (async () => {
+      await startDecorShedAutoStore();
+      const keys = Array.from(decorInventoryQty.keys()).filter((k) => decorShedItems.has(k));
+      if (keys.length) queueDecorShedStore(keys);
+    })();
+  } else {
+    stopDecorShedAutoStore();
+  }
+}
+
+if (autoSeedSiloEnabled) {
+  void startSeedSiloAutoStore();
+}
+if (autoDecorShedEnabled) {
+  void startDecorShedAutoStore();
+}
 
 // Ce que l’utilisateur sélectionne dans l’overlay
 type SeedSelection = { name: string; qty: number; maxQty: number };
@@ -1498,6 +1752,10 @@ export const MiscService = {
   setAutoRecoDelayMs,
   readInventorySlotReserveEnabled,
   writeInventorySlotReserveEnabled,
+  readAutoStoreSeedSiloEnabled,
+  setAutoStoreSeedSiloEnabled,
+  readAutoStoreDecorShedEnabled,
+  setAutoStoreDecorShedEnabled,
   // seeds
   getMySeedInventory,
   openSeedInventoryPreview,
