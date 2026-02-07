@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.46
+// @version      2.99.47
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -62,7 +62,7 @@
         Wet: { overlayTall: "sprite/mutation-overlay/WetTallPlant", tallIconOverride: "sprite/mutation/Puddle" },
         Chilled: { overlayTall: "sprite/mutation-overlay/ChilledTallPlant", tallIconOverride: null },
         Frozen: { overlayTall: "sprite/mutation-overlay/FrozenTallPlant", tallIconOverride: null },
-        Thunderstruck: { overlayTall: null, tallIconOverride: null },
+        Thunderstruck: { overlayTall: "sprite/mutation-overlay/ThunderstruckTallPlant", tallIconOverride: "sprite/mutation/ThunderstruckGround" },
         Dawnlit: { overlayTall: null, tallIconOverride: null },
         Ambershine: { overlayTall: null, tallIconOverride: null },
         Dawncharged: { overlayTall: null, tallIconOverride: null },
