@@ -1,7 +1,8 @@
 // src/ui/menus/calculator.ts
 import { addStyle } from "../../core/dom";
-import { coin, plantCatalog } from "../../data/hardcoded-data.clean";
+import { coin, plantCatalog, petAbilities, petCatalog } from "../../data/hardcoded-data.clean";
 import { DefaultPricing, estimateProduceValue } from "../../utils/calculators";
+import { getPetMaxStrength, getPetStrength } from "../../utils/petCalcul";
 import {
   getLockerSeedEmojiForKey,
   getLockerSeedEmojiForSeedName,
@@ -18,7 +19,7 @@ const SCALE_MIN = 1;
 const SCALE_MAX = 3;
 
 const COLOR_MUTATION_LABELS = ["None", "Gold", "Rainbow"] as const;
-const WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen"] as const;
+const WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen", "Thunderstruck"] as const;
 const WEATHER_LIGHTING_LABELS = ["None", "Dawnlit", "Dawnbound", "Amberlit", "Amberbound"] as const;
 const FRIEND_BONUS_LABELS = ["+0%", "+10%", "+20%", "+30%", "+40%", "+50%"] as const;
 const FRIEND_BONUS_MIN_PLAYERS = 1;
@@ -35,6 +36,7 @@ const WEATHER_CONDITION_SEGMENT_METADATA: Record<string, Record<string, string>>
   Wet: { mgWeather: "wet" },
   Chilled: { mgWeather: "chilled" },
   Frozen: { mgWeather: "frozen" },
+  Thunderstruck: { mgWeather: "thunderstruck" },
 };
 
 const WEATHER_LIGHTING_SEGMENT_METADATA: Record<string, Record<string, string>> = {
@@ -50,6 +52,7 @@ const MUTATION_SPRITE_OVERRIDES: Record<string, string> = {
   dawnbound: "Dawncharged",
   amberlit: "Ambershine",
   amberbound: "Ambercharged",
+  thunderstruck: "Thunderstruck",
 };
 
 type ColorLabel = (typeof COLOR_MUTATION_LABELS)[number];
@@ -398,6 +401,11 @@ const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"].active {
   color: #AABEFF;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="thunderstruck"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="thunderstruck"].active {
+  color: rgb(16, 141, 163);
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"],

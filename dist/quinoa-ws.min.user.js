@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.42
+// @version      2.99.45
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -62,6 +62,7 @@
         Wet: { overlayTall: "sprite/mutation-overlay/WetTallPlant", tallIconOverride: "sprite/mutation/Puddle" },
         Chilled: { overlayTall: "sprite/mutation-overlay/ChilledTallPlant", tallIconOverride: null },
         Frozen: { overlayTall: "sprite/mutation-overlay/FrozenTallPlant", tallIconOverride: null },
+        Thunderstruck: { overlayTall: null, tallIconOverride: null },
         Dawnlit: { overlayTall: null, tallIconOverride: null },
         Ambershine: { overlayTall: null, tallIconOverride: null },
         Dawncharged: { overlayTall: null, tallIconOverride: null },
@@ -69,7 +70,7 @@
       };
       MUT_NAMES = Object.keys(MUT_META);
       MUT_G1 = ["", "Gold", "Rainbow"].filter(Boolean);
-      MUT_G2 = ["", "Wet", "Chilled", "Frozen"].filter(Boolean);
+      MUT_G2 = ["", "Wet", "Chilled", "Frozen", "Thunderstruck"].filter(Boolean);
       MUT_G3 = ["", "Dawnlit", "Ambershine", "Dawncharged", "Ambercharged"].filter(Boolean);
     }
   });
@@ -96,6 +97,8 @@
         return ["Dawncharged", "Dawnbound"];
       case "Ambercharged":
         return ["Ambercharged", "Amberbound"];
+      case "Thunderstruck":
+        return ["Thunderstruck", "ThunderstruckGround"];
       default:
         return [mut];
     }
@@ -316,6 +319,11 @@
       const ow = oCan.width;
       const overlayAnchor = { x: 0, y: 0 };
       const overlayPos = { x: basePos.x - aX * ow, y: 0 };
+      const overlayOffset = TALL_OVERLAY_OFFSETS[step.name];
+      if (overlayOffset) {
+        overlayPos.x += overlayOffset.x ?? 0;
+        overlayPos.y += overlayOffset.y ?? 0;
+      }
       const maskedCanvas = document.createElement("canvas");
       maskedCanvas.width = ow;
       maskedCanvas.height = oCan.height;
@@ -485,7 +493,7 @@
     }
     return needsLayout;
   }
-  var TILE_SIZE_WORLD, BASE_ICON_SCALE, TALL_PLANT_MUTATION_ICON_SCALE_BOOST, FLOATING_MUTATION_ICONS, MUT_ICON_Y_EXCEPT, MUT_ICON_X_EXCEPT, MUTATION_ORDER, MUTATION_INDEX, sortMutations, SUPPORTED_BLEND_OPS, pickBlendOp, FILTERS, hasMutationFilter, isTallKey, computeVariantSignature, curVariant, normalizeMutListColor, normalizeMutListOverlay, buildMutationPipeline, angleGrad, fillGrad, baseNameOf, entryCost, processJobs;
+  var TILE_SIZE_WORLD, BASE_ICON_SCALE, TALL_PLANT_MUTATION_ICON_SCALE_BOOST, FLOATING_MUTATION_ICONS, MUT_ICON_Y_EXCEPT, MUT_ICON_X_EXCEPT, TALL_OVERLAY_OFFSETS, MUTATION_ORDER, MUTATION_INDEX, sortMutations, SUPPORTED_BLEND_OPS, pickBlendOp, FILTERS, hasMutationFilter, isTallKey, computeVariantSignature, curVariant, normalizeMutListColor, normalizeMutListOverlay, buildMutationPipeline, angleGrad, fillGrad, baseNameOf, entryCost, processJobs;
   var init_variantBuilder = __esm({
     "src/sprite/mutations/variantBuilder.ts"() {
       init_settings();
@@ -499,7 +507,8 @@
         "Ambercharged"
       ]);
       MUT_ICON_Y_EXCEPT = {
-        Banana: 0.6,
+        Banana: 0.68,
+        Beet: 0.65,
         Carrot: 0.6,
         Sunflower: 0.5,
         Starweaver: 0.5,
@@ -507,10 +516,13 @@
         BurrosTail: 0.2
       };
       MUT_ICON_X_EXCEPT = {
-        Pepper: 0.5,
+        Pepper: 0.6,
         Banana: 0.6
       };
-      MUTATION_ORDER = ["Gold", "Rainbow", "Wet", "Chilled", "Frozen", "Ambershine", "Dawnlit", "Dawncharged", "Ambercharged"];
+      TALL_OVERLAY_OFFSETS = {
+        Thunderstruck: { x: 0, y: 250 }
+      };
+      MUTATION_ORDER = ["Gold", "Rainbow", "Wet", "Chilled", "Frozen", "Thunderstruck", "Ambershine", "Dawnlit", "Dawncharged", "Ambercharged"];
       MUTATION_INDEX = new Map(MUTATION_ORDER.map((m, idx) => [m, idx]));
       sortMutations = (list) => {
         const uniq = [...new Set(list.filter(Boolean))];
@@ -545,6 +557,7 @@
         Wet: { op: "source-atop", colors: ["rgb(50,180,200)"], a: 0.25 },
         Chilled: { op: "source-atop", colors: ["rgb(100,160,210)"], a: 0.45 },
         Frozen: { op: "source-atop", colors: ["rgb(100,130,220)"], a: 0.5 },
+        Thunderstruck: { op: "source-atop", colors: ["rgb(16, 141, 163)"], a: 0.45 },
         Dawnlit: { op: "source-atop", colors: ["rgb(209,70,231)"], a: 0.5 },
         Ambershine: { op: "source-atop", colors: ["rgb(190,100,40)"], a: 0.5 },
         Dawncharged: { op: "source-atop", colors: ["rgb(140,80,200)"], a: 0.5 },
@@ -579,7 +592,7 @@
         const warm = ["Ambershine", "Dawnlit", "Dawncharged", "Ambercharged"];
         const hasWarm = names.some((n) => warm.includes(n));
         if (hasWarm) {
-          return sortMutations(names.filter((n) => !["Wet", "Chilled", "Frozen"].includes(n)));
+          return sortMutations(names.filter((n) => !["Wet", "Chilled", "Frozen", "Thunderstruck"].includes(n)));
         }
         return sortMutations(names);
       };
@@ -1577,7 +1590,9 @@
     Dawnlit: 11,
     Amberlit: 12,
     Dawncharged: 13,
-    Ambercharged: 14
+    Ambercharged: 14,
+    Thunderstruck: 15,
+    ThunderstruckGround: 16
   };
   var tileRefsMutationLabels = {
     Wet: "Wet",
@@ -1587,7 +1602,9 @@
     Dawnlit: "Dawnlit",
     Amberlit: "Amberlit",
     Dawncharged: "Dawnbound",
-    Ambercharged: "Amberbound"
+    Ambercharged: "Amberbound",
+    Thunderstruck: "Thunderstruck",
+    ThunderstruckGround: "Thunderstruck"
   };
   var tileRefsDecor = {
     SmallRock: 11,
@@ -2945,11 +2962,12 @@
     Rainbow: { name: "Rainbow", baseChance: 1e-3, coinMultiplier: 50 },
     Wet: { name: "Wet", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Wet },
     Chilled: { name: "Chilled", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Chilled },
-    Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
-    Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 2, tileRef: tileRefsMutations.Dawnlit },
-    Amberlit: { name: "Amberlit", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Amberlit },
-    Dawncharged: { name: "Dawnbound", baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
-    Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged }
+    Frozen: { name: "Frozen", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Frozen },
+    Thunderstruck: { name: "Thunderstruck", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Thunderstruck },
+    Dawnlit: { name: "Dawnlit", baseChance: 0, coinMultiplier: 4, tileRef: tileRefsMutations.Dawnlit },
+    Amberlit: { name: "Amberlit", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Amberlit },
+    Dawncharged: { name: "Dawnbound", baseChance: 0, coinMultiplier: 7, tileRef: tileRefsMutations.Dawncharged },
+    Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Ambercharged }
   };
   var eggCatalog = {
     CommonEgg: { tileRef: tileRefsPets.CommonEgg, name: "Common Egg", coinPrice: 1e5, creditPrice: 19, rarity: rarity.Common, initialTileScale: 0.3, baseTileScale: 0.8, secondsToHatch: 600, faunaSpawnWeights: { Worm: 60, Snail: 35, Bee: 5 } },
@@ -4237,7 +4255,7 @@
       conditions: { requiresMature: true, requiresNoExistingModifier: true },
       mutations: [
         { name: "Wet", multiplier: 2 },
-        { name: "Frozen", multiplier: 10, conditional: "applies if crop already has Chilled" }
+        { name: "Frozen", multiplier: 6, conditional: "applies if crop already has Chilled" }
       ],
       stacking: {
         compatible: ["Golden", "Rainbow", "Giant"],
@@ -4258,7 +4276,7 @@
       conditions: { requiresMature: true, requiresNoExistingModifier: true },
       mutations: [
         { name: "Chilled", multiplier: 2 },
-        { name: "Frozen", multiplier: 10, conditional: "applies if crop already has Wet" }
+        { name: "Frozen", multiplier: 6, conditional: "applies if crop already has Wet" }
       ],
       stacking: {
         compatible: ["Golden", "Rainbow", "Giant"],
@@ -4293,7 +4311,8 @@
       appliesRandomCropPercent: 30,
       conditions: { requiresMature: true, requiresNoExistingModifier: true },
       mutations: [
-        { name: "Amberglow", multiplier: 5 }
+        { name: "Amberlit", multiplier: 6 },
+        { name: "Amberbound", multiplier: 10 }
       ],
       stacking: { compatible: ["Gold", "Rainbow"], incompatible: ["Dawnlit", "Amberlit"] },
       screenEffect: "Nightfall glow (orange)",
@@ -4309,11 +4328,18 @@
       appliesRandomCropPercent: 30,
       conditions: { requiresMature: true, requiresNoExistingModifier: true },
       mutations: [
-        { name: "Dawnlit", multiplier: 2 }
+        { name: "Dawnlit", multiplier: 4 },
+        { name: "Dawnbound", multiplier: 7 }
       ],
       stacking: { compatible: ["Gold", "Rainbow"], incompatible: ["Amberlit", "Dawnlit"] },
       screenEffect: "Sunrise glow (purple)",
       notes: ["1 fois / 4h", "Ne se cumule pas avec Amberglow"]
+    },
+    Thunderstorm: {
+      atomValue: "Thunderstorm",
+      mutations: [
+        { name: "Thunderstruck", multiplier: 5 }
+      ]
     }
   };
   var coin = {
@@ -13056,6 +13082,7 @@
     Wet: "rgb(30, 140, 230)",
     Chilled: "rgb(100, 190, 200)",
     Frozen: "rgb(100, 120, 255)",
+    Thunderstruck: "rgb(16, 141, 163)",
     Dawnlit: "rgba(120, 100, 180, 1)",
     Ambershine: "rgba(160, 70, 50, 1)",
     // <- important : Ambershine, pas Amberlit
@@ -19682,6 +19709,7 @@
 
   // src/utils/calculators.ts
   var key = (s) => String(s ?? "").trim();
+  var lowerKey = (s) => key(s).toLowerCase();
   function resolveSpeciesKey(species) {
     const wanted = key(species).toLowerCase();
     if (!wanted) return null;
@@ -19749,54 +19777,48 @@
     const n = Math.max(1, Math.min(6, Math.floor(playersInRoom)));
     return 1 + (n - 1) * 0.1;
   }
-  var COLOR_MULT = {
-    Gold: 25,
-    Rainbow: 50
-  };
-  var WEATHER_MULT = {
-    Wet: 2,
-    Chilled: 2,
-    Frozen: 10
-  };
-  var TIME_MULT = {
-    Dawnlit: 2,
-    Dawnbound: 3,
-    Amberlit: 5,
-    Amberbound: 6
-  };
-  var WEATHER_TIME_COMBO = {
-    "Wet+Dawnlit": 3,
-    "Chilled+Dawnlit": 3,
-    "Wet+Dawnbound": 4,
-    "Chilled+Dawnbound": 4,
-    "Wet+Amberlit": 6,
-    "Chilled+Amberlit": 6,
-    "Wet+Amberbound": 7,
-    "Chilled+Amberbound": 7,
-    "Frozen+Dawnlit": 11,
-    "Frozen+Dawnbound": 12,
-    "Frozen+Amberlit": 14,
-    "Frozen+Amberbound": 15
-  };
+  var MUTATION_MULTIPLIER_BY_KEY = (() => {
+    const map2 = {};
+    if (!mutationCatalog || typeof mutationCatalog !== "object") return map2;
+    for (const [rawKey, rawValue] of Object.entries(mutationCatalog)) {
+      const mult = Number(rawValue?.coinMultiplier);
+      if (!Number.isFinite(mult)) continue;
+      const name = key(rawValue?.name);
+      const lowerName = lowerKey(name);
+      const lowerRawKey = lowerKey(rawKey);
+      if (lowerName) map2[lowerName] = mult;
+      if (lowerRawKey) map2[lowerRawKey] = mult;
+    }
+    return map2;
+  })();
+  function mutationMultiplier(name) {
+    const k = lowerKey(name);
+    if (!k) return null;
+    const mult = MUTATION_MULTIPLIER_BY_KEY[k];
+    return Number.isFinite(mult) ? mult : null;
+  }
   function isColor(m) {
     return m === "Gold" || m === "Rainbow";
   }
   function isWeather(m) {
-    return m === "Wet" || m === "Chilled" || m === "Frozen";
+    return m === "Wet" || m === "Chilled" || m === "Frozen" || m === "Thunderstruck";
   }
   function isTime(m) {
     return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
   }
   function normalizeMutationName(m) {
-    const s = key(m).toLowerCase();
+    const s = lowerKey(m);
     if (!s) return "";
     if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
     if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+    if (s === "golden") return "Gold";
     if (s === "gold") return "Gold";
     if (s === "rainbow") return "Rainbow";
     if (s === "wet") return "Wet";
     if (s === "chilled") return "Chilled";
     if (s === "frozen") return "Frozen";
+    if (s === "thunderstruck" || s === "thunder") return "Thunderstruck";
+    if (s === "thunderstruckground" || s === "thunderstruck_ground") return "Thunderstruck";
     if (s === "dawnlit") return "Dawnlit";
     if (s === "dawnbound") return "Dawnbound";
     if (s === "amberlit") return "Amberlit";
@@ -19810,50 +19832,85 @@
     for (const raw of mutations) {
       const m = normalizeMutationName(raw);
       if (isColor(m)) {
-        const mult = COLOR_MULT[m];
-        if (mult > best) best = mult;
+        const mult = mutationMultiplier(m);
+        if (typeof mult === "number" && mult > best) best = mult;
       }
     }
     return best;
   }
   function pickWeather(mutations) {
     if (!Array.isArray(mutations)) return null;
-    let pick = null;
+    const candidates = /* @__PURE__ */ new Set();
+    let hasWet = false;
+    let hasChilled = false;
     for (const raw of mutations) {
       const m = normalizeMutationName(raw);
-      if (isWeather(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+      if (m === "Wet") {
+        hasWet = true;
+        continue;
+      }
+      if (m === "Chilled") {
+        hasChilled = true;
+        continue;
+      }
+      if (isWeather(m)) candidates.add(m);
+    }
+    if (hasWet && hasChilled) {
+      candidates.add("Frozen");
+    } else if (hasWet) {
+      candidates.add("Wet");
+    } else if (hasChilled) {
+      candidates.add("Chilled");
+    }
+    if (!candidates.size) return null;
+    let pick = null;
+    let best = -Infinity;
+    for (const cand of candidates) {
+      const mult = mutationMultiplier(cand) ?? 1;
+      if (mult > best) {
+        best = mult;
+        pick = cand;
       }
     }
     return pick;
   }
   function pickTime(mutations) {
     if (!Array.isArray(mutations)) return null;
-    let pick = null;
+    const candidates = /* @__PURE__ */ new Set();
     for (const raw of mutations) {
       const m = normalizeMutationName(raw);
-      if (isTime(m)) {
-        if (pick == null) {
-          pick = m;
-          continue;
-        }
-        if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+      if (isTime(m)) candidates.add(m);
+    }
+    if (!candidates.size) return null;
+    let pick = null;
+    let best = -Infinity;
+    for (const cand of candidates) {
+      const mult = mutationMultiplier(cand) ?? 1;
+      if (mult > best) {
+        best = mult;
+        pick = cand;
       }
     }
     return pick;
   }
+  function combineWeatherMultipliers(multipliers) {
+    if (!multipliers.length) return 1;
+    const sum = multipliers.reduce((acc, value) => acc + value, 0);
+    return sum - multipliers.length + 1;
+  }
   function computeWeatherTimeMultiplier(weather2, time) {
     if (!weather2 && !time) return 1;
-    if (weather2 && !time) return WEATHER_MULT[weather2];
-    if (!weather2 && time) return TIME_MULT[time];
-    const k = `${weather2}+${time}`;
-    const combo = WEATHER_TIME_COMBO[k];
-    if (typeof combo === "number") return combo;
-    return Math.max(WEATHER_MULT[weather2], TIME_MULT[time]);
+    const multipliers = [];
+    if (weather2) {
+      const mult = mutationMultiplier(weather2);
+      if (typeof mult === "number") multipliers.push(mult);
+    }
+    if (time) {
+      const mult = mutationMultiplier(time);
+      if (typeof mult === "number") multipliers.push(mult);
+    }
+    if (!multipliers.length) return 1;
+    return combineWeatherMultipliers(multipliers);
   }
   function mutationsMultiplier(mutations) {
     const color = computeColorMultiplier(mutations);
@@ -33386,7 +33443,7 @@ next: ${next}`;
     tileRefsMutations
   ).filter((entry) => {
     const [key2, value] = entry;
-    if (key2 === "Puddle") {
+    if (key2 === "Puddle" || key2 === "Thunderstruck" || key2 === "ThunderstruckGround") {
       return false;
     }
     return typeof value === "number" && Number.isFinite(value);
@@ -35501,7 +35558,7 @@ next: ${next}`;
   var SCALE_MIN = 1;
   var SCALE_MAX = 3;
   var COLOR_MUTATION_LABELS = ["None", "Gold", "Rainbow"];
-  var WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen"];
+  var WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen", "Thunderstruck"];
   var WEATHER_LIGHTING_LABELS = ["None", "Dawnlit", "Dawnbound", "Amberlit", "Amberbound"];
   var FRIEND_BONUS_LABELS = ["+0%", "+10%", "+20%", "+30%", "+40%", "+50%"];
   var FRIEND_BONUS_MIN_PLAYERS = 1;
@@ -35515,7 +35572,8 @@ next: ${next}`;
     None: { mgWeather: "none" },
     Wet: { mgWeather: "wet" },
     Chilled: { mgWeather: "chilled" },
-    Frozen: { mgWeather: "frozen" }
+    Frozen: { mgWeather: "frozen" },
+    Thunderstruck: { mgWeather: "thunderstruck" }
   };
   var WEATHER_LIGHTING_SEGMENT_METADATA = {
     None: { mgLighting: "none" },
@@ -35528,7 +35586,8 @@ next: ${next}`;
     dawnlit: "Dawnlit",
     dawnbound: "Dawncharged",
     amberlit: "Ambershine",
-    amberbound: "Ambercharged"
+    amberbound: "Ambercharged",
+    thunderstruck: "Thunderstruck"
   };
   var segmentedUi = new Menu({ compact: true });
   var ensureMenuStyles = segmentedUi.ensureStyles;
@@ -35839,6 +35898,11 @@ next: ${next}`;
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"],
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="frozen"].active {
   color: #AABEFF;
+  font-weight: 700;
+}
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="thunderstruck"],
+.${ROOT_CLASS} .qmm-seg__btn[data-mg-weather="thunderstruck"].active {
+  color: rgb(16, 141, 163);
   font-weight: 700;
 }
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-lighting="dawnlit"],

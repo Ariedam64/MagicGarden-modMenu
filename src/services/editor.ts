@@ -50,6 +50,8 @@ const mutationColorMap: Record<string, string> = {
 
   Frozen:      "rgb(100, 120, 255)",
 
+  Thunderstruck:"rgb(16, 141, 163)",
+
   Dawnlit:     "rgba(120, 100, 180, 1)",
 
   Ambershine:  "rgba(160, 70, 50, 1)",      // <- important : Ambershine, pas Amberlit
@@ -57,6 +59,8 @@ const mutationColorMap: Record<string, string> = {
   Dawncharged: "rgba(160, 140, 220, 1)",
 
   Ambercharged:"rgba(240, 110, 80, 1)",
+
+
 
 };
 
@@ -6166,7 +6170,7 @@ async function readUserSlotIdx(): Promise<number> {
 
 
 
-async function collectCurrentUserGardenTiles(): Promise<{
+export async function collectCurrentUserGardenTiles(): Promise<{
 
   userSlotIdx: number;
 

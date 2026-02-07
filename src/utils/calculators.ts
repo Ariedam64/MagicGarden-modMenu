@@ -1,8 +1,8 @@
 // src/utils/calculators.ts
-import { plantCatalog } from "../data/hardcoded-data.clean.js";
+import { plantCatalog, mutationCatalog } from "../data/hardcoded-data.clean.js";
 
 export type ColorMutation = "Gold" | "Rainbow";
-export type WeatherMutation = "Wet" | "Chilled" | "Frozen";
+export type WeatherMutation = "Wet" | "Chilled" | "Frozen" | "Thunderstruck";
 export type TimeMutation = "Dawnlit" | "Dawnbound" | "Amberlit" | "Amberbound";
 
 export type MutationName =
@@ -45,6 +45,7 @@ export type PricingOptions = {
 };
 
 const key = (s: unknown) => String(s ?? "").trim();
+const lowerKey = (s: unknown) => key(s).toLowerCase();
 
 function resolveSpeciesKey(species: string): string | null {
   const wanted = key(species).toLowerCase();
@@ -113,59 +114,51 @@ function friendBonusMultiplier(playersInRoom?: number): number {
   return 1 + (n - 1) * 0.1;
 }
 
-const COLOR_MULT: Record<ColorMutation, number> = {
-  Gold: 25,
-  Rainbow: 50,
-} as const;
+const MUTATION_MULTIPLIER_BY_KEY: Record<string, number> = (() => {
+  const map: Record<string, number> = {};
+  if (!mutationCatalog || typeof mutationCatalog !== "object") return map;
+  for (const [rawKey, rawValue] of Object.entries(mutationCatalog as Record<string, any>)) {
+    const mult = Number((rawValue as any)?.coinMultiplier);
+    if (!Number.isFinite(mult)) continue;
+    const name = key((rawValue as any)?.name);
+    const lowerName = lowerKey(name);
+    const lowerRawKey = lowerKey(rawKey);
+    if (lowerName) map[lowerName] = mult;
+    if (lowerRawKey) map[lowerRawKey] = mult;
+  }
+  return map;
+})();
 
-const WEATHER_MULT: Record<WeatherMutation, number> = {
-  Wet: 2,
-  Chilled: 2,
-  Frozen: 10,
-} as const;
-
-const TIME_MULT: Record<TimeMutation, number> = {
-  Dawnlit: 2,
-  Dawnbound: 3,
-  Amberlit: 5,
-  Amberbound: 6,
-} as const;
-
-const WEATHER_TIME_COMBO: Record<string, number> = {
-  "Wet+Dawnlit": 3,
-  "Chilled+Dawnlit": 3,
-  "Wet+Dawnbound": 4,
-  "Chilled+Dawnbound": 4,
-  "Wet+Amberlit": 6,
-  "Chilled+Amberlit": 6,
-  "Wet+Amberbound": 7,
-  "Chilled+Amberbound": 7,
-  "Frozen+Dawnlit": 11,
-  "Frozen+Dawnbound": 12,
-  "Frozen+Amberlit": 14,
-  "Frozen+Amberbound": 15,
-} as const;
+function mutationMultiplier(name: MutationName): number | null {
+  const k = lowerKey(name);
+  if (!k) return null;
+  const mult = MUTATION_MULTIPLIER_BY_KEY[k];
+  return Number.isFinite(mult) ? mult : null;
+}
 
 function isColor(m: MutationName): m is ColorMutation {
   return m === "Gold" || m === "Rainbow";
 }
 function isWeather(m: MutationName): m is WeatherMutation {
-  return m === "Wet" || m === "Chilled" || m === "Frozen";
+  return m === "Wet" || m === "Chilled" || m === "Frozen" || m === "Thunderstruck";
 }
 function isTime(m: MutationName): m is TimeMutation {
   return m === "Dawnlit" || m === "Dawnbound" || m === "Amberlit" || m === "Amberbound";
 }
 
 function normalizeMutationName(m: MutationName): MutationName {
-  const s = key(m).toLowerCase();
+  const s = lowerKey(m);
   if (!s) return "" as MutationName;
   if (s === "amberglow" || s === "ambershine" || s === "amberlight") return "Amberlit";
   if (s === "dawn" || s === "dawnlight") return "Dawnlit";
+  if (s === "golden") return "Gold";
   if (s === "gold") return "Gold";
   if (s === "rainbow") return "Rainbow";
   if (s === "wet") return "Wet";
   if (s === "chilled") return "Chilled";
   if (s === "frozen") return "Frozen";
+  if (s === "thunderstruck" || s === "thunder") return "Thunderstruck";
+  if (s === "thunderstruckground" || s === "thunderstruck_ground") return "Thunderstruck";
   if (s === "dawnlit") return "Dawnlit";
   if (s === "dawnbound") return "Dawnbound";
   if (s === "amberlit") return "Amberlit";
@@ -181,8 +174,8 @@ function computeColorMultiplier(mutations?: MutationName[] | null): number {
   for (const raw of mutations) {
     const m = normalizeMutationName(raw);
     if (isColor(m)) {
-      const mult = COLOR_MULT[m];
-      if (mult > best) best = mult;
+      const mult = mutationMultiplier(m);
+      if (typeof mult === "number" && mult > best) best = mult;
     }
   }
   return best;
@@ -190,12 +183,30 @@ function computeColorMultiplier(mutations?: MutationName[] | null): number {
 
 function pickWeather(mutations?: MutationName[] | null): WeatherMutation | null {
   if (!Array.isArray(mutations)) return null;
-  let pick: WeatherMutation | null = null;
+  const candidates = new Set<WeatherMutation>();
+  let hasWet = false;
+  let hasChilled = false;
   for (const raw of mutations) {
     const m = normalizeMutationName(raw);
-    if (isWeather(m)) {
-      if (pick == null) { pick = m; continue; }
-      if (WEATHER_MULT[m] > WEATHER_MULT[pick]) pick = m;
+    if (m === "Wet") { hasWet = true; continue; }
+    if (m === "Chilled") { hasChilled = true; continue; }
+    if (isWeather(m)) candidates.add(m);
+  }
+  if (hasWet && hasChilled) {
+    candidates.add("Frozen");
+  } else if (hasWet) {
+    candidates.add("Wet");
+  } else if (hasChilled) {
+    candidates.add("Chilled");
+  }
+  if (!candidates.size) return null;
+  let pick: WeatherMutation | null = null;
+  let best = -Infinity;
+  for (const cand of candidates) {
+    const mult = mutationMultiplier(cand) ?? 1;
+    if (mult > best) {
+      best = mult;
+      pick = cand;
     }
   }
   return pick;
@@ -203,15 +214,28 @@ function pickWeather(mutations?: MutationName[] | null): WeatherMutation | null 
 
 function pickTime(mutations?: MutationName[] | null): TimeMutation | null {
   if (!Array.isArray(mutations)) return null;
-  let pick: TimeMutation | null = null;
+  const candidates = new Set<TimeMutation>();
   for (const raw of mutations) {
     const m = normalizeMutationName(raw);
-    if (isTime(m)) {
-      if (pick == null) { pick = m; continue; }
-      if (TIME_MULT[m] > TIME_MULT[pick]) pick = m;
+    if (isTime(m)) candidates.add(m);
+  }
+  if (!candidates.size) return null;
+  let pick: TimeMutation | null = null;
+  let best = -Infinity;
+  for (const cand of candidates) {
+    const mult = mutationMultiplier(cand) ?? 1;
+    if (mult > best) {
+      best = mult;
+      pick = cand;
     }
   }
   return pick;
+}
+
+function combineWeatherMultipliers(multipliers: number[]): number {
+  if (!multipliers.length) return 1;
+  const sum = multipliers.reduce((acc, value) => acc + value, 0);
+  return sum - multipliers.length + 1;
 }
 
 function computeWeatherTimeMultiplier(
@@ -219,12 +243,17 @@ function computeWeatherTimeMultiplier(
   time: TimeMutation | null
 ): number {
   if (!weather && !time) return 1;
-  if (weather && !time) return WEATHER_MULT[weather];
-  if (!weather && time) return TIME_MULT[time];
-  const k = `${weather}+${time}`;
-  const combo = WEATHER_TIME_COMBO[k];
-  if (typeof combo === "number") return combo;
-  return Math.max(WEATHER_MULT[weather!], TIME_MULT[time!]);
+  const multipliers: number[] = [];
+  if (weather) {
+    const mult = mutationMultiplier(weather);
+    if (typeof mult === "number") multipliers.push(mult);
+  }
+  if (time) {
+    const mult = mutationMultiplier(time);
+    if (typeof mult === "number") multipliers.push(mult);
+  }
+  if (!multipliers.length) return 1;
+  return combineWeatherMultipliers(multipliers);
 }
 
 export function mutationsMultiplier(mutations?: MutationName[] | null): number {

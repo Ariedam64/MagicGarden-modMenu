@@ -13,7 +13,8 @@ const FLOATING_MUTATION_ICONS = new Set<MutationName>([
   'Ambercharged',
 ]);
 const MUT_ICON_Y_EXCEPT: Record<string, number> = {
-  Banana: 0.6,
+  Banana: 0.68,
+  Beet: 0.65,
   Carrot: 0.6,
   Sunflower: 0.5,
   Starweaver: 0.5,
@@ -21,13 +22,16 @@ const MUT_ICON_Y_EXCEPT: Record<string, number> = {
   BurrosTail: 0.2,
 };
 const MUT_ICON_X_EXCEPT: Record<string, number> = {
-  Pepper: 0.5,
+  Pepper: 0.6,
   Banana: 0.6,
+};
+const TALL_OVERLAY_OFFSETS: Partial<Record<MutationName, { x: number; y: number }>> = {
+  Thunderstruck: { x: 0, y: 250 },
 };
 
 // Ordering matches in-game stacking: Gold/Rainbow override everything,
 // then base wet/chilled/frozen, then warm/charged hues render on top of them.
-const MUTATION_ORDER: MutationName[] = ['Gold', 'Rainbow', 'Wet', 'Chilled', 'Frozen', 'Ambershine', 'Dawnlit', 'Dawncharged', 'Ambercharged'];
+const MUTATION_ORDER: MutationName[] = ['Gold', 'Rainbow', 'Wet', 'Chilled', 'Frozen', 'Thunderstruck', 'Ambershine', 'Dawnlit', 'Dawncharged', 'Ambercharged'];
 const MUTATION_INDEX = new Map(MUTATION_ORDER.map((m, idx) => [m, idx]));
 const sortMutations = (list: MutationName[]): MutationName[] => {
   const uniq = [...new Set(list.filter(Boolean))];
@@ -65,6 +69,7 @@ const FILTERS: Record<string, any> = {
   Wet: { op: 'source-atop', colors: ['rgb(50,180,200)'], a: 0.25 },
   Chilled: { op: 'source-atop', colors: ['rgb(100,160,210)'], a: 0.45 },
   Frozen: { op: 'source-atop', colors: ['rgb(100,130,220)'], a: 0.5 },
+  Thunderstruck: { op: 'source-atop', colors: ['rgb(16, 141, 163)'], a: 0.45 },
   Dawnlit: { op: 'source-atop', colors: ['rgb(209,70,231)'], a: 0.5 },
   Ambershine: { op: 'source-atop', colors: ['rgb(190,100,40)'], a: 0.5 },
   Dawncharged: { op: 'source-atop', colors: ['rgb(140,80,200)'], a: 0.5 },
@@ -131,7 +136,7 @@ const normalizeMutListColor = (list: MutationName[]): MutationName[] => {
   const hasWarm = names.some(n => warm.includes(n as any));
   if (hasWarm) {
     // When warm hues are present, suppress wet/chilled/frozen filters (matches game).
-    return sortMutations(names.filter(n => !['Wet', 'Chilled', 'Frozen'].includes(n)));
+    return sortMutations(names.filter(n => !['Wet', 'Chilled', 'Frozen', 'Thunderstruck'].includes(n)));
   }
   return sortMutations(names);
 };
@@ -179,6 +184,8 @@ function mutationAliases(mut: MutationName): string[] {
       return ['Dawncharged', 'Dawnbound'];
     case 'Ambercharged':
       return ['Ambercharged', 'Amberbound'];
+    case 'Thunderstruck':
+      return ['Thunderstruck', 'ThunderstruckGround'];
     default:
       return [mut];
   }
@@ -487,6 +494,11 @@ function buildTallOverlaySprites(
     const ow = oCan.width;
     const overlayAnchor = { x: 0, y: 0 };
     const overlayPos = { x: basePos.x - aX * ow, y: 0 };
+    const overlayOffset = TALL_OVERLAY_OFFSETS[step.name];
+    if (overlayOffset) {
+      overlayPos.x += overlayOffset.x ?? 0;
+      overlayPos.y += overlayOffset.y ?? 0;
+    }
 
     const maskedCanvas = document.createElement('canvas');
     maskedCanvas.width = ow;

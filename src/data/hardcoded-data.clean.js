@@ -254,6 +254,8 @@ export const tileRefsMutations = {
   Amberlit: 12,
   Dawncharged: 13,
   Ambercharged: 14,
+  Thunderstruck: 15,
+  ThunderstruckGround: 16
 };
 
 export const tileRefsMutationLabels = {
@@ -264,7 +266,11 @@ export const tileRefsMutationLabels = {
   Dawnlit: "Dawnlit",
   Amberlit: "Amberlit",
   Dawncharged: "Dawnbound",
-  Ambercharged: "Amberbound"};
+  Ambercharged: "Amberbound",
+  Thunderstruck: "Thunderstruck",
+  ThunderstruckGround: "Thunderstruck"
+
+};
 
 export const tileRefsDecor = {
       SmallRock: 11,
@@ -1666,13 +1672,16 @@ export const mutationCatalog = {
 
   Wet:        { name: "Wet",         baseChance: 0, coinMultiplier: 2,  tileRef: tileRefsMutations.Wet },
   Chilled:    { name: "Chilled",     baseChance: 0, coinMultiplier: 2,  tileRef: tileRefsMutations.Chilled },
-  Frozen:     { name: "Frozen",      baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Frozen },
-  Dawnlit:    { name: "Dawnlit",     baseChance: 0, coinMultiplier: 2,  tileRef: tileRefsMutations.Dawnlit },
+  Frozen:     { name: "Frozen",      baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Frozen },
+  Thunderstruck: { name: "Thunderstruck", baseChance: 0, coinMultiplier: 5, tileRef: tileRefsMutations.Thunderstruck },
 
-  Amberlit: { name: "Amberlit",    baseChance: 0, coinMultiplier: 5,  tileRef: tileRefsMutations.Amberlit },
+  Dawnlit:    { name: "Dawnlit",     baseChance: 0, coinMultiplier: 4,  tileRef: tileRefsMutations.Dawnlit },
+  Amberlit: { name: "Amberlit",    baseChance: 0, coinMultiplier: 6,  tileRef: tileRefsMutations.Amberlit },
 
-  Dawncharged:  { name: "Dawnbound",  baseChance: 0, coinMultiplier: 3, tileRef: tileRefsMutations.Dawncharged },
-  Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 6, tileRef: tileRefsMutations.Ambercharged },
+  Dawncharged:  { name: "Dawnbound",  baseChance: 0, coinMultiplier: 7, tileRef: tileRefsMutations.Dawncharged },
+  Ambercharged: { name: "Amberbound", baseChance: 0, coinMultiplier: 10, tileRef: tileRefsMutations.Ambercharged },
+
+
 }
 
 export const eggCatalog = {
@@ -2778,7 +2787,7 @@ export const weatherCatalog = {
     conditions: { requiresMature: true, requiresNoExistingModifier: true },
     mutations: [
       { name: 'Wet',    multiplier: 2 },
-      { name: 'Frozen', multiplier: 10, conditional: 'applies if crop already has Chilled' },
+      { name: 'Frozen', multiplier: 6, conditional: 'applies if crop already has Chilled' },
     ],
     stacking: {
       compatible: ['Golden', 'Rainbow', 'Giant'],
@@ -2796,7 +2805,7 @@ export const weatherCatalog = {
     conditions: { requiresMature: true, requiresNoExistingModifier: true },
     mutations: [
       { name: 'Chilled', multiplier: 2 },
-      { name: 'Frozen',  multiplier: 10, conditional: 'applies if crop already has Wet' },
+      { name: 'Frozen',  multiplier: 6, conditional: 'applies if crop already has Wet' },
     ],
     stacking: {
       compatible: ['Golden', 'Rainbow', 'Giant'],
@@ -2826,7 +2835,8 @@ export const weatherCatalog = {
     appliesRandomCropPercent: 30,
     conditions: { requiresMature: true, requiresNoExistingModifier: true },
     mutations: [
-      { name: 'Amberglow', multiplier: 5 },
+      { name: 'Amberlit', multiplier: 6 },
+      { name: 'Amberbound',   multiplier: 10 },
     ],
     stacking: { compatible: ['Gold','Rainbow'], incompatible: ['Dawnlit','Amberlit'] },
     screenEffect: 'Nightfall glow (orange)',
@@ -2840,11 +2850,19 @@ export const weatherCatalog = {
     appliesRandomCropPercent: 30,
     conditions: { requiresMature: true, requiresNoExistingModifier: true },
     mutations: [
-      { name: 'Dawnlit', multiplier: 2 },
+      { name: 'Dawnlit', multiplier: 4 },
+      { name: 'Dawnbound',   multiplier: 7 },
     ],
     stacking: { compatible: ['Gold','Rainbow'], incompatible: ['Amberlit','Dawnlit'] },
     screenEffect: 'Sunrise glow (purple)',
-    notes: ['1 fois / 4h', 'Ne se cumule pas avec Amberglow']}
+    notes: ['1 fois / 4h', 'Ne se cumule pas avec Amberglow']},
+    Thunderstorm:{
+      atomValue:'Thunderstorm',
+      mutations: [
+      { name: 'Thunderstruck', multiplier: 5 }
+    ]
+    }
+
 }
 
 export const coin = {

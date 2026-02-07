@@ -151,7 +151,7 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
 )
   .filter((entry): entry is [WeatherTag, number] => {
     const [key, value] = entry;
-    if (key === "Puddle") {
+    if (key === "Puddle" || key === "Thunderstruck" || key === "ThunderstruckGround") {
       return false;
     }
     return typeof value === "number" && Number.isFinite(value);
