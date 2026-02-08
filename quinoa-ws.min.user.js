@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.47
+// @version      2.99.50
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -104,9 +104,9 @@
     }
   }
   function applyFilterOnto(ctx2, sourceCanvas, name, isTall) {
-    const base = FILTERS[name];
-    if (!base) return;
-    const f = { ...base };
+    const base2 = FILTERS[name];
+    if (!base2) return;
+    const f = { ...base2 };
     if (name === "Rainbow" && isTall && f.angTall != null) f.ang = f.angTall;
     const fullSpan = name === "Rainbow" && isTall;
     const w = sourceCanvas.width;
@@ -145,14 +145,14 @@
   }
   function findOverlayTexture(itKey, mutName, state3, preferTall) {
     if (!mutName) return null;
-    const base = baseNameOf(itKey);
+    const base2 = baseNameOf(itKey);
     const aliases = mutationAliases(mutName);
     for (const name of aliases) {
       const tries = [
-        `sprite/mutation/${name}${base}`,
-        `sprite/mutation/${name}-${base}`,
-        `sprite/mutation/${name}_${base}`,
-        `sprite/mutation/${name}/${base}`,
+        `sprite/mutation/${name}${base2}`,
+        `sprite/mutation/${name}-${base2}`,
+        `sprite/mutation/${name}_${base2}`,
+        `sprite/mutation/${name}/${base2}`,
         `sprite/mutation/${name}`
       ];
       for (const k of tries) {
@@ -179,16 +179,16 @@
       const t = state3.tex.get(meta.tallIconOverride);
       if (t) return t;
     }
-    const base = baseNameOf(itKey);
+    const base2 = baseNameOf(itKey);
     const aliases = mutationAliases(mutName);
     for (const name of aliases) {
       const tries = [
         `sprite/mutation/${name}Icon`,
         `sprite/mutation/${name}`,
-        `sprite/mutation/${name}${base}`,
-        `sprite/mutation/${name}-${base}`,
-        `sprite/mutation/${name}_${base}`,
-        `sprite/mutation/${name}/${base}`
+        `sprite/mutation/${name}${base2}`,
+        `sprite/mutation/${name}-${base2}`,
+        `sprite/mutation/${name}_${base2}`,
+        `sprite/mutation/${name}/${base2}`
       ];
       for (const k of tries) {
         const t = state3.tex.get(k);
@@ -403,11 +403,11 @@
         root.addChild(lock);
       } catch {
       }
-      const base = new Sprite(tex);
-      base.anchor?.set?.(aX, aY);
-      base.position.set(basePos.x, basePos.y);
-      base.zIndex = 0;
-      root.addChild(base);
+      const base2 = new Sprite(tex);
+      base2.anchor?.set?.(aX, aY);
+      base2.position.set(basePos.x, basePos.y);
+      base2.zIndex = 0;
+      root.addChild(base2);
       const isTall = isTallKey(itKey);
       const pipeline = buildMutationPipeline(V.muts, isTall);
       const overlayPipeline = buildMutationPipeline(V.overlayMuts, isTall);
@@ -525,8 +525,8 @@
       MUTATION_ORDER = ["Gold", "Rainbow", "Wet", "Chilled", "Frozen", "Thunderstruck", "Ambershine", "Dawnlit", "Dawncharged", "Ambercharged"];
       MUTATION_INDEX = new Map(MUTATION_ORDER.map((m, idx) => [m, idx]));
       sortMutations = (list) => {
-        const uniq = [...new Set(list.filter(Boolean))];
-        return uniq.sort((a, b) => (MUTATION_INDEX.get(a) ?? Infinity) - (MUTATION_INDEX.get(b) ?? Infinity));
+        const uniq2 = [...new Set(list.filter(Boolean))];
+        return uniq2.sort((a, b) => (MUTATION_INDEX.get(a) ?? Infinity) - (MUTATION_INDEX.get(b) ?? Infinity));
       };
       SUPPORTED_BLEND_OPS = (() => {
         try {
@@ -646,8 +646,8 @@
     for (const it of state3.items) {
       const keyCat = keyCategoryOf(it.key);
       if (!matchesCategory(keyCat, category)) continue;
-      const base = normalizeKey(baseNameOf2(it.key));
-      if (base === normId) return it;
+      const base2 = normalizeKey(baseNameOf2(it.key));
+      if (base2 === normId) return it;
     }
     return null;
   }
@@ -830,24 +830,24 @@
       if (!atom || typeof atom.write !== "function" || atom.__origWrite) continue;
       const orig = atom.write;
       atom.__origWrite = orig;
-      atom.write = function(get, set2, ...args) {
+      atom.write = function(get3, set3, ...args) {
         if (!capturedSet) {
-          capturedGet = get;
-          capturedSet = set2;
+          capturedGet = get3;
+          capturedSet = set3;
           restorePatched();
         }
-        return orig.call(this, get, set2, ...args);
+        return orig.call(this, get3, set3, ...args);
       };
       patched.push(atom);
     }
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const wait2 = (ms) => new Promise((r) => setTimeout(r, ms));
     const t0 = Date.now();
     try {
       pageWindow.dispatchEvent?.(new pageWindow.Event("visibilitychange"));
     } catch {
     }
     while (!capturedSet && Date.now() - t0 < timeoutMs) {
-      await wait(50);
+      await wait2(50);
     }
     if (!capturedSet) {
       restorePatched();
@@ -950,8 +950,8 @@
     return out;
   }
   function getAtomByLabel(label2) {
-    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return findAtomsByLabel(new RegExp("^" + escape(label2) + "$"))[0] || null;
+    const escape2 = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return findAtomsByLabel(new RegExp("^" + escape2(label2) + "$"))[0] || null;
   }
 
   // src/store/api.ts
@@ -1046,11 +1046,11 @@
   };
   function makeView(sourceLabel, opts = {}) {
     const { path, write = "replace" } = opts;
-    async function get() {
+    async function get3() {
       const src = await Store.select(sourceLabel);
       return path ? getAtPath(src, path) : src;
     }
-    async function set2(next) {
+    async function set3(next) {
       if (typeof write === "function") {
         const prev2 = await Store.select(sourceLabel);
         const raw2 = write(next, prev2);
@@ -1064,9 +1064,9 @@
       return Store.set(sourceLabel, raw);
     }
     async function update(fn) {
-      const prev = await get();
+      const prev = await get3();
       const next = fn(prev);
-      await set2(next);
+      await set3(next);
       return next;
     }
     async function onChange(cb, isEqual = Object.is) {
@@ -1094,7 +1094,7 @@
     function asSignature(opts2) {
       return makeSignatureChannel(sourceLabel, path, opts2);
     }
-    return { label: sourceLabel + (path ? ":" + toPathArray(path).join(".") : ""), get, set: set2, update, onChange, onChangeNow, asSignature };
+    return { label: sourceLabel + (path ? ":" + toPathArray(path).join(".") : ""), get: get3, set: set3, update, onChange, onChangeNow, asSignature };
   }
   function stablePick(obj, fields) {
     const out = {};
@@ -1111,8 +1111,8 @@
   function makeSignatureChannel(sourceLabel, path, opts) {
     const mode = opts.mode ?? "auto";
     function computeSig(whole) {
-      const base = whole;
-      const value = path ? getAtPath(base, path) : base;
+      const base2 = whole;
+      const value = path ? getAtPath(base2, path) : base2;
       const sig = /* @__PURE__ */ new Map();
       if (value == null) return { sig, keys: [] };
       if ((mode === "array" || mode === "auto" && Array.isArray(value)) && Array.isArray(value)) {
@@ -4386,13 +4386,13 @@
     }
   }
   function mergeSection(existing, next) {
-    const base = { ...existing ?? {} };
+    const base2 = { ...existing ?? {} };
     for (const [k, v] of Object.entries(next)) {
-      if (base[k] === void 0) {
-        base[k] = v;
+      if (base2[k] === void 0) {
+        base2[k] = v;
       }
     }
-    return base;
+    return base2;
   }
   function unwrapNestedSnapshot(raw) {
     let cur = raw;
@@ -4665,9 +4665,9 @@
       const entries = Object.keys(obj).sort().map((key2) => `${key2}:${JSON.stringify(obj[key2])}`);
       return `other|${entries.join(";")}`;
     }
-    const base = `${obj.objectType}|${obj.species ?? ""}|${obj.plantedAt ?? 0}|${obj.maturedAt ?? 0}`;
+    const base2 = `${obj.objectType}|${obj.species ?? ""}|${obj.plantedAt ?? 0}|${obj.maturedAt ?? 0}`;
     const slots = Array.isArray(obj.slots) ? obj.slots.map((slot) => slotSignature(slot)).join("||") : "";
-    return `${base}|slots:${slots}`;
+    return `${base2}|slots:${slots}`;
   };
   var arraySignature = (arr) => Array.isArray(arr) ? arr.join(",") : "\u2205";
   var defaultOrder = (n) => Array.from({ length: n }, (_, i) => i);
@@ -5030,11 +5030,11 @@
   var ARIES_LOCKER_STATE_PATH = "locker.state";
   var clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
   function sanitizeSettings(raw) {
-    const base = defaultSettings();
-    base.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
+    const base2 = defaultSettings();
+    base2.lockMode = raw?.lockMode === "ALLOW" ? "ALLOW" : "LOCK";
     const rawMode = raw?.scaleLockMode;
     const scaleMode = rawMode === "MINIMUM" ? "MINIMUM" : rawMode === "MAXIMUM" ? "MAXIMUM" : rawMode === "NONE" ? "NONE" : "RANGE";
-    base.scaleLockMode = scaleMode;
+    base2.scaleLockMode = scaleMode;
     const minScaleRaw = Number(raw?.minScalePct);
     let minScale = Number.isFinite(minScaleRaw) ? clampNumber(Math.round(minScaleRaw), 50, 100) : 50;
     const maxScaleRaw = Number(raw?.maxScalePct);
@@ -5054,24 +5054,24 @@
     } else if (scaleMode === "MINIMUM") {
       minScale = clampNumber(minScale, 50, 100);
     }
-    base.minScalePct = minScale;
-    base.maxScalePct = maxScale;
+    base2.minScalePct = minScale;
+    base2.maxScalePct = maxScale;
     const minInv = Number(raw?.minInventory);
-    base.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
+    base2.minInventory = Number.isFinite(minInv) ? clampNumber(Math.round(minInv), 0, 999) : 91;
     if (typeof raw?.avoidNormal === "boolean") {
-      base.avoidNormal = raw.avoidNormal;
+      base2.avoidNormal = raw.avoidNormal;
     } else {
-      base.avoidNormal = raw?.includeNormal === false;
+      base2.avoidNormal = raw?.includeNormal === false;
     }
-    base.includeNormal = !base.avoidNormal;
-    base.visualMutations = Array.isArray(raw?.visualMutations) ? Array.from(new Set(raw.visualMutations.filter((m) => VISUAL_MUTATIONS.has(m)))) : [];
+    base2.includeNormal = !base2.avoidNormal;
+    base2.visualMutations = Array.isArray(raw?.visualMutations) ? Array.from(new Set(raw.visualMutations.filter((m) => VISUAL_MUTATIONS.has(m)))) : [];
     const mode = raw?.weatherMode;
-    base.weatherMode = mode === "ALL" || mode === "RECIPES" ? mode : "ANY";
-    base.weatherSelected = Array.isArray(raw?.weatherSelected) ? Array.from(new Set(raw.weatherSelected.map((m) => String(m || "")).filter(Boolean))) : [];
-    base.weatherRecipes = Array.isArray(raw?.weatherRecipes) ? raw.weatherRecipes.map(
+    base2.weatherMode = mode === "ALL" || mode === "RECIPES" ? mode : "ANY";
+    base2.weatherSelected = Array.isArray(raw?.weatherSelected) ? Array.from(new Set(raw.weatherSelected.map((m) => String(m || "")).filter(Boolean))) : [];
+    base2.weatherRecipes = Array.isArray(raw?.weatherRecipes) ? raw.weatherRecipes.map(
       (recipe) => Array.isArray(recipe) ? Array.from(new Set(recipe.map((m) => String(m || "")).filter(Boolean))) : []
     ).filter((arr) => arr.length > 0) : [];
-    return base;
+    return base2;
   }
   function sanitizeState(raw) {
     const state3 = defaultState();
@@ -5663,46 +5663,46 @@
   }
   function normalizeStats(raw) {
     const fallbackCreatedAt = Date.now();
-    const base = createDefaultStats(fallbackCreatedAt);
-    if (!isRecord(raw)) return base;
+    const base2 = createDefaultStats(fallbackCreatedAt);
+    if (!isRecord(raw)) return base2;
     if (Object.prototype.hasOwnProperty.call(raw, "createdAt")) {
-      base.createdAt = toPositiveTimestamp(raw.createdAt, fallbackCreatedAt);
+      base2.createdAt = toPositiveTimestamp(raw.createdAt, fallbackCreatedAt);
     }
     if (isRecord(raw.garden)) {
-      base.garden = {
-        totalPlanted: toPositiveInt(raw.garden.totalPlanted, base.garden.totalPlanted),
-        totalHarvested: toPositiveInt(raw.garden.totalHarvested, base.garden.totalHarvested),
-        totalDestroyed: toPositiveInt(raw.garden.totalDestroyed, base.garden.totalDestroyed),
-        watercanUsed: toPositiveInt(raw.garden.watercanUsed, base.garden.watercanUsed),
-        waterTimeSavedMs: toPositiveInt(raw.garden.waterTimeSavedMs, base.garden.waterTimeSavedMs)
+      base2.garden = {
+        totalPlanted: toPositiveInt(raw.garden.totalPlanted, base2.garden.totalPlanted),
+        totalHarvested: toPositiveInt(raw.garden.totalHarvested, base2.garden.totalHarvested),
+        totalDestroyed: toPositiveInt(raw.garden.totalDestroyed, base2.garden.totalDestroyed),
+        watercanUsed: toPositiveInt(raw.garden.watercanUsed, base2.garden.watercanUsed),
+        waterTimeSavedMs: toPositiveInt(raw.garden.waterTimeSavedMs, base2.garden.waterTimeSavedMs)
       };
     }
     if (isRecord(raw.shops)) {
-      base.shops = {
-        seedsBought: toPositiveInt(raw.shops.seedsBought, base.shops.seedsBought),
-        decorBought: toPositiveInt(raw.shops.decorBought, base.shops.decorBought),
-        eggsBought: toPositiveInt(raw.shops.eggsBought, base.shops.eggsBought),
-        toolsBought: toPositiveInt(raw.shops.toolsBought, base.shops.toolsBought),
-        cropsSoldCount: toPositiveInt(raw.shops.cropsSoldCount, base.shops.cropsSoldCount),
-        cropsSoldValue: toPositiveNumber(raw.shops.cropsSoldValue, base.shops.cropsSoldValue),
-        petsSoldCount: toPositiveInt(raw.shops.petsSoldCount, base.shops.petsSoldCount),
-        petsSoldValue: toPositiveNumber(raw.shops.petsSoldValue, base.shops.petsSoldValue)
+      base2.shops = {
+        seedsBought: toPositiveInt(raw.shops.seedsBought, base2.shops.seedsBought),
+        decorBought: toPositiveInt(raw.shops.decorBought, base2.shops.decorBought),
+        eggsBought: toPositiveInt(raw.shops.eggsBought, base2.shops.eggsBought),
+        toolsBought: toPositiveInt(raw.shops.toolsBought, base2.shops.toolsBought),
+        cropsSoldCount: toPositiveInt(raw.shops.cropsSoldCount, base2.shops.cropsSoldCount),
+        cropsSoldValue: toPositiveNumber(raw.shops.cropsSoldValue, base2.shops.cropsSoldValue),
+        petsSoldCount: toPositiveInt(raw.shops.petsSoldCount, base2.shops.petsSoldCount),
+        petsSoldValue: toPositiveNumber(raw.shops.petsSoldValue, base2.shops.petsSoldValue)
       };
     }
     if (isRecord(raw.pets) && isRecord(raw.pets.hatchedByType)) {
       for (const [key2, counts] of Object.entries(raw.pets.hatchedByType)) {
         if (typeof key2 !== "string") continue;
         const normalizedKey = key2.toLowerCase();
-        const fallback = base.pets.hatchedByType[normalizedKey] ?? { normal: 0, gold: 0, rainbow: 0 };
-        base.pets.hatchedByType[normalizedKey] = normalizeHatchedCounts(counts, fallback);
+        const fallback = base2.pets.hatchedByType[normalizedKey] ?? { normal: 0, gold: 0, rainbow: 0 };
+        base2.pets.hatchedByType[normalizedKey] = normalizeHatchedCounts(counts, fallback);
       }
     }
     if (isRecord(raw.abilities)) {
       for (const [key2, value] of Object.entries(raw.abilities)) {
         if (typeof key2 !== "string" || !isRecord(value)) continue;
-        base.abilities[key2] = {
-          triggers: toPositiveInt(value.triggers, base.abilities[key2]?.triggers ?? 0),
-          totalValue: toPositiveNumber(value.totalValue, base.abilities[key2]?.totalValue ?? 0)
+        base2.abilities[key2] = {
+          triggers: toPositiveInt(value.triggers, base2.abilities[key2]?.triggers ?? 0),
+          totalValue: toPositiveNumber(value.totalValue, base2.abilities[key2]?.totalValue ?? 0)
         };
       }
     }
@@ -5710,13 +5710,13 @@
       for (const [key2, value] of Object.entries(raw.weather)) {
         if (typeof key2 !== "string" || !isRecord(value)) continue;
         const normalizedKey = key2.toLowerCase();
-        const fallback = base.weather[normalizedKey] ?? { triggers: 0 };
-        base.weather[normalizedKey] = {
+        const fallback = base2.weather[normalizedKey] ?? { triggers: 0 };
+        base2.weather[normalizedKey] = {
           triggers: toPositiveInt(value.triggers, fallback.triggers)
         };
       }
     }
-    return base;
+    return base2;
   }
   function readFromStorage() {
     if (memoryStore) return cloneStats(memoryStore);
@@ -6077,11 +6077,11 @@
   function buildRoomApiUrl(roomIdOrCode, endpoint = "info") {
     return `${location.origin}/api/rooms/${encodeURIComponent(roomIdOrCode)}/${endpoint}`;
   }
-  async function httpGetWithFetch(url, headers, timeoutMs = 1e4) {
+  async function httpGetWithFetch(url2, headers, timeoutMs = 1e4) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(url2, {
         method: "GET",
         credentials: "include",
         headers,
@@ -6093,7 +6093,7 @@
       clearTimeout(timeout);
     }
   }
-  function httpGetWithGM(url, headers, timeoutMs = 1e4) {
+  function httpGetWithGM(url2, headers, timeoutMs = 1e4) {
     return new Promise((resolve2, reject) => {
       if (typeof GM_xmlhttpRequest !== "function") {
         reject(new Error("GM_xmlhttpRequest is not available"));
@@ -6101,7 +6101,7 @@
       }
       GM_xmlhttpRequest({
         method: "GET",
-        url,
+        url: url2,
         headers,
         timeout: timeoutMs,
         onload: (response) => resolve2({
@@ -6116,20 +6116,20 @@
   }
   async function requestRoomEndpoint(roomIdOrCode, options = {}) {
     const endpoint = options.endpoint ?? "info";
-    const url = buildRoomApiUrl(roomIdOrCode, endpoint);
+    const url2 = buildRoomApiUrl(roomIdOrCode, endpoint);
     const headers = {};
     if (options.jwt) {
       headers["Authorization"] = `Bearer ${options.jwt}`;
     }
     let rawResponse;
     if (options.preferGM && typeof GM_xmlhttpRequest === "function") {
-      rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+      rawResponse = await httpGetWithGM(url2, headers, options.timeoutMs);
     } else {
       try {
-        rawResponse = await httpGetWithFetch(url, headers, options.timeoutMs);
+        rawResponse = await httpGetWithFetch(url2, headers, options.timeoutMs);
       } catch (error) {
         if (typeof GM_xmlhttpRequest === "function") {
-          rawResponse = await httpGetWithGM(url, headers, options.timeoutMs);
+          rawResponse = await httpGetWithGM(url2, headers, options.timeoutMs);
         } else {
           throw error;
         }
@@ -6140,22 +6140,22 @@
       parsed = JSON.parse(rawResponse.body);
     } catch {
     }
-    return { url, ...rawResponse, parsed };
+    return { url: url2, ...rawResponse, parsed };
   }
-  function safeHost(url) {
-    if (!url) return null;
+  function safeHost(url2) {
+    if (!url2) return null;
     try {
-      return new URL(url).hostname;
+      return new URL(url2).hostname;
     } catch {
       return null;
     }
   }
   function buildSoftJoinUrl(roomCode) {
     const merged = new URLSearchParams(location.search);
-    const url = new URL(location.href);
-    url.pathname = `/r/${encodeURIComponent(roomCode)}`;
-    url.search = merged.toString();
-    return url.toString();
+    const url2 = new URL(location.href);
+    url2.pathname = `/r/${encodeURIComponent(roomCode)}`;
+    url2.search = merged.toString();
+    return url2.toString();
   }
   function buildHardJoinUrl(roomCode) {
     return buildSoftJoinUrl(roomCode);
@@ -6189,12 +6189,12 @@
     const softUrl = buildSoftJoinUrl(roomCode);
     if (preferSoft) {
       try {
-        const url = new URL(softUrl);
-        if (url.origin === location.origin) {
-          history.replaceState({}, "", url.pathname + (url.search || "") + (url.hash || ""));
+        const url2 = new URL(softUrl);
+        if (url2.origin === location.origin) {
+          history.replaceState({}, "", url2.pathname + (url2.search || "") + (url2.hash || ""));
           window.dispatchEvent(new PopStateEvent("popstate", { state: {} }));
-          console.log("[joinRoom] soft \u2192", url.toString());
-          return { ok: true, mode: "soft", url: url.toString() };
+          console.log("[joinRoom] soft \u2192", url2.toString());
+          return { ok: true, mode: "soft", url: url2.toString() };
         }
       } catch {
       }
@@ -6586,8 +6586,8 @@
       return getFavoriteIdSet();
     },
     async isFavoriteItem(itemId) {
-      const set2 = await getFavoriteIdSet();
-      return set2.has(itemId);
+      const set3 = await getFavoriteIdSet();
+      return set3.has(itemId);
     },
     async ensureFavoriteItem(itemId, shouldBeFavorite) {
       const cur = await this.isFavoriteItem(itemId);
@@ -6598,9 +6598,9 @@
       return cur;
     },
     async ensureFavorites(items, shouldBeFavorite) {
-      const set2 = await getFavoriteIdSet();
+      const set3 = await getFavoriteIdSet();
       for (const id of items) {
-        const cur = set2.has(id);
+        const cur = set3.has(id);
         if (cur !== shouldBeFavorite) {
           try {
             await this.toggleFavoriteItem(id);
@@ -6830,19 +6830,19 @@
     for (const a of atoms) {
       const readKey = _findReadKey(a);
       const orig = a[readKey];
-      a[readKey] = (get) => {
+      a[readKey] = (get3) => {
         try {
-          if (gateAtom) get(gateAtom);
+          if (gateAtom) get3(gateAtom);
         } catch (err) {
         }
         for (const dep of config.extraDeps || []) {
           try {
             const d = getAtomByLabel(dep);
-            d && get(d);
+            d && get3(d);
           } catch (err) {
           }
         }
-        const real = orig(get);
+        const real = orig(get3);
         if (!state3.enabled || state3.payload == null) return real;
         return config.merge ? config.merge(real, state3.payload) : state3.payload;
       };
@@ -6932,10 +6932,10 @@
     }
     return false;
   }
-  var mergeMyData = (real, patch) => {
-    const base = real && typeof real === "object" ? real : {};
-    const add = patch && typeof patch === "object" ? patch : {};
-    return { ...base, ...add };
+  var mergeMyData = (real, patch2) => {
+    const base2 = real && typeof real === "object" ? real : {};
+    const add = patch2 && typeof patch2 === "object" ? patch2 : {};
+    return { ...base2, ...add };
   };
   var SHARED_MYDATA_PATCH = {
     label: Atoms.data.myData.label,
@@ -7291,16 +7291,16 @@
     return map2;
   };
   var buildKeySet = (raw, getKey) => {
-    const set2 = /* @__PURE__ */ new Set();
+    const set3 = /* @__PURE__ */ new Set();
     const list = Array.isArray(raw) ? raw : [];
     for (const item of list) {
       const key2 = getKey(item);
       if (!key2) continue;
       const qty = normalizeStorageQty(item?.quantity);
       if (qty <= 0) continue;
-      set2.add(key2);
+      set3.add(key2);
     }
-    return set2;
+    return set3;
   };
   var diffIncreases = (prev, next) => {
     const out = [];
@@ -9241,8 +9241,8 @@
       return v;
     }
     /** Ajoute un onglet (peut être appelé avant ou après mount) */
-    addTab(id, title, render) {
-      this.tabs.set(id, { title, render, badge: null });
+    addTab(id, title, render2) {
+      this.tabs.set(id, { title, render: render2, badge: null });
       if (this.root) {
         this.createTabView(id, this.tabs.get(id));
         this.updateTabsBarVisibility();
@@ -9988,10 +9988,10 @@
       return wrap;
     }
     /** Bind LS: sauvegarde automatique via toStr/parse */
-    bindLS(key2, read, write, parse, toStr) {
+    bindLS(key2, read, write, parse2, toStr) {
       try {
         const raw = localStorage.getItem(key2);
-        if (raw != null) write(parse(raw));
+        if (raw != null) write(parse2(raw));
       } catch {
       }
       return { save: () => {
@@ -10034,7 +10034,7 @@
       btn.type = "button";
       btn.className = "qmm-hotkey";
       btn.setAttribute("aria-live", "polite");
-      const render = () => {
+      const render2 = () => {
         btn.classList.toggle("is-recording", recording);
         btn.classList.toggle("is-empty", !hk);
         btn.classList.toggle("is-assigned", !recording && !!hk);
@@ -10051,18 +10051,18 @@
       };
       const applyHotkey = (value, skipRender = false) => {
         hk = value ? { ...value } : null;
-        if (!skipRender) render();
+        if (!skipRender) render2();
       };
       btn.refreshHotkey = (value) => {
         applyHotkey(value);
       };
-      const stopRecording = (commit) => {
+      const stopRecording = (commit2) => {
         recording = false;
-        if (!commit) {
-          render();
+        if (!commit2) {
+          render2();
           return;
         }
-        render();
+        render2();
       };
       const save = () => {
         if (opts?.storageKey) {
@@ -10104,7 +10104,7 @@
         e.preventDefault();
         if (!recording) {
           recording = true;
-          render();
+          render2();
           window.addEventListener("keydown", handleKeyDown, true);
           btn.focus();
         }
@@ -10115,11 +10115,11 @@
           if (hk) {
             applyHotkey(null, true);
             save();
-            render();
+            render2();
           }
         });
       }
-      render();
+      render2();
       return btn;
     }
     // ---------- internes ----------
@@ -11864,15 +11864,15 @@
     if (hk.shift) mods.push("Shift");
     if (hk.alt) mods.push("Alt");
     if (hk.meta) mods.push(isMac2() ? "\xE2\u0152\u02DC" : "Win");
-    let base = "";
+    let base2 = "";
     const k = hk.key;
     if (typeof k === "string" && k.length === 1) {
-      base = k.toUpperCase();
+      base2 = k.toUpperCase();
     } else {
-      base = codeToDisplay(hk.code);
+      base2 = codeToDisplay(hk.code);
     }
-    const baseIsModifier = base && ["Ctrl", "Shift", "Alt", "\xE2\u0152\u02DC", "Win"].includes(base);
-    const parts = baseIsModifier ? mods : mods.concat(base ? [base] : []);
+    const baseIsModifier = base2 && ["Ctrl", "Shift", "Alt", "\xE2\u0152\u02DC", "Win"].includes(base2);
+    const parts = baseIsModifier ? mods : mods.concat(base2 ? [base2] : []);
     return parts.join(" + ");
   }
   function syncGameKeybind(id) {
@@ -11946,21 +11946,21 @@
   function writeStored(id, hk) {
     if (typeof window === "undefined") return;
     updateAriesPath(KEYBINDS_BINDINGS_PATH, (current) => {
-      const base = current && typeof current === "object" ? { ...current } : {};
+      const base2 = current && typeof current === "object" ? { ...current } : {};
       if (hk) {
-        base[id] = hotkeyToString(hk);
+        base2[id] = hotkeyToString(hk);
       } else {
-        base[id] = STORED_NONE;
+        base2[id] = STORED_NONE;
       }
-      return base;
+      return base2;
     });
   }
   function removeStored(id) {
     if (typeof window === "undefined") return;
     updateAriesPath(KEYBINDS_BINDINGS_PATH, (current) => {
-      const base = current && typeof current === "object" ? { ...current } : {};
-      delete base[id];
-      return base;
+      const base2 = current && typeof current === "object" ? { ...current } : {};
+      delete base2[id];
+      return base2;
     });
   }
   function readHoldStored(id) {
@@ -11976,22 +11976,22 @@
   function writeHoldStored(id, enabled) {
     if (typeof window === "undefined") return;
     updateAriesPath(KEYBINDS_HOLD_PATH, (current) => {
-      const base = current && typeof current === "object" ? { ...current } : {};
-      base[id] = !!enabled;
-      return base;
+      const base2 = current && typeof current === "object" ? { ...current } : {};
+      base2[id] = !!enabled;
+      return base2;
     });
   }
   function emitHoldChange(id) {
-    const set2 = holdListeners.get(id);
-    if (!set2 || set2.size === 0) return;
+    const set3 = holdListeners.get(id);
+    if (!set3 || set3.size === 0) return;
     const current = getKeybindHoldDetection(id);
-    for (const cb of set2) cb(current);
+    for (const cb of set3) cb(current);
   }
   function emitChange(id) {
-    const set2 = listeners2.get(id);
-    if (!set2 || set2.size === 0) return;
+    const set3 = listeners2.get(id);
+    if (!set3 || set3.size === 0) return;
     const current = cloneHotkey(getKeybind(id));
-    for (const cb of set2) cb(current);
+    for (const cb of set3) cb(current);
   }
   function ensureCache(id) {
     if (cache.has(id)) {
@@ -12059,21 +12059,21 @@
       return () => {
       };
     }
-    const set2 = holdListeners.get(id) ?? /* @__PURE__ */ new Set();
-    if (!holdListeners.has(id)) holdListeners.set(id, set2);
-    set2.add(cb);
+    const set3 = holdListeners.get(id) ?? /* @__PURE__ */ new Set();
+    if (!holdListeners.has(id)) holdListeners.set(id, set3);
+    set3.add(cb);
     return () => {
-      set2.delete(cb);
-      if (set2.size === 0) holdListeners.delete(id);
+      set3.delete(cb);
+      if (set3.size === 0) holdListeners.delete(id);
     };
   }
   function onKeybindChange(id, cb) {
-    const set2 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
-    if (!listeners2.has(id)) listeners2.set(id, set2);
-    set2.add(cb);
+    const set3 = listeners2.get(id) ?? /* @__PURE__ */ new Set();
+    if (!listeners2.has(id)) listeners2.set(id, set3);
+    set3.add(cb);
     return () => {
-      set2.delete(cb);
-      if (set2.size === 0) listeners2.delete(id);
+      set3.delete(cb);
+      if (set3.size === 0) listeners2.delete(id);
     };
   }
   function eventMatchesKeybind(id, e) {
@@ -12180,13 +12180,13 @@
     }
     add(u, sourceTag) {
       if (!u || !this.isMP3(u)) return;
-      const url = this.abs(u);
-      if (!this.found.has(url)) {
-        this.found.add(url);
-        const name = this.fileName(url);
-        this.meta.set(url, { from: /* @__PURE__ */ new Set([sourceTag]), name, logicalName: this.logicalName(name) });
+      const url2 = this.abs(u);
+      if (!this.found.has(url2)) {
+        this.found.add(url2);
+        const name = this.fileName(url2);
+        this.meta.set(url2, { from: /* @__PURE__ */ new Set([sourceTag]), name, logicalName: this.logicalName(name) });
       } else {
-        this.meta.get(url)?.from.add(sourceTag);
+        this.meta.get(url2)?.from.add(sourceTag);
       }
     }
     refreshHowler() {
@@ -12286,8 +12286,8 @@
       document.querySelectorAll('script[src],link[rel="stylesheet"][href]').forEach((el2) => {
         const u = el2.src || el2.href;
         try {
-          const url = new URL(u, location.href);
-          if (url.origin === location.origin) urls.add(url.href);
+          const url2 = new URL(u, location.href);
+          if (url2.origin === location.origin) urls.add(url2.href);
         } catch {
         }
       });
@@ -12318,30 +12318,30 @@
     }
     // ----------------- Groupes -----------------
     inferGroupKey(logicalName) {
-      const base = String(logicalName || "").replace(/\.mp3$/i, "");
-      let m = base.match(/^([A-Za-z]+)[_\-]/);
+      const base2 = String(logicalName || "").replace(/\.mp3$/i, "");
+      let m = base2.match(/^([A-Za-z]+)[_\-]/);
       if (m) return m[1].toLowerCase();
-      m = base.match(/^([A-Za-z]+)\d+$/);
+      m = base2.match(/^([A-Za-z]+)\d+$/);
       if (m) return m[1].toLowerCase();
-      m = base.match(/^([A-Za-z]+)/);
-      return m ? m[1].toLowerCase() : base.toLowerCase();
+      m = base2.match(/^([A-Za-z]+)/);
+      return m ? m[1].toLowerCase() : base2.toLowerCase();
     }
     defineGroup(name, matcher) {
       const key2 = this.toKey(name);
-      const set2 = /* @__PURE__ */ new Set();
+      const set3 = /* @__PURE__ */ new Set();
       const items = this.urls().map((u) => [u, this.meta.get(u)]);
-      const test = (url, meta) => {
+      const test = (url2, meta) => {
         if (!matcher) return false;
-        if (typeof matcher === "function") return !!matcher(url, meta);
-        const ln = meta?.logicalName || meta?.name || url;
-        if (matcher instanceof RegExp) return matcher.test(ln) || matcher.test(url);
+        if (typeof matcher === "function") return !!matcher(url2, meta);
+        const ln = meta?.logicalName || meta?.name || url2;
+        if (matcher instanceof RegExp) return matcher.test(ln) || matcher.test(url2);
         const txt = String(matcher).toLowerCase();
-        return ln.toLowerCase().startsWith(txt) || url.toLowerCase().includes("/" + txt);
+        return ln.toLowerCase().startsWith(txt) || url2.toLowerCase().includes("/" + txt);
       };
-      for (const [url, meta] of items)
-        if (test(url, meta && { name: meta.name, logicalName: meta.logicalName })) set2.add(url);
-      this.groupsMap.set(key2, set2);
-      return [...set2];
+      for (const [url2, meta] of items)
+        if (test(url2, meta && { name: meta.name, logicalName: meta.logicalName })) set3.add(url2);
+      this.groupsMap.set(key2, set3);
+      return [...set3];
     }
     undefineGroup(name) {
       this.groupsMap.delete(this.toKey(name));
@@ -12354,36 +12354,36 @@
     // Helper privé appelé par autoGroups()
     rebuildAutoGroups(overwrite, minVariants) {
       const tmp = /* @__PURE__ */ new Map();
-      for (const [url, m] of this.meta.entries()) {
-        const grp = this.inferGroupKey(m?.logicalName || m?.name || url);
+      for (const [url2, m] of this.meta.entries()) {
+        const grp = this.inferGroupKey(m?.logicalName || m?.name || url2);
         if (!tmp.has(grp)) tmp.set(grp, /* @__PURE__ */ new Set());
-        tmp.get(grp).add(url);
+        tmp.get(grp).add(url2);
       }
-      for (const [grp, set2] of tmp.entries()) {
-        if (set2.size < minVariants) continue;
-        if (overwrite || !this.groupsMap.has(grp)) this.groupsMap.set(grp, set2);
+      for (const [grp, set3] of tmp.entries()) {
+        if (set3.size < minVariants) continue;
+        if (overwrite || !this.groupsMap.has(grp)) this.groupsMap.set(grp, set3);
       }
     }
     groups() {
       const out = {};
-      for (const [k, set2] of this.groupsMap.entries()) out[k] = [...set2];
+      for (const [k, set3] of this.groupsMap.entries()) out[k] = [...set3];
       return out;
     }
     getGroup(name) {
-      const set2 = this.groupsMap.get(this.toKey(name));
-      return set2 ? [...set2] : [];
+      const set3 = this.groupsMap.get(this.toKey(name));
+      return set3 ? [...set3] : [];
     }
     pick(name) {
       const g = this.getGroup(name);
       return this.choose(g);
     }
     // ----------------- Lecture -----------------
-    findExistingHowlByUrl(url) {
+    findExistingHowlByUrl(url2) {
       this.refreshHowler();
       if (!this.howler) return null;
       for (const h of this.howler._howls) {
         const src = h && (h._src || h._urls && h._urls[0]);
-        if (src && this.sameAsset(src, url)) return h;
+        if (src && this.sameAsset(src, url2)) return h;
       }
       return null;
     }
@@ -12402,9 +12402,9 @@
       this.max = max;
     }
     /** Joue une URL en respectant le volume du jeu et Howler si dispo. */
-    playUrl(url) {
+    playUrl(url2) {
       const { vol } = this.finalVolumeObj();
-      const existing = this.findExistingHowlByUrl(url);
+      const existing = this.findExistingHowlByUrl(url2);
       if (existing) {
         try {
           existing.play();
@@ -12415,14 +12415,14 @@
       const Howl = window.Howl && window.Howler ? window.Howl : null;
       if (Howl) {
         try {
-          const h = new Howl({ src: [url], volume: vol });
+          const h = new Howl({ src: [url2], volume: vol });
           h.play();
           return h;
         } catch {
         }
       }
       try {
-        const a = new Audio(url);
+        const a = new Audio(url2);
         a.volume = Math.max(0, Math.min(1, vol));
         void a.play().catch(() => {
         });
@@ -12458,8 +12458,8 @@
         });
         if (!list.length) return null;
       }
-      const url = typeof index === "number" ? list[(index % list.length + list.length) % list.length] : random ? this.choose(list) : list[0];
-      return this.playUrl(url);
+      const url2 = typeof index === "number" ? list[(index % list.length + list.length) % list.length] : random ? this.choose(list) : list[0];
+      return this.playUrl(url2);
     }
     /** Alias pratique pour jouer une variation aléatoire d’un groupe (ex: "harvest"). */
     playRandom(name) {
@@ -12471,9 +12471,9 @@
     }
     map() {
       const map2 = {};
-      for (const [url, m] of this.meta.entries()) {
+      for (const [url2, m] of this.meta.entries()) {
         const key2 = m.logicalName || m.name;
-        (map2[key2] || (map2[key2] = [])).push(url);
+        (map2[key2] || (map2[key2] = [])).push(url2);
       }
       return map2;
     }
@@ -12660,13 +12660,13 @@
     setTileEmpty(tx, ty, opts = {}) {
       return applyTileObject(Number(tx), Number(ty), null, opts);
     },
-    setTilePlant(tx, ty, patch, opts = {}) {
+    setTilePlant(tx, ty, patch2, opts = {}) {
       const info = this.getTileObject(tx, ty, opts);
       const cur = info.tileObject;
       assertType(cur, "plant");
       const next = deepClone(cur);
       if (!Array.isArray(next.slots)) next.slots = [];
-      const p = patch || {};
+      const p = patch2 || {};
       if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
       if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
       if ("species" in p) next.species = String(p.species);
@@ -12698,21 +12698,21 @@
       }
       return applyTileObject(Number(tx), Number(ty), next, opts);
     },
-    setTileDecor(tx, ty, patch, opts = {}) {
+    setTileDecor(tx, ty, patch2, opts = {}) {
       const info = this.getTileObject(tx, ty, opts);
       const cur = info.tileObject;
       assertType(cur, "decor");
       const next = deepClone(cur);
-      const p = patch || {};
+      const p = patch2 || {};
       if ("rotation" in p) next.rotation = Number(p.rotation);
       return applyTileObject(Number(tx), Number(ty), next, opts);
     },
-    setTileEgg(tx, ty, patch, opts = {}) {
+    setTileEgg(tx, ty, patch2, opts = {}) {
       const info = this.getTileObject(tx, ty, opts);
       const cur = info.tileObject;
       assertType(cur, "egg");
       const next = deepClone(cur);
-      const p = patch || {};
+      const p = patch2 || {};
       if ("plantedAt" in p) next.plantedAt = Number(p.plantedAt);
       if ("maturedAt" in p) next.maturedAt = Number(p.maturedAt);
       return applyTileObject(Number(tx), Number(ty), next, opts);
@@ -12838,9 +12838,9 @@
     }
     const { list: mutationList, key: mutationKey } = normalizeMutationList(options?.mutations);
     const cacheKey = cacheKeyFor(category, spriteId, mutationKey);
-    let promise = spriteDataUrlCache.get(cacheKey);
-    if (!promise) {
-      promise = scheduleNonBlocking(async () => {
+    let promise2 = spriteDataUrlCache.get(cacheKey);
+    if (!promise2) {
+      promise2 = scheduleNonBlocking(async () => {
         try {
           const canvas = service.renderToCanvas?.({
             category,
@@ -12854,9 +12854,9 @@
           return null;
         }
       });
-      spriteDataUrlCache.set(cacheKey, promise);
+      spriteDataUrlCache.set(cacheKey, promise2);
     }
-    return promise;
+    return promise2;
   }
   var spriteMatchCache = /* @__PURE__ */ new Map();
   function getMatchCacheKey(categories, id) {
@@ -12875,9 +12875,9 @@
       items: service.list?.(category) ?? []
     }));
     let matched = null;
-    const tryMatch = (category, base) => {
-      if (normalizeSpriteId(base) === normalizedTarget) {
-        matched = { category, spriteId: base };
+    const tryMatch = (category, base2) => {
+      if (normalizeSpriteId(base2) === normalizedTarget) {
+        matched = { category, spriteId: base2 };
         return true;
       }
       return false;
@@ -12886,8 +12886,8 @@
       for (const it of items) {
         const key2 = typeof it?.key === "string" ? it.key : "";
         if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        if (tryMatch(category, base)) {
+        const base2 = baseNameFromKey(key2);
+        if (tryMatch(category, base2)) {
           spriteMatchCache.set(cacheKey, matched);
           return matched;
         }
@@ -12897,11 +12897,11 @@
       for (const it of items) {
         const key2 = typeof it?.key === "string" ? it.key : "";
         if (!key2) continue;
-        const base = baseNameFromKey(key2);
-        const normBase = normalizeSpriteId(base);
+        const base2 = baseNameFromKey(key2);
+        const normBase = normalizeSpriteId(base2);
         if (!normBase) continue;
         if (normalizedTarget.includes(normBase) || normBase.includes(normalizedTarget) || normBase.startsWith(normalizedTarget) || normalizedTarget.startsWith(normBase)) {
-          matched = { category, spriteId: base };
+          matched = { category, spriteId: base2 };
           spriteMatchCache.set(cacheKey, matched);
           return matched;
         }
@@ -13000,12 +13000,12 @@
         items.forEach((item) => {
           const key2 = typeof item?.key === "string" ? item.key : "";
           if (!key2) return;
-          const base = baseNameFromKey(key2);
-          if (!base) return;
-          const k = `${category}:${base.toLowerCase()}`;
+          const base2 = baseNameFromKey(key2);
+          if (!base2) return;
+          const k = `${category}:${base2.toLowerCase()}`;
           if (seen.has(k)) return;
           seen.add(k);
-          tasks.push({ category, id: base });
+          tasks.push({ category, id: base2 });
         });
       });
     }
@@ -13090,22 +13090,22 @@
     Ambercharged: "rgba(240, 110, 80, 1)"
   };
   function buildSpriteCandidates(rawId, label2) {
-    const set2 = /* @__PURE__ */ new Set();
+    const set3 = /* @__PURE__ */ new Set();
     const add = (value) => {
       if (!value) return;
       const trimmed = String(value).trim();
       if (!trimmed) return;
-      set2.add(trimmed);
-      set2.add(trimmed.replace(/\s+/g, ""));
+      set3.add(trimmed);
+      set3.add(trimmed.replace(/\s+/g, ""));
       const last = trimmed.split(/[./]/).pop();
       if (last && last !== trimmed) {
-        set2.add(last);
-        set2.add(last.replace(/\s+/g, ""));
+        set3.add(last);
+        set3.add(last.replace(/\s+/g, ""));
       }
     };
     add(rawId);
     add(label2);
-    return Array.from(set2).filter(Boolean);
+    return Array.from(set3).filter(Boolean);
   }
   var overlayEl = null;
   var currentEnabled = false;
@@ -13822,23 +13822,23 @@
       let debounceTimer = null;
       const flushPatch = () => {
         if (!pendingPatch) return;
-        const patch = pendingPatch;
+        const patch2 = pendingPatch;
         pendingPatch = null;
         void updateGardenObjectAtCurrentTile((obj) => {
           if (obj?.objectType !== "plant") return obj;
           const nextSlots = Array.isArray(obj.slots) ? obj.slots.slice() : [];
           if (applyAll) {
             for (let i = 0; i < nextSlots.length; i++) {
-              nextSlots[i] = { ...nextSlots[i] || {}, ...patch };
+              nextSlots[i] = { ...nextSlots[i] || {}, ...patch2 };
             }
           } else {
-            nextSlots[idx] = { ...nextSlots[idx] || {}, ...patch };
+            nextSlots[idx] = { ...nextSlots[idx] || {}, ...patch2 };
           }
           return { ...obj, slots: nextSlots };
         });
       };
-      const queuePatch = (patch) => {
-        pendingPatch = { ...pendingPatch || {}, ...patch };
+      const queuePatch = (patch2) => {
+        pendingPatch = { ...pendingPatch || {}, ...patch2 };
         if (debounceTimer != null) window.clearTimeout(debounceTimer);
         debounceTimer = window.setTimeout(() => {
           flushPatch();
@@ -14693,14 +14693,14 @@
             row.style.display = showPercentMode ? "none" : "flex";
           });
         };
-        const applySlotPatch = (patch) => {
-          const base = ensureEditorStateForSpecies(selId).slots;
+        const applySlotPatch = (patch2) => {
+          const base2 = ensureEditorStateForSpecies(selId).slots;
           editorPlantSlotsState = {
             ...editorPlantSlotsState,
             species: selId,
-            slots: base.map((c, i) => {
+            slots: base2.map((c, i) => {
               if (!applyAll && i !== idx) return c;
-              return { ...c, sizeMode: currentMode, ...patch };
+              return { ...c, sizeMode: currentMode, ...patch2 };
             })
           };
         };
@@ -14835,15 +14835,15 @@
             styleLetter(letterSpan, mutId);
             tag.title = "Remove mutation";
             tag.onclick = () => {
-              const base = ensureEditorStateForSpecies(selId).slots;
+              const base2 = ensureEditorStateForSpecies(selId).slots;
               editorPlantSlotsState = {
                 ...editorPlantSlotsState,
                 species: selId,
-                slots: applyAll ? base.map((c) => {
+                slots: applyAll ? base2.map((c) => {
                   const prev = Array.isArray(c.mutations) ? c.mutations : [];
                   const next = prev.filter((m) => m !== mutId);
                   return { ...c, mutations: next };
-                }) : base.map((c, i) => {
+                }) : base2.map((c, i) => {
                   if (i !== idx) return c;
                   const prev = Array.isArray(c.mutations) ? c.mutations : [];
                   const next = prev.filter((m) => m !== mutId);
@@ -14898,16 +14898,16 @@
             }
           }
           btn2.onclick = () => {
-            const base = ensureEditorStateForSpecies(selId).slots;
+            const base2 = ensureEditorStateForSpecies(selId).slots;
             editorPlantSlotsState = {
               ...editorPlantSlotsState,
               species: selId,
-              slots: applyAll ? base.map((c) => {
+              slots: applyAll ? base2.map((c) => {
                 const prev = Array.isArray(c.mutations) ? c.mutations : [];
                 const has = prev.includes(storedId);
                 const next = has ? prev.filter((x) => x !== storedId) : [...prev, storedId];
                 return { ...c, mutations: next };
-              }) : base.map((c, i) => {
+              }) : base2.map((c, i) => {
                 if (i !== idx) return c;
                 const prev = Array.isArray(c.mutations) ? c.mutations : [];
                 const has = prev.includes(storedId);
@@ -15009,12 +15009,12 @@
       }
     };
   }
-  async function withPatchedWrite(patch, op) {
-    if (!patch) {
+  async function withPatchedWrite(patch2, op) {
+    if (!patch2) {
       await op();
       return;
     }
-    const { atom, readKey, origRead, writeKey, origWrite } = patch;
+    const { atom, readKey, origRead, writeKey, origWrite } = patch2;
     const savedRead = atom[readKey];
     const savedWrite = writeKey ? atom[writeKey] : void 0;
     try {
@@ -15505,12 +15505,12 @@
     const now2 = Date.now();
     const all = readSavedGardens();
     const baseName = name?.trim() || "Untitled";
-    const makeUniqueName = (base, existing) => {
+    const makeUniqueName = (base2, existing) => {
       let idx = 1;
-      let candidate = base;
-      const set2 = new Set(existing);
-      while (set2.has(candidate)) {
-        candidate = `${base} (${idx})`;
+      let candidate = base2;
+      const set3 = new Set(existing);
+      while (set3.has(candidate)) {
+        candidate = `${base2} (${idx})`;
         idx += 1;
       }
       return candidate;
@@ -15810,22 +15810,22 @@
         }
         const typ = obj?.objectType;
         if (typ === "plant") {
-          const patch = {
+          const patch2 = {
             species: obj.species,
             plantedAt: obj.plantedAt,
             maturedAt: obj.maturedAt,
             slots: obj.slots
           };
           injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTilePlant(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+          tos.setTilePlant(t.x, t.y, patch2, { ensureView: true, forceUpdate: true });
         } else if (typ === "decor") {
-          const patch = { rotation: obj.rotation };
+          const patch2 = { rotation: obj.rotation };
           injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTileDecor(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+          tos.setTileDecor(t.x, t.y, patch2, { ensureView: true, forceUpdate: true });
         } else if (typ === "egg") {
-          const patch = { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt };
+          const patch2 = { plantedAt: obj.plantedAt, maturedAt: obj.maturedAt };
           injectTileObjectRaw(t.x, t.y, obj);
-          tos.setTileEgg(t.x, t.y, patch, { ensureView: true, forceUpdate: true });
+          tos.setTileEgg(t.x, t.y, patch2, { ensureView: true, forceUpdate: true });
         } else {
           tos.setTileEmpty(t.x, t.y, { ensureView: true, forceUpdate: true });
         }
@@ -16662,8 +16662,8 @@
     return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
-    const STYLE_ID3 = "mgAutoRecoOverlayStyle";
-    if (document.getElementById(STYLE_ID3)) return;
+    const STYLE_ID4 = "mgAutoRecoOverlayStyle";
+    if (document.getElementById(STYLE_ID4)) return;
     const css = `
     #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
@@ -16672,10 +16672,10 @@
     #mgAutoRecoOverlay .btn { margin-top: 6px; padding: 10px 16px; border-radius: 999px; border: 1px solid #7aa2ff; background: #1a2644; color: #fff; font-weight: 700; cursor: pointer; }
     #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
   `;
-    const style2 = document.createElement("style");
-    style2.id = STYLE_ID3;
-    style2.textContent = css;
-    document.documentElement.appendChild(style2);
+    const style3 = document.createElement("style");
+    style3.id = STYLE_ID4;
+    style3.textContent = css;
+    document.documentElement.appendChild(style3);
   }
   function createAutoRecoOverlay(initialMs, onReconnectNow) {
     ensureAutoRecoOverlayStyle();
@@ -16692,7 +16692,7 @@
   `;
     const subtitle = overlay.querySelector(".auto-reco-subtitle");
     const btn = overlay.querySelector("button.btn");
-    const render = (ms) => {
+    const render2 = (ms) => {
       if (!subtitle) return;
       const seconds = Math.max(0, Math.ceil(ms / 1e3));
       const unit = seconds <= 1 ? "second" : "seconds";
@@ -16705,9 +16705,9 @@
       });
     }
     document.documentElement.appendChild(overlay);
-    render(initialMs);
+    render2(initialMs);
     return {
-      update: render,
+      update: render2,
       destroy: () => {
         try {
           overlay.remove();
@@ -16788,8 +16788,8 @@
     if (!pageWindow || !NativeWS) return;
     startAutoReloadOnVersionExpired();
     startAutoReconnectOnSuperseded();
-    function WrappedWebSocket(url, protocols) {
-      const ws = protocols !== void 0 ? new NativeWS(url, protocols) : new NativeWS(url);
+    function WrappedWebSocket(url2, protocols) {
+      const ws = protocols !== void 0 ? new NativeWS(url2, protocols) : new NativeWS(url2);
       sockets.push(ws);
       ws.addEventListener("open", () => {
         setTimeout(() => {
@@ -17854,10 +17854,10 @@
     for (const team of _teams) {
       const slots = (Array.isArray(team?.slots) ? team.slots : []).map((id) => String(id || "")).filter(Boolean);
       if (slots.length !== wanted.size) continue;
-      const set2 = new Set(slots);
+      const set3 = new Set(slots);
       let ok = true;
       for (const id of wanted) {
-        if (!set2.has(id)) {
+        if (!set3.has(id)) {
           ok = false;
           break;
         }
@@ -18281,13 +18281,13 @@
       const all = loadOverrides();
       return cloneOverride(all[petId]);
     },
-    setOverride(petId, patch) {
+    setOverride(petId, patch2) {
       const all = loadOverrides();
       const cur = cloneOverride(all[petId]);
       const next = {
-        enabled: patch.enabled ?? cur.enabled,
-        thresholdPct: Number.isFinite(patch.thresholdPct) ? Math.min(100, Math.max(1, Number(patch.thresholdPct))) : cur.thresholdPct,
-        crops: { ...cur.crops, ...patch.crops || {} }
+        enabled: patch2.enabled ?? cur.enabled,
+        thresholdPct: Number.isFinite(patch2.thresholdPct) ? Math.min(100, Math.max(1, Number(patch2.thresholdPct))) : cur.thresholdPct,
+        crops: { ...cur.crops, ...patch2.crops || {} }
       };
       all[petId] = next;
       saveOverrides(all);
@@ -18444,14 +18444,14 @@
       this._notifyTeamSubs();
       return true;
     },
-    saveTeam(patch) {
-      const i = this._teams.findIndex((t) => t.id === patch.id);
+    saveTeam(patch2) {
+      const i = this._teams.findIndex((t) => t.id === patch2.id);
       if (i < 0) return null;
       const cur = this._teams[i];
       const next = {
         id: cur.id,
-        name: typeof patch.name === "string" ? patch.name : cur.name,
-        slots: Array.isArray(patch.slots) ? patch.slots.slice(0, 3) : cur.slots
+        name: typeof patch2.name === "string" ? patch2.name : cur.name,
+        slots: Array.isArray(patch2.slots) ? patch2.slots.slice(0, 3) : cur.slots
       };
       this._teams[i] = next;
       saveTeams(this._teams);
@@ -18644,7 +18644,7 @@
         return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
       };
       const data = rawData ?? {};
-      const base = petAbilities[abilityId]?.baseParameters ?? {};
+      const base2 = petAbilities[abilityId]?.baseParameters ?? {};
       switch (abilityId) {
         case "CoinFinderI":
         case "CoinFinderII":
@@ -18665,31 +18665,31 @@
         case "ProduceScaleBoost":
         case "ProduceScaleBoostII":
         case "SnowyCropSizeBoost": {
-          const inc = data["scaleIncreasePercentage"] ?? data["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"] ?? 0;
+          const inc = data["scaleIncreasePercentage"] ?? data["cropScaleIncreasePercentage"] ?? base2["scaleIncreasePercentage"] ?? 0;
           return num(inc);
         }
         case "EggGrowthBoost":
         case "EggGrowthBoostII_NEW":
         case "EggGrowthBoostII":
         case "SnowyEggGrowthBoost": {
-          const minutes = data["eggGrowthTimeReductionMinutes"] ?? data["minutesReduced"] ?? data["reductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"] ?? 0;
+          const minutes = data["eggGrowthTimeReductionMinutes"] ?? data["minutesReduced"] ?? data["reductionMinutes"] ?? base2["eggGrowthTimeReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PlantGrowthBoost":
         case "PlantGrowthBoostII":
         case "SnowyPlantGrowthBoost": {
-          const minutes = data["minutesReduced"] ?? data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base["plantGrowthReductionMinutes"] ?? 0;
+          const minutes = data["minutesReduced"] ?? data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base2["plantGrowthReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PetXpBoost":
         case "SnowyPetXpBoost":
         case "PetXpBoostII": {
-          const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
+          const xp = data["bonusXp"] ?? base2["bonusXp"] ?? 0;
           return num(xp);
         }
         case "PetAgeBoost":
         case "PetAgeBoostII": {
-          const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
+          const xp = data["bonusXp"] ?? base2["bonusXp"] ?? 0;
           return num(xp);
         }
         case "PetHatchSizeBoost":
@@ -18700,13 +18700,13 @@
         case "HungerRestore":
         case "HungerRestoreII":
         case "SnowyHungerRestore": {
-          const amount = data["hungerRestoreAmount"] ?? data["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"] ?? 0;
+          const amount = data["hungerRestoreAmount"] ?? data["hungerRestoredPercentage"] ?? base2["hungerRestorePercentage"] ?? 0;
           return num(amount);
         }
         case "HungerBoost":
         case "HungerBoostII":
         case "SnowyHungerBoost": {
-          const pct = data["hungerDepletionRateDecreasePercentage"] ?? base["hungerDepletionRateDecreasePercentage"] ?? 0;
+          const pct = data["hungerDepletionRateDecreasePercentage"] ?? base2["hungerDepletionRateDecreasePercentage"] ?? 0;
           return num(pct);
         }
         default:
@@ -18809,9 +18809,9 @@
       };
     },
     getSeenAbilityIds() {
-      const set2 = /* @__PURE__ */ new Set();
-      for (const e of this._logs) set2.add(e.abilityId);
-      return Array.from(set2).sort();
+      const set3 = /* @__PURE__ */ new Set();
+      for (const e of this._logs) set3.add(e.abilityId);
+      return Array.from(set3).sort();
     },
     clearAbilityLogs() {
       this._logs.length = 0;
@@ -18907,7 +18907,7 @@
       const fmtMin1 = (n) => `${Number.isFinite(Number(n)) ? Number(n).toFixed(1) : "0.0"} min`;
       const formatDetails = (abilityId, data) => {
         const d = data ?? {};
-        const base = petAbilities[abilityId]?.baseParameters ?? {};
+        const base2 = petAbilities[abilityId]?.baseParameters ?? {};
         const label2 = (value, fallback) => {
           const s = typeof value === "string" ? value.trim() : "";
           return s || fallback;
@@ -18930,7 +18930,7 @@
           case "CoinFinderII":
           case "CoinFinderIII":
           case "SnowyCoinFinder": {
-            const coins = d["coinsFound"] ?? d["coins"] ?? base["baseMaxCoinsFindable"];
+            const coins = d["coinsFound"] ?? d["coins"] ?? base2["baseMaxCoinsFindable"];
             return coins != null ? `+ ${fmtInt(coins)} coins` : "Coins found";
           }
           case "SeedFinderI":
@@ -18946,7 +18946,7 @@
             const whoRaw = d["petName"];
             const who = label2(whoRaw === "itself" ? "itself" : whoRaw, "pet");
             const amount = d["hungerRestoreAmount"];
-            const pct = percentOr(d["hungerRestoredPercentage"], base["hungerRestorePercentage"]);
+            const pct = percentOr(d["hungerRestoredPercentage"], base2["hungerRestorePercentage"]);
             if (amount != null) return `${who}: +${fmtInt(amount)} hunger`;
             return pct != null ? `${who}: ${fmtPct0(pct)}` : `${who}: Hunger restored`;
           }
@@ -18961,7 +18961,7 @@
           case "ProduceEater": {
             const name = label2(d["cropName"], "crop");
             if (d["sellPrice"] != null) return `Sold ${name}: +${fmtInt(d["sellPrice"])} coins`;
-            const pct = base["cropSellPriceIncreasePercentage"];
+            const pct = base2["cropSellPriceIncreasePercentage"];
             return pct != null ? `Eaten: ${name} (+${fmtPct0(pct)} value)` : `Eaten: ${name}`;
           }
           case "ProduceRefund": {
@@ -18973,7 +18973,7 @@
           case "SellBoostIII":
           case "SellBoostIV": {
             if (d["bonusCoins"] != null) return `Sale bonus: +${fmtInt(d["bonusCoins"])} coins`;
-            const pct = base["cropSellPriceIncreasePercentage"];
+            const pct = base2["cropSellPriceIncreasePercentage"];
             return pct != null ? `+ ${fmtPct0(pct)}` : "Sale bonus";
           }
           case "GoldGranter":
@@ -18999,38 +18999,38 @@
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII":
           case "SnowyCropSizeBoost": {
-            const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
+            const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base2["scaleIncreasePercentage"];
             return inc != null ? `+ ${fmtPct0(inc)}` : "Crop size boosted";
           }
           case "ProduceMutationBoost":
           case "ProduceMutationBoostII":
           case "PetMutationBoost":
           case "PetMutationBoostII": {
-            const inc = percentOr(d["mutationChanceIncreasePercentage"], base["mutationChanceIncreasePercentage"]);
+            const inc = percentOr(d["mutationChanceIncreasePercentage"], base2["mutationChanceIncreasePercentage"]);
             return inc != null ? `+ ${fmtPct0(inc)} mutation chance` : "Mutation chance up";
           }
           case "EggGrowthBoost":
           case "EggGrowthBoostII_NEW":
           case "EggGrowthBoostII":
           case "SnowyEggGrowthBoost": {
-            const mins = d["minutesReduced"] ?? d["eggGrowthTimeReductionMinutes"] ?? base["eggGrowthTimeReductionMinutes"];
+            const mins = d["minutesReduced"] ?? d["eggGrowthTimeReductionMinutes"] ?? base2["eggGrowthTimeReductionMinutes"];
             return mins != null ? `- ${fmtMin1(mins)}` : "Egg growth reduced";
           }
           case "PlantGrowthBoost":
           case "PlantGrowthBoostII":
           case "SnowyPlantGrowthBoost": {
-            const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
+            const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base2["plantGrowthReductionMinutes"];
             return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
           }
           case "PetXpBoost":
           case "SnowyPetXpBoost":
           case "PetXpBoostII": {
-            const xp = d["bonusXp"] ?? base["bonusXp"];
+            const xp = d["bonusXp"] ?? base2["bonusXp"];
             return `+ ${fmtInt(xp)} XP`;
           }
           case "PetAgeBoost":
           case "PetAgeBoostII": {
-            const xp = d["bonusXp"] ?? base["bonusXp"];
+            const xp = d["bonusXp"] ?? base2["bonusXp"];
             const who = label2(d["petName"], "pet");
             return `+ ${fmtInt(xp)} XP (${who})`;
           }
@@ -19038,13 +19038,13 @@
           case "PetHatchSizeBoostII": {
             const who = label2(d["petName"], "pet");
             if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
-            const pct = base["maxStrengthIncreasePercentage"];
+            const pct = base2["maxStrengthIncreasePercentage"];
             return pct != null ? `+ ${fmtPct0(pct)} (${who})` : `Strength increased (${who})`;
           }
           case "HungerBoost":
           case "HungerBoostII":
           case "SnowyHungerBoost": {
-            const pct = base["hungerDepletionRateDecreasePercentage"];
+            const pct = base2["hungerDepletionRateDecreasePercentage"];
             return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
           }
           case "PetRefund":
@@ -19129,8 +19129,8 @@
     const snapshotMatches = async () => {
       try {
         const cur = await Atoms.pets.myPetInfos.get();
-        const set2 = new Set((Array.isArray(cur) ? cur : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
-        return [...wanted].every((id) => set2.has(id));
+        const set3 = new Set((Array.isArray(cur) ? cur : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
+        return [...wanted].every((id) => set3.has(id));
       } catch {
         return false;
       }
@@ -19161,8 +19161,8 @@
         resolve2(ok);
       };
       const check = async (state3) => {
-        const set2 = new Set((Array.isArray(state3) ? state3 : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
-        if ([...wanted].every((id) => set2.has(id))) {
+        const set3 = new Set((Array.isArray(state3) ? state3 : []).map((p) => String(p?.slot?.id || "")).filter(Boolean));
+        if ([...wanted].every((id) => set3.has(id))) {
           stop2(true);
         } else if (Date.now() >= deadline) {
           stop2(false);
@@ -19196,10 +19196,10 @@
     const snapshotMatches = async () => {
       try {
         const cur = await Atoms.inventory.myInventory.get();
-        const set2 = new Set(
+        const set3 = new Set(
           (Array.isArray(cur?.items) ? cur.items : Array.isArray(cur) ? cur : []).map((p) => String(p?.id || "")).filter(Boolean)
         );
-        return predicate(set2);
+        return predicate(set3);
       } catch {
         return false;
       }
@@ -19230,10 +19230,10 @@
         resolve2(ok);
       };
       const check = async (state3) => {
-        const set2 = new Set(
+        const set3 = new Set(
           (Array.isArray(state3?.items) ? state3.items : Array.isArray(state3) ? state3 : []).map((p) => String(p?.id || "")).filter(Boolean)
         );
-        if (predicate(set2)) {
+        if (predicate(set3)) {
           stop2(true);
         } else if (Date.now() >= deadline) {
           stop2(false);
@@ -19267,10 +19267,10 @@
     const snapshotMatches = async () => {
       try {
         const cur = await myPetHutchPetItems.get();
-        const set2 = new Set(
+        const set3 = new Set(
           (Array.isArray(cur) ? cur : []).map((p) => String(p?.id || "")).filter(Boolean)
         );
-        return predicate(set2);
+        return predicate(set3);
       } catch {
         return false;
       }
@@ -19301,10 +19301,10 @@
         resolve2(ok);
       };
       const check = async (state3) => {
-        const set2 = new Set(
+        const set3 = new Set(
           (Array.isArray(state3) ? state3 : []).map((p) => String(p?.id || "")).filter(Boolean)
         );
-        if (predicate(set2)) {
+        if (predicate(set3)) {
           stop2(true);
         } else if (Date.now() >= deadline) {
           stop2(false);
@@ -19411,7 +19411,7 @@
               if (invPet) {
                 await PlayerService.putItemInStorage(invPet.id, "PetHutch");
                 freeHutch = Math.max(0, freeHutch - 1);
-                void _waitForHutchState((set2) => set2.has(String(invPet.id)), 3e3);
+                void _waitForHutchState((set3) => set3.has(String(invPet.id)), 3e3);
               } else {
                 try {
                   await toastSimple("Inventory Full", "Cannot equip team: no free slot to retrieve a pet from the Pet Hutch.", "error");
@@ -19444,7 +19444,7 @@
         } catch {
           continue;
         }
-        void _waitForHutchState((set2) => !set2.has(String(invId)), 3e3);
+        void _waitForHutchState((set3) => !set3.has(String(invId)), 3e3);
       }
       const offTargetActive = activeSlots.find((id) => !targetSet.has(id));
       if (offTargetActive) {
@@ -19457,7 +19457,7 @@
               freeHutch = Math.max(0, freeHutch - 1);
             } catch {
             }
-            void _waitForHutchState((set2) => set2.has(String(offTargetActive)), 3e3);
+            void _waitForHutchState((set3) => set3.has(String(offTargetActive)), 3e3);
           }
           activeSlots = activeSlots.filter((x) => x !== offTargetActive);
           activeSlots.push(invId);
@@ -19492,7 +19492,7 @@
           await PlayerService.putItemInStorage(slotId, "PetHutch");
           freeHutch = Math.max(0, freeHutch - 1);
           activeSlots = activeSlots.filter((x) => x !== slotId);
-          void _waitForHutchState((set2) => set2.has(String(slotId)), 3e3);
+          void _waitForHutchState((set3) => set3.has(String(slotId)), 3e3);
         } catch {
         }
       }
@@ -19504,11 +19504,11 @@
     } catch {
     }
     try {
-      await _waitForInventoryState((set2) => targetInvIds.every((id) => set2.has(id)), 3e3);
+      await _waitForInventoryState((set3) => targetInvIds.every((id) => set3.has(id)), 3e3);
     } catch {
     }
     try {
-      await _waitForHutchState((set2) => targetInvIds.every((id) => !set2.has(id)), 3e3);
+      await _waitForHutchState((set3) => targetInvIds.every((id) => !set3.has(id)), 3e3);
     } catch {
     }
     if (shouldMark) markTeamAsUsed(markResolved);
@@ -19661,8 +19661,8 @@
     return Math.max(strength, 0);
   };
   var getBaseStrength = (maxStrength) => {
-    const base = maxStrength - BASE_STRENGTH_FLOOR;
-    return Math.max(base, 0);
+    const base2 = maxStrength - BASE_STRENGTH_FLOOR;
+    return Math.max(base2, 0);
   };
   var getPetStrength = (pet) => {
     const entry = getCatalogEntry(pet?.petSpecies ?? "");
@@ -19923,15 +19923,15 @@
     const getBase = opts?.getBasePrice ?? defaultGetBasePrice;
     const sXform = opts?.scaleTransform ?? ((_, s) => s);
     const round = opts?.rounding ?? "round";
-    const base = getBase(species);
-    if (!(Number.isFinite(base) && base > 0)) return 0;
+    const base2 = getBase(species);
+    if (!(Number.isFinite(base2) && base2 > 0)) return 0;
     const sc = Number(scale);
     if (!Number.isFinite(sc) || sc <= 0) return 0;
     const effScale = sXform(species, sc);
     if (!Number.isFinite(effScale) || effScale <= 0) return 0;
     const mutMult = mutationsMultiplier(mutations);
     const friendsMult = friendBonusMultiplier2(opts?.friendPlayers);
-    const pre = base * effScale * mutMult * friendsMult;
+    const pre = base2 * effScale * mutMult * friendsMult;
     const out = Math.max(0, applyRounding(pre, round));
     return out;
   }
@@ -20897,8 +20897,8 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID3 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID3)) return;
+    const STYLE_ID4 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID4)) return;
     const css = `
 .${injectedClass}{
   font-synthesis: none;
@@ -20953,7 +20953,7 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID3;
+    s.id = STYLE_ID4;
     s.textContent = css;
     document.head.appendChild(s);
   }
@@ -21992,12 +21992,12 @@
       if (!this.oneshotQueue.length) return;
       if (this.oneshotQueueTimer != null) return;
       const delta = Date.now() - this.lastPlayTs;
-      const wait = Math.max(0, this.minPlayGapMs - delta);
+      const wait2 = Math.max(0, this.minPlayGapMs - delta);
       this.oneshotQueueTimer = window.setTimeout(() => {
         this.oneshotQueueTimer = null;
         if (this.oneshotProcessing) return;
         this.processOneshotQueue();
-      }, wait);
+      }, wait2);
     }
     processOneshotQueue() {
       if (this.oneshotProcessing) return;
@@ -22030,11 +22030,11 @@
       return null;
     }
     uniqueName(raw) {
-      const base = String(raw || "Sound").replace(/\.[a-z0-9]+$/i, "").trim() || "Sound";
-      if (!this.library.has(base)) return base;
+      const base2 = String(raw || "Sound").replace(/\.[a-z0-9]+$/i, "").trim() || "Sound";
+      if (!this.library.has(base2)) return base2;
       let i = 2;
-      while (this.library.has(`${base} (${i})`)) i++;
-      return `${base} (${i})`;
+      while (this.library.has(`${base2} (${i})`)) i++;
+      return `${base2} (${i})`;
     }
     async blobToDataURL(blob) {
       return await new Promise((resolve2, reject) => {
@@ -22502,14 +22502,14 @@
     }
   }
   function _normalizeRule(raw) {
-    const patch = {};
-    if (_hasOwn.call(raw ?? {}, "sound")) patch.sound = raw?.sound ?? null;
-    if (_hasOwn.call(raw ?? {}, "volume")) patch.volume = raw?.volume ?? null;
-    if (_hasOwn.call(raw ?? {}, "playbackMode")) patch.playbackMode = raw?.playbackMode ?? null;
-    if (_hasOwn.call(raw ?? {}, "stopMode")) patch.stopMode = raw?.stopMode ?? null;
-    if (_hasOwn.call(raw ?? {}, "stopRepeats")) patch.stopRepeats = raw?.stopRepeats ?? null;
-    if (_hasOwn.call(raw ?? {}, "loopIntervalMs")) patch.loopIntervalMs = raw?.loopIntervalMs ?? null;
-    return _mergeRule(void 0, patch);
+    const patch2 = {};
+    if (_hasOwn.call(raw ?? {}, "sound")) patch2.sound = raw?.sound ?? null;
+    if (_hasOwn.call(raw ?? {}, "volume")) patch2.volume = raw?.volume ?? null;
+    if (_hasOwn.call(raw ?? {}, "playbackMode")) patch2.playbackMode = raw?.playbackMode ?? null;
+    if (_hasOwn.call(raw ?? {}, "stopMode")) patch2.stopMode = raw?.stopMode ?? null;
+    if (_hasOwn.call(raw ?? {}, "stopRepeats")) patch2.stopRepeats = raw?.stopRepeats ?? null;
+    if (_hasOwn.call(raw ?? {}, "loopIntervalMs")) patch2.loopIntervalMs = raw?.loopIntervalMs ?? null;
+    return _mergeRule(void 0, patch2);
   }
   function _saveRules() {
     if (!_rulesLoaded) return;
@@ -22748,34 +22748,34 @@
     const normalized = Math.max(150, Math.floor(n));
     return normalized >= 150 ? normalized : void 0;
   }
-  function _mergeRule(prev, patch) {
+  function _mergeRule(prev, patch2) {
     const next = { ...prev ?? {} };
-    if (_hasOwn.call(patch, "sound")) {
-      const s = _sanitizeSound(patch.sound);
+    if (_hasOwn.call(patch2, "sound")) {
+      const s = _sanitizeSound(patch2.sound);
       if (s) next.sound = s;
       else delete next.sound;
     }
-    if (_hasOwn.call(patch, "volume")) {
-      const vol = _sanitizeVolume(patch.volume);
+    if (_hasOwn.call(patch2, "volume")) {
+      const vol = _sanitizeVolume(patch2.volume);
       if (vol != null) next.volume = vol;
       else delete next.volume;
     }
-    if (_hasOwn.call(patch, "playbackMode")) {
-      const mode = _sanitizePlaybackMode(patch.playbackMode);
+    if (_hasOwn.call(patch2, "playbackMode")) {
+      const mode = _sanitizePlaybackMode(patch2.playbackMode);
       if (mode) next.playbackMode = mode;
       else delete next.playbackMode;
     }
-    if (_hasOwn.call(patch, "stopMode")) {
-      const mode = _sanitizeStopMode(patch.stopMode);
+    if (_hasOwn.call(patch2, "stopMode")) {
+      const mode = _sanitizeStopMode(patch2.stopMode);
       if (mode) next.stopMode = mode;
       else delete next.stopMode;
       delete next.stopRepeats;
     }
-    if (_hasOwn.call(patch, "stopRepeats")) {
+    if (_hasOwn.call(patch2, "stopRepeats")) {
       delete next.stopRepeats;
     }
-    if (_hasOwn.call(patch, "loopIntervalMs")) {
-      const interval = _sanitizeLoopInterval(patch.loopIntervalMs);
+    if (_hasOwn.call(patch2, "loopIntervalMs")) {
+      const interval = _sanitizeLoopInterval(patch2.loopIntervalMs);
       if (interval != null) next.loopIntervalMs = interval;
       else delete next.loopIntervalMs;
     }
@@ -23291,11 +23291,11 @@
     getAllRules() {
       return _rulesSnapshot();
     },
-    setRule(id, patch) {
-      if (!id || !patch || typeof patch !== "object") return;
+    setRule(id, patch2) {
+      if (!id || !patch2 || typeof patch2 !== "object") return;
       _ensureRulesLoaded();
       const prev = _rules.get(id);
-      const next = _mergeRule(prev, patch);
+      const next = _mergeRule(prev, patch2);
       if (_rulesEqual(prev, next)) return;
       if (next) _rules.set(id, next);
       else _rules.delete(id);
@@ -23435,6 +23435,8 @@
       __publicField(this, "rows", []);
       __publicField(this, "lastPanelSig", null);
       this.slot = this.createSlot();
+      this.slot.id = "qws-notifier-slot";
+      globalThis.__qws_notifier_slot = this.slot;
       this.btn = this.createButton();
       this.ensureBellCSS();
       this.badge = this.createBadge();
@@ -23478,15 +23480,21 @@
       } catch {
       }
       try {
+        if (globalThis.__qws_notifier_slot === this.slot) {
+          delete globalThis.__qws_notifier_slot;
+        }
+      } catch {
+      }
+      try {
         audio.stopAllLoops();
       } catch {
       }
     }
     ensureBellCSS() {
       if (document.getElementById("qws-bell-anim-css")) return;
-      const style2 = document.createElement("style");
-      style2.id = "qws-bell-anim-css";
-      style2.textContent = `
+      const style3 = document.createElement("style");
+      style3.id = "qws-bell-anim-css";
+      style3.textContent = `
 @keyframes qwsBellShake {
   0% { transform: rotate(0deg); }
   10% { transform: rotate(-16deg); }
@@ -23512,7 +23520,7 @@
   .qws-bell--wiggle { animation: none !important; }
 }
 `;
-      document.head.appendChild(style2);
+      document.head.appendChild(style3);
     }
     /* ========= SETTERS (subs) ========= */
     setShops(s) {
@@ -24226,10 +24234,5482 @@
     };
   }
 
+  // src/utils/mgCommon.ts
+  var ORIGIN = "https://magicgarden.gg";
+  var sleep2 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+
+  // src/utils/mgVersion.ts
+  var gameVersion = null;
+  function init(doc) {
+    if (gameVersion !== null) return;
+    const d = doc ?? (typeof document !== "undefined" ? document : null);
+    if (!d) return;
+    const scripts = d.scripts;
+    for (let i = 0; i < scripts.length; i++) {
+      const s = scripts.item(i);
+      const src = s?.src;
+      if (!src) continue;
+      const m = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (m && m[1]) {
+        gameVersion = m[1];
+        return;
+      }
+    }
+  }
+  function get() {
+    init(document);
+    return gameVersion;
+  }
+  async function wait(timeoutMs = 15e3) {
+    const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
+    while ((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0 < timeoutMs) {
+      init(document);
+      if (gameVersion) return gameVersion;
+      await sleep2(50);
+    }
+    throw new Error("MGVersion timeout (gameVersion not found)");
+  }
+  var MGVersion = { init, get, wait };
+
+  // src/utils/mgAssets.ts
+  var _baseP = null;
+  var _base = null;
+  async function base() {
+    if (_base) return _base;
+    if (_baseP) return _baseP;
+    _baseP = (async () => {
+      const gv = await MGVersion.wait(15e3);
+      _base = `${ORIGIN}/version/${gv}/assets/`;
+      return _base;
+    })();
+    return _baseP;
+  }
+  async function url(rel) {
+    const b = await base();
+    return b.replace(/\/?$/, "/") + String(rel || "").replace(/^\//, "");
+  }
+  var MGAssets = { base, url };
+
+  // src/utils/supabase.ts
+  var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
+  var cachedFriendsView = null;
+  var cachedIncomingRequests = null;
+  function getCachedFriendsWithViews() {
+    return cachedFriendsView ? [...cachedFriendsView] : [];
+  }
+  function getCachedIncomingRequestsWithViews() {
+    return cachedIncomingRequests ? [...cachedIncomingRequests] : [];
+  }
+  function buildUrl(path, query) {
+    const url2 = new URL(path, API_BASE_URL);
+    if (query) {
+      for (const [key2, value] of Object.entries(query)) {
+        if (value === void 0) continue;
+        url2.searchParams.set(key2, String(value));
+      }
+    }
+    return url2.toString();
+  }
+  function httpGet(path, query) {
+    return new Promise((resolve2) => {
+      const url2 = buildUrl(path, query);
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: url2,
+        headers: {},
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              console.error("[api] GET parse error:", e, res.responseText);
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            console.error("[api] GET error:", res.status, res.responseText);
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          console.error("[api] GET request failed:", err);
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  function httpPost(path, body) {
+    return new Promise((resolve2) => {
+      const url2 = buildUrl(path);
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: url2,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: JSON.stringify(body),
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              console.error("[api] POST parse error:", e, res.responseText);
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            console.error("[api] POST error:", res.status, res.responseText);
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          console.error("[api] POST request failed:", err);
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  async function sendPlayerState(payload) {
+    if (!payload) {
+      return false;
+    }
+    const { status } = await httpPost("collect-state", payload);
+    if (status === 204) return true;
+    if (status === 429) {
+      console.warn("[api] sendPlayerState rate-limited");
+    }
+    return false;
+  }
+  async function fetchAvailableRooms(limit = 50) {
+    const { data } = await httpGet("rooms", { limit });
+    if (!data || !Array.isArray(data)) return [];
+    return data.map((r) => ({
+      id: r.id,
+      isPrivate: r.is_private,
+      playersCount: r.players_count ?? 0,
+      lastUpdatedAt: r.last_updated_at,
+      lastUpdatedByPlayerId: r.last_updated_by_player_id,
+      userSlots: Array.isArray(r.user_slots) ? r.user_slots.map((slot) => ({
+        name: slot.name,
+        avatarUrl: slot.avatar_url ?? null
+      })) : void 0
+    }));
+  }
+  async function fetchPlayersView(playerIds, options) {
+    const ids = Array.from(
+      new Set(
+        (playerIds ?? []).map((x) => String(x).trim()).filter((x) => x.length >= 3)
+      )
+    );
+    if (ids.length === 0) return [];
+    const body = { playerIds: ids };
+    if (options?.sections) {
+      body.sections = Array.isArray(options.sections) ? options.sections : [options.sections];
+    }
+    const { status, data } = await httpPost(
+      "get-players-view",
+      body
+    );
+    if (status !== 200 || !Array.isArray(data)) return [];
+    return data;
+  }
+  async function sendFriendRequest(fromPlayerId, toPlayerId) {
+    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-request", {
+      fromPlayerId,
+      toPlayerId
+    });
+    if (status === 204) return true;
+    if (status === 409) {
+      console.warn("[api] friend-request conflict (already exists)");
+    }
+    return false;
+  }
+  async function respondFriendRequest(params) {
+    const { playerId: playerId2, otherPlayerId, action: action2 } = params;
+    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-respond", {
+      playerId: playerId2,
+      otherPlayerId,
+      action: action2
+    });
+    if (status === 204) return true;
+    return false;
+  }
+  async function fetchFriendsIds(playerId2) {
+    if (!playerId2) return [];
+    const { status, data } = await httpGet("list-friends", { playerId: playerId2 });
+    if (status !== 200 || !data || !Array.isArray(data.friends)) return [];
+    return data.friends;
+  }
+  async function fetchFriendsWithViews(playerId2) {
+    const friendIds = await fetchFriendsIds(playerId2);
+    if (friendIds.length === 0) {
+      cachedFriendsView = [];
+      return [];
+    }
+    const result = await fetchPlayersView(friendIds, {
+      sections: ["profile", "room"]
+    });
+    cachedFriendsView = result;
+    return [...result];
+  }
+  async function fetchFriendRequests(playerId2) {
+    if (!playerId2) {
+      return { playerId: "", incoming: [], outgoing: [] };
+    }
+    const { status, data } = await httpGet(
+      "list-friend-requests",
+      { playerId: playerId2 }
+    );
+    if (status !== 200 || !data) {
+      return { playerId: playerId2, incoming: [], outgoing: [] };
+    }
+    return {
+      playerId: data.playerId,
+      incoming: Array.isArray(data.incoming) ? data.incoming : [],
+      outgoing: Array.isArray(data.outgoing) ? data.outgoing : []
+    };
+  }
+  async function fetchIncomingRequestsWithViews(playerId2) {
+    const { incoming } = await fetchFriendRequests(playerId2);
+    const ids = incoming.map((r) => r.fromPlayerId);
+    if (ids.length === 0) {
+      cachedIncomingRequests = [];
+      return [];
+    }
+    const result = await fetchPlayersView(ids, { sections: ["profile"] });
+    cachedIncomingRequests = result;
+    return [...result];
+  }
+  async function removeFriend(playerId2, otherPlayerId) {
+    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-remove", {
+      playerId: playerId2,
+      otherPlayerId
+    });
+    return status === 204;
+  }
+  async function searchRoomsByPlayerName(rawQuery, options) {
+    const query = rawQuery.trim();
+    const minLen = options?.minQueryLength ?? 2;
+    if (query.length < minLen) {
+      return [];
+    }
+    const limitRooms = options?.limitRooms ?? 200;
+    const qLower = query.toLowerCase();
+    const rooms = await fetchAvailableRooms(limitRooms);
+    const results = [];
+    for (const room of rooms) {
+      if (!room.userSlots || room.userSlots.length === 0) continue;
+      const matchedSlots = room.userSlots.filter((slot) => {
+        if (!slot.name) return false;
+        return slot.name.toLowerCase().includes(qLower);
+      });
+      if (matchedSlots.length > 0) {
+        results.push({
+          room,
+          matchedSlots
+        });
+      }
+    }
+    return results;
+  }
+  function openMessagesStream(playerId2, handlers = {}) {
+    if (!playerId2) return null;
+    const url2 = buildUrl("messages/stream", { playerId: playerId2 });
+    const es = new EventSource(url2);
+    es.addEventListener("connected", (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        handlers.onConnected?.(data);
+      } catch (e) {
+        console.error("[api] stream connected parse error:", e);
+      }
+    });
+    es.addEventListener("message", (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        handlers.onMessage?.(data);
+      } catch (e) {
+        console.error("[api] stream message parse error:", e);
+      }
+    });
+    es.addEventListener("read", (evt) => {
+      try {
+        const data = JSON.parse(evt.data);
+        handlers.onRead?.(data);
+      } catch (e) {
+        console.error("[api] stream read parse error:", e);
+      }
+    });
+    es.addEventListener("error", (evt) => {
+      handlers.onError?.(evt);
+    });
+    return es;
+  }
+  async function sendMessage(params) {
+    const { fromPlayerId, toPlayerId, roomId, text } = params;
+    if (!fromPlayerId || !toPlayerId || !roomId || !text) return null;
+    if (fromPlayerId === toPlayerId) return null;
+    const { status, data } = await httpPost("messages/send", {
+      fromPlayerId,
+      toPlayerId,
+      roomId,
+      text
+    });
+    if (status >= 200 && status < 300 && data) return data;
+    return null;
+  }
+  async function fetchMessagesThread(playerId2, otherPlayerId, options) {
+    if (!playerId2 || !otherPlayerId) return [];
+    const { status, data } = await httpGet("messages/thread", {
+      playerId: playerId2,
+      otherPlayerId,
+      afterId: options?.afterId,
+      limit: options?.limit
+    });
+    if (status !== 200 || !Array.isArray(data)) return [];
+    return data;
+  }
+  async function markMessagesRead(params) {
+    const { playerId: playerId2, otherPlayerId, upToId } = params;
+    if (!playerId2 || !otherPlayerId || !upToId) return 0;
+    const { status, data } = await httpPost(
+      "messages/read",
+      { playerId: playerId2, otherPlayerId, upToId }
+    );
+    if (status !== 200 || !data) return 0;
+    return data.updated ?? 0;
+  }
+
+  // node_modules/emoji-picker-element/database.js
+  function assertNonEmptyString(str) {
+    if (typeof str !== "string" || !str) {
+      throw new Error("expected a non-empty string, got: " + str);
+    }
+  }
+  function assertNumber(number) {
+    if (typeof number !== "number") {
+      throw new Error("expected a number, got: " + number);
+    }
+  }
+  var DB_VERSION_CURRENT = 1;
+  var DB_VERSION_INITIAL = 1;
+  var STORE_EMOJI = "emoji";
+  var STORE_KEYVALUE = "keyvalue";
+  var STORE_FAVORITES = "favorites";
+  var FIELD_TOKENS = "tokens";
+  var INDEX_TOKENS = "tokens";
+  var FIELD_UNICODE = "unicode";
+  var INDEX_COUNT = "count";
+  var FIELD_GROUP = "group";
+  var FIELD_ORDER = "order";
+  var INDEX_GROUP_AND_ORDER = "group-order";
+  var KEY_ETAG = "eTag";
+  var KEY_URL = "url";
+  var KEY_PREFERRED_SKINTONE = "skinTone";
+  var MODE_READONLY = "readonly";
+  var MODE_READWRITE = "readwrite";
+  var INDEX_SKIN_UNICODE = "skinUnicodes";
+  var FIELD_SKIN_UNICODE = "skinUnicodes";
+  var DEFAULT_DATA_SOURCE = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@^1/en/emojibase/data.json";
+  var DEFAULT_LOCALE = "en";
+  function uniqBy(arr, func) {
+    const set3 = /* @__PURE__ */ new Set();
+    const res = [];
+    for (const item of arr) {
+      const key2 = func(item);
+      if (!set3.has(key2)) {
+        set3.add(key2);
+        res.push(item);
+      }
+    }
+    return res;
+  }
+  function uniqEmoji(emojis) {
+    return uniqBy(emojis, (_) => _.unicode);
+  }
+  function initialMigration(db) {
+    function createObjectStore(name, keyPath, indexes) {
+      const store = keyPath ? db.createObjectStore(name, { keyPath }) : db.createObjectStore(name);
+      if (indexes) {
+        for (const [indexName, [keyPath2, multiEntry]] of Object.entries(indexes)) {
+          store.createIndex(indexName, keyPath2, { multiEntry });
+        }
+      }
+      return store;
+    }
+    createObjectStore(STORE_KEYVALUE);
+    createObjectStore(
+      STORE_EMOJI,
+      /* keyPath */
+      FIELD_UNICODE,
+      {
+        [INDEX_TOKENS]: [
+          FIELD_TOKENS,
+          /* multiEntry */
+          true
+        ],
+        [INDEX_GROUP_AND_ORDER]: [[FIELD_GROUP, FIELD_ORDER]],
+        [INDEX_SKIN_UNICODE]: [
+          FIELD_SKIN_UNICODE,
+          /* multiEntry */
+          true
+        ]
+      }
+    );
+    createObjectStore(STORE_FAVORITES, void 0, {
+      [INDEX_COUNT]: [""]
+    });
+  }
+  var openIndexedDBRequests = {};
+  var databaseCache = {};
+  var onCloseListeners = {};
+  function handleOpenOrDeleteReq(resolve2, reject, req) {
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error("IDB blocked"));
+    req.onsuccess = () => resolve2(req.result);
+  }
+  async function createDatabase(dbName) {
+    const db = await new Promise((resolve2, reject) => {
+      const req = indexedDB.open(dbName, DB_VERSION_CURRENT);
+      openIndexedDBRequests[dbName] = req;
+      req.onupgradeneeded = (e) => {
+        if (e.oldVersion < DB_VERSION_INITIAL) {
+          initialMigration(req.result);
+        }
+      };
+      handleOpenOrDeleteReq(resolve2, reject, req);
+    });
+    db.onclose = () => closeDatabase(dbName);
+    return db;
+  }
+  function openDatabase(dbName) {
+    if (!databaseCache[dbName]) {
+      databaseCache[dbName] = createDatabase(dbName);
+    }
+    return databaseCache[dbName];
+  }
+  function dbPromise(db, storeName, readOnlyOrReadWrite, cb) {
+    return new Promise((resolve2, reject) => {
+      const txn = db.transaction(storeName, readOnlyOrReadWrite, { durability: "relaxed" });
+      const store = typeof storeName === "string" ? txn.objectStore(storeName) : storeName.map((name) => txn.objectStore(name));
+      let res;
+      cb(store, txn, (result) => {
+        res = result;
+      });
+      txn.oncomplete = () => resolve2(res);
+      txn.onerror = () => reject(txn.error);
+    });
+  }
+  function closeDatabase(dbName) {
+    const req = openIndexedDBRequests[dbName];
+    const db = req && req.result;
+    if (db) {
+      db.close();
+      const listeners5 = onCloseListeners[dbName];
+      if (listeners5) {
+        for (const listener of listeners5) {
+          listener();
+        }
+      }
+    }
+    delete openIndexedDBRequests[dbName];
+    delete databaseCache[dbName];
+    delete onCloseListeners[dbName];
+  }
+  function deleteDatabase(dbName) {
+    return new Promise((resolve2, reject) => {
+      closeDatabase(dbName);
+      const req = indexedDB.deleteDatabase(dbName);
+      handleOpenOrDeleteReq(resolve2, reject, req);
+    });
+  }
+  function addOnCloseListener(dbName, listener) {
+    let listeners5 = onCloseListeners[dbName];
+    if (!listeners5) {
+      listeners5 = onCloseListeners[dbName] = [];
+    }
+    listeners5.push(listener);
+  }
+  var irregularEmoticons = /* @__PURE__ */ new Set([
+    ":D",
+    "XD",
+    ":'D",
+    "O:)",
+    ":X",
+    ":P",
+    ";P",
+    "XP",
+    ":L",
+    ":Z",
+    ":j",
+    "8D",
+    "XO",
+    "8)",
+    ":B",
+    ":O",
+    ":S",
+    ":'o",
+    "Dx",
+    "X(",
+    "D:",
+    ":C",
+    ">0)",
+    ":3",
+    "</3",
+    "<3",
+    "\\M/",
+    ":E",
+    "8#"
+  ]);
+  function extractTokens(str) {
+    return str.split(/[\s_]+/).map((word) => {
+      if (!word.match(/\w/) || irregularEmoticons.has(word)) {
+        return word.toLowerCase();
+      }
+      return word.replace(/[)(:,]/g, "").replace(/’/g, "'").toLowerCase();
+    }).filter(Boolean);
+  }
+  var MIN_SEARCH_TEXT_LENGTH = 2;
+  function normalizeTokens(str) {
+    return str.filter(Boolean).map((_) => _.toLowerCase()).filter((_) => _.length >= MIN_SEARCH_TEXT_LENGTH);
+  }
+  function transformEmojiData(emojiData) {
+    const res = emojiData.map(({ annotation, emoticon, group, order, shortcodes, skins, tags, emoji, version }) => {
+      const tokens = [...new Set(
+        normalizeTokens([
+          ...(shortcodes || []).map(extractTokens).flat(),
+          ...(tags || []).map(extractTokens).flat(),
+          ...extractTokens(annotation),
+          emoticon
+        ])
+      )].sort();
+      const res2 = {
+        annotation,
+        group,
+        order,
+        tags,
+        tokens,
+        unicode: emoji,
+        version
+      };
+      if (emoticon) {
+        res2.emoticon = emoticon;
+      }
+      if (shortcodes) {
+        res2.shortcodes = shortcodes;
+      }
+      if (skins) {
+        res2.skinTones = [];
+        res2.skinUnicodes = [];
+        res2.skinVersions = [];
+        for (const { tone, emoji: emoji2, version: version2 } of skins) {
+          res2.skinTones.push(tone);
+          res2.skinUnicodes.push(emoji2);
+          res2.skinVersions.push(version2);
+        }
+      }
+      return res2;
+    });
+    return res;
+  }
+  function callStore(store, method, key2, cb) {
+    store[method](key2).onsuccess = (e) => cb && cb(e.target.result);
+  }
+  function getIDB(store, key2, cb) {
+    callStore(store, "get", key2, cb);
+  }
+  function getAllIDB(store, key2, cb) {
+    callStore(store, "getAll", key2, cb);
+  }
+  function commit(txn) {
+    if (txn.commit) {
+      txn.commit();
+    }
+  }
+  function minBy(array, func) {
+    let minItem = array[0];
+    for (let i = 1; i < array.length; i++) {
+      const item = array[i];
+      if (func(minItem) > func(item)) {
+        minItem = item;
+      }
+    }
+    return minItem;
+  }
+  function findCommonMembers(arrays, uniqByFunc) {
+    const shortestArray = minBy(arrays, (_) => _.length);
+    const results = [];
+    for (const item of shortestArray) {
+      if (!arrays.some((array) => array.findIndex((_) => uniqByFunc(_) === uniqByFunc(item)) === -1)) {
+        results.push(item);
+      }
+    }
+    return results;
+  }
+  async function isEmpty(db) {
+    return !await get2(db, STORE_KEYVALUE, KEY_URL);
+  }
+  async function hasData(db, url2, eTag) {
+    const [oldETag, oldUrl] = await Promise.all([KEY_ETAG, KEY_URL].map((key2) => get2(db, STORE_KEYVALUE, key2)));
+    return oldETag === eTag && oldUrl === url2;
+  }
+  async function doFullDatabaseScanForSingleResult(db, predicate) {
+    const BATCH_SIZE = 50;
+    return dbPromise(db, STORE_EMOJI, MODE_READONLY, (emojiStore, txn, cb) => {
+      let lastKey;
+      const processNextBatch = () => {
+        emojiStore.getAll(lastKey && IDBKeyRange.lowerBound(lastKey, true), BATCH_SIZE).onsuccess = (e) => {
+          const results = e.target.result;
+          for (const result of results) {
+            lastKey = result.unicode;
+            if (predicate(result)) {
+              return cb(result);
+            }
+          }
+          if (results.length < BATCH_SIZE) {
+            return cb();
+          }
+          processNextBatch();
+        };
+      };
+      processNextBatch();
+    });
+  }
+  async function loadData(db, emojiData, url2, eTag) {
+    try {
+      const transformedData = transformEmojiData(emojiData);
+      await dbPromise(db, [STORE_EMOJI, STORE_KEYVALUE], MODE_READWRITE, ([emojiStore, metaStore], txn) => {
+        let oldETag;
+        let oldUrl;
+        let todo = 0;
+        function checkFetched() {
+          if (++todo === 2) {
+            onFetched();
+          }
+        }
+        function onFetched() {
+          if (oldETag === eTag && oldUrl === url2) {
+            return;
+          }
+          emojiStore.clear();
+          for (const data of transformedData) {
+            emojiStore.put(data);
+          }
+          metaStore.put(eTag, KEY_ETAG);
+          metaStore.put(url2, KEY_URL);
+          commit(txn);
+        }
+        getIDB(metaStore, KEY_ETAG, (result) => {
+          oldETag = result;
+          checkFetched();
+        });
+        getIDB(metaStore, KEY_URL, (result) => {
+          oldUrl = result;
+          checkFetched();
+        });
+      });
+    } finally {
+    }
+  }
+  async function getEmojiByGroup(db, group) {
+    return dbPromise(db, STORE_EMOJI, MODE_READONLY, (emojiStore, txn, cb) => {
+      const range = IDBKeyRange.bound([group, 0], [group + 1, 0], false, true);
+      getAllIDB(emojiStore.index(INDEX_GROUP_AND_ORDER), range, cb);
+    });
+  }
+  async function getEmojiBySearchQuery(db, query) {
+    const tokens = normalizeTokens(extractTokens(query));
+    if (!tokens.length) {
+      return [];
+    }
+    return dbPromise(db, STORE_EMOJI, MODE_READONLY, (emojiStore, txn, cb) => {
+      const intermediateResults = [];
+      const checkDone = () => {
+        if (intermediateResults.length === tokens.length) {
+          onDone();
+        }
+      };
+      const onDone = () => {
+        const results = findCommonMembers(intermediateResults, (_) => _.unicode);
+        cb(results.sort((a, b) => a.order < b.order ? -1 : 1));
+      };
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        const range = i === tokens.length - 1 ? IDBKeyRange.bound(token, token + "\uFFFF", false, true) : IDBKeyRange.only(token);
+        getAllIDB(emojiStore.index(INDEX_TOKENS), range, (result) => {
+          intermediateResults.push(result);
+          checkDone();
+        });
+      }
+    });
+  }
+  async function getEmojiByShortcode(db, shortcode) {
+    const emojis = await getEmojiBySearchQuery(db, shortcode);
+    if (!emojis.length) {
+      const predicate = (_) => (_.shortcodes || []).includes(shortcode.toLowerCase());
+      return await doFullDatabaseScanForSingleResult(db, predicate) || null;
+    }
+    return emojis.filter((_) => {
+      const lowerShortcodes = (_.shortcodes || []).map((_2) => _2.toLowerCase());
+      return lowerShortcodes.includes(shortcode.toLowerCase());
+    })[0] || null;
+  }
+  async function getEmojiByUnicode(db, unicode) {
+    return dbPromise(db, STORE_EMOJI, MODE_READONLY, (emojiStore, txn, cb) => getIDB(emojiStore, unicode, (result) => {
+      if (result) {
+        return cb(result);
+      }
+      getIDB(emojiStore.index(INDEX_SKIN_UNICODE), unicode, (result2) => cb(result2 || null));
+    }));
+  }
+  function get2(db, storeName, key2) {
+    return dbPromise(db, storeName, MODE_READONLY, (store, txn, cb) => getIDB(store, key2, cb));
+  }
+  function set2(db, storeName, key2, value) {
+    return dbPromise(db, storeName, MODE_READWRITE, (store, txn) => {
+      store.put(value, key2);
+      commit(txn);
+    });
+  }
+  function incrementFavoriteEmojiCount(db, unicode) {
+    return dbPromise(db, STORE_FAVORITES, MODE_READWRITE, (store, txn) => getIDB(store, unicode, (result) => {
+      store.put((result || 0) + 1, unicode);
+      commit(txn);
+    }));
+  }
+  function getTopFavoriteEmoji(db, customEmojiIndex2, limit) {
+    if (limit === 0) {
+      return [];
+    }
+    return dbPromise(db, [STORE_FAVORITES, STORE_EMOJI], MODE_READONLY, ([favoritesStore, emojiStore], txn, cb) => {
+      const results = [];
+      favoritesStore.index(INDEX_COUNT).openCursor(void 0, "prev").onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) {
+          return cb(results);
+        }
+        function addResult(result) {
+          results.push(result);
+          if (results.length === limit) {
+            return cb(results);
+          }
+          cursor.continue();
+        }
+        const unicodeOrName = cursor.primaryKey;
+        const custom = customEmojiIndex2.byName(unicodeOrName);
+        if (custom) {
+          return addResult(custom);
+        }
+        getIDB(emojiStore, unicodeOrName, (emoji) => {
+          if (emoji) {
+            return addResult(emoji);
+          }
+          cursor.continue();
+        });
+      };
+    });
+  }
+  var CODA_MARKER = "";
+  function trie(arr, itemToTokens) {
+    const map2 = /* @__PURE__ */ new Map();
+    for (const item of arr) {
+      const tokens = itemToTokens(item);
+      for (const token of tokens) {
+        let currentMap = map2;
+        for (let i = 0; i < token.length; i++) {
+          const char = token.charAt(i);
+          let nextMap = currentMap.get(char);
+          if (!nextMap) {
+            nextMap = /* @__PURE__ */ new Map();
+            currentMap.set(char, nextMap);
+          }
+          currentMap = nextMap;
+        }
+        let valuesAtCoda = currentMap.get(CODA_MARKER);
+        if (!valuesAtCoda) {
+          valuesAtCoda = [];
+          currentMap.set(CODA_MARKER, valuesAtCoda);
+        }
+        valuesAtCoda.push(item);
+      }
+    }
+    const search = (query, exact) => {
+      let currentMap = map2;
+      for (let i = 0; i < query.length; i++) {
+        const char = query.charAt(i);
+        const nextMap = currentMap.get(char);
+        if (nextMap) {
+          currentMap = nextMap;
+        } else {
+          return [];
+        }
+      }
+      if (exact) {
+        const results2 = currentMap.get(CODA_MARKER);
+        return results2 || [];
+      }
+      const results = [];
+      const queue = [currentMap];
+      while (queue.length) {
+        const currentMap2 = queue.shift();
+        const entriesSortedByKey = [...currentMap2.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+        for (const [key2, value] of entriesSortedByKey) {
+          if (key2 === CODA_MARKER) {
+            results.push(...value);
+          } else {
+            queue.push(value);
+          }
+        }
+      }
+      return results;
+    };
+    return search;
+  }
+  var requiredKeys$1 = [
+    "name",
+    "url"
+  ];
+  function assertCustomEmojis(customEmojis) {
+    const isArray = customEmojis && Array.isArray(customEmojis);
+    const firstItemIsFaulty = isArray && customEmojis.length && (!customEmojis[0] || requiredKeys$1.some((key2) => !(key2 in customEmojis[0])));
+    if (!isArray || firstItemIsFaulty) {
+      throw new Error("Custom emojis are in the wrong format");
+    }
+  }
+  function customEmojiIndex(customEmojis) {
+    assertCustomEmojis(customEmojis);
+    const sortByName = (a, b) => a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+    const all = customEmojis.sort(sortByName);
+    const emojiToTokens = (emoji) => {
+      const set3 = /* @__PURE__ */ new Set();
+      if (emoji.shortcodes) {
+        for (const shortcode of emoji.shortcodes) {
+          for (const token of extractTokens(shortcode)) {
+            set3.add(token);
+          }
+        }
+      }
+      return set3;
+    };
+    const searchTrie = trie(customEmojis, emojiToTokens);
+    const searchByExactMatch = (_) => searchTrie(_, true);
+    const searchByPrefix = (_) => searchTrie(_, false);
+    const search = (query) => {
+      const tokens = extractTokens(query);
+      const intermediateResults = tokens.map((token, i) => (i < tokens.length - 1 ? searchByExactMatch : searchByPrefix)(token));
+      return findCommonMembers(intermediateResults, (_) => _.name).sort(sortByName);
+    };
+    const shortcodeToEmoji = /* @__PURE__ */ new Map();
+    const nameToEmoji = /* @__PURE__ */ new Map();
+    for (const customEmoji of customEmojis) {
+      nameToEmoji.set(customEmoji.name.toLowerCase(), customEmoji);
+      for (const shortcode of customEmoji.shortcodes || []) {
+        shortcodeToEmoji.set(shortcode.toLowerCase(), customEmoji);
+      }
+    }
+    const byShortcode = (shortcode) => shortcodeToEmoji.get(shortcode.toLowerCase());
+    const byName = (name) => nameToEmoji.get(name.toLowerCase());
+    return {
+      all,
+      search,
+      byShortcode,
+      byName
+    };
+  }
+  var isFirefoxContentScript = typeof wrappedJSObject !== "undefined";
+  function cleanEmoji(emoji) {
+    if (!emoji) {
+      return emoji;
+    }
+    if (isFirefoxContentScript) {
+      emoji = structuredClone(emoji);
+    }
+    delete emoji.tokens;
+    if (emoji.skinTones) {
+      const len = emoji.skinTones.length;
+      emoji.skins = Array(len);
+      for (let i = 0; i < len; i++) {
+        emoji.skins[i] = {
+          tone: emoji.skinTones[i],
+          unicode: emoji.skinUnicodes[i],
+          version: emoji.skinVersions[i]
+        };
+      }
+      delete emoji.skinTones;
+      delete emoji.skinUnicodes;
+      delete emoji.skinVersions;
+    }
+    return emoji;
+  }
+  function warnETag(eTag) {
+    if (!eTag) {
+      console.warn("emoji-picker-element is more efficient if the dataSource server exposes an ETag header.");
+    }
+  }
+  var requiredKeys = [
+    "annotation",
+    "emoji",
+    "group",
+    "order",
+    "version"
+  ];
+  function assertEmojiData(emojiData) {
+    if (!emojiData || !Array.isArray(emojiData) || !emojiData[0] || typeof emojiData[0] !== "object" || requiredKeys.some((key2) => !(key2 in emojiData[0]))) {
+      throw new Error("Emoji data is in the wrong format");
+    }
+  }
+  function assertStatus(response, dataSource) {
+    if (Math.floor(response.status / 100) !== 2) {
+      throw new Error("Failed to fetch: " + dataSource + ":  " + response.status);
+    }
+  }
+  async function getETag(dataSource) {
+    const response = await fetch(dataSource, { method: "HEAD" });
+    assertStatus(response, dataSource);
+    const eTag = response.headers.get("etag");
+    warnETag(eTag);
+    return eTag;
+  }
+  async function getETagAndData(dataSource) {
+    const response = await fetch(dataSource);
+    assertStatus(response, dataSource);
+    const eTag = response.headers.get("etag");
+    warnETag(eTag);
+    const emojiData = await response.json();
+    assertEmojiData(emojiData);
+    return [eTag, emojiData];
+  }
+  function arrayBufferToBinaryString(buffer) {
+    var binary = "";
+    var bytes = new Uint8Array(buffer);
+    var length = bytes.byteLength;
+    var i = -1;
+    while (++i < length) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return binary;
+  }
+  function binaryStringToArrayBuffer(binary) {
+    var length = binary.length;
+    var buf = new ArrayBuffer(length);
+    var arr = new Uint8Array(buf);
+    var i = -1;
+    while (++i < length) {
+      arr[i] = binary.charCodeAt(i);
+    }
+    return buf;
+  }
+  async function jsonChecksum(object) {
+    const inString = JSON.stringify(object);
+    let inBuffer = binaryStringToArrayBuffer(inString);
+    const outBuffer = await crypto.subtle.digest("SHA-1", inBuffer);
+    const outBinString = arrayBufferToBinaryString(outBuffer);
+    const res = btoa(outBinString);
+    return res;
+  }
+  async function doCheckForUpdates(db, dataSource) {
+    let emojiData;
+    let eTag = await getETag(dataSource);
+    if (!eTag) {
+      const eTagAndData = await getETagAndData(dataSource);
+      eTag = eTagAndData[0];
+      emojiData = eTagAndData[1];
+      if (!eTag) {
+        eTag = await jsonChecksum(emojiData);
+      }
+    }
+    if (await hasData(db, dataSource, eTag)) ;
+    else {
+      if (!emojiData) {
+        const eTagAndData = await getETagAndData(dataSource);
+        emojiData = eTagAndData[1];
+      }
+      await loadData(db, emojiData, dataSource, eTag);
+    }
+  }
+  async function loadDataForFirstTime(db, dataSource) {
+    let [eTag, emojiData] = await getETagAndData(dataSource);
+    if (!eTag) {
+      eTag = await jsonChecksum(emojiData);
+    }
+    await loadData(db, emojiData, dataSource, eTag);
+  }
+  async function checkForUpdates(db, dataSource) {
+    try {
+      await doCheckForUpdates(db, dataSource);
+    } catch (err) {
+      if (err.name !== "InvalidStateError") {
+        throw err;
+      }
+    }
+  }
+  var Database = class {
+    constructor({ dataSource = DEFAULT_DATA_SOURCE, locale = DEFAULT_LOCALE, customEmoji = [] } = {}) {
+      this.dataSource = dataSource;
+      this.locale = locale;
+      this._dbName = `emoji-picker-element-${this.locale}`;
+      this._db = void 0;
+      this._lazyUpdate = void 0;
+      this._custom = customEmojiIndex(customEmoji);
+      this._clear = this._clear.bind(this);
+      this._ready = this._init();
+    }
+    async _init() {
+      const db = this._db = await openDatabase(this._dbName);
+      addOnCloseListener(this._dbName, this._clear);
+      const dataSource = this.dataSource;
+      const empty = await isEmpty(db);
+      if (empty) {
+        await loadDataForFirstTime(db, dataSource);
+      } else {
+        this._lazyUpdate = checkForUpdates(db, dataSource);
+      }
+    }
+    async ready() {
+      const checkReady = async () => {
+        if (!this._ready) {
+          this._ready = this._init();
+        }
+        return this._ready;
+      };
+      await checkReady();
+      if (!this._db) {
+        await checkReady();
+      }
+    }
+    async getEmojiByGroup(group) {
+      assertNumber(group);
+      await this.ready();
+      return uniqEmoji(await getEmojiByGroup(this._db, group)).map(cleanEmoji);
+    }
+    async getEmojiBySearchQuery(query) {
+      assertNonEmptyString(query);
+      await this.ready();
+      const customs = this._custom.search(query);
+      const natives = uniqEmoji(await getEmojiBySearchQuery(this._db, query)).map(cleanEmoji);
+      return [
+        ...customs,
+        ...natives
+      ];
+    }
+    async getEmojiByShortcode(shortcode) {
+      assertNonEmptyString(shortcode);
+      await this.ready();
+      const custom = this._custom.byShortcode(shortcode);
+      if (custom) {
+        return custom;
+      }
+      return cleanEmoji(await getEmojiByShortcode(this._db, shortcode));
+    }
+    async getEmojiByUnicodeOrName(unicodeOrName) {
+      assertNonEmptyString(unicodeOrName);
+      await this.ready();
+      const custom = this._custom.byName(unicodeOrName);
+      if (custom) {
+        return custom;
+      }
+      return cleanEmoji(await getEmojiByUnicode(this._db, unicodeOrName));
+    }
+    async getPreferredSkinTone() {
+      await this.ready();
+      return await get2(this._db, STORE_KEYVALUE, KEY_PREFERRED_SKINTONE) || 0;
+    }
+    async setPreferredSkinTone(skinTone) {
+      assertNumber(skinTone);
+      await this.ready();
+      return set2(this._db, STORE_KEYVALUE, KEY_PREFERRED_SKINTONE, skinTone);
+    }
+    async incrementFavoriteEmojiCount(unicodeOrName) {
+      assertNonEmptyString(unicodeOrName);
+      await this.ready();
+      return incrementFavoriteEmojiCount(this._db, unicodeOrName);
+    }
+    async getTopFavoriteEmoji(limit) {
+      assertNumber(limit);
+      await this.ready();
+      return (await getTopFavoriteEmoji(this._db, this._custom, limit)).map(cleanEmoji);
+    }
+    set customEmoji(customEmojis) {
+      this._custom = customEmojiIndex(customEmojis);
+    }
+    get customEmoji() {
+      return this._custom.all;
+    }
+    async _shutdown() {
+      await this.ready();
+      try {
+        await this._lazyUpdate;
+      } catch (err) {
+      }
+    }
+    // clear references to IDB, e.g. during a close event
+    _clear() {
+      this._db = this._ready = this._lazyUpdate = void 0;
+    }
+    async close() {
+      await this._shutdown();
+      await closeDatabase(this._dbName);
+    }
+    async delete() {
+      await this._shutdown();
+      await deleteDatabase(this._dbName);
+    }
+  };
+
+  // node_modules/emoji-picker-element/picker.js
+  var allGroups = [
+    [-1, "\u2728", "custom"],
+    [0, "\u{1F600}", "smileys-emotion"],
+    [1, "\u{1F44B}", "people-body"],
+    [3, "\u{1F431}", "animals-nature"],
+    [4, "\u{1F34E}", "food-drink"],
+    [5, "\u{1F3E0}\uFE0F", "travel-places"],
+    [6, "\u26BD", "activities"],
+    [7, "\u{1F4DD}", "objects"],
+    [8, "\u26D4\uFE0F", "symbols"],
+    [9, "\u{1F3C1}", "flags"]
+  ].map(([id, emoji, name]) => ({ id, emoji, name }));
+  var groups = allGroups.slice(1);
+  var MIN_SEARCH_TEXT_LENGTH2 = 2;
+  var NUM_SKIN_TONES = 6;
+  var rIC = typeof requestIdleCallback === "function" ? requestIdleCallback : setTimeout;
+  function hasZwj(emoji) {
+    return emoji.unicode.includes("\u200D");
+  }
+  var versionsAndTestEmoji = {
+    "\u{1FAEA}": 17,
+    // distorted face
+    "\u{1FAE9}": 16,
+    // face with bags under eyes
+    "\u{1FAE8}": 15.1,
+    // shaking head, technically from v15 but see note above
+    "\u{1FAE0}": 14,
+    "\u{1F972}": 13.1,
+    // smiling face with tear, technically from v13 but see note above
+    "\u{1F97B}": 12.1,
+    // sari, technically from v12 but see note above
+    "\u{1F970}": 11,
+    "\u{1F929}": 5,
+    "\u{1F471}\u200D\u2640\uFE0F": 4,
+    "\u{1F923}": 3,
+    "\u{1F441}\uFE0F\u200D\u{1F5E8}\uFE0F": 2,
+    "\u{1F600}": 1,
+    "\u{1F610}\uFE0F": 0.7,
+    "\u{1F603}": 0.6
+  };
+  var TIMEOUT_BEFORE_LOADING_MESSAGE = 1e3;
+  var DEFAULT_SKIN_TONE_EMOJI = "\u{1F590}\uFE0F";
+  var DEFAULT_NUM_COLUMNS = 8;
+  var MOST_COMMONLY_USED_EMOJI = [
+    "\u{1F60A}",
+    "\u{1F612}",
+    "\u2764\uFE0F",
+    "\u{1F44D}\uFE0F",
+    "\u{1F60D}",
+    "\u{1F602}",
+    "\u{1F62D}",
+    "\u263A\uFE0F",
+    "\u{1F614}",
+    "\u{1F629}",
+    "\u{1F60F}",
+    "\u{1F495}",
+    "\u{1F64C}",
+    "\u{1F618}"
+  ];
+  var FONT_FAMILY = '"Twemoji Mozilla","Apple Color Emoji","Segoe UI Emoji","Segoe UI Symbol","Noto Color Emoji","EmojiOne Color","Android Emoji",sans-serif';
+  var DEFAULT_CATEGORY_SORTING = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+  var getTextFeature = (text, color) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx2 = canvas.getContext("2d", {
+      // Improves the performance of `getImageData()`
+      // https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getContextAttributes#willreadfrequently
+      willReadFrequently: true
+    });
+    ctx2.textBaseline = "top";
+    ctx2.font = `100px ${FONT_FAMILY}`;
+    ctx2.fillStyle = color;
+    ctx2.scale(0.01, 0.01);
+    ctx2.fillText(text, 0, 0);
+    return ctx2.getImageData(0, 0, 1, 1).data;
+  };
+  var compareFeatures = (feature1, feature2) => {
+    const feature1Str = [...feature1].join(",");
+    const feature2Str = [...feature2].join(",");
+    return feature1Str === feature2Str && !feature1Str.startsWith("0,0,0,");
+  };
+  function testColorEmojiSupported(text) {
+    const feature1 = getTextFeature(text, "#000");
+    const feature2 = getTextFeature(text, "#fff");
+    return feature1 && feature2 && compareFeatures(feature1, feature2);
+  }
+  function determineEmojiSupportLevel() {
+    const entries = Object.entries(versionsAndTestEmoji);
+    try {
+      for (const [emoji, version] of entries) {
+        if (testColorEmojiSupported(emoji)) {
+          return version;
+        }
+      }
+    } catch (e) {
+    } finally {
+    }
+    return entries[0][1];
+  }
+  var promise;
+  var detectEmojiSupportLevel = () => {
+    if (!promise) {
+      promise = new Promise((resolve2) => rIC(() => resolve2(determineEmojiSupportLevel())));
+    }
+    return promise;
+  };
+  var supportedZwjEmojis = /* @__PURE__ */ new Map();
+  var VARIATION_SELECTOR = "\uFE0F";
+  var SKINTONE_MODIFIER = "\uD83C";
+  var ZWJ = "\u200D";
+  var LIGHT_SKIN_TONE = 127995;
+  var LIGHT_SKIN_TONE_MODIFIER = 57339;
+  function applySkinTone(str, skinTone) {
+    if (skinTone === 0) {
+      return str;
+    }
+    const zwjIndex = str.indexOf(ZWJ);
+    if (zwjIndex !== -1) {
+      return str.substring(0, zwjIndex) + String.fromCodePoint(LIGHT_SKIN_TONE + skinTone - 1) + str.substring(zwjIndex);
+    }
+    if (str.endsWith(VARIATION_SELECTOR)) {
+      str = str.substring(0, str.length - 1);
+    }
+    return str + SKINTONE_MODIFIER + String.fromCodePoint(LIGHT_SKIN_TONE_MODIFIER + skinTone - 1);
+  }
+  function halt(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  function incrementOrDecrement(decrement, val, arr) {
+    val += decrement ? -1 : 1;
+    if (val < 0) {
+      val = arr.length - 1;
+    } else if (val >= arr.length) {
+      val = 0;
+    }
+    return val;
+  }
+  function uniqBy2(arr, func) {
+    const set3 = /* @__PURE__ */ new Set();
+    const res = [];
+    for (const item of arr) {
+      const key2 = func(item);
+      if (!set3.has(key2)) {
+        set3.add(key2);
+        res.push(item);
+      }
+    }
+    return res;
+  }
+  function summarizeEmojisForUI(emojis, emojiSupportLevel) {
+    const toSimpleSkinsMap = (skins) => {
+      const res = {};
+      for (const skin of skins) {
+        if (typeof skin.tone === "number" && skin.version <= emojiSupportLevel) {
+          res[skin.tone] = skin.unicode;
+        }
+      }
+      return res;
+    };
+    return emojis.map(({ unicode, skins, shortcodes, url: url2, name, category, annotation }) => ({
+      unicode,
+      name,
+      shortcodes,
+      url: url2,
+      category,
+      annotation,
+      id: unicode || name,
+      skins: skins && toSimpleSkinsMap(skins)
+    }));
+  }
+  var rAF = requestAnimationFrame;
+  var resizeObserverSupported = typeof ResizeObserver === "function";
+  function resizeObserverAction(node, abortSignal, onUpdate) {
+    let resizeObserver;
+    if (resizeObserverSupported) {
+      resizeObserver = new ResizeObserver(onUpdate);
+      resizeObserver.observe(node);
+    } else {
+      rAF(onUpdate);
+    }
+    abortSignal.addEventListener("abort", () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+    });
+  }
+  function calculateTextWidth(node) {
+    {
+      const range = document.createRange();
+      range.selectNode(node.firstChild);
+      return range.getBoundingClientRect().width;
+    }
+  }
+  var baselineEmojiWidth;
+  function checkZwjSupport(zwjEmojisToCheck, baselineEmoji, emojiToDomNode) {
+    let allSupported = true;
+    for (const emoji of zwjEmojisToCheck) {
+      const domNode = emojiToDomNode(emoji);
+      if (!domNode) {
+        continue;
+      }
+      const emojiWidth = calculateTextWidth(domNode);
+      if (typeof baselineEmojiWidth === "undefined") {
+        baselineEmojiWidth = calculateTextWidth(baselineEmoji);
+      }
+      const supported = emojiWidth / 1.8 < baselineEmojiWidth;
+      supportedZwjEmojis.set(emoji.unicode, supported);
+      if (!supported) {
+        allSupported = false;
+      }
+    }
+    return allSupported;
+  }
+  function uniq(arr) {
+    return uniqBy2(arr, (_) => _);
+  }
+  function resetScrollTopIfPossible(element) {
+    if (element) {
+      element.scrollTop = 0;
+    }
+  }
+  function getFromMap(cache2, key2, func) {
+    let cached = cache2.get(key2);
+    if (!cached) {
+      cached = func();
+      cache2.set(key2, cached);
+    }
+    return cached;
+  }
+  function toString(value) {
+    return "" + value;
+  }
+  function parseTemplate(htmlString) {
+    const template = document.createElement("template");
+    template.innerHTML = htmlString;
+    return template;
+  }
+  var parseCache = /* @__PURE__ */ new WeakMap();
+  var domInstancesCache = /* @__PURE__ */ new WeakMap();
+  var unkeyedSymbol = Symbol("un-keyed");
+  var hasReplaceChildren = "replaceChildren" in Element.prototype;
+  function replaceChildren(parentNode, newChildren) {
+    if (hasReplaceChildren) {
+      parentNode.replaceChildren(...newChildren);
+    } else {
+      parentNode.innerHTML = "";
+      parentNode.append(...newChildren);
+    }
+  }
+  function doChildrenNeedRerender(parentNode, newChildren) {
+    let oldChild = parentNode.firstChild;
+    let oldChildrenCount = 0;
+    while (oldChild) {
+      const newChild = newChildren[oldChildrenCount];
+      if (newChild !== oldChild) {
+        return true;
+      }
+      oldChild = oldChild.nextSibling;
+      oldChildrenCount++;
+    }
+    return oldChildrenCount !== newChildren.length;
+  }
+  function patchChildren(newChildren, instanceBinding) {
+    const { targetNode } = instanceBinding;
+    let { targetParentNode } = instanceBinding;
+    let needsRerender = false;
+    if (targetParentNode) {
+      needsRerender = doChildrenNeedRerender(targetParentNode, newChildren);
+    } else {
+      needsRerender = true;
+      instanceBinding.targetNode = void 0;
+      instanceBinding.targetParentNode = targetParentNode = targetNode.parentNode;
+    }
+    if (needsRerender) {
+      replaceChildren(targetParentNode, newChildren);
+    }
+  }
+  function patch(expressions, instanceBindings) {
+    for (const instanceBinding of instanceBindings) {
+      const {
+        targetNode,
+        currentExpression,
+        binding: {
+          expressionIndex,
+          attributeName,
+          attributeValuePre,
+          attributeValuePost
+        }
+      } = instanceBinding;
+      const expression = expressions[expressionIndex];
+      if (currentExpression === expression) {
+        continue;
+      }
+      instanceBinding.currentExpression = expression;
+      if (attributeName) {
+        if (expression === null) {
+          targetNode.removeAttribute(attributeName);
+        } else {
+          const newValue = attributeValuePre + toString(expression) + attributeValuePost;
+          targetNode.setAttribute(attributeName, newValue);
+        }
+      } else {
+        let newNode;
+        if (Array.isArray(expression)) {
+          patchChildren(expression, instanceBinding);
+        } else if (expression instanceof Element) {
+          newNode = expression;
+          targetNode.replaceWith(newNode);
+        } else {
+          targetNode.nodeValue = toString(expression);
+        }
+        if (newNode) {
+          instanceBinding.targetNode = newNode;
+        }
+      }
+    }
+  }
+  function parse(tokens) {
+    let htmlString = "";
+    let withinTag = false;
+    let withinAttribute = false;
+    let elementIndexCounter = -1;
+    const elementsToBindings = /* @__PURE__ */ new Map();
+    const elementIndexes = [];
+    let skipTokenChars = 0;
+    for (let i = 0, len = tokens.length; i < len; i++) {
+      const token = tokens[i];
+      htmlString += token.slice(skipTokenChars);
+      if (i === len - 1) {
+        break;
+      }
+      for (let j = 0; j < token.length; j++) {
+        const char = token.charAt(j);
+        switch (char) {
+          case "<": {
+            const nextChar = token.charAt(j + 1);
+            if (nextChar === "/") {
+              elementIndexes.pop();
+            } else {
+              withinTag = true;
+              elementIndexes.push(++elementIndexCounter);
+            }
+            break;
+          }
+          case ">": {
+            withinTag = false;
+            withinAttribute = false;
+            break;
+          }
+          case "=": {
+            withinAttribute = true;
+            break;
+          }
+        }
+      }
+      const elementIndex = elementIndexes[elementIndexes.length - 1];
+      const bindings = getFromMap(elementsToBindings, elementIndex, () => []);
+      let attributeName;
+      let attributeValuePre;
+      let attributeValuePost;
+      if (withinAttribute) {
+        const attributePreMatch = /(\S+)="?([^"=]*)$/.exec(token);
+        attributeName = attributePreMatch[1];
+        attributeValuePre = attributePreMatch[2];
+        const attributePostMatch = /^([^">]*)("?)/.exec(tokens[i + 1]);
+        attributeValuePost = attributePostMatch[1];
+        htmlString = htmlString.slice(0, -1 * attributePreMatch[0].length);
+        skipTokenChars = attributePostMatch[0].length;
+      } else {
+        skipTokenChars = 0;
+      }
+      const binding = {
+        attributeName,
+        attributeValuePre,
+        attributeValuePost,
+        expressionIndex: i
+      };
+      bindings.push(binding);
+      if (!withinTag && !withinAttribute) {
+        htmlString += " ";
+      }
+    }
+    const template = parseTemplate(htmlString);
+    return {
+      template,
+      elementsToBindings
+    };
+  }
+  function applyBindings(bindings, element, instanceBindings) {
+    for (let i = 0; i < bindings.length; i++) {
+      const binding = bindings[i];
+      const targetNode = binding.attributeName ? element : element.firstChild;
+      const instanceBinding = {
+        binding,
+        targetNode,
+        targetParentNode: void 0,
+        currentExpression: void 0
+      };
+      instanceBindings.push(instanceBinding);
+    }
+  }
+  function traverseAndSetupBindings(rootElement, elementsToBindings) {
+    const instanceBindings = [];
+    let topLevelBindings;
+    if (elementsToBindings.size === 1 && (topLevelBindings = elementsToBindings.get(0))) {
+      applyBindings(topLevelBindings, rootElement, instanceBindings);
+    } else {
+      const treeWalker = document.createTreeWalker(rootElement, NodeFilter.SHOW_ELEMENT);
+      let element = rootElement;
+      let elementIndex = -1;
+      do {
+        const bindings = elementsToBindings.get(++elementIndex);
+        if (bindings) {
+          applyBindings(bindings, element, instanceBindings);
+        }
+      } while (element = treeWalker.nextNode());
+    }
+    return instanceBindings;
+  }
+  function parseHtml(tokens) {
+    const { template, elementsToBindings } = getFromMap(parseCache, tokens, () => parse(tokens));
+    const dom = template.cloneNode(true).content.firstElementChild;
+    const instanceBindings = traverseAndSetupBindings(dom, elementsToBindings);
+    return function updateDomInstance(expressions) {
+      patch(expressions, instanceBindings);
+      return dom;
+    };
+  }
+  function createFramework(state3) {
+    const domInstances = getFromMap(domInstancesCache, state3, () => /* @__PURE__ */ new Map());
+    let domInstanceCacheKey = unkeyedSymbol;
+    function html(tokens, ...expressions) {
+      const domInstancesForTokens = getFromMap(domInstances, tokens, () => /* @__PURE__ */ new Map());
+      const updateDomInstance = getFromMap(domInstancesForTokens, domInstanceCacheKey, () => parseHtml(tokens));
+      return updateDomInstance(expressions);
+    }
+    function map2(array, callback, keyFunction) {
+      return array.map((item, index) => {
+        const originalCacheKey = domInstanceCacheKey;
+        domInstanceCacheKey = keyFunction(item);
+        try {
+          return callback(item, index);
+        } finally {
+          domInstanceCacheKey = originalCacheKey;
+        }
+      });
+    }
+    return { map: map2, html };
+  }
+  function render(container, state3, helpers, events, actions, refs, abortSignal, actionContext, firstRender) {
+    const { labelWithSkin, titleForEmoji, unicodeWithSkin } = helpers;
+    const { html, map: map2 } = createFramework(state3);
+    function emojiList(emojis, searchMode, prefix) {
+      return map2(emojis, (emoji, i) => {
+        return html`<button role="${searchMode ? "option" : "menuitem"}" aria-selected="${searchMode ? i === state3.activeSearchItem : null}" aria-label="${labelWithSkin(emoji, state3.currentSkinTone)}" title="${titleForEmoji(emoji)}" class="${"emoji" + (searchMode && i === state3.activeSearchItem ? " active" : "") + (emoji.unicode ? "" : " custom-emoji")}" id="${`${prefix}-${emoji.id}`}" style="${emoji.unicode ? null : `--custom-emoji-background: url(${JSON.stringify(emoji.url)})`}">${emoji.unicode ? unicodeWithSkin(emoji, state3.currentSkinTone) : ""}</button>`;
+      }, (emoji) => `${prefix}-${emoji.id}`);
+    }
+    const section = () => {
+      return html`<section data-ref="rootElement" class="picker" aria-label="${state3.i18n.regionLabel}" style="${state3.pickerStyle || ""}"><div class="pad-top"></div><div class="search-row"><div class="search-wrapper"><input id="search" class="search" type="search" role="combobox" enterkeyhint="search" placeholder="${state3.i18n.searchLabel}" autocapitalize="none" autocomplete="off" spellcheck="true" aria-expanded="${!!(state3.searchMode && state3.currentEmojis.length)}" aria-controls="search-results" aria-describedby="search-description" aria-autocomplete="list" aria-activedescendant="${state3.activeSearchItemId ? `emo-${state3.activeSearchItemId}` : null}" data-ref="searchElement" data-on-input="onSearchInput" data-on-keydown="onSearchKeydown"><label class="sr-only" for="search">${state3.i18n.searchLabel}</label> <span id="search-description" class="sr-only">${state3.i18n.searchDescription}</span></div><div class="skintone-button-wrapper ${state3.skinTonePickerExpandedAfterAnimation ? "expanded" : ""}"><button id="skintone-button" class="emoji ${state3.skinTonePickerExpanded ? "hide-focus" : ""}" aria-label="${state3.skinToneButtonLabel}" title="${state3.skinToneButtonLabel}" aria-describedby="skintone-description" aria-haspopup="listbox" aria-expanded="${state3.skinTonePickerExpanded}" aria-controls="skintone-list" data-on-click="onClickSkinToneButton">${state3.skinToneButtonText || ""}</button></div><span id="skintone-description" class="sr-only">${state3.i18n.skinToneDescription}</span><div data-ref="skinToneDropdown" id="skintone-list" class="skintone-list hide-focus ${state3.skinTonePickerExpanded ? "" : "hidden no-animate"}" style="transform:translateY(${state3.skinTonePickerExpanded ? 0 : "calc(-1 * var(--num-skintones) * var(--total-emoji-size))"})" role="listbox" aria-label="${state3.i18n.skinTonesLabel}" aria-activedescendant="skintone-${state3.activeSkinTone}" aria-hidden="${!state3.skinTonePickerExpanded}" tabIndex="-1" data-on-focusout="onSkinToneOptionsFocusOut" data-on-click="onSkinToneOptionsClick" data-on-keydown="onSkinToneOptionsKeydown" data-on-keyup="onSkinToneOptionsKeyup">${map2(state3.skinTones, (skinTone, i) => {
+        return html`<div id="skintone-${i}" class="emoji ${i === state3.activeSkinTone ? "active" : ""}" aria-selected="${i === state3.activeSkinTone}" role="option" title="${state3.i18n.skinTones[i]}" aria-label="${state3.i18n.skinTones[i]}">${skinTone}</div>`;
+      }, (skinTone) => skinTone)}</div></div><div class="nav" role="tablist" style="grid-template-columns:repeat(${state3.groups.length},1fr)" aria-label="${state3.i18n.categoriesLabel}" data-on-keydown="onNavKeydown" data-on-click="onNavClick">${map2(state3.groups, (group) => {
+        return html`<button role="tab" class="nav-button" aria-controls="tab-${group.id}" aria-label="${state3.i18n.categories[group.name]}" aria-selected="${!state3.searchMode && state3.currentGroup.id === group.id}" title="${state3.i18n.categories[group.name]}" data-group-id="${group.id}"><div class="nav-emoji emoji">${group.emoji}</div></button>`;
+      }, (group) => group.id)}</div><div class="indicator-wrapper"><div class="indicator" style="transform:translateX(${/* istanbul ignore next */
+      (state3.isRtl ? -1 : 1) * state3.currentGroupIndex * 100}%)"></div></div><div class="message ${state3.message ? "" : "gone"}" role="alert" aria-live="polite">${state3.message || ""}</div><div data-ref="tabpanelElement" class="tabpanel ${!state3.databaseLoaded || state3.message ? "gone" : ""}" role="${state3.searchMode ? "region" : "tabpanel"}" aria-label="${state3.searchMode ? state3.i18n.searchResultsLabel : state3.i18n.categories[state3.currentGroup.name]}" id="${state3.searchMode ? null : `tab-${state3.currentGroup.id}`}" tabIndex="0" data-on-click="onEmojiClick"><div data-action="calculateEmojiGridStyle">${map2(state3.currentEmojisWithCategories, (emojiWithCategory, i) => {
+        return html`<div><div id="menu-label-${i}" class="category ${state3.currentEmojisWithCategories.length === 1 && state3.currentEmojisWithCategories[0].category === "" ? "gone" : ""}" aria-hidden="true">${state3.searchMode ? state3.i18n.searchResultsLabel : emojiWithCategory.category ? emojiWithCategory.category : state3.currentEmojisWithCategories.length > 1 ? state3.i18n.categories.custom : state3.i18n.categories[state3.currentGroup.name]}</div><div class="emoji-menu ${i !== 0 && !state3.searchMode && state3.currentGroup.id === -1 ? "visibility-auto" : ""}" style="${`--num-rows: ${Math.ceil(emojiWithCategory.emojis.length / state3.numColumns)}`}" data-action="updateOnIntersection" role="${state3.searchMode ? "listbox" : "menu"}" aria-labelledby="menu-label-${i}" id="${state3.searchMode ? "search-results" : null}">${emojiList(
+          emojiWithCategory.emojis,
+          state3.searchMode,
+          /* prefix */
+          "emo"
+        )}</div></div>`;
+      }, (emojiWithCategory) => emojiWithCategory.category)}</div></div><div class="favorites onscreen emoji-menu ${state3.message ? "gone" : ""}" role="menu" aria-label="${state3.i18n.favoritesLabel}" data-on-click="onEmojiClick">${emojiList(
+        state3.currentFavorites,
+        /* searchMode */
+        false,
+        /* prefix */
+        "fav"
+      )}</div><button data-ref="baselineEmoji" aria-hidden="true" tabindex="-1" class="abs-pos hidden emoji baseline-emoji">😀</button></section>`;
+    };
+    const rootDom = section();
+    const forElementWithAttribute = (attributeName, callback) => {
+      for (const element of container.querySelectorAll(`[${attributeName}]`)) {
+        callback(element, element.getAttribute(attributeName));
+      }
+    };
+    if (firstRender) {
+      container.appendChild(rootDom);
+      for (const eventName of ["click", "focusout", "input", "keydown", "keyup"]) {
+        forElementWithAttribute(`data-on-${eventName}`, (element, listenerName) => {
+          element.addEventListener(eventName, events[listenerName]);
+        });
+      }
+      forElementWithAttribute("data-ref", (element, ref) => {
+        refs[ref] = element;
+      });
+      abortSignal.addEventListener("abort", () => {
+        container.removeChild(rootDom);
+      });
+    }
+    forElementWithAttribute("data-action", (element, action2) => {
+      let boundActions = actionContext.get(action2);
+      if (!boundActions) {
+        actionContext.set(action2, boundActions = /* @__PURE__ */ new WeakSet());
+      }
+      if (!boundActions.has(element)) {
+        boundActions.add(element);
+        actions[action2](element);
+      }
+    });
+  }
+  var qM = typeof queueMicrotask === "function" ? queueMicrotask : (callback) => Promise.resolve().then(callback);
+  function createState(abortSignal) {
+    let destroyed = false;
+    let currentObserver;
+    const propsToObservers = /* @__PURE__ */ new Map();
+    const dirtyObservers = /* @__PURE__ */ new Set();
+    let queued;
+    const flush = () => {
+      if (destroyed) {
+        return;
+      }
+      const observersToRun = [...dirtyObservers];
+      dirtyObservers.clear();
+      try {
+        for (const observer2 of observersToRun) {
+          observer2();
+        }
+      } finally {
+        queued = false;
+        if (dirtyObservers.size) {
+          queued = true;
+          qM(flush);
+        }
+      }
+    };
+    const state3 = new Proxy({}, {
+      get(target, prop) {
+        if (currentObserver) {
+          let observers = propsToObservers.get(prop);
+          if (!observers) {
+            observers = /* @__PURE__ */ new Set();
+            propsToObservers.set(prop, observers);
+          }
+          observers.add(currentObserver);
+        }
+        return target[prop];
+      },
+      set(target, prop, newValue) {
+        if (target[prop] !== newValue) {
+          target[prop] = newValue;
+          const observers = propsToObservers.get(prop);
+          if (observers) {
+            for (const observer2 of observers) {
+              dirtyObservers.add(observer2);
+            }
+            if (!queued) {
+              queued = true;
+              qM(flush);
+            }
+          }
+        }
+        return true;
+      }
+    });
+    const createEffect = (callback) => {
+      const runnable = () => {
+        const oldObserver = currentObserver;
+        currentObserver = runnable;
+        try {
+          return callback();
+        } finally {
+          currentObserver = oldObserver;
+        }
+      };
+      return runnable();
+    };
+    abortSignal.addEventListener("abort", () => {
+      destroyed = true;
+    });
+    return {
+      state: state3,
+      createEffect
+    };
+  }
+  function arraysAreEqualByFunction(left, right, areEqualFunc) {
+    if (left.length !== right.length) {
+      return false;
+    }
+    for (let i = 0; i < left.length; i++) {
+      if (!areEqualFunc(left[i], right[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  var intersectionObserverCache = /* @__PURE__ */ new WeakMap();
+  function intersectionObserverAction(node, abortSignal, listener) {
+    {
+      const root = node.closest(".tabpanel");
+      let observer2 = intersectionObserverCache.get(root);
+      if (!observer2) {
+        observer2 = new IntersectionObserver(listener, {
+          root,
+          // trigger if we are 1/2 scroll container height away so that the images load a bit quicker while scrolling
+          rootMargin: "50% 0px 50% 0px",
+          // trigger if any part of the emoji grid is intersecting
+          threshold: 0
+        });
+        intersectionObserverCache.set(root, observer2);
+        abortSignal.addEventListener("abort", () => {
+          observer2.disconnect();
+        });
+      }
+      observer2.observe(node);
+    }
+  }
+  var EMPTY_ARRAY = [];
+  var { assign } = Object;
+  function createRoot(shadowRoot, props) {
+    const refs = {};
+    const abortController = new AbortController();
+    const abortSignal = abortController.signal;
+    const { state: state3, createEffect } = createState(abortSignal);
+    const actionContext = /* @__PURE__ */ new Map();
+    assign(state3, {
+      skinToneEmoji: void 0,
+      i18n: void 0,
+      database: void 0,
+      customEmoji: void 0,
+      customCategorySorting: void 0,
+      emojiVersion: void 0
+    });
+    assign(state3, props);
+    assign(state3, {
+      initialLoad: true,
+      currentEmojis: [],
+      currentEmojisWithCategories: [],
+      rawSearchText: "",
+      searchText: "",
+      searchMode: false,
+      activeSearchItem: -1,
+      message: void 0,
+      skinTonePickerExpanded: false,
+      skinTonePickerExpandedAfterAnimation: false,
+      currentSkinTone: 0,
+      activeSkinTone: 0,
+      skinToneButtonText: void 0,
+      pickerStyle: void 0,
+      skinToneButtonLabel: "",
+      skinTones: [],
+      currentFavorites: [],
+      defaultFavoriteEmojis: void 0,
+      numColumns: DEFAULT_NUM_COLUMNS,
+      isRtl: false,
+      currentGroupIndex: 0,
+      groups,
+      databaseLoaded: false,
+      activeSearchItemId: void 0
+    });
+    createEffect(() => {
+      if (state3.currentGroup !== state3.groups[state3.currentGroupIndex]) {
+        state3.currentGroup = state3.groups[state3.currentGroupIndex];
+      }
+    });
+    const focus = (id) => {
+      shadowRoot.getElementById(id).focus();
+    };
+    const emojiToDomNode = (emoji) => shadowRoot.getElementById(`emo-${emoji.id}`);
+    const fireEvent = (name, detail) => {
+      refs.rootElement.dispatchEvent(new CustomEvent(name, {
+        detail,
+        bubbles: true,
+        composed: true
+      }));
+    };
+    const compareEmojiArrays = (a, b) => a.id === b.id;
+    const compareCurrentEmojisWithCategories = (a, b) => {
+      const { category: aCategory, emojis: aEmojis } = a;
+      const { category: bCategory, emojis: bEmojis } = b;
+      if (aCategory !== bCategory) {
+        return false;
+      }
+      return arraysAreEqualByFunction(aEmojis, bEmojis, compareEmojiArrays);
+    };
+    const updateCurrentEmojis = (newEmojis) => {
+      if (!arraysAreEqualByFunction(state3.currentEmojis, newEmojis, compareEmojiArrays)) {
+        state3.currentEmojis = newEmojis;
+      }
+    };
+    const updateSearchMode = (newSearchMode) => {
+      if (state3.searchMode !== newSearchMode) {
+        state3.searchMode = newSearchMode;
+      }
+    };
+    const updateCurrentEmojisWithCategories = (newEmojisWithCategories) => {
+      if (!arraysAreEqualByFunction(state3.currentEmojisWithCategories, newEmojisWithCategories, compareCurrentEmojisWithCategories)) {
+        state3.currentEmojisWithCategories = newEmojisWithCategories;
+      }
+    };
+    const unicodeWithSkin = (emoji, currentSkinTone) => currentSkinTone && emoji.skins && emoji.skins[currentSkinTone] || emoji.unicode;
+    const labelWithSkin = (emoji, currentSkinTone) => uniq([
+      emoji.name || unicodeWithSkin(emoji, currentSkinTone),
+      emoji.annotation,
+      ...emoji.shortcodes || EMPTY_ARRAY
+    ].filter(Boolean)).join(", ");
+    const titleForEmoji = (emoji) => emoji.annotation || (emoji.shortcodes || EMPTY_ARRAY).join(", ");
+    const helpers = {
+      labelWithSkin,
+      titleForEmoji,
+      unicodeWithSkin
+    };
+    const events = {
+      onClickSkinToneButton,
+      onEmojiClick,
+      onNavClick,
+      onNavKeydown,
+      onSearchKeydown,
+      onSkinToneOptionsClick,
+      onSkinToneOptionsFocusOut,
+      onSkinToneOptionsKeydown,
+      onSkinToneOptionsKeyup,
+      onSearchInput
+    };
+    const actions = {
+      calculateEmojiGridStyle,
+      updateOnIntersection
+    };
+    let firstRender = true;
+    createEffect(() => {
+      render(shadowRoot, state3, helpers, events, actions, refs, abortSignal, actionContext, firstRender);
+      firstRender = false;
+    });
+    if (!state3.emojiVersion) {
+      detectEmojiSupportLevel().then((level) => {
+        if (!level) {
+          state3.message = state3.i18n.emojiUnsupportedMessage;
+        }
+      });
+    }
+    createEffect(() => {
+      async function handleDatabaseLoading() {
+        let showingLoadingMessage = false;
+        const timeoutHandle = setTimeout(() => {
+          showingLoadingMessage = true;
+          state3.message = state3.i18n.loadingMessage;
+        }, TIMEOUT_BEFORE_LOADING_MESSAGE);
+        try {
+          await state3.database.ready();
+          state3.databaseLoaded = true;
+        } catch (err) {
+          console.error(err);
+          state3.message = state3.i18n.networkErrorMessage;
+        } finally {
+          clearTimeout(timeoutHandle);
+          if (showingLoadingMessage) {
+            showingLoadingMessage = false;
+            state3.message = "";
+          }
+        }
+      }
+      if (state3.database) {
+        handleDatabaseLoading();
+      }
+    });
+    createEffect(() => {
+      state3.pickerStyle = `
+      --num-groups: ${state3.groups.length}; 
+      --indicator-opacity: ${state3.searchMode ? 0 : 1}; 
+      --num-skintones: ${NUM_SKIN_TONES};`;
+    });
+    createEffect(() => {
+      if (state3.customEmoji && state3.database) {
+        updateCustomEmoji();
+      }
+    });
+    createEffect(() => {
+      if (state3.customEmoji && state3.customEmoji.length) {
+        if (state3.groups !== allGroups) {
+          state3.groups = allGroups;
+        }
+      } else if (state3.groups !== groups) {
+        if (state3.currentGroupIndex) {
+          state3.currentGroupIndex--;
+        }
+        state3.groups = groups;
+      }
+    });
+    createEffect(() => {
+      async function updatePreferredSkinTone() {
+        if (state3.databaseLoaded) {
+          state3.currentSkinTone = await state3.database.getPreferredSkinTone();
+        }
+      }
+      updatePreferredSkinTone();
+    });
+    createEffect(() => {
+      state3.skinTones = Array(NUM_SKIN_TONES).fill().map((_, i) => applySkinTone(state3.skinToneEmoji, i));
+    });
+    createEffect(() => {
+      state3.skinToneButtonText = state3.skinTones[state3.currentSkinTone];
+    });
+    createEffect(() => {
+      state3.skinToneButtonLabel = state3.i18n.skinToneLabel.replace("{skinTone}", state3.i18n.skinTones[state3.currentSkinTone]);
+    });
+    createEffect(() => {
+      async function updateDefaultFavoriteEmojis() {
+        const { database } = state3;
+        const favs = (await Promise.all(MOST_COMMONLY_USED_EMOJI.map((unicode) => database.getEmojiByUnicodeOrName(unicode)))).filter(Boolean);
+        state3.defaultFavoriteEmojis = favs;
+      }
+      if (state3.databaseLoaded) {
+        updateDefaultFavoriteEmojis();
+      }
+    });
+    function updateCustomEmoji() {
+      const { customEmoji, database } = state3;
+      const databaseCustomEmoji = customEmoji || EMPTY_ARRAY;
+      if (database.customEmoji !== databaseCustomEmoji) {
+        database.customEmoji = databaseCustomEmoji;
+      }
+    }
+    createEffect(() => {
+      async function updateFavorites() {
+        updateCustomEmoji();
+        const { database, defaultFavoriteEmojis, numColumns } = state3;
+        const dbFavorites = await database.getTopFavoriteEmoji(numColumns);
+        const favorites = await summarizeEmojis(uniqBy2([
+          ...dbFavorites,
+          ...defaultFavoriteEmojis
+        ], (_) => _.unicode || _.name).slice(0, numColumns));
+        state3.currentFavorites = favorites;
+      }
+      if (state3.databaseLoaded && state3.defaultFavoriteEmojis) {
+        updateFavorites();
+      }
+    });
+    function calculateEmojiGridStyle(node) {
+      resizeObserverAction(node, abortSignal, () => {
+        {
+          const style3 = getComputedStyle(refs.rootElement);
+          const newNumColumns = parseInt(style3.getPropertyValue("--num-columns"), 10);
+          const newIsRtl = style3.getPropertyValue("direction") === "rtl";
+          state3.numColumns = newNumColumns;
+          state3.isRtl = newIsRtl;
+        }
+      });
+    }
+    function updateOnIntersection(node) {
+      intersectionObserverAction(node, abortSignal, (entries) => {
+        for (const { target, isIntersecting } of entries) {
+          target.classList.toggle("onscreen", isIntersecting);
+        }
+      });
+    }
+    createEffect(() => {
+      async function updateEmojis() {
+        const { searchText, currentGroup, databaseLoaded, customEmoji } = state3;
+        if (!databaseLoaded) {
+          state3.currentEmojis = [];
+          state3.searchMode = false;
+        } else if (searchText.length >= MIN_SEARCH_TEXT_LENGTH2) {
+          const newEmojis = await getEmojisBySearchQuery(searchText);
+          if (state3.searchText === searchText) {
+            updateCurrentEmojis(newEmojis);
+            updateSearchMode(true);
+          }
+        } else {
+          const { id: currentGroupId } = currentGroup;
+          if (currentGroupId !== -1 || customEmoji && customEmoji.length) {
+            const newEmojis = await getEmojisByGroup(currentGroupId);
+            if (state3.currentGroup.id === currentGroupId) {
+              updateCurrentEmojis(newEmojis);
+              updateSearchMode(false);
+            }
+          }
+        }
+      }
+      updateEmojis();
+    });
+    const resetScrollTopInRaf = () => {
+      rAF(() => resetScrollTopIfPossible(refs.tabpanelElement));
+    };
+    createEffect(() => {
+      const { currentEmojis, emojiVersion } = state3;
+      const zwjEmojisToCheck = currentEmojis.filter((emoji) => emoji.unicode).filter((emoji) => hasZwj(emoji) && !supportedZwjEmojis.has(emoji.unicode));
+      if (!emojiVersion && zwjEmojisToCheck.length) {
+        updateCurrentEmojis(currentEmojis);
+        rAF(() => checkZwjSupportAndUpdate(zwjEmojisToCheck));
+      } else {
+        const newEmojis = emojiVersion ? currentEmojis : currentEmojis.filter(isZwjSupported);
+        updateCurrentEmojis(newEmojis);
+        resetScrollTopInRaf();
+      }
+    });
+    function checkZwjSupportAndUpdate(zwjEmojisToCheck) {
+      const allSupported = checkZwjSupport(zwjEmojisToCheck, refs.baselineEmoji, emojiToDomNode);
+      if (allSupported) {
+        resetScrollTopInRaf();
+      } else {
+        state3.currentEmojis = [...state3.currentEmojis];
+      }
+    }
+    function isZwjSupported(emoji) {
+      return !emoji.unicode || !hasZwj(emoji) || supportedZwjEmojis.get(emoji.unicode);
+    }
+    async function filterEmojisByVersion(emojis) {
+      const emojiSupportLevel = state3.emojiVersion || await detectEmojiSupportLevel();
+      return emojis.filter(({ version }) => !version || version <= emojiSupportLevel);
+    }
+    async function summarizeEmojis(emojis) {
+      return summarizeEmojisForUI(emojis, state3.emojiVersion || await detectEmojiSupportLevel());
+    }
+    async function getEmojisByGroup(group) {
+      const emoji = group === -1 ? state3.customEmoji : await state3.database.getEmojiByGroup(group);
+      return summarizeEmojis(await filterEmojisByVersion(emoji));
+    }
+    async function getEmojisBySearchQuery(query) {
+      return summarizeEmojis(await filterEmojisByVersion(await state3.database.getEmojiBySearchQuery(query)));
+    }
+    createEffect(() => {
+    });
+    createEffect(() => {
+      function calculateCurrentEmojisWithCategories() {
+        const { searchMode, currentEmojis } = state3;
+        if (searchMode) {
+          return [
+            {
+              category: "",
+              emojis: currentEmojis
+            }
+          ];
+        }
+        const categoriesToEmoji = /* @__PURE__ */ new Map();
+        for (const emoji of currentEmojis) {
+          const category = emoji.category || "";
+          let emojis = categoriesToEmoji.get(category);
+          if (!emojis) {
+            emojis = [];
+            categoriesToEmoji.set(category, emojis);
+          }
+          emojis.push(emoji);
+        }
+        return [...categoriesToEmoji.entries()].map(([category, emojis]) => ({ category, emojis })).sort((a, b) => state3.customCategorySorting(a.category, b.category));
+      }
+      const newEmojisWithCategories = calculateCurrentEmojisWithCategories();
+      updateCurrentEmojisWithCategories(newEmojisWithCategories);
+    });
+    createEffect(() => {
+      state3.activeSearchItemId = state3.activeSearchItem !== -1 && state3.currentEmojis[state3.activeSearchItem].id;
+    });
+    createEffect(() => {
+      const { rawSearchText } = state3;
+      rIC(() => {
+        state3.searchText = (rawSearchText || "").trim();
+        state3.activeSearchItem = -1;
+      });
+    });
+    function onSearchKeydown(event) {
+      if (!state3.searchMode || !state3.currentEmojis.length) {
+        return;
+      }
+      const goToNextOrPrevious = (previous) => {
+        halt(event);
+        state3.activeSearchItem = incrementOrDecrement(previous, state3.activeSearchItem, state3.currentEmojis);
+      };
+      switch (event.key) {
+        case "ArrowDown":
+          return goToNextOrPrevious(false);
+        case "ArrowUp":
+          return goToNextOrPrevious(true);
+        case "Enter":
+          if (state3.activeSearchItem === -1) {
+            state3.activeSearchItem = 0;
+          } else {
+            halt(event);
+            return clickEmoji(state3.currentEmojis[state3.activeSearchItem].id);
+          }
+      }
+    }
+    function onNavClick(event) {
+      const { target } = event;
+      const closestTarget = target.closest(".nav-button");
+      if (!closestTarget) {
+        return;
+      }
+      const groupId = parseInt(closestTarget.dataset.groupId, 10);
+      refs.searchElement.value = "";
+      state3.rawSearchText = "";
+      state3.searchText = "";
+      state3.activeSearchItem = -1;
+      state3.currentGroupIndex = state3.groups.findIndex((_) => _.id === groupId);
+    }
+    function onNavKeydown(event) {
+      const { target, key: key2 } = event;
+      const doFocus = (el2) => {
+        if (el2) {
+          halt(event);
+          el2.focus();
+        }
+      };
+      switch (key2) {
+        case "ArrowLeft":
+          return doFocus(target.previousElementSibling);
+        case "ArrowRight":
+          return doFocus(target.nextElementSibling);
+        case "Home":
+          return doFocus(target.parentElement.firstElementChild);
+        case "End":
+          return doFocus(target.parentElement.lastElementChild);
+      }
+    }
+    async function getDetailForClickEvent(unicodeOrName) {
+      const emoji = await state3.database.getEmojiByUnicodeOrName(unicodeOrName);
+      const emojiSummary = [...state3.currentEmojis, ...state3.currentFavorites].find((_) => _.id === unicodeOrName);
+      const skinTonedUnicode = emojiSummary.unicode && unicodeWithSkin(emojiSummary, state3.currentSkinTone);
+      await state3.database.incrementFavoriteEmojiCount(unicodeOrName);
+      return {
+        emoji,
+        skinTone: state3.currentSkinTone,
+        ...skinTonedUnicode && { unicode: skinTonedUnicode },
+        ...emojiSummary.name && { name: emojiSummary.name }
+      };
+    }
+    async function clickEmoji(unicodeOrName) {
+      const promiseForDetail = getDetailForClickEvent(unicodeOrName);
+      fireEvent("emoji-click-sync", promiseForDetail);
+      fireEvent("emoji-click", await promiseForDetail);
+    }
+    function onEmojiClick(event) {
+      const { target } = event;
+      if (!target.classList.contains("emoji")) {
+        return;
+      }
+      halt(event);
+      const id = target.id.substring(4);
+      clickEmoji(id);
+    }
+    function changeSkinTone(skinTone) {
+      state3.currentSkinTone = skinTone;
+      state3.skinTonePickerExpanded = false;
+      focus("skintone-button");
+      fireEvent("skin-tone-change", { skinTone });
+      state3.database.setPreferredSkinTone(skinTone);
+    }
+    function onSkinToneOptionsClick(event) {
+      const { target: { id } } = event;
+      const match = id && id.match(/^skintone-(\d)/);
+      if (!match) {
+        return;
+      }
+      halt(event);
+      const skinTone = parseInt(match[1], 10);
+      changeSkinTone(skinTone);
+    }
+    function onClickSkinToneButton(event) {
+      state3.skinTonePickerExpanded = !state3.skinTonePickerExpanded;
+      state3.activeSkinTone = state3.currentSkinTone;
+      if (state3.skinTonePickerExpanded) {
+        halt(event);
+        rAF(() => focus("skintone-list"));
+      }
+    }
+    createEffect(() => {
+      if (state3.skinTonePickerExpanded) {
+        refs.skinToneDropdown.addEventListener("transitionend", () => {
+          state3.skinTonePickerExpandedAfterAnimation = true;
+        }, { once: true });
+      } else {
+        state3.skinTonePickerExpandedAfterAnimation = false;
+      }
+    });
+    function onSkinToneOptionsKeydown(event) {
+      if (!state3.skinTonePickerExpanded) {
+        return;
+      }
+      const changeActiveSkinTone = async (nextSkinTone) => {
+        halt(event);
+        state3.activeSkinTone = nextSkinTone;
+      };
+      switch (event.key) {
+        case "ArrowUp":
+          return changeActiveSkinTone(incrementOrDecrement(true, state3.activeSkinTone, state3.skinTones));
+        case "ArrowDown":
+          return changeActiveSkinTone(incrementOrDecrement(false, state3.activeSkinTone, state3.skinTones));
+        case "Home":
+          return changeActiveSkinTone(0);
+        case "End":
+          return changeActiveSkinTone(state3.skinTones.length - 1);
+        case "Enter":
+          halt(event);
+          return changeSkinTone(state3.activeSkinTone);
+        case "Escape":
+          halt(event);
+          state3.skinTonePickerExpanded = false;
+          return focus("skintone-button");
+      }
+    }
+    function onSkinToneOptionsKeyup(event) {
+      if (!state3.skinTonePickerExpanded) {
+        return;
+      }
+      switch (event.key) {
+        case " ":
+          halt(event);
+          return changeSkinTone(state3.activeSkinTone);
+      }
+    }
+    async function onSkinToneOptionsFocusOut(event) {
+      const { relatedTarget } = event;
+      if (!relatedTarget || relatedTarget.id !== "skintone-list") {
+        state3.skinTonePickerExpanded = false;
+      }
+    }
+    function onSearchInput(event) {
+      state3.rawSearchText = event.target.value;
+    }
+    return {
+      $set(newState) {
+        assign(state3, newState);
+      },
+      $destroy() {
+        abortController.abort();
+      }
+    };
+  }
+  var DEFAULT_DATA_SOURCE2 = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data@^1/en/emojibase/data.json";
+  var DEFAULT_LOCALE2 = "en";
+  var enI18n = {
+    categoriesLabel: "Categories",
+    emojiUnsupportedMessage: "Your browser does not support color emoji.",
+    favoritesLabel: "Favorites",
+    loadingMessage: "Loading\u2026",
+    networkErrorMessage: "Could not load emoji.",
+    regionLabel: "Emoji picker",
+    searchDescription: "When search results are available, press up or down to select and enter to choose.",
+    searchLabel: "Search",
+    searchResultsLabel: "Search results",
+    skinToneDescription: "When expanded, press up or down to select and enter to choose.",
+    skinToneLabel: "Choose a skin tone (currently {skinTone})",
+    skinTonesLabel: "Skin tones",
+    skinTones: [
+      "Default",
+      "Light",
+      "Medium-Light",
+      "Medium",
+      "Medium-Dark",
+      "Dark"
+    ],
+    categories: {
+      custom: "Custom",
+      "smileys-emotion": "Smileys and emoticons",
+      "people-body": "People and body",
+      "animals-nature": "Animals and nature",
+      "food-drink": "Food and drink",
+      "travel-places": "Travel and places",
+      activities: "Activities",
+      objects: "Objects",
+      symbols: "Symbols",
+      flags: "Flags"
+    }
+  };
+  var baseStyles = ':host{--emoji-size:1.375rem;--emoji-padding:0.5rem;--category-emoji-size:var(--emoji-size);--category-emoji-padding:var(--emoji-padding);--indicator-height:3px;--input-border-radius:0.5rem;--input-border-size:1px;--input-font-size:1rem;--input-line-height:1.5;--input-padding:0.25rem;--num-columns:8;--outline-size:2px;--border-size:1px;--border-radius:0;--skintone-border-radius:1rem;--category-font-size:1rem;display:flex;width:min-content;height:400px}:host,:host(.light){color-scheme:light;--background:#fff;--border-color:#e0e0e0;--indicator-color:#385ac1;--input-border-color:#999;--input-font-color:#111;--input-placeholder-color:#999;--outline-color:#999;--category-font-color:#111;--button-active-background:#e6e6e6;--button-hover-background:#d9d9d9}:host(.dark){color-scheme:dark;--background:#222;--border-color:#444;--indicator-color:#5373ec;--input-border-color:#ccc;--input-font-color:#efefef;--input-placeholder-color:#ccc;--outline-color:#fff;--category-font-color:#efefef;--button-active-background:#555555;--button-hover-background:#484848}@media (prefers-color-scheme:dark){:host{color-scheme:dark;--background:#222;--border-color:#444;--indicator-color:#5373ec;--input-border-color:#ccc;--input-font-color:#efefef;--input-placeholder-color:#ccc;--outline-color:#fff;--category-font-color:#efefef;--button-active-background:#555555;--button-hover-background:#484848}}:host([hidden]){display:none}button{margin:0;padding:0;border:0;background:0 0;box-shadow:none;-webkit-tap-highlight-color:transparent}button::-moz-focus-inner{border:0}input{padding:0;margin:0;line-height:1.15;font-family:inherit}input[type=search]{-webkit-appearance:none}:focus{outline:var(--outline-color) solid var(--outline-size);outline-offset:calc(-1*var(--outline-size))}:host([data-js-focus-visible]) :focus:not([data-focus-visible-added]){outline:0}:focus:not(:focus-visible){outline:0}.hide-focus{outline:0}*{box-sizing:border-box}.picker{contain:content;display:flex;flex-direction:column;background:var(--background);border:var(--border-size) solid var(--border-color);border-radius:var(--border-radius);width:100%;height:100%;overflow:hidden;--total-emoji-size:calc(var(--emoji-size) + (2 * var(--emoji-padding)));--total-category-emoji-size:calc(var(--category-emoji-size) + (2 * var(--category-emoji-padding)))}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}.hidden{opacity:0;pointer-events:none}.abs-pos{position:absolute;left:0;top:0}.gone{display:none!important}.skintone-button-wrapper,.skintone-list{background:var(--background);z-index:3}.skintone-button-wrapper.expanded{z-index:1}.skintone-list{position:absolute;inset-inline-end:0;top:0;z-index:2;overflow:visible;border-bottom:var(--border-size) solid var(--border-color);border-radius:0 0 var(--skintone-border-radius) var(--skintone-border-radius);will-change:transform;transition:transform .2s ease-in-out;transform-origin:center 0}@media (prefers-reduced-motion:reduce){.skintone-list{transition-duration:.001s}}@supports not (inset-inline-end:0){.skintone-list{right:0}}.skintone-list.no-animate{transition:none}.tabpanel{overflow-y:auto;scrollbar-gutter:stable;-webkit-overflow-scrolling:touch;will-change:transform;min-height:0;flex:1;contain:content}.emoji-menu{display:grid;grid-template-columns:repeat(var(--num-columns),var(--total-emoji-size));justify-content:space-around;align-items:flex-start;width:100%}.emoji-menu.visibility-auto{content-visibility:auto;contain-intrinsic-size:calc(var(--num-columns)*var(--total-emoji-size)) calc(var(--num-rows)*var(--total-emoji-size))}.category{padding:var(--emoji-padding);font-size:var(--category-font-size);color:var(--category-font-color)}.emoji,button.emoji{font-size:var(--emoji-size);display:flex;align-items:center;justify-content:center;border-radius:100%;height:var(--total-emoji-size);width:var(--total-emoji-size);line-height:1;overflow:hidden;font-family:var(--emoji-font-family);cursor:pointer}@media (hover:hover) and (pointer:fine){.emoji:hover,button.emoji:hover{background:var(--button-hover-background)}}.emoji.active,.emoji:active,button.emoji.active,button.emoji:active{background:var(--button-active-background)}.onscreen .custom-emoji::after{content:"";width:var(--emoji-size);height:var(--emoji-size);background-repeat:no-repeat;background-position:center center;background-size:contain;background-image:var(--custom-emoji-background)}.nav,.nav-button{align-items:center}.nav{display:grid;justify-content:space-between;contain:content}.nav-button{display:flex;justify-content:center}.nav-emoji{font-size:var(--category-emoji-size);width:var(--total-category-emoji-size);height:var(--total-category-emoji-size)}.indicator-wrapper{display:flex;border-bottom:1px solid var(--border-color)}.indicator{width:calc(100%/var(--num-groups));height:var(--indicator-height);opacity:var(--indicator-opacity);background-color:var(--indicator-color);will-change:transform,opacity;transition:opacity .1s linear,transform .25s ease-in-out}@media (prefers-reduced-motion:reduce){.indicator{will-change:opacity;transition:opacity .1s linear}}.pad-top,input.search{background:var(--background);width:100%}.pad-top{height:var(--emoji-padding);z-index:3}.search-row{display:flex;align-items:center;position:relative;padding-inline-start:var(--emoji-padding);padding-bottom:var(--emoji-padding)}.search-wrapper{flex:1;min-width:0}input.search{padding:var(--input-padding);border-radius:var(--input-border-radius);border:var(--input-border-size) solid var(--input-border-color);color:var(--input-font-color);font-size:var(--input-font-size);line-height:var(--input-line-height)}input.search::placeholder{color:var(--input-placeholder-color)}.favorites{overflow-y:auto;scrollbar-gutter:stable;display:flex;flex-direction:row;border-top:var(--border-size) solid var(--border-color);contain:content}.message{padding:var(--emoji-padding)}';
+  var PROPS = [
+    "customEmoji",
+    "customCategorySorting",
+    "database",
+    "dataSource",
+    "i18n",
+    "locale",
+    "skinToneEmoji",
+    "emojiVersion"
+  ];
+  var EXTRA_STYLES = `:host{--emoji-font-family:${FONT_FAMILY}}`;
+  var PickerElement = class extends HTMLElement {
+    constructor(props) {
+      super();
+      this.attachShadow({ mode: "open" });
+      const style3 = document.createElement("style");
+      style3.textContent = baseStyles + EXTRA_STYLES;
+      this.shadowRoot.appendChild(style3);
+      this._ctx = {
+        // Set defaults
+        locale: DEFAULT_LOCALE2,
+        dataSource: DEFAULT_DATA_SOURCE2,
+        skinToneEmoji: DEFAULT_SKIN_TONE_EMOJI,
+        customCategorySorting: DEFAULT_CATEGORY_SORTING,
+        customEmoji: null,
+        i18n: enI18n,
+        emojiVersion: null,
+        ...props
+      };
+      for (const prop of PROPS) {
+        if (prop !== "database" && Object.prototype.hasOwnProperty.call(this, prop)) {
+          this._ctx[prop] = this[prop];
+          delete this[prop];
+        }
+      }
+      this._dbFlush();
+    }
+    connectedCallback() {
+      rescueElementPrototype(this);
+      if (!this._cmp) {
+        this._cmp = createRoot(this.shadowRoot, this._ctx);
+      }
+    }
+    disconnectedCallback() {
+      rescueElementPrototype(this);
+      qM(() => {
+        if (!this.isConnected && this._cmp) {
+          this._cmp.$destroy();
+          this._cmp = void 0;
+          const { database } = this._ctx;
+          database.close().catch((err) => console.error(err));
+        }
+      });
+    }
+    static get observedAttributes() {
+      return ["locale", "data-source", "skin-tone-emoji", "emoji-version"];
+    }
+    attributeChangedCallback(attrName, oldValue, newValue) {
+      this._set(
+        // convert from kebab-case to camelcase
+        // see https://github.com/sveltejs/svelte/issues/3852#issuecomment-665037015
+        attrName.replace(/-([a-z])/g, (_, up) => up.toUpperCase()),
+        // convert string attribute to float if necessary
+        attrName === "emoji-version" ? parseFloat(newValue) : newValue
+      );
+    }
+    _set(prop, newValue) {
+      this._ctx[prop] = newValue;
+      if (this._cmp) {
+        this._cmp.$set({ [prop]: newValue });
+      }
+      if (["locale", "dataSource"].includes(prop)) {
+        this._dbFlush();
+      }
+    }
+    _dbCreate() {
+      const { locale, dataSource, database } = this._ctx;
+      if (!database || database.locale !== locale || database.dataSource !== dataSource) {
+        this._set("database", new Database({ locale, dataSource }));
+      }
+    }
+    // Update the Database in one microtask if the locale/dataSource change. We do one microtask
+    // so we don't create two Databases if e.g. both the locale and the dataSource change
+    _dbFlush() {
+      qM(() => this._dbCreate());
+    }
+  };
+  var definitions = {};
+  for (const prop of PROPS) {
+    definitions[prop] = {
+      get() {
+        if (prop === "database") {
+          this._dbCreate();
+        }
+        return this._ctx[prop];
+      },
+      set(val) {
+        if (prop === "database") {
+          throw new Error("database is read-only");
+        }
+        this._set(prop, val);
+      }
+    };
+  }
+  Object.defineProperties(PickerElement.prototype, definitions);
+  function rescueElementPrototype(element) {
+    if (!(element instanceof PickerElement)) {
+      Object.setPrototypeOf(element, customElements.get(element.tagName.toLowerCase()).prototype);
+    }
+  }
+  if (!customElements.get("emoji-picker")) {
+    customElements.define("emoji-picker", PickerElement);
+  }
+
+  // src/ui/menus/messagesOverlay.ts
+  var ITEM_MESSAGE_PREFIX = "ITEM::v1::";
+  var ATTACHMENT_STATUS_PREFIX = "Items attached:";
+  var MAX_ATTACHMENTS = 6;
+  var MAX_MESSAGE_LENGTH = 1e3;
+  var STYLE_ID = "qws-messages-overlay-css";
+  var style2 = (el2, s) => Object.assign(el2.style, s);
+  var setProps2 = (el2, props) => {
+    for (const [k, v] of Object.entries(props)) el2.style.setProperty(k, v);
+  };
+  function installInputKeyTrap(scope, opts = {}) {
+    const isEditable = (el2) => {
+      if (!el2 || !(el2 instanceof HTMLElement)) return false;
+      if (el2 instanceof HTMLTextAreaElement) return true;
+      if (el2 instanceof HTMLInputElement) {
+        const t = (el2.type || "").toLowerCase();
+        return t === "text" || t === "number" || t === "search";
+      }
+      return el2.isContentEditable === true;
+    };
+    const inScope = (node) => {
+      if (!node) return false;
+      if (scope.contains(node) || node.closest?.(".qws-msg-panel")) return true;
+      const picker = scope.querySelector("emoji-picker");
+      if (!picker) return false;
+      if (picker === node || picker.contains(node)) return true;
+      const shadow = picker.shadowRoot;
+      if (shadow && node instanceof Node && shadow.contains(node)) return true;
+      const root = node.getRootNode?.();
+      if (root && shadow && root === shadow) return true;
+      return false;
+    };
+    const handler = (ev) => {
+      const target = ev.target;
+      const active = document.activeElement;
+      if (!(inScope(target) && isEditable(target) || inScope(active) && isEditable(active))) return;
+      const key2 = ev.key || "";
+      const code = ev.code || "";
+      const keyCode = ev.keyCode;
+      const isEnter = (key2 === "Enter" || code === "Enter" || keyCode === 13) && !ev.shiftKey;
+      const shouldHandleEnter = opts.shouldHandleEnter ? opts.shouldHandleEnter(target, active) : true;
+      if (isEnter && !ev.isComposing && ev.type === "keydown" && shouldHandleEnter) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        ev.stopImmediatePropagation?.();
+        opts.onEnter?.();
+        return;
+      }
+      ev.stopPropagation();
+      ev.stopImmediatePropagation?.();
+    };
+    const types = ["keydown", "keypress", "keyup"];
+    types.forEach((t) => {
+      window.addEventListener(t, handler, { capture: true });
+      document.addEventListener(t, handler, { capture: true });
+      scope.addEventListener(t, handler, { capture: true });
+    });
+    return () => {
+      types.forEach((t) => {
+        window.removeEventListener(t, handler, { capture: true });
+        document.removeEventListener(t, handler, { capture: true });
+        scope.removeEventListener(t, handler, { capture: true });
+      });
+    };
+  }
+  var encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+  var decoder = typeof TextDecoder !== "undefined" ? new TextDecoder() : null;
+  function base64UrlDecode(input) {
+    try {
+      const raw = input.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = raw.length % 4;
+      const padded = pad ? raw + "=".repeat(4 - pad) : raw;
+      const binary = atob(padded);
+      if (decoder) {
+        const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+        return decoder.decode(bytes);
+      }
+      return decodeURIComponent(escape(binary));
+    } catch {
+      return null;
+    }
+  }
+  function normalizeQuantity(raw) {
+    const n = Math.floor(Number(raw ?? 1));
+    if (!Number.isFinite(n) || n <= 0) return 1;
+    return n;
+  }
+  function normalizeChatItem(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const typeRaw = raw.itemType ?? raw.type ?? raw.kind ?? raw.category;
+    const type = String(typeRaw ?? "").trim();
+    const typeLc = type.toLowerCase();
+    const scaleCandidate = Number(raw.scale ?? raw.targetScale);
+    if (typeLc === "produce" || typeLc === "crop" || typeLc === "seed" && Number.isFinite(scaleCandidate)) {
+      const species = String(raw.species ?? raw.cropSpecies ?? raw.name ?? "").trim();
+      if (!species) return null;
+      const scale = Number.isFinite(scaleCandidate) ? scaleCandidate : void 0;
+      const mutations = Array.isArray(raw.mutations) ? raw.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
+      const id = raw.id != null ? String(raw.id) : void 0;
+      return { itemType: "Produce", id, species, scale, mutations };
+    }
+    if (typeLc === "seed") {
+      const species = String(raw.species ?? raw.seedSpecies ?? raw.name ?? "").trim();
+      if (!species) return null;
+      return { itemType: "Seed", species, quantity: normalizeQuantity(raw.quantity) };
+    }
+    if (typeLc === "decor") {
+      const decorId = String(raw.decorId ?? raw.id ?? raw.name ?? "").trim();
+      if (!decorId) return null;
+      return { itemType: "Decor", decorId, quantity: normalizeQuantity(raw.quantity) };
+    }
+    if (typeLc === "tool") {
+      const toolId = String(raw.toolId ?? raw.id ?? raw.name ?? "").trim();
+      if (!toolId) return null;
+      return { itemType: "Tool", toolId, quantity: normalizeQuantity(raw.quantity) };
+    }
+    if (typeLc === "egg") {
+      const eggId = String(raw.eggId ?? raw.id ?? raw.name ?? "").trim();
+      if (!eggId) return null;
+      return { itemType: "Egg", eggId, quantity: normalizeQuantity(raw.quantity) };
+    }
+    if (typeLc === "plant") {
+      const species = String(raw.species ?? raw.plantSpecies ?? raw.name ?? "").trim();
+      if (!species) return null;
+      const slotsCount = Array.isArray(raw.slots) ? raw.slots.length : void 0;
+      const id = raw.id != null ? String(raw.id) : void 0;
+      return { itemType: "Plant", id, species, slotsCount };
+    }
+    if (typeLc === "pet") {
+      const petSpecies = String(raw.petSpecies ?? raw.species ?? "").trim();
+      const id = raw.id != null ? String(raw.id) : void 0;
+      const name = raw.name != null && String(raw.name).trim() ? String(raw.name) : null;
+      const xpRaw = Number(raw.xp ?? raw.data?.xp);
+      const xp = Number.isFinite(xpRaw) ? xpRaw : void 0;
+      const mutations = Array.isArray(raw.mutations) ? raw.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
+      const abilities = Array.isArray(raw.abilities) ? raw.abilities.map((a) => String(a ?? "").trim()).filter(Boolean) : void 0;
+      const targetScale = Number(raw.targetScale);
+      if (!petSpecies && !name && !id) return null;
+      return {
+        itemType: "Pet",
+        id,
+        petSpecies: petSpecies || void 0,
+        name,
+        xp,
+        mutations,
+        abilities,
+        targetScale: Number.isFinite(targetScale) ? targetScale : void 0
+      };
+    }
+    return null;
+  }
+  function compactItem(item) {
+    const out = {};
+    const set3 = (key2, value) => {
+      if (value == null) return;
+      if (typeof value === "string" && !value.trim()) return;
+      if (Array.isArray(value) && value.length === 0) return;
+      out[key2] = value;
+    };
+    const setNum = (key2, value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return;
+      out[key2] = n;
+    };
+    if (item.itemType === "Seed") {
+      out.t = "S";
+      set3("s", item.species);
+      if (item.quantity > 1) setNum("q", item.quantity);
+      return out;
+    }
+    if (item.itemType === "Decor") {
+      out.t = "D";
+      set3("d", item.decorId);
+      if (item.quantity > 1) setNum("q", item.quantity);
+      return out;
+    }
+    if (item.itemType === "Tool") {
+      out.t = "T";
+      set3("o", item.toolId);
+      if (item.quantity > 1) setNum("q", item.quantity);
+      return out;
+    }
+    if (item.itemType === "Egg") {
+      out.t = "E";
+      set3("e", item.eggId);
+      if (item.quantity > 1) setNum("q", item.quantity);
+      return out;
+    }
+    if (item.itemType === "Produce") {
+      out.t = "C";
+      set3("s", item.species);
+      setNum("sc", item.scale);
+      set3("m", item.mutations);
+      set3("i", item.id);
+      return out;
+    }
+    if (item.itemType === "Plant") {
+      out.t = "L";
+      set3("s", item.species);
+      setNum("c", item.slotsCount);
+      set3("i", item.id);
+      return out;
+    }
+    if (item.itemType === "Pet") {
+      out.t = "P";
+      set3("s", item.petSpecies);
+      set3("n", item.name ?? void 0);
+      setNum("x", item.xp);
+      set3("m", item.mutations);
+      set3("a", item.abilities);
+      setNum("sc", item.targetScale);
+      set3("i", item.id);
+      return out;
+    }
+    out.t = "U";
+    return out;
+  }
+  function encodeItemMessage(payload) {
+    const itemsRaw = Array.isArray(payload.items) ? payload.items : payload.item ? [payload.item] : [];
+    const compactItems = itemsRaw.map(compactItem);
+    const compactPayload = {
+      v: 1,
+      k: "i",
+      i: compactItems
+    };
+    if (payload.message && payload.message.trim()) {
+      compactPayload.m = payload.message;
+    }
+    const json = JSON.stringify(compactPayload);
+    return `${ITEM_MESSAGE_PREFIX}${json}`;
+  }
+  function decodeCompactItem(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const t = String(raw.t ?? "").toUpperCase();
+    const qty = normalizeQuantity(raw.q ?? 1);
+    if (t === "S") {
+      const species = String(raw.s ?? "").trim();
+      if (!species) return null;
+      return { itemType: "Seed", species, quantity: qty };
+    }
+    if (t === "D") {
+      const decorId = String(raw.d ?? "").trim();
+      if (!decorId) return null;
+      return { itemType: "Decor", decorId, quantity: qty };
+    }
+    if (t === "T") {
+      const toolId = String(raw.o ?? "").trim();
+      if (!toolId) return null;
+      return { itemType: "Tool", toolId, quantity: qty };
+    }
+    if (t === "E") {
+      const eggId = String(raw.e ?? "").trim();
+      if (!eggId) return null;
+      return { itemType: "Egg", eggId, quantity: qty };
+    }
+    if (t === "C") {
+      const species = String(raw.s ?? "").trim();
+      if (!species) return null;
+      const scale = Number(raw.sc);
+      const mutations = Array.isArray(raw.m) ? raw.m.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
+      const id = raw.i != null ? String(raw.i) : void 0;
+      return {
+        itemType: "Produce",
+        id,
+        species,
+        scale: Number.isFinite(scale) ? scale : void 0,
+        mutations
+      };
+    }
+    if (t === "L") {
+      const species = String(raw.s ?? "").trim();
+      if (!species) return null;
+      const slotsCount = Number(raw.c);
+      const id = raw.i != null ? String(raw.i) : void 0;
+      return {
+        itemType: "Plant",
+        id,
+        species,
+        slotsCount: Number.isFinite(slotsCount) ? slotsCount : void 0
+      };
+    }
+    if (t === "P") {
+      const petSpecies = String(raw.s ?? "").trim();
+      const name = raw.n != null && String(raw.n).trim() ? String(raw.n) : null;
+      const xp = Number(raw.x);
+      const mutations = Array.isArray(raw.m) ? raw.m.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
+      const abilities = Array.isArray(raw.a) ? raw.a.map((a) => String(a ?? "").trim()).filter(Boolean) : void 0;
+      const targetScale = Number(raw.sc);
+      const id = raw.i != null ? String(raw.i) : void 0;
+      if (!petSpecies && !name && !id) return null;
+      return {
+        itemType: "Pet",
+        id,
+        petSpecies: petSpecies || void 0,
+        name,
+        xp: Number.isFinite(xp) ? xp : void 0,
+        mutations,
+        abilities,
+        targetScale: Number.isFinite(targetScale) ? targetScale : void 0
+      };
+    }
+    return null;
+  }
+  function decodeItemMessage(text) {
+    if (!text || !text.startsWith(ITEM_MESSAGE_PREFIX)) return null;
+    const raw = text.slice(ITEM_MESSAGE_PREFIX.length);
+    let parsed = null;
+    try {
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        parsed = JSON.parse(trimmed);
+      } else {
+        const decoded = base64UrlDecode(raw);
+        if (!decoded) return null;
+        parsed = JSON.parse(decoded);
+      }
+      if (!parsed || parsed.k !== "i" && parsed.kind !== "item") return null;
+      const version = Number(parsed.v ?? parsed.version ?? 1);
+      if (!Number.isFinite(version) || version !== 1) return null;
+      const itemsRaw = Array.isArray(parsed.i) ? parsed.i : Array.isArray(parsed.items) ? parsed.items : parsed.item ? [parsed.item] : [];
+      const normalizedItems = itemsRaw.map((entry) => {
+        if (entry && typeof entry === "object" && "t" in entry) {
+          return decodeCompactItem(entry);
+        }
+        return normalizeChatItem(entry);
+      }).filter((entry) => !!entry);
+      if (!normalizedItems.length) return null;
+      return {
+        v: 1,
+        kind: "item",
+        message: typeof parsed.m === "string" ? parsed.m : typeof parsed.message === "string" ? parsed.message : "",
+        items: normalizedItems
+      };
+    } catch {
+      return null;
+    }
+  }
+  var RAINBOW_BADGE_TEXT_GRADIENT = "linear-gradient(90deg, #ff6b6b 0%, #ffd86f 25%, #6bff8f 50%, #6bc7ff 75%, #b86bff 100%)";
+  var SIZE_MIN = 50;
+  var SIZE_MAX = 100;
+  var SCALE_MIN = 1;
+  var SCALE_MAX = 3;
+  var COIN_FORMATTER = new Intl.NumberFormat("en-US");
+  function findPlayersDeep(state3) {
+    if (!state3 || typeof state3 !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state3];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const key2 of Object.keys(cur)) {
+        const value = cur[key2];
+        if (Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === "object")) {
+          const looksLikePlayer = value.some((item) => "id" in item && "name" in item);
+          if (looksLikePlayer && /player/i.test(key2)) {
+            out.push(...value);
+          }
+        }
+        if (value && typeof value === "object") {
+          stack.push(value);
+        }
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const entry of out) {
+      if (entry?.id) {
+        byId.set(String(entry.id), entry);
+      }
+    }
+    return [...byId.values()];
+  }
+  function getPlayersArrayFromState(state3) {
+    const direct = state3?.fullState?.data?.players ?? state3?.data?.players ?? state3?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep(state3);
+  }
+  function normalizeCosmeticName(raw) {
+    const source = String(raw ?? "").trim();
+    if (!source) return null;
+    let value = source;
+    const lower = value.toLowerCase();
+    const idx = lower.lastIndexOf("cosmetic/");
+    if (idx >= 0) {
+      value = value.slice(idx + "cosmetic/".length);
+    }
+    value = value.replace(/^\/+/, "");
+    const q = value.indexOf("?");
+    if (q >= 0) value = value.slice(0, q);
+    const h = value.indexOf("#");
+    if (h >= 0) value = value.slice(0, h);
+    return value.trim() ? value.trim() : null;
+  }
+  var MUTATION_SPRITE_OVERRIDES = {
+    dawnlit: "Dawnlit",
+    dawnbound: "Dawncharged",
+    amberlit: "Ambershine",
+    amberbound: "Ambercharged",
+    thunderstruck: "Thunderstruck"
+  };
+  function getPetMutationTone(mutations) {
+    const list = Array.isArray(mutations) ? mutations : [];
+    const seen = new Set(list.map((m) => String(m).toLowerCase()));
+    if (seen.has("rainbow")) return "rainbow";
+    if (seen.has("gold") || seen.has("golden")) return "gold";
+    return "normal";
+  }
+  function applyStrengthBadgeTone(badge, tone) {
+    badge.dataset.tmStrengthTone = tone;
+    badge.style.backgroundImage = "";
+    badge.style.backgroundColor = "";
+    badge.style.color = "";
+    badge.style.backgroundClip = "";
+    badge.style.webkitBackgroundClip = "";
+    badge.style.backgroundOrigin = "";
+    badge.style.webkitTextFillColor = "";
+    if (tone === "rainbow") {
+      badge.style.color = "transparent";
+      badge.style.backgroundImage = `linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)), ${RAINBOW_BADGE_TEXT_GRADIENT}`;
+      badge.style.backgroundClip = "padding-box, text";
+      badge.style.webkitBackgroundClip = "padding-box, text";
+      badge.style.backgroundOrigin = "padding-box, text";
+      badge.style.webkitTextFillColor = "transparent";
+    } else if (tone === "gold") {
+      badge.style.color = "#F3D32B";
+      badge.style.backgroundColor = "rgba(243, 211, 43, 0.25)";
+    } else {
+      badge.style.color = "#8fd3ff";
+      badge.style.backgroundColor = "rgba(79, 166, 255, 0.28)";
+    }
+  }
+  function normalizeMutationLabelForSprite(label2) {
+    const normalized = String(label2 ?? "").trim();
+    if (!normalized) return normalized;
+    const overridden = MUTATION_SPRITE_OVERRIDES[normalized.toLowerCase()];
+    return overridden ?? normalized;
+  }
+  function normalizeMutationsForSprite(list) {
+    return (Array.isArray(list) ? list : []).map((label2) => normalizeMutationLabelForSprite(label2)).filter(Boolean);
+  }
+  function getMaxScaleForSpecies(key2) {
+    const entry = plantCatalog[key2];
+    const candidates = [entry?.crop?.maxScale, entry?.plant?.maxScale, entry?.seed?.maxScale];
+    for (const candidate of candidates) {
+      const numeric = typeof candidate === "number" ? candidate : Number(candidate);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric;
+      }
+    }
+    return null;
+  }
+  function scaleToSizePercent(scale, maxScale) {
+    if (!Number.isFinite(scale)) return null;
+    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN ? maxScale : SCALE_MAX;
+    if (safeMax <= SCALE_MIN) return SIZE_MIN;
+    const normalized = (scale - SCALE_MIN) / (safeMax - SCALE_MIN);
+    const percent = SIZE_MIN + normalized * (SIZE_MAX - SIZE_MIN);
+    if (!Number.isFinite(percent)) return null;
+    return Math.max(SIZE_MIN, Math.min(SIZE_MAX, percent));
+  }
+  function getProduceMeta(item) {
+    let sizeValue = null;
+    const sizePercent = scaleToSizePercent(
+      Number(item.scale),
+      getMaxScaleForSpecies(item.species)
+    );
+    if (sizePercent != null) {
+      sizeValue = Math.round(sizePercent);
+    }
+    let priceLabel = null;
+    if (Number.isFinite(item.scale) && item.scale > 0) {
+      const price = estimateProduceValue(
+        item.species,
+        item.scale,
+        item.mutations,
+        DefaultPricing
+      );
+      if (Number.isFinite(price) && price > 0) {
+        priceLabel = COIN_FORMATTER.format(price);
+      }
+    }
+    return { sizeValue, priceLabel };
+  }
+  function buildSpriteCandidates2(...values) {
+    const candidates = /* @__PURE__ */ new Set();
+    const addCandidate = (value) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      candidates.add(trimmed);
+      candidates.add(trimmed.replace(/\W+/g, ""));
+      const lastSegment = trimmed.split(/[./]/).pop();
+      if (lastSegment && lastSegment !== trimmed) {
+        candidates.add(lastSegment);
+        candidates.add(lastSegment.replace(/\W+/g, ""));
+      }
+    };
+    values.forEach(addCandidate);
+    const baseCandidates = Array.from(candidates).map((value) => value.replace(/icon$/i, "")).filter(Boolean);
+    const iconCandidates = baseCandidates.map((value) => `${value}Icon`).filter(Boolean);
+    return Array.from(/* @__PURE__ */ new Set([...candidates, ...baseCandidates, ...iconCandidates])).filter(Boolean);
+  }
+  function getChatItemLabel(item) {
+    if (item.itemType === "Seed") {
+      const entry = plantCatalog?.[item.species];
+      return entry?.seed?.name || entry?.crop?.name || item.species || "Seed";
+    }
+    if (item.itemType === "Produce") {
+      const entry = plantCatalog?.[item.species];
+      return entry?.crop?.name || entry?.plant?.name || entry?.seed?.name || item.species || "Produce";
+    }
+    if (item.itemType === "Plant") {
+      const entry = plantCatalog?.[item.species];
+      return entry?.plant?.name || entry?.crop?.name || entry?.seed?.name || item.species || "Plant";
+    }
+    if (item.itemType === "Egg") {
+      const entry = eggCatalog?.[item.eggId];
+      return entry?.name || item.eggId || "Egg";
+    }
+    if (item.itemType === "Decor") {
+      const entry = decorCatalog?.[item.decorId];
+      return entry?.name || item.decorId || "Decor";
+    }
+    if (item.itemType === "Tool") {
+      const entry = toolCatalog?.[item.toolId];
+      return entry?.name || item.toolId || "Tool";
+    }
+    if (item.itemType === "Pet") {
+      const entry = petCatalog?.[item.petSpecies ?? ""];
+      if (item.name) return item.name;
+      return entry?.name || item.petSpecies || "Pet";
+    }
+    return "Item";
+  }
+  function getChatItemSubtitle(item) {
+    if (item.itemType === "Seed") {
+      return `x${item.quantity}`;
+    }
+    if (item.itemType === "Decor") {
+      return `x${item.quantity}`;
+    }
+    if (item.itemType === "Tool") {
+      return `x${item.quantity}`;
+    }
+    if (item.itemType === "Egg") {
+      return `x${item.quantity}`;
+    }
+    if (item.itemType === "Pet") {
+      const entry = petCatalog?.[item.petSpecies ?? ""];
+      const speciesLabel = entry?.name || item.petSpecies || "Pet";
+      if (item.name) return speciesLabel;
+      return "";
+    }
+    if (item.itemType === "Produce") {
+      const meta = getProduceMeta(item);
+      return meta.priceLabel ?? "";
+    }
+    if (item.itemType === "Plant") {
+      const slots = typeof item.slotsCount === "number" ? item.slotsCount : null;
+      if (slots != null) return `${slots} slots`;
+      return "";
+    }
+    return "Item";
+  }
+  function createItemCard(item) {
+    const card = document.createElement("div");
+    card.className = "qws-msg-item-card";
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "qws-msg-item-icon";
+    const fallback = document.createElement("span");
+    fallback.textContent = getChatItemLabel(item).charAt(0).toUpperCase();
+    iconWrap.appendChild(fallback);
+    const meta = document.createElement("div");
+    meta.className = "qws-msg-item-meta";
+    const title = document.createElement("div");
+    title.className = "qws-msg-item-title";
+    title.textContent = getChatItemLabel(item);
+    const titleRow = document.createElement("div");
+    titleRow.className = "qws-msg-item-title-row";
+    titleRow.appendChild(title);
+    const sub = document.createElement("div");
+    sub.className = "qws-msg-item-sub";
+    if (item.itemType === "Pet") {
+      const petSpecies = item.petSpecies ?? "";
+      const petLike = {
+        petSpecies,
+        xp: item.xp ?? 0,
+        targetScale: item.targetScale ?? 1,
+        mutations: item.mutations ?? []
+      };
+      const maxStrength = getPetMaxStrength(petLike);
+      const strength = getPetStrength(petLike);
+      if (Number.isFinite(maxStrength) && maxStrength > 0) {
+        const roundedMax = Math.round(maxStrength);
+        const roundedCurrent = Math.round(strength);
+        if (roundedCurrent >= roundedMax) {
+          const badge = document.createElement("span");
+          badge.className = "qws-msg-item-badge";
+          badge.textContent = "MAX";
+          applyStrengthBadgeTone(badge, getPetMutationTone(item.mutations));
+          sub.appendChild(badge);
+        } else {
+          sub.textContent = `${Math.max(0, roundedCurrent)}/${roundedMax}`;
+        }
+      } else {
+        sub.textContent = getChatItemSubtitle(item);
+      }
+    } else if (item.itemType === "Produce") {
+      const produceMeta = getProduceMeta(item);
+      if (produceMeta.sizeValue != null) {
+        const sizeBadge = document.createElement("span");
+        sizeBadge.className = "qws-msg-item-size";
+        sizeBadge.textContent = String(produceMeta.sizeValue);
+        titleRow.appendChild(sizeBadge);
+      }
+      if (produceMeta.priceLabel) {
+        const priceEl = document.createElement("span");
+        priceEl.className = "qws-msg-item-price";
+        priceEl.textContent = produceMeta.priceLabel;
+        sub.appendChild(priceEl);
+      }
+    } else {
+      sub.textContent = getChatItemSubtitle(item);
+    }
+    if (!sub.textContent && !sub.childElementCount) {
+      sub.style.display = "none";
+    }
+    meta.append(titleRow, sub);
+    card.append(iconWrap, meta);
+    let categories = [];
+    let candidates = [];
+    let mutations;
+    if (item.itemType === "Seed") {
+      categories = ["seed", "plant"];
+      candidates = [item.species];
+    } else if (item.itemType === "Produce" || item.itemType === "Plant") {
+      categories = ["plant", "tallplant"];
+      candidates = [item.species];
+      mutations = normalizeMutationsForSprite(item.mutations);
+    } else if (item.itemType === "Decor") {
+      categories = ["decor"];
+      candidates = [item.decorId];
+    } else if (item.itemType === "Tool") {
+      categories = ["item"];
+      candidates = [item.toolId];
+    } else if (item.itemType === "Egg") {
+      categories = ["pet"];
+      candidates = [item.eggId];
+    } else if (item.itemType === "Pet") {
+      categories = ["pet"];
+      if (item.petSpecies) candidates = [item.petSpecies];
+      mutations = normalizeMutationsForSprite(item.mutations);
+    }
+    if (categories.length && candidates.length) {
+      const expandedCandidates = buildSpriteCandidates2(
+        ...candidates,
+        getChatItemLabel(item)
+      );
+      attachSpriteIcon(iconWrap, categories, expandedCandidates, 34, "messages-item", {
+        mutations
+      });
+    }
+    return card;
+  }
+  function ensureMessagesOverlayStyle() {
+    if (document.getElementById(STYLE_ID)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID;
+    st.textContent = `
+.qws-msg-panel{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  width:min(760px, 92vw);
+  height:min(70vh, 560px);
+  max-height:70vh;
+  display:none;
+  border-radius:12px;
+  border:1px solid var(--qws-border, #ffffff22);
+  background:var(--qws-panel, #111823cc);
+  backdrop-filter:blur(var(--qws-blur, 8px));
+  color:var(--qws-text, #e7eef7);
+  box-shadow:var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45));
+  overflow:hidden;
+  z-index:var(--chakra-zIndices-DialogModal, 7010);
+}
+.qws-msg-panel *{ box-sizing:border-box; }
+.qws-msg-head{
+  padding:10px 12px;
+  font-weight:700;
+  border-bottom:1px solid var(--qws-border, #ffffff22);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  cursor:grab;
+  user-select:none;
+}
+.qws-msg-body{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  height:calc(100% - 44px);
+  min-height:0;
+}
+.qws-msg-list{
+  border-right:1px solid var(--qws-border, #ffffff22);
+  overflow:auto;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.qws-msg-thread{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+.qws-msg-thread-head{
+  padding:10px 12px;
+  border-bottom:1px solid var(--qws-border, #ffffff22);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+}
+.qws-msg-thread-body{
+  flex:1;
+  overflow:auto;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-msg-input{
+  padding:10px;
+  border-top:1px solid var(--qws-border, #ffffff22);
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.qws-msg-import{
+  position:relative;
+  flex:0 0 auto;
+}
+.qws-msg-import-btn{
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  border:1px solid var(--qws-border, #ffffff33);
+  background:rgba(255,255,255,0.08);
+  color:var(--qws-text, #e7eef7);
+  font-weight:700;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-msg-import-menu{
+  position:absolute;
+  left:0;
+  bottom:40px;
+  min-width:170px;
+  display:none;
+  flex-direction:column;
+  gap:4px;
+  padding:6px;
+  border-radius:10px;
+  border:1px solid var(--qws-border, #ffffff22);
+  background:var(--qws-panel, #111823cc);
+  backdrop-filter:blur(var(--qws-blur, 8px));
+  box-shadow:var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45));
+  z-index:2;
+}
+.qws-msg-import-menu button{
+  text-align:left;
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid transparent;
+  background:transparent;
+  color:var(--qws-text, #e7eef7);
+  font-size:12px;
+  cursor:pointer;
+}
+.qws-msg-import-menu button:hover{
+  background:rgba(255,255,255,0.08);
+  border-color:rgba(255,255,255,0.12);
+}
+.qws-msg-emoji{
+  position:relative;
+  flex:0 0 auto;
+}
+.qws-msg-emoji-btn{
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  border:1px solid var(--qws-border, #ffffff33);
+  background:rgba(255,255,255,0.08);
+  color:var(--qws-text, #e7eef7);
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+}
+.qws-msg-emoji-btn.active{
+  border-color:rgba(122,162,255,.6);
+  box-shadow:0 0 0 1px rgba(122,162,255,.3);
+}
+.qws-msg-emoji-menu{
+  position:absolute;
+  right:0;
+  bottom:40px;
+  width:min(380px, 80vw);
+  height:320px;
+  display:none;
+  flex-direction:column;
+  gap:6px;
+  padding:8px;
+  border-radius:12px;
+  border:1px solid var(--qws-border, #ffffff22);
+  background:var(--qws-panel, #111823cc);
+  backdrop-filter:blur(var(--qws-blur, 8px));
+  box-shadow:var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45));
+  z-index:2;
+  overflow:hidden;
+}
+.qws-msg-emoji-menu .qws-msg-emoji-picker{
+  width:100%;
+  height:100%;
+  color-scheme:dark;
+  --background:#0f1724;
+  --border-color:rgba(255,255,255,0.08);
+  --border-size:1px;
+  --border-radius:10px;
+  --button-hover-background:rgba(122,162,255,0.18);
+  --button-active-background:rgba(122,162,255,0.28);
+  --indicator-color:#7aa2ff;
+  --input-border-color:rgba(255,255,255,0.18);
+  --input-border-radius:8px;
+  --input-font-color:#e7eef7;
+  --input-placeholder-color:rgba(231,238,247,0.6);
+  --category-font-color:#d6e2f0;
+  --emoji-size:1.45rem;
+  --emoji-padding:0.35rem;
+  --num-columns:8;
+}
+.qws-msg-input input{
+  flex:1;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid var(--qws-border, #ffffff33);
+  background:rgba(0,0,0,.42);
+  color:#fff;
+  outline:none;
+}
+.qws-msg-input .qws-msg-send-btn{
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid var(--qws-border, #ffffff33);
+  background:var(--qws-accent, #7aa2ff);
+  color:#0b1017;
+  font-weight:700;
+  cursor:pointer;
+}
+.qws-msg-input .qws-msg-send-btn:disabled{
+  opacity:.5;
+  cursor:not-allowed;
+}
+.qws-msg-char-count{
+  font-size:11px;
+  opacity:.65;
+  white-space:nowrap;
+}
+.qws-msg-char-count.over{
+  color:#ff6c84;
+  opacity:0.95;
+}
+`;
+    st.textContent += `
+.qws-msg-friend{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.06);
+  background:rgba(255,255,255,0.02);
+  cursor:pointer;
+}
+.qws-msg-friend.active{
+  border-color:#9db7ff66;
+  background:rgba(122,162,255,.16);
+}
+.qws-msg-friend.unread .qws-msg-friend-name{
+  font-weight:700;
+}
+.qws-msg-friend-avatar-wrap{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  position:relative;
+}
+.qws-msg-friend-avatar{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,0.06);
+  font-size:12px;
+  font-weight:600;
+}
+.qws-msg-status-dot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:#34d399;
+  box-shadow:0 0 0 2px rgba(0,0,0,.35);
+  position:absolute;
+  right:-2px;
+  bottom:-2px;
+}
+.qws-msg-friend-meta{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+  flex:1;
+}
+.qws-msg-friend-name{
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-msg-friend-sub{
+  font-size:11px;
+  opacity:.6;
+}
+.qws-msg-unread-badge{
+  min-width:18px;
+  height:18px;
+  padding:0 6px;
+  border-radius:999px;
+  background:#D02128;
+  color:#fff;
+  font-size:11px;
+  font-weight:700;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-msg-row{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  width:100%;
+  justify-content:flex-start;
+}
+.qws-msg-row.outgoing{
+  justify-content:flex-end;
+}
+.qws-msg-avatar{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  overflow:hidden;
+  position:relative;
+  flex:0 0 32px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.12);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  font-weight:700;
+  color:#dbe7f5;
+}
+.qws-msg-avatar img{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+.qws-msg-avatar img.qws-msg-avatar-layer{
+  object-fit:contain;
+  transform:scale(1.8);
+  transform-origin:50% 18%;
+}
+.qws-msg-avatar img.qws-msg-avatar-photo{
+  object-fit:cover;
+}
+.qws-msg-friend-avatar img.qws-msg-avatar-photo{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-msg-bubble{
+  max-width:75%;
+  padding:8px 10px;
+  border-radius:12px;
+  font-size:12px;
+  line-height:1.35;
+  word-wrap:break-word;
+  white-space:pre-wrap;
+  display:flex;
+  flex-direction:column;
+  cursor:default;
+  position:relative;
+  transition:padding-bottom 180ms ease, min-width 180ms ease;
+}
+.qws-msg-bubble.has-multi-items{
+  width:100%;
+}
+.qws-msg-content{
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.qws-msg-item-card{
+  margin-top:6px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:10px;
+  background:rgba(0,0,0,0.18);
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.05);
+  max-width:100%;
+}
+.qws-msg-item-stack{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));
+  gap:6px;
+  align-items:stretch;
+  justify-items:stretch;
+  width:100%;
+}
+.qws-msg-item-stack .qws-msg-item-card{
+  margin-top:0;
+  width:100%;
+}
+.qws-msg-bubble.no-text .qws-msg-item-card{
+  margin-top:0;
+}
+.qws-msg-item-icon{
+  width:36px;
+  height:36px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.08);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:14px;
+  font-weight:700;
+  flex:0 0 auto;
+  overflow:hidden;
+}
+.qws-msg-item-meta{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.qws-msg-item-title-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+.qws-msg-item-title{
+  font-weight:600;
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+  flex:1;
+}
+.qws-msg-item-size{
+  font-size:10px;
+  padding:2px 6px;
+  border-radius:999px;
+  background:rgba(122,162,255,.2);
+  border:1px solid rgba(122,162,255,.4);
+  color:#d6e5ff;
+  line-height:1;
+  white-space:nowrap;
+}
+.qws-msg-item-sub{
+  font-size:11px;
+  opacity:0.7;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-height:14px;
+}
+.qws-msg-item-price{
+  color:#F3D32B;
+  font-weight:700;
+}
+.qws-msg-item-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 6px;
+  border-radius:999px;
+  font-size:10px;
+  line-height:1.1;
+  font-weight:700;
+  letter-spacing:0.02em;
+  background:rgba(79, 166, 255, 0.28);
+  color:#8fd3ff;
+}
+.qws-msg-attachments{
+  display:none;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:0 10px 8px 10px;
+}
+.qws-msg-attachment{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.1);
+  font-size:11px;
+}
+.qws-msg-attachment-label{
+  white-space:nowrap;
+  max-width:160px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-msg-attachment-remove{
+  border:none;
+  background:rgba(0,0,0,0.3);
+  color:#fff;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:12px;
+  line-height:1;
+  padding:0;
+}
+.qws-msg-attachment-remove:hover{
+  background:rgba(255,255,255,0.2);
+}
+.qws-msg-bubble.incoming{
+  align-self:flex-start;
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.08);
+}
+.qws-msg-bubble.outgoing{
+  align-self:flex-end;
+  background:rgba(122,162,255,.22);
+  border:1px solid rgba(122,162,255,.45);
+}
+.qws-msg-loading{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px 0;
+  min-height:120px;
+}
+.qws-msg-loading-dots{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.qws-msg-loading-dots span{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.65);
+  display:inline-block;
+  animation:qws-msg-bounce 1s ease-in-out infinite;
+}
+.qws-msg-loading-dots span:nth-child(2){
+  animation-delay:0.15s;
+}
+.qws-msg-loading-dots span:nth-child(3){
+  animation-delay:0.3s;
+}
+@keyframes qws-msg-bounce{
+  0%, 80%, 100% { transform:translateY(0); opacity:0.6; }
+  40% { transform:translateY(-6px); opacity:1; }
+}
+.qws-msg-sep{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  opacity:.65;
+  font-size:11px;
+  margin:6px 0;
+}
+.qws-msg-sep-line{
+  flex:1;
+  height:1px;
+  background:rgba(255,255,255,0.12);
+}
+.qws-msg-sep-label{
+  padding:0 6px;
+  white-space:nowrap;
+}
+.qws-msg-read-hint{
+  align-self:flex-end;
+  font-size:11px;
+  opacity:.65;
+  margin-top:-2px;
+}
+.qws-msg-empty{
+  opacity:.6;
+  font-size:12px;
+  text-align:center;
+  margin:auto;
+}
+@media (max-width: 700px){
+  .qws-msg-body{
+    grid-template-columns:1fr;
+    grid-template-rows:160px 1fr;
+  }
+  .qws-msg-list{
+    border-right:none;
+    border-bottom:1px solid var(--qws-border, #ffffff22);
+  }
+}
+`;
+    document.head.appendChild(st);
+  }
+  function normalizeId(value) {
+    return value == null ? "" : String(value);
+  }
+  function formatFriendName(friend, fallbackId) {
+    const name = friend?.playerName ?? friend?.playerId ?? fallbackId;
+    const trimmed = String(name ?? "").trim();
+    return trimmed || fallbackId || "Unknown";
+  }
+  function formatStatus(friend) {
+    if (!friend) return "";
+    if (friend.isOnline) return "Online";
+    const seen = formatLastSeen2(friend.lastEventAt);
+    return seen ? `Offline \xB7 ${seen}` : "Offline";
+  }
+  function parseMessageTime(msg) {
+    const raw = msg.createdAt || msg.deliveredAt || msg.readAt || "";
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  function formatDayLabel(date) {
+    const now2 = /* @__PURE__ */ new Date();
+    const todayKey = `${now2.getFullYear()}-${now2.getMonth()}-${now2.getDate()}`;
+    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    if (dayKey === todayKey) return "Today";
+    const yesterday = new Date(now2);
+    yesterday.setDate(now2.getDate() - 1);
+    const yKey = `${yesterday.getFullYear()}-${yesterday.getMonth()}-${yesterday.getDate()}`;
+    if (dayKey === yKey) return "Yesterday";
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  }
+  function formatTimeLabel(date) {
+    return date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+  function createSeparator(label2) {
+    const wrap = document.createElement("div");
+    wrap.className = "qws-msg-sep";
+    const lineLeft = document.createElement("div");
+    lineLeft.className = "qws-msg-sep-line";
+    const lineRight = document.createElement("div");
+    lineRight.className = "qws-msg-sep-line";
+    const text = document.createElement("div");
+    text.className = "qws-msg-sep-label";
+    text.textContent = label2;
+    wrap.append(lineLeft, text, lineRight);
+    return wrap;
+  }
+  function extractInventoryItems2(rawInventory) {
+    if (!rawInventory) return [];
+    if (Array.isArray(rawInventory)) return rawInventory;
+    if (Array.isArray(rawInventory.items)) return rawInventory.items;
+    if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
+    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+    return [];
+  }
+  function extractStorages(rawInventory) {
+    if (!rawInventory) return [];
+    if (Array.isArray(rawInventory.storages)) return rawInventory.storages;
+    if (Array.isArray(rawInventory.inventory?.storages)) return rawInventory.inventory.storages;
+    return [];
+  }
+  function unwrapInventoryItem(entry) {
+    if (!entry || typeof entry !== "object") return entry;
+    if (entry.item && typeof entry.item === "object") return entry.item;
+    if (entry.data && typeof entry.data === "object" && entry.data.itemType) return entry.data;
+    return entry;
+  }
+  function isPlantInventoryItem(item) {
+    if (!item || typeof item !== "object") return false;
+    const type = String(item.itemType ?? item.type ?? item.kind ?? "").toLowerCase();
+    return type === "plant";
+  }
+  function getStackKey(item) {
+    if (!item || typeof item !== "object") return null;
+    const qty = Number(item.quantity);
+    if (!Number.isFinite(qty)) return null;
+    const type = String(item.itemType ?? item.type ?? "").toLowerCase();
+    const id = item.species ?? item.seedSpecies ?? item.decorId ?? item.toolId ?? item.eggId ?? item.cropId ?? item.produceId ?? item.id ?? null;
+    if (!id) return null;
+    return `${type}:${id}`;
+  }
+  function mergeInventoryItems(entries) {
+    const out = [];
+    const stack = /* @__PURE__ */ new Map();
+    for (const raw of entries) {
+      const item = unwrapInventoryItem(raw);
+      if (!item || typeof item !== "object") continue;
+      if (isPlantInventoryItem(item)) continue;
+      const key2 = getStackKey(item);
+      if (!key2) {
+        out.push(item);
+        continue;
+      }
+      const qty = Number(item.quantity);
+      if (!stack.has(key2)) {
+        const clone = { ...item, quantity: qty };
+        stack.set(key2, clone);
+        out.push(clone);
+      } else {
+        const existing = stack.get(key2);
+        const base2 = Number(existing.quantity) || 0;
+        existing.quantity = base2 + qty;
+      }
+    }
+    return out;
+  }
+  function parseLastSeen(raw) {
+    if (!raw) return 0;
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  function formatLastSeen2(raw) {
+    if (!raw) return null;
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) return null;
+    const deltaSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1e3));
+    if (deltaSeconds < 60) {
+      return deltaSeconds <= 15 ? "Last seen just now" : `Last seen ${deltaSeconds}s`;
+    }
+    const minutes = Math.floor(deltaSeconds / 60);
+    if (minutes < 60) {
+      return `Last seen ${minutes}m`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `Last seen ${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    return `Last seen ${days}d`;
+  }
+  function normalizeMessage(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const idRaw = raw.id ?? raw.message_id ?? raw.messageId ?? raw.msgId ?? raw.msg_id;
+    const id = typeof idRaw === "number" ? idRaw : Number(idRaw);
+    if (!Number.isFinite(id)) return null;
+    const bodyRaw = raw.body ?? raw.text ?? raw.content ?? raw.message ?? raw.msg ?? "";
+    const body = bodyRaw == null ? "" : String(bodyRaw);
+    const conversationIdRaw = raw.conversationId ?? raw.conversation_id ?? "";
+    const senderIdRaw = raw.senderId ?? raw.sender_id ?? "";
+    const recipientIdRaw = raw.recipientId ?? raw.recipient_id ?? "";
+    const createdAtRaw = raw.createdAt ?? raw.created_at;
+    const deliveredAtRaw = raw.deliveredAt ?? raw.delivered_at;
+    const conversationId = conversationIdRaw ? String(conversationIdRaw) : "";
+    const senderId = senderIdRaw ? String(senderIdRaw) : "";
+    const recipientId = recipientIdRaw ? String(recipientIdRaw) : "";
+    const createdAt = createdAtRaw ? String(createdAtRaw) : (/* @__PURE__ */ new Date()).toISOString();
+    const deliveredAt = deliveredAtRaw ? String(deliveredAtRaw) : "";
+    const readAt = raw.readAt ?? raw.read_at ?? null;
+    return {
+      id,
+      conversationId,
+      senderId,
+      recipientId,
+      body,
+      createdAt,
+      deliveredAt,
+      readAt
+    };
+  }
+  async function getCurrentRoomId() {
+    try {
+      const state3 = await Atoms.root.state.get();
+      const roomId = state3?.data?.roomId ?? state3?.fullState?.data?.roomId ?? state3?.roomId ?? null;
+      return roomId != null ? String(roomId) : null;
+    } catch {
+      return null;
+    }
+  }
+  var MessagesOverlay = class {
+    constructor() {
+      __publicField(this, "slot", document.createElement("div"));
+      __publicField(this, "btn", document.createElement("button"));
+      __publicField(this, "badge", document.createElement("span"));
+      __publicField(this, "panel", document.createElement("div"));
+      __publicField(this, "iconWrap", document.createElement("div"));
+      __publicField(this, "listEl", document.createElement("div"));
+      __publicField(this, "threadHeadEl", document.createElement("div"));
+      __publicField(this, "threadBodyEl", document.createElement("div"));
+      __publicField(this, "inputEl", document.createElement("input"));
+      __publicField(this, "sendBtn", document.createElement("button"));
+      __publicField(this, "emojiWrapEl", document.createElement("div"));
+      __publicField(this, "emojiBtnEl", document.createElement("button"));
+      __publicField(this, "emojiMenuEl", document.createElement("div"));
+      __publicField(this, "statusEl", document.createElement("div"));
+      __publicField(this, "attachmentsEl", document.createElement("div"));
+      __publicField(this, "charCountEl", document.createElement("div"));
+      __publicField(this, "maxTextLength", MAX_MESSAGE_LENGTH);
+      __publicField(this, "myId", null);
+      __publicField(this, "friends", []);
+      __publicField(this, "friendsFingerprint", null);
+      __publicField(this, "convs", /* @__PURE__ */ new Map());
+      __publicField(this, "convByConversationId", /* @__PURE__ */ new Map());
+      __publicField(this, "selectedId", null);
+      __publicField(this, "panelOpen", false);
+      __publicField(this, "stream", null);
+      __publicField(this, "mo", null);
+      __publicField(this, "unsubPlayerId", null);
+      __publicField(this, "keyTrapCleanup", null);
+      __publicField(this, "panelHeadEl", null);
+      __publicField(this, "panelDetached", false);
+      __publicField(this, "importPending", false);
+      __publicField(this, "importRestoreOpen", false);
+      __publicField(this, "importUnsubs", []);
+      __publicField(this, "pendingImportItems", []);
+      __publicField(this, "rowById", /* @__PURE__ */ new Map());
+      __publicField(this, "myAvatarUrl", null);
+      __publicField(this, "myAvatar", null);
+      __publicField(this, "myName", null);
+      __publicField(this, "cosmeticBaseUrl", null);
+      __publicField(this, "cosmeticBasePromise", null);
+      ensureMessagesOverlayStyle();
+      this.slot = this.createSlot();
+      this.btn = this.createButton();
+      this.badge = this.createBadge();
+      this.panel = this.createPanel();
+      this.installScrollGuards(this.listEl);
+      this.installScrollGuards(this.threadBodyEl);
+      this.keyTrapCleanup = installInputKeyTrap(this.panel, {
+        onEnter: () => {
+          void this.handleSendMessage();
+        },
+        shouldHandleEnter: (_target, active) => active === this.inputEl
+      });
+      this.installPanelDrag();
+      this.btn.onclick = () => {
+        if (this.importPending) return;
+        this.setEmojiMenu(false);
+        const next = this.panel.style.display !== "block";
+        this.panel.style.display = next ? "block" : "none";
+        this.panelOpen = next;
+        if (next) {
+          if (!this.panelDetached) {
+            this.panel.style.position = "absolute";
+            this.panel.style.left = "";
+            this.panel.style.top = "";
+            this.panel.style.right = "0";
+            this.panel.style.bottom = "";
+          }
+          this.loadFriends();
+          this.renderAttachments();
+          this.updateAttachmentStatus();
+          if (this.selectedId) {
+            void this.selectConversation(this.selectedId);
+          } else {
+            this.renderThread();
+          }
+          this.fitPanelWithinViewport();
+        }
+        this.updateButtonBadge();
+      };
+      this.slot.append(this.btn, this.badge, this.panel);
+      this.attach();
+      this.observeDomForRelocation();
+      window.addEventListener("pointerdown", (e) => {
+        if (!this.panelOpen) return;
+        const t = e.target;
+        if (!this.slot.contains(t)) {
+          this.panel.style.display = "none";
+          this.panelOpen = false;
+        }
+      });
+    }
+    async init() {
+      const initial = await playerDatabaseUserId.get();
+      this.setMyId(initial);
+      playerDatabaseUserId.onChangeNow((next) => {
+        this.setMyId(next);
+      }).then((unsub) => {
+        this.unsubPlayerId = unsub;
+      }).catch(() => {
+      });
+    }
+    destroy() {
+      try {
+        this.stream?.close();
+      } catch {
+      }
+      try {
+        this.mo?.disconnect();
+      } catch {
+      }
+      try {
+        this.keyTrapCleanup?.();
+      } catch {
+      }
+      try {
+        this.clearImportWatchers();
+      } catch {
+      }
+      try {
+        this.unsubPlayerId?.();
+      } catch {
+      }
+      try {
+        this.slot.remove();
+      } catch {
+      }
+    }
+    setMyId(next) {
+      const normalized = next ? String(next) : null;
+      if (this.myId === normalized) return;
+      this.myId = normalized;
+      void this.refreshMyProfile();
+      this.resetStream();
+      this.loadFriends(true);
+      this.renderFriendList({ preserveScroll: true });
+      this.renderThread();
+    }
+    async refreshMyProfile() {
+      if (!this.myId) {
+        this.myAvatar = null;
+        this.myAvatarUrl = null;
+        this.myName = null;
+        return;
+      }
+      try {
+        const state3 = await Atoms.root.state.get();
+        const players = getPlayersArrayFromState(state3);
+        const normalized = String(this.myId);
+        const me = players.find((p) => {
+          const candidate = p?.databaseUserId ?? p?.playerId ?? p?.id ?? "";
+          return String(candidate) === normalized;
+        });
+        this.myName = typeof me?.name === "string" && me.name ? me.name : this.myName;
+        this.myAvatarUrl = typeof me?.discordAvatarUrl === "string" ? me.discordAvatarUrl : this.myAvatarUrl;
+        const avatarRaw = me?.cosmetic?.avatar ?? null;
+        this.myAvatar = Array.isArray(avatarRaw) && avatarRaw.length ? avatarRaw.map((entry) => String(entry)) : null;
+        this.renderThread();
+      } catch {
+      }
+    }
+    ensureCosmeticBase() {
+      if (this.cosmeticBaseUrl || this.cosmeticBasePromise) return;
+      this.cosmeticBasePromise = MGAssets.base().then((base2) => {
+        this.cosmeticBaseUrl = base2;
+        this.cosmeticBasePromise = null;
+        this.populateCosmeticImages();
+        return base2;
+      }).catch(() => {
+        this.cosmeticBasePromise = null;
+      });
+    }
+    buildCosmeticUrl(name) {
+      if (!this.cosmeticBaseUrl) return null;
+      const normalized = normalizeCosmeticName(name);
+      if (!normalized) return null;
+      const base2 = this.cosmeticBaseUrl.replace(/\/?$/, "/");
+      return `${base2}cosmetic/${normalized}`;
+    }
+    populateCosmeticImages() {
+      if (!this.cosmeticBaseUrl) return;
+      const imgs = this.panel.querySelectorAll("img[data-cosmetic]");
+      imgs.forEach((img) => {
+        const name = img.dataset.cosmetic;
+        if (!name) return;
+        const url2 = this.buildCosmeticUrl(name);
+        if (!url2) return;
+        img.src = url2;
+        img.removeAttribute("data-cosmetic");
+      });
+    }
+    buildAvatarElement(avatarList, fallbackUrl, label2) {
+      const wrap = document.createElement("div");
+      wrap.className = "qws-msg-avatar";
+      const list = Array.isArray(avatarList) ? avatarList.map((entry) => normalizeCosmeticName(entry)).filter((entry) => !!entry) : [];
+      if (list.length) {
+        this.ensureCosmeticBase();
+        list.forEach((entry, index) => {
+          const img = document.createElement("img");
+          img.className = "qws-msg-avatar-layer";
+          img.decoding = "async";
+          img.loading = "eager";
+          img.style.zIndex = String(index + 1);
+          const url2 = this.buildCosmeticUrl(entry);
+          if (url2) {
+            img.src = url2;
+          } else {
+            img.dataset.cosmetic = entry;
+          }
+          wrap.appendChild(img);
+        });
+        return wrap;
+      }
+      if (fallbackUrl) {
+        const img = document.createElement("img");
+        img.decoding = "async";
+        img.loading = "lazy";
+        img.className = "qws-msg-avatar-photo";
+        img.src = fallbackUrl;
+        wrap.appendChild(img);
+        return wrap;
+      }
+      const fallbackLetter = (label2 ?? "?").trim().slice(0, 1).toUpperCase() || "?";
+      wrap.textContent = fallbackLetter;
+      return wrap;
+    }
+    createMessageAvatar(senderId, outgoing) {
+      if (outgoing) {
+        return this.buildAvatarElement(this.myAvatar, this.myAvatarUrl, this.myName ?? "You");
+      }
+      const friend = this.getFriendById(senderId) ?? this.getFriendById(this.selectedId ?? "");
+      return this.buildAvatarElement(
+        friend?.avatar ?? null,
+        friend?.avatarUrl ?? null,
+        friend?.playerName ?? senderId
+      );
+    }
+    resetStream() {
+      if (this.stream) {
+        try {
+          this.stream.close();
+        } catch {
+        }
+        this.stream = null;
+      }
+      if (!this.myId) return;
+      const es = openMessagesStream(this.myId, {
+        onMessage: (msg) => this.handleIncomingMessage(msg),
+        onRead: (receipt) => this.handleReadReceipt(receipt),
+        onError: () => {
+        }
+      });
+      this.stream = es ?? null;
+    }
+    ensureConversation(otherIdRaw) {
+      const otherId = normalizeId(otherIdRaw);
+      let conv = this.convs.get(otherId);
+      if (!conv) {
+        conv = {
+          otherId,
+          conversationId: null,
+          messages: [],
+          unread: 0,
+          lastMessageAt: 0,
+          loaded: false,
+          loading: false
+        };
+        this.convs.set(otherId, conv);
+      }
+      return conv;
+    }
+    updateConversationMap(conv) {
+      if (conv.conversationId) {
+        this.convByConversationId.set(conv.conversationId, conv.otherId);
+      }
+    }
+    mergeMessages(existing, incoming) {
+      const map2 = /* @__PURE__ */ new Map();
+      for (const msg of existing) {
+        if (typeof msg?.id === "number") map2.set(msg.id, msg);
+      }
+      for (const msg of incoming) {
+        if (typeof msg?.id === "number") map2.set(msg.id, msg);
+      }
+      return Array.from(map2.values()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+    }
+    updateUnreadFromMessages(conv) {
+      if (!this.myId) return;
+      let unread = 0;
+      for (const msg of conv.messages) {
+        if (msg.senderId !== this.myId && !msg.readAt) unread += 1;
+      }
+      conv.unread = unread;
+    }
+    handleIncomingMessage(message) {
+      if (!this.myId) return;
+      const normalized = normalizeMessage(message);
+      if (!normalized) return;
+      const isOutgoing = normalized.senderId === this.myId;
+      const otherId = isOutgoing ? normalized.recipientId : normalized.senderId;
+      const conv = this.ensureConversation(otherId);
+      conv.messages = this.mergeMessages(conv.messages, [normalized]);
+      conv.conversationId = normalized.conversationId ?? conv.conversationId;
+      conv.lastMessageAt = Math.max(
+        conv.lastMessageAt,
+        Number.isFinite(Date.parse(normalized.createdAt)) ? Date.parse(normalized.createdAt) : 0
+      );
+      this.updateConversationMap(conv);
+      if (!isOutgoing) {
+        const shouldMarkRead = this.panelOpen && this.selectedId === conv.otherId;
+        if (shouldMarkRead) {
+          void this.markConversationRead(conv.otherId);
+        } else {
+          conv.unread += 1;
+        }
+      }
+      this.updateButtonBadge();
+      if (!this.updateFriendRow(conv.otherId)) {
+        this.renderFriendList({ preserveScroll: true });
+      }
+      if (this.selectedId === conv.otherId) {
+        this.renderThread();
+      }
+    }
+    handleReadReceipt(receipt) {
+      if (!receipt?.conversationId) return;
+      const otherId = this.convByConversationId.get(receipt.conversationId);
+      if (!otherId) return;
+      const conv = this.convs.get(otherId);
+      if (!conv) return;
+      const upTo = Number(receipt.upToId);
+      if (!Number.isFinite(upTo)) return;
+      const readAt = receipt.readAt ?? (/* @__PURE__ */ new Date()).toISOString();
+      let changed = false;
+      for (const msg of conv.messages) {
+        if (msg.senderId === this.myId && msg.id <= upTo) {
+          if (!msg.readAt) {
+            msg.readAt = readAt;
+            changed = true;
+          }
+        }
+      }
+      if (changed && this.selectedId === otherId) {
+        this.renderThread();
+      }
+    }
+    computeFriendsFingerprint(friends) {
+      const parts = friends.map((friend) => {
+        const avatar = Array.isArray(friend.avatar) ? friend.avatar.map(String).join("|") : "";
+        return [
+          String(friend.playerId ?? ""),
+          friend.playerName ?? "",
+          friend.avatarUrl ?? "",
+          avatar,
+          friend.isOnline ? "1" : "0",
+          friend.lastEventAt ?? ""
+        ].join("~");
+      });
+      parts.sort();
+      return parts.join("||");
+    }
+    applyFriends(next, opts) {
+      this.friends = next;
+      const fingerprint = this.computeFriendsFingerprint(next);
+      if (!opts?.forceRender && this.friendsFingerprint === fingerprint) return;
+      this.friendsFingerprint = fingerprint;
+      this.renderFriendList({ preserveScroll: true });
+    }
+    async loadFriends(force = false) {
+      if (!this.myId) return;
+      if (!force) {
+        const cached = getCachedFriendsWithViews();
+        if (cached.length) {
+          this.applyFriends(cached, { forceRender: this.friendsFingerprint == null });
+        }
+      }
+      try {
+        const next = await fetchFriendsWithViews(this.myId);
+        this.applyFriends(next);
+      } catch {
+        this.friends = [];
+        this.friendsFingerprint = null;
+        this.renderFriendList({ preserveScroll: true });
+      }
+    }
+    async selectConversation(otherId) {
+      this.selectedId = otherId;
+      const conv = this.ensureConversation(otherId);
+      this.updateSelection();
+      this.renderThread();
+      this.updateSendState();
+      if (this.myId && !conv.loaded && !conv.loading) {
+        conv.loading = true;
+        this.renderThread();
+        const currentId = otherId;
+        void (async () => {
+          try {
+            const data = await fetchMessagesThread(this.myId, currentId, { limit: 100 });
+            const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
+            conv.messages = this.mergeMessages(conv.messages, normalized);
+            if (conv.messages.length) {
+              conv.conversationId = conv.messages[0]?.conversationId ?? conv.conversationId;
+              conv.lastMessageAt = Math.max(
+                conv.lastMessageAt,
+                ...conv.messages.map(
+                  (m) => Number.isFinite(Date.parse(m.createdAt)) ? Date.parse(m.createdAt) : 0
+                )
+              );
+            }
+            conv.loaded = true;
+            this.updateConversationMap(conv);
+            this.updateUnreadFromMessages(conv);
+          } catch {
+          } finally {
+            conv.loading = false;
+            if (this.selectedId === currentId) {
+              this.renderThread();
+            }
+            this.updateFriendRow(currentId);
+            await this.markConversationRead(currentId);
+          }
+        })();
+      } else {
+        await this.markConversationRead(otherId);
+        this.updateFriendRow(otherId);
+      }
+    }
+    async markConversationRead(otherId) {
+      if (!this.myId) return;
+      const conv = this.convs.get(otherId);
+      if (!conv) return;
+      const unreadMsgs = conv.messages.filter(
+        (m) => m.senderId !== this.myId && !m.readAt
+      );
+      if (!unreadMsgs.length) {
+        conv.unread = 0;
+        this.updateButtonBadge();
+        this.updateFriendRow(otherId);
+        return;
+      }
+      const last = unreadMsgs[unreadMsgs.length - 1];
+      if (!last?.id) return;
+      try {
+        await markMessagesRead({
+          playerId: this.myId,
+          otherPlayerId: otherId,
+          upToId: last.id
+        });
+        const readAt = (/* @__PURE__ */ new Date()).toISOString();
+        for (const msg of conv.messages) {
+          if (msg.senderId !== this.myId && msg.id <= last.id) {
+            msg.readAt = readAt;
+          }
+        }
+        conv.unread = 0;
+        this.updateButtonBadge();
+        this.updateFriendRow(otherId);
+      } catch {
+      }
+    }
+    getFriendById(id) {
+      return this.friends.find((f) => normalizeId(f.playerId) === normalizeId(id)) ?? null;
+    }
+    buildFriendEntries() {
+      const entries = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const friend of this.friends) {
+        const id = normalizeId(friend.playerId);
+        if (!id) continue;
+        const conv = this.convs.get(id);
+        entries.push({
+          id,
+          friend,
+          unread: conv?.unread ?? 0,
+          lastMessageAt: conv?.lastMessageAt ?? 0,
+          online: Boolean(friend.isOnline),
+          lastSeenAt: parseLastSeen(friend.lastEventAt)
+        });
+        seen.add(id);
+      }
+      for (const [id, conv] of this.convs) {
+        if (seen.has(id)) continue;
+        entries.push({
+          id,
+          friend: null,
+          unread: conv.unread,
+          lastMessageAt: conv.lastMessageAt,
+          online: false,
+          lastSeenAt: 0
+        });
+      }
+      entries.sort((a, b) => {
+        const aUnread = a.unread > 0 ? 1 : 0;
+        const bUnread = b.unread > 0 ? 1 : 0;
+        if (aUnread !== bUnread) return bUnread - aUnread;
+        const aOnline = a.online ? 1 : 0;
+        const bOnline = b.online ? 1 : 0;
+        if (aOnline !== bOnline) return bOnline - aOnline;
+        if (!a.online && !b.online && a.lastSeenAt !== b.lastSeenAt) {
+          return b.lastSeenAt - a.lastSeenAt;
+        }
+        if (a.lastMessageAt !== b.lastMessageAt) return b.lastMessageAt - a.lastMessageAt;
+        const nameA = formatFriendName(a.friend, a.id).toLowerCase();
+        const nameB = formatFriendName(b.friend, b.id).toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+      return entries;
+    }
+    renderFriendList(options) {
+      const preserveScroll = options?.preserveScroll ?? false;
+      const scrollTop = preserveScroll ? this.listEl.scrollTop : 0;
+      this.listEl.innerHTML = "";
+      this.rowById.clear();
+      const entries = this.buildFriendEntries();
+      if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.className = "qws-msg-empty";
+        empty.textContent = "No friends yet.";
+        this.listEl.appendChild(empty);
+        return;
+      }
+      for (const entry of entries) {
+        const row = document.createElement("div");
+        row.className = "qws-msg-friend";
+        if (entry.unread > 0) row.classList.add("unread");
+        if (this.selectedId === entry.id) row.classList.add("active");
+        const avatarWrap = document.createElement("div");
+        avatarWrap.className = "qws-msg-friend-avatar-wrap";
+        const avatar = document.createElement("div");
+        avatar.className = "qws-msg-friend-avatar";
+        if (entry.friend?.avatarUrl) {
+          const img = document.createElement("img");
+          img.className = "qws-msg-avatar-photo";
+          img.decoding = "async";
+          img.loading = "lazy";
+          img.src = entry.friend.avatarUrl;
+          img.alt = formatFriendName(entry.friend, entry.id);
+          img.width = 32;
+          img.height = 32;
+          avatar.appendChild(img);
+        } else {
+          const fallback = document.createElement("span");
+          fallback.textContent = formatFriendName(entry.friend, entry.id).charAt(0).toUpperCase();
+          avatar.appendChild(fallback);
+        }
+        avatarWrap.appendChild(avatar);
+        const meta = document.createElement("div");
+        meta.className = "qws-msg-friend-meta";
+        const name = document.createElement("div");
+        name.className = "qws-msg-friend-name";
+        name.textContent = formatFriendName(entry.friend, entry.id);
+        const sub = document.createElement("div");
+        sub.className = "qws-msg-friend-sub";
+        sub.textContent = formatStatus(entry.friend);
+        meta.append(name, sub);
+        let dot = null;
+        if (entry.friend?.isOnline) {
+          dot = document.createElement("span");
+          dot.className = "qws-msg-status-dot";
+          avatarWrap.appendChild(dot);
+        }
+        row.append(avatarWrap, meta);
+        let badge = null;
+        if (entry.unread > 0) {
+          badge = document.createElement("span");
+          badge.className = "qws-msg-unread-badge";
+          badge.textContent = String(entry.unread);
+          row.appendChild(badge);
+        }
+        row.addEventListener("click", () => {
+          void this.selectConversation(entry.id);
+        });
+        this.rowById.set(entry.id, {
+          row,
+          badge,
+          avatarWrap,
+          statusDot: dot,
+          sub
+        });
+        this.listEl.appendChild(row);
+      }
+      if (preserveScroll) {
+        this.listEl.scrollTop = scrollTop;
+      }
+    }
+    renderThread() {
+      this.threadHeadEl.innerHTML = "";
+      this.threadBodyEl.innerHTML = "";
+      this.statusEl.textContent = "";
+      if (!this.selectedId) {
+        const empty = document.createElement("div");
+        empty.className = "qws-msg-empty";
+        empty.textContent = "Select a friend to start chatting.";
+        this.threadBodyEl.appendChild(empty);
+        this.setInputState(false);
+        return;
+      }
+      const friend = this.getFriendById(this.selectedId);
+      const title = document.createElement("div");
+      title.textContent = formatFriendName(friend, this.selectedId);
+      title.style.fontWeight = "700";
+      this.threadHeadEl.appendChild(title);
+      const conv = this.ensureConversation(this.selectedId);
+      if (conv.loading && !conv.messages.length) {
+        const loading = document.createElement("div");
+        loading.className = "qws-msg-loading";
+        const dots = document.createElement("div");
+        dots.className = "qws-msg-loading-dots";
+        dots.innerHTML = "<span></span><span></span><span></span>";
+        loading.appendChild(dots);
+        this.threadBodyEl.appendChild(loading);
+        this.setInputState(true);
+        return;
+      }
+      if (!conv.messages.length) {
+        const empty = document.createElement("div");
+        empty.className = "qws-msg-empty";
+        empty.textContent = "No messages yet.";
+        this.threadBodyEl.appendChild(empty);
+        this.setInputState(true);
+        return;
+      }
+      const messages = conv.messages.slice();
+      if (conv.loading) {
+        const loading = document.createElement("div");
+        loading.className = "qws-msg-loading";
+        const dots = document.createElement("div");
+        dots.className = "qws-msg-loading-dots";
+        dots.innerHTML = "<span></span><span></span><span></span>";
+        loading.appendChild(dots);
+        this.threadBodyEl.appendChild(loading);
+      }
+      const GAP_MS = 10 * 60 * 1e3;
+      let lastTs = 0;
+      let lastDayKey = "";
+      for (const msg of messages) {
+        const ts = parseMessageTime(msg);
+        if (ts) {
+          const date = new Date(ts);
+          const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+          if (dayKey !== lastDayKey) {
+            this.threadBodyEl.appendChild(createSeparator(formatDayLabel(date)));
+            lastDayKey = dayKey;
+          } else if (lastTs && ts - lastTs >= GAP_MS) {
+            this.threadBodyEl.appendChild(createSeparator(formatTimeLabel(date)));
+          }
+          lastTs = ts;
+        }
+        const parsed = decodeItemMessage(msg.body ?? "");
+        const itemPayloads = parsed?.items && parsed.items.length ? parsed.items : null;
+        const messageText = typeof parsed?.message === "string" ? parsed.message : msg.body ?? "";
+        const hasMessage = messageText.trim().length > 0;
+        const bubble = document.createElement("div");
+        bubble.className = "qws-msg-bubble";
+        const outgoing = msg.senderId === this.myId;
+        bubble.classList.add(outgoing ? "outgoing" : "incoming");
+        if (!hasMessage && itemPayloads) bubble.classList.add("no-text");
+        const content = document.createElement("div");
+        content.className = "qws-msg-content";
+        content.textContent = messageText;
+        if (!hasMessage) {
+          content.style.display = "none";
+        }
+        let itemStack = null;
+        if (itemPayloads && itemPayloads.length) {
+          itemStack = document.createElement("div");
+          itemStack.className = "qws-msg-item-stack";
+          for (const item of itemPayloads) {
+            itemStack.appendChild(createItemCard(item));
+          }
+        }
+        if (itemStack) {
+          if (itemPayloads && itemPayloads.length > 1) {
+            bubble.classList.add("has-multi-items");
+          }
+          bubble.append(content, itemStack);
+        } else {
+          bubble.append(content);
+        }
+        const avatarEl = this.createMessageAvatar(msg.senderId, outgoing);
+        const row = document.createElement("div");
+        row.className = "qws-msg-row";
+        row.classList.add(outgoing ? "outgoing" : "incoming");
+        if (outgoing) {
+          row.append(bubble, avatarEl);
+        } else {
+          row.append(avatarEl, bubble);
+        }
+        this.threadBodyEl.appendChild(row);
+      }
+      const last = messages[messages.length - 1];
+      if (last && last.senderId === this.myId) {
+        const hintText = last.readAt ? "Read" : last.deliveredAt ? "Delivered" : "";
+        if (hintText) {
+          const hint = document.createElement("div");
+          hint.className = "qws-msg-read-hint";
+          hint.textContent = hintText;
+          this.threadBodyEl.appendChild(hint);
+        }
+      }
+      this.setInputState(true);
+      this.scrollThreadToBottom();
+    }
+    scrollThreadToBottom() {
+      requestAnimationFrame(() => {
+        this.threadBodyEl.scrollTop = this.threadBodyEl.scrollHeight;
+      });
+    }
+    canSend() {
+      if (!this.selectedId) return false;
+      const hasText = !!this.inputEl.value.trim();
+      const hasItem = this.pendingImportItems.length > 0;
+      return hasText || hasItem;
+    }
+    buildMessageBody() {
+      const text = this.inputEl.value.trim();
+      const pendingItems = this.pendingImportItems.slice(0, MAX_ATTACHMENTS);
+      if (!text && !pendingItems.length) return null;
+      if (!pendingItems.length) {
+        return { body: text, usedItems: false };
+      }
+      const payload = {
+        v: 1,
+        kind: "item",
+        message: text || "",
+        items: pendingItems
+      };
+      try {
+        const body = encodeItemMessage(payload);
+        return { body, usedItems: true };
+      } catch {
+        return null;
+      }
+    }
+    computeMaxTextLength() {
+      const pendingItems = this.pendingImportItems.slice(0, MAX_ATTACHMENTS);
+      if (!pendingItems.length) return MAX_MESSAGE_LENGTH;
+      let lo = 0;
+      let hi = MAX_MESSAGE_LENGTH;
+      let best = 0;
+      while (lo <= hi) {
+        const mid = Math.floor((lo + hi) / 2);
+        const payload = {
+          v: 1,
+          kind: "item",
+          message: "x".repeat(mid),
+          items: pendingItems
+        };
+        let body = "";
+        try {
+          body = encodeItemMessage(payload);
+        } catch {
+          body = "";
+        }
+        if (body.length <= MAX_MESSAGE_LENGTH && body.length > 0) {
+          best = mid;
+          lo = mid + 1;
+        } else if (body.length <= MAX_MESSAGE_LENGTH && body.length === 0) {
+          best = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return best;
+    }
+    recomputeInputLimit() {
+      this.maxTextLength = this.computeMaxTextLength();
+      this.inputEl.maxLength = this.maxTextLength;
+      if (this.inputEl.value.length > this.maxTextLength) {
+        this.inputEl.value = this.inputEl.value.slice(0, this.maxTextLength);
+      }
+      this.updateSendState();
+    }
+    getMessageLength() {
+      const built = this.buildMessageBody();
+      return built ? built.body.length : 0;
+    }
+    updateCharCount(length) {
+      const len = typeof length === "number" ? length : this.getMessageLength();
+      this.charCountEl.textContent = `${len}/${MAX_MESSAGE_LENGTH}`;
+      this.charCountEl.classList.toggle("over", len > MAX_MESSAGE_LENGTH);
+    }
+    updateSendState() {
+      const length = this.getMessageLength();
+      const overLimit = length > MAX_MESSAGE_LENGTH;
+      this.sendBtn.disabled = this.inputEl.disabled || !this.canSend() || overLimit;
+      this.inputEl.placeholder = this.pendingImportItems.length > 0 ? "Add a message (optional)..." : "Type a message...";
+      this.updateCharCount(length);
+      if (!overLimit && this.statusEl.textContent.startsWith("Message too long")) {
+        this.statusEl.textContent = "";
+        this.updateAttachmentStatus();
+      }
+    }
+    updateAttachmentStatus() {
+      const count = this.pendingImportItems.length;
+      if (count > 0) {
+        if (!this.statusEl.textContent || this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+          this.statusEl.textContent = `${ATTACHMENT_STATUS_PREFIX} ${count}/${MAX_ATTACHMENTS}`;
+        }
+        return;
+      }
+      if (this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+        this.statusEl.textContent = "";
+      }
+    }
+    renderAttachments() {
+      this.attachmentsEl.innerHTML = "";
+      if (!this.pendingImportItems.length) {
+        this.attachmentsEl.style.display = "none";
+        this.recomputeInputLimit();
+        return;
+      }
+      this.attachmentsEl.style.display = "flex";
+      this.pendingImportItems.forEach((item, index) => {
+        const chip = document.createElement("div");
+        chip.className = "qws-msg-attachment";
+        const label2 = document.createElement("span");
+        label2.className = "qws-msg-attachment-label";
+        label2.textContent = getChatItemLabel(item);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "qws-msg-attachment-remove";
+        remove.textContent = "\xD7";
+        remove.title = "Remove";
+        remove.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.pendingImportItems.splice(index, 1);
+          this.renderAttachments();
+          this.updateSendState();
+          this.updateAttachmentStatus();
+        });
+        chip.append(label2, remove);
+        this.attachmentsEl.appendChild(chip);
+      });
+      this.recomputeInputLimit();
+    }
+    setInputState(enabled) {
+      this.inputEl.disabled = !enabled;
+      this.updateSendState();
+    }
+    async handleImportItems() {
+      if (this.importPending) return;
+      if (this.pendingImportItems.length >= MAX_ATTACHMENTS) {
+        this.statusEl.textContent = `You can attach up to ${MAX_ATTACHMENTS} items.`;
+        return;
+      }
+      this.beginImportSuspend();
+      try {
+        const raw = await Atoms.inventory.myInventory.get();
+        const items = extractInventoryItems2(raw);
+        const storages = extractStorages(raw);
+        const storageItems = [];
+        for (const storage of storages) {
+          const storageList = Array.isArray(storage?.items) ? storage.items : [];
+          storageItems.push(...storageList);
+        }
+        const merged = mergeInventoryItems([...items, ...storageItems]);
+        const favoritedItemIds = Array.isArray(raw?.favoritedItemIds) ? raw.favoritedItemIds : Array.isArray(raw?.inventory?.favoritedItemIds) ? raw.inventory.favoritedItemIds : [];
+        await fakeInventoryShow(
+          { items: merged, favoritedItemIds },
+          { open: true }
+        );
+        this.startImportResumeWatchers();
+        await this.resetImportSelection();
+        try {
+          const [currentIndex2, modalVal] = await Promise.all([
+            Atoms.inventory.myValidatedSelectedItemIndex.get(),
+            Atoms.ui.activeModal.get()
+          ]);
+          if (typeof currentIndex2 === "number" && Number.isInteger(currentIndex2) && currentIndex2 >= 0 || !isInventoryOpen(modalVal)) {
+            this.resumeFromImport();
+          }
+        } catch {
+        }
+      } catch (error) {
+        console.error("[MessagesOverlay] import items failed", error);
+        this.statusEl.textContent = "Unable to import inventory.";
+        this.resumeFromImport();
+      }
+    }
+    beginImportSuspend() {
+      if (this.importPending) return;
+      this.importPending = true;
+      this.importRestoreOpen = this.panelOpen;
+      this.panel.style.display = "none";
+      this.panelOpen = false;
+    }
+    startImportResumeWatchers() {
+      if (!this.importPending) return;
+      this.clearImportWatchers();
+      Atoms.inventory.myValidatedSelectedItemIndex.onChange((next) => {
+        if (!this.importPending) return;
+        if (typeof next === "number" && Number.isInteger(next) && next >= 0) {
+          void this.handleImportSelection(next);
+        }
+      }).then((unsub) => {
+        if (!this.importPending) {
+          try {
+            unsub();
+          } catch {
+          }
+          return;
+        }
+        this.importUnsubs.push(unsub);
+      }).catch(() => {
+      });
+      Atoms.ui.activeModal.onChange((next) => {
+        if (!this.importPending) return;
+        if (!isInventoryOpen(next)) {
+          this.resumeFromImport();
+        }
+      }).then((unsub) => {
+        if (!this.importPending) {
+          try {
+            unsub();
+          } catch {
+          }
+          return;
+        }
+        this.importUnsubs.push(unsub);
+      }).catch(() => {
+      });
+    }
+    clearImportWatchers() {
+      if (!this.importUnsubs.length) return;
+      for (const unsub of this.importUnsubs) {
+        try {
+          unsub();
+        } catch {
+        }
+      }
+      this.importUnsubs = [];
+    }
+    async handleImportSelection(index) {
+      if (!this.importPending) return;
+      try {
+        const inv = await Atoms.inventory.myInventory.get();
+        const items = Array.isArray(inv?.items) ? inv.items : Array.isArray(inv?.inventory?.items) ? inv.inventory.items : [];
+        const item = index >= 0 && index < items.length ? items[index] : null;
+        const normalized = normalizeChatItem(item);
+        console.log("[MessagesOverlay] Selected import item:", normalized ?? item);
+        if (normalized) {
+          if (this.pendingImportItems.length >= MAX_ATTACHMENTS) {
+            this.statusEl.textContent = `You can attach up to ${MAX_ATTACHMENTS} items.`;
+          } else {
+            this.pendingImportItems.push(normalized);
+            this.renderAttachments();
+            this.updateAttachmentStatus();
+            this.updateSendState();
+          }
+        } else {
+          this.statusEl.textContent = "Unsupported item for chat.";
+          this.updateAttachmentStatus();
+          this.updateSendState();
+        }
+      } catch (err) {
+        console.warn("[MessagesOverlay] Unable to read selected item", err);
+      }
+      try {
+        await closeInventoryPanel();
+      } catch {
+      }
+      this.resumeFromImport();
+    }
+    async resetImportSelection() {
+      try {
+        await Atoms.inventory.mySelectedItemName.set(null);
+      } catch {
+      }
+      try {
+        await Atoms.inventory.myValidatedSelectedItemIndex.set(null);
+      } catch {
+      }
+      try {
+        await Atoms.inventory.myPossiblyNoLongerValidSelectedItemIndex.set(null);
+      } catch {
+      }
+    }
+    resumeFromImport() {
+      if (!this.importPending) return;
+      this.clearImportWatchers();
+      this.importPending = false;
+      if (this.importRestoreOpen) {
+        this.panel.style.display = "block";
+        this.panelOpen = true;
+        this.renderThread();
+        this.fitPanelWithinViewport();
+        this.renderAttachments();
+        this.updateSendState();
+        this.updateAttachmentStatus();
+      }
+    }
+    updateButtonBadge() {
+      let total = 0;
+      for (const conv of this.convs.values()) total += conv.unread;
+      this.badge.textContent = total ? String(total) : "";
+      style2(this.badge, { display: total ? "inline-flex" : "none" });
+    }
+    adjustBubbleWidth(bubble, content, timeEl, show, itemEl) {
+      if (!show) {
+        bubble.style.minWidth = "";
+        return;
+      }
+      requestAnimationFrame(() => {
+        const parent = bubble.parentElement;
+        const maxWidth = parent ? parent.clientWidth * 0.75 : Infinity;
+        const styles = getComputedStyle(bubble);
+        const pad = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+        const widths = [];
+        if (content.offsetParent !== null) widths.push(content.scrollWidth || 0);
+        if (itemEl && itemEl.offsetParent !== null) {
+          widths.push(itemEl.scrollWidth || 0);
+        }
+        widths.push(timeEl.scrollWidth || 0);
+        const desired = Math.max(...widths) + pad;
+        const clamped = Math.min(desired, maxWidth);
+        if (Number.isFinite(clamped) && clamped > 0) {
+          bubble.style.minWidth = `${Math.ceil(clamped)}px`;
+        }
+      });
+    }
+    updateSelection() {
+      for (const [id, state3] of this.rowById) {
+        state3.row.classList.toggle("active", id === this.selectedId);
+      }
+    }
+    updateFriendRow(id) {
+      const state3 = this.rowById.get(id);
+      if (!state3) return false;
+      const friend = this.getFriendById(id);
+      const conv = this.convs.get(id);
+      const unread = conv?.unread ?? 0;
+      state3.sub.textContent = formatStatus(friend);
+      if (unread > 0) {
+        state3.row.classList.add("unread");
+        if (!state3.badge) {
+          const badge = document.createElement("span");
+          badge.className = "qws-msg-unread-badge";
+          badge.textContent = String(unread);
+          state3.row.appendChild(badge);
+          state3.badge = badge;
+        } else {
+          state3.badge.textContent = String(unread);
+        }
+      } else {
+        state3.row.classList.remove("unread");
+        if (state3.badge) {
+          state3.badge.remove();
+          state3.badge = null;
+        }
+      }
+      const isOnline = Boolean(friend?.isOnline);
+      if (isOnline && !state3.statusDot) {
+        const dot = document.createElement("span");
+        dot.className = "qws-msg-status-dot";
+        state3.avatarWrap.appendChild(dot);
+        state3.statusDot = dot;
+      } else if (!isOnline && state3.statusDot) {
+        state3.statusDot.remove();
+        state3.statusDot = null;
+      }
+      return true;
+    }
+    createSlot() {
+      const d = document.createElement("div");
+      style2(d, {
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        marginRight: "0",
+        pointerEvents: "auto",
+        fontFamily: "var(--chakra-fonts-body, GreyCliff CF), system-ui, sans-serif",
+        color: "var(--chakra-colors-chakra-body-text, #e7eef7)",
+        userSelect: "none",
+        zIndex: "var(--chakra-zIndices-PresentableOverlay, 5100)"
+      });
+      setProps2(d, {
+        "-webkit-font-smoothing": "antialiased",
+        "-webkit-text-size-adjust": "100%",
+        "text-rendering": "optimizeLegibility"
+      });
+      return d;
+    }
+    createButton() {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Messages");
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 20 20");
+      icon.setAttribute("width", "18");
+      icon.setAttribute("height", "18");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = '<circle cx="7" cy="6.5" r="3" fill="currentColor"/><circle cx="14.5" cy="7.5" r="2.5" fill="currentColor" opacity="0.75"/><path d="M2 18c0-2.8 2.6-5 6-5h2c3.4 0 6 2.2 6 5v2H2v-2z" fill="currentColor"/><path d="M12.5 18c0-1.6 1.4-2.9 3.2-2.9h0.8c1.8 0 3.2 1.3 3.2 2.9v2h-7.2v-2z" fill="currentColor" opacity="0.75"/>';
+      this.iconWrap = document.createElement("div");
+      this.iconWrap.appendChild(icon);
+      this.applyFallbackButtonStyles();
+      btn.appendChild(this.iconWrap);
+      btn.addEventListener("mouseenter", () => {
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
+      });
+      btn.addEventListener("mouseleave", () => {
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
+      });
+      return btn;
+    }
+    createBadge() {
+      const badge = document.createElement("span");
+      style2(badge, {
+        position: "absolute",
+        top: "-6px",
+        right: "-6px",
+        minWidth: "18px",
+        height: "18px",
+        padding: "0 6px",
+        borderRadius: "999px",
+        background: "var(--chakra-colors-Red-Magic, #D02128)",
+        color: "var(--chakra-colors-Neutral-TrueWhite, #fff)",
+        fontSize: "12px",
+        fontWeight: "700",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        border: "1px solid rgba(0,0,0,.35)",
+        lineHeight: "18px",
+        pointerEvents: "none"
+      });
+      return badge;
+    }
+    createPanel() {
+      const panel = document.createElement("div");
+      panel.className = "qws-msg-panel";
+      const head = document.createElement("div");
+      head.className = "qws-msg-head";
+      head.textContent = "Messages";
+      this.panelHeadEl = head;
+      const body = document.createElement("div");
+      body.className = "qws-msg-body";
+      this.listEl = document.createElement("div");
+      this.listEl.className = "qws-msg-list";
+      const thread = document.createElement("div");
+      thread.className = "qws-msg-thread";
+      this.threadHeadEl = document.createElement("div");
+      this.threadHeadEl.className = "qws-msg-thread-head";
+      this.threadBodyEl = document.createElement("div");
+      this.threadBodyEl.className = "qws-msg-thread-body";
+      const inputRow = document.createElement("div");
+      inputRow.className = "qws-msg-input";
+      const importWrap = document.createElement("div");
+      importWrap.className = "qws-msg-import";
+      const importBtn = document.createElement("button");
+      importBtn.type = "button";
+      importBtn.className = "qws-msg-import-btn";
+      importBtn.textContent = "+";
+      importBtn.title = "Import";
+      const importMenu = document.createElement("div");
+      importMenu.className = "qws-msg-import-menu";
+      const importOptions = [
+        { id: "item", label: "Import item" }
+      ];
+      for (const opt of importOptions) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = opt.label;
+        btn.dataset.import = opt.id;
+        btn.addEventListener("click", () => {
+          importMenu.style.display = "none";
+          if (opt.id === "item") {
+            void this.handleImportItems();
+          }
+        });
+        importMenu.appendChild(btn);
+      }
+      importBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = importMenu.style.display === "flex";
+        importMenu.style.display = open ? "none" : "flex";
+      });
+      importWrap.append(importBtn, importMenu);
+      inputRow.appendChild(importWrap);
+      this.inputEl = document.createElement("input");
+      this.inputEl.type = "text";
+      this.inputEl.maxLength = MAX_MESSAGE_LENGTH;
+      this.inputEl.placeholder = "Type a message...";
+      this.inputEl.addEventListener("input", () => {
+        this.updateSendState();
+      });
+      const enterHandler = (e) => {
+        if (!this.shouldSendOnEnter(e)) return;
+        this.consumeEnterEvent(e);
+        void this.handleSendMessage();
+      };
+      this.inputEl.addEventListener("keydown", enterHandler, { capture: true });
+      this.inputEl.addEventListener("keypress", enterHandler, { capture: true });
+      this.inputEl.addEventListener("keyup", enterHandler, { capture: true });
+      const emojiWrap = document.createElement("div");
+      emojiWrap.className = "qws-msg-emoji";
+      const emojiBtn = document.createElement("button");
+      emojiBtn.type = "button";
+      emojiBtn.className = "qws-msg-emoji-btn";
+      emojiBtn.textContent = "\u{1F60A}";
+      emojiBtn.title = "Emoji";
+      const emojiMenu = document.createElement("div");
+      emojiMenu.className = "qws-msg-emoji-menu";
+      const picker = document.createElement("emoji-picker");
+      picker.className = "qws-msg-emoji-picker";
+      picker.classList.add("dark");
+      picker.addEventListener("emoji-click", (event) => {
+        const detail = event.detail;
+        const unicode = detail?.unicode ?? detail?.emoji?.unicode ?? "";
+        if (unicode) {
+          this.insertEmoji(String(unicode));
+        }
+        this.setEmojiMenu(false);
+      });
+      emojiMenu.appendChild(picker);
+      emojiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = this.emojiMenuEl.style.display === "flex";
+        this.setEmojiMenu(!open);
+        if (!open) {
+          importMenu.style.display = "none";
+        }
+      });
+      emojiWrap.append(emojiBtn, emojiMenu);
+      this.emojiWrapEl = emojiWrap;
+      this.emojiBtnEl = emojiBtn;
+      this.emojiMenuEl = emojiMenu;
+      const isEmojiTarget = (node) => {
+        if (!node) return false;
+        if (emojiWrap.contains(node)) return true;
+        const pickerHost = emojiMenu.querySelector("emoji-picker");
+        const shadow = pickerHost ? pickerHost.shadowRoot : null;
+        return !!(shadow && node instanceof Node && shadow.contains(node));
+      };
+      this.sendBtn = document.createElement("button");
+      this.sendBtn.type = "button";
+      this.sendBtn.className = "qws-msg-send-btn";
+      this.sendBtn.textContent = "Send";
+      this.sendBtn.disabled = true;
+      this.sendBtn.addEventListener("click", () => {
+        void this.handleSendMessage();
+      });
+      this.charCountEl = document.createElement("div");
+      this.charCountEl.className = "qws-msg-char-count";
+      this.charCountEl.textContent = `0/${MAX_MESSAGE_LENGTH}`;
+      inputRow.append(this.inputEl, emojiWrap, this.charCountEl, this.sendBtn);
+      this.attachmentsEl = document.createElement("div");
+      this.attachmentsEl.className = "qws-msg-attachments";
+      this.statusEl = document.createElement("div");
+      style2(this.statusEl, {
+        fontSize: "11px",
+        opacity: "0.7",
+        padding: "0 10px 8px 10px",
+        minHeight: "16px"
+      });
+      panel.addEventListener("pointerdown", (e) => {
+        const target = e.target;
+        if (importMenu.style.display === "flex" && target && !importWrap.contains(target)) {
+          importMenu.style.display = "none";
+        }
+        if (this.emojiMenuEl.style.display === "flex" && !isEmojiTarget(target)) {
+          this.setEmojiMenu(false);
+        }
+      });
+      thread.append(this.threadHeadEl, this.threadBodyEl, inputRow, this.attachmentsEl, this.statusEl);
+      body.append(this.listEl, thread);
+      panel.append(head, body);
+      return panel;
+    }
+    async handleSendMessage() {
+      if (!this.myId || !this.selectedId) return;
+      const built = this.buildMessageBody();
+      if (!built) {
+        if (this.pendingImportItems.length) {
+          this.statusEl.textContent = "Unable to attach item.";
+        }
+        return;
+      }
+      this.sendBtn.disabled = true;
+      if (!this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+        this.statusEl.textContent = "";
+      }
+      if (built.body.length > MAX_MESSAGE_LENGTH) {
+        this.statusEl.textContent = `Message too long (${built.body.length}/${MAX_MESSAGE_LENGTH}).`;
+        this.updateSendState();
+        return;
+      }
+      const roomId = await getCurrentRoomId();
+      if (!roomId) {
+        this.statusEl.textContent = "Room id unavailable.";
+        this.updateSendState();
+        return;
+      }
+      const body = built.body;
+      const usedItems = built.usedItems;
+      try {
+        const msg = await sendMessage({
+          fromPlayerId: this.myId,
+          toPlayerId: this.selectedId,
+          roomId,
+          text: body
+        });
+        const normalized = normalizeMessage(msg);
+        if (normalized) {
+          const conv = this.ensureConversation(this.selectedId);
+          conv.messages = this.mergeMessages(conv.messages, [normalized]);
+          conv.conversationId = normalized.conversationId ?? conv.conversationId;
+          conv.lastMessageAt = Math.max(
+            conv.lastMessageAt,
+            Number.isFinite(Date.parse(normalized.createdAt)) ? Date.parse(normalized.createdAt) : 0
+          );
+          this.updateConversationMap(conv);
+          this.inputEl.value = "";
+          if (usedItems) {
+            this.pendingImportItems = [];
+            this.renderAttachments();
+            this.updateAttachmentStatus();
+          }
+          this.updateFriendRow(this.selectedId);
+          this.updateSelection();
+          this.renderThread();
+        } else {
+          this.statusEl.textContent = "Message failed to send.";
+        }
+      } catch {
+        this.statusEl.textContent = "Message failed to send.";
+      } finally {
+        this.updateSendState();
+      }
+    }
+    installScrollGuards(el2) {
+      const stop2 = (e) => {
+        e.stopPropagation();
+      };
+      el2.addEventListener("wheel", stop2, { passive: true, capture: true });
+      el2.addEventListener("mousewheel", stop2, { passive: true, capture: true });
+      el2.addEventListener("DOMMouseScroll", stop2, { passive: true, capture: true });
+      el2.addEventListener("touchmove", stop2, { passive: true, capture: true });
+    }
+    installPanelDrag() {
+      if (!this.panelHeadEl) return;
+      const head = this.panelHeadEl;
+      let dragging = false;
+      let offsetX = 0;
+      let offsetY = 0;
+      const onMove = (e) => {
+        if (!dragging) return;
+        const rect = this.panel.getBoundingClientRect();
+        let left = e.clientX - offsetX;
+        let top = e.clientY - offsetY;
+        const pad = 8;
+        const maxLeft = Math.max(pad, window.innerWidth - rect.width - pad);
+        const maxTop = Math.max(pad, window.innerHeight - rect.height - pad);
+        left = Math.min(Math.max(pad, left), maxLeft);
+        top = Math.min(Math.max(pad, top), maxTop);
+        this.panel.style.left = `${left}px`;
+        this.panel.style.top = `${top}px`;
+      };
+      const onUp = () => {
+        dragging = false;
+        head.style.cursor = "grab";
+        window.removeEventListener("pointermove", onMove, true);
+        window.removeEventListener("pointerup", onUp, true);
+      };
+      head.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        if (this.panel.style.display !== "block") return;
+        dragging = true;
+        this.panelDetached = true;
+        const rect = this.panel.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        this.panel.style.position = "fixed";
+        this.panel.style.left = `${rect.left}px`;
+        this.panel.style.top = `${rect.top}px`;
+        this.panel.style.right = "auto";
+        this.panel.style.bottom = "auto";
+        head.style.cursor = "grabbing";
+        window.addEventListener("pointermove", onMove, true);
+        window.addEventListener("pointerup", onUp, true);
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
+    applyFallbackButtonStyles() {
+      this.btn.className = "";
+      style2(this.btn, {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "36px",
+        padding: "0 12px",
+        borderRadius: "var(--chakra-radii-button, 50px)",
+        border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
+        background: "var(--qws-panel, #111823cc)",
+        backdropFilter: "blur(var(--qws-blur, 8px))",
+        color: "var(--qws-text, #e7eef7)",
+        boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
+        cursor: "pointer",
+        transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
+        outline: "none",
+        position: "relative"
+      });
+      setProps2(this.btn, {
+        "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
+        "-webkit-tap-highlight-color": "transparent"
+      });
+      style2(this.iconWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "100%"
+      });
+    }
+    shouldSendOnEnter(e) {
+      const key2 = e.key || "";
+      const code = e.code || "";
+      const keyCode = e.keyCode;
+      if (e.isComposing) return false;
+      if (e.shiftKey) return false;
+      if (e.type !== "keydown") return false;
+      if (key2 !== "Enter" && code !== "Enter" && keyCode !== 13) return false;
+      return document.activeElement === this.inputEl;
+    }
+    consumeEnterEvent(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation?.();
+    }
+    setEmojiMenu(open) {
+      this.emojiMenuEl.style.display = open ? "flex" : "none";
+      this.emojiBtnEl.classList.toggle("active", open);
+    }
+    insertEmoji(emoji) {
+      if (!emoji) return;
+      const input = this.inputEl;
+      const value = input.value;
+      const start2 = typeof input.selectionStart === "number" ? input.selectionStart : value.length;
+      const end = typeof input.selectionEnd === "number" ? input.selectionEnd : value.length;
+      const next = value.slice(0, start2) + emoji + value.slice(end);
+      if (next.length > this.maxTextLength) {
+        this.statusEl.textContent = `Message too long (${next.length}/${MAX_MESSAGE_LENGTH}).`;
+        this.updateSendState();
+        return;
+      }
+      input.value = next;
+      const caret = start2 + emoji.length;
+      input.setSelectionRange(caret, caret);
+      input.focus();
+      this.updateSendState();
+    }
+    closestFlexWithEnoughChildren(el2, minChildren = 3) {
+      let cur = el2;
+      while (cur && cur.parentElement) {
+        const parent = cur.parentElement;
+        const cs = getComputedStyle(parent);
+        if (cs.display.includes("flex") && parent.children.length >= minChildren) return parent;
+        cur = parent;
+      }
+      return null;
+    }
+    findToolbarContainer() {
+      try {
+        const mcFlex = document.querySelector(".McFlex.css-13izacw");
+        if (mcFlex) return mcFlex;
+        const chatBtn = document.querySelector('button[aria-label="Chat"]');
+        const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
+        if (flexFromChat) return flexFromChat;
+        const canvas = this.findTargetCanvas();
+        if (canvas) {
+          const flexFromCanvas = this.closestFlexWithEnoughChildren(canvas);
+          if (flexFromCanvas) return flexFromCanvas;
+          const block = this.findAnchorBlockFromCanvas(canvas);
+          if (block && block.parentElement) return block.parentElement;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    applyToolbarLook(toolbar) {
+      const refBtn = toolbar?.querySelector("button.chakra-button");
+      if (!refBtn) return;
+      this.btn.className = refBtn.className;
+      this.btn.removeAttribute("style");
+      this.btn.removeAttribute("data-focus-visible-added");
+      const refInner = refBtn.querySelector("div");
+      if (refInner) {
+        this.iconWrap.className = refInner.className;
+        this.iconWrap.removeAttribute("style");
+      }
+      style2(this.iconWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%"
+      });
+      style2(this.btn, { position: "relative" });
+    }
+    findNotifierSlot() {
+      const fromGlobal = globalThis.__qws_notifier_slot;
+      if (fromGlobal && fromGlobal.isConnected) return fromGlobal;
+      const el2 = document.getElementById("qws-notifier-slot");
+      return el2 && el2.isConnected ? el2 : null;
+    }
+    attachUnderNotifier() {
+      const notifier = this.findNotifierSlot();
+      if (!notifier) return false;
+      if (!document.body.contains(this.slot)) document.body.appendChild(this.slot);
+      const rect = notifier.getBoundingClientRect();
+      const width = this.slot.getBoundingClientRect().width || 42;
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, window.innerWidth - width - 8)
+      );
+      const top = rect.bottom + 8;
+      style2(this.slot, {
+        position: "fixed",
+        left: `${left}px`,
+        top: `${top}px`,
+        right: "",
+        bottom: "",
+        transform: ""
+      });
+      return true;
+    }
+    findTargetCanvas() {
+      try {
+        const c1 = document.querySelector("span[tabindex] canvas");
+        if (c1) return c1;
+        const all = Array.from(document.querySelectorAll("canvas"));
+        const candidates = all.map((c) => ({ c, r: c.getBoundingClientRect() })).filter(({ r }) => r.width <= 512 && r.height <= 512 && r.top < 300).sort((a, b) => a.r.left - b.r.left || a.r.top - b.r.top);
+        return candidates[0]?.c ?? null;
+      } catch {
+        return null;
+      }
+    }
+    findAnchorBlockFromCanvas(c) {
+      try {
+        const tabbable = c.closest("span[tabindex]");
+        if (tabbable && tabbable.parentElement) return tabbable.parentElement;
+        let cur = c;
+        while (cur && cur.parentElement) {
+          const p = cur.parentElement;
+          const cs = getComputedStyle(p);
+          if (cs.display.includes("flex") && p.children.length <= 3) return p;
+          cur = p;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    insertLeftOf(block, el2) {
+      const parent = block.parentElement;
+      if (!parent) return;
+      if (!block.isConnected || !parent.isConnected) return;
+      const cs = getComputedStyle(parent);
+      const isFlex = cs.display.includes("flex");
+      const dir = cs.flexDirection || "row";
+      try {
+        if (isFlex && dir.startsWith("row") && dir.endsWith("reverse")) {
+          if (el2 !== block.nextSibling) parent.insertBefore(el2, block.nextSibling);
+        } else {
+          parent.insertBefore(el2, block);
+        }
+      } catch {
+      }
+    }
+    attachFallback() {
+      const canvas = this.findTargetCanvas();
+      const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
+      if (!block || !block.parentElement || !block.isConnected) {
+        let fixed = document.getElementById("qws-messages-fallback");
+        if (!fixed) {
+          fixed = document.createElement("div");
+          fixed.id = "qws-messages-fallback";
+          style2(fixed, {
+            position: "fixed",
+            zIndex: "var(--chakra-zIndices-PresentableOverlay, 5100)",
+            top: "calc(10px + var(--sait, 0px))",
+            right: "calc(10px + var(--sair, 0px))"
+          });
+          document.body.appendChild(fixed);
+        }
+        if (!fixed.contains(this.slot)) fixed.appendChild(this.slot);
+        return;
+      }
+      if (this.slot.parentElement !== block.parentElement || this.slot.nextElementSibling !== block && block.previousElementSibling !== this.slot) {
+        this.insertLeftOf(block, this.slot);
+      }
+    }
+    attach() {
+      const toolbar = this.findToolbarContainer();
+      if (toolbar) this.applyToolbarLook(toolbar);
+      else this.applyFallbackButtonStyles();
+      if (this.attachUnderNotifier()) return;
+      this.attachFallback();
+    }
+    observeDomForRelocation() {
+      try {
+        this.mo?.disconnect();
+        this.mo = new MutationObserver(() => this.attach());
+        this.mo.observe(document.body, { childList: true, subtree: true });
+        this.attach();
+        window.addEventListener("resize", () => this.attach());
+      } catch {
+      }
+    }
+    fitPanelWithinViewport() {
+      requestAnimationFrame(() => {
+        if (this.panel.style.display !== "block") return;
+        if (this.panelDetached) return;
+        const rect = this.panel.getBoundingClientRect();
+        const padding = 8;
+        if (rect.right > window.innerWidth - padding) {
+          this.panel.style.right = "0";
+          this.panel.style.left = "auto";
+        }
+        if (rect.left < padding) {
+          this.panel.style.left = "0";
+          this.panel.style.right = "auto";
+        }
+      });
+    }
+  };
+  async function renderMessagesOverlay() {
+    const prev = window.__qws_cleanup_messages_overlay;
+    if (typeof prev === "function") {
+      try {
+        prev();
+      } catch {
+      }
+    }
+    const overlay = new MessagesOverlay();
+    await overlay.init();
+    window.__qws_cleanup_messages_overlay = () => {
+      try {
+        overlay.destroy();
+      } catch {
+      }
+    };
+  }
+
   // src/utils/shopUtility.ts
   var SHOP_TYPES = ["plant", "egg", "tool", "decor"];
   var BTN_CLASS = "romann-buyall-btn";
-  var STYLE_ID = "tm-buyall-css";
+  var STYLE_ID2 = "tm-buyall-css";
   var ITEM_SELECTOR = "div.McFlex.css-1kkwxjt";
   var LIST_SELECTOR = "div.McFlex.css-1lfov12";
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
@@ -24396,10 +29876,10 @@
     }
     if (!lastNum) return void 0;
     if (lastSuf) {
-      const base = Number(lastNum.replace(/[ \u00A0\u202F]/g, "").replace(",", "."));
-      if (!Number.isFinite(base)) return void 0;
+      const base2 = Number(lastNum.replace(/[ \u00A0\u202F]/g, "").replace(",", "."));
+      if (!Number.isFinite(base2)) return void 0;
       const mult = lastSuf === "K" ? 1e3 : lastSuf === "M" ? 1e6 : lastSuf === "B" ? 1e9 : lastSuf === "T" ? 1e12 : 1;
-      return Math.round(base * mult);
+      return Math.round(base2 * mult);
     }
     const hasThousandsSep = /[ \u00A0\u202F.,]\d{3}/.test(lastNum);
     if (hasThousandsSep) {
@@ -24511,7 +29991,7 @@
     return any ?? null;
   }
   function ensureGlobalStyles() {
-    if (document.getElementById(STYLE_ID)) return;
+    if (document.getElementById(STYLE_ID2)) return;
     const css = `
     .${BTN_CLASS}{
       background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
@@ -24558,10 +30038,10 @@
       box-shadow: none !important;
     }
   `.trim();
-    const style2 = document.createElement("style");
-    style2.id = STYLE_ID;
-    style2.textContent = css;
-    document.head.appendChild(style2);
+    const style3 = document.createElement("style");
+    style3.id = STYLE_ID2;
+    style3.textContent = css;
+    document.head.appendChild(style3);
   }
   function createButton2(templateBtn) {
     const btn = document.createElement("button");
@@ -24908,11 +30388,11 @@
       feedFromInventory: raw?.feedFromInventory !== false
     };
   }
-  function setPetPanelButtonSettings(patch) {
+  function setPetPanelButtonSettings(patch2) {
     const merged = {
       ...DEFAULT_PANEL_BUTTONS,
       ...getPetPanelButtonSettings(),
-      ...patch || {}
+      ...patch2 || {}
     };
     writeAriesPath(PATH_PETS_PANEL_BUTTONS, merged);
     return merged;
@@ -25560,7 +31040,7 @@
     let lastRenderedLocked = void 0;
     let needsRepositionRender = false;
     let qpmObserver = null;
-    const render = () => {
+    const render2 = () => {
       if (!running) return;
       if (!lockerReady) return;
       const value = priceWatcher.get();
@@ -25589,7 +31069,7 @@
         lockerReadyTimeout = null;
         if (!lockerReady) {
           lockerReady = true;
-          render();
+          render2();
         }
       }, 500);
     };
@@ -25617,7 +31097,7 @@
         }
         if (found) {
           needsRepositionRender = true;
-          render();
+          render2();
         }
       });
       qpmObserver.observe(target, { childList: true, subtree: true });
@@ -25637,14 +31117,14 @@
       if (!lockerReady && shouldWaitForLocker) {
         lockerReady = true;
       }
-      render();
+      render2();
     });
     if (shouldWaitForLocker && lockerOff == null) {
       clearLockerReadyTimeout();
       lockerReady = true;
     }
-    render();
-    const off = priceWatcher.onChange(render);
+    render2();
+    const off = priceWatcher.onChange(render2);
     return {
       stop() {
         if (!running) return;
@@ -25662,7 +31142,7 @@
         logger("stopped");
       },
       runOnce() {
-        render();
+        render2();
       },
       isRunning() {
         return running;
@@ -26372,20 +31852,20 @@
   var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
   var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
   var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
-  async function fetchTextWithFetch(url, options) {
-    const response = await fetch(url, { cache: "no-store", ...options });
+  async function fetchTextWithFetch(url2, options) {
+    const response = await fetch(url2, { cache: "no-store", ...options });
     if (!response.ok) {
       throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
     }
     return await response.text();
   }
-  async function fetchTextWithGM(url, options) {
+  async function fetchTextWithGM(url2, options) {
     return new Promise((resolve2, reject) => {
       const xhr = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
       if (!xhr) return reject(new Error("GM_xmlhttpRequest not available"));
       xhr({
         method: "GET",
-        url,
+        url: url2,
         headers: options?.headers,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) resolve2(res.responseText);
@@ -26395,17 +31875,17 @@
       });
     });
   }
-  async function fetchText(url, options) {
+  async function fetchText(url2, options) {
     const preferGM = isDiscordSurface();
     const hasGM = typeof GM_xmlhttpRequest === "function" || typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function";
     if (preferGM && hasGM) {
-      return await fetchTextWithGM(url, options);
+      return await fetchTextWithGM(url2, options);
     }
     try {
-      return await fetchTextWithFetch(url, options);
+      return await fetchTextWithFetch(url2, options);
     } catch (error) {
       if (hasGM) {
-        return await fetchTextWithGM(url, options);
+        return await fetchTextWithGM(url2, options);
       }
       throw error;
     }
@@ -26858,11 +32338,11 @@
     }
     return false;
   }
-  var debounce = (fn, wait = 120) => {
+  var debounce = (fn, wait2 = 120) => {
     let t;
     return (...args) => {
       if (t) window.clearTimeout(t);
-      t = window.setTimeout(() => fn(...args), wait);
+      t = window.setTimeout(() => fn(...args), wait2);
     };
   };
   function isVisible(el2) {
@@ -27108,9 +32588,9 @@
       for (const itemType of itemTypes) {
         const normalizedType = normalize(itemType);
         if (!normalizedType) continue;
-        const set2 = mapping.get(normalizedType) ?? /* @__PURE__ */ new Set();
-        set2.add(filterKey);
-        mapping.set(normalizedType, set2);
+        const set3 = mapping.get(normalizedType) ?? /* @__PURE__ */ new Set();
+        set3.add(filterKey);
+        mapping.set(normalizedType, set3);
       }
     }
     const result = {};
@@ -27414,8 +32894,8 @@
   var PET_HUTCH_LIST_SELECTOR = ".McGrid.css-1nv2ym8 .McFlex.css-1tgchvv";
   var PET_HUTCH_INVENTORY_LIST_SELECTOR = ".McGrid.css-1nv2ym8 .McFlex.css-gui45t";
   var PET_HUTCH_VISIBILITY_STYLE = "visibility";
-  var RAINBOW_BADGE_TEXT_GRADIENT = "linear-gradient(90deg, #ff6b6b 0%, #ffd86f 25%, #6bff8f 50%, #6bc7ff 75%, #b86bff 100%)";
-  var getPetMutationTone = (item) => {
+  var RAINBOW_BADGE_TEXT_GRADIENT2 = "linear-gradient(90deg, #ff6b6b 0%, #ffd86f 25%, #6bff8f 50%, #6bc7ff 75%, #b86bff 100%)";
+  var getPetMutationTone2 = (item) => {
     const mutations = getInventoryItemMutations(item);
     if (!mutations.length) return "normal";
     const seen = new Set(mutations.map((mutation) => mutation.toLowerCase()));
@@ -27423,7 +32903,7 @@
     if (seen.has("gold") || seen.has("golden")) return "gold";
     return "normal";
   };
-  var applyStrengthBadgeTone = (badge, tone) => {
+  var applyStrengthBadgeTone2 = (badge, tone) => {
     if (badge.dataset.tmStrengthTone === tone) return;
     badge.dataset.tmStrengthTone = tone;
     badge.style.backgroundImage = "";
@@ -27437,7 +32917,7 @@
     switch (tone) {
       case "rainbow":
         badge.style.color = "transparent";
-        badge.style.backgroundImage = `linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)), ${RAINBOW_BADGE_TEXT_GRADIENT}`;
+        badge.style.backgroundImage = `linear-gradient(rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.25)), ${RAINBOW_BADGE_TEXT_GRADIENT2}`;
         badge.style.backgroundClip = "padding-box, text";
         badge.style.webkitBackgroundClip = "padding-box, text";
         badge.style.backgroundOrigin = "padding-box, text";
@@ -27510,7 +32990,7 @@
     if (!Number.isFinite(roundedMax) || roundedMax <= 0) return;
     const safeCurrent = clampNumber2(currentStrength, 0, roundedMax);
     const isMax = safeCurrent >= roundedMax;
-    const mutationTone = getPetMutationTone(item);
+    const mutationTone = getPetMutationTone2(item);
     const parts = ensureStrengthTextParts(textEl);
     if (parts.label.textContent !== "STR ") {
       parts.label.textContent = "STR ";
@@ -27523,7 +33003,7 @@
     parts.current.style.setProperty("font-weight", "700", "important");
     if (isMax) {
       const badge = ensureStrengthBadge(textEl, parts.label);
-      applyStrengthBadgeTone(badge, mutationTone);
+      applyStrengthBadgeTone2(badge, mutationTone);
       if (parts.max.textContent) {
         parts.max.textContent = "";
       }
@@ -28446,10 +33926,10 @@
     }
     .tm-select-arrow svg { display: block; }
   `;
-    const style2 = document.createElement("style");
-    style2.id = id;
-    style2.textContent = css;
-    document.head.appendChild(style2);
+    const style3 = document.createElement("style");
+    style3.id = id;
+    style3.textContent = css;
+    document.head.appendChild(style3);
   }
   function createSortingBar(useCustomSelectStyles) {
     const wrap = document.createElement("div");
@@ -29486,7 +34966,7 @@
 
   // src/utils/activityLogFilter.ts
   var FILTER_STORAGE_KEY = "activityLog.filter";
-  var STYLE_ID2 = "mg-activity-log-filter-style";
+  var STYLE_ID3 = "mg-activity-log-filter-style";
   var ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
   var WRAPPER_CLASS = "mg-activity-log-filter";
   var BUTTON_CLASS = "mg-activity-log-filter-btn";
@@ -29820,7 +35300,7 @@
     }
   }
   function ensureStyles() {
-    if (document.getElementById(STYLE_ID2)) return;
+    if (document.getElementById(STYLE_ID3)) return;
     const css = `
 .${WRAPPER_CLASS}{
   display:flex;
@@ -29874,7 +35354,7 @@
 }
 `;
     const s = addStyle(css);
-    s.id = STYLE_ID2;
+    s.id = STYLE_ID3;
   }
 
   // src/services/activityLogHistory.ts
@@ -30548,7 +36028,7 @@
     );
     const windows = /* @__PURE__ */ new Map();
     let cascade = 0;
-    function openWindow(id, title, render) {
+    function openWindow(id, title, render2) {
       if (windows.has(id)) {
         const w = windows.get(id);
         w.el.style.display = "";
@@ -30627,7 +36107,7 @@
       };
       patchInputsKeyTrap(win);
       try {
-        render(body);
+        render2(body);
       } catch (e) {
         body.textContent = String(e);
       }
@@ -30638,13 +36118,13 @@
     function isShown(el2) {
       return el2.style.display !== "none";
     }
-    function toggleWindow(id, title, render) {
+    function toggleWindow(id, title, render2) {
       const existing = windows.get(id);
       if (!existing) {
         openWindow(id, title, (root) => {
           const el2 = root.closest(".qws-win");
           if (el2) restoreWinPos(id, el2);
-          render(root);
+          render2(root);
         });
         return true;
       } else {
@@ -30799,11 +36279,11 @@
       if (open) btn.classList.add("active");
       else btn.classList.remove("active");
     }
-    function register(id, title, render) {
-      registry2.push({ id, title, render });
-      addLaunchItem(id, title, render);
+    function register(id, title, render2) {
+      registry2.push({ id, title, render: render2 });
+      addLaunchItem(id, title, render2);
     }
-    function addLaunchItem(id, title, render) {
+    function addLaunchItem(id, title, render2) {
       const item = document.createElement("div");
       item.className = "launch-item";
       item.innerHTML = `<div class="name">${escapeHtml2(title)}</div>`;
@@ -30821,7 +36301,7 @@
           openWindow(id, title, (root) => {
             const el2 = root.closest(".qws-win");
             if (el2) restoreWinPos(id, el2);
-            render(root);
+            render2(root);
           });
           setLaunchState(id, true);
         }
@@ -30840,9 +36320,9 @@
         sVersion.textContent = text;
         tag(sVersion, cls);
       };
-      const setDownloadTarget = (url) => {
-        if (url) {
-          sVersion.dataset.download = url;
+      const setDownloadTarget = (url2) => {
+        if (url2) {
+          sVersion.dataset.download = url2;
           sVersion.style.cursor = "pointer";
           sVersion.title = `Download the new version`;
         } else {
@@ -30853,24 +36333,24 @@
       };
       setBadge("checking\u2026", "warn");
       setDownloadTarget(null);
-      const openDownloadLink = (url) => {
+      const openDownloadLink = (url2) => {
         const shouldUseGM = isDiscordSurface();
         const gmObject = globalThis.GM;
         const gmOpen = typeof GM_openInTab === "function" ? GM_openInTab : typeof gmObject?.openInTab === "function" ? gmObject.openInTab.bind(gmObject) : null;
         if (shouldUseGM && gmOpen) {
           try {
-            gmOpen(url, { active: true, setParent: true });
+            gmOpen(url2, { active: true, setParent: true });
             return;
           } catch (error) {
             console.warn("[MagicGarden] GM_openInTab failed, falling back to window.open", error);
           }
         }
-        window.open(url, "_blank", "noopener,noreferrer");
+        window.open(url2, "_blank", "noopener,noreferrer");
       };
       sVersion.addEventListener("click", () => {
-        const url = sVersion.dataset.download;
-        if (url) {
-          openDownloadLink(url);
+        const url2 = sVersion.dataset.download;
+        if (url2) {
+          openDownloadLink(url2);
         }
       });
       (async () => {
@@ -31044,6 +36524,7 @@
       await startActivityLogHistoryWatcher();
       startActivityLogFilter();
       await renderOverlay();
+      await renderMessagesOverlay();
       setupBuyAll();
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();
@@ -31258,11 +36739,11 @@
     function labelForSound(info) {
       return info.logicalName || info.name || fileNameFromUrl(info.url);
     }
-    function fileNameFromUrl(url) {
+    function fileNameFromUrl(url2) {
       try {
-        return new URL(url, location.href).pathname.split("/").pop() || url;
+        return new URL(url2, location.href).pathname.split("/").pop() || url2;
       } catch {
-        return url;
+        return url2;
       }
     }
     function formatNumber(value, digits = 3) {
@@ -31319,9 +36800,9 @@
       let visible = 0;
       const matches = (value) => !!value && rx.test(value);
       for (const [name, urls] of groupEntries) {
-        const include = matches(name) || urls.some((url) => {
-          const info = infoByUrl.get(url);
-          return matches(url) || matches(info?.logicalName) || matches(info?.name);
+        const include = matches(name) || urls.some((url2) => {
+          const info = infoByUrl.get(url2);
+          return matches(url2) || matches(info?.logicalName) || matches(info?.name);
         });
         if (!include) continue;
         visible++;
@@ -32616,7 +38097,7 @@ next: ${next}`;
   var MAX_VISIBLE_SPRITES = 400;
   var SPRITE_ICON_SIZE = 96;
   var spriteServicePromise = null;
-  var sleep2 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  var sleep3 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   function resolveGlobalSpriteService() {
     const root = globalThis.unsafeWindow || globalThis;
     return root?.__MG_SPRITE_SERVICE__ ?? null;
@@ -32635,7 +38116,7 @@ next: ${next}`;
         }
         return svc;
       }
-      await sleep2(200);
+      await sleep3(200);
     }
     return null;
   }
@@ -32662,7 +38143,7 @@ next: ${next}`;
     const full = parts.slice(start2).join("/") || safe;
     return { category, id, full };
   }
-  function buildSpriteCandidates2(parsed) {
+  function buildSpriteCandidates3(parsed) {
     const variants = [parsed.id, parsed.full];
     const compact = parsed.id.replace(/\W+/g, "");
     if (compact && compact !== parsed.id) {
@@ -32919,7 +38400,7 @@ next: ${next}`;
         attachSpriteIcon(
           iconSlot,
           [parsed.category],
-          buildSpriteCandidates2(parsed),
+          buildSpriteCandidates3(parsed),
           SPRITE_ICON_SIZE,
           "debug-sprites",
           { mutations: activeMutations }
@@ -33242,14 +38723,14 @@ next: ${next}`;
       a.remove();
     }
     function triggerBlobDownload(blob, filename) {
-      const url = URL.createObjectURL(blob);
+      const url2 = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = url2;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1e3);
+      setTimeout(() => URL.revokeObjectURL(url2), 1e3);
     }
   }
   function createSelectControl(labelText, control) {
@@ -33267,9 +38748,9 @@ next: ${next}`;
   function ensureStyles2() {
     if (stylesInjected) return;
     stylesInjected = true;
-    const style2 = document.createElement("style");
-    style2.id = "mg-debug-data-styles";
-    style2.textContent = `
+    const style3 = document.createElement("style");
+    style3.id = "mg-debug-data-styles";
+    style3.textContent = `
   .dd-debug-view{display:flex;flex-direction:column;gap:16px;}
   .dd-debug-columns{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(320px,1fr));align-items:start;}
   @media (max-width:720px){.dd-debug-columns{grid-template-columns:minmax(0,1fr);}}
@@ -33362,7 +38843,7 @@ next: ${next}`;
   .dd-sprite-mutation-btn:hover{border-color:rgba(255,255,255,.35);}
   .dd-sprite-mutation-btn.active{background:rgba(90,118,255,.18);border-color:rgba(90,118,255,.6);color:#9fb4ff;}
   `;
-    document.head.appendChild(style2);
+    document.head.appendChild(style3);
   }
   async function renderDebugDataMenu(root) {
     ensureStyles2();
@@ -33630,7 +39111,7 @@ next: ${next}`;
     target.weatherSelected.clear();
     source.weatherSelected.forEach((v) => target.weatherSelected.add(v));
     target.weatherRecipes.length = 0;
-    source.weatherRecipes.forEach((set2) => target.weatherRecipes.push(new Set(set2)));
+    source.weatherRecipes.forEach((set3) => target.weatherRecipes.push(new Set(set3)));
   }
   function hydrateSettingsFromPersisted(target, persisted) {
     const src = persisted ?? {};
@@ -33672,21 +39153,21 @@ next: ${next}`;
     });
     target.weatherRecipes.length = 0;
     (src.weatherRecipes ?? []).forEach((recipe) => {
-      const set2 = /* @__PURE__ */ new Set();
+      const set3 = /* @__PURE__ */ new Set();
       if (Array.isArray(recipe)) {
         recipe.forEach((tag) => {
           const weatherTag = tag;
           if (isWeatherMutationAvailable(weatherTag)) {
-            set2.add(weatherTag);
+            set3.add(weatherTag);
           }
         });
       }
-      target.weatherRecipes.push(set2);
+      target.weatherRecipes.push(set3);
     });
   }
   function serializeSettingsState(state3) {
     normalizeWeatherSelection(state3.weatherSelected);
-    state3.weatherRecipes.forEach((set2) => normalizeRecipeSelection(set2));
+    state3.weatherRecipes.forEach((set3) => normalizeRecipeSelection(set3));
     const mode = state3.scaleLockMode === "MINIMUM" ? "MINIMUM" : state3.scaleLockMode === "MAXIMUM" ? "MAXIMUM" : state3.scaleLockMode === "NONE" ? "NONE" : "RANGE";
     let minScale = Math.max(50, Math.min(100, Math.round(state3.minScalePct || 50)));
     let maxScale = Math.max(50, Math.min(100, Math.round(state3.maxScalePct || 100)));
@@ -33716,7 +39197,7 @@ next: ${next}`;
       visualMutations: Array.from(state3.visualMutations),
       weatherMode: state3.weatherMode,
       weatherSelected: Array.from(state3.weatherSelected),
-      weatherRecipes: state3.weatherRecipes.map((set2) => Array.from(set2))
+      weatherRecipes: state3.weatherRecipes.map((set3) => Array.from(set3))
     };
   }
   var LockerMenuStore = class {
@@ -34173,7 +39654,7 @@ next: ${next}`;
     });
     rangeControls.append(scaleSlider.root, scaleValues);
     scaleRow.append(scaleModeRow, minControls, maxControls, rangeControls);
-    const applyScaleRange = (commit, notify2 = commit) => {
+    const applyScaleRange = (commit2, notify2 = commit2) => {
       let minValue = parseInt(scaleMinSlider.value, 10);
       let maxValue = parseInt(scaleMaxSlider.value, 10);
       if (!Number.isFinite(minValue)) minValue = state3.minScalePct;
@@ -34191,30 +39672,30 @@ next: ${next}`;
       scaleSlider.setValues(minValue, maxValue);
       scaleMinValue.textContent = `${minValue}%`;
       scaleMaxValue.textContent = `${maxValue}%`;
-      if (commit) {
+      if (commit2) {
         state3.minScalePct = minValue;
         state3.maxScalePct = maxValue;
         if (notify2) opts.onChange?.();
       }
     };
-    const applyScaleMinimum = (commit, notify2 = commit) => {
+    const applyScaleMinimum = (commit2, notify2 = commit2) => {
       let minValue = parseInt(minSlider.value, 10);
       if (!Number.isFinite(minValue)) minValue = state3.minScalePct;
       minValue = Math.max(50, Math.min(100, minValue));
       minSlider.value = String(minValue);
       scaleMinimumValue.textContent = `${minValue}%`;
-      if (commit) {
+      if (commit2) {
         state3.minScalePct = minValue;
         if (notify2) opts.onChange?.();
       }
     };
-    const applyScaleMaximum = (commit, notify2 = commit) => {
+    const applyScaleMaximum = (commit2, notify2 = commit2) => {
       let maxValue = parseInt(maxSlider.value, 10);
       if (!Number.isFinite(maxValue)) maxValue = state3.maxScalePct;
       maxValue = Math.max(50, Math.min(100, maxValue));
       maxSlider.value = String(maxValue);
       scaleMaximumValue.textContent = `${maxValue}%`;
-      if (commit) {
+      if (commit2) {
         state3.maxScalePct = maxValue;
         if (notify2) opts.onChange?.();
       }
@@ -34451,9 +39932,9 @@ next: ${next}`;
       btnAddRecipe.style.opacity = editing ? "0.7" : "";
       btnAddRecipe.style.pointerEvents = editing ? "none" : "";
     };
-    const startEditingRecipe = (index, base) => {
+    const startEditingRecipe = (index, base2) => {
       editingRecipeIndex = index;
-      editingRecipeDraft = new Set(base ?? []);
+      editingRecipeDraft = new Set(base2 ?? []);
       normalizeRecipeSelection(editingRecipeDraft);
       repaintRecipes();
     };
@@ -34618,10 +40099,10 @@ next: ${next}`;
         applyDisabled();
         return;
       }
-      state3.weatherRecipes.forEach((set2, index) => {
-        normalizeRecipeSelection(set2);
+      state3.weatherRecipes.forEach((set3, index) => {
+        normalizeRecipeSelection(set3);
         const isEditing = editingRecipeIndex === index;
-        const selection = isEditing ? editingRecipeDraft : set2;
+        const selection = isEditing ? editingRecipeDraft : set3;
         const row = applyStyles(document.createElement("div"), {
           display: "flex",
           gap: isEditing ? "10px" : "12px",
@@ -34684,7 +40165,7 @@ next: ${next}`;
           styleBtnCompact(btnEdit, "\u270F\uFE0F");
           btnEdit.title = "Edit";
           btnEdit.setAttribute("aria-label", "Edit");
-          btnEdit.onclick = () => startEditingRecipe(index, set2);
+          btnEdit.onclick = () => startEditingRecipe(index, set3);
           const btnDelete = document.createElement("button");
           styleBtnCompact(btnDelete, "\u{1F5D1}\uFE0F");
           btnDelete.title = "Delete";
@@ -35058,13 +40539,13 @@ next: ${next}`;
       setStatusTone(allowed ? "success" : "warn");
       statusText.textContent = allowed ? `Current bonus ${currentPct}% (${currentPlayers} players) meets the requirement (${requiredPct}%).` : `Requires ${requiredPct}% (${requiredPlayers} players) or more`;
     };
-    const handleSliderInput = (commit) => {
+    const handleSliderInput = (commit2) => {
       const raw = Number(slider.value);
       const pct = clampPercent4(Number.isFinite(raw) ? raw : 0);
       updateSliderValue(pct);
       state3.minRequiredPlayers = percentToRequiredFriendCount(pct);
       updateStatus();
-      if (commit) {
+      if (commit2) {
         lockerRestrictionsService.setMinRequiredPlayers(state3.minRequiredPlayers);
       }
     };
@@ -35144,7 +40625,7 @@ next: ${next}`;
       } catch {
       }
     };
-    const render = (view) => {
+    const render2 = (view) => {
       view.innerHTML = "";
       view.style.maxHeight = "54vh";
       view.style.overflow = "auto";
@@ -35162,7 +40643,7 @@ next: ${next}`;
         }
       }
     };
-    return { render, destroy };
+    return { render: render2, destroy };
   }
   function extractEggOptions(raw) {
     const seen = /* @__PURE__ */ new Set();
@@ -35257,7 +40738,7 @@ next: ${next}`;
       update();
     });
     update();
-    const render = (view) => {
+    const render2 = (view) => {
       view.innerHTML = "";
       view.style.maxHeight = "54vh";
       view.style.overflow = "auto";
@@ -35265,7 +40746,7 @@ next: ${next}`;
       update();
     };
     return {
-      render,
+      render: render2,
       destroy: () => unsubscribe2()
     };
   }
@@ -35511,13 +40992,13 @@ next: ${next}`;
       renderDetail();
     };
     const unsubscribe2 = store.subscribe(refresh);
-    const render = (view) => {
+    const render2 = (view) => {
       view.innerHTML = "";
       view.append(layout);
       refresh();
     };
     return {
-      render,
+      render: render2,
       destroy: () => unsubscribe2()
     };
   }
@@ -35553,10 +41034,10 @@ next: ${next}`;
 
   // src/ui/menus/calculator.ts
   var ROOT_CLASS = "mg-crop-simulation";
-  var SIZE_MIN = 50;
-  var SIZE_MAX = 100;
-  var SCALE_MIN = 1;
-  var SCALE_MAX = 3;
+  var SIZE_MIN2 = 50;
+  var SIZE_MAX2 = 100;
+  var SCALE_MIN2 = 1;
+  var SCALE_MAX2 = 3;
   var COLOR_MUTATION_LABELS = ["None", "Gold", "Rainbow"];
   var WEATHER_CONDITION_LABELS = ["None", "Wet", "Chilled", "Frozen", "Thunderstruck"];
   var WEATHER_LIGHTING_LABELS = ["None", "Dawnlit", "Dawnbound", "Amberlit", "Amberbound"];
@@ -35582,7 +41063,7 @@ next: ${next}`;
     Amberlit: { mgLighting: "amberlit" },
     Amberbound: { mgLighting: "amberbound" }
   };
-  var MUTATION_SPRITE_OVERRIDES = {
+  var MUTATION_SPRITE_OVERRIDES2 = {
     dawnlit: "Dawnlit",
     dawnbound: "Dawncharged",
     amberlit: "Ambershine",
@@ -35598,7 +41079,7 @@ next: ${next}`;
     maximumFractionDigits: 3
   });
   var DEFAULT_STATE2 = {
-    sizePercent: SIZE_MIN,
+    sizePercent: SIZE_MIN2,
     color: "None",
     weatherCondition: "None",
     weatherLighting: "None",
@@ -35936,7 +41417,7 @@ next: ${next}`;
     if (cropSimulationStyleEl) return;
     cropSimulationStyleEl = addStyle(CROP_SIMULATION_CSS);
   }
-  function buildSpriteCandidates3(primary, option) {
+  function buildSpriteCandidates4(primary, option) {
     const candidates = /* @__PURE__ */ new Set();
     const addCandidate = (value) => {
       if (!value) return;
@@ -36004,7 +41485,7 @@ next: ${next}`;
       justifyContent: "center"
     });
     wrap.textContent = fallback && fallback.trim().length > 0 ? fallback : "??";
-    const candidates = buildSpriteCandidates3(option.key, option);
+    const candidates = buildSpriteCandidates4(option.key, option);
     const categories = getSpriteCategoriesForKey(option?.key, option?.seedName, option?.cropName);
     attachSpriteIcon(wrap, categories, candidates, size, logTag);
     return wrap;
@@ -36018,7 +41499,7 @@ next: ${next}`;
       syncCropSpriteLoadedState(el2, layer);
       return;
     }
-    const candidates = options.candidates && options.candidates.length ? options.candidates : buildSpriteCandidates3(speciesKey);
+    const candidates = options.candidates && options.candidates.length ? options.candidates : buildSpriteCandidates4(speciesKey);
     const mutations = Array.isArray(options.mutations) && options.mutations.length ? options.mutations : void 0;
     const categories = options.categories && options.categories.length ? options.categories : getSpriteCategoriesForKey(speciesKey);
     const updateLoadedState = () => syncCropSpriteLoadedState(el2, layer);
@@ -36111,16 +41592,16 @@ next: ${next}`;
     return clamp3(players, FRIEND_BONUS_MIN_PLAYERS, FRIEND_BONUS_MAX_PLAYERS);
   }
   function setSpriteScale(el2, sizePercent) {
-    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN, SIZE_MAX);
+    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN2, SIZE_MAX2);
     const scale = clamped / 100;
     el2.style.setProperty("--mg-crop-simulation-scale", scale.toString());
   }
   function applySizePercent(refs, sizePercent, maxScale, baseWeight) {
-    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN, SIZE_MAX);
+    const clamped = clamp3(Math.round(sizePercent), SIZE_MIN2, SIZE_MAX2);
     refs.sizeSlider.value = String(clamped);
     refs.sizeValue.textContent = `${clamped}%`;
     setSpriteScale(refs.sprite, clamped);
-    if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN) {
+    if (typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN2) {
       refs.sizeSlider.dataset.maxScale = String(maxScale);
     } else {
       delete refs.sizeSlider.dataset.maxScale;
@@ -36154,7 +41635,7 @@ next: ${next}`;
       return [null, null];
     }
     const minWeight = numericWeight * scale;
-    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN ? maxScale : SCALE_MIN;
+    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN2 ? maxScale : SCALE_MIN2;
     const variation = 1 + Math.max(0, (safeMax - scale) * 0.02);
     const maxWeight = minWeight * variation;
     return [minWeight, maxWeight];
@@ -36175,13 +41656,13 @@ next: ${next}`;
   }
   function sizePercentToScale(sizePercent, maxScale) {
     const numeric = Number(sizePercent);
-    if (!Number.isFinite(numeric)) return SCALE_MIN;
-    const clampedPercent = clamp3(numeric, SIZE_MIN, SIZE_MAX);
-    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN ? maxScale : SCALE_MAX;
-    if (safeMax <= SCALE_MIN) return SCALE_MIN;
-    const normalized = (clampedPercent - SIZE_MIN) / (SIZE_MAX - SIZE_MIN);
-    const scale = SCALE_MIN + normalized * (safeMax - SCALE_MIN);
-    return Number.isFinite(scale) ? scale : SCALE_MIN;
+    if (!Number.isFinite(numeric)) return SCALE_MIN2;
+    const clampedPercent = clamp3(numeric, SIZE_MIN2, SIZE_MAX2);
+    const safeMax = typeof maxScale === "number" && Number.isFinite(maxScale) && maxScale > SCALE_MIN2 ? maxScale : SCALE_MAX2;
+    if (safeMax <= SCALE_MIN2) return SCALE_MIN2;
+    const normalized = (clampedPercent - SIZE_MIN2) / (SIZE_MAX2 - SIZE_MIN2);
+    const scale = SCALE_MIN2 + normalized * (safeMax - SCALE_MIN2);
+    return Number.isFinite(scale) ? scale : SCALE_MIN2;
   }
   function createSegmentedControl(labels, selectedLabel, interactive, onSelect, ariaLabel) {
     const coerced = coerceLabel(selectedLabel, labels);
@@ -36213,12 +41694,12 @@ next: ${next}`;
     if (state3.color !== "None") mutations.push(state3.color);
     if (state3.weatherCondition !== "None") mutations.push(state3.weatherCondition);
     if (state3.weatherLighting !== "None") mutations.push(state3.weatherLighting);
-    return mutations.map((label2) => normalizeMutationLabelForSprite(label2));
+    return mutations.map((label2) => normalizeMutationLabelForSprite2(label2));
   }
-  function normalizeMutationLabelForSprite(label2) {
+  function normalizeMutationLabelForSprite2(label2) {
     const normalized = label2.trim();
     if (!normalized) return normalized;
-    const overridden = MUTATION_SPRITE_OVERRIDES[normalized.toLowerCase()];
+    const overridden = MUTATION_SPRITE_OVERRIDES2[normalized.toLowerCase()];
     return overridden ?? normalized;
   }
   function computePrice(speciesKey, state3, percent, maxScale) {
@@ -36230,7 +41711,7 @@ next: ${next}`;
     const value = estimateProduceValue(speciesKey, scale, mutations, pricingOptions);
     return Number.isFinite(value) && value > 0 ? value : null;
   }
-  function getMaxScaleForSpecies(key2) {
+  function getMaxScaleForSpecies2(key2) {
     const entry = plantCatalog[key2];
     const candidates = [entry?.crop?.maxScale, entry?.plant?.maxScale, entry?.seed?.maxScale];
     for (const candidate of candidates) {
@@ -36359,12 +41840,12 @@ next: ${next}`;
       const sliderLabel = document.createElement("span");
       sliderLabel.className = "mg-crop-simulation__slider-label";
       sliderLabel.textContent = "Size";
-      const slider = ui.slider(SIZE_MIN, SIZE_MAX, 1, SIZE_MIN);
+      const slider = ui.slider(SIZE_MIN2, SIZE_MAX2, 1, SIZE_MIN2);
       slider.classList.add("mg-crop-simulation__slider");
       slider.disabled = true;
       const sliderValue = document.createElement("span");
       sliderValue.className = "mg-crop-simulation__slider-value";
-      sliderValue.textContent = `${SIZE_MIN}%`;
+      sliderValue.textContent = `${SIZE_MIN2}%`;
       const sliderWeight = document.createElement("span");
       sliderWeight.className = "mg-crop-simulation__slider-weight";
       sliderWeight.textContent = "\u2014";
@@ -36527,7 +42008,7 @@ next: ${next}`;
         }
         const state3 = getStateForKey(key2);
         const min = computePrice(key2, state3, state3.sizePercent, currentMaxScale);
-        const maxPercent = Math.min(SIZE_MAX, state3.sizePercent + 1);
+        const maxPercent = Math.min(SIZE_MAX2, state3.sizePercent + 1);
         const max = computePrice(key2, state3, maxPercent, currentMaxScale);
         refs.priceValue.textContent = formatCoinRange(min, max);
       }
@@ -36541,7 +42022,7 @@ next: ${next}`;
         const option = optionByKey.get(key2);
         const fallbackEmoji = getLockerSeedEmojiForKey(key2) || (option?.seedName ? getLockerSeedEmojiForSeedName(option.seedName) : void 0) || "\u{1F331}";
         const mutations = getMutationsForState(state3);
-        const candidates = buildSpriteCandidates3(key2, option);
+        const candidates = buildSpriteCandidates4(key2, option);
         const categories = getSpriteCategoriesForKey(key2, option?.seedName, option?.cropName);
         applyCropSimulationSprite(refs.sprite, key2, {
           fallback: fallbackEmoji,
@@ -36556,7 +42037,7 @@ next: ${next}`;
           resetCropSimulationSprite(refs.sprite);
           refs.sizeSlider.disabled = true;
           currentBaseWeight = null;
-          applySizePercent(refs, SIZE_MIN, null, currentBaseWeight);
+          applySizePercent(refs, SIZE_MIN2, null, currentBaseWeight);
           renderColorSegment(null, false);
           renderWeatherConditions(null, false);
           renderWeatherLighting(null, false);
@@ -36564,7 +42045,7 @@ next: ${next}`;
           refs.priceValue.textContent = "\u2014";
           return;
         }
-        currentMaxScale = getMaxScaleForSpecies(key2);
+        currentMaxScale = getMaxScaleForSpecies2(key2);
         currentBaseWeight = getBaseWeightForSpecies(key2);
         const state3 = getStateForKey(key2);
         refs.sizeSlider.disabled = false;
@@ -36580,7 +42061,7 @@ next: ${next}`;
         if (!selectedKey) return;
         const state3 = getStateForKey(selectedKey);
         const raw = Number(slider.value);
-        const value = clamp3(Math.round(raw), SIZE_MIN, SIZE_MAX);
+        const value = clamp3(Math.round(raw), SIZE_MIN2, SIZE_MAX2);
         state3.sizePercent = value;
         applySizePercent(refs, value, currentMaxScale, currentBaseWeight);
         updateOutputs();
@@ -36601,11 +42082,11 @@ next: ${next}`;
         }
         if (selectedKey && !options.some((opt) => opt.key === selectedKey)) {
           selectedKey = options[0].key;
-          currentMaxScale = getMaxScaleForSpecies(selectedKey);
+          currentMaxScale = getMaxScaleForSpecies2(selectedKey);
         }
         if (!selectedKey) {
           selectedKey = options[0].key;
-          currentMaxScale = getMaxScaleForSpecies(selectedKey);
+          currentMaxScale = getMaxScaleForSpecies2(selectedKey);
         }
         const fragment = document.createDocumentFragment();
         options.forEach((opt) => {
@@ -36636,7 +42117,7 @@ next: ${next}`;
           button.onclick = () => {
             if (selectedKey === opt.key) return;
             selectedKey = opt.key;
-            currentMaxScale = getMaxScaleForSpecies(opt.key);
+            currentMaxScale = getMaxScaleForSpecies2(opt.key);
             refreshListStyles();
             renderDetail();
             updateOutputs();
@@ -36848,15 +42329,15 @@ next: ${next}`;
     });
     if (key2 === "Celestial") {
       if (!document.getElementById("qws-celestial-kf")) {
-        const style2 = document.createElement("style");
-        style2.id = "qws-celestial-kf";
-        style2.textContent = `
+        const style3 = document.createElement("style");
+        style3.id = "qws-celestial-kf";
+        style3.textContent = `
 @keyframes qwsCelestialShift {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }`;
-        document.head.appendChild(style2);
+        document.head.appendChild(style3);
       }
       el2.style.background = `linear-gradient(130deg,
       rgb(0,180,216) 0%,
@@ -37931,9 +43412,9 @@ next: ${next}`;
     view.innerHTML = "";
     view.style.cssText = "";
     if (!document.getElementById("qws-rule-style")) {
-      const style2 = document.createElement("style");
-      style2.id = "qws-rule-style";
-      style2.textContent = `
+      const style3 = document.createElement("style");
+      style3.id = "qws-rule-style";
+      style3.textContent = `
 :root {
   /* PATCH: z-index centralis\xE9 */
   --qws-z-popover: 99999999999999;
@@ -37986,7 +43467,7 @@ next: ${next}`;
   min-height: 1.2em;  /* ~1 ligne r\xE9serv\xE9e */
 }
 `;
-      document.head.appendChild(style2);
+      document.head.appendChild(style3);
     }
     const wrap = document.createElement("div");
     Object.assign(wrap.style, {
@@ -38319,9 +43800,9 @@ next: ${next}`;
       followedBadge.textContent = `Followed: ${next.counts.followed}`;
     }
     function filteredIdSet(s) {
-      const set2 = /* @__PURE__ */ new Set();
-      for (const r of passesFilters(s.rows)) set2.add(r.id);
-      return set2;
+      const set3 = /* @__PURE__ */ new Set();
+      for (const r of passesFilters(s.rows)) set3.add(r.id);
+      return set3;
     }
     let unsub = null;
     let unsubRules = null;
@@ -38695,7 +44176,7 @@ next: ${next}`;
       const bases = Array.from(candidateSet).map((value) => value.replace(/icon$/i, ""));
       const candidates = Array.from(
         new Set(
-          bases.map((base) => `${base}Icon`).concat(Array.from(candidateSet))
+          bases.map((base2) => `${base2}Icon`).concat(Array.from(candidateSet))
         ).values()
       ).filter(Boolean);
       if (candidates.length) {
@@ -39480,7 +44961,7 @@ next: ${next}`;
     );
     const candidates = Array.from(
       new Set(
-        bases.map((base) => `${base}Icon`).filter((candidate) => candidate.includes("Icon"))
+        bases.map((base2) => `${base2}Icon`).filter((candidate) => candidate.includes("Icon"))
       )
     );
     if (candidates.length === 0) {
@@ -39683,9 +45164,9 @@ next: ${next}`;
       subtitle: "Hatching overview",
       storageId: "pets"
     });
-    const groups = createPetRarityGroups();
+    const groups2 = createPetRarityGroups();
     for (const rarityKey of RARITY_ORDER2) {
-      const speciesList = groups.get(rarityKey) ?? [];
+      const speciesList = groups2.get(rarityKey) ?? [];
       if (!speciesList.length) continue;
       const group = document.createElement("div");
       group.className = "stats-pet-group";
@@ -39894,8 +45375,8 @@ next: ${next}`;
   // src/ui/menus/pets.ts
   function getAbilityChipColors(id) {
     const key2 = String(id || "");
-    const base = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
-    const is = (prefix) => key2.startsWith(prefix) || base === prefix.toLowerCase();
+    const base2 = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
+    const is = (prefix) => key2.startsWith(prefix) || base2 === prefix.toLowerCase();
     if (is("MoonKisser")) {
       return {
         bg: "rgba(250,166,35,0.9)",
@@ -40560,8 +46041,8 @@ next: ${next}`;
           for (const p of inv) {
             const abs = Array.isArray(p?.abilities) ? p.abilities.filter(Boolean) : [];
             for (const id of abs) {
-              const base = PetsService.getAbilityNameWithoutLevel?.(id) || "";
-              if (base) nameSet.add(base);
+              const base2 = PetsService.getAbilityNameWithoutLevel?.(id) || "";
+              if (base2) nameSet.add(base2);
             }
           }
           for (const name of Array.from(nameSet).sort((a, b) => a.localeCompare(b))) {
@@ -40571,12 +46052,12 @@ next: ${next}`;
             select2.appendChild(o);
           }
         } else {
-          const set2 = /* @__PURE__ */ new Set();
+          const set3 = /* @__PURE__ */ new Set();
           for (const p of inv) {
             const sp = String(p?.petSpecies || "").trim();
-            if (sp) set2.add(sp);
+            if (sp) set3.add(sp);
           }
-          for (const v of Array.from(set2).sort((a, b) => a.localeCompare(b))) {
+          for (const v of Array.from(set3).sort((a, b) => a.localeCompare(b))) {
             const o = document.createElement("option");
             o.value = v;
             o.textContent = v.charAt(0).toUpperCase() + v.slice(1);
@@ -41888,9 +47369,9 @@ next: ${next}`;
         const running = MiscService.isSeedDeletionRunning();
         const paused = MiscService.isSeedDeletionPaused();
         const target = seedStatus.species || "-";
-        const base = `${target} (${seedStatus.done}/${seedStatus.total})`;
+        const base2 = `${target} (${seedStatus.done}/${seedStatus.total})`;
         if (!running) return "Idle";
-        return paused ? `Paused - ${base}` : base;
+        return paused ? `Paused - ${base2}` : base2;
       };
       const updateSeedStatusUI = () => {
         statusLine.textContent = describeSeedStatus();
@@ -42076,9 +47557,9 @@ next: ${next}`;
         const running = MiscService.isDecorDeletionRunning();
         const paused = MiscService.isDecorDeletionPaused();
         const target = decorStatus.name || "-";
-        const base = `${target} (${decorStatus.done}/${decorStatus.total})`;
+        const base2 = `${target} (${decorStatus.done}/${decorStatus.total})`;
         if (!running) return "Idle";
-        return paused ? `Paused - ${base}` : base;
+        return paused ? `Paused - ${base2}` : base2;
       };
       const updateDecorStatusUI = () => {
         statusLine.textContent = describeDecorStatus();
@@ -42222,9 +47703,9 @@ next: ${next}`;
   }
 
   // src/utils/gameVersion.ts
-  var gameVersion = null;
+  var gameVersion2 = null;
   function initGameVersion(doc) {
-    if (gameVersion !== null) {
+    if (gameVersion2 !== null) {
       return;
     }
     const d = doc ?? (typeof document !== "undefined" ? document : null);
@@ -42239,7 +47720,7 @@ next: ${next}`;
       if (!src) continue;
       const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
       if (match && match[1]) {
-        gameVersion = match[1];
+        gameVersion2 = match[1];
         return;
       }
     }
@@ -42422,8 +47903,8 @@ next: ${next}`;
     if (typeof GM_download === "function") {
       try {
         const encoded = encodeURIComponent(payload);
-        const url = `data:application/json;charset=utf-8,${encoded}`;
-        GM_download({ name: filename, url, saveAs: true });
+        const url2 = `data:application/json;charset=utf-8,${encoded}`;
+        GM_download({ name: filename, url: url2, saveAs: true });
         return;
       } catch {
       }
@@ -42441,9 +47922,9 @@ next: ${next}`;
       const doc = win.document || document;
       const root = doc.body || doc.documentElement || document.body;
       const blob = new Blob([payload], { type: "application/json" });
-      const url = (win.URL || URL).createObjectURL(blob);
+      const url2 = (win.URL || URL).createObjectURL(blob);
       const a = doc.createElement("a");
-      a.href = url;
+      a.href = url2;
       a.download = filename;
       a.style.display = "none";
       if (root) {
@@ -42453,7 +47934,7 @@ next: ${next}`;
       if (root) {
         root.removeChild(a);
       }
-      (win.URL || URL).revokeObjectURL(url);
+      (win.URL || URL).revokeObjectURL(url2);
     } catch {
       copyTextToClipboard(payload);
     }
@@ -42773,7 +48254,7 @@ next: ${next}`;
     const safeNavigator = typeof navigator !== "undefined" ? navigator : null;
     const safeLocation = typeof location !== "undefined" ? location : null;
     const environment = safeWindow ? detectEnvironment() : null;
-    const resolvedGameVersion = gameVersion ?? "unknown";
+    const resolvedGameVersion = gameVersion2 ?? "unknown";
     const resolvedModVersion = getLocalVersion() ?? "unknown";
     const infoCard = ui.card("Runtime infos");
     infoCard.body.style.display = "flex";
@@ -43060,15 +48541,15 @@ next: ${next}`;
     }
     return cloneTool(tool);
   }
-  function openUrl(url) {
+  function openUrl(url2) {
     if (typeof GM_openInTab === "function") {
-      GM_openInTab(url, { active: true, insert: true });
+      GM_openInTab(url2, { active: true, insert: true });
       return true;
     }
     if (typeof window === "undefined") return false;
     try {
       const a = document.createElement("a");
-      a.href = url;
+      a.href = url2;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       document.body.appendChild(a);
@@ -43079,8 +48560,8 @@ next: ${next}`;
       return false;
     }
   }
-  function openLink(url) {
-    return openUrl(url);
+  function openLink(url2) {
+    return openUrl(url2);
   }
   var ToolsService = {
     list() {
@@ -43123,13 +48604,13 @@ next: ${next}`;
     return pill;
   }
   function renderToolCard(ui, tool) {
-    async function fetchImageBlob(url) {
+    async function fetchImageBlob(url2) {
       if (typeof GM_xmlhttpRequest === "function") {
         try {
           return await new Promise((resolve2, reject) => {
             GM_xmlhttpRequest({
               method: "GET",
-              url,
+              url: url2,
               responseType: "blob",
               timeout: 15e3,
               onload: (response) => {
@@ -43149,9 +48630,9 @@ next: ${next}`;
           console.warn("[Tools] GM_xmlhttpRequest failed, fallback to fetch", error);
         }
       }
-      const res = await fetch(url, { cache: "no-store" });
+      const res = await fetch(url2, { cache: "no-store" });
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status} while loading ${url}`);
+        throw new Error(`HTTP ${res.status} while loading ${url2}`);
       }
       return await res.blob();
     }
@@ -43271,7 +48752,7 @@ next: ${next}`;
     const actionsRow = ui.flexRow({ gap: 8, justify: "end", fullWidth: true });
     actionsRow.style.marginTop = "4px";
     const shouldShowInlinePreview = tool.showInlinePreview ?? false;
-    const openInlinePreview = (url, title) => {
+    const openInlinePreview = (url2, title) => {
       let objectUrl;
       let zoomed = false;
       let lastOrigin = "center center";
@@ -43360,7 +48841,7 @@ next: ${next}`;
         }
       };
       document.body.appendChild(overlay);
-      void fetchImageBlob(url).then((blob) => {
+      void fetchImageBlob(url2).then((blob) => {
         if (closed) return;
         objectUrl = URL.createObjectURL(blob);
         img.src = objectUrl;
@@ -43888,7 +49369,7 @@ next: ${next}`;
   }
 
   // src/services/players.ts
-  function findPlayersDeep(state3) {
+  function findPlayersDeep2(state3) {
     if (!state3 || typeof state3 !== "object") return [];
     const out = [];
     const seen = /* @__PURE__ */ new Set();
@@ -43912,7 +49393,7 @@ next: ${next}`;
   }
   function getPlayersArray(st) {
     const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep(st);
+    return Array.isArray(direct) ? direct : findPlayersDeep2(st);
   }
   function getSlotsArray(st) {
     const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
@@ -44174,8 +49655,8 @@ next: ${next}`;
     async list() {
       const st = await Atoms.root.state.get();
       if (!st) return [];
-      const base = enrichPlayersWithSlots(getPlayersArray(st), st);
-      const ordered = orderPlayersBySlots(base, st);
+      const base2 = enrichPlayersWithSlots(getPlayersArray(st), st);
+      const ordered = orderPlayersBySlots(base2, st);
       const spawns = await getSpawnTilesSorted();
       const players = assignGardenPositions(ordered, spawns);
       return players;
@@ -44556,238 +50037,6 @@ next: ${next}`;
     }
   };
 
-  // src/utils/supabase.ts
-  var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
-  var cachedFriendsView = null;
-  var cachedIncomingRequests = null;
-  function getCachedFriendsWithViews() {
-    return cachedFriendsView ? [...cachedFriendsView] : [];
-  }
-  function getCachedIncomingRequestsWithViews() {
-    return cachedIncomingRequests ? [...cachedIncomingRequests] : [];
-  }
-  function buildUrl(path, query) {
-    const url = new URL(path, API_BASE_URL);
-    if (query) {
-      for (const [key2, value] of Object.entries(query)) {
-        if (value === void 0) continue;
-        url.searchParams.set(key2, String(value));
-      }
-    }
-    return url.toString();
-  }
-  function httpGet(path, query) {
-    return new Promise((resolve2) => {
-      const url = buildUrl(path, query);
-      GM_xmlhttpRequest({
-        method: "GET",
-        url,
-        headers: {},
-        onload: (res) => {
-          if (res.status >= 200 && res.status < 300) {
-            try {
-              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
-              resolve2({ status: res.status, data: parsed });
-            } catch (e) {
-              console.error("[api] GET parse error:", e, res.responseText);
-              resolve2({ status: res.status, data: null });
-            }
-          } else {
-            console.error("[api] GET error:", res.status, res.responseText);
-            resolve2({ status: res.status, data: null });
-          }
-        },
-        onerror: (err) => {
-          console.error("[api] GET request failed:", err);
-          resolve2({ status: 0, data: null });
-        }
-      });
-    });
-  }
-  function httpPost(path, body) {
-    return new Promise((resolve2) => {
-      const url = buildUrl(path);
-      GM_xmlhttpRequest({
-        method: "POST",
-        url,
-        headers: {
-          "Content-Type": "application/json"
-        },
-        data: JSON.stringify(body),
-        onload: (res) => {
-          if (res.status >= 200 && res.status < 300) {
-            try {
-              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
-              resolve2({ status: res.status, data: parsed });
-            } catch (e) {
-              console.error("[api] POST parse error:", e, res.responseText);
-              resolve2({ status: res.status, data: null });
-            }
-          } else {
-            console.error("[api] POST error:", res.status, res.responseText);
-            resolve2({ status: res.status, data: null });
-          }
-        },
-        onerror: (err) => {
-          console.error("[api] POST request failed:", err);
-          resolve2({ status: 0, data: null });
-        }
-      });
-    });
-  }
-  async function sendPlayerState(payload) {
-    if (!payload) {
-      return false;
-    }
-    const { status } = await httpPost("collect-state", payload);
-    if (status === 204) return true;
-    if (status === 429) {
-      console.warn("[api] sendPlayerState rate-limited");
-    }
-    return false;
-  }
-  async function fetchAvailableRooms(limit = 50) {
-    const { data } = await httpGet("rooms", { limit });
-    if (!data || !Array.isArray(data)) return [];
-    return data.map((r) => ({
-      id: r.id,
-      isPrivate: r.is_private,
-      playersCount: r.players_count ?? 0,
-      lastUpdatedAt: r.last_updated_at,
-      lastUpdatedByPlayerId: r.last_updated_by_player_id,
-      userSlots: Array.isArray(r.user_slots) ? r.user_slots.map((slot) => ({
-        name: slot.name,
-        avatarUrl: slot.avatar_url ?? null
-      })) : void 0
-    }));
-  }
-  async function fetchPlayersView(playerIds, options) {
-    const ids = Array.from(
-      new Set(
-        (playerIds ?? []).map((x) => String(x).trim()).filter((x) => x.length >= 3)
-      )
-    );
-    if (ids.length === 0) return [];
-    const body = { playerIds: ids };
-    if (options?.sections) {
-      body.sections = Array.isArray(options.sections) ? options.sections : [options.sections];
-    }
-    const { status, data } = await httpPost(
-      "get-players-view",
-      body
-    );
-    if (status !== 200 || !Array.isArray(data)) return [];
-    return data;
-  }
-  async function sendFriendRequest(fromPlayerId, toPlayerId) {
-    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-request", {
-      fromPlayerId,
-      toPlayerId
-    });
-    if (status === 204) return true;
-    if (status === 409) {
-      console.warn("[api] friend-request conflict (already exists)");
-    }
-    return false;
-  }
-  async function respondFriendRequest(params) {
-    const { playerId: playerId2, otherPlayerId, action: action2 } = params;
-    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-respond", {
-      playerId: playerId2,
-      otherPlayerId,
-      action: action2
-    });
-    if (status === 204) return true;
-    return false;
-  }
-  async function fetchFriendsIds(playerId2) {
-    if (!playerId2) return [];
-    const { status, data } = await httpGet("list-friends", { playerId: playerId2 });
-    if (status !== 200 || !data || !Array.isArray(data.friends)) return [];
-    return data.friends;
-  }
-  async function fetchFriendsWithViews(playerId2) {
-    const friendIds = await fetchFriendsIds(playerId2);
-    if (friendIds.length === 0) {
-      cachedFriendsView = [];
-      return [];
-    }
-    const result = await fetchPlayersView(friendIds, {
-      sections: ["profile", "room"]
-    });
-    cachedFriendsView = result;
-    return [...result];
-  }
-  async function fetchFriendRequests(playerId2) {
-    if (!playerId2) {
-      return { playerId: "", incoming: [], outgoing: [] };
-    }
-    const { status, data } = await httpGet(
-      "list-friend-requests",
-      { playerId: playerId2 }
-    );
-    if (status !== 200 || !data) {
-      return { playerId: playerId2, incoming: [], outgoing: [] };
-    }
-    return {
-      playerId: data.playerId,
-      incoming: Array.isArray(data.incoming) ? data.incoming : [],
-      outgoing: Array.isArray(data.outgoing) ? data.outgoing : []
-    };
-  }
-  async function fetchIncomingRequestsWithViews(playerId2) {
-    const { incoming } = await fetchFriendRequests(playerId2);
-    const ids = incoming.map((r) => r.fromPlayerId);
-    if (ids.length === 0) {
-      cachedIncomingRequests = [];
-      return [];
-    }
-    const result = await fetchPlayersView(ids, { sections: ["profile"] });
-    cachedIncomingRequests = result;
-    return [...result];
-  }
-  async function removeFriend(playerId2, otherPlayerId) {
-    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-remove", {
-      playerId: playerId2,
-      otherPlayerId
-    });
-    return status === 204;
-  }
-  async function searchRoomsByPlayerName(rawQuery, options) {
-    const query = rawQuery.trim();
-    const minLen = options?.minQueryLength ?? 2;
-    if (query.length < minLen) {
-      return [];
-    }
-    const limitRooms = options?.limitRooms ?? 200;
-    const qLower = query.toLowerCase();
-    const rooms = await fetchAvailableRooms(limitRooms);
-    const results = [];
-    for (const room of rooms) {
-      if (!room.userSlots || room.userSlots.length === 0) continue;
-      const matchedSlots = room.userSlots.filter((slot) => {
-        if (!slot.name) return false;
-        return slot.name.toLowerCase().includes(qLower);
-      });
-      if (matchedSlots.length > 0) {
-        results.push({
-          room,
-          matchedSlots
-        });
-      }
-    }
-    return results;
-  }
-
   // src/utils/publicRooms.ts
   var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
   function resolveGmXhr() {
@@ -44799,14 +50048,14 @@ next: ${next}`;
     }
     return void 0;
   }
-  async function fetchTextWithFetch2(url, options) {
-    const response = await fetch(url, { cache: "no-store", ...options });
+  async function fetchTextWithFetch2(url2, options) {
+    const response = await fetch(url2, { cache: "no-store", ...options });
     if (!response.ok) {
       throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
     }
     return await response.text();
   }
-  async function fetchTextWithGM2(url, options) {
+  async function fetchTextWithGM2(url2, options) {
     const xhr = resolveGmXhr();
     if (!xhr) {
       throw new Error("GM_xmlhttpRequest not available");
@@ -44814,7 +50063,7 @@ next: ${next}`;
     return await new Promise((resolve2, reject) => {
       xhr({
         method: "GET",
-        url,
+        url: url2,
         headers: options?.headers,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
@@ -44831,17 +50080,17 @@ next: ${next}`;
       });
     });
   }
-  async function fetchText2(url, options) {
+  async function fetchText2(url2, options) {
     const preferGM = isDiscordSurface();
     const hasGM = !!resolveGmXhr();
     if (preferGM && hasGM) {
-      return await fetchTextWithGM2(url, options);
+      return await fetchTextWithGM2(url2, options);
     }
     try {
-      return await fetchTextWithFetch2(url, options);
+      return await fetchTextWithFetch2(url2, options);
     } catch (error) {
       if (hasGM) {
-        return await fetchTextWithGM2(url, options);
+        return await fetchTextWithGM2(url2, options);
       }
       throw error;
     }
@@ -44864,8 +50113,8 @@ next: ${next}`;
     }
     return "other";
   }
-  function deriveCategoryOrder(definitions, preferredOrder = []) {
-    const available = new Set(definitions.map((room) => room.category));
+  function deriveCategoryOrder(definitions2, preferredOrder = []) {
+    const available = new Set(definitions2.map((room) => room.category));
     const seen = /* @__PURE__ */ new Set();
     const order = [];
     for (const category of preferredOrder) {
@@ -44874,15 +50123,15 @@ next: ${next}`;
       seen.add(category);
       order.push(category);
     }
-    for (const room of definitions) {
+    for (const room of definitions2) {
       if (seen.has(room.category)) continue;
       seen.add(room.category);
       order.push(room.category);
     }
     return order;
   }
-  function createStateFromDefinitions(definitions, preferredOrder = []) {
-    const cloned = definitions.map((room) => ({ ...room }));
+  function createStateFromDefinitions(definitions2, preferredOrder = []) {
+    const cloned = definitions2.map((room) => ({ ...room }));
     return {
       definitions: cloned,
       categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
@@ -44906,7 +50155,7 @@ next: ${next}`;
     if (!record || typeof record !== "object") {
       return null;
     }
-    const definitions = [];
+    const definitions2 = [];
     const categoryOrder = [];
     for (const [rawCategory, entries] of Object.entries(record)) {
       if (!Array.isArray(entries) || !entries.length) {
@@ -44932,17 +50181,17 @@ next: ${next}`;
         if (!name || !idRoom) {
           continue;
         }
-        definitions.push({
+        definitions2.push({
           name,
           idRoom,
           category: categoryName
         });
       }
     }
-    if (!definitions.length) {
+    if (!definitions2.length) {
       return null;
     }
-    return createStateFromDefinitions(definitions, categoryOrder);
+    return createStateFromDefinitions(definitions2, categoryOrder);
   }
   function setPublicRoomsState(next) {
     publicRoomsState = cloneState2(next);
@@ -44971,9 +50220,9 @@ next: ${next}`;
     return remoteRoomsPromise;
   }
   async function ensureRemoteRoomsLoaded() {
-    const promise = requestRemoteRoomsFetch();
-    if (promise) {
-      await promise;
+    const promise2 = requestRemoteRoomsFetch();
+    if (promise2) {
+      await promise2;
     }
   }
   function sanitizeRoomDefinition(room) {
@@ -45018,10 +50267,10 @@ next: ${next}`;
   function normalizeIdentifier(value) {
     return value.trim().toLowerCase();
   }
-  function fetchStatusesFor(definitions) {
+  function fetchStatusesFor(definitions2) {
     const now2 = Date.now();
     return Promise.all(
-      definitions.map(async (def) => {
+      definitions2.map(async (def) => {
         try {
           const response = await requestRoomEndpoint(def.idRoom, {
             endpoint: "info",
@@ -45155,13 +50404,13 @@ next: ${next}`;
     },
     async fetchPublicRoomsStatus() {
       await ensureRemoteRoomsLoaded();
-      const definitions = publicRoomsState.definitions.map((room) => ({ ...room }));
-      return fetchStatusesFor(definitions);
+      const definitions2 = publicRoomsState.definitions.map((room) => ({ ...room }));
+      return fetchStatusesFor(definitions2);
     },
     async fetchCustomRoomsStatus() {
-      const definitions = this.getCustomRooms();
-      if (!definitions.length) return [];
-      return fetchStatusesFor(definitions);
+      const definitions2 = this.getCustomRooms();
+      if (!definitions2.length) return [];
+      return fetchStatusesFor(definitions2);
     },
     canJoinPublicRoom(room) {
       if (room.error) return false;
@@ -45184,9 +50433,9 @@ next: ${next}`;
   var ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
   function ensureRoomMenuStyles() {
     if (document.getElementById(ROOM_MENU_STYLE_ID)) return;
-    const style2 = document.createElement("style");
-    style2.id = ROOM_MENU_STYLE_ID;
-    style2.textContent = `
+    const style3 = document.createElement("style");
+    style3.id = ROOM_MENU_STYLE_ID;
+    style3.textContent = `
 @keyframes room-menu-spin {
   from {
     transform: rotate(0deg);
@@ -45203,7 +50452,7 @@ next: ${next}`;
   min-width: 160px;
 }
 `;
-    document.head.appendChild(style2);
+    document.head.appendChild(style3);
   }
   var TAB_ID = "public-rooms";
   var SEARCH_TAB_ID = "search-player";
@@ -46851,9 +52100,9 @@ next: ${next}`;
     persistSettings(next);
     return next;
   }
-  function patchFriendSettings(patch) {
-    const base = ensureSettingsInitialized();
-    return setFriendSettings({ ...base, ...patch });
+  function patchFriendSettings(patch2) {
+    const base2 = ensureSettingsInitialized();
+    return setFriendSettings({ ...base2, ...patch2 });
   }
   function onFriendSettingsChange(cb) {
     subscribers.add(cb);
@@ -46864,9 +52113,9 @@ next: ${next}`;
   var FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
   function ensureFriendsMenuRefreshStyle() {
     if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
-    const style2 = document.createElement("style");
-    style2.id = FRIENDS_MENU_REFRESH_STYLE_ID;
-    style2.textContent = `
+    const style3 = document.createElement("style");
+    style3.id = FRIENDS_MENU_REFRESH_STYLE_ID;
+    style3.textContent = `
 @keyframes friends-menu-spin {
   from {
     transform: rotate(0deg);
@@ -46876,7 +52125,7 @@ next: ${next}`;
   }
 }
 `;
-    document.head.appendChild(style2);
+    document.head.appendChild(style3);
   }
   function createRefreshIndicator(scrollTarget, container, offsetY = 14) {
     ensureFriendsMenuRefreshStyle();
@@ -46972,7 +52221,7 @@ next: ${next}`;
   }
   var refreshAllFriends = null;
   var refreshIncomingRequests = null;
-  function formatLastSeen2(timestamp) {
+  function formatLastSeen3(timestamp) {
     if (!timestamp) return null;
     const parsed = Date.parse(timestamp);
     if (!Number.isFinite(parsed)) return null;
@@ -47121,7 +52370,7 @@ next: ${next}`;
     metaColumn.style.minHeight = "38px";
     metaColumn.style.alignSelf = "stretch";
     metaColumn.style.gap = "4px";
-    const lastSeenText = formatLastSeen2(friend.lastEventAt);
+    const lastSeenText = formatLastSeen3(friend.lastEventAt);
     let lastSeenEl = null;
     if (lastSeenText) {
       lastSeenEl = document.createElement("div");
@@ -48031,7 +53280,7 @@ next: ${next}`;
     const privacyCard = ui.card("Privacy");
     privacyCard.body.style.display = "grid";
     privacyCard.body.style.gap = "12px";
-    const applyPatch = (patch) => patchFriendSettings(patch);
+    const applyPatch = (patch2) => patchFriendSettings(patch2);
     const buildToggleRow = (label2, checked, description, onToggle) => {
       const row = document.createElement("div");
       row.style.display = "grid";
@@ -48368,7 +53617,7 @@ next: ${next}`;
     if (!Number.isFinite(value)) return 1;
     return Math.max(1, Math.min(6, value));
   }
-  function findPlayersDeep2(state3) {
+  function findPlayersDeep3(state3) {
     if (!state3 || typeof state3 !== "object") return [];
     const out = [];
     const seen = /* @__PURE__ */ new Set();
@@ -48402,7 +53651,7 @@ next: ${next}`;
   }
   function getPlayersArray2(state3) {
     const direct = state3?.fullState?.data?.players ?? state3?.data?.players ?? state3?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep2(state3);
+    return Array.isArray(direct) ? direct : findPlayersDeep3(state3);
   }
   function getSlotsArray2(state3) {
     const raw = state3?.child?.data?.userSlots ?? state3?.fullState?.child?.data?.userSlots ?? state3?.data?.userSlots;
@@ -48515,6 +53764,8 @@ next: ${next}`;
       const playerId2 = slot.databaseUserId ?? resolvedPlayer?.databaseUserId ?? slot.playerId ?? (resolvedPlayer?.id ?? null);
       const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
       const avatarUrl = resolvedPlayer?.discordAvatarUrl ?? slotData?.discordAvatarUrl ?? slot?.discordAvatarUrl ?? null;
+      const avatarRaw = resolvedPlayer?.cosmetic?.avatar ?? slotData?.cosmetic?.avatar ?? slot?.cosmetic?.avatar ?? null;
+      const avatar = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
       const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
       const coinValue = Number(coinCandidate);
       const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
@@ -48535,6 +53786,7 @@ next: ${next}`;
         playerId: playerId2 != null ? String(playerId2) : null,
         playerName: privacy.showProfile ? playerName : null,
         avatarUrl: privacy.showProfile ? avatarUrl : null,
+        avatar: privacy.showProfile ? avatar : null,
         modVersion,
         coins: privacy.showCoins ? coinsRaw : null,
         room: {
@@ -48819,11 +54071,11 @@ next: ${next}`;
   }
 
   // src/sprite/utils/async.ts
-  var sleep3 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
+  var sleep4 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
   async function waitWithTimeout(p, ms, label2) {
     const t0 = performance.now();
     while (performance.now() - t0 < ms) {
-      const result = await Promise.race([p, sleep3(50).then(() => null)]);
+      const result = await Promise.race([p, sleep4(50).then(() => null)]);
       if (result !== null) return result;
     }
     throw new Error(`${label2} timeout`);
@@ -48954,15 +54206,15 @@ next: ${next}`;
   }
   var baseTexOf = (tex) => tex?.baseTexture ?? tex?.source?.baseTexture ?? tex?.source ?? tex?._baseTexture ?? null;
   function rememberBaseTex(tex, atlasBases) {
-    const base = baseTexOf(tex);
-    if (base) atlasBases.add(base);
+    const base2 = baseTexOf(tex);
+    if (base2) atlasBases.add(base2);
   }
 
   // src/sprite/utils/path.ts
   var splitKey = (key2) => String(key2 || "").split("/").filter(Boolean);
-  var joinPath = (base, path) => base.replace(/\/?$/, "/") + String(path || "").replace(/^\//, "");
+  var joinPath = (base2, path) => base2.replace(/\/?$/, "/") + String(path || "").replace(/^\//, "");
   var dirOf = (path) => path.lastIndexOf("/") >= 0 ? path.slice(0, path.lastIndexOf("/") + 1) : "";
-  var relPath = (base, path) => typeof path === "string" ? path.startsWith("/") ? path.slice(1) : dirOf(base) + path : path;
+  var relPath = (base2, path) => typeof path === "string" ? path.startsWith("/") ? path.slice(1) : dirOf(base2) + path : path;
   function categoryOf(key2, cfg) {
     const parts = splitKey(key2);
     const start2 = parts[0] === "sprite" || parts[0] === "sprites" ? 1 : 0;
@@ -48981,9 +54233,9 @@ next: ${next}`;
   }
 
   // src/sprite/data/assetFetcher.ts
-  function fetchFallback(url, type) {
-    return fetch(url).then(async (res) => {
-      if (!res.ok) throw new Error(`HTTP ${res.status} (${url})`);
+  function fetchFallback(url2, type) {
+    return fetch(url2).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status} (${url2})`);
       if (type === "blob") return { status: res.status, response: await res.blob(), responseText: "" };
       const text = await res.text();
       return {
@@ -48992,40 +54244,40 @@ next: ${next}`;
         responseText: text
       };
     }).catch((err) => {
-      throw new Error(`Network (${url}): ${err instanceof Error ? err.message : String(err)}`);
+      throw new Error(`Network (${url2}): ${err instanceof Error ? err.message : String(err)}`);
     });
   }
-  function gm(url, type = "text") {
+  function gm(url2, type = "text") {
     if (typeof GM_xmlhttpRequest === "function") {
       return new Promise(
         (resolve2, reject) => GM_xmlhttpRequest({
           method: "GET",
-          url,
+          url: url2,
           responseType: type,
-          onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url})`)),
-          onerror: () => reject(new Error(`Network (${url})`)),
-          ontimeout: () => reject(new Error(`Timeout (${url})`))
+          onload: (r) => r.status >= 200 && r.status < 300 ? resolve2(r) : reject(new Error(`HTTP ${r.status} (${url2})`)),
+          onerror: () => reject(new Error(`Network (${url2})`)),
+          ontimeout: () => reject(new Error(`Timeout (${url2})`))
         })
       );
     }
-    return fetchFallback(url, type);
+    return fetchFallback(url2, type);
   }
-  var getJSON = async (url) => JSON.parse((await gm(url, "text")).responseText);
-  var getBlob = async (url) => (await gm(url, "blob")).response;
+  var getJSON = async (url2) => JSON.parse((await gm(url2, "text")).responseText);
+  var getBlob = async (url2) => (await gm(url2, "blob")).response;
   function blobToImage(blob) {
     return new Promise((resolve2, reject) => {
-      const url = URL.createObjectURL(blob);
+      const url2 = URL.createObjectURL(blob);
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url2);
         resolve2(img);
       };
       img.onerror = () => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(url2);
         reject(new Error("decode fail"));
       };
-      img.src = url;
+      img.src = url2;
     });
   }
   function extractAtlasJsons(manifest) {
@@ -49043,14 +54295,14 @@ next: ${next}`;
     }
     return jsons;
   }
-  async function loadAtlasJsons(base, manifest) {
+  async function loadAtlasJsons(base2, manifest) {
     const jsons = extractAtlasJsons(manifest);
     const seen = /* @__PURE__ */ new Set();
     const data = {};
     const loadOne = async (path) => {
       if (seen.has(path)) return;
       seen.add(path);
-      const json = await getJSON(joinPath(base, path));
+      const json = await getJSON(joinPath(base2, path));
       data[path] = json;
       if (json?.meta?.related_multi_packs) {
         for (const rel of json.meta.related_multi_packs) {
@@ -49311,7 +54563,7 @@ next: ${next}`;
   function detectGameVersion() {
     try {
       initGameVersion();
-      if (gameVersion) return gameVersion;
+      if (gameVersion2) return gameVersion2;
     } catch {
     }
     const root = globalThis.unsafeWindow || globalThis;
@@ -49383,16 +54635,16 @@ next: ${next}`;
       return null;
     }
   }
-  async function prefetchAtlas(base) {
+  async function prefetchAtlas(base2) {
     try {
-      const manifest = await getJSON(joinPath(base, "manifest.json"));
-      const atlasJsons = await loadAtlasJsons(base, manifest);
+      const manifest = await getJSON(joinPath(base2, "manifest.json"));
+      const atlasJsons = await loadAtlasJsons(base2, manifest);
       const blobs = /* @__PURE__ */ new Map();
       for (const [path, data] of Object.entries(atlasJsons)) {
         if (!isAtlas(data)) continue;
         const imgPath = relPath(path, data.meta.image);
         try {
-          const blob = await getBlob(joinPath(base, imgPath));
+          const blob = await getBlob(joinPath(base2, imgPath));
           blobs.set(imgPath, blob);
         } catch {
         }
@@ -49416,20 +54668,20 @@ next: ${next}`;
         warmupSpritesFromAtlases(atlasJsons, blobs).catch(() => {
         });
       }
-      return { base, atlasJsons, blobs };
+      return { base: base2, atlasJsons, blobs };
     } catch {
       return null;
     }
   }
-  async function loadTextures(base, prefetched) {
-    const usePrefetched = prefetched && prefetched.base === base ? prefetched : null;
-    const atlasJsons = usePrefetched?.atlasJsons ?? await loadAtlasJsons(base, await getJSON(joinPath(base, "manifest.json")));
+  async function loadTextures(base2, prefetched) {
+    const usePrefetched = prefetched && prefetched.base === base2 ? prefetched : null;
+    const atlasJsons = usePrefetched?.atlasJsons ?? await loadAtlasJsons(base2, await getJSON(joinPath(base2, "manifest.json")));
     const ctors = ctx.state.ctors;
     if (!ctors?.Texture || !ctors?.Rectangle) throw new Error("PIXI constructors missing");
     for (const [path, data] of Object.entries(atlasJsons)) {
       if (!isAtlas(data)) continue;
       const imgPath = relPath(path, data.meta.image);
-      const blob = usePrefetched?.blobs.get(imgPath) ?? usePrefetched?.blobs.get(relPath(path, data.meta.image)) ?? await getBlob(joinPath(base, imgPath));
+      const blob = usePrefetched?.blobs.get(imgPath) ?? usePrefetched?.blobs.get(relPath(path, data.meta.image)) ?? await getBlob(joinPath(base2, imgPath));
       const img = await blobToImage(blob);
       const baseTex = ctors.Texture.from(img);
       buildAtlasTextures(data, baseTex, ctx.state.tex, ctx.state.atlasBases, {
@@ -49495,9 +54747,9 @@ next: ${next}`;
         await delay3(200);
       }
     }
-    const base = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
+    const base2 = `${ctx.cfg.origin.replace(/\/$/, "")}/version/${version}/assets/`;
     if (!prefetchPromise) {
-      prefetchPromise = prefetchAtlas(base);
+      prefetchPromise = prefetchAtlas(base2);
     }
     const { app, renderer: _renderer, version: pixiVersion } = await resolvePixiFast();
     await ensureDocumentReady();
@@ -49506,7 +54758,7 @@ next: ${next}`;
     ctx.state.app = app;
     ctx.state.renderer = renderer;
     ctx.state.version = pixiVersion || version || version === "" ? pixiVersion ?? version : detectGameVersion();
-    ctx.state.base = base;
+    ctx.state.base = base2;
     ctx.state.sig = curVariant(ctx.state).sig;
     const prefetched = await (prefetchPromise ?? Promise.resolve(null));
     await loadTextures(ctx.state.base, prefetched);
