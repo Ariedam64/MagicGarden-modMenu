@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.56
+// @version      2.99.60
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11,13 +11,16 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
 // @grant        GM_openInTab 
-// @grant        GM_registerMenuCommand
-// @connect      raw.githubusercontent.com
-// @connect      api.github.com
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @grant        GM_download
+// @connect      raw.githubusercontent.com
+// @connect      api.github.com
 // @connect      ariesmod-api.ariedam.fr
+// @connect      ariedam.fr
+// @connect      cdn.pixabay.com
+// @connect      cdn.jsdelivr.net
 // @connect      magicgarden.gg
 // @connect      imgur.com
 
@@ -779,7 +782,18 @@
   var _captureInProgress = false;
   var _captureError = null;
   var _lastCapturedVia = null;
+  var ATOM_CACHE_WAIT_MS = 2e4;
+  var WRITE_ONCE_MS = 5e3;
   var getAtomCache = () => pageWindow.jotaiAtomCache?.cache;
+  async function waitForAtomCache() {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ATOM_CACHE_WAIT_MS) {
+      const cache2 = getAtomCache();
+      if (cache2) return cache2;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return null;
+  }
   function findStoreViaFiber() {
     const hook = pageWindow.__REACT_DEVTOOLS_GLOBAL_HOOK__;
     if (!hook?.renderers?.size) return null;
@@ -806,11 +820,29 @@
     }
     return null;
   }
-  async function captureViaWriteOnce(timeoutMs = 5e3) {
-    const cache2 = getAtomCache();
+  function makePolyfillStore() {
+    return {
+      get: () => {
+        throw new Error("Store non captur\xE9: get indisponible");
+      },
+      set: () => {
+        throw new Error("Store non captur\xE9: set indisponible");
+      },
+      sub: () => () => {
+      },
+      __polyfill: true
+    };
+  }
+  async function captureViaWriteOnce() {
+    let cache2 = getAtomCache() ?? null;
+    if (!cache2) {
+      console.log("[jotai-bridge] Waiting for jotaiAtomCache...");
+      cache2 = await waitForAtomCache();
+    }
     if (!cache2) {
       console.warn("[jotai-bridge] jotaiAtomCache.cache introuvable");
-      throw new Error("jotaiAtomCache.cache introuvable");
+      _lastCapturedVia = "polyfill";
+      return makePolyfillStore();
     }
     let capturedGet = null;
     let capturedSet = null;
@@ -846,7 +878,7 @@
       pageWindow.dispatchEvent?.(new pageWindow.Event("visibilitychange"));
     } catch {
     }
-    while (!capturedSet && Date.now() - t0 < timeoutMs) {
+    while (!capturedSet && Date.now() - t0 < WRITE_ONCE_MS) {
       await wait2(50);
     }
     if (!capturedSet) {
@@ -898,7 +930,7 @@
     if (_store && !_store.__polyfill) return _store;
     if (_captureInProgress) {
       const t0 = Date.now();
-      const maxWait = 5500;
+      const maxWait = ATOM_CACHE_WAIT_MS + WRITE_ONCE_MS + 1e3;
       while (!_store && Date.now() - t0 < maxWait) {
         await new Promise((r) => setTimeout(r, 25));
       }
@@ -4350,8 +4382,9 @@
   var FRIEND_SETTINGS_PATH = "friends.settings";
   var DEFAULT_FRIEND_SETTINGS = {
     showOnlineFriendsOnly: false,
-    autoAcceptIncomingRequests: false,
     hideRoomFromPublicList: false,
+    messageSoundEnabled: true,
+    friendRequestSoundEnabled: true,
     showGarden: true,
     showInventory: true,
     showCoins: true,
@@ -12507,6 +12540,17 @@
     playDestroyStone() {
       return this.playBy("Break_Stone");
     }
+    /** Joue une URL à un volume fixe (0-1), indépendamment du volume SFX du jeu. */
+    playAt(url2, volume) {
+      const clampedVol = Math.max(0, Math.min(1, volume));
+      try {
+        const a = new Audio(url2);
+        a.volume = clampedVol;
+        void a.play().catch(() => {
+        });
+      } catch {
+      }
+    }
     playSellNotification() {
       return this.playBy("Score_PlusOne");
     }
@@ -12518,7 +12562,6 @@
     }
   };
   var audioPlayer = new AudioPlayer({ autoScan: true });
-  window.__audioPlayer = audioPlayer;
 
   // src/utils/tileObjectSystemApi.ts
   var state2 = {
@@ -12732,6 +12775,7 @@
     "mutation-overlay"
   ];
   var spriteDataUrlCache = /* @__PURE__ */ new Map();
+  var spriteDataUrlResolved = /* @__PURE__ */ new Map();
   var spriteWarmupQueued = false;
   var spriteWarmupStarted = false;
   var warmupState = { total: 0, done: 0, completed: false };
@@ -12771,6 +12815,7 @@
     if (!spriteDataUrlCache.has(cacheKey)) {
       spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
     }
+    spriteDataUrlResolved.set(cacheKey, dataUrl);
     if (!warmupCompletedKeys.has(cacheKey)) {
       warmupCompletedKeys.add(cacheKey);
       const nextDone = warmupState.done + 1;
@@ -12848,7 +12893,11 @@
             mutations: mutationList
           });
           if (!canvas) return null;
-          return canvas.toDataURL("image/png");
+          const dataUrl = canvas.toDataURL("image/png");
+          if (dataUrl) {
+            spriteDataUrlResolved.set(cacheKey, dataUrl);
+          }
+          return dataUrl;
         } catch (error) {
           console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
           return null;
@@ -12862,6 +12911,17 @@
   function getMatchCacheKey(categories, id) {
     const normalizedCategories = categories.map((category) => category.toLowerCase()).join("|");
     return `${normalizedCategories}|${normalizeSpriteId(id)}`;
+  }
+  function findCachedSpriteMatch(categories, candidateIds) {
+    for (const candidate of candidateIds) {
+      const cacheKey = getMatchCacheKey(categories, candidate);
+      if (!spriteMatchCache.has(cacheKey)) continue;
+      const match = spriteMatchCache.get(cacheKey);
+      if (match) {
+        return { match, candidate };
+      }
+    }
+    return null;
   }
   function findSpriteMatch(service, categories, id) {
     if (!service.list) return null;
@@ -12910,11 +12970,48 @@
     spriteMatchCache.set(cacheKey, null);
     return null;
   }
-  function attachSpriteIcon(target, categories, id, size, logTag, options) {
-    const service = getSpriteService();
-    if (!service?.renderToCanvas) return;
+  function attachSpriteIcon2(target, categories, id, size, logTag, options) {
     const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
     if (!candidateIds.length) return;
+    const cachedMatch = findCachedSpriteMatch(categories, candidateIds);
+    if (cachedMatch) {
+      const { match, candidate } = cachedMatch;
+      const { key: mutationKey } = normalizeMutationList(options?.mutations);
+      const spriteKey = `${match.category}:${match.spriteId}${mutationKey}`;
+      const cacheKey = cacheKeyFor(match.category, match.spriteId, mutationKey);
+      const cachedUrl = spriteDataUrlResolved.get(cacheKey);
+      const existingImg = target.querySelector("img[data-sprite-key]");
+      if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
+        return;
+      }
+      if (cachedUrl) {
+        const img = document.createElement("img");
+        img.src = cachedUrl;
+        img.width = size;
+        img.height = size;
+        img.alt = "";
+        img.decoding = "async";
+        img.loading = "lazy";
+        img.draggable = false;
+        img.style.width = `${size}px`;
+        img.style.height = `${size}px`;
+        img.style.objectFit = "contain";
+        img.style.imageRendering = "auto";
+        img.style.display = "block";
+        img.dataset.spriteKey = spriteKey;
+        img.dataset.spriteCategory = match.category;
+        img.dataset.spriteId = match.spriteId;
+        target.replaceChildren(img);
+        options?.onSpriteApplied?.(img, {
+          category: match.category,
+          spriteId: match.spriteId,
+          candidate
+        });
+        return;
+      }
+    }
+    const service = getSpriteService();
+    if (!service?.renderToCanvas) return;
     void whenServiceReady(service).then(
       () => scheduleNonBlocking(async () => {
         let selected = null;
@@ -12975,7 +13072,7 @@
   }
   function attachWeatherSpriteIcon(target, tag, size) {
     if (tag === "NoWeatherEffect") return;
-    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
+    attachSpriteIcon2(target, ["mutation"], tag, size, "weather");
   }
   function warmupSpriteCache() {
     if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
@@ -13176,7 +13273,7 @@
       categories = ["tallplant", "tallPlant", "plant"];
     }
     if (candidates.length) {
-      attachSpriteIcon(wrap, categories, candidates, size, "editor", {
+      attachSpriteIcon2(wrap, categories, candidates, size, "editor", {
         onNoSpriteFound: applyFallback
       });
     } else {
@@ -16662,8 +16759,8 @@
     return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
-    const STYLE_ID4 = "mgAutoRecoOverlayStyle";
-    if (document.getElementById(STYLE_ID4)) return;
+    const STYLE_ID5 = "mgAutoRecoOverlayStyle";
+    if (document.getElementById(STYLE_ID5)) return;
     const css = `
     #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
@@ -16672,10 +16769,10 @@
     #mgAutoRecoOverlay .btn { margin-top: 6px; padding: 10px 16px; border-radius: 999px; border: 1px solid #7aa2ff; background: #1a2644; color: #fff; font-weight: 700; cursor: pointer; }
     #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
   `;
-    const style3 = document.createElement("style");
-    style3.id = STYLE_ID4;
-    style3.textContent = css;
-    document.documentElement.appendChild(style3);
+    const style4 = document.createElement("style");
+    style4.id = STYLE_ID5;
+    style4.textContent = css;
+    document.documentElement.appendChild(style4);
   }
   function createAutoRecoOverlay(initialMs, onReconnectNow) {
     ensureAutoRecoOverlayStyle();
@@ -20715,7 +20812,7 @@
         const species = String(entry.pet.petSpecies || "").trim();
         const mutations = Array.isArray(entry.mutations) ? entry.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : [];
         if (species) {
-          attachSpriteIcon(
+          attachSpriteIcon2(
             imgWrap,
             ["pet"],
             [species, entry.pet.name || ""],
@@ -20897,8 +20994,8 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID4 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID4)) return;
+    const STYLE_ID5 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID5)) return;
     const css = `
 .${injectedClass}{
   font-synthesis: none;
@@ -20953,7 +21050,7 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID4;
+    s.id = STYLE_ID5;
     s.textContent = css;
     document.head.appendChild(s);
   }
@@ -23385,7 +23482,7 @@
       const iconized = originals.map((value) => value.replace(/icon$/i, "")).filter(Boolean).map((value) => `${value}Icon`);
       const candidates = Array.from(/* @__PURE__ */ new Set([...originals, ...iconized])).filter(Boolean);
       if (candidates.length) {
-        attachSpriteIcon(wrap, categories, candidates, size, "alerts-overlay");
+        attachSpriteIcon2(wrap, categories, candidates, size, "alerts-overlay");
       }
     }
     return wrap;
@@ -23492,9 +23589,9 @@
     }
     ensureBellCSS() {
       if (document.getElementById("qws-bell-anim-css")) return;
-      const style3 = document.createElement("style");
-      style3.id = "qws-bell-anim-css";
-      style3.textContent = `
+      const style4 = document.createElement("style");
+      style4.id = "qws-bell-anim-css";
+      style4.textContent = `
 @keyframes qwsBellShake {
   0% { transform: rotate(0deg); }
   10% { transform: rotate(-16deg); }
@@ -23520,7 +23617,7 @@
   .qws-bell--wiggle { animation: none !important; }
 }
 `;
-      document.head.appendChild(style3);
+      document.head.appendChild(style4);
     }
     /* ========= SETTERS (subs) ========= */
     setShops(s) {
@@ -24290,15 +24387,301 @@
   }
   var MGAssets = { base, url };
 
+  // src/utils/friendSettings.ts
+  var subscribers = /* @__PURE__ */ new Set();
+  var currentSettings = null;
+  var initialized = false;
+  function persistSettings(settings) {
+    try {
+      writeAriesPath(FRIEND_SETTINGS_PATH, settings);
+    } catch {
+    }
+  }
+  function ensureSettingsInitialized() {
+    if (initialized && currentSettings) {
+      return currentSettings;
+    }
+    initialized = true;
+    const stored = readAriesPath(FRIEND_SETTINGS_PATH);
+    const next = buildSettings(stored);
+    currentSettings = next;
+    if (!stored) {
+      persistSettings(next);
+    }
+    return next;
+  }
+  function notifySubscribers(next) {
+    for (const cb of subscribers) {
+      try {
+        cb(next);
+      } catch (error) {
+        console.error("[FriendSettings] subscriber error", error);
+      }
+    }
+  }
+  function buildSettings(raw) {
+    return { ...DEFAULT_FRIEND_SETTINGS, ...raw ?? {} };
+  }
+  function getFriendSettings() {
+    return ensureSettingsInitialized();
+  }
+  function setFriendSettings(settings) {
+    ensureSettingsInitialized();
+    const next = buildSettings(settings);
+    currentSettings = next;
+    notifySubscribers(next);
+    persistSettings(next);
+    return next;
+  }
+  function patchFriendSettings(patch2) {
+    const base2 = ensureSettingsInitialized();
+    return setFriendSettings({ ...base2, ...patch2 });
+  }
+  function onFriendSettingsChange(cb) {
+    subscribers.add(cb);
+    return () => subscribers.delete(cb);
+  }
+
   // src/utils/supabase.ts
   var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
-  var cachedFriendsView = null;
-  var cachedIncomingRequests = null;
-  function getCachedFriendsWithViews() {
-    return cachedFriendsView ? [...cachedFriendsView] : [];
+  var _SAFE_IMG_HOSTS = ["cdn.discordapp.com", "media.discordapp.net"];
+  var _gmImgCache = /* @__PURE__ */ new Map();
+  var _gmImgPending = /* @__PURE__ */ new Map();
+  var _extMimeMap = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    svg: "image/svg+xml"
+  };
+  function _isImgUrlSafe(url2) {
+    if (!url2 || url2.startsWith("blob:") || url2.startsWith("data:") || url2.startsWith("/")) return true;
+    try {
+      const { hostname } = new URL(url2);
+      return _SAFE_IMG_HOSTS.some((h) => hostname === h || hostname.endsWith("." + h));
+    } catch {
+      return true;
+    }
   }
-  function getCachedIncomingRequestsWithViews() {
-    return cachedIncomingRequests ? [...cachedIncomingRequests] : [];
+  function setImageSafe(img, url2) {
+    if (!url2) return;
+    if (_isImgUrlSafe(url2)) {
+      img.src = url2;
+      return;
+    }
+    const cached = _gmImgCache.get(url2);
+    if (cached) {
+      img.src = cached;
+      return;
+    }
+    const pending = _gmImgPending.get(url2);
+    if (pending) {
+      pending.push(img);
+      return;
+    }
+    _gmImgPending.set(url2, [img]);
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: url2,
+      headers: {},
+      responseType: "arraybuffer",
+      onload: (res) => {
+        const imgs = _gmImgPending.get(url2) ?? [];
+        _gmImgPending.delete(url2);
+        if (!res.response) {
+          for (const el2 of imgs) el2.src = url2;
+          return;
+        }
+        const ext = url2.split(".").pop()?.toLowerCase().split("?")[0] ?? "png";
+        const mime = _extMimeMap[ext] ?? "image/png";
+        const blob = new Blob([res.response], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        _gmImgCache.set(url2, blobUrl);
+        for (const el2 of imgs) el2.src = blobUrl;
+      },
+      onerror: () => {
+        const imgs = _gmImgPending.get(url2) ?? [];
+        _gmImgPending.delete(url2);
+        for (const el2 of imgs) el2.src = url2;
+      }
+    });
+  }
+  var _gmAudioCache = /* @__PURE__ */ new Map();
+  var _gmAudioPending = /* @__PURE__ */ new Map();
+  function getAudioUrlSafe(url2) {
+    return new Promise((resolve2) => {
+      if (!url2) {
+        resolve2(url2);
+        return;
+      }
+      if (!isDiscordActivityContext()) {
+        resolve2(url2);
+        return;
+      }
+      const cached = _gmAudioCache.get(url2);
+      if (cached) {
+        resolve2(cached);
+        return;
+      }
+      const pending = _gmAudioPending.get(url2);
+      if (pending) {
+        pending.push(resolve2);
+        return;
+      }
+      _gmAudioPending.set(url2, [resolve2]);
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: url2,
+        headers: {},
+        responseType: "arraybuffer",
+        onload: (res) => {
+          const callbacks = _gmAudioPending.get(url2) ?? [];
+          _gmAudioPending.delete(url2);
+          if (!res.response) {
+            for (const cb of callbacks) cb(url2);
+            return;
+          }
+          const ext = url2.split(".").pop()?.toLowerCase().split("?")[0] ?? "mp3";
+          const audioMimeMap = {
+            mp3: "audio/mpeg",
+            ogg: "audio/ogg",
+            wav: "audio/wav",
+            m4a: "audio/mp4"
+          };
+          const mime = audioMimeMap[ext] ?? "audio/mpeg";
+          const blob = new Blob([res.response], { type: mime });
+          const blobUrl = URL.createObjectURL(blob);
+          _gmAudioCache.set(url2, blobUrl);
+          for (const cb of callbacks) cb(blobUrl);
+        },
+        onerror: () => {
+          const callbacks = _gmAudioPending.get(url2) ?? [];
+          _gmAudioPending.delete(url2);
+          for (const cb of callbacks) cb(url2);
+        }
+      });
+    });
+  }
+  function isDiscordActivityContext() {
+    try {
+      return window.location.hostname.endsWith("discordsays.com");
+    } catch {
+      return false;
+    }
+  }
+  var SSE_EVENT_NAMES = [
+    "connected",
+    "friend_request",
+    "friend_response",
+    "friend_cancelled",
+    "friend_removed",
+    "message",
+    "read",
+    "ping"
+  ];
+  function openGMSSEStream(url2, onEvent, onError) {
+    let closed = false;
+    let source = null;
+    const tag = (() => {
+      try {
+        return `[SSE ${new URL(url2).pathname.split("/").slice(-2).join("/")}]`;
+      } catch {
+        return "[SSE]";
+      }
+    })();
+    source = new EventSource(url2);
+    const handleEvent = (event, name) => {
+      if (closed) return;
+      const data = event.data;
+      onEvent(name, data);
+    };
+    for (const name of SSE_EVENT_NAMES) {
+      source.addEventListener(name, (e) => handleEvent(e, name));
+    }
+    source.addEventListener("open", () => {
+    });
+    source.addEventListener("error", (e) => {
+      if (closed) return;
+      console.warn(tag, "error", e);
+      onError?.();
+    });
+    return {
+      close: () => {
+        closed = true;
+        source?.close();
+        source = null;
+      }
+    };
+  }
+  var EMOJI_DATA_CDN_PREFIX = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data";
+  var _emojiJson = null;
+  var _emojiPending = [];
+  var _emojiInterceptorInstalled = false;
+  function _emojiMakeResponse(json, method) {
+    if (method === "HEAD") {
+      return new Response(null, {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+    return new Response(json, {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+  function installEmojiDataFetchInterceptor() {
+    if (_emojiInterceptorInstalled) return;
+    _emojiInterceptorInstalled = true;
+    const _origFetch = window.fetch.bind(window);
+    window.fetch = function(input, init2) {
+      const url2 = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (!url2.startsWith(EMOJI_DATA_CDN_PREFIX)) {
+        return _origFetch(input, init2);
+      }
+      const method = (init2?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (_emojiJson) {
+        return Promise.resolve(_emojiMakeResponse(_emojiJson, method));
+      }
+      return new Promise((resolve2) => {
+        _emojiPending.push((json) => {
+          resolve2(
+            json ? _emojiMakeResponse(json, method) : new Response(null, { status: 503 })
+          );
+        });
+      });
+    };
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: `${EMOJI_DATA_CDN_PREFIX}@^1/en/emojibase/data.json`,
+      headers: {},
+      onload: (res) => {
+        if (res.status >= 200 && res.status < 300 && res.responseText) {
+          _emojiJson = res.responseText;
+          for (const cb of _emojiPending) cb(_emojiJson);
+        } else {
+          console.error("[api] emoji fetch failed:", res.status);
+          for (const cb of _emojiPending) cb(null);
+        }
+        _emojiPending = [];
+      },
+      onerror: (err) => {
+        console.error("[api] emoji fetch error:", err);
+        for (const cb of _emojiPending) cb(null);
+        _emojiPending = [];
+      }
+    });
+  }
+  var ONLINE_THRESHOLD_MS = 6 * 60 * 1e3;
+  function computeIsOnline(lastEventAt) {
+    if (!lastEventAt) return false;
+    const ts = Date.parse(lastEventAt);
+    return Number.isFinite(ts) && Date.now() - ts <= ONLINE_THRESHOLD_MS;
+  }
+  var cachedFriendsSummary = null;
+  var cachedOutgoingRequests = null;
+  function getCachedFriendsSummary() {
+    return cachedFriendsSummary ? [...cachedFriendsSummary] : [];
   }
   function buildUrl(path, query) {
     const url2 = new URL(path, API_BASE_URL);
@@ -24376,7 +24759,7 @@
     const { status } = await httpPost("collect-state", payload);
     if (status === 204) return true;
     if (status === 429) {
-      console.warn("[api] sendPlayerState rate-limited");
+      console.error("[api] sendPlayerState rate-limited");
     }
     return false;
   }
@@ -24394,6 +24777,14 @@
         avatarUrl: slot.avatar_url ?? null
       })) : void 0
     }));
+  }
+  async function fetchPlayerView(playerId2) {
+    if (!playerId2) return null;
+    const { status, data } = await httpGet("get-player-view", {
+      playerId: playerId2
+    });
+    if (status === 404) return null;
+    return data;
   }
   async function fetchPlayersView(playerIds, options) {
     const ids = Array.from(
@@ -24440,23 +24831,28 @@
     if (status === 204) return true;
     return false;
   }
-  async function fetchFriendsIds(playerId2) {
+  async function fetchFriendsSummary(playerId2) {
     if (!playerId2) return [];
     const { status, data } = await httpGet("list-friends", { playerId: playerId2 });
-    if (status !== 200 || !data || !Array.isArray(data.friends)) return [];
-    return data.friends;
-  }
-  async function fetchFriendsWithViews(playerId2) {
-    const friendIds = await fetchFriendsIds(playerId2);
-    if (friendIds.length === 0) {
-      cachedFriendsView = [];
+    if (status !== 200 || !data || !Array.isArray(data.friends)) {
+      cachedFriendsSummary = [];
       return [];
     }
-    const result = await fetchPlayersView(friendIds, {
-      sections: ["profile", "room"]
-    });
-    cachedFriendsView = result;
+    const result = data.friends.map((f) => ({
+      playerId: f.playerId,
+      playerName: f.name,
+      avatarUrl: f.avatarUrl,
+      avatar: Array.isArray(f.avatar) ? f.avatar : null,
+      lastEventAt: f.lastEventAt,
+      isOnline: computeIsOnline(f.lastEventAt),
+      roomId: f.roomId
+    }));
+    cachedFriendsSummary = result;
     return [...result];
+  }
+  async function fetchFriendsIds(playerId2) {
+    const friends = await fetchFriendsSummary(playerId2);
+    return friends.map((f) => f.playerId);
   }
   async function fetchFriendRequests(playerId2) {
     if (!playerId2) {
@@ -24469,22 +24865,129 @@
     if (status !== 200 || !data) {
       return { playerId: playerId2, incoming: [], outgoing: [] };
     }
-    return {
-      playerId: data.playerId,
+    const result = {
+      playerId: data.playerId ?? playerId2,
       incoming: Array.isArray(data.incoming) ? data.incoming : [],
       outgoing: Array.isArray(data.outgoing) ? data.outgoing : []
     };
+    cachedOutgoingRequests = result.outgoing;
+    return result;
   }
-  async function fetchIncomingRequestsWithViews(playerId2) {
-    const { incoming } = await fetchFriendRequests(playerId2);
-    const ids = incoming.map((r) => r.fromPlayerId);
-    if (ids.length === 0) {
-      cachedIncomingRequests = [];
-      return [];
+  function openDiscordFriendRequestsPoller(playerId2, handlers) {
+    const LOG = "[friend-poll]";
+    let closed = false;
+    let prevIncomingKeys = /* @__PURE__ */ new Set();
+    let prevOutgoingKeys = /* @__PURE__ */ new Set();
+    let prevFriendKeys = /* @__PURE__ */ new Set();
+    let initialized2 = false;
+    let pollCount = 0;
+    handlers.onConnected?.({ playerId: playerId2 });
+    async function poll() {
+      if (closed) return;
+      pollCount++;
+      try {
+        const [result, friendIds] = await Promise.all([
+          fetchFriendRequests(playerId2),
+          fetchFriendsIds(playerId2)
+        ]);
+        const newIncomingKeys = new Set(result.incoming.map((r) => r.fromPlayerId));
+        const newOutgoingKeys = new Set(result.outgoing.map((r) => r.toPlayerId));
+        const newFriendKeys = new Set(friendIds);
+        if (initialized2) {
+          for (const req of result.incoming) {
+            if (!prevIncomingKeys.has(req.fromPlayerId)) {
+              handlers.onRequest?.({ requesterId: req.fromPlayerId, targetId: playerId2, createdAt: req.createdAt });
+            }
+          }
+          for (const key2 of prevIncomingKeys) {
+            if (!newIncomingKeys.has(key2)) {
+              handlers.onCancelled?.({ requesterId: key2, targetId: playerId2 });
+            }
+          }
+          for (const key2 of prevOutgoingKeys) {
+            if (!newOutgoingKeys.has(key2)) {
+              const now2 = (/* @__PURE__ */ new Date()).toISOString();
+              if (newFriendKeys.has(key2)) {
+                handlers.onAccepted?.({ requesterId: playerId2, responderId: key2, updatedAt: now2 });
+              } else {
+                handlers.onRejected?.({ requesterId: playerId2, responderId: key2, updatedAt: now2 });
+              }
+            }
+          }
+          for (const key2 of prevFriendKeys) {
+            if (!newFriendKeys.has(key2)) {
+              handlers.onRemoved?.({ removerId: key2, removedId: playerId2, removedAt: (/* @__PURE__ */ new Date()).toISOString() });
+            }
+          }
+        }
+        prevIncomingKeys = newIncomingKeys;
+        prevOutgoingKeys = newOutgoingKeys;
+        prevFriendKeys = newFriendKeys;
+        initialized2 = true;
+      } catch (e) {
+        console.error(LOG, "poll error:", e);
+      }
+      if (!closed) setTimeout(poll, 5e3);
     }
-    const result = await fetchPlayersView(ids, { sections: ["profile"] });
-    cachedIncomingRequests = result;
-    return [...result];
+    poll();
+    return { close: () => {
+      closed = true;
+    } };
+  }
+  function openFriendRequestsStream(playerId2, handlers = {}) {
+    if (!playerId2) return null;
+    if (isDiscordActivityContext()) return openDiscordFriendRequestsPoller(playerId2, handlers);
+    const url2 = buildUrl("friend-requests/stream", { playerId: playerId2 });
+    const LOG = "[friend-stream]";
+    return openGMSSEStream(
+      url2,
+      (eventName, data) => {
+        try {
+          const parsed = JSON.parse(data);
+          switch (eventName) {
+            case "connected":
+              handlers.onConnected?.(parsed);
+              break;
+            case "friend_request":
+              handlers.onRequest?.(parsed);
+              break;
+            case "friend_response": {
+              const resp = parsed;
+              handlers.onResponse?.(resp);
+              if (resp.action === "accept") {
+                handlers.onAccepted?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
+              } else if (resp.action === "reject") {
+                handlers.onRejected?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
+              }
+              break;
+            }
+            case "friend_cancelled":
+              handlers.onCancelled?.(parsed);
+              break;
+            case "friend_removed":
+              handlers.onRemoved?.(parsed);
+              break;
+            default:
+              break;
+          }
+        } catch (e) {
+          console.error(LOG, "parse error:", e, "raw:", data);
+        }
+      },
+      () => {
+        handlers.onError?.(new Event("error"));
+      }
+    );
+  }
+  async function cancelFriendRequest(playerId2, otherPlayerId) {
+    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
+      return false;
+    }
+    const { status } = await httpPost("friend-cancel", {
+      playerId: playerId2,
+      otherPlayerId
+    });
+    return status === 204;
   }
   async function removeFriend(playerId2, otherPlayerId) {
     if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
@@ -24521,38 +25024,75 @@
     }
     return results;
   }
+  async function fetchModPlayers(options) {
+    const { status, data } = await httpGet("list-mod-players", {
+      query: options?.query,
+      limit: options?.limit,
+      offset: options?.offset
+    });
+    if (status !== 200 || !Array.isArray(data)) return [];
+    return data;
+  }
+  function openDiscordMessagesPoller(playerId2, handlers) {
+    let closed = false;
+    let since = (/* @__PURE__ */ new Date()).toISOString();
+    const seenIds = /* @__PURE__ */ new Set();
+    handlers.onConnected?.({ playerId: playerId2 });
+    async function poll() {
+      if (closed) return;
+      try {
+        const { status, data } = await httpGet("messages/poll", { playerId: playerId2, since });
+        if (status === 200 && Array.isArray(data)) {
+          for (const msg of data) {
+            const numId = Number(msg?.id);
+            if (!isNaN(numId) && !seenIds.has(numId)) {
+              seenIds.add(numId);
+              const normalized = { ...msg, id: numId };
+              if (normalized.createdAt > since) since = normalized.createdAt;
+              handlers.onMessage?.(normalized);
+            }
+          }
+        }
+      } catch {
+      }
+      if (!closed) setTimeout(poll, 2e3);
+    }
+    poll();
+    return { close: () => {
+      closed = true;
+    } };
+  }
   function openMessagesStream(playerId2, handlers = {}) {
     if (!playerId2) return null;
+    if (isDiscordActivityContext()) return openDiscordMessagesPoller(playerId2, handlers);
     const url2 = buildUrl("messages/stream", { playerId: playerId2 });
-    const es = new EventSource(url2);
-    es.addEventListener("connected", (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        handlers.onConnected?.(data);
-      } catch (e) {
-        console.error("[api] stream connected parse error:", e);
+    const MLOG = "[messages-stream]";
+    return openGMSSEStream(
+      url2,
+      (eventName, data) => {
+        try {
+          const parsed = JSON.parse(data);
+          switch (eventName) {
+            case "connected":
+              handlers.onConnected?.(parsed);
+              break;
+            case "message":
+              handlers.onMessage?.(parsed);
+              break;
+            case "read":
+              handlers.onRead?.(parsed);
+              break;
+            default:
+              break;
+          }
+        } catch (e) {
+          console.error(MLOG, "parse error:", e, "raw:", data);
+        }
+      },
+      () => {
+        handlers.onError?.(new Event("error"));
       }
-    });
-    es.addEventListener("message", (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        handlers.onMessage?.(data);
-      } catch (e) {
-        console.error("[api] stream message parse error:", e);
-      }
-    });
-    es.addEventListener("read", (evt) => {
-      try {
-        const data = JSON.parse(evt.data);
-        handlers.onRead?.(data);
-      } catch (e) {
-        console.error("[api] stream read parse error:", e);
-      }
-    });
-    es.addEventListener("error", (evt) => {
-      handlers.onError?.(evt);
-    });
-    return es;
+    );
   }
   async function sendMessage(params) {
     const { fromPlayerId, toPlayerId, roomId, text } = params;
@@ -24573,6 +25113,7 @@
       playerId: playerId2,
       otherPlayerId,
       afterId: options?.afterId,
+      beforeId: options?.beforeId,
       limit: options?.limit
     });
     if (status !== 200 || !Array.isArray(data)) return [];
@@ -26205,9 +26746,9 @@
     function calculateEmojiGridStyle(node) {
       resizeObserverAction(node, abortSignal, () => {
         {
-          const style3 = getComputedStyle(refs.rootElement);
-          const newNumColumns = parseInt(style3.getPropertyValue("--num-columns"), 10);
-          const newIsRtl = style3.getPropertyValue("direction") === "rtl";
+          const style4 = getComputedStyle(refs.rootElement);
+          const newNumColumns = parseInt(style4.getPropertyValue("--num-columns"), 10);
+          const newIsRtl = style4.getPropertyValue("direction") === "rtl";
           state3.numColumns = newNumColumns;
           state3.isRtl = newIsRtl;
         }
@@ -26543,9 +27084,9 @@
     constructor(props) {
       super();
       this.attachShadow({ mode: "open" });
-      const style3 = document.createElement("style");
-      style3.textContent = baseStyles + EXTRA_STYLES;
-      this.shadowRoot.appendChild(style3);
+      const style4 = document.createElement("style");
+      style4.textContent = baseStyles + EXTRA_STYLES;
+      this.shadowRoot.appendChild(style4);
       this._ctx = {
         // Set defaults
         locale: DEFAULT_LOCALE2,
@@ -26643,7 +27184,10 @@
   }
 
   // src/ui/menus/messagesOverlay.ts
+  var MSG_NOTIFICATION_URL = "https://cdn.pixabay.com/audio/2024/01/11/audio_8e3b99318b.mp3";
+  installEmojiDataFetchInterceptor();
   var ITEM_MESSAGE_PREFIX = "ITEM::v1::";
+  var ROOM_INVITE_PREFIX = "ROOM::v1::";
   var ATTACHMENT_STATUS_PREFIX = "Items attached:";
   var MAX_ATTACHMENTS = 6;
   var MAX_MESSAGE_LENGTH = 1e3;
@@ -26651,6 +27195,7 @@
   var THREAD_PAGE_LIMIT = 50;
   var LOAD_OLDER_THRESHOLD = 80;
   var FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
+  var FRIEND_REMOVED_EVENT = "qws-friend-removed";
   var STYLE_ID = "qws-messages-overlay-css";
   var style2 = (el2, s) => Object.assign(el2.style, s);
   var setProps2 = (el2, props) => {
@@ -26978,6 +27523,49 @@
         kind: "item",
         message: typeof parsed.m === "string" ? parsed.m : typeof parsed.message === "string" ? parsed.message : "",
         items: normalizedItems
+      };
+    } catch {
+      return null;
+    }
+  }
+  function encodeRoomInvite(payload) {
+    const compact = {
+      v: 1,
+      k: "r",
+      r: payload.roomId
+    };
+    if (payload.message && payload.message.trim()) compact.m = payload.message;
+    if (payload.roomName) compact.n = payload.roomName;
+    if (typeof payload.playersCount === "number") compact.p = payload.playersCount;
+    if (typeof payload.maxPlayers === "number") compact.x = payload.maxPlayers;
+    const json = JSON.stringify(compact);
+    return `${ROOM_INVITE_PREFIX}${json}`;
+  }
+  function decodeRoomInvite(text) {
+    if (!text || !text.startsWith(ROOM_INVITE_PREFIX)) return null;
+    const raw = text.slice(ROOM_INVITE_PREFIX.length);
+    try {
+      let parsed = null;
+      const trimmed = raw.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        parsed = JSON.parse(trimmed);
+      } else {
+        const decoded = base64UrlDecode(raw);
+        if (!decoded) return null;
+        parsed = JSON.parse(decoded);
+      }
+      if (!isRecord2(parsed)) return null;
+      if (parsed.k !== "r" && parsed.kind !== "room") return null;
+      const roomId = String(parsed.r ?? parsed.roomId ?? "").trim();
+      if (!roomId) return null;
+      return {
+        v: 1,
+        kind: "room",
+        message: typeof parsed.m === "string" ? parsed.m : typeof parsed.message === "string" ? parsed.message : "",
+        roomId,
+        roomName: typeof parsed.n === "string" ? parsed.n : typeof parsed.roomName === "string" ? parsed.roomName : void 0,
+        playersCount: typeof parsed.p === "number" ? parsed.p : typeof parsed.playersCount === "number" ? parsed.playersCount : void 0,
+        maxPlayers: typeof parsed.x === "number" ? parsed.x : typeof parsed.maxPlayers === "number" ? parsed.maxPlayers : void 0
       };
     } catch {
       return null;
@@ -27523,15 +28111,15 @@
         ...candidates,
         getChatItemLabel(item)
       );
-      attachSpriteIcon(iconWrap, categories, expandedCandidates, 34, "messages-item", {
+      attachSpriteIcon2(iconWrap, categories, expandedCandidates, 34, "messages-item", {
         mutations
       });
     }
     return card;
   }
   function ensureMessagesOverlayStyle() {
-    if (document.getElementById(STYLE_ID)) return;
-    const st = document.createElement("style");
+    const existing = document.getElementById(STYLE_ID);
+    const st = existing ?? document.createElement("style");
     st.id = STYLE_ID;
     st.textContent = `
 .qws-msg-panel{
@@ -27550,6 +28138,27 @@
   box-shadow:var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45));
   overflow:hidden;
   z-index:var(--chakra-zIndices-DialogModal, 7010);
+}
+.qws-msg-panel.qws-msg-panel-embedded{
+  position:relative;
+  top:auto;
+  right:auto;
+  left:auto;
+  bottom:auto;
+  width:100%;
+  height:100%;
+  max-height:none;
+  display:flex;
+  flex-direction:column;
+  border-radius:16px;
+  z-index:auto;
+}
+.qws-msg-panel.qws-msg-panel-embedded .qws-msg-head{
+  cursor:default;
+  display:none;
+}
+.qws-msg-panel.qws-msg-panel-embedded .qws-msg-body{
+  height:100%;
 }
 .qws-msg-panel *{ box-sizing:border-box; }
 .qws-msg-head{
@@ -28121,6 +28730,48 @@
   text-align:center;
   margin:auto;
 }
+.qws-msg-room-invite{
+  position:relative;
+}
+.qws-msg-room-invite .qws-msg-item-icon svg{
+  width:20px;
+  height:20px;
+  opacity:0.8;
+}
+.qws-msg-room-btn-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  align-items:flex-end;
+  margin-left:auto;
+}
+.qws-msg-room-join-btn{
+  padding:6px 12px;
+  border-radius:8px;
+  border:1px solid rgba(122,162,255,.45);
+  background:rgba(122,162,255,.22);
+  color:#d6e5ff;
+  font-weight:600;
+  font-size:11px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all 0.15s ease;
+}
+.qws-msg-room-join-btn:hover:not(:disabled){
+  background:rgba(122,162,255,.32);
+  border-color:rgba(122,162,255,.6);
+  transform:translateY(-1px);
+}
+.qws-msg-room-join-btn:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+.qws-msg-room-hint{
+  font-size:10px;
+  opacity:0.65;
+  white-space:nowrap;
+  text-align:right;
+}
 @media (max-width: 700px){
   .qws-msg-body{
     grid-template-columns:1fr;
@@ -28132,7 +28783,9 @@
   }
 }
 `;
-    document.head.appendChild(st);
+    if (!existing) {
+      document.head.appendChild(st);
+    }
   }
   function normalizeId(value) {
     return value == null ? "" : String(value);
@@ -28315,7 +28968,7 @@
     }
   }
   var MessagesOverlay = class {
-    constructor() {
+    constructor(options = {}) {
       __publicField(this, "slot", document.createElement("div"));
       __publicField(this, "btn", document.createElement("button"));
       __publicField(this, "badge", document.createElement("span"));
@@ -28333,6 +28986,8 @@
       __publicField(this, "attachmentsEl", document.createElement("div"));
       __publicField(this, "charCountEl", document.createElement("div"));
       __publicField(this, "maxTextLength", MAX_MESSAGE_LENGTH);
+      __publicField(this, "opts");
+      __publicField(this, "embedded", false);
       __publicField(this, "myId", null);
       __publicField(this, "friends", []);
       __publicField(this, "friendsFingerprint", null);
@@ -28348,8 +29003,10 @@
       __publicField(this, "panelDetached", false);
       __publicField(this, "importPending", false);
       __publicField(this, "importRestoreOpen", false);
+      __publicField(this, "importRestoreFriendOverlay", false);
       __publicField(this, "importUnsubs", []);
       __publicField(this, "pendingImportItems", []);
+      __publicField(this, "pendingRoomInvite", null);
       __publicField(this, "rowById", /* @__PURE__ */ new Map());
       __publicField(this, "myAvatarUrl", null);
       __publicField(this, "myAvatar", null);
@@ -28360,8 +29017,25 @@
         if (!this.myId) return;
         void this.loadFriends(true);
       });
+      __publicField(this, "handleFriendRemoved", (event) => {
+        const playerId2 = event.detail?.playerId;
+        if (!playerId2) return;
+        const id = normalizeId(playerId2);
+        if (!id) return;
+        this.convs.delete(id);
+        this.convByConversationId.forEach((otherId, convId) => {
+          if (normalizeId(otherId) === id) this.convByConversationId.delete(convId);
+        });
+        if (this.selectedId === id) {
+          this.selectedId = null;
+          this.renderThread();
+        }
+        this.renderFriendList({ preserveScroll: true });
+      });
       __publicField(this, "unreadRefreshInFlight", false);
       __publicField(this, "lastUnreadRefreshAt", 0);
+      this.opts = options;
+      this.embedded = Boolean(options.embedded);
       ensureMessagesOverlayStyle();
       this.slot = this.createSlot();
       this.btn = this.createButton();
@@ -28375,50 +29049,56 @@
         { passive: true }
       );
       window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
+      window.addEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved);
       this.keyTrapCleanup = installInputKeyTrap(this.panel, {
         onEnter: () => {
           void this.handleSendMessage();
         },
         shouldHandleEnter: (_target, active) => active === this.inputEl
       });
-      this.installPanelDrag();
-      this.btn.onclick = () => {
-        if (this.importPending) return;
-        this.setEmojiMenu(false);
-        const next = this.panel.style.display !== "block";
-        this.panel.style.display = next ? "block" : "none";
-        this.panelOpen = next;
-        if (next) {
-          if (!this.panelDetached) {
-            this.panel.style.position = "absolute";
-            this.panel.style.left = "";
-            this.panel.style.top = "";
-            this.panel.style.right = "0";
-            this.panel.style.bottom = "";
+      if (this.embedded) {
+        this.panel.classList.add("qws-msg-panel-embedded");
+        this.panel.style.display = "block";
+      } else {
+        this.installPanelDrag();
+        this.btn.onclick = () => {
+          if (this.importPending) return;
+          this.setEmojiMenu(false);
+          const next = this.panel.style.display !== "block";
+          this.panel.style.display = next ? "block" : "none";
+          this.panelOpen = next;
+          if (next) {
+            if (!this.panelDetached) {
+              this.panel.style.position = "absolute";
+              this.panel.style.left = "";
+              this.panel.style.top = "";
+              this.panel.style.right = "0";
+              this.panel.style.bottom = "";
+            }
+            this.loadFriends(true);
+            this.renderAttachments();
+            this.updateAttachmentStatus();
+            if (this.selectedId) {
+              void this.selectConversation(this.selectedId);
+            } else {
+              this.renderThread();
+            }
+            this.fitPanelWithinViewport();
           }
-          this.loadFriends(true);
-          this.renderAttachments();
-          this.updateAttachmentStatus();
-          if (this.selectedId) {
-            void this.selectConversation(this.selectedId);
-          } else {
-            this.renderThread();
+          this.updateButtonBadge();
+        };
+        this.slot.append(this.btn, this.badge, this.panel);
+        this.attach();
+        this.observeDomForRelocation();
+        window.addEventListener("pointerdown", (e) => {
+          if (!this.panelOpen) return;
+          const t = e.target;
+          if (!this.slot.contains(t)) {
+            this.panel.style.display = "none";
+            this.panelOpen = false;
           }
-          this.fitPanelWithinViewport();
-        }
-        this.updateButtonBadge();
-      };
-      this.slot.append(this.btn, this.badge, this.panel);
-      this.attach();
-      this.observeDomForRelocation();
-      window.addEventListener("pointerdown", (e) => {
-        if (!this.panelOpen) return;
-        const t = e.target;
-        if (!this.slot.contains(t)) {
-          this.panel.style.display = "none";
-          this.panelOpen = false;
-        }
-      });
+        });
+      }
     }
     async init() {
       const initial = await playerDatabaseUserId.get();
@@ -28445,6 +29125,7 @@
       }
       try {
         window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
+        window.removeEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved);
       } catch {
       }
       try {
@@ -28458,6 +29139,26 @@
       try {
         this.slot.remove();
       } catch {
+      }
+      if (this.embedded) {
+        try {
+          this.panel.remove();
+        } catch {
+        }
+      }
+    }
+    mount(container) {
+      if (!this.embedded) return;
+      if (!container.contains(this.panel)) {
+        container.appendChild(this.panel);
+      }
+    }
+    setActive(active) {
+      if (!this.embedded) return;
+      this.panelOpen = active;
+      if (active && this.selectedId) {
+        void this.markConversationRead(this.selectedId);
+        this.updateFriendRow(this.selectedId);
       }
     }
     setMyId(next) {
@@ -28519,7 +29220,7 @@
         if (!name) return;
         const url2 = this.buildCosmeticUrl(name);
         if (!url2) return;
-        img.src = url2;
+        setImageSafe(img, url2);
         img.removeAttribute("data-cosmetic");
       });
     }
@@ -28537,7 +29238,7 @@
           img.style.zIndex = String(index + 1);
           const url2 = this.buildCosmeticUrl(entry);
           if (url2) {
-            img.src = url2;
+            setImageSafe(img, url2);
           } else {
             img.dataset.cosmetic = entry;
           }
@@ -28550,7 +29251,7 @@
         img.decoding = "async";
         img.loading = "lazy";
         img.className = "qws-msg-avatar-photo";
-        img.src = fallbackUrl;
+        setImageSafe(img, fallbackUrl);
         wrap.appendChild(img);
         return wrap;
       }
@@ -28568,6 +29269,56 @@
         friend?.avatarUrl ?? null,
         friend?.playerName ?? senderId
       );
+    }
+    createRoomInviteCard(invite, outgoing) {
+      const card = document.createElement("div");
+      card.className = "qws-msg-item-card qws-msg-room-invite";
+      const iconWrap = document.createElement("div");
+      iconWrap.className = "qws-msg-item-icon";
+      iconWrap.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const meta = document.createElement("div");
+      meta.className = "qws-msg-item-meta";
+      const title = document.createElement("div");
+      title.className = "qws-msg-item-title";
+      title.textContent = invite.roomName || "Join my room";
+      const sub = document.createElement("div");
+      sub.className = "qws-msg-item-sub";
+      if (typeof invite.playersCount === "number" && typeof invite.maxPlayers === "number") {
+        sub.textContent = `${invite.playersCount}/${invite.maxPlayers} players`;
+      } else {
+        sub.textContent = "Room invite";
+      }
+      meta.append(title, sub);
+      const isDiscord = window.location.hostname.endsWith("discordsays.com");
+      const isFull = typeof invite.playersCount === "number" && typeof invite.maxPlayers === "number" && invite.playersCount >= invite.maxPlayers;
+      const btnWrap = document.createElement("div");
+      btnWrap.className = "qws-msg-room-btn-wrap";
+      const joinBtn = document.createElement("button");
+      joinBtn.type = "button";
+      joinBtn.className = "qws-msg-room-join-btn";
+      joinBtn.textContent = "Join";
+      joinBtn.disabled = outgoing || isDiscord || isFull;
+      if (outgoing) {
+        joinBtn.title = "Cannot join your own room";
+      } else if (isFull) {
+        joinBtn.title = "Room is full";
+      } else if (isDiscord) {
+        joinBtn.title = "Cannot join rooms from Discord Activity";
+      }
+      joinBtn.addEventListener("click", () => {
+        if (outgoing || isDiscord || isFull || !invite.roomId) return;
+        const roomUrl = `${window.location.origin}/r/${encodeURIComponent(invite.roomId)}`;
+        window.location.href = roomUrl;
+      });
+      btnWrap.appendChild(joinBtn);
+      if (isDiscord) {
+        const hint = document.createElement("div");
+        hint.className = "qws-msg-room-hint";
+        hint.textContent = "Can't join rooms on Discord Activity";
+        btnWrap.appendChild(hint);
+      }
+      card.append(iconWrap, meta, btnWrap);
+      return card;
     }
     resetStream() {
       if (this.stream) {
@@ -28648,6 +29399,11 @@
           void this.markConversationRead(conv.otherId);
         } else {
           conv.unread += 1;
+          if (getFriendSettings().messageSoundEnabled) {
+            void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url2) => {
+              audioPlayer.playAt(url2, 0.2);
+            });
+          }
         }
       }
       this.updateButtonBadge();
@@ -28707,14 +29463,14 @@
     }
     async loadFriends(force = false) {
       if (!this.myId) return;
-      const cached = getCachedFriendsWithViews();
+      const cached = getCachedFriendsSummary();
       if (cached.length) {
         this.applyFriends(cached, {
           forceRender: this.friendsFingerprint == null || this.friends.length === 0
         });
       }
       try {
-        const next = await fetchFriendsWithViews(this.myId);
+        const next = await fetchFriendsSummary(this.myId);
         this.applyFriends(next);
         if (force) {
           void this.refreshUnreadCounts(next);
@@ -28901,22 +29657,32 @@
     buildFriendEntries() {
       const entries = [];
       const seen = /* @__PURE__ */ new Set();
+      const shouldInclude = (id, conv) => {
+        if (this.selectedId && id === this.selectedId) return true;
+        if (!conv) return false;
+        if (conv.lastMessageAt > 0) return true;
+        if (conv.messages.length > 0) return true;
+        return false;
+      };
       for (const friend of this.friends) {
         const id = normalizeId(friend.playerId);
         if (!id) continue;
         const conv = this.convs.get(id);
-        entries.push({
-          id,
-          friend,
-          unread: conv?.unread ?? 0,
-          lastMessageAt: conv?.lastMessageAt ?? 0,
-          online: Boolean(friend.isOnline),
-          lastSeenAt: parseLastSeen(friend.lastEventAt)
-        });
-        seen.add(id);
+        if (shouldInclude(id, conv)) {
+          entries.push({
+            id,
+            friend,
+            unread: conv?.unread ?? 0,
+            lastMessageAt: conv?.lastMessageAt ?? 0,
+            online: Boolean(friend.isOnline),
+            lastSeenAt: parseLastSeen(friend.lastEventAt)
+          });
+          seen.add(id);
+        }
       }
       for (const [id, conv] of this.convs) {
         if (seen.has(id)) continue;
+        if (!shouldInclude(id, conv)) continue;
         entries.push({
           id,
           friend: null,
@@ -28927,15 +29693,6 @@
         });
       }
       entries.sort((a, b) => {
-        const aUnread = a.unread > 0 ? 1 : 0;
-        const bUnread = b.unread > 0 ? 1 : 0;
-        if (aUnread !== bUnread) return bUnread - aUnread;
-        const aOnline = a.online ? 1 : 0;
-        const bOnline = b.online ? 1 : 0;
-        if (aOnline !== bOnline) return bOnline - aOnline;
-        if (!a.online && !b.online && a.lastSeenAt !== b.lastSeenAt) {
-          return b.lastSeenAt - a.lastSeenAt;
-        }
         if (a.lastMessageAt !== b.lastMessageAt) return b.lastMessageAt - a.lastMessageAt;
         const nameA = formatFriendName(a.friend, a.id).toLowerCase();
         const nameB = formatFriendName(b.friend, b.id).toLowerCase();
@@ -28952,7 +29709,7 @@
       if (!entries.length) {
         const empty = document.createElement("div");
         empty.className = "qws-msg-empty";
-        empty.textContent = "No friends yet.";
+        empty.textContent = "No conversations yet.";
         this.listEl.appendChild(empty);
         return;
       }
@@ -28970,7 +29727,7 @@
           img.className = "qws-msg-avatar-photo";
           img.decoding = "async";
           img.loading = "lazy";
-          img.src = entry.friend.avatarUrl;
+          setImageSafe(img, entry.friend.avatarUrl);
           img.alt = formatFriendName(entry.friend, entry.id);
           img.width = 32;
           img.height = 32;
@@ -29096,14 +29853,15 @@
           lastTs = ts;
         }
         const parsed = decodeItemMessage(msg.body ?? "");
+        const roomInvite = decodeRoomInvite(msg.body ?? "");
         const itemPayloads = parsed?.items && parsed.items.length ? parsed.items : null;
-        const messageText = typeof parsed?.message === "string" ? parsed.message : msg.body ?? "";
+        const messageText = roomInvite ? typeof roomInvite.message === "string" ? roomInvite.message : "" : typeof parsed?.message === "string" ? parsed.message : msg.body ?? "";
         const hasMessage = messageText.trim().length > 0;
         const bubble = document.createElement("div");
         bubble.className = "qws-msg-bubble";
         const outgoing = msg.senderId === this.myId;
         bubble.classList.add(outgoing ? "outgoing" : "incoming");
-        if (!hasMessage && itemPayloads) bubble.classList.add("no-text");
+        if (!hasMessage && (itemPayloads || roomInvite)) bubble.classList.add("no-text");
         const content = document.createElement("div");
         content.className = "qws-msg-content";
         content.appendChild(linkifyText(messageText));
@@ -29118,11 +29876,17 @@
             itemStack.appendChild(createItemCard(item));
           }
         }
+        let roomCard = null;
+        if (roomInvite) {
+          roomCard = this.createRoomInviteCard(roomInvite, outgoing);
+        }
         if (itemStack) {
           if (itemPayloads && itemPayloads.length > 1) {
             bubble.classList.add("has-multi-items");
           }
           bubble.append(content, itemStack);
+        } else if (roomCard) {
+          bubble.append(content, roomCard);
         } else {
           bubble.append(content);
         }
@@ -29166,12 +29930,26 @@
       if (!this.selectedId) return false;
       const hasText = !!this.inputEl.value.trim();
       const hasItem = this.pendingImportItems.length > 0;
-      return hasText || hasItem;
+      const hasRoomInvite = !!this.pendingRoomInvite;
+      return hasText || hasItem || hasRoomInvite;
     }
     buildMessageBody() {
       const text = this.inputEl.value.trim();
       const pendingItems = this.pendingImportItems.slice(0, MAX_ATTACHMENTS);
-      if (!text && !pendingItems.length) return null;
+      const pendingRoom = this.pendingRoomInvite;
+      if (!text && !pendingItems.length && !pendingRoom) return null;
+      if (pendingRoom) {
+        const payload2 = {
+          ...pendingRoom,
+          message: text || pendingRoom.message
+        };
+        try {
+          const body = encodeRoomInvite(payload2);
+          return { body, usedItems: false, usedRoomInvite: true };
+        } catch {
+          return null;
+        }
+      }
       if (!pendingItems.length) {
         return { body: text, usedItems: false };
       }
@@ -29241,7 +30019,7 @@
       const length = this.getMessageLength();
       const overLimit = length > MAX_MESSAGE_LENGTH;
       this.sendBtn.disabled = this.inputEl.disabled || !this.canSend() || overLimit;
-      this.inputEl.placeholder = this.pendingImportItems.length > 0 ? "Add a message (optional)..." : "Type a message...";
+      this.inputEl.placeholder = this.pendingImportItems.length > 0 || this.pendingRoomInvite ? "Add a message (optional)..." : "Type a message...";
       this.updateCharCount(length);
       if (!overLimit && this.statusEl.textContent.startsWith("Message too long")) {
         this.statusEl.textContent = "";
@@ -29256,7 +30034,15 @@
         }
         return;
       }
-      if (this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+      if (this.pendingRoomInvite) {
+        if (!this.statusEl.textContent || this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX) || this.statusEl.textContent.includes("Room invite")) {
+          const roomName = this.pendingRoomInvite.roomName || "Room";
+          const playerInfo = typeof this.pendingRoomInvite.playersCount === "number" && typeof this.pendingRoomInvite.maxPlayers === "number" ? ` (${this.pendingRoomInvite.playersCount}/${this.pendingRoomInvite.maxPlayers})` : "";
+          this.statusEl.textContent = `Room invite attached: ${roomName}${playerInfo}`;
+        }
+        return;
+      }
+      if (this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX) || this.statusEl.textContent.includes("Room invite")) {
         this.statusEl.textContent = "";
       }
     }
@@ -29301,6 +30087,7 @@
         this.statusEl.textContent = `You can attach up to ${MAX_ATTACHMENTS} items.`;
         return;
       }
+      this.pendingRoomInvite = null;
       this.beginImportSuspend();
       try {
         const raw = await Atoms.inventory.myInventory.get();
@@ -29335,12 +30122,61 @@
         this.resumeFromImport();
       }
     }
+    async handleRoomInvite() {
+      if (this.pendingRoomInvite) {
+        this.statusEl.textContent = "You already have a pending room invite.";
+        return;
+      }
+      try {
+        const roomId = await getCurrentRoomId();
+        if (!roomId) {
+          this.statusEl.textContent = "You are not in a room.";
+          return;
+        }
+        const maxPlayers = 6;
+        let playersCount = 0;
+        try {
+          const numPlayers2 = await Atoms.server.numPlayers.get();
+          playersCount = Math.max(1, Math.min(6, Math.floor(Number(numPlayers2))));
+        } catch {
+          playersCount = 1;
+        }
+        if (playersCount >= maxPlayers) {
+          this.statusEl.textContent = "Your room is full. Cannot invite.";
+          return;
+        }
+        const state3 = await Atoms.root.state.get();
+        const players = getPlayersArrayFromState(state3);
+        const myPlayerId = await Atoms.player.playerId.get();
+        const myPlayer = players.find((p) => String(p?.id ?? "") === String(myPlayerId ?? ""));
+        const roomName = myPlayer?.name ? `${myPlayer.name}'s room` : void 0;
+        this.pendingImportItems = [];
+        this.renderAttachments();
+        this.pendingRoomInvite = {
+          v: 1,
+          kind: "room",
+          roomId,
+          roomName,
+          playersCount,
+          maxPlayers
+        };
+        this.updateAttachmentStatus();
+        this.updateSendState();
+      } catch (error) {
+        console.error("[MessagesOverlay] room invite failed", error);
+        this.statusEl.textContent = "Unable to attach room invite.";
+      }
+    }
     beginImportSuspend() {
       if (this.importPending) return;
       this.importPending = true;
       this.importRestoreOpen = this.panelOpen;
       this.panel.style.display = "none";
       this.panelOpen = false;
+      this.importRestoreFriendOverlay = !!document.querySelector(".qws-fo-panel.open");
+      if (this.importRestoreFriendOverlay) {
+        window.dispatchEvent(new CustomEvent("qws-friend-overlay-close"));
+      }
     }
     startImportResumeWatchers() {
       if (!this.importPending) return;
@@ -29437,21 +30273,43 @@
       if (!this.importPending) return;
       this.clearImportWatchers();
       this.importPending = false;
-      if (this.importRestoreOpen) {
+      if (this.importRestoreFriendOverlay) {
+        this.importRestoreFriendOverlay = false;
+        window.dispatchEvent(new CustomEvent("qws-friend-overlay-open"));
+      }
+      const shouldRestore = this.embedded ? true : this.importRestoreOpen;
+      if (shouldRestore) {
         this.panel.style.display = "block";
-        this.panelOpen = true;
+        if (!this.embedded) {
+          this.panelOpen = true;
+        }
         this.renderThread();
-        this.fitPanelWithinViewport();
+        if (!this.embedded) {
+          this.fitPanelWithinViewport();
+        }
         this.renderAttachments();
         this.updateSendState();
         this.updateAttachmentStatus();
       }
     }
+    openConversation(otherId) {
+      if (!otherId) return;
+      const conv = this.ensureConversation(otherId);
+      if (!conv.lastMessageAt) {
+        conv.lastMessageAt = Date.now();
+      }
+      this.updateConversationMap(conv);
+      void this.selectConversation(otherId);
+      this.renderFriendList({ preserveScroll: true });
+    }
     updateButtonBadge() {
       let total = 0;
       for (const conv of this.convs.values()) total += conv.unread;
-      this.badge.textContent = total ? String(total) : "";
-      style2(this.badge, { display: total ? "inline-flex" : "none" });
+      if (!this.embedded) {
+        this.badge.textContent = total ? String(total) : "";
+        style2(this.badge, { display: total ? "inline-flex" : "none" });
+      }
+      this.opts.onUnreadChange?.(total);
     }
     adjustBubbleWidth(bubble, content, timeEl, show, itemEl) {
       if (!show) {
@@ -29612,7 +30470,8 @@
       const importMenu = document.createElement("div");
       importMenu.className = "qws-msg-import-menu";
       const importOptions = [
-        { id: "item", label: "Import item" }
+        { id: "item", label: "Import item" },
+        { id: "room", label: "Invite to room" }
       ];
       for (const opt of importOptions) {
         const btn = document.createElement("button");
@@ -29623,6 +30482,8 @@
           importMenu.style.display = "none";
           if (opt.id === "item") {
             void this.handleImportItems();
+          } else if (opt.id === "room") {
+            void this.handleRoomInvite();
           }
         });
         importMenu.appendChild(btn);
@@ -29750,6 +30611,7 @@
       }
       const body = built.body;
       const usedItems = built.usedItems;
+      const usedRoomInvite = built.usedRoomInvite;
       try {
         const msg = await sendMessage({
           fromPlayerId: this.myId,
@@ -29771,6 +30633,10 @@
           if (usedItems) {
             this.pendingImportItems = [];
             this.renderAttachments();
+            this.updateAttachmentStatus();
+          }
+          if (usedRoomInvite) {
+            this.pendingRoomInvite = null;
             this.updateAttachmentStatus();
           }
           this.updateFriendRow(this.selectedId);
@@ -30083,17 +30949,3951 @@
       });
     }
   };
-  async function renderMessagesOverlay() {
-    const prev = window.__qws_cleanup_messages_overlay;
+
+  // src/ui/menus/friendOverlay/tabs/messagesTab.ts
+  function createMessagesTab(options) {
+    const root = document.createElement("div");
+    root.className = "qws-fo-tab qws-fo-tab-messages";
+    const messages = new MessagesOverlay({
+      embedded: true,
+      onUnreadChange: options.onUnreadChange
+    });
+    messages.mount(root);
+    void messages.init();
+    return {
+      root,
+      show: () => messages.setActive(true),
+      hide: () => messages.setActive(false),
+      openConversation: (playerId2) => messages.openConversation(playerId2),
+      destroy: () => messages.destroy()
+    };
+  }
+
+  // src/ui/menus/friendOverlay/ui.ts
+  function createButton2(label2, options = {}) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "qws-fo-btn";
+    if (options.variant) btn.classList.add(`qws-fo-btn--${options.variant}`);
+    if (options.size === "sm") btn.classList.add("qws-fo-btn--sm");
+    if (options.fullWidth) btn.classList.add("qws-fo-btn--full");
+    if (options.title) btn.title = options.title;
+    if (options.icon) {
+      const icon = document.createElement("span");
+      icon.className = "qws-fo-btn__icon";
+      if (typeof options.icon === "string") {
+        icon.textContent = options.icon;
+      } else {
+        icon.appendChild(options.icon);
+      }
+      btn.appendChild(icon);
+    }
+    const labelEl = document.createElement("span");
+    labelEl.className = "qws-fo-btn__label";
+    labelEl.textContent = label2;
+    btn.appendChild(labelEl);
+    return btn;
+  }
+  function setButtonEnabled(button, enabled) {
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+    button.setAttribute("aria-disabled", (!enabled).toString());
+  }
+  function createInput(placeholder = "", value = "") {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.value = value;
+    input.className = "qws-fo-input";
+    return input;
+  }
+  function createCard(title) {
+    const root = document.createElement("div");
+    root.className = "qws-fo-card";
+    const head = document.createElement("div");
+    head.className = "qws-fo-card__head";
+    head.textContent = title;
+    const body = document.createElement("div");
+    body.className = "qws-fo-card__body";
+    root.append(head, body);
+    return { root, body };
+  }
+  function createFlexRow(options = {}) {
+    const row = document.createElement("div");
+    row.className = "qws-fo-row";
+    row.style.display = "flex";
+    row.style.alignItems = options.align ?? "center";
+    row.style.justifyContent = options.justify ?? "flex-start";
+    row.style.gap = `${options.gap ?? 8}px`;
+    row.style.flexWrap = options.wrap === false ? "nowrap" : "wrap";
+    return row;
+  }
+  function createToggle(checked) {
+    const label2 = document.createElement("label");
+    label2.className = "qws-fo-switch";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    const knob = document.createElement("span");
+    knob.className = "qws-fo-switch__knob";
+    label2.append(input, knob);
+    return label2;
+  }
+  function getToggleInput(toggle) {
+    return toggle.querySelector("input");
+  }
+
+  // src/ui/menus/friendOverlay/utils.ts
+  function normalizeQuery(term) {
+    return term.trim().toLowerCase();
+  }
+  function formatLastSeen3(timestamp) {
+    if (!timestamp) return null;
+    const parsed = Date.parse(timestamp);
+    if (!Number.isFinite(parsed)) return null;
+    const deltaSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1e3));
+    if (deltaSeconds < 60) {
+      return deltaSeconds <= 15 ? "just now" : `${deltaSeconds}s`;
+    }
+    const minutes = Math.floor(deltaSeconds / 60);
+    if (minutes < 60) {
+      return `${minutes}min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) {
+      return `${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days}d`;
+  }
+
+  // src/ui/menus/friendOverlay/tabs/friendsTab.ts
+  var FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
+  function ensureFriendsMenuRefreshStyle() {
+    if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
+    const style4 = document.createElement("style");
+    style4.id = FRIENDS_MENU_REFRESH_STYLE_ID;
+    style4.textContent = `
+@keyframes friends-menu-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+`;
+    document.head.appendChild(style4);
+  }
+  function createRefreshIndicator(scrollTarget, container, offsetY = 14) {
+    ensureFriendsMenuRefreshStyle();
+    const computedPosition = container.style.position || "";
+    if (!computedPosition || computedPosition === "static") {
+      container.style.position = "relative";
+    }
+    const indicator = document.createElement("div");
+    Object.assign(indicator.style, {
+      position: "absolute",
+      top: `${offsetY}px`,
+      right: "14px",
+      width: "28px",
+      height: "28px",
+      borderRadius: "999px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(14, 16, 25, 0.9)",
+      border: "1px solid rgba(255, 255, 255, 0.08)",
+      boxShadow: "0 10px 24px rgba(0, 0, 0, 0.45)",
+      opacity: "0",
+      visibility: "hidden",
+      pointerEvents: "none",
+      transition: "opacity 160ms ease, transform 160ms ease",
+      zIndex: "3"
+    });
+    const spinner = document.createElement("div");
+    Object.assign(spinner.style, {
+      width: "16px",
+      height: "16px",
+      borderRadius: "999px",
+      border: "2px solid rgba(248, 250, 252, 0.16)",
+      borderTopColor: "#f8fafc",
+      animation: "friends-menu-spin 1s linear infinite"
+    });
+    indicator.appendChild(spinner);
+    container.appendChild(indicator);
+    let isVisible3 = false;
+    let hideTimeout = null;
+    const hide = () => {
+      if (hideTimeout) {
+        window.clearTimeout(hideTimeout);
+        hideTimeout = null;
+      }
+      indicator.style.opacity = "0";
+      const onTransitionEnd = () => {
+        if (!isVisible3) {
+          indicator.style.visibility = "hidden";
+        }
+      };
+      indicator.addEventListener("transitionend", onTransitionEnd, { once: true });
+      hideTimeout = window.setTimeout(() => {
+        if (!isVisible3) {
+          indicator.style.visibility = "hidden";
+        }
+        hideTimeout = null;
+      }, 220);
+    };
+    const setVisible = (next) => {
+      if (next) {
+        if (hideTimeout) {
+          window.clearTimeout(hideTimeout);
+          hideTimeout = null;
+        }
+        isVisible3 = true;
+        indicator.style.visibility = "visible";
+        indicator.style.opacity = "1";
+      } else if (isVisible3) {
+        isVisible3 = false;
+        hide();
+      }
+    };
+    return { setVisible };
+  }
+  function resolveRoomLabel(friend) {
+    if (!friend.roomId) return null;
+    return `Room ${friend.roomId}`;
+  }
+  function createFriendRow(friend) {
+    const card = document.createElement("div");
+    card.className = "qws-fo-friend-card";
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    const avatar = document.createElement("div");
+    avatar.className = "qws-fo-friend-avatar";
+    if (friend.avatarUrl) {
+      const img = document.createElement("img");
+      img.src = friend.avatarUrl;
+      img.alt = friend.playerName ?? friend.playerId ?? "Friend avatar";
+      avatar.appendChild(img);
+    } else {
+      const fallback = document.createElement("span");
+      const label2 = (friend.playerName ?? friend.playerId ?? "F").trim();
+      fallback.textContent = label2.charAt(0).toUpperCase();
+      avatar.appendChild(fallback);
+    }
+    const header = document.createElement("div");
+    header.className = "qws-fo-friend-header";
+    const headerInfo = document.createElement("div");
+    headerInfo.className = "qws-fo-friend-header-info";
+    const nameRow = document.createElement("div");
+    nameRow.className = "qws-fo-friend-name-row";
+    const nameEl = document.createElement("div");
+    nameEl.textContent = friend.playerName ?? friend.playerId ?? "Unknown friend";
+    nameEl.className = "qws-fo-friend-name";
+    const statusPill = document.createElement("span");
+    statusPill.className = "qws-fo-friend-status-pill";
+    const dot = document.createElement("span");
+    dot.className = "qws-fo-friend-status-dot";
+    const isOnline = Boolean(friend.isOnline);
+    if (isOnline) statusPill.classList.add("online");
+    const statusText = document.createElement("span");
+    statusText.textContent = isOnline ? "Online" : "Offline";
+    statusPill.append(dot, statusText);
+    nameRow.append(nameEl, statusPill);
+    const metaRow = document.createElement("div");
+    metaRow.className = "qws-fo-friend-meta";
+    const lastSeen = formatLastSeen3(friend.lastEventAt);
+    if (!isOnline) {
+      const lastSeenEl = document.createElement("span");
+      lastSeenEl.className = "qws-fo-friend-lastseen";
+      lastSeenEl.textContent = lastSeen ? `Last seen ${lastSeen}` : "Last seen unknown";
+      metaRow.appendChild(lastSeenEl);
+    }
+    if (isOnline) {
+      const roomLabel = resolveRoomLabel(friend);
+      if (roomLabel) {
+        const room = document.createElement("span");
+        room.className = "qws-fo-friend-room-chip";
+        room.textContent = roomLabel;
+        metaRow.appendChild(room);
+      }
+    }
+    headerInfo.append(nameRow, metaRow);
+    header.append(avatar, headerInfo);
+    const openInfo = () => {
+      if (!friend.playerId) return;
+      try {
+        window.dispatchEvent(new CustomEvent("qws-friend-info-open", {
+          detail: { playerId: friend.playerId, friend }
+        }));
+      } catch {
+      }
+    };
+    card.addEventListener("click", openInfo);
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openInfo();
+      }
+    });
+    card.append(header);
+    return card;
+  }
+  function createFriendsTab() {
+    const root = document.createElement("div");
+    root.className = "qws-fo-community-panel qws-fo-community-friends";
+    const wrap = document.createElement("div");
+    wrap.style.display = "flex";
+    wrap.style.flexDirection = "column";
+    wrap.style.gap = "10px";
+    wrap.style.position = wrap.style.position || "relative";
+    wrap.style.height = "100%";
+    wrap.style.minHeight = "0";
+    const controls = createFlexRow({ align: "center", gap: 8 });
+    const search = createInput("Search for a friend...");
+    search.style.flex = "1";
+    search.style.minWidth = "0";
+    const refresh = createButton2("Refresh", { size: "sm", variant: "ghost" });
+    refresh.style.background = "rgba(248, 250, 252, 0.08)";
+    refresh.style.color = "#f8fafc";
+    refresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
+    refresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+    controls.append(search, refresh);
+    const statusMessage = document.createElement("div");
+    statusMessage.style.fontSize = "12px";
+    statusMessage.style.opacity = "0.7";
+    statusMessage.textContent = "Loading friends...";
+    const listContainer = document.createElement("div");
+    listContainer.style.display = "flex";
+    listContainer.style.flexDirection = "column";
+    listContainer.style.flex = "1";
+    listContainer.style.minHeight = "0";
+    listContainer.style.position = "relative";
+    const list = document.createElement("div");
+    list.className = "qws-fo-friends-list";
+    list.style.padding = "10px";
+    list.style.borderRadius = "12px";
+    list.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    list.style.background = "rgba(255, 255, 255, 0.02)";
+    list.style.flex = "1";
+    list.style.minHeight = "0";
+    list.style.overflow = "auto";
+    listContainer.appendChild(list);
+    wrap.append(controls, statusMessage, listContainer);
+    root.appendChild(wrap);
+    let friends = [];
+    let isLoading = false;
+    let destroyed = false;
+    list.style.position = list.style.position || "relative";
+    const refreshIndicator = createRefreshIndicator(list, listContainer);
+    let unsubscribePlayerId = null;
+    const renderPlaceholder = (text) => {
+      list.innerHTML = "";
+      const placeholder = document.createElement("div");
+      placeholder.textContent = text;
+      placeholder.style.opacity = "0.6";
+      placeholder.style.fontSize = "12px";
+      placeholder.style.textAlign = "center";
+      list.appendChild(placeholder);
+    };
+    const renderList = (options = {}) => {
+      if (destroyed) return;
+      const shouldForce = options.force ?? true;
+      if (isLoading && friends.length && !shouldForce) {
+        return;
+      }
+      list.innerHTML = "";
+      if (isLoading) {
+        renderPlaceholder("Loading friends...");
+        return;
+      }
+      const showOnlineOnly = getFriendSettings().showOnlineFriendsOnly;
+      const query = normalizeQuery(search.value);
+      const matching = friends.filter((friend) => {
+        const label2 = (friend.playerName ?? friend.playerId ?? "").toLowerCase();
+        return label2.includes(query);
+      });
+      const filtered = showOnlineOnly ? matching.filter((friend) => Boolean(friend.isOnline)) : matching;
+      const sorted = filtered.slice().sort((a, b) => {
+        const aOnline = Boolean(a.isOnline);
+        const bOnline = Boolean(b.isOnline);
+        if (aOnline !== bOnline) return aOnline ? -1 : 1;
+        const aTs = Number.isFinite(Date.parse(a.lastEventAt ?? "")) ? Date.parse(a.lastEventAt ?? "") : 0;
+        const bTs = Number.isFinite(Date.parse(b.lastEventAt ?? "")) ? Date.parse(b.lastEventAt ?? "") : 0;
+        if (aTs !== bTs) return bTs - aTs;
+        const aName = (a.playerName ?? a.playerId ?? "").toLowerCase();
+        const bName = (b.playerName ?? b.playerId ?? "").toLowerCase();
+        return aName.localeCompare(bName);
+      });
+      if (!sorted.length) {
+        if (friends.length === 0) {
+          renderPlaceholder("You have no friends yet.");
+          statusMessage.textContent = "No friends available.";
+        } else if (query.length > 0) {
+          renderPlaceholder("No friends match that search.");
+          statusMessage.textContent = `${friends.length} friends loaded.`;
+        } else if (showOnlineOnly) {
+          renderPlaceholder("No online friends right now.");
+          statusMessage.textContent = `${friends.length} friends loaded (online filter).`;
+        } else {
+          renderPlaceholder("Nothing to show.");
+          statusMessage.textContent = `${friends.length} friends loaded.`;
+        }
+        return;
+      }
+      for (const friend of sorted) {
+        list.appendChild(createFriendRow(friend));
+      }
+      if (showOnlineOnly) {
+        statusMessage.textContent = `${sorted.length} online friend${sorted.length !== 1 ? "s" : ""} shown.`;
+      } else {
+        statusMessage.textContent = `${sorted.length} friend${sorted.length !== 1 ? "s" : ""} shown.`;
+      }
+    };
+    const updateRefreshControls = () => {
+      const enabled = !destroyed && !isLoading;
+      setButtonEnabled(refresh, enabled);
+      refresh.setAttribute("aria-busy", isLoading ? "true" : "false");
+    };
+    const loadFriends = async (options) => {
+      if (destroyed) return;
+      isLoading = true;
+      statusMessage.textContent = friends.length ? "Refreshing friends..." : "Loading friends...";
+      refreshIndicator.setVisible(true);
+      updateRefreshControls();
+      renderList({ force: friends.length === 0 });
+      try {
+        const player2 = await playerDatabaseUserId.get();
+        if (!player2) {
+          friends = [];
+          statusMessage.textContent = "Player ID unavailable.";
+          renderPlaceholder("Unable to identify your player.");
+          return;
+        }
+        if (!options?.force) {
+          const cached = getCachedFriendsSummary();
+          if (cached.length) {
+            friends = cached;
+            statusMessage.textContent = `${friends.length} friends loaded.`;
+            return;
+          }
+        }
+        friends = await fetchFriendsSummary(player2);
+        statusMessage.textContent = friends.length ? `${friends.length} friends loaded.` : "You have no friends yet.";
+      } catch (error) {
+        console.error("[FriendOverlay] Failed to load friends", error);
+        friends = [];
+        statusMessage.textContent = "Failed to load friends.";
+        renderPlaceholder("Unable to load friends.");
+        return;
+      } finally {
+        isLoading = false;
+        refreshIndicator.setVisible(false);
+        updateRefreshControls();
+        renderList({ force: true });
+      }
+    };
+    search.addEventListener("input", () => {
+      renderList({ force: true });
+    });
+    refresh.addEventListener("click", () => {
+      void loadFriends({ force: true });
+    });
+    const unsubscribeSettings = onFriendSettingsChange(() => {
+      if (!destroyed) {
+        renderList({ force: true });
+      }
+    });
+    playerDatabaseUserId.onChangeNow((next) => {
+      if (!next) return;
+      void loadFriends({ force: true });
+    }).then((unsub) => {
+      unsubscribePlayerId = unsub;
+    }).catch(() => {
+    });
+    void loadFriends();
+    return {
+      root,
+      refresh: (opts) => loadFriends(opts),
+      destroy: () => {
+        destroyed = true;
+        unsubscribeSettings();
+        try {
+          unsubscribePlayerId?.();
+        } catch {
+        }
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/requestsTab.ts
+  var FRIEND_REQUEST_NOTIFICATION_URL = "https://cdn.pixabay.com/audio/2024/01/11/audio_e374973afd.mp3";
+  var FRIEND_REMOVED_EVENT2 = "qws-friend-removed";
+  var dispatchFriendRemoved = (removerId) => {
+    try {
+      window.dispatchEvent(new CustomEvent(FRIEND_REMOVED_EVENT2, { detail: { playerId: removerId } }));
+    } catch {
+    }
+  };
+  var FRIENDS_REFRESH_EVENT2 = "qws-friends-refresh";
+  var dispatchFriendsRefresh = () => {
+    try {
+      window.dispatchEvent(new CustomEvent(FRIENDS_REFRESH_EVENT2));
+    } catch {
+    }
+  };
+  function createRequestsTab(options = {}) {
+    const root = document.createElement("div");
+    root.className = "qws-fo-community-panel qws-fo-community-requests";
+    const card = document.createElement("div");
+    card.className = "qws-fo-card";
+    card.style.display = "flex";
+    card.style.flexDirection = "column";
+    card.style.height = "100%";
+    card.style.minHeight = "0";
+    const cardHead = document.createElement("div");
+    cardHead.className = "qws-fo-card__head";
+    cardHead.textContent = "Friend requests";
+    card.appendChild(cardHead);
+    const body = document.createElement("div");
+    body.className = "qws-fo-card__body";
+    body.style.display = "flex";
+    body.style.flexDirection = "column";
+    body.style.gap = "8px";
+    body.style.flex = "1";
+    body.style.minHeight = "0";
+    body.style.overflow = "auto";
+    card.appendChild(body);
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "6px";
+    list.style.alignContent = "start";
+    body.appendChild(list);
+    root.appendChild(card);
+    let myId = null;
+    let incoming = [];
+    let outgoing = [];
+    let loading = false;
+    let destroyed = false;
+    const actionInProgress = /* @__PURE__ */ new Set();
+    let unsubscribePlayerId = null;
+    let stream = null;
+    const updateBadge = () => {
+      options.onCountChange?.(incoming.length);
+    };
+    const renderPlaceholder = (text) => {
+      const el2 = document.createElement("div");
+      el2.textContent = text;
+      el2.style.opacity = "0.6";
+      el2.style.fontSize = "12px";
+      el2.style.textAlign = "center";
+      el2.style.padding = "12px 0";
+      list.appendChild(el2);
+    };
+    const renderRow = (playerId2, view, kind, actionsEl) => {
+      const displayName = view?.playerName ?? playerId2 ?? "Unknown";
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "36px 1fr auto";
+      row.style.alignItems = "center";
+      row.style.gap = "10px";
+      row.style.padding = "8px 10px";
+      row.style.borderRadius = "10px";
+      row.style.background = "rgba(255,255,255,0.03)";
+      row.style.border = "1px solid rgba(255,255,255,0.05)";
+      const avatar = document.createElement("div");
+      avatar.style.width = "36px";
+      avatar.style.height = "36px";
+      avatar.style.borderRadius = "50%";
+      avatar.style.display = "grid";
+      avatar.style.placeItems = "center";
+      avatar.style.background = "rgba(255,255,255,0.06)";
+      avatar.style.overflow = "hidden";
+      avatar.style.fontSize = "13px";
+      avatar.style.fontWeight = "700";
+      avatar.style.flexShrink = "0";
+      if (view?.avatarUrl) {
+        const img = document.createElement("img");
+        img.src = view.avatarUrl;
+        img.alt = displayName;
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "cover";
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = displayName.charAt(0).toUpperCase();
+      }
+      const info = document.createElement("div");
+      info.style.display = "flex";
+      info.style.flexDirection = "column";
+      info.style.gap = "3px";
+      info.style.minWidth = "0";
+      const nameEl = document.createElement("div");
+      nameEl.textContent = displayName;
+      nameEl.style.fontWeight = "600";
+      nameEl.style.fontSize = "13px";
+      nameEl.style.overflow = "hidden";
+      nameEl.style.textOverflow = "ellipsis";
+      nameEl.style.whiteSpace = "nowrap";
+      const kindBadge = document.createElement("span");
+      kindBadge.textContent = kind === "received" ? "Received" : "Sent";
+      kindBadge.style.fontSize = "10px";
+      kindBadge.style.fontWeight = "600";
+      kindBadge.style.padding = "1px 6px";
+      kindBadge.style.borderRadius = "999px";
+      kindBadge.style.display = "inline-block";
+      kindBadge.style.width = "fit-content";
+      if (kind === "received") {
+        kindBadge.style.background = "rgba(59,130,246,0.18)";
+        kindBadge.style.color = "#93c5fd";
+        kindBadge.style.border = "1px solid rgba(59,130,246,0.3)";
+      } else {
+        kindBadge.style.background = "rgba(148,163,184,0.12)";
+        kindBadge.style.color = "rgba(148,163,184,0.9)";
+        kindBadge.style.border = "1px solid rgba(148,163,184,0.2)";
+      }
+      info.append(nameEl, kindBadge);
+      row.append(avatar, info, actionsEl);
+      list.appendChild(row);
+    };
+    const renderAll = () => {
+      if (destroyed) return;
+      list.innerHTML = "";
+      if (loading && !incoming.length && !outgoing.length) {
+        renderPlaceholder("Loading...");
+        updateBadge();
+        return;
+      }
+      if (!incoming.length && !outgoing.length) {
+        renderPlaceholder("No pending friend requests.");
+        updateBadge();
+        return;
+      }
+      for (const req of incoming) {
+        const actionsRow = createFlexRow({ gap: 4, align: "center", wrap: false });
+        const rejectBtn = createButton2("Reject", { size: "sm" });
+        rejectBtn.title = "Reject request";
+        const acceptBtn = createButton2("Accept", { size: "sm", variant: "primary" });
+        acceptBtn.title = "Accept request";
+        const handleAction = (action2) => async () => {
+          if (!myId || !req.fromPlayerId) return;
+          if (actionInProgress.has(req.fromPlayerId)) return;
+          actionInProgress.add(req.fromPlayerId);
+          rejectBtn.disabled = true;
+          acceptBtn.disabled = true;
+          try {
+            await respondFriendRequest({ playerId: myId, otherPlayerId: req.fromPlayerId, action: action2 });
+          } catch (e) {
+            console.error("[RequestsTab] respondFriendRequest", e);
+          } finally {
+            actionInProgress.delete(req.fromPlayerId);
+            await loadRequests({ force: true });
+            dispatchFriendsRefresh();
+            if (action2 === "accept") options.onAccept?.();
+          }
+        };
+        rejectBtn.addEventListener("click", () => void handleAction("reject")());
+        acceptBtn.addEventListener("click", () => void handleAction("accept")());
+        actionsRow.append(rejectBtn, acceptBtn);
+        renderRow(req.fromPlayerId, req.view, "received", actionsRow);
+      }
+      for (const req of outgoing) {
+        const actionsRow = createFlexRow({ gap: 4, align: "center", wrap: false });
+        const cancelBtn = createButton2("Cancel", { size: "sm", variant: "danger" });
+        cancelBtn.title = "Cancel request";
+        const handleCancel = async () => {
+          if (!myId || !req.toPlayerId) return;
+          if (actionInProgress.has(req.toPlayerId)) return;
+          actionInProgress.add(req.toPlayerId);
+          cancelBtn.disabled = true;
+          try {
+            await cancelFriendRequest(myId, req.toPlayerId);
+          } catch (e) {
+            console.error("[RequestsTab] cancelFriendRequest", e);
+          } finally {
+            actionInProgress.delete(req.toPlayerId);
+            await loadRequests({ force: true });
+            dispatchFriendsRefresh();
+          }
+        };
+        cancelBtn.addEventListener("click", () => void handleCancel());
+        actionsRow.appendChild(cancelBtn);
+        renderRow(req.toPlayerId, req.view, "sent", actionsRow);
+      }
+      updateBadge();
+    };
+    async function loadRequests(opts) {
+      if (destroyed) return;
+      if (!myId) {
+        incoming = [];
+        outgoing = [];
+        renderAll();
+        return;
+      }
+      loading = true;
+      renderAll();
+      try {
+        const result = await fetchFriendRequests(myId);
+        const allIds = [
+          ...result.incoming.map((r) => r.fromPlayerId),
+          ...result.outgoing.map((r) => r.toPlayerId)
+        ].filter(Boolean);
+        const views = allIds.length > 0 ? await fetchPlayersView(allIds, { sections: ["profile"] }) : [];
+        const viewMap = /* @__PURE__ */ new Map();
+        for (const v of views) {
+          if (v.playerId) viewMap.set(v.playerId, v);
+        }
+        incoming = result.incoming.map((r) => ({ ...r, view: viewMap.get(r.fromPlayerId) ?? null }));
+        outgoing = result.outgoing.map((r) => ({ ...r, view: viewMap.get(r.toPlayerId) ?? null }));
+      } catch (e) {
+        console.error("[RequestsTab] loadRequests", e);
+        incoming = [];
+        outgoing = [];
+      } finally {
+        loading = false;
+        renderAll();
+      }
+    }
+    const resetStream = () => {
+      if (stream) {
+        try {
+          stream.close();
+        } catch {
+        }
+        stream = null;
+      }
+      if (!myId) return;
+      stream = openFriendRequestsStream(myId, {
+        onRequest: () => {
+          if (getFriendSettings().friendRequestSoundEnabled) {
+            void getAudioUrlSafe(FRIEND_REQUEST_NOTIFICATION_URL).then((url2) => {
+              audioPlayer.playAt(url2, 0.2);
+            });
+          }
+          void loadRequests({ force: true });
+        },
+        onResponse: (payload) => {
+          void loadRequests({ force: true });
+          if (payload.action === "accept") options.onAccept?.();
+        },
+        onCancelled: () => void loadRequests({ force: true }),
+        onRemoved: (payload) => {
+          dispatchFriendsRefresh();
+          dispatchFriendRemoved(payload.removerId);
+          options.onRemoved?.(payload);
+        },
+        onError: () => {
+        }
+      });
+    };
+    playerDatabaseUserId.onChangeNow((next) => {
+      myId = next ? String(next) : null;
+      if (myId) {
+        resetStream();
+        void loadRequests({ force: true });
+      } else {
+        incoming = [];
+        outgoing = [];
+        renderAll();
+      }
+    }).then((unsub) => {
+      unsubscribePlayerId = unsub;
+    }).catch(() => {
+    });
+    return {
+      root,
+      refresh: (opts) => loadRequests(opts),
+      destroy: () => {
+        destroyed = true;
+        try {
+          unsubscribePlayerId?.();
+        } catch {
+        }
+        if (stream) {
+          try {
+            stream.close();
+          } catch {
+          }
+          stream = null;
+        }
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/addFriendTab.ts
+  var FRIENDS_REFRESH_EVENT3 = "qws-friends-refresh";
+  function createAddFriendTab() {
+    const root = document.createElement("div");
+    root.className = "qws-fo-community-panel qws-fo-community-add";
+    const layout = document.createElement("div");
+    layout.style.display = "flex";
+    layout.style.flexDirection = "column";
+    layout.style.gap = "12px";
+    layout.style.height = "100%";
+    layout.style.minHeight = "0";
+    layout.style.flex = "1";
+    const modCard = createCard("Mod players");
+    modCard.body.style.display = "flex";
+    modCard.body.style.flexDirection = "column";
+    modCard.body.style.gap = "8px";
+    modCard.body.style.flex = "1";
+    modCard.body.style.minHeight = "0";
+    const modControls = createFlexRow({ align: "center", gap: 8 });
+    const modSearch = createInput("Search mod players...");
+    modSearch.style.flex = "1";
+    modSearch.style.minWidth = "0";
+    const modRefresh = createButton2("Refresh", { size: "sm", variant: "ghost" });
+    modRefresh.style.background = "rgba(248, 250, 252, 0.08)";
+    modRefresh.style.color = "#f8fafc";
+    modRefresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
+    modRefresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+    modRefresh.title = "Reload mod players list";
+    modControls.append(modSearch, modRefresh);
+    const modStatus = document.createElement("div");
+    modStatus.style.fontSize = "12px";
+    modStatus.style.opacity = "0.7";
+    modStatus.style.minHeight = "18px";
+    const modList = document.createElement("div");
+    modList.style.display = "grid";
+    modList.style.gap = "6px";
+    modList.style.gridTemplateColumns = "repeat(auto-fill, 230px)";
+    modList.style.flex = "1";
+    modList.style.minHeight = "0";
+    modList.style.overflow = "auto";
+    modList.style.paddingRight = "4px";
+    modList.style.alignContent = "start";
+    modList.style.justifyItems = "start";
+    modList.style.alignItems = "start";
+    modCard.body.append(modControls, modStatus, modList);
+    modCard.root.style.display = "flex";
+    modCard.root.style.flexDirection = "column";
+    modCard.root.style.flex = "1";
+    modCard.root.style.minHeight = "0";
+    layout.append(modCard.root);
+    root.appendChild(layout);
+    let myId = null;
+    let modPlayers = [];
+    let modLoading = false;
+    let modDestroyed = false;
+    let modSearchTimer = null;
+    const modRequestPending = /* @__PURE__ */ new Set();
+    let friendIds = /* @__PURE__ */ new Set();
+    let outgoingRequestIds = /* @__PURE__ */ new Set();
+    let unsubscribePlayerId = null;
+    const renderModPlayers = () => {
+      if (modDestroyed) return;
+      modList.innerHTML = "";
+      if (modLoading) {
+        const loading = document.createElement("div");
+        loading.textContent = "Loading mod players...";
+        loading.style.opacity = "0.6";
+        loading.style.fontSize = "12px";
+        loading.style.textAlign = "center";
+        modList.appendChild(loading);
+        return;
+      }
+      if (!modPlayers.length) {
+        const empty = document.createElement("div");
+        empty.textContent = "No mod players found.";
+        empty.style.opacity = "0.6";
+        empty.style.fontSize = "12px";
+        empty.style.textAlign = "center";
+        modList.appendChild(empty);
+        return;
+      }
+      for (const entry of modPlayers) {
+        const row = document.createElement("div");
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "32px 1fr auto";
+        row.style.alignItems = "center";
+        row.style.gap = "8px";
+        row.style.padding = "6px 8px";
+        row.style.borderRadius = "8px";
+        row.style.background = "rgba(255, 255, 255, 0.03)";
+        row.style.border = "1px solid rgba(255, 255, 255, 0.05)";
+        row.style.alignSelf = "start";
+        row.style.height = "auto";
+        row.style.width = "min(100%, 230px)";
+        row.style.justifySelf = "start";
+        const avatar = document.createElement("div");
+        avatar.style.width = "32px";
+        avatar.style.height = "32px";
+        avatar.style.borderRadius = "50%";
+        avatar.style.display = "grid";
+        avatar.style.placeItems = "center";
+        avatar.style.background = "rgba(255, 255, 255, 0.05)";
+        avatar.style.overflow = "hidden";
+        if (entry.avatarUrl) {
+          const img = document.createElement("img");
+          img.src = entry.avatarUrl;
+          img.alt = entry.playerName ?? entry.playerId;
+          img.width = 32;
+          img.height = 32;
+          img.style.borderRadius = "50%";
+          img.style.objectFit = "cover";
+          avatar.appendChild(img);
+        } else {
+          const fallback = document.createElement("span");
+          const label2 = (entry.playerName || entry.playerId || "P").trim();
+          fallback.textContent = label2.charAt(0).toUpperCase();
+          fallback.style.fontWeight = "600";
+          fallback.style.fontSize = "13px";
+          avatar.appendChild(fallback);
+        }
+        const text = document.createElement("div");
+        text.style.display = "grid";
+        text.style.gap = "2px";
+        text.style.minWidth = "0";
+        const nameEl = document.createElement("div");
+        nameEl.textContent = entry.playerName || entry.playerId;
+        nameEl.style.fontWeight = "600";
+        nameEl.style.fontSize = "12px";
+        nameEl.style.whiteSpace = "nowrap";
+        nameEl.style.overflow = "hidden";
+        nameEl.style.textOverflow = "ellipsis";
+        const lastEventAt = entry.lastEventAt ? Date.parse(entry.lastEventAt) : NaN;
+        const ONLINE_THRESHOLD_MS2 = 6 * 60 * 1e3;
+        const isOnline = Number.isFinite(lastEventAt) && Date.now() - lastEventAt <= ONLINE_THRESHOLD_MS2;
+        const status = document.createElement("div");
+        status.style.display = "inline-flex";
+        status.style.alignItems = "center";
+        status.style.gap = "6px";
+        status.style.fontSize = "11px";
+        status.style.opacity = "0.75";
+        const dot = document.createElement("span");
+        dot.style.width = "6px";
+        dot.style.height = "6px";
+        dot.style.borderRadius = "999px";
+        dot.style.background = isOnline ? "#34d399" : "rgba(148,163,184,0.7)";
+        dot.style.boxShadow = "0 0 0 2px rgba(15,23,42,0.6)";
+        const statusLabel = document.createElement("span");
+        statusLabel.textContent = isOnline ? "Online" : "Offline";
+        status.append(dot, statusLabel);
+        text.append(nameEl, status);
+        const targetId = entry.playerId;
+        const isSelf = !!myId && targetId === myId;
+        const isPending = modRequestPending.has(targetId);
+        const isFriend = friendIds.has(targetId);
+        const hasOutgoing = outgoingRequestIds.has(targetId);
+        const isAdded = isFriend || hasOutgoing;
+        const iconWrap = document.createElement("span");
+        iconWrap.innerHTML = isAdded ? '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+        const addBtn = createButton2("", { size: "sm", variant: "ghost", icon: iconWrap });
+        addBtn.classList.add("qws-fo-mod-action-btn");
+        if (isAdded) addBtn.classList.add("is-added");
+        if (!myId) {
+          addBtn.disabled = true;
+          addBtn.title = "Player ID unavailable.";
+        } else if (isSelf) {
+          addBtn.disabled = true;
+          addBtn.title = "You cannot add yourself.";
+        } else if (isPending) {
+          addBtn.disabled = true;
+          addBtn.title = "Sending request...";
+        } else if (isFriend) {
+          addBtn.title = "Remove friend";
+        } else if (hasOutgoing) {
+          addBtn.title = "Cancel request";
+        }
+        addBtn.addEventListener("click", async () => {
+          if (!myId || !targetId || isSelf || modRequestPending.has(targetId)) return;
+          modRequestPending.add(targetId);
+          renderModPlayers();
+          try {
+            if (isFriend) {
+              const ok = await removeFriend(myId, targetId);
+              if (ok) {
+                friendIds.delete(targetId);
+                await toastSimple("Friends", `Removed ${entry.playerName ?? targetId}.`, "success");
+              } else {
+                await toastSimple("Friends", "Unable to remove friend.", "info");
+              }
+            } else if (hasOutgoing) {
+              const ok = await cancelFriendRequest(myId, targetId);
+              if (ok) {
+                outgoingRequestIds.delete(targetId);
+                await toastSimple("Friend request", `Request to ${entry.playerName ?? targetId} cancelled.`, "success");
+              } else {
+                await toastSimple("Friend request", "Unable to cancel request.", "info");
+              }
+            } else {
+              const sent = await sendFriendRequest(myId, targetId);
+              if (sent) {
+                outgoingRequestIds.add(targetId);
+                await toastSimple("Friend request", `Request sent to ${entry.playerName ?? targetId}.`, "success");
+              } else {
+                await toastSimple("Friend request", "Unable to send request.", "info");
+              }
+            }
+          } catch (error) {
+            console.error("[FriendOverlay] mod list action", error);
+            await toastSimple("Friends", "Action failed.", "error");
+          } finally {
+            modRequestPending.delete(targetId);
+            renderModPlayers();
+          }
+        });
+        row.append(avatar, text, addBtn);
+        modList.appendChild(row);
+      }
+    };
+    const loadModPlayers = async () => {
+      if (modDestroyed) return;
+      modLoading = true;
+      modStatus.textContent = modSearch.value.trim() ? "Searching mod players..." : "Loading latest mod players...";
+      renderModPlayers();
+      try {
+        const query = modSearch.value.trim();
+        const result = await fetchModPlayers({
+          query: query.length ? query : void 0,
+          limit: 18,
+          offset: 0
+        });
+        modPlayers = result;
+        modStatus.textContent = modPlayers.length ? `Showing ${modPlayers.length} mod player${modPlayers.length > 1 ? "s" : ""}.` : "No mod players found.";
+      } catch (error) {
+        console.error("[FriendOverlay] fetchModPlayers failed", error);
+        modPlayers = [];
+        modStatus.textContent = "Failed to load mod players.";
+      } finally {
+        modLoading = false;
+        renderModPlayers();
+      }
+    };
+    modSearch.addEventListener("input", () => {
+      if (modSearchTimer) {
+        window.clearTimeout(modSearchTimer);
+      }
+      modSearchTimer = window.setTimeout(() => {
+        modSearchTimer = null;
+        void loadModPlayers();
+      }, 300);
+    });
+    modRefresh.addEventListener("click", () => {
+      void loadModPlayers();
+    });
+    async function refreshFriendIds(skipCache = false) {
+      if (!myId) {
+        friendIds = /* @__PURE__ */ new Set();
+        return;
+      }
+      if (!skipCache) {
+        const cached = getCachedFriendsSummary();
+        if (cached.length) {
+          friendIds = new Set(cached.map((f) => String(f.playerId ?? "")).filter(Boolean));
+          renderModPlayers();
+        }
+      }
+      try {
+        const friends = await fetchFriendsSummary(myId);
+        friendIds = new Set(friends.map((f) => String(f.playerId ?? "")).filter(Boolean));
+      } catch {
+      } finally {
+        renderModPlayers();
+      }
+    }
+    async function refreshOutgoingRequests() {
+      if (!myId) {
+        outgoingRequestIds = /* @__PURE__ */ new Set();
+        return;
+      }
+      try {
+        const result = await fetchFriendRequests(myId);
+        outgoingRequestIds = new Set(result.outgoing.map((r) => r.toPlayerId).filter(Boolean));
+      } catch {
+      } finally {
+        renderModPlayers();
+      }
+    }
+    const handleFriendsRefresh = () => {
+      void refreshFriendIds(true);
+      void refreshOutgoingRequests();
+    };
+    window.addEventListener(FRIENDS_REFRESH_EVENT3, handleFriendsRefresh);
+    playerDatabaseUserId.onChangeNow((next) => {
+      myId = next ? String(next) : null;
+      void refreshFriendIds();
+      void refreshOutgoingRequests();
+      renderModPlayers();
+    }).then((unsub) => {
+      unsubscribePlayerId = unsub;
+    }).catch(() => {
+    });
+    void loadModPlayers();
+    return {
+      root,
+      destroy: () => {
+        modDestroyed = true;
+        window.removeEventListener(FRIENDS_REFRESH_EVENT3, handleFriendsRefresh);
+        try {
+          unsubscribePlayerId?.();
+        } catch {
+        }
+        if (modSearchTimer) {
+          window.clearTimeout(modSearchTimer);
+          modSearchTimer = null;
+        }
+      }
+    };
+  }
+
+  // src/utils/publicRooms.ts
+  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
+  function resolveGmXhr() {
+    if (typeof GM_xmlhttpRequest === "function") {
+      return GM_xmlhttpRequest;
+    }
+    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
+      return GM.xmlHttpRequest.bind(GM);
+    }
+    return void 0;
+  }
+  async function fetchTextWithFetch(url2, options) {
+    const response = await fetch(url2, { cache: "no-store", ...options });
+    if (!response.ok) {
+      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  }
+  async function fetchTextWithGM(url2, options) {
+    const xhr = resolveGmXhr();
+    if (!xhr) {
+      throw new Error("GM_xmlhttpRequest not available");
+    }
+    return await new Promise((resolve2, reject) => {
+      xhr({
+        method: "GET",
+        url: url2,
+        headers: options?.headers,
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            resolve2(res.responseText ?? "");
+          } else {
+            reject(new Error(`GM_xmlhttpRequest failed: ${res.status}`));
+          }
+        },
+        onerror: (res) => {
+          reject(new Error(res.error ?? "GM_xmlhttpRequest error"));
+        },
+        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout")),
+        onabort: () => reject(new Error("GM_xmlhttpRequest aborted"))
+      });
+    });
+  }
+  async function fetchText(url2, options) {
+    const preferGM = isDiscordSurface();
+    const hasGM = !!resolveGmXhr();
+    if (preferGM && hasGM) {
+      return await fetchTextWithGM(url2, options);
+    }
+    try {
+      return await fetchTextWithFetch(url2, options);
+    } catch (error) {
+      if (hasGM) {
+        return await fetchTextWithGM(url2, options);
+      }
+      throw error;
+    }
+  }
+  async function fetchRemoteRooms() {
+    const text = await fetchText(ROOMS_JSON_URL);
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error("Failed to parse rooms JSON", { cause: error });
+    }
+  }
+
+  // src/services/room.ts
+  var MAX_PLAYERS = 6;
+  function deriveCategoryFromName(name) {
+    const match = /^([a-zA-Z]+)/.exec(name);
+    if (match && match[1]) {
+      return match[1].toLowerCase();
+    }
+    return "other";
+  }
+  function deriveCategoryOrder(definitions2, preferredOrder = []) {
+    const available = new Set(definitions2.map((room) => room.category));
+    const seen = /* @__PURE__ */ new Set();
+    const order = [];
+    for (const category of preferredOrder) {
+      if (!available.has(category)) continue;
+      if (seen.has(category)) continue;
+      seen.add(category);
+      order.push(category);
+    }
+    for (const room of definitions2) {
+      if (seen.has(room.category)) continue;
+      seen.add(room.category);
+      order.push(room.category);
+    }
+    return order;
+  }
+  function createStateFromDefinitions(definitions2, preferredOrder = []) {
+    const cloned = definitions2.map((room) => ({ ...room }));
+    return {
+      definitions: cloned,
+      categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
+    };
+  }
+  function cloneState2(state3) {
+    return {
+      definitions: state3.definitions.map((room) => ({ ...room })),
+      categoryOrder: [...state3.categoryOrder]
+    };
+  }
+  var INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
+  var publicRoomsState = cloneState2(INITIAL_PUBLIC_ROOMS_STATE);
+  var remoteRoomsStatus = "idle";
+  var remoteRoomsPromise = null;
+  function parseRemoteRoomsPayload(payload) {
+    if (!payload || typeof payload !== "object") {
+      return null;
+    }
+    const record = payload.publicRooms;
+    if (!record || typeof record !== "object") {
+      return null;
+    }
+    const definitions2 = [];
+    const categoryOrder = [];
+    for (const [rawCategory, entries] of Object.entries(record)) {
+      if (!Array.isArray(entries) || !entries.length) {
+        continue;
+      }
+      const categoryName = typeof rawCategory === "string" ? rawCategory.trim() : "";
+      if (!categoryName) {
+        continue;
+      }
+      if (!categoryOrder.includes(categoryName)) {
+        categoryOrder.push(categoryName);
+      }
+      for (const entry of entries) {
+        if (typeof entry !== "string") {
+          continue;
+        }
+        const separatorIndex = entry.indexOf(":");
+        if (separatorIndex <= 0) {
+          continue;
+        }
+        const name = entry.slice(0, separatorIndex).trim();
+        const idRoom = entry.slice(separatorIndex + 1).trim();
+        if (!name || !idRoom) {
+          continue;
+        }
+        definitions2.push({
+          name,
+          idRoom,
+          category: categoryName
+        });
+      }
+    }
+    if (!definitions2.length) {
+      return null;
+    }
+    return createStateFromDefinitions(definitions2, categoryOrder);
+  }
+  function setPublicRoomsState(next) {
+    publicRoomsState = cloneState2(next);
+  }
+  function requestRemoteRoomsFetch() {
+    if (remoteRoomsStatus === "pending" || remoteRoomsStatus === "fulfilled" || remoteRoomsStatus === "rejected") {
+      return remoteRoomsPromise;
+    }
+    if (typeof window === "undefined") {
+      return null;
+    }
+    remoteRoomsStatus = "pending";
+    remoteRoomsPromise = (async () => {
+      try {
+        const payload = await fetchRemoteRooms();
+        const parsed = parseRemoteRoomsPayload(payload);
+        if (parsed) {
+          setPublicRoomsState(parsed);
+        }
+        remoteRoomsStatus = "fulfilled";
+      } catch (error) {
+        remoteRoomsStatus = "rejected";
+        console.warn("[MagicGarden] Unable to load remote rooms list", error);
+      }
+    })();
+    return remoteRoomsPromise;
+  }
+  async function ensureRemoteRoomsLoaded() {
+    const promise2 = requestRemoteRoomsFetch();
+    if (promise2) {
+      await promise2;
+    }
+  }
+  function sanitizeRoomDefinition(room) {
+    if (!room) return null;
+    const name = typeof room.name === "string" ? room.name.trim() : "";
+    const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
+    if (!name || !idRoom) return null;
+    return {
+      name,
+      idRoom,
+      category: deriveCategoryFromName(name)
+    };
+  }
+  function loadStoredCustomRooms() {
+    const parsed = readAriesPath("room.customRooms") ?? [];
+    if (!Array.isArray(parsed)) return [];
+    const result = [];
+    for (const entry of parsed) {
+      const sanitized = sanitizeRoomDefinition(entry);
+      if (sanitized) result.push(sanitized);
+    }
+    return result;
+  }
+  function persistCustomRooms(rooms) {
+    const payload = rooms.map((room) => ({
+      name: room.name,
+      idRoom: room.idRoom
+    }));
+    writeAriesPath("room.customRooms", payload);
+  }
+  var customRoomsCache = null;
+  function getCustomRoomsCache() {
+    if (!customRoomsCache) {
+      customRoomsCache = loadStoredCustomRooms();
+    }
+    return customRoomsCache.map((room) => ({ ...room }));
+  }
+  function setCustomRoomsCache(rooms) {
+    customRoomsCache = rooms.map((room) => ({ ...room }));
+    persistCustomRooms(customRoomsCache);
+  }
+  function normalizeIdentifier(value) {
+    return value.trim().toLowerCase();
+  }
+  function fetchStatusesFor(definitions2) {
+    const now2 = Date.now();
+    return Promise.all(
+      definitions2.map(async (def) => {
+        try {
+          const response = await requestRoomEndpoint(def.idRoom, {
+            endpoint: "info",
+            timeoutMs: 1e4
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const payload = response.parsed ?? (() => {
+            try {
+              return JSON.parse(response.body);
+            } catch {
+              return void 0;
+            }
+          })();
+          const players = clampPlayerCount(typeof payload?.numPlayers === "number" ? payload.numPlayers : 0);
+          const capacity = MAX_PLAYERS;
+          const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
+          const hostPlayerId = typeof payload?.hostPlayerId === "string" && payload.hostPlayerId.trim().length ? payload.hostPlayerId.trim() : void 0;
+          const playerDetails = normalizeRoomPlayers(payload?.players, hostPlayerId);
+          return {
+            ...def,
+            players,
+            capacity,
+            isFull: players >= capacity,
+            lastUpdatedAt: now2,
+            currentGame,
+            hostPlayerId,
+            playerDetails
+          };
+        } catch (error) {
+          const message = normalizeError(error);
+          return {
+            ...def,
+            players: 0,
+            capacity: MAX_PLAYERS,
+            isFull: false,
+            lastUpdatedAt: now2,
+            hostPlayerId: void 0,
+            playerDetails: [],
+            error: message
+          };
+        }
+      })
+    );
+  }
+  function clampPlayerCount(value) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(MAX_PLAYERS, Math.floor(value)));
+  }
+  function normalizeRoomPlayers(value, hostPlayerId) {
+    if (!Array.isArray(value)) return [];
+    const normalized = [];
+    for (const entry of value) {
+      if (!entry || typeof entry !== "object") continue;
+      const id = typeof entry.id === "string" && entry.id.trim().length ? entry.id.trim() : void 0;
+      const databaseUserId = typeof entry.databaseUserId === "string" && entry.databaseUserId.trim().length ? entry.databaseUserId.trim() : void 0;
+      const rawName = typeof entry.name === "string" ? entry.name.trim() : "";
+      const name = rawName || "Unknown player";
+      const isConnected = typeof entry.isConnected === "boolean" ? entry.isConnected : false;
+      const discordAvatarUrl = typeof entry.discordAvatarUrl === "string" && entry.discordAvatarUrl.trim().length ? entry.discordAvatarUrl.trim() : void 0;
+      normalized.push({
+        id,
+        databaseUserId,
+        name,
+        isConnected,
+        discordAvatarUrl,
+        isHost: Boolean(hostPlayerId && (id === hostPlayerId || databaseUserId === hostPlayerId))
+      });
+    }
+    return normalized;
+  }
+  function normalizeError(error) {
+    if (!error) return "Erreur inconnue.";
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message || "Erreur inconnue.";
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  var RoomService = {
+    getPublicRooms() {
+      void requestRemoteRoomsFetch();
+      return publicRoomsState.definitions.map((room) => ({ ...room }));
+    },
+    getPublicRoomsCategoryOrder() {
+      void requestRemoteRoomsFetch();
+      return [...publicRoomsState.categoryOrder];
+    },
+    getCustomRooms() {
+      return getCustomRoomsCache();
+    },
+    addCustomRoom(room) {
+      const name = typeof room.name === "string" ? room.name.trim() : "";
+      const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
+      if (!name) {
+        return { ok: false, error: "Room name is required." };
+      }
+      if (!idRoom) {
+        return { ok: false, error: "Room identifier is required." };
+      }
+      const normalizedName = normalizeIdentifier(name);
+      const normalizedId = normalizeIdentifier(idRoom);
+      const allRooms = [...this.getPublicRooms(), ...getCustomRoomsCache()];
+      if (allRooms.some((existing) => normalizeIdentifier(existing.idRoom) === normalizedId)) {
+        return { ok: false, error: "This room already exists." };
+      }
+      if (allRooms.some((existing) => normalizeIdentifier(existing.name) === normalizedName)) {
+        return { ok: false, error: "A room with this name already exists." };
+      }
+      const definition = {
+        name,
+        idRoom,
+        category: deriveCategoryFromName(name)
+      };
+      const next = [...getCustomRoomsCache(), definition];
+      setCustomRoomsCache(next);
+      return { ok: true, room: { ...definition } };
+    },
+    removeCustomRoom(idRoom) {
+      const normalizedId = normalizeIdentifier(idRoom);
+      const rooms = getCustomRoomsCache();
+      const filtered = rooms.filter((room) => normalizeIdentifier(room.idRoom) !== normalizedId);
+      if (filtered.length === rooms.length) {
+        return false;
+      }
+      setCustomRoomsCache(filtered);
+      return true;
+    },
+    async fetchPublicRoomsStatus() {
+      await ensureRemoteRoomsLoaded();
+      const definitions2 = publicRoomsState.definitions.map((room) => ({ ...room }));
+      return fetchStatusesFor(definitions2);
+    },
+    async fetchCustomRoomsStatus() {
+      const definitions2 = this.getCustomRooms();
+      if (!definitions2.length) return [];
+      return fetchStatusesFor(definitions2);
+    },
+    canJoinPublicRoom(room) {
+      if (room.error) return false;
+      if (room.isFull) return false;
+      if (this.isDiscordActivity()) return false;
+      return true;
+    },
+    isDiscordActivity() {
+      return isDiscordSurface();
+    },
+    joinPublicRoom(room) {
+      const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
+      if (!result.ok) {
+      }
+      return result;
+    }
+  };
+
+  // src/services/activityLogHistory.ts
+  var HISTORY_STORAGE_KEY = "activityLog.history";
+  var HISTORY_LIMIT = 500;
+  var skipNextHistoryReopen = false;
+  function skipNextActivityLogHistoryReopen() {
+    skipNextHistoryReopen = true;
+  }
+  function normalizeEntry(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const ts = Number(raw.timestamp);
+    if (!Number.isFinite(ts)) return null;
+    const parameters = (() => {
+      const p = raw.parameters;
+      if (!p || typeof p !== "object") return p;
+      const petId = typeof p?.pet?.id === "string" ? p.pet.id : null;
+      if (petId && !p.petId) {
+        return { ...p, petId };
+      }
+      return p;
+    })();
+    const action2 = typeof raw.action === "string" && raw.action.trim() ? String(raw.action) : null;
+    const entry = {
+      ...raw,
+      timestamp: ts,
+      parameters
+    };
+    if (action2 !== null) entry.action = action2;
+    return entry;
+  }
+  function normalizeList(logs) {
+    const out = [];
+    if (!Array.isArray(logs)) return out;
+    for (const raw of logs) {
+      const norm3 = normalizeEntry(raw);
+      if (norm3) out.push(norm3);
+    }
+    return out;
+  }
+  function stableStringify(value) {
+    const seen = /* @__PURE__ */ new WeakSet();
+    const walk = (val) => {
+      if (val === null) return null;
+      if (typeof val !== "object") return val;
+      if (seen.has(val)) return "__CYCLE__";
+      seen.add(val);
+      if (Array.isArray(val)) return val.map(walk);
+      const obj = {};
+      const keys = Object.keys(val).sort();
+      for (const k of keys) obj[k] = walk(val[k]);
+      return obj;
+    };
+    try {
+      return JSON.stringify(walk(value));
+    } catch {
+      return "";
+    }
+  }
+  function entryIdentity(entry) {
+    const p = entry?.parameters;
+    const candidates = [
+      p?.id,
+      p?.pet?.id,
+      p?.petId,
+      p?.playerId,
+      p?.userId,
+      p?.objectId,
+      p?.slotId,
+      p?.itemId,
+      p?.cropId,
+      p?.seedId,
+      p?.decorId,
+      p?.toolId,
+      p?.targetId,
+      p?.abilityId
+    ];
+    for (const c of candidates) {
+      if (typeof c === "string" && c.trim()) return c;
+    }
+    return null;
+  }
+  function entryKey(entry) {
+    const ts = Number(entry.timestamp);
+    const action2 = typeof entry.action === "string" ? entry.action : "";
+    const identity = entryIdentity(entry) ?? "__noid__";
+    const tsPart = Number.isFinite(ts) ? String(ts) : `t:${stableStringify({ timestamp: entry.timestamp ?? null })}`;
+    return `${tsPart}|${action2}|${identity}`;
+  }
+  function entriesEqual(a, b) {
+    return stableStringify(a) === stableStringify(b);
+  }
+  function loadHistory() {
+    try {
+      const parsed = readAriesPath(HISTORY_STORAGE_KEY);
+      if (!Array.isArray(parsed)) return [];
+      const out = [];
+      for (const item of parsed) {
+        const norm3 = normalizeEntry(item);
+        if (norm3) out.push(norm3);
+      }
+      return out;
+    } catch {
+      return [];
+    }
+  }
+  function saveHistory(entries) {
+    const sorted = entries.slice().sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
+    if (sorted.length > HISTORY_LIMIT) {
+      sorted.splice(0, sorted.length - HISTORY_LIMIT);
+    }
+    try {
+      writeAriesPath(HISTORY_STORAGE_KEY, sorted);
+    } catch {
+    }
+  }
+  function diffSnapshots(prev, next) {
+    const prevBuckets = /* @__PURE__ */ new Map();
+    const bucketPush = (k, entry) => {
+      const arr = prevBuckets.get(k);
+      if (arr) arr.push(entry);
+      else prevBuckets.set(k, [entry]);
+    };
+    for (const entry of prev) bucketPush(entryKey(entry), entry);
+    const added = [];
+    const updated = [];
+    for (const entry of next) {
+      const key2 = entryKey(entry);
+      const bucket = prevBuckets.get(key2);
+      const prevEntry = bucket?.shift();
+      if (!prevEntry) {
+        added.push(entry);
+      } else if (!entriesEqual(prevEntry, entry)) {
+        updated.push(entry);
+      }
+      if (bucket && bucket.length === 0) prevBuckets.delete(key2);
+    }
+    return { added, updated };
+  }
+  function syncHistory(prevSnapshot, nextSnapshot) {
+    const history2 = loadHistory();
+    const { added, updated } = diffSnapshots(prevSnapshot, nextSnapshot);
+    if (!added.length && !updated.length) return history2;
+    const map2 = /* @__PURE__ */ new Map();
+    for (const h of history2) map2.set(entryKey(h), h);
+    let changed = false;
+    const upsert = (entry) => {
+      const key2 = entryKey(entry);
+      const cur = map2.get(key2);
+      if (!cur || !entriesEqual(cur, entry)) {
+        map2.set(key2, entry);
+        changed = true;
+      }
+    };
+    updated.forEach(upsert);
+    added.forEach(upsert);
+    if (!changed) return history2;
+    const merged = Array.from(map2.values());
+    saveHistory(merged);
+    return merged;
+  }
+  async function reopenFakeActivityLogFromHistory() {
+    try {
+      const history2 = loadHistory();
+      await fakeActivityLogShow(history2, { open: true });
+    } catch {
+    }
+  }
+  async function startActivityLogHistoryWatcher() {
+    const stops = [];
+    let lastSnapshot = [];
+    const ingest = async (logs, prev) => {
+      try {
+        const prevSnapshot = typeof prev !== "undefined" ? normalizeList(prev) : lastSnapshot;
+        const nextSnapshot = normalizeList(logs);
+        syncHistory(prevSnapshot, nextSnapshot);
+        lastSnapshot = nextSnapshot;
+      } catch {
+      }
+    };
+    try {
+      const initial = normalizeList(await myActivityLog.get());
+      await ingest(initial);
+    } catch {
+    }
+    try {
+      const unsub = await myActivityLog.onChange((next, prev) => {
+        void ingest(next, prev);
+      });
+      stops.push(() => {
+        try {
+          unsub();
+        } catch {
+        }
+      });
+    } catch {
+    }
+    let lastModal = null;
+    try {
+      const cur = await Atoms.ui.activeModal.get();
+      lastModal = cur ?? null;
+    } catch {
+    }
+    const consumeHistoryReopenSkip = () => {
+      if (!skipNextHistoryReopen) return false;
+      skipNextHistoryReopen = false;
+      return true;
+    };
+    const onModalChange = async (modalId) => {
+      const cur = modalId ?? null;
+      if (cur === ACTIVITY_LOG_MODAL_ID && lastModal !== ACTIVITY_LOG_MODAL_ID) {
+        if (!consumeHistoryReopenSkip()) {
+          await reopenFakeActivityLogFromHistory();
+        }
+      }
+      lastModal = cur;
+    };
+    try {
+      const unsubModal = await Atoms.ui.activeModal.onChange(onModalChange);
+      stops.push(() => {
+        try {
+          unsubModal();
+        } catch {
+        }
+      });
+    } catch {
+    }
+    return async () => {
+      for (const stop2 of stops) {
+        try {
+          await stop2();
+        } catch {
+        }
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/communityTab.ts
+  function createCommunityTab(options) {
+    const root = document.createElement("div");
+    root.className = "qws-fo-tab qws-fo-tab-community";
+    const layout = document.createElement("div");
+    layout.className = "qws-fo-community";
+    const tabsRow = document.createElement("div");
+    tabsRow.className = "qws-fo-community-tabs";
+    const body = document.createElement("div");
+    body.className = "qws-fo-community-body";
+    const listWrap = document.createElement("div");
+    listWrap.className = "qws-fo-community-list";
+    const profileWrap = document.createElement("div");
+    profileWrap.className = "qws-fo-community-profile";
+    const friendsTab = createFriendsTab();
+    const addTab = createAddFriendTab();
+    const requestsTab = createRequestsTab({
+      onCountChange: (count) => {
+        setRequestsBadge(count);
+        options.onRequestsCountChange?.(count);
+      },
+      onAccept: () => {
+        void friendsTab.refresh({ force: true });
+      },
+      onRemoved: () => {
+        void friendsTab.refresh({ force: true });
+      }
+    });
+    const panels = {
+      friends: friendsTab.root,
+      add: addTab.root,
+      requests: requestsTab.root
+    };
+    Object.values(panels).forEach((panel) => body.appendChild(panel));
+    const tabButtons = /* @__PURE__ */ new Map();
+    const tabDefs = [
+      { id: "friends", label: "Friend list" },
+      { id: "add", label: "Add friend" },
+      { id: "requests", label: "Requests" }
+    ];
+    let activeTab = "friends";
+    const storedTab = window.__qws_friend_overlay_last_community_tab;
+    if (storedTab === "friends" || storedTab === "add" || storedTab === "requests") {
+      activeTab = storedTab;
+    }
+    const setRequestsBadge = (count) => {
+      const btn = tabButtons.get("requests");
+      if (!btn) return;
+      let badge = btn.querySelector(".qws-fo-community-tab-badge");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "qws-fo-community-tab-badge";
+        btn.appendChild(badge);
+      }
+      if (!count) {
+        badge.style.display = "none";
+        badge.textContent = "";
+      } else {
+        badge.textContent = String(count);
+        badge.style.display = "inline-flex";
+      }
+    };
+    const setActiveTab = (id) => {
+      activeTab = id;
+      window.__qws_friend_overlay_last_community_tab = id;
+      tabButtons.forEach((btn, tabId) => {
+        btn.classList.toggle("active", tabId === id);
+      });
+      Object.entries(panels).forEach(([tabId, panel]) => {
+        panel.classList.toggle("active", tabId === id);
+      });
+    };
+    tabDefs.forEach((def) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qws-fo-community-tab-btn";
+      btn.textContent = def.label;
+      btn.addEventListener("click", () => setActiveTab(def.id));
+      tabsRow.appendChild(btn);
+      tabButtons.set(def.id, btn);
+    });
+    const tabsShell = document.createElement("div");
+    tabsShell.className = "qws-fo-community-tabshell";
+    tabsShell.append(tabsRow, body);
+    listWrap.append(tabsShell);
+    layout.append(listWrap, profileWrap);
+    root.appendChild(layout);
+    setActiveTab(activeTab);
+    let profileOpen = false;
+    let activeFriend = null;
+    let activeGardenPlayerId = null;
+    const previewOverlay = document.createElement("div");
+    previewOverlay.className = "qws-fo-garden-preview";
+    const previewCard = document.createElement("div");
+    previewCard.className = "qws-fo-garden-preview-card";
+    const previewTitle = document.createElement("div");
+    previewTitle.className = "qws-fo-garden-preview-title";
+    const previewActions = document.createElement("div");
+    previewActions.className = "qws-fo-garden-preview-actions";
+    const previewStopBtn = createButton2("Stop preview", { size: "sm", variant: "danger" });
+    previewActions.appendChild(previewStopBtn);
+    previewCard.append(previewTitle, previewActions);
+    previewOverlay.appendChild(previewCard);
+    document.body.appendChild(previewOverlay);
+    const backBtn = createButton2("Back", { size: "sm", variant: "ghost" });
+    const profileTitle = document.createElement("div");
+    profileTitle.className = "qws-fo-profile-title";
+    profileTitle.textContent = "Friend profile";
+    const profileTop = document.createElement("div");
+    profileTop.className = "qws-fo-profile-top";
+    const profileTopLeft = document.createElement("div");
+    profileTopLeft.className = "qws-fo-profile-top-left";
+    profileTopLeft.append(backBtn, profileTitle);
+    const removeBtn = createButton2("Remove this friend", { size: "sm", variant: "danger" });
+    removeBtn.classList.add("qws-fo-profile-remove");
+    removeBtn.title = "Remove friend";
+    profileTop.append(profileTopLeft, removeBtn);
+    const profileCard = document.createElement("div");
+    profileCard.className = "qws-fo-profile-card";
+    const profileHeader = document.createElement("div");
+    profileHeader.className = "qws-fo-profile-header";
+    const profileInfo = document.createElement("div");
+    profileInfo.className = "qws-fo-profile-info";
+    const profileAvatar = document.createElement("div");
+    profileAvatar.className = "qws-fo-profile-avatar";
+    const profileAvatarImg = document.createElement("img");
+    profileAvatarImg.alt = "Friend avatar";
+    profileAvatarImg.style.display = "none";
+    const profileAvatarFallback = document.createElement("span");
+    profileAvatar.append(profileAvatarImg, profileAvatarFallback);
+    const profileHeadline = document.createElement("div");
+    profileHeadline.className = "qws-fo-profile-headline";
+    const profileNameRow = document.createElement("div");
+    profileNameRow.className = "qws-fo-profile-name-row";
+    const profileName = document.createElement("div");
+    profileName.className = "qws-fo-profile-name";
+    const profileStatus = document.createElement("span");
+    profileStatus.className = "qws-fo-profile-status-pill";
+    const profileStatusDot = document.createElement("span");
+    profileStatusDot.className = "qws-fo-profile-status-dot";
+    const profileStatusText = document.createElement("span");
+    profileStatus.append(profileStatusDot, profileStatusText);
+    profileNameRow.append(profileName, profileStatus);
+    const profileMeta = document.createElement("div");
+    profileMeta.className = "qws-fo-profile-meta";
+    profileHeadline.append(profileNameRow, profileMeta);
+    profileInfo.append(profileAvatar, profileHeadline);
+    const profileActions = document.createElement("div");
+    profileActions.className = "qws-fo-profile-actions";
+    const joinWrap = document.createElement("div");
+    joinWrap.className = "qws-fo-profile-join";
+    const joinBtn = createButton2("Join room", { size: "sm", variant: "primary" });
+    const joinBtnLabel = joinBtn.querySelector(".qws-fo-btn__label");
+    const seatInfo = document.createElement("span");
+    seatInfo.className = "qws-fo-profile-seat";
+    joinWrap.append(joinBtn, seatInfo);
+    const chatIcon = document.createElement("span");
+    chatIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor"/><circle cx="9" cy="10" r="1.5" fill="#0b1020"/><circle cx="13" cy="10" r="1.5" fill="#0b1020"/><circle cx="17" cy="10" r="1.5" fill="#0b1020"/></svg>';
+    const chatBtn = createButton2("", { size: "sm", variant: "ghost", icon: chatIcon });
+    chatBtn.setAttribute("aria-label", "Chat");
+    chatBtn.classList.add("qws-fo-chat-btn");
+    profileActions.append(joinWrap, chatBtn);
+    profileHeader.append(profileInfo, profileActions);
+    const profileGrid = document.createElement("div");
+    profileGrid.className = "qws-fo-profile-grid";
+    const inspectSection = document.createElement("div");
+    inspectSection.className = "qws-fo-profile-section";
+    const inspectTitle = document.createElement("div");
+    inspectTitle.className = "qws-fo-profile-section-title";
+    inspectTitle.textContent = "Inspect";
+    const inspectGrid = document.createElement("div");
+    inspectGrid.className = "qws-fo-inspect-grid";
+    inspectSection.append(inspectTitle, inspectGrid);
+    const profileCoins = document.createElement("div");
+    profileCoins.className = "qws-fo-profile-coins";
+    const profileCoinsIcon = document.createElement("img");
+    profileCoinsIcon.className = "qws-fo-profile-coins-icon";
+    profileCoinsIcon.alt = "Coins";
+    profileCoinsIcon.src = coin.img64;
+    const profileCoinsValue = document.createElement("span");
+    profileCoinsValue.className = "qws-fo-profile-coins-value";
+    profileCoins.append(profileCoinsIcon, profileCoinsValue);
+    profileGrid.append(inspectSection);
+    profileCard.append(profileHeader, profileCoins, profileGrid);
+    profileWrap.append(profileTop, profileCard);
+    const runInspect = async (section, label2, resolver, showModal, waitClose) => {
+      if (!activeFriend?.playerId) return;
+      let didClose = false;
+      try {
+        const views = await fetchPlayersView([activeFriend.playerId], { sections: [section] });
+        const view = views[0];
+        const payload = resolver(view);
+        if (!payload) {
+          await toastSimple(label2, `${label2} data unavailable.`, "info");
+          return;
+        }
+        try {
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-close"));
+          didClose = true;
+        } catch {
+        }
+        await showModal(payload);
+        await waitClose();
+      } catch (error) {
+        console.error(`[FriendOverlay] Failed to load ${label2.toLowerCase()}`, error);
+        await toastSimple(label2, `Unable to load ${label2.toLowerCase()}.`, "error");
+      } finally {
+        if (didClose) {
+          try {
+            window.dispatchEvent(new CustomEvent("qws-friend-overlay-open"));
+          } catch {
+          }
+        }
+      }
+    };
+    const createInspectCard = (label2, iconContent) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "qws-fo-inspect-card";
+      const icon = document.createElement("div");
+      icon.className = "qws-fo-inspect-icon";
+      if (typeof iconContent === "string") {
+        icon.innerHTML = iconContent;
+      } else {
+        const spriteContainer = document.createElement("span");
+        spriteContainer.style.display = "flex";
+        spriteContainer.style.alignItems = "center";
+        spriteContainer.style.justifyContent = "center";
+        spriteContainer.style.width = "100%";
+        spriteContainer.style.height = "100%";
+        icon.appendChild(spriteContainer);
+        attachSpriteIcon(spriteContainer, [iconContent.category], iconContent.id, 28, "friend-inspect", {
+          onNoSpriteFound: (meta) => {
+            console.warn("[FriendOverlay] Sprite not found:", meta);
+          }
+        });
+      }
+      const labelEl = document.createElement("div");
+      labelEl.className = "qws-fo-inspect-label";
+      labelEl.textContent = label2;
+      card.append(icon, labelEl);
+      return card;
+    };
+    const gardenIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/><path d="M12 12c-1.5-2-4-3-6-3 0 3 1 6 6 6s6-3 6-6c-2 0-4.5 1-6 3z"/></svg>';
+    const inventoryIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>';
+    const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>';
+    const journalIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/></svg>';
+    const activityIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>';
+    const gardenBtn = createInspectCard("Garden", gardenIcon);
+    const inventoryBtn = createInspectCard("Inventory", inventoryIcon);
+    const statsBtn = createInspectCard("Stats", statsIcon);
+    const journalBtn = createInspectCard("Journal", journalIcon);
+    const activityBtn = createInspectCard("Activity", activityIcon);
+    inspectGrid.append(gardenBtn, inventoryBtn, statsBtn, journalBtn, activityBtn);
+    let joinRoomId = null;
+    const setGardenPreviewUI = (open, friendLabel) => {
+      previewOverlay.classList.toggle("active", open);
+      if (open) {
+        const name = friendLabel?.trim() || "this friend";
+        previewTitle.textContent = `Previewing ${name}'s garden`;
+      } else {
+        previewTitle.textContent = "";
+      }
+    };
+    const stopGardenPreview = async () => {
+      const clearFn = window.qwsEditorClearFriendGardenPreview;
+      if (typeof clearFn === "function") {
+        try {
+          await clearFn();
+        } catch {
+        }
+      }
+      activeGardenPlayerId = null;
+      gardenBtn.textContent = "Garden";
+      setGardenPreviewUI(false);
+      try {
+        window.dispatchEvent(new CustomEvent("qws-friend-overlay-open"));
+      } catch {
+      }
+    };
+    const previewGarden = async () => {
+      if (!activeFriend?.playerId) return;
+      const clearFn = window.qwsEditorClearFriendGardenPreview;
+      const previewFn = window.qwsEditorPreviewFriendGarden;
+      if (activeGardenPlayerId === activeFriend.playerId && typeof clearFn === "function") {
+        await stopGardenPreview();
+        return;
+      }
+      if (typeof previewFn !== "function") {
+        await toastSimple("Garden", "Garden preview unavailable.", "error");
+        return;
+      }
+      const views = await fetchPlayersView([activeFriend.playerId], { sections: ["garden"] });
+      const gardenData = views[0]?.state?.garden ?? null;
+      if (!gardenData) {
+        await toastSimple("Garden", "Garden data unavailable.", "info");
+        return;
+      }
+      const applied = await previewFn(gardenData);
+      if (applied) {
+        activeGardenPlayerId = activeFriend.playerId;
+        gardenBtn.textContent = "Stop garden";
+        setGardenPreviewUI(true, activeFriend.playerName ?? activeFriend.playerId);
+        try {
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-close"));
+        } catch {
+        }
+      }
+    };
+    gardenBtn.addEventListener("click", () => void previewGarden());
+    previewStopBtn.addEventListener("click", () => void stopGardenPreview());
+    inventoryBtn.addEventListener("click", () => void runInspect(
+      "inventory",
+      "Inventory",
+      (view) => view?.state?.inventory ?? null,
+      (payload) => fakeInventoryShow(payload, { open: true }),
+      () => waitInventoryPanelClosed()
+    ));
+    statsBtn.addEventListener("click", () => void runInspect(
+      "stats",
+      "Stats",
+      (view) => view?.state?.stats ?? null,
+      (payload) => fakeStatsShow(payload, { open: true }),
+      () => waitStatsModalClosed()
+    ));
+    journalBtn.addEventListener("click", () => void runInspect(
+      "journal",
+      "Journal",
+      (view) => view?.state?.journal ?? null,
+      (payload) => fakeJournalShow(payload, { open: true }),
+      () => waitJournalModalClosed()
+    ));
+    activityBtn.addEventListener("click", () => void runInspect(
+      "activityLog",
+      "Activity log",
+      (view) => view?.state?.activityLog ?? view?.state?.activityLogs ?? null,
+      (payload) => {
+        skipNextActivityLogHistoryReopen();
+        return fakeActivityLogShow(payload, { open: true });
+      },
+      () => waitActivityLogModalClosed()
+    ));
+    joinBtn.addEventListener("click", () => {
+      if (!joinRoomId) return;
+      RoomService.joinPublicRoom({ idRoom: joinRoomId });
+    });
+    chatBtn.addEventListener("click", () => {
+      if (!activeFriend?.playerId) return;
+      options.onChat?.(activeFriend.playerId, activeFriend);
+    });
+    removeBtn.addEventListener("click", async () => {
+      if (!activeFriend?.playerId) return;
+      const me = await playerDatabaseUserId.get();
+      if (!me) return;
+      removeBtn.disabled = true;
+      try {
+        await removeFriend(me, activeFriend.playerId);
+        window.dispatchEvent(new CustomEvent("qws-friends-refresh"));
+        void friendsTab.refresh({ force: true });
+        setProfileOpen(false);
+      } catch (error) {
+        console.error("[FriendOverlay] removeFriend failed", error);
+        await toastSimple("Remove friend", "Unable to remove friend.", "error");
+      } finally {
+        removeBtn.disabled = false;
+      }
+    });
+    const updateProfile = (friend) => {
+      activeFriend = friend;
+      const displayName = friend.playerName ?? friend.playerId ?? "Unknown friend";
+      const roomInfo = friend.room ?? {};
+      const roomIsPrivate = Boolean(roomInfo.isPrivate) || Boolean(roomInfo.is_private) || Boolean(friend.privacy?.hideRoomFromPublicList);
+      const roomLabelRaw = typeof roomInfo.id === "string" ? roomInfo.id.trim() : typeof roomInfo.roomId === "string" ? roomInfo.roomId.trim() : "";
+      profileName.textContent = displayName;
+      profileStatus.classList.toggle("online", Boolean(friend.isOnline));
+      profileStatusText.textContent = friend.isOnline ? "Online" : "Offline";
+      const fallbackLetter = displayName.trim().slice(0, 1).toUpperCase() || "?";
+      if (friend.avatarUrl) {
+        profileAvatarImg.src = friend.avatarUrl;
+        profileAvatarImg.style.display = "";
+        profileAvatarFallback.style.display = "none";
+      } else {
+        profileAvatarImg.src = "";
+        profileAvatarImg.style.display = "none";
+        profileAvatarFallback.textContent = fallbackLetter;
+        profileAvatarFallback.style.display = "";
+      }
+      profileMeta.innerHTML = "";
+      if (!friend.isOnline) {
+        const lastSeen = formatLastSeen3(friend.lastEventAt);
+        const seenText = document.createElement("span");
+        seenText.className = "qws-fo-profile-chip";
+        seenText.textContent = lastSeen ? `Last seen ${lastSeen}` : "Last seen unknown";
+        profileMeta.appendChild(seenText);
+      } else {
+        if (roomLabelRaw) {
+          const roomChip = document.createElement("span");
+          roomChip.className = "qws-fo-profile-chip";
+          roomChip.textContent = roomIsPrivate ? "Private room" : `Room ${roomLabelRaw}`;
+          profileMeta.appendChild(roomChip);
+        }
+      }
+      const allowGarden = Boolean(friend.privacy?.showGarden);
+      const allowInventory = Boolean(friend.privacy?.showInventory);
+      const allowStats = Boolean(friend.privacy?.showStats);
+      const allowJournal = Boolean(friend.privacy?.showJournal);
+      const allowActivity = Boolean(friend.privacy?.showActivityLog);
+      const inspectButtons = [
+        { btn: gardenBtn, allow: allowGarden, title: "Inspect garden" },
+        { btn: inventoryBtn, allow: allowInventory, title: "Inspect inventory" },
+        { btn: statsBtn, allow: allowStats, title: "Inspect stats" },
+        { btn: journalBtn, allow: allowJournal, title: "Inspect journal" },
+        { btn: activityBtn, allow: allowActivity, title: "Inspect activity log" }
+      ];
+      let visibleInspect = 0;
+      inspectButtons.forEach(({ btn, allow, title }) => {
+        btn.style.display = allow ? "" : "none";
+        setButtonEnabled(btn, allow);
+        btn.title = allow ? title : "Hidden by privacy";
+        if (allow) visibleInspect += 1;
+      });
+      inspectSection.style.display = visibleInspect ? "flex" : "none";
+      const gardenLabel = gardenBtn.querySelector(".qws-fo-inspect-label");
+      if (gardenLabel) {
+        if (activeGardenPlayerId !== friend.playerId) {
+          gardenLabel.textContent = "Garden";
+        } else {
+          gardenLabel.textContent = "Stop garden";
+        }
+      }
+      joinRoomId = roomLabelRaw || null;
+      const rawPlayerCount = roomInfo.playersCount ?? roomInfo.players_count ?? roomInfo.players ?? null;
+      const playersCount = rawPlayerCount != null && Number.isFinite(Number(rawPlayerCount)) ? Math.floor(Number(rawPlayerCount)) : null;
+      const ROOM_CAPACITY = 6;
+      const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY - playersCount) : null;
+      const isOnline = Boolean(friend.isOnline);
+      const isDiscordTarget = RoomService.isDiscordActivity();
+      const canJoinRoom = Boolean(joinRoomId) && !isDiscordTarget && !roomIsPrivate && isOnline && (playersCount == null || seatsLeft === null || seatsLeft > 0);
+      const joinButtonTitle = roomIsPrivate ? "Room is private" : !isOnline ? "Player is offline" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= ROOM_CAPACITY ? "Room is full" : "Unable to join this room";
+      setButtonEnabled(joinBtn, canJoinRoom);
+      joinBtn.title = canJoinRoom ? "Join room" : joinButtonTitle;
+      const countLabel = isOnline && typeof playersCount === "number" ? `${playersCount}/${ROOM_CAPACITY}` : "";
+      const joinLabel = countLabel ? `Join room (${countLabel})` : "Join room";
+      if (joinBtnLabel) {
+        joinBtnLabel.textContent = joinLabel;
+      } else {
+        joinBtn.textContent = joinLabel;
+      }
+      seatInfo.textContent = "";
+      seatInfo.style.display = "none";
+      const coinsValue = Number(friend.coins);
+      if (Number.isFinite(coinsValue)) {
+        profileCoinsValue.textContent = coinsValue.toLocaleString("en-US");
+        profileCoins.style.display = "flex";
+      } else {
+        profileCoinsValue.textContent = "";
+        profileCoins.style.display = "none";
+      }
+      setButtonEnabled(chatBtn, Boolean(friend.playerId));
+      chatBtn.title = friend.playerId ? "Open chat" : "Player ID unavailable";
+    };
+    const setProfileOpen = (open) => {
+      profileOpen = open;
+      listWrap.style.display = open ? "none" : "flex";
+      profileWrap.classList.toggle("active", open);
+    };
+    const handleFriendOpen = (event) => {
+      const detail = event.detail;
+      if (!detail) return;
+      const targetId = detail.playerId ?? detail.friend?.playerId;
+      if (!targetId) return;
+      const partial = detail.friend;
+      updateProfile({
+        playerId: targetId,
+        playerName: partial?.playerName ?? targetId,
+        avatarUrl: partial?.avatarUrl ?? null,
+        avatar: partial?.avatar ?? null,
+        lastEventAt: partial?.lastEventAt ?? null,
+        isOnline: partial?.isOnline ?? false,
+        privacy: partial?.privacy ?? {},
+        room: partial?.room ?? null,
+        coins: null
+      });
+      setProfileOpen(true);
+      void fetchPlayerView(targetId).then((full) => {
+        if (full && profileOpen) updateProfile(full);
+      });
+    };
+    backBtn.addEventListener("click", () => setProfileOpen(false));
+    window.addEventListener("qws-friend-info-open", handleFriendOpen);
+    return {
+      root,
+      show: () => {
+        if (profileOpen) return;
+      },
+      hide: () => {
+      },
+      refresh: () => {
+        void friendsTab.refresh({ force: true });
+      },
+      destroy: () => {
+        window.removeEventListener("qws-friend-info-open", handleFriendOpen);
+        friendsTab.destroy();
+        addTab.destroy();
+        requestsTab.destroy();
+        previewOverlay.remove();
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/settingsTab.ts
+  function createSettingsTab() {
+    const root = document.createElement("div");
+    root.className = "qws-fo-tab qws-fo-tab-settings";
+    const settings = getFriendSettings();
+    const layout = document.createElement("div");
+    layout.style.display = "flex";
+    layout.style.flexDirection = "column";
+    layout.style.gap = "12px";
+    layout.style.height = "100%";
+    layout.style.minHeight = "0";
+    layout.style.overflowY = "auto";
+    layout.style.paddingRight = "4px";
+    layout.style.flex = "1";
+    const profileCard = createCard("My profile");
+    profileCard.body.style.display = "flex";
+    profileCard.body.style.alignItems = "center";
+    profileCard.body.style.gap = "12px";
+    const avatarWrapper = document.createElement("div");
+    avatarWrapper.style.width = "54px";
+    avatarWrapper.style.height = "54px";
+    avatarWrapper.style.borderRadius = "14px";
+    avatarWrapper.style.background = "rgba(255, 255, 255, 0.05)";
+    avatarWrapper.style.display = "flex";
+    avatarWrapper.style.alignItems = "center";
+    avatarWrapper.style.justifyContent = "center";
+    avatarWrapper.style.overflow = "hidden";
+    avatarWrapper.style.border = "1px solid rgba(255, 255, 255, 0.08)";
+    const avatarImg = document.createElement("img");
+    avatarImg.alt = "Player avatar";
+    avatarImg.style.width = "100%";
+    avatarImg.style.height = "100%";
+    avatarImg.style.objectFit = "cover";
+    avatarImg.style.display = "none";
+    const avatarFallback = document.createElement("span");
+    avatarFallback.style.fontSize = "18px";
+    avatarFallback.style.fontWeight = "700";
+    avatarFallback.style.color = "#f8fafc";
+    avatarFallback.style.display = "block";
+    avatarWrapper.append(avatarImg, avatarFallback);
+    const profileText = document.createElement("div");
+    profileText.style.display = "grid";
+    profileText.style.gap = "4px";
+    profileText.style.minWidth = "0";
+    const profileNameLabel = document.createElement("div");
+    profileNameLabel.textContent = "Loading profile...";
+    profileNameLabel.style.fontSize = "14px";
+    profileNameLabel.style.fontWeight = "700";
+    profileNameLabel.style.whiteSpace = "nowrap";
+    profileNameLabel.style.overflow = "hidden";
+    profileNameLabel.style.textOverflow = "ellipsis";
+    const profileIdLabel = document.createElement("div");
+    profileIdLabel.textContent = "Loading player ID...";
+    profileIdLabel.style.fontSize = "12px";
+    profileIdLabel.style.opacity = "0.75";
+    profileText.append(profileNameLabel, profileIdLabel);
+    profileCard.body.append(avatarWrapper, profileText);
+    const globalCard = createCard("Global settings");
+    globalCard.body.style.display = "grid";
+    globalCard.body.style.gap = "12px";
+    const privacyCard = createCard("Privacy");
+    privacyCard.body.style.display = "grid";
+    privacyCard.body.style.gap = "12px";
+    const applyPatch = (patch2) => patchFriendSettings(patch2);
+    const buildToggleRow = (label2, checked, description, onToggle) => {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "1fr auto";
+      row.style.alignItems = "center";
+      row.style.gap = "12px";
+      const text = document.createElement("div");
+      text.style.display = "grid";
+      text.style.gap = "2px";
+      const labelEl = document.createElement("div");
+      labelEl.textContent = label2;
+      labelEl.style.fontWeight = "600";
+      labelEl.style.fontSize = "13px";
+      if (description) {
+        const descriptionEl = document.createElement("div");
+        descriptionEl.textContent = description;
+        descriptionEl.style.fontSize = "12px";
+        descriptionEl.style.opacity = "0.7";
+        text.append(labelEl, descriptionEl);
+      } else {
+        text.append(labelEl);
+      }
+      const toggle = createToggle(checked);
+      const input = getToggleInput(toggle);
+      if (input) {
+        input.addEventListener("input", () => {
+          onToggle(input.checked);
+        });
+      }
+      row.append(text, toggle);
+      return row;
+    };
+    globalCard.body.append(
+      buildToggleRow(
+        "Show online friends only",
+        settings.showOnlineFriendsOnly,
+        void 0,
+        (next) => applyPatch({ showOnlineFriendsOnly: next })
+      ),
+      buildToggleRow(
+        "Make my room private",
+        settings.hideRoomFromPublicList,
+        "Prevents friends from joining and hides your room from the public list.",
+        (next) => applyPatch({ hideRoomFromPublicList: next })
+      ),
+      buildToggleRow(
+        "Message notification sound",
+        settings.messageSoundEnabled,
+        "Plays a sound when you receive a new message.",
+        (next) => applyPatch({ messageSoundEnabled: next })
+      ),
+      buildToggleRow(
+        "Friend request notification sound",
+        settings.friendRequestSoundEnabled,
+        "Plays a sound when you receive a friend request.",
+        (next) => applyPatch({ friendRequestSoundEnabled: next })
+      )
+    );
+    privacyCard.body.append(
+      buildToggleRow(
+        "Friends can view my garden",
+        settings.showGarden,
+        void 0,
+        (next) => applyPatch({ showGarden: next })
+      ),
+      buildToggleRow(
+        "Friends can view my inventory",
+        settings.showInventory,
+        void 0,
+        (next) => applyPatch({ showInventory: next })
+      ),
+      buildToggleRow(
+        "Friends can see my coins",
+        settings.showCoins,
+        void 0,
+        (next) => applyPatch({ showCoins: next })
+      ),
+      buildToggleRow(
+        "Friends can see my activity log",
+        settings.showActivityLog,
+        void 0,
+        (next) => applyPatch({ showActivityLog: next })
+      ),
+      buildToggleRow(
+        "Friends can view my journal",
+        settings.showJournal,
+        void 0,
+        (next) => applyPatch({ showJournal: next })
+      ),
+      buildToggleRow(
+        "Friends can see my stats",
+        settings.showStats,
+        void 0,
+        (next) => applyPatch({ showStats: next })
+      )
+    );
+    layout.append(profileCard.root, globalCard.root, privacyCard.root);
+    root.appendChild(layout);
+    const updateProfileInfo = async () => {
+      const [resolved, playerInfo] = await Promise.all([
+        playerDatabaseUserId.get(),
+        player.get()
+      ]);
+      const displayName = (playerInfo?.name ?? "").trim();
+      profileNameLabel.textContent = displayName || "Your profile";
+      profileIdLabel.textContent = resolved ? `Player ID: ${resolved}` : "Player ID unavailable.";
+      const avatarUrl = (playerInfo?.discordAvatarUrl ?? "").trim();
+      if (avatarUrl) {
+        avatarImg.src = avatarUrl;
+        avatarImg.style.display = "";
+        avatarFallback.style.display = "none";
+      } else {
+        avatarImg.src = "";
+        avatarImg.style.display = "none";
+        const fallbackLabel = (displayName || resolved || "P").trim();
+        avatarFallback.textContent = fallbackLabel ? fallbackLabel.charAt(0).toUpperCase() : "P";
+        avatarFallback.style.display = "";
+      }
+    };
+    void updateProfileInfo();
+    let unsubscribePlayerId = null;
+    let unsubscribePlayer = null;
+    playerDatabaseUserId.onChangeNow(() => {
+      void updateProfileInfo();
+    }).then((unsub) => {
+      unsubscribePlayerId = unsub;
+    }).catch(() => {
+    });
+    player.onChangeNow(() => {
+      void updateProfileInfo();
+    }).then((unsub) => {
+      unsubscribePlayer = unsub;
+    }).catch(() => {
+    });
+    const unsubscribeSettings = onFriendSettingsChange(() => {
+    });
+    return {
+      root,
+      destroy: () => {
+        unsubscribeSettings();
+        try {
+          unsubscribePlayerId?.();
+        } catch {
+        }
+        try {
+          unsubscribePlayer?.();
+        } catch {
+        }
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/index.ts
+  var STYLE_ID2 = "qws-friend-overlay-css";
+  var style3 = (el2, s) => Object.assign(el2.style, s);
+  var setProps3 = (el2, props) => {
+    for (const [k, v] of Object.entries(props)) el2.style.setProperty(k, v);
+  };
+  function installInputKeyTrap2(scope) {
+    const isEditable = (el2) => {
+      if (!el2 || !(el2 instanceof HTMLElement)) return false;
+      if (el2 instanceof HTMLTextAreaElement) return true;
+      if (el2 instanceof HTMLInputElement) {
+        const t = (el2.type || "").toLowerCase();
+        return t === "text" || t === "number" || t === "search";
+      }
+      return el2.isContentEditable === true;
+    };
+    const inScope = (node) => !!(node && (scope.contains(node) || node.closest?.(".qws-fo-panel")));
+    const handler = (ev) => {
+      const target = ev.target;
+      const active = document.activeElement;
+      if (!(inScope(target) && isEditable(target) || inScope(active) && isEditable(active))) return;
+      ev.stopPropagation();
+      ev.stopImmediatePropagation?.();
+    };
+    const types = ["keydown", "keypress", "keyup"];
+    types.forEach((t) => {
+      window.addEventListener(t, handler, { capture: true });
+      document.addEventListener(t, handler, { capture: true });
+      scope.addEventListener(t, handler, { capture: true });
+    });
+    return () => {
+      types.forEach((t) => {
+        window.removeEventListener(t, handler, { capture: true });
+        document.removeEventListener(t, handler, { capture: true });
+        scope.removeEventListener(t, handler, { capture: true });
+      });
+    };
+  }
+  function ensureFriendOverlayStyle() {
+    if (document.getElementById(STYLE_ID2)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID2;
+    st.textContent = `
+.qws-fo-panel{
+  position:fixed;
+  top:50%;
+  left:50%;
+  width:min(980px, 95vw);
+  height:min(78vh, 640px);
+  max-height:78vh;
+  display:none;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,0.14);
+  background:linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%);
+  backdrop-filter:blur(10px);
+  color:#e7eef7;
+  box-shadow:0 18px 44px rgba(0,0,0,.45);
+  overflow:hidden;
+  z-index:var(--chakra-zIndices-DialogModal, 7010);
+  opacity:0;
+  transform:translate(-50%, calc(-50% + 6px));
+  pointer-events:none;
+  transition:opacity 180ms ease, transform 180ms ease;
+}
+.qws-fo-panel.open{
+  opacity:1;
+  transform:translate(-50%, -50%);
+  pointer-events:auto;
+}
+.qws-fo-panel *{ box-sizing:border-box; }
+.qws-fo-head{
+  padding:12px 16px;
+  font-weight:700;
+  letter-spacing:0.01em;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  background:linear-gradient(120deg, rgba(22,28,40,0.9), rgba(12,17,26,0.92));
+  cursor:grab;
+  user-select:none;
+}
+.qws-fo-title{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:14px;
+}
+.qws-fo-body{
+  display:grid;
+  grid-template-columns:180px 1fr;
+  height:calc(100% - 48px);
+  min-height:0;
+}
+.qws-fo-nav{
+  border-right:1px solid rgba(255,255,255,0.08);
+  padding:12px 10px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  background:rgba(10,14,20,0.7);
+}
+.qws-fo-nav-btn{
+  border:none;
+  background:transparent;
+  color:#c9d4e6;
+  padding:10px 12px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  font-size:12px;
+  transition:background 120ms ease, color 120ms ease, border 120ms ease;
+  border:1px solid transparent;
+  position:relative;
+}
+.qws-fo-nav-btn:hover{
+  background:rgba(94,234,212,0.08);
+  color:#e7eef7;
+}
+.qws-fo-nav-btn.active{
+  background:rgba(94,234,212,0.18);
+  border-color:rgba(94,234,212,0.35);
+  color:#ecfdf5;
+}
+.qws-fo-nav-icon{
+  width:20px;
+  height:20px;
+  border-radius:8px;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,0.08);
+  font-size:12px;
+  color:#dbe7f5;
+}
+.qws-fo-nav-icon svg{
+  width:14px;
+  height:14px;
+  display:block;
+}
+.qws-fo-btn__icon svg{
+  width:14px;
+  height:14px;
+  display:block;
+}
+.qws-fo-nav-badge{
+  margin-left:auto;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-size:11px;
+  font-weight:700;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-content{
+  position:relative;
+  overflow:hidden;
+  padding:12px;
+}
+.qws-fo-community{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+.qws-fo-community-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-community-tabshell{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+  padding:10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-community-tabs{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  align-items:center;
+  gap:6px;
+  width:100%;
+}
+.qws-fo-community-tab-btn{
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(17,24,39,0.6);
+  color:#e2e8f0;
+  padding:6px 10px;
+  border-radius:10px;
+  font-size:12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  transition:background 120ms ease, border 120ms ease, color 120ms ease;
+  position:relative;
+  justify-content:center;
+  width:100%;
+  white-space:nowrap;
+}
+.qws-fo-community-tab-btn.active{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.4);
+  color:#f8fafc;
+}
+.qws-fo-community-tab-badge{
+  min-width:18px;
+  height:18px;
+  padding:0 6px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-size:11px;
+  font-weight:700;
+  display:none;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-community-body{
+  flex:1;
+  min-height:0;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+.qws-fo-community-panel{
+  display:none;
+  flex-direction:column;
+  min-height:0;
+  height:100%;
+}
+.qws-fo-community-panel.active{
+  display:flex;
+}
+.qws-fo-community-profile{
+  display:none;
+  flex-direction:column;
+  gap:12px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-community-profile.active{
+  display:flex;
+}
+.qws-fo-garden-preview{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:flex-start;
+  justify-content:center;
+  background:transparent;
+  z-index:var(--chakra-zIndices-DialogModal, 7010);
+  pointer-events:none;
+  padding-top:60px;
+}
+.qws-fo-garden-preview.active{
+  display:flex;
+}
+.qws-fo-garden-preview-card{
+  pointer-events:auto;
+  background:rgba(15,20,30,0.92);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:16px;
+  padding:16px 18px;
+  min-width:260px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  box-shadow:0 16px 40px rgba(0,0,0,0.5);
+  text-align:center;
+}
+.qws-fo-garden-preview-title{
+  font-size:14px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-garden-preview-actions{
+  display:flex;
+  justify-content:center;
+  margin-top:4px;
+}
+.qws-fo-profile-top{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  justify-content:space-between;
+}
+.qws-fo-profile-top-left{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.qws-fo-profile-title{
+  font-size:13px;
+  font-weight:700;
+  color:#e2e8f0;
+}
+.qws-fo-profile-card{
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(15,20,30,0.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+  padding:14px;
+  display:grid;
+  gap:14px;
+}
+.qws-fo-profile-coins{
+  display:none;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(15,23,42,0.65);
+}
+.qws-fo-profile-coins-icon{
+  width:18px;
+  height:18px;
+  flex:0 0 18px;
+  object-fit:contain;
+}
+.qws-fo-profile-coins-value{
+  font-size:13px;
+  font-weight:700;
+  color:#f8fafc;
+  letter-spacing:0.01em;
+}
+.qws-fo-profile-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+  justify-content:space-between;
+  flex-wrap:wrap;
+}
+.qws-fo-profile-info{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+  flex:1 1 auto;
+}
+.qws-fo-profile-actions{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex:0 0 auto;
+  margin-left:auto;
+}
+.qws-fo-profile-remove{
+  padding:6px 10px;
+  font-size:12px;
+}
+.qws-fo-chat-btn{
+  width:36px;
+  height:36px;
+  padding:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-chat-btn .qws-fo-btn__label{
+  display:none;
+}
+.qws-fo-chat-btn .qws-fo-btn__icon{
+  margin:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-chat-btn .qws-fo-btn__icon svg{
+  width:16px;
+  height:16px;
+}
+.qws-fo-profile-join{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-direction:column;
+  align-items:flex-end;
+}
+.qws-fo-profile-seat{
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:rgba(148,163,184,0.9);
+  font-size:11px;
+  font-weight:600;
+  line-height:1;
+  white-space:nowrap;
+}
+.qws-fo-profile-avatar{
+  width:64px;
+  height:64px;
+  border-radius:16px;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,0.06);
+  font-weight:700;
+  position:relative;
+  border:3px solid rgba(148,163,184,0.3);
+  transition:border-color 200ms ease;
+}
+.qws-fo-profile-status-pill.online ~ * .qws-fo-profile-avatar,
+.qws-fo-profile-name-row:has(.qws-fo-profile-status-pill.online) ~ * .qws-fo-profile-avatar{
+  border-color:rgba(52,211,153,0.5);
+  box-shadow:0 0 0 4px rgba(52,211,153,0.1);
+}
+  font-size:18px;
+  color:#f8fafc;
+}
+.qws-fo-profile-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-profile-headline{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+.qws-fo-profile-name-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.qws-fo-profile-name{
+  font-size:16px;
+  font-weight:700;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-profile-status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 10px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.02em;
+  background:rgba(248,113,113,0.18);
+  color:#fecaca;
+  border:1px solid rgba(248,113,113,0.35);
+}
+.qws-fo-profile-status-pill.online{
+  background:rgba(52,211,153,0.18);
+  color:#bbf7d0;
+  border-color:rgba(52,211,153,0.35);
+}
+.qws-fo-profile-status-dot{
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  background:#f87171;
+}
+.qws-fo-profile-status-pill.online .qws-fo-profile-status-dot{
+  background:#34d399;
+}
+.qws-fo-profile-meta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-profile-chip{
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:rgba(148,163,184,0.9);
+  font-size:11px;
+  white-space:nowrap;
+  overflow:visible;
+  text-overflow:clip;
+  max-width:none;
+}
+.qws-fo-profile-grid{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.qws-fo-profile-section{
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(135deg, rgba(30,41,59,0.5) 0%, rgba(17,24,39,0.7) 100%);
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-height:0;
+  box-shadow:0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.qws-fo-profile-section-title{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.1em;
+  color:rgba(147,197,253,0.8);
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-profile-section-title::before{
+  content:'';
+  width:3px;
+  height:12px;
+  background:linear-gradient(180deg, #3b82f6, #8b5cf6);
+  border-radius:999px;
+}
+.qws-fo-privacy-list{
+  display:grid;
+  gap:6px;
+}
+.qws-fo-privacy-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:12px;
+  color:#e2e8f0;
+}
+.qws-fo-privacy-state{
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.02em;
+  background:rgba(248,113,113,0.2);
+  color:#fecaca;
+  border:1px solid rgba(248,113,113,0.35);
+}
+.qws-fo-privacy-state.allowed{
+  background:rgba(52,211,153,0.2);
+  color:#bbf7d0;
+  border-color:rgba(52,211,153,0.35);
+}
+.qws-fo-inspect-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+  gap:10px;
+}
+.qws-fo-inspect-card{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:8px;
+  padding:16px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(135deg, rgba(30,41,59,0.4) 0%, rgba(15,23,42,0.6) 100%);
+  box-shadow:0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06);
+  cursor:pointer;
+  transition:all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow:hidden;
+}
+.qws-fo-inspect-card::before{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(147,51,234,0.08) 100%);
+  opacity:0;
+  transition:opacity 200ms ease;
+  pointer-events:none;
+}
+.qws-fo-inspect-card:hover{
+  border-color:rgba(147,197,253,0.35);
+  transform:translateY(-2px);
+  box-shadow:0 8px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.qws-fo-inspect-card:hover::before{
+  opacity:1;
+}
+.qws-fo-inspect-card:active{
+  transform:translateY(0px);
+  transition:transform 80ms ease;
+}
+.qws-fo-inspect-card:disabled{
+  opacity:0.4;
+  cursor:not-allowed;
+  transform:none !important;
+}
+.qws-fo-inspect-card:disabled::before{
+  opacity:0 !important;
+}
+.qws-fo-inspect-icon{
+  width:32px;
+  height:32px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:10px;
+  background:rgba(255,255,255,0.08);
+  transition:all 200ms ease;
+}
+.qws-fo-inspect-card:hover .qws-fo-inspect-icon{
+  background:rgba(255,255,255,0.14);
+  transform:scale(1.1);
+}
+.qws-fo-inspect-icon svg{
+  width:18px;
+  height:18px;
+  opacity:0.9;
+}
+.qws-fo-inspect-label{
+  font-size:12px;
+  font-weight:600;
+  color:#e2e8f0;
+  text-align:center;
+  letter-spacing:0.01em;
+}
+@media (max-width: 820px){
+  .qws-fo-profile-grid{ gap:10px; }
+}
+
+.qws-fo-friends-list{
+  display:grid;
+  gap:10px;
+  padding:4px;
+  grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));
+  align-content:start;
+}
+.qws-fo-friend-card{
+  display:grid;
+  gap:10px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,20,30,0.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+  transition:background 140ms ease, border 140ms ease, transform 140ms ease;
+  cursor:pointer;
+  width:min(100%, 260px);
+  max-width:260px;
+  justify-self:start;
+  align-self:start;
+  height:auto;
+}
+.qws-fo-friend-card:hover{
+  border-color:rgba(59,130,246,0.35);
+  background:rgba(30,41,59,0.45);
+  transform:translateY(-1px);
+}
+.qws-fo-friend-card:focus{
+  outline:2px solid rgba(59,130,246,0.35);
+  outline-offset:2px;
+}
+.qws-fo-friend-avatar{
+  width:44px;
+  height:44px;
+  border-radius:12px;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  background:rgba(255,255,255,0.06);
+  font-weight:700;
+  font-size:14px;
+  color:#f8fafc;
+}
+.qws-fo-friend-header{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.qws-fo-friend-header-info{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.qws-fo-friend-name-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.qws-fo-friend-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-friend-main{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.qws-fo-friend-name{
+  font-weight:700;
+  font-size:13px;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-friend-status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:0;
+  border-radius:999px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:0.02em;
+  background:transparent;
+  color:rgba(226,232,240,0.7);
+  border:none;
+}
+.qws-fo-friend-status-pill.online{
+  background:transparent;
+  color:rgba(226,232,240,0.7);
+  border:none;
+}
+.qws-fo-friend-status-dot{
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  background:#f87171;
+}
+.qws-fo-friend-status-pill.online .qws-fo-friend-status-dot{
+  background:#34d399;
+}
+.qws-fo-friend-meta{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+  min-width:0;
+}
+.qws-fo-friend-lastseen{
+  white-space:nowrap;
+}
+.qws-fo-friend-room-chip{
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:rgba(148,163,184,0.9);
+  font-size:11px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:160px;
+}
+.qws-fo-friend-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+}
+.qws-fo-tab{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  pointer-events:none;
+  transform:translateX(6px);
+  transition:opacity 160ms ease, transform 160ms ease;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  padding:8px;
+}
+.qws-fo-tab.active{
+  opacity:1;
+  pointer-events:auto;
+  transform:translateX(0);
+}
+
+.qws-fo-btn{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(20,28,40,0.75);
+  color:#f8fafc;
+  font-weight:600;
+  padding:8px 12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  transition:background 140ms ease, border 140ms ease, transform 140ms ease;
+}
+.qws-fo-btn:hover{ background:rgba(30,41,59,0.8); }
+.qws-fo-btn.is-disabled{ opacity:0.5; cursor:not-allowed; }
+.qws-fo-btn--primary{
+  background:linear-gradient(135deg, #34d399 0%, #22d3ee 100%);
+  border-color:transparent;
+  color:#0b1020;
+}
+.qws-fo-btn--ghost{
+  background:rgba(148,163,184,0.12);
+  border-color:rgba(248,250,252,0.25);
+}
+.qws-fo-btn--danger{
+  background:rgba(239,68,68,0.16);
+  border-color:rgba(239,68,68,0.35);
+}
+.qws-fo-btn--sm{ padding:6px 10px; font-size:12px; }
+.qws-fo-btn--full{ width:100%; justify-content:center; }
+.qws-fo-btn__icon{ font-size:12px; opacity:0.9; }
+.qws-fo-btn__label{ display:inline-flex; align-items:center; }
+.qws-fo-mod-action-btn{
+  width:30px;
+  height:30px;
+  padding:0;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-mod-action-btn .qws-fo-btn__label{
+  display:none;
+}
+.qws-fo-mod-action-btn .qws-fo-btn__icon{
+  margin:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.qws-fo-mod-action-btn .qws-fo-btn__icon svg{
+  width:14px;
+  height:14px;
+}
+.qws-fo-mod-action-btn.is-added{
+  background:rgba(239,68,68,0.16);
+  border-color:rgba(239,68,68,0.35);
+  color:#fecaca;
+}
+.qws-fo-input{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(9,12,18,0.7);
+  color:#f8fafc;
+  padding:8px 10px;
+  font-size:12px;
+  outline:none;
+}
+.qws-fo-input::placeholder{ color:rgba(226,232,240,0.6); }
+.qws-fo-card{
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,20,30,0.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-card__head{
+  padding:10px 12px;
+  font-weight:700;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(226,232,240,0.7);
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+.qws-fo-card__body{
+  padding:12px;
+}
+.qws-fo-switch{
+  position:relative;
+  width:44px;
+  height:24px;
+  background:rgba(148,163,184,0.3);
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  padding:2px;
+  cursor:pointer;
+}
+.qws-fo-switch input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+.qws-fo-switch__knob{
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#e2e8f0;
+  transition:transform 140ms ease, background 140ms ease;
+}
+.qws-fo-switch input:checked + .qws-fo-switch__knob{
+  transform:translateX(20px);
+  background:#34d399;
+}
+
+.qws-fo-badge{
+  position:absolute;
+  top:-6px;
+  right:-6px;
+  min-width:18px;
+  height:18px;
+  padding:0 6px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(0,0,0,.35);
+  line-height:18px;
+  pointer-events:none;
+}
+@media (max-width: 820px){
+  .qws-fo-body{ grid-template-columns:1fr; }
+  .qws-fo-nav{
+    flex-direction:row;
+    overflow:auto;
+    border-right:none;
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  .qws-fo-nav-btn{ flex:1 0 auto; }
+}
+`;
+    document.head.appendChild(st);
+  }
+  var FriendOverlay = class {
+    constructor() {
+      __publicField(this, "slot", document.createElement("div"));
+      __publicField(this, "btn", document.createElement("button"));
+      __publicField(this, "iconWrap", document.createElement("div"));
+      __publicField(this, "badge", document.createElement("span"));
+      __publicField(this, "panel", document.createElement("div"));
+      __publicField(this, "nav", document.createElement("div"));
+      __publicField(this, "content", document.createElement("div"));
+      __publicField(this, "tabs", /* @__PURE__ */ new Map());
+      __publicField(this, "tabButtons", /* @__PURE__ */ new Map());
+      __publicField(this, "activeTab", "community");
+      __publicField(this, "panelOpen", false);
+      __publicField(this, "unreadMessages", 0);
+      __publicField(this, "pendingRequests", 0);
+      __publicField(this, "mo", null);
+      __publicField(this, "panelHeadEl", null);
+      __publicField(this, "panelDetached", false);
+      __publicField(this, "keyTrapCleanup", null);
+      __publicField(this, "handleOverlayOpen", () => this.setOpen(true));
+      __publicField(this, "handleOverlayClose", () => this.setOpen(false));
+      __publicField(this, "handleResize", () => {
+        this.attach();
+        if (this.panelOpen && !this.panelDetached) {
+          this.centerPanel();
+        }
+      });
+      __publicField(this, "handlePointerDown", (e) => {
+        if (!this.panelOpen) return;
+        const t = e.target;
+        if (!this.slot.contains(t)) {
+          this.setOpen(false);
+        }
+      });
+      ensureFriendOverlayStyle();
+      this.slot = this.createSlot();
+      this.btn = this.createButton();
+      this.badge = this.createBadge();
+      const lastTab = window.__qws_friend_overlay_last_tab;
+      if (lastTab === "community" || lastTab === "messages" || lastTab === "settings") {
+        this.activeTab = lastTab;
+      }
+      this.panel = this.createPanel();
+      this.keyTrapCleanup = installInputKeyTrap2(this.panel);
+      this.btn.onclick = () => {
+        const next = !this.panelOpen;
+        this.setOpen(next);
+      };
+      this.slot.append(this.btn, this.badge, this.panel);
+      this.attach();
+      this.observeDomForRelocation();
+      this.installPanelDrag();
+      window.addEventListener("pointerdown", this.handlePointerDown);
+      window.addEventListener("qws-friend-overlay-open", this.handleOverlayOpen);
+      window.addEventListener("qws-friend-overlay-close", this.handleOverlayClose);
+    }
+    destroy() {
+      try {
+        this.mo?.disconnect();
+      } catch {
+      }
+      try {
+        this.keyTrapCleanup?.();
+      } catch {
+      }
+      try {
+        window.removeEventListener("resize", this.handleResize);
+      } catch {
+      }
+      try {
+        this.panelHeadEl = null;
+      } catch {
+      }
+      try {
+        window.removeEventListener("pointerdown", this.handlePointerDown);
+      } catch {
+      }
+      try {
+        window.removeEventListener("qws-friend-overlay-open", this.handleOverlayOpen);
+        window.removeEventListener("qws-friend-overlay-close", this.handleOverlayClose);
+      } catch {
+      }
+      try {
+        this.slot.remove();
+      } catch {
+      }
+      for (const tab of this.tabs.values()) {
+        tab.destroy?.();
+      }
+    }
+    setOpen(open) {
+      if (this.panelOpen === open) return;
+      this.panelOpen = open;
+      if (open) {
+        this.panel.style.display = "block";
+        if (!this.panelDetached) {
+          this.centerPanel();
+        }
+        requestAnimationFrame(() => this.panel.classList.add("open"));
+        this.showTab(this.activeTab);
+        const lastCommunityTab = window.__qws_friend_overlay_last_community_tab;
+        if (this.activeTab === "community" && lastCommunityTab === "friends") {
+          this.tabs.get("community")?.refresh?.();
+        }
+      } else {
+        this.panel.classList.remove("open");
+        window.setTimeout(() => {
+          if (!this.panelOpen) {
+            this.panel.style.display = "none";
+          }
+        }, 180);
+        const active = this.tabs.get(this.activeTab);
+        active?.hide?.();
+      }
+      this.updateButtonBadge();
+    }
+    centerPanel() {
+      this.panel.style.left = "50%";
+      this.panel.style.top = "50%";
+      this.panel.style.right = "auto";
+      this.panel.style.bottom = "auto";
+      this.panel.style.transform = this.panel.classList.contains("open") ? "translate(-50%, -50%)" : "translate(-50%, calc(-50% + 6px))";
+    }
+    installPanelDrag() {
+      if (!this.panelHeadEl) return;
+      const head = this.panelHeadEl;
+      let dragging = false;
+      let offsetX = 0;
+      let offsetY = 0;
+      const onMove = (e) => {
+        if (!dragging) return;
+        const rect = this.panel.getBoundingClientRect();
+        let left = e.clientX - offsetX;
+        let top = e.clientY - offsetY;
+        const pad = 10;
+        const maxLeft = Math.max(pad, window.innerWidth - rect.width - pad);
+        const maxTop = Math.max(pad, window.innerHeight - rect.height - pad);
+        left = Math.min(Math.max(pad, left), maxLeft);
+        top = Math.min(Math.max(pad, top), maxTop);
+        this.panel.style.left = `${left}px`;
+        this.panel.style.top = `${top}px`;
+      };
+      const onUp = () => {
+        dragging = false;
+        head.style.cursor = "grab";
+        window.removeEventListener("pointermove", onMove, true);
+        window.removeEventListener("pointerup", onUp, true);
+      };
+      head.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        if (!this.panelOpen) return;
+        dragging = true;
+        this.panelDetached = true;
+        const rect = this.panel.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        this.panel.style.position = "fixed";
+        this.panel.style.left = `${rect.left}px`;
+        this.panel.style.top = `${rect.top}px`;
+        this.panel.style.right = "auto";
+        this.panel.style.bottom = "auto";
+        this.panel.style.transform = "none";
+        head.style.cursor = "grabbing";
+        window.addEventListener("pointermove", onMove, true);
+        window.addEventListener("pointerup", onUp, true);
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    }
+    updateButtonBadge() {
+      const total = this.unreadMessages + this.pendingRequests;
+      this.badge.textContent = total ? String(total) : "";
+      style3(this.badge, { display: total ? "inline-flex" : "none" });
+    }
+    setTabBadge(id, text) {
+      const btn = this.tabButtons.get(id);
+      if (!btn) return;
+      let badge = btn.querySelector(".qws-fo-nav-badge");
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "qws-fo-nav-badge";
+        btn.appendChild(badge);
+      }
+      if (!text) {
+        badge.style.display = "none";
+        badge.textContent = "";
+        return;
+      }
+      badge.textContent = text;
+      badge.style.display = "inline-flex";
+    }
+    createPanel() {
+      const panel = document.createElement("div");
+      panel.className = "qws-fo-panel";
+      const head = document.createElement("div");
+      head.className = "qws-fo-head";
+      this.panelHeadEl = head;
+      const title = document.createElement("div");
+      title.className = "qws-fo-title";
+      title.textContent = "Community Hub";
+      head.appendChild(title);
+      const body = document.createElement("div");
+      body.className = "qws-fo-body";
+      this.nav = document.createElement("div");
+      this.nav.className = "qws-fo-nav";
+      this.content = document.createElement("div");
+      this.content.className = "qws-fo-content";
+      body.append(this.nav, this.content);
+      panel.append(head, body);
+      this.buildTabs();
+      return panel;
+    }
+    buildTabs() {
+      let messagesHandle = null;
+      const tabDefs = [
+        {
+          id: "community",
+          label: "Friends",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm10-1a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/><path d="M2.5 20a5.5 5.5 0 0 1 5.5-5.5h2A5.5 5.5 0 0 1 15.5 20v.5H2.5V20Z" fill="currentColor"/><path d="M13.5 20a4.5 4.5 0 0 1 4.5-4.5h1A4.5 4.5 0 0 1 23.5 20v.5h-10V20Z" fill="currentColor" opacity="0.7"/></svg>',
+          build: () => {
+            const tab = createCommunityTab({
+              onRequestsCountChange: (count) => {
+                this.pendingRequests = count;
+                this.setTabBadge("community", count ? String(count) : null);
+                this.updateButtonBadge();
+              },
+              onChat: (playerId2) => {
+                if (!messagesHandle) return;
+                this.showTab("messages");
+                messagesHandle.openConversation(playerId2);
+              }
+            });
+            return {
+              id: "community",
+              root: tab.root,
+              refresh: tab.refresh,
+              show: tab.show,
+              hide: tab.hide,
+              destroy: tab.destroy
+            };
+          }
+        },
+        {
+          id: "messages",
+          label: "Messages",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" fill="currentColor"/><circle cx="9" cy="10" r="1.5" fill="#0b1020"/><circle cx="13" cy="10" r="1.5" fill="#0b1020"/><circle cx="17" cy="10" r="1.5" fill="#0b1020"/></svg>',
+          build: () => {
+            const tab = createMessagesTab({
+              onUnreadChange: (total) => {
+                this.unreadMessages = total;
+                this.setTabBadge("messages", total ? String(total) : null);
+                this.updateButtonBadge();
+              }
+            });
+            messagesHandle = tab;
+            return {
+              id: "messages",
+              root: tab.root,
+              show: tab.show,
+              hide: tab.hide,
+              destroy: tab.destroy
+            };
+          }
+        },
+        {
+          id: "settings",
+          label: "My profile",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" fill="currentColor"/><path d="M4 20a8 8 0 0 1 16 0v.5H4V20Z" fill="currentColor" opacity="0.6"/></svg>',
+          build: () => {
+            const tab = createSettingsTab();
+            return { id: "settings", root: tab.root, destroy: tab.destroy };
+          }
+        }
+      ];
+      tabDefs.forEach((def) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "qws-fo-nav-btn";
+        btn.dataset.tab = def.id;
+        const icon = document.createElement("span");
+        icon.className = "qws-fo-nav-icon";
+        icon.innerHTML = def.icon;
+        const label2 = document.createElement("span");
+        label2.textContent = def.label;
+        btn.append(icon, label2);
+        btn.addEventListener("click", () => this.showTab(def.id));
+        this.nav.appendChild(btn);
+        this.tabButtons.set(def.id, btn);
+        const instance = def.build();
+        instance.root.classList.add("qws-fo-tab");
+        this.tabs.set(def.id, instance);
+        this.content.appendChild(instance.root);
+      });
+      this.showTab(this.activeTab, { silent: true });
+    }
+    showTab(id, options = {}) {
+      this.activeTab = id;
+      window.__qws_friend_overlay_last_tab = id;
+      for (const [tabId, btn] of this.tabButtons) {
+        btn.classList.toggle("active", tabId === id);
+      }
+      const shouldNotify = this.panelOpen && !options.silent;
+      for (const [tabId, tab] of this.tabs) {
+        const isActive = tabId === id;
+        tab.root.classList.toggle("active", isActive);
+        if (shouldNotify) {
+          if (isActive) tab.show?.();
+          else tab.hide?.();
+        }
+      }
+    }
+    createSlot() {
+      const d = document.createElement("div");
+      style3(d, {
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        marginRight: "0",
+        pointerEvents: "auto",
+        fontFamily: "var(--chakra-fonts-body, GreyCliff CF), 'Space Grotesk', system-ui, sans-serif",
+        color: "var(--chakra-colors-chakra-body-text, #e7eef7)",
+        userSelect: "none",
+        zIndex: "var(--chakra-zIndices-PresentableOverlay, 5100)"
+      });
+      setProps3(d, {
+        "-webkit-font-smoothing": "antialiased",
+        "-webkit-text-size-adjust": "100%",
+        "text-rendering": "optimizeLegibility"
+      });
+      return d;
+    }
+    createButton() {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("aria-label", "Community Hub");
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("width", "18");
+      icon.setAttribute("height", "18");
+      icon.setAttribute("fill", "currentColor");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = '<path d="M7 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm10-1a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/><path d="M2.5 20a5.5 5.5 0 0 1 5.5-5.5h2A5.5 5.5 0 0 1 15.5 20v.5H2.5V20Z"/><path d="M13.5 20a4.5 4.5 0 0 1 4.5-4.5h1A4.5 4.5 0 0 1 23.5 20v.5h-10V20Z" opacity="0.7"/>';
+      this.iconWrap = document.createElement("div");
+      this.iconWrap.className = "qws-fo-icon-wrap";
+      this.iconWrap.appendChild(icon);
+      this.applyFallbackButtonStyles();
+      btn.appendChild(this.iconWrap);
+      btn.addEventListener("mouseenter", () => {
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
+      });
+      btn.addEventListener("mouseleave", () => {
+        if (btn.hasAttribute("style")) btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
+      });
+      return btn;
+    }
+    applyFallbackButtonStyles() {
+      this.btn.className = "";
+      style3(this.btn, {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "36px",
+        padding: "0 12px",
+        borderRadius: "var(--chakra-radii-button, 50px)",
+        border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
+        background: "var(--qws-panel, #111823cc)",
+        backdropFilter: "blur(var(--qws-blur, 8px))",
+        color: "var(--qws-text, #e7eef7)",
+        boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
+        cursor: "pointer",
+        transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
+        outline: "none",
+        position: "relative"
+      });
+      setProps3(this.btn, {
+        "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
+        "-webkit-tap-highlight-color": "transparent"
+      });
+      this.iconWrap.className = "qws-fo-icon-wrap";
+      style3(this.iconWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "6px",
+        height: "100%"
+      });
+    }
+    applyToolbarLook(toolbar) {
+      const refBtn = toolbar?.querySelector("button.chakra-button");
+      if (!refBtn) return;
+      this.btn.className = refBtn.className;
+      this.btn.removeAttribute("style");
+      this.btn.removeAttribute("data-focus-visible-added");
+      const refInner = refBtn.querySelector("div");
+      if (refInner) {
+        this.iconWrap.className = refInner.className;
+        this.iconWrap.removeAttribute("style");
+      }
+      style3(this.iconWrap, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%"
+      });
+      style3(this.btn, { position: "relative" });
+    }
+    createBadge() {
+      const badge = document.createElement("span");
+      badge.className = "qws-fo-badge";
+      style3(badge, { display: "none" });
+      return badge;
+    }
+    findNotifierSlot() {
+      const fromGlobal = window.__qws_notifier_slot;
+      if (fromGlobal && fromGlobal.isConnected) return fromGlobal;
+      const el2 = document.getElementById("qws-notifier-slot");
+      return el2 && el2.isConnected ? el2 : null;
+    }
+    closestFlexWithEnoughChildren(el2, minChildren = 3) {
+      let cur = el2;
+      while (cur && cur.parentElement) {
+        const parent = cur.parentElement;
+        const cs = getComputedStyle(parent);
+        if (cs.display.includes("flex") && parent.children.length >= minChildren) return parent;
+        cur = parent;
+      }
+      return null;
+    }
+    findToolbarContainer() {
+      try {
+        const mcFlex = document.querySelector(".McFlex.css-13izacw");
+        if (mcFlex) return mcFlex;
+        const chatBtn = document.querySelector('button[aria-label="Chat"]');
+        const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
+        if (flexFromChat) return flexFromChat;
+        const canvas = this.findTargetCanvas();
+        if (canvas) {
+          const flexFromCanvas = this.closestFlexWithEnoughChildren(canvas);
+          if (flexFromCanvas) return flexFromCanvas;
+          const block = this.findAnchorBlockFromCanvas(canvas);
+          if (block && block.parentElement) return block.parentElement;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    attachUnderNotifier() {
+      const notifier = this.findNotifierSlot();
+      if (!notifier) return false;
+      const toolbar = this.findToolbarContainer();
+      if (toolbar) {
+        this.applyToolbarLook(toolbar);
+      } else {
+        this.applyFallbackButtonStyles();
+      }
+      if (!document.body.contains(this.slot)) document.body.appendChild(this.slot);
+      const rect = notifier.getBoundingClientRect();
+      const width = this.slot.getBoundingClientRect().width || 42;
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, window.innerWidth - width - 8)
+      );
+      const top = rect.bottom + 8;
+      style3(this.slot, {
+        position: "fixed",
+        left: `${left}px`,
+        top: `${top}px`,
+        right: "",
+        bottom: "",
+        transform: ""
+      });
+      return true;
+    }
+    findTargetCanvas() {
+      try {
+        const c1 = document.querySelector("span[tabindex] canvas");
+        if (c1) return c1;
+        const all = Array.from(document.querySelectorAll("canvas"));
+        const candidates = all.map((c) => ({ c, r: c.getBoundingClientRect() })).filter(({ r }) => r.width <= 512 && r.height <= 512 && r.top < 300).sort((a, b) => a.r.left - b.r.left || a.r.top - b.r.top);
+        return candidates[0]?.c ?? null;
+      } catch {
+        return null;
+      }
+    }
+    findAnchorBlockFromCanvas(c) {
+      try {
+        const tabbable = c.closest("span[tabindex]");
+        if (tabbable && tabbable.parentElement) return tabbable.parentElement;
+        let cur = c;
+        while (cur && cur.parentElement) {
+          const p = cur.parentElement;
+          const cs = getComputedStyle(p);
+          if (cs.display.includes("flex") && p.children.length <= 3) return p;
+          cur = p;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    }
+    insertLeftOf(block, el2) {
+      const parent = block.parentElement;
+      if (!parent) return;
+      if (!block.isConnected || !parent.isConnected) return;
+      const cs = getComputedStyle(parent);
+      const isFlex = cs.display.includes("flex");
+      const dir = cs.flexDirection || "row";
+      try {
+        if (isFlex && dir.startsWith("row") && dir.endsWith("reverse")) {
+          if (el2 !== block.nextSibling) parent.insertBefore(el2, block.nextSibling);
+        } else {
+          parent.insertBefore(el2, block);
+        }
+      } catch {
+      }
+    }
+    attachFallback() {
+      const canvas = this.findTargetCanvas();
+      const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
+      if (!block || !block.parentElement || !block.isConnected) {
+        this.applyFallbackButtonStyles();
+        let fixed = document.getElementById("qws-friend-overlay-fallback");
+        if (!fixed) {
+          fixed = document.createElement("div");
+          fixed.id = "qws-friend-overlay-fallback";
+          style3(fixed, {
+            position: "fixed",
+            zIndex: "var(--chakra-zIndices-PresentableOverlay, 5100)",
+            top: "calc(10px + var(--sait, 0px))",
+            right: "calc(10px + var(--sair, 0px))"
+          });
+          document.body.appendChild(fixed);
+        }
+        if (!fixed.contains(this.slot)) fixed.appendChild(this.slot);
+        return;
+      }
+      this.applyToolbarLook(block.parentElement);
+      if (this.slot.parentElement !== block.parentElement || this.slot.nextElementSibling !== block && block.previousElementSibling !== this.slot) {
+        this.insertLeftOf(block, this.slot);
+      }
+    }
+    attach() {
+      if (this.attachUnderNotifier()) return;
+      this.attachFallback();
+    }
+    observeDomForRelocation() {
+      try {
+        this.mo?.disconnect();
+        this.mo = new MutationObserver(() => this.attach());
+        this.mo.observe(document.body, { childList: true, subtree: true });
+        this.attach();
+        window.addEventListener("resize", this.handleResize);
+      } catch {
+      }
+    }
+  };
+  async function renderFriendOverlay() {
+    const prev = window.__qws_cleanup_friend_overlay;
     if (typeof prev === "function") {
       try {
         prev();
       } catch {
       }
     }
-    const overlay = new MessagesOverlay();
-    await overlay.init();
-    window.__qws_cleanup_messages_overlay = () => {
+    const overlay = new FriendOverlay();
+    window.__qws_cleanup_friend_overlay = () => {
       try {
         overlay.destroy();
       } catch {
@@ -30104,7 +34904,7 @@
   // src/utils/shopUtility.ts
   var SHOP_TYPES = ["plant", "egg", "tool", "decor"];
   var BTN_CLASS = "romann-buyall-btn";
-  var STYLE_ID2 = "tm-buyall-css";
+  var STYLE_ID3 = "tm-buyall-css";
   var ITEM_SELECTOR = "div.McFlex.css-1kkwxjt";
   var LIST_SELECTOR = "div.McFlex.css-1lfov12";
   var ROW_SELECTOR = "div.McFlex.css-b9riu6";
@@ -30386,7 +35186,7 @@
     return any ?? null;
   }
   function ensureGlobalStyles() {
-    if (document.getElementById(STYLE_ID2)) return;
+    if (document.getElementById(STYLE_ID3)) return;
     const css = `
     .${BTN_CLASS}{
       background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
@@ -30433,12 +35233,12 @@
       box-shadow: none !important;
     }
   `.trim();
-    const style3 = document.createElement("style");
-    style3.id = STYLE_ID2;
-    style3.textContent = css;
-    document.head.appendChild(style3);
+    const style4 = document.createElement("style");
+    style4.id = STYLE_ID3;
+    style4.textContent = css;
+    document.head.appendChild(style4);
   }
-  function createButton2(templateBtn) {
+  function createButton3(templateBtn) {
     const btn = document.createElement("button");
     btn.type = "button";
     if (templateBtn?.className) {
@@ -30528,7 +35328,7 @@
     if (btns.length < 2) return;
     let middle = row.querySelector(`button.${BTN_CLASS}`);
     if (!middle) {
-      middle = createButton2(btns[0]);
+      middle = createButton3(btns[0]);
       row.insertBefore(middle, btns[1]);
     }
     const disabled = isItemDisabled(itemEl);
@@ -32247,14 +37047,14 @@
   var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
   var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
   var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
-  async function fetchTextWithFetch(url2, options) {
+  async function fetchTextWithFetch2(url2, options) {
     const response = await fetch(url2, { cache: "no-store", ...options });
     if (!response.ok) {
       throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
     }
     return await response.text();
   }
-  async function fetchTextWithGM(url2, options) {
+  async function fetchTextWithGM2(url2, options) {
     return new Promise((resolve2, reject) => {
       const xhr = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
       if (!xhr) return reject(new Error("GM_xmlhttpRequest not available"));
@@ -32270,24 +37070,24 @@
       });
     });
   }
-  async function fetchText(url2, options) {
+  async function fetchText2(url2, options) {
     const preferGM = isDiscordSurface();
     const hasGM = typeof GM_xmlhttpRequest === "function" || typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function";
     if (preferGM && hasGM) {
-      return await fetchTextWithGM(url2, options);
+      return await fetchTextWithGM2(url2, options);
     }
     try {
-      return await fetchTextWithFetch(url2, options);
+      return await fetchTextWithFetch2(url2, options);
     } catch (error) {
       if (hasGM) {
-        return await fetchTextWithGM(url2, options);
+        return await fetchTextWithGM2(url2, options);
       }
       throw error;
     }
   }
   async function fetchLatestCommitSha() {
     try {
-      const responseText = await fetchText(COMMITS_API_URL, {
+      const responseText = await fetchText2(COMMITS_API_URL, {
         headers: { Accept: "application/vnd.github+json" }
       });
       const data = JSON.parse(responseText);
@@ -32302,7 +37102,7 @@
   async function fetchScriptSource() {
     const commitSha = await fetchLatestCommitSha();
     const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
-    return await fetchText(scriptUrl);
+    return await fetchText2(scriptUrl);
   }
   async function fetchRemoteVersion() {
     try {
@@ -34321,10 +39121,10 @@
     }
     .tm-select-arrow svg { display: block; }
   `;
-    const style3 = document.createElement("style");
-    style3.id = id;
-    style3.textContent = css;
-    document.head.appendChild(style3);
+    const style4 = document.createElement("style");
+    style4.id = id;
+    style4.textContent = css;
+    document.head.appendChild(style4);
   }
   function createSortingBar(useCustomSelectStyles) {
     const wrap = document.createElement("div");
@@ -35361,7 +40161,7 @@
 
   // src/utils/activityLogFilter.ts
   var FILTER_STORAGE_KEY = "activityLog.filter";
-  var STYLE_ID3 = "mg-activity-log-filter-style";
+  var STYLE_ID4 = "mg-activity-log-filter-style";
   var ROOT_FLAG_ATTR = "data-mg-activity-log-filter-ready";
   var WRAPPER_CLASS = "mg-activity-log-filter";
   var BUTTON_CLASS = "mg-activity-log-filter-btn";
@@ -35695,7 +40495,7 @@
     }
   }
   function ensureStyles() {
-    if (document.getElementById(STYLE_ID3)) return;
+    if (document.getElementById(STYLE_ID4)) return;
     const css = `
 .${WRAPPER_CLASS}{
   display:flex;
@@ -35749,242 +40549,7 @@
 }
 `;
     const s = addStyle(css);
-    s.id = STYLE_ID3;
-  }
-
-  // src/services/activityLogHistory.ts
-  var HISTORY_STORAGE_KEY = "activityLog.history";
-  var HISTORY_LIMIT = 500;
-  var skipNextHistoryReopen = false;
-  function skipNextActivityLogHistoryReopen() {
-    skipNextHistoryReopen = true;
-  }
-  function normalizeEntry(raw) {
-    if (!raw || typeof raw !== "object") return null;
-    const ts = Number(raw.timestamp);
-    if (!Number.isFinite(ts)) return null;
-    const parameters = (() => {
-      const p = raw.parameters;
-      if (!p || typeof p !== "object") return p;
-      const petId = typeof p?.pet?.id === "string" ? p.pet.id : null;
-      if (petId && !p.petId) {
-        return { ...p, petId };
-      }
-      return p;
-    })();
-    const action2 = typeof raw.action === "string" && raw.action.trim() ? String(raw.action) : null;
-    const entry = {
-      ...raw,
-      timestamp: ts,
-      parameters
-    };
-    if (action2 !== null) entry.action = action2;
-    return entry;
-  }
-  function normalizeList(logs) {
-    const out = [];
-    if (!Array.isArray(logs)) return out;
-    for (const raw of logs) {
-      const norm3 = normalizeEntry(raw);
-      if (norm3) out.push(norm3);
-    }
-    return out;
-  }
-  function stableStringify(value) {
-    const seen = /* @__PURE__ */ new WeakSet();
-    const walk = (val) => {
-      if (val === null) return null;
-      if (typeof val !== "object") return val;
-      if (seen.has(val)) return "__CYCLE__";
-      seen.add(val);
-      if (Array.isArray(val)) return val.map(walk);
-      const obj = {};
-      const keys = Object.keys(val).sort();
-      for (const k of keys) obj[k] = walk(val[k]);
-      return obj;
-    };
-    try {
-      return JSON.stringify(walk(value));
-    } catch {
-      return "";
-    }
-  }
-  function entryIdentity(entry) {
-    const p = entry?.parameters;
-    const candidates = [
-      p?.id,
-      p?.pet?.id,
-      p?.petId,
-      p?.playerId,
-      p?.userId,
-      p?.objectId,
-      p?.slotId,
-      p?.itemId,
-      p?.cropId,
-      p?.seedId,
-      p?.decorId,
-      p?.toolId,
-      p?.targetId,
-      p?.abilityId
-    ];
-    for (const c of candidates) {
-      if (typeof c === "string" && c.trim()) return c;
-    }
-    return null;
-  }
-  function entryKey(entry) {
-    const ts = Number(entry.timestamp);
-    const action2 = typeof entry.action === "string" ? entry.action : "";
-    const identity = entryIdentity(entry) ?? "__noid__";
-    const tsPart = Number.isFinite(ts) ? String(ts) : `t:${stableStringify({ timestamp: entry.timestamp ?? null })}`;
-    return `${tsPart}|${action2}|${identity}`;
-  }
-  function entriesEqual(a, b) {
-    return stableStringify(a) === stableStringify(b);
-  }
-  function loadHistory() {
-    try {
-      const parsed = readAriesPath(HISTORY_STORAGE_KEY);
-      if (!Array.isArray(parsed)) return [];
-      const out = [];
-      for (const item of parsed) {
-        const norm3 = normalizeEntry(item);
-        if (norm3) out.push(norm3);
-      }
-      return out;
-    } catch {
-      return [];
-    }
-  }
-  function saveHistory(entries) {
-    const sorted = entries.slice().sort((a, b) => Number(a.timestamp || 0) - Number(b.timestamp || 0));
-    if (sorted.length > HISTORY_LIMIT) {
-      sorted.splice(0, sorted.length - HISTORY_LIMIT);
-    }
-    try {
-      writeAriesPath(HISTORY_STORAGE_KEY, sorted);
-    } catch {
-    }
-  }
-  function diffSnapshots(prev, next) {
-    const prevBuckets = /* @__PURE__ */ new Map();
-    const bucketPush = (k, entry) => {
-      const arr = prevBuckets.get(k);
-      if (arr) arr.push(entry);
-      else prevBuckets.set(k, [entry]);
-    };
-    for (const entry of prev) bucketPush(entryKey(entry), entry);
-    const added = [];
-    const updated = [];
-    for (const entry of next) {
-      const key2 = entryKey(entry);
-      const bucket = prevBuckets.get(key2);
-      const prevEntry = bucket?.shift();
-      if (!prevEntry) {
-        added.push(entry);
-      } else if (!entriesEqual(prevEntry, entry)) {
-        updated.push(entry);
-      }
-      if (bucket && bucket.length === 0) prevBuckets.delete(key2);
-    }
-    return { added, updated };
-  }
-  function syncHistory(prevSnapshot, nextSnapshot) {
-    const history2 = loadHistory();
-    const { added, updated } = diffSnapshots(prevSnapshot, nextSnapshot);
-    if (!added.length && !updated.length) return history2;
-    const map2 = /* @__PURE__ */ new Map();
-    for (const h of history2) map2.set(entryKey(h), h);
-    let changed = false;
-    const upsert = (entry) => {
-      const key2 = entryKey(entry);
-      const cur = map2.get(key2);
-      if (!cur || !entriesEqual(cur, entry)) {
-        map2.set(key2, entry);
-        changed = true;
-      }
-    };
-    updated.forEach(upsert);
-    added.forEach(upsert);
-    if (!changed) return history2;
-    const merged = Array.from(map2.values());
-    saveHistory(merged);
-    return merged;
-  }
-  async function reopenFakeActivityLogFromHistory() {
-    try {
-      const history2 = loadHistory();
-      await fakeActivityLogShow(history2, { open: true });
-    } catch {
-    }
-  }
-  async function startActivityLogHistoryWatcher() {
-    const stops = [];
-    let lastSnapshot = [];
-    const ingest = async (logs, prev) => {
-      try {
-        const prevSnapshot = typeof prev !== "undefined" ? normalizeList(prev) : lastSnapshot;
-        const nextSnapshot = normalizeList(logs);
-        syncHistory(prevSnapshot, nextSnapshot);
-        lastSnapshot = nextSnapshot;
-      } catch {
-      }
-    };
-    try {
-      const initial = normalizeList(await myActivityLog.get());
-      await ingest(initial);
-    } catch {
-    }
-    try {
-      const unsub = await myActivityLog.onChange((next, prev) => {
-        void ingest(next, prev);
-      });
-      stops.push(() => {
-        try {
-          unsub();
-        } catch {
-        }
-      });
-    } catch {
-    }
-    let lastModal = null;
-    try {
-      const cur = await Atoms.ui.activeModal.get();
-      lastModal = cur ?? null;
-    } catch {
-    }
-    const consumeHistoryReopenSkip = () => {
-      if (!skipNextHistoryReopen) return false;
-      skipNextHistoryReopen = false;
-      return true;
-    };
-    const onModalChange = async (modalId) => {
-      const cur = modalId ?? null;
-      if (cur === ACTIVITY_LOG_MODAL_ID && lastModal !== ACTIVITY_LOG_MODAL_ID) {
-        if (!consumeHistoryReopenSkip()) {
-          await reopenFakeActivityLogFromHistory();
-        }
-      }
-      lastModal = cur;
-    };
-    try {
-      const unsubModal = await Atoms.ui.activeModal.onChange(onModalChange);
-      stops.push(() => {
-        try {
-          unsubModal();
-        } catch {
-        }
-      });
-    } catch {
-    }
-    return async () => {
-      for (const stop2 of stops) {
-        try {
-          await stop2();
-        } catch {
-        }
-      }
-    };
+    s.id = STYLE_ID4;
   }
 
   // src/ui/hud.ts
@@ -36919,7 +41484,7 @@
       await startActivityLogHistoryWatcher();
       startActivityLogFilter();
       await renderOverlay();
-      await renderMessagesOverlay();
+      await renderFriendOverlay();
       setupBuyAll();
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();
@@ -37144,7 +41709,7 @@
     function formatNumber(value, digits = 3) {
       return value == null || Number.isNaN(value) || !Number.isFinite(value) ? "\u2014" : value.toFixed(digits);
     }
-    function setButtonEnabled(btn, enabled) {
+    function setButtonEnabled2(btn, enabled) {
       const setter = btn.setEnabled;
       if (typeof setter === "function") setter(enabled);
       else btn.disabled = !enabled;
@@ -37152,7 +41717,7 @@
     const scanLabel = btnScan.querySelector(".label");
     const defaultScanText = scanLabel?.textContent ?? "Rescan sounds";
     function setScanButtonLoading(loading) {
-      setButtonEnabled(btnScan, !loading);
+      setButtonEnabled2(btnScan, !loading);
       if (scanLabel) scanLabel.textContent = loading ? "Scanning\u2026" : defaultScanText;
     }
     function refreshData() {
@@ -37255,7 +41820,7 @@
       groupList.style.display = visible ? "" : "none";
       groupEmpty.textContent = groupEntries.length ? "No groups match the current filter." : "No groups detected yet. Run a rescan to populate the cache.";
       groupEmpty.style.display = visible ? "none" : "block";
-      setButtonEnabled(btnGroupClear, groupFilter.value.trim().length > 0);
+      setButtonEnabled2(btnGroupClear, groupFilter.value.trim().length > 0);
     }
     function renderSounds() {
       const rx = safeRegex(soundFilter.value.trim() || ".*");
@@ -37316,8 +41881,8 @@
       soundList.style.display = visibleSounds.length ? "" : "none";
       soundEmpty.textContent = infoList.length ? "No sounds match the current filter." : "No sounds detected yet. Run a rescan to populate the cache.";
       soundEmpty.style.display = visibleSounds.length ? "none" : "block";
-      setButtonEnabled(btnCopyVisible, visibleSounds.length > 0);
-      setButtonEnabled(btnSoundClear, soundFilter.value.trim().length > 0);
+      setButtonEnabled2(btnCopyVisible, visibleSounds.length > 0);
+      setButtonEnabled2(btnSoundClear, soundFilter.value.trim().length > 0);
     }
     async function refreshAll(opts = {}) {
       if (busy) return;
@@ -37325,8 +41890,8 @@
       const { rescan = false } = opts;
       overviewError.clear();
       if (rescan) setScanButtonLoading(true);
-      else setButtonEnabled(btnScan, false);
-      setButtonEnabled(btnRefresh, false);
+      else setButtonEnabled2(btnScan, false);
+      setButtonEnabled2(btnRefresh, false);
       let scanError = null;
       try {
         if (rescan) {
@@ -37347,8 +41912,8 @@
         }
       } finally {
         if (rescan) setScanButtonLoading(false);
-        else setButtonEnabled(btnScan, true);
-        setButtonEnabled(btnRefresh, true);
+        else setButtonEnabled2(btnScan, true);
+        setButtonEnabled2(btnRefresh, true);
         busy = false;
       }
     }
@@ -38792,7 +43357,7 @@ next: ${next}`;
         iconSlot.className = "dd-sprite-grid__icon";
         iconSlot.textContent = "\u2026";
         imgWrap.appendChild(iconSlot);
-        attachSpriteIcon(
+        attachSpriteIcon2(
           iconSlot,
           [parsed.category],
           buildSpriteCandidates3(parsed),
@@ -39143,9 +43708,9 @@ next: ${next}`;
   function ensureStyles2() {
     if (stylesInjected) return;
     stylesInjected = true;
-    const style3 = document.createElement("style");
-    style3.id = "mg-debug-data-styles";
-    style3.textContent = `
+    const style4 = document.createElement("style");
+    style4.id = "mg-debug-data-styles";
+    style4.textContent = `
   .dd-debug-view{display:flex;flex-direction:column;gap:16px;}
   .dd-debug-columns{display:grid;gap:16px;grid-template-columns:repeat(2,minmax(320px,1fr));align-items:start;}
   @media (max-width:720px){.dd-debug-columns{grid-template-columns:minmax(0,1fr);}}
@@ -39238,7 +43803,7 @@ next: ${next}`;
   .dd-sprite-mutation-btn:hover{border-color:rgba(255,255,255,.35);}
   .dd-sprite-mutation-btn.active{background:rgba(90,118,255,.18);border-color:rgba(90,118,255,.6);color:#9fb4ff;}
   `;
-    document.head.appendChild(style3);
+    document.head.appendChild(style4);
   }
   async function renderDebugDataMenu(root) {
     ensureStyles2();
@@ -39319,7 +43884,7 @@ next: ${next}`;
     tileRefsMutations
   ).filter((entry) => {
     const [key2, value] = entry;
-    if (key2 === "Puddle" || key2 === "Thunderstruck" || key2 === "ThunderstruckGround") {
+    if (key2 === "Puddle" || key2 === "ThunderstruckGround") {
       return false;
     }
     return typeof value === "number" && Number.isFinite(value);
@@ -39359,13 +43924,14 @@ next: ${next}`;
     Wet: "condition",
     Chilled: "condition",
     Frozen: "condition",
+    Thunderstruck: "condition",
     Dawnlit: "lighting",
     Amberlit: "lighting",
     Dawncharged: "lighting",
     Ambercharged: "lighting"
   };
   var WEATHER_RECIPE_GROUP_MEMBERS = {
-    condition: ["Wet", "Chilled", "Frozen"],
+    condition: ["Wet", "Chilled", "Frozen", "Thunderstruck"],
     lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"]
   };
   function normalizeWeatherSelection(selection) {
@@ -39421,7 +43987,7 @@ next: ${next}`;
       justifyContent: "center"
     });
     wrap.appendChild(createEmojiIcon(fallback, size));
-    attachSpriteIcon(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
+    attachSpriteIcon2(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
     return wrap;
   }
   function createEggIcon(eggId, label2, size = 32) {
@@ -39450,7 +44016,7 @@ next: ${next}`;
     add(eggId);
     add(label2);
     if (candidates.size) {
-      attachSpriteIcon(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
+      attachSpriteIcon2(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
     }
     return wrap;
   }
@@ -41882,7 +46448,7 @@ next: ${next}`;
     wrap.textContent = fallback && fallback.trim().length > 0 ? fallback : "??";
     const candidates = buildSpriteCandidates4(option.key, option);
     const categories = getSpriteCategoriesForKey(option?.key, option?.seedName, option?.cropName);
-    attachSpriteIcon(wrap, categories, candidates, size, logTag);
+    attachSpriteIcon2(wrap, categories, candidates, size, logTag);
     return wrap;
   }
   function applyCropSimulationSprite(el2, speciesKey, options = {}) {
@@ -41899,7 +46465,7 @@ next: ${next}`;
     const categories = options.categories && options.categories.length ? options.categories : getSpriteCategoriesForKey(speciesKey);
     const updateLoadedState = () => syncCropSpriteLoadedState(el2, layer);
     updateLoadedState();
-    attachSpriteIcon(
+    attachSpriteIcon2(
       layer,
       categories,
       candidates,
@@ -42724,15 +47290,15 @@ next: ${next}`;
     });
     if (key2 === "Celestial") {
       if (!document.getElementById("qws-celestial-kf")) {
-        const style3 = document.createElement("style");
-        style3.id = "qws-celestial-kf";
-        style3.textContent = `
+        const style4 = document.createElement("style");
+        style4.id = "qws-celestial-kf";
+        style4.textContent = `
 @keyframes qwsCelestialShift {
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }`;
-        document.head.appendChild(style3);
+        document.head.appendChild(style4);
       }
       el2.style.background = `linear-gradient(130deg,
       rgb(0,180,216) 0%,
@@ -43807,9 +48373,9 @@ next: ${next}`;
     view.innerHTML = "";
     view.style.cssText = "";
     if (!document.getElementById("qws-rule-style")) {
-      const style3 = document.createElement("style");
-      style3.id = "qws-rule-style";
-      style3.textContent = `
+      const style4 = document.createElement("style");
+      style4.id = "qws-rule-style";
+      style4.textContent = `
 :root {
   /* PATCH: z-index centralis\xE9 */
   --qws-z-popover: 99999999999999;
@@ -43862,7 +48428,7 @@ next: ${next}`;
   min-height: 1.2em;  /* ~1 ligne r\xE9serv\xE9e */
 }
 `;
-      document.head.appendChild(style3);
+      document.head.appendChild(style4);
     }
     const wrap = document.createElement("div");
     Object.assign(wrap.style, {
@@ -44072,7 +48638,7 @@ next: ${next}`;
         addCandidate(row.name);
         const candidates = Array.from(candidatesSet).filter(Boolean);
         if (candidates.length) {
-          attachSpriteIcon(iconWrap, spriteCategories, candidates, ICON, "alerts");
+          attachSpriteIcon2(iconWrap, spriteCategories, candidates, ICON, "alerts");
         }
       }
       const col = document.createElement("div");
@@ -44403,7 +48969,7 @@ next: ${next}`;
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
           avatar.appendChild(span);
-          attachSpriteIcon(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
+          attachSpriteIcon2(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
             mutations: Array.isArray(mutations2) ? mutations2 : void 0
           });
         };
@@ -44575,7 +49141,7 @@ next: ${next}`;
         ).values()
       ).filter(Boolean);
       if (candidates.length) {
-        attachSpriteIcon(iconWrap, weatherCategories, candidates, ICON, "alerts-weather");
+        attachSpriteIcon2(iconWrap, weatherCategories, candidates, ICON, "alerts-weather");
       }
       const col = document.createElement("div");
       Object.assign(col.style, {
@@ -45362,7 +49928,7 @@ next: ${next}`;
     if (candidates.length === 0) {
       candidates.push(`${normalized || sanitize(entry.lookupId)}Icon`);
     }
-    attachSpriteIcon(iconWrap, categories, candidates, 28, "stats-weather");
+    attachSpriteIcon2(iconWrap, categories, candidates, 28, "stats-weather");
     const label2 = document.createElement("span");
     label2.className = "stats-weather__label";
     label2.textContent = entry.label;
@@ -45535,7 +50101,7 @@ next: ${next}`;
     iconWrap.className = "stats-pet__icon";
     iconWrap.textContent = species?.trim().charAt(0).toUpperCase() || "?";
     iconWrap.setAttribute("aria-hidden", "true");
-    attachSpriteIcon(iconWrap, ["pet"], species, 28, "stats-pet");
+    attachSpriteIcon2(iconWrap, ["pet"], species, 28, "stats-pet");
     const label2 = document.createElement("span");
     label2.className = "stats-pet__label";
     label2.textContent = species;
@@ -45928,7 +50494,7 @@ next: ${next}`;
         applyImg(cached);
         return holder;
       }
-      attachSpriteIcon(holder, ["pet"], species, size, "pet-team-mini", {
+      attachSpriteIcon2(holder, ["pet"], species, size, "pet-team-mini", {
         mutations: pet.mutations,
         onSpriteApplied: (img) => {
           miniSpriteCache.set(cacheKey, img.src);
@@ -46552,7 +51118,7 @@ next: ${next}`;
             return;
           }
           iconWrap.dataset.iconKey = key2;
-          attachSpriteIcon(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
+          attachSpriteIcon2(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
             mutations,
             onNoSpriteFound: () => {
               iconWrap.replaceChildren();
@@ -46907,7 +51473,7 @@ next: ${next}`;
         });
         const label2 = String(item.title || "Pet");
         iconWrap.textContent = label2.charAt(0).toUpperCase();
-        attachSpriteIcon(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
+        attachSpriteIcon2(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
           onNoSpriteFound: () => {
             iconWrap.textContent = label2.charAt(0).toUpperCase();
           }
@@ -47214,7 +51780,7 @@ next: ${next}`;
       const letter = (log2.petName || species || "pet").charAt(0).toUpperCase();
       holder.textContent = letter || "\u{1F43E}";
       if (species) {
-        attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
+        attachSpriteIcon2(holder, ["pet"], species, size, "pet-log", {
           mutations,
           onSpriteApplied: (img) => {
             petSpriteCache.set(cacheKey, img.src);
@@ -50432,405 +54998,13 @@ next: ${next}`;
     }
   };
 
-  // src/utils/publicRooms.ts
-  var ROOMS_JSON_URL = "https://raw.githubusercontent.com/Ariedam64/MagicGarden-modMenu/refs/heads/main/rooms.json";
-  function resolveGmXhr() {
-    if (typeof GM_xmlhttpRequest === "function") {
-      return GM_xmlhttpRequest;
-    }
-    if (typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function") {
-      return GM.xmlHttpRequest.bind(GM);
-    }
-    return void 0;
-  }
-  async function fetchTextWithFetch2(url2, options) {
-    const response = await fetch(url2, { cache: "no-store", ...options });
-    if (!response.ok) {
-      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
-    }
-    return await response.text();
-  }
-  async function fetchTextWithGM2(url2, options) {
-    const xhr = resolveGmXhr();
-    if (!xhr) {
-      throw new Error("GM_xmlhttpRequest not available");
-    }
-    return await new Promise((resolve2, reject) => {
-      xhr({
-        method: "GET",
-        url: url2,
-        headers: options?.headers,
-        onload: (res) => {
-          if (res.status >= 200 && res.status < 300) {
-            resolve2(res.responseText ?? "");
-          } else {
-            reject(new Error(`GM_xmlhttpRequest failed: ${res.status}`));
-          }
-        },
-        onerror: (res) => {
-          reject(new Error(res.error ?? "GM_xmlhttpRequest error"));
-        },
-        ontimeout: () => reject(new Error("GM_xmlhttpRequest timeout")),
-        onabort: () => reject(new Error("GM_xmlhttpRequest aborted"))
-      });
-    });
-  }
-  async function fetchText2(url2, options) {
-    const preferGM = isDiscordSurface();
-    const hasGM = !!resolveGmXhr();
-    if (preferGM && hasGM) {
-      return await fetchTextWithGM2(url2, options);
-    }
-    try {
-      return await fetchTextWithFetch2(url2, options);
-    } catch (error) {
-      if (hasGM) {
-        return await fetchTextWithGM2(url2, options);
-      }
-      throw error;
-    }
-  }
-  async function fetchRemoteRooms() {
-    const text = await fetchText2(ROOMS_JSON_URL);
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      throw new Error("Failed to parse rooms JSON", { cause: error });
-    }
-  }
-
-  // src/services/room.ts
-  var MAX_PLAYERS = 6;
-  function deriveCategoryFromName(name) {
-    const match = /^([a-zA-Z]+)/.exec(name);
-    if (match && match[1]) {
-      return match[1].toLowerCase();
-    }
-    return "other";
-  }
-  function deriveCategoryOrder(definitions2, preferredOrder = []) {
-    const available = new Set(definitions2.map((room) => room.category));
-    const seen = /* @__PURE__ */ new Set();
-    const order = [];
-    for (const category of preferredOrder) {
-      if (!available.has(category)) continue;
-      if (seen.has(category)) continue;
-      seen.add(category);
-      order.push(category);
-    }
-    for (const room of definitions2) {
-      if (seen.has(room.category)) continue;
-      seen.add(room.category);
-      order.push(room.category);
-    }
-    return order;
-  }
-  function createStateFromDefinitions(definitions2, preferredOrder = []) {
-    const cloned = definitions2.map((room) => ({ ...room }));
-    return {
-      definitions: cloned,
-      categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
-    };
-  }
-  function cloneState2(state3) {
-    return {
-      definitions: state3.definitions.map((room) => ({ ...room })),
-      categoryOrder: [...state3.categoryOrder]
-    };
-  }
-  var INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
-  var publicRoomsState = cloneState2(INITIAL_PUBLIC_ROOMS_STATE);
-  var remoteRoomsStatus = "idle";
-  var remoteRoomsPromise = null;
-  function parseRemoteRoomsPayload(payload) {
-    if (!payload || typeof payload !== "object") {
-      return null;
-    }
-    const record = payload.publicRooms;
-    if (!record || typeof record !== "object") {
-      return null;
-    }
-    const definitions2 = [];
-    const categoryOrder = [];
-    for (const [rawCategory, entries] of Object.entries(record)) {
-      if (!Array.isArray(entries) || !entries.length) {
-        continue;
-      }
-      const categoryName = typeof rawCategory === "string" ? rawCategory.trim() : "";
-      if (!categoryName) {
-        continue;
-      }
-      if (!categoryOrder.includes(categoryName)) {
-        categoryOrder.push(categoryName);
-      }
-      for (const entry of entries) {
-        if (typeof entry !== "string") {
-          continue;
-        }
-        const separatorIndex = entry.indexOf(":");
-        if (separatorIndex <= 0) {
-          continue;
-        }
-        const name = entry.slice(0, separatorIndex).trim();
-        const idRoom = entry.slice(separatorIndex + 1).trim();
-        if (!name || !idRoom) {
-          continue;
-        }
-        definitions2.push({
-          name,
-          idRoom,
-          category: categoryName
-        });
-      }
-    }
-    if (!definitions2.length) {
-      return null;
-    }
-    return createStateFromDefinitions(definitions2, categoryOrder);
-  }
-  function setPublicRoomsState(next) {
-    publicRoomsState = cloneState2(next);
-  }
-  function requestRemoteRoomsFetch() {
-    if (remoteRoomsStatus === "pending" || remoteRoomsStatus === "fulfilled" || remoteRoomsStatus === "rejected") {
-      return remoteRoomsPromise;
-    }
-    if (typeof window === "undefined") {
-      return null;
-    }
-    remoteRoomsStatus = "pending";
-    remoteRoomsPromise = (async () => {
-      try {
-        const payload = await fetchRemoteRooms();
-        const parsed = parseRemoteRoomsPayload(payload);
-        if (parsed) {
-          setPublicRoomsState(parsed);
-        }
-        remoteRoomsStatus = "fulfilled";
-      } catch (error) {
-        remoteRoomsStatus = "rejected";
-        console.warn("[MagicGarden] Unable to load remote rooms list", error);
-      }
-    })();
-    return remoteRoomsPromise;
-  }
-  async function ensureRemoteRoomsLoaded() {
-    const promise2 = requestRemoteRoomsFetch();
-    if (promise2) {
-      await promise2;
-    }
-  }
-  function sanitizeRoomDefinition(room) {
-    if (!room) return null;
-    const name = typeof room.name === "string" ? room.name.trim() : "";
-    const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
-    if (!name || !idRoom) return null;
-    return {
-      name,
-      idRoom,
-      category: deriveCategoryFromName(name)
-    };
-  }
-  function loadStoredCustomRooms() {
-    const parsed = readAriesPath("room.customRooms") ?? [];
-    if (!Array.isArray(parsed)) return [];
-    const result = [];
-    for (const entry of parsed) {
-      const sanitized = sanitizeRoomDefinition(entry);
-      if (sanitized) result.push(sanitized);
-    }
-    return result;
-  }
-  function persistCustomRooms(rooms) {
-    const payload = rooms.map((room) => ({
-      name: room.name,
-      idRoom: room.idRoom
-    }));
-    writeAriesPath("room.customRooms", payload);
-  }
-  var customRoomsCache = null;
-  function getCustomRoomsCache() {
-    if (!customRoomsCache) {
-      customRoomsCache = loadStoredCustomRooms();
-    }
-    return customRoomsCache.map((room) => ({ ...room }));
-  }
-  function setCustomRoomsCache(rooms) {
-    customRoomsCache = rooms.map((room) => ({ ...room }));
-    persistCustomRooms(customRoomsCache);
-  }
-  function normalizeIdentifier(value) {
-    return value.trim().toLowerCase();
-  }
-  function fetchStatusesFor(definitions2) {
-    const now2 = Date.now();
-    return Promise.all(
-      definitions2.map(async (def) => {
-        try {
-          const response = await requestRoomEndpoint(def.idRoom, {
-            endpoint: "info",
-            timeoutMs: 1e4
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-          const payload = response.parsed ?? (() => {
-            try {
-              return JSON.parse(response.body);
-            } catch {
-              return void 0;
-            }
-          })();
-          const players = clampPlayerCount(typeof payload?.numPlayers === "number" ? payload.numPlayers : 0);
-          const capacity = MAX_PLAYERS;
-          const currentGame = typeof payload?.currentGame === "string" && payload.currentGame.trim().length ? payload.currentGame.trim() : void 0;
-          const hostPlayerId = typeof payload?.hostPlayerId === "string" && payload.hostPlayerId.trim().length ? payload.hostPlayerId.trim() : void 0;
-          const playerDetails = normalizeRoomPlayers(payload?.players, hostPlayerId);
-          return {
-            ...def,
-            players,
-            capacity,
-            isFull: players >= capacity,
-            lastUpdatedAt: now2,
-            currentGame,
-            hostPlayerId,
-            playerDetails
-          };
-        } catch (error) {
-          const message = normalizeError(error);
-          return {
-            ...def,
-            players: 0,
-            capacity: MAX_PLAYERS,
-            isFull: false,
-            lastUpdatedAt: now2,
-            hostPlayerId: void 0,
-            playerDetails: [],
-            error: message
-          };
-        }
-      })
-    );
-  }
-  function clampPlayerCount(value) {
-    if (!Number.isFinite(value)) return 0;
-    return Math.max(0, Math.min(MAX_PLAYERS, Math.floor(value)));
-  }
-  function normalizeRoomPlayers(value, hostPlayerId) {
-    if (!Array.isArray(value)) return [];
-    const normalized = [];
-    for (const entry of value) {
-      if (!entry || typeof entry !== "object") continue;
-      const id = typeof entry.id === "string" && entry.id.trim().length ? entry.id.trim() : void 0;
-      const databaseUserId = typeof entry.databaseUserId === "string" && entry.databaseUserId.trim().length ? entry.databaseUserId.trim() : void 0;
-      const rawName = typeof entry.name === "string" ? entry.name.trim() : "";
-      const name = rawName || "Unknown player";
-      const isConnected = typeof entry.isConnected === "boolean" ? entry.isConnected : false;
-      const discordAvatarUrl = typeof entry.discordAvatarUrl === "string" && entry.discordAvatarUrl.trim().length ? entry.discordAvatarUrl.trim() : void 0;
-      normalized.push({
-        id,
-        databaseUserId,
-        name,
-        isConnected,
-        discordAvatarUrl,
-        isHost: Boolean(hostPlayerId && (id === hostPlayerId || databaseUserId === hostPlayerId))
-      });
-    }
-    return normalized;
-  }
-  function normalizeError(error) {
-    if (!error) return "Erreur inconnue.";
-    if (typeof error === "string") return error;
-    if (error instanceof Error) return error.message || "Erreur inconnue.";
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return String(error);
-    }
-  }
-  var RoomService = {
-    getPublicRooms() {
-      void requestRemoteRoomsFetch();
-      return publicRoomsState.definitions.map((room) => ({ ...room }));
-    },
-    getPublicRoomsCategoryOrder() {
-      void requestRemoteRoomsFetch();
-      return [...publicRoomsState.categoryOrder];
-    },
-    getCustomRooms() {
-      return getCustomRoomsCache();
-    },
-    addCustomRoom(room) {
-      const name = typeof room.name === "string" ? room.name.trim() : "";
-      const idRoom = typeof room.idRoom === "string" ? room.idRoom.trim() : "";
-      if (!name) {
-        return { ok: false, error: "Room name is required." };
-      }
-      if (!idRoom) {
-        return { ok: false, error: "Room identifier is required." };
-      }
-      const normalizedName = normalizeIdentifier(name);
-      const normalizedId = normalizeIdentifier(idRoom);
-      const allRooms = [...this.getPublicRooms(), ...getCustomRoomsCache()];
-      if (allRooms.some((existing) => normalizeIdentifier(existing.idRoom) === normalizedId)) {
-        return { ok: false, error: "This room already exists." };
-      }
-      if (allRooms.some((existing) => normalizeIdentifier(existing.name) === normalizedName)) {
-        return { ok: false, error: "A room with this name already exists." };
-      }
-      const definition = {
-        name,
-        idRoom,
-        category: deriveCategoryFromName(name)
-      };
-      const next = [...getCustomRoomsCache(), definition];
-      setCustomRoomsCache(next);
-      return { ok: true, room: { ...definition } };
-    },
-    removeCustomRoom(idRoom) {
-      const normalizedId = normalizeIdentifier(idRoom);
-      const rooms = getCustomRoomsCache();
-      const filtered = rooms.filter((room) => normalizeIdentifier(room.idRoom) !== normalizedId);
-      if (filtered.length === rooms.length) {
-        return false;
-      }
-      setCustomRoomsCache(filtered);
-      return true;
-    },
-    async fetchPublicRoomsStatus() {
-      await ensureRemoteRoomsLoaded();
-      const definitions2 = publicRoomsState.definitions.map((room) => ({ ...room }));
-      return fetchStatusesFor(definitions2);
-    },
-    async fetchCustomRoomsStatus() {
-      const definitions2 = this.getCustomRooms();
-      if (!definitions2.length) return [];
-      return fetchStatusesFor(definitions2);
-    },
-    canJoinPublicRoom(room) {
-      if (room.error) return false;
-      if (room.isFull) return false;
-      if (this.isDiscordActivity()) return false;
-      return true;
-    },
-    isDiscordActivity() {
-      return isDiscordSurface();
-    },
-    joinPublicRoom(room) {
-      const result = joinRoom(room.idRoom, { siteFallbackOnDiscord: true, preferSoft: false });
-      if (!result.ok) {
-      }
-      return result;
-    }
-  };
-
   // src/ui/menus/room.ts
   var ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
   function ensureRoomMenuStyles() {
     if (document.getElementById(ROOM_MENU_STYLE_ID)) return;
-    const style3 = document.createElement("style");
-    style3.id = ROOM_MENU_STYLE_ID;
-    style3.textContent = `
+    const style4 = document.createElement("style");
+    style4.id = ROOM_MENU_STYLE_ID;
+    style4.textContent = `
 @keyframes room-menu-spin {
   from {
     transform: rotate(0deg);
@@ -50847,7 +55021,7 @@ next: ${next}`;
   min-width: 160px;
 }
 `;
-    document.head.appendChild(style3);
+    document.head.appendChild(style4);
   }
   var TAB_ID = "public-rooms";
   var SEARCH_TAB_ID = "search-player";
@@ -52352,7 +56526,7 @@ next: ${next}`;
       });
       actionsWrap.appendChild(resetBtn);
     }
-    const setButtonEnabled = (btn, enabled) => {
+    const setButtonEnabled2 = (btn, enabled) => {
       if (!btn) return;
       const setter = btn.setEnabled;
       if (setter) {
@@ -52366,11 +56540,11 @@ next: ${next}`;
     const updateButtons2 = (current) => {
       const hasHotkey = hotkeyToString(current).length > 0;
       if (clearBtn) {
-        setButtonEnabled(clearBtn, hasHotkey);
+        setButtonEnabled2(clearBtn, hasHotkey);
       }
       if (resetBtn) {
         const isDefault = hotkeyToString(current) === defaultString;
-        setButtonEnabled(resetBtn, !isDefault);
+        setButtonEnabled2(resetBtn, !isDefault);
       }
     };
     if (clearBtn) {
@@ -52447,1377 +56621,6 @@ next: ${next}`;
       wrapper.appendChild(card.root);
     }
     view.appendChild(wrapper);
-  }
-
-  // src/utils/friendSettings.ts
-  var subscribers = /* @__PURE__ */ new Set();
-  var currentSettings = null;
-  var initialized = false;
-  function persistSettings(settings) {
-    try {
-      writeAriesPath(FRIEND_SETTINGS_PATH, settings);
-    } catch {
-    }
-  }
-  function ensureSettingsInitialized() {
-    if (initialized && currentSettings) {
-      return currentSettings;
-    }
-    initialized = true;
-    const stored = readAriesPath(FRIEND_SETTINGS_PATH);
-    const next = buildSettings(stored);
-    currentSettings = next;
-    if (!stored) {
-      persistSettings(next);
-    }
-    return next;
-  }
-  function notifySubscribers(next) {
-    for (const cb of subscribers) {
-      try {
-        cb(next);
-      } catch (error) {
-        console.error("[FriendSettings] subscriber error", error);
-      }
-    }
-  }
-  function buildSettings(raw) {
-    return { ...DEFAULT_FRIEND_SETTINGS, ...raw ?? {} };
-  }
-  function getFriendSettings() {
-    return ensureSettingsInitialized();
-  }
-  function setFriendSettings(settings) {
-    ensureSettingsInitialized();
-    const next = buildSettings(settings);
-    currentSettings = next;
-    notifySubscribers(next);
-    persistSettings(next);
-    return next;
-  }
-  function patchFriendSettings(patch2) {
-    const base2 = ensureSettingsInitialized();
-    return setFriendSettings({ ...base2, ...patch2 });
-  }
-  function onFriendSettingsChange(cb) {
-    subscribers.add(cb);
-    return () => subscribers.delete(cb);
-  }
-
-  // src/ui/menus/friends.ts
-  var FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
-  var FRIENDS_REFRESH_EVENT2 = "qws-friends-refresh";
-  var dispatchFriendsRefresh = () => {
-    try {
-      window.dispatchEvent(new CustomEvent(FRIENDS_REFRESH_EVENT2));
-    } catch {
-    }
-  };
-  function ensureFriendsMenuRefreshStyle() {
-    if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
-    const style3 = document.createElement("style");
-    style3.id = FRIENDS_MENU_REFRESH_STYLE_ID;
-    style3.textContent = `
-@keyframes friends-menu-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-`;
-    document.head.appendChild(style3);
-  }
-  function createRefreshIndicator(scrollTarget, container, offsetY = 14) {
-    ensureFriendsMenuRefreshStyle();
-    const computedPosition = container.style.position || "";
-    if (!computedPosition || computedPosition === "static") {
-      container.style.position = "relative";
-    }
-    const indicator = document.createElement("div");
-    Object.assign(indicator.style, {
-      position: "absolute",
-      top: `${offsetY}px`,
-      right: "14px",
-      width: "28px",
-      height: "28px",
-      borderRadius: "999px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "rgba(14, 16, 25, 0.9)",
-      border: "1px solid rgba(255, 255, 255, 0.08)",
-      boxShadow: "0 10px 24px rgba(0, 0, 0, 0.45)",
-      opacity: "0",
-      visibility: "hidden",
-      pointerEvents: "none",
-      transition: "opacity 160ms ease, transform 160ms ease",
-      zIndex: "3"
-    });
-    const spinner = document.createElement("div");
-    Object.assign(spinner.style, {
-      width: "16px",
-      height: "16px",
-      borderRadius: "999px",
-      border: "2px solid rgba(248, 250, 252, 0.16)",
-      borderTopColor: "#f8fafc",
-      animation: "friends-menu-spin 1s linear infinite"
-    });
-    indicator.appendChild(spinner);
-    container.appendChild(indicator);
-    let isVisible3 = false;
-    let hideTimeout = null;
-    const hide = () => {
-      if (hideTimeout) {
-        window.clearTimeout(hideTimeout);
-        hideTimeout = null;
-      }
-      indicator.style.opacity = "0";
-      const onTransitionEnd = () => {
-        if (!isVisible3) {
-          indicator.style.visibility = "hidden";
-        }
-      };
-      indicator.addEventListener("transitionend", onTransitionEnd, { once: true });
-      hideTimeout = window.setTimeout(() => {
-        if (!isVisible3) {
-          indicator.style.visibility = "hidden";
-        }
-        hideTimeout = null;
-      }, 220);
-    };
-    const setVisible = (next) => {
-      if (next) {
-        if (hideTimeout) {
-          window.clearTimeout(hideTimeout);
-          hideTimeout = null;
-        }
-        isVisible3 = true;
-        indicator.style.visibility = "visible";
-        indicator.style.opacity = "1";
-      } else if (isVisible3) {
-        isVisible3 = false;
-        hide();
-      }
-    };
-    return { setVisible };
-  }
-  var activeGardenPreview = null;
-  async function stopActiveGardenPreview(keepButton) {
-    if (!activeGardenPreview) return;
-    const clearFn = window.qwsEditorClearFriendGardenPreview;
-    if (typeof clearFn === "function") {
-      try {
-        await clearFn();
-      } catch (error) {
-        console.error("[FriendsMenu] clear garden preview", error);
-      }
-    }
-    const prevButton = activeGardenPreview.button;
-    if (!keepButton || keepButton !== prevButton) {
-      const defaultLabel = prevButton.dataset.gardenDefaultLabel ?? "Garden";
-      prevButton.textContent = defaultLabel;
-    }
-    activeGardenPreview = null;
-  }
-  var refreshAllFriends = null;
-  var refreshIncomingRequests = null;
-  function formatLastSeen3(timestamp) {
-    if (!timestamp) return null;
-    const parsed = Date.parse(timestamp);
-    if (!Number.isFinite(parsed)) return null;
-    const deltaSeconds = Math.max(0, Math.floor((Date.now() - parsed) / 1e3));
-    if (deltaSeconds < 60) {
-      return deltaSeconds <= 15 ? "just now" : `${deltaSeconds}s`;
-    }
-    const minutes = Math.floor(deltaSeconds / 60);
-    if (minutes < 60) {
-      return `${minutes}min`;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-      return `${hours}h`;
-    }
-    const days = Math.floor(hours / 24);
-    return `${days}d`;
-  }
-  function formatCoinAmount(value) {
-    const numeric = typeof value === "string" ? Number(value) : value;
-    if (numeric == null || !Number.isFinite(numeric)) return null;
-    const abs = Math.abs(numeric);
-    const units = [
-      { threshold: 1e12, suffix: "T" },
-      { threshold: 1e9, suffix: "B" },
-      { threshold: 1e6, suffix: "M" },
-      { threshold: 1e3, suffix: "K" }
-    ];
-    for (const { threshold, suffix } of units) {
-      if (abs >= threshold) {
-        const normalized = numeric / threshold;
-        return `${normalized.toFixed(2)}${suffix}`;
-      }
-    }
-    return numeric.toLocaleString("en-US");
-  }
-  function createPrivacyBadge(label2, enabled) {
-    const badge = document.createElement("span");
-    badge.textContent = label2;
-    badge.style.fontSize = "16px";
-    badge.style.lineHeight = "1";
-    badge.style.opacity = enabled ? "1" : "0.3";
-    badge.style.display = "inline-flex";
-    badge.style.alignItems = "center";
-    badge.style.justifyContent = "center";
-    badge.style.width = "auto";
-    badge.style.height = "auto";
-    badge.style.fontWeight = "500";
-    return badge;
-  }
-  function createFriendRow(ui, friend) {
-    const card = document.createElement("div");
-    card.style.display = "grid";
-    card.style.gridTemplateColumns = "1fr";
-    card.style.alignItems = "stretch";
-    card.style.gap = "8px";
-    card.style.padding = "10px 12px";
-    card.style.borderRadius = "10px";
-    card.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    card.style.background = "rgba(255, 255, 255, 0.02)";
-    card.style.boxShadow = "0 1px 0 rgba(0, 0, 0, 0.35) inset";
-    card.style.cursor = "default";
-    const roomInfo = friend.room ?? {};
-    const roomIsPrivate = Boolean(roomInfo.isPrivate) || Boolean(roomInfo.is_private) || Boolean(friend.privacy?.hideRoomFromPublicList);
-    const joinRoomId = typeof roomInfo.id === "string" ? roomInfo.id.trim() : typeof roomInfo.roomId === "string" ? roomInfo.roomId.trim() : null;
-    const rawPlayerCount = roomInfo.playersCount ?? roomInfo.players_count ?? roomInfo.players ?? null;
-    const playersCount = Number.isFinite(Number(rawPlayerCount)) && rawPlayerCount !== null ? Math.floor(Number(rawPlayerCount)) : null;
-    const isFriendOnline = Boolean(friend.isOnline);
-    const isDiscordTarget = RoomService.isDiscordActivity();
-    const ROOM_CAPACITY = 6;
-    const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY - playersCount) : null;
-    const canJoinRoom = Boolean(joinRoomId) && typeof playersCount === "number" && seatsLeft !== null && seatsLeft > 0 && !isDiscordTarget && !roomIsPrivate && isFriendOnline;
-    const joinButtonTitle = roomIsPrivate ? "Room is private" : !isFriendOnline ? "Player is offline" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= 6 ? "Room is full" : "Unable to join this room";
-    const avatar = document.createElement("div");
-    avatar.style.width = "48px";
-    avatar.style.height = "48px";
-    avatar.style.display = "grid";
-    avatar.style.placeItems = "center";
-    avatar.style.borderRadius = "50%";
-    avatar.style.background = "rgba(255, 255, 255, 0.07)";
-    avatar.style.fontWeight = "600";
-    avatar.style.fontSize = "14px";
-    avatar.style.color = "#f8fafc";
-    avatar.style.overflow = "hidden";
-    if (friend.avatarUrl) {
-      const img = document.createElement("img");
-      img.src = friend.avatarUrl;
-      img.alt = friend.playerName ?? friend.playerId ?? "Friend avatar";
-      img.width = 48;
-      img.height = 48;
-      img.style.borderRadius = "50%";
-      img.style.objectFit = "cover";
-      avatar.appendChild(img);
-    } else {
-      const fallback = document.createElement("span");
-      const label2 = (friend.playerName ?? friend.playerId ?? "F").trim();
-      fallback.textContent = label2.charAt(0).toUpperCase();
-      fallback.style.fontSize = "15px";
-      avatar.appendChild(fallback);
-    }
-    const infoColumn = document.createElement("div");
-    infoColumn.style.display = "grid";
-    infoColumn.style.gridTemplateColumns = "52px 1fr";
-    infoColumn.style.alignItems = "center";
-    infoColumn.style.gap = "10px";
-    infoColumn.style.minWidth = "0";
-    const textGrid = document.createElement("div");
-    textGrid.style.display = "grid";
-    textGrid.style.gridTemplateColumns = "1fr auto";
-    textGrid.style.alignItems = "stretch";
-    textGrid.style.gap = "12px";
-    const textStack = document.createElement("div");
-    textStack.style.display = "grid";
-    textStack.style.gap = "4px";
-    textStack.style.minWidth = "0";
-    textStack.style.alignItems = "flex-start";
-    const nameEl = document.createElement("div");
-    nameEl.textContent = friend.playerName ?? friend.playerId ?? "Unknown friend";
-    nameEl.style.fontWeight = "600";
-    nameEl.style.fontSize = "13px";
-    nameEl.style.whiteSpace = "nowrap";
-    nameEl.style.overflow = "hidden";
-    nameEl.style.textOverflow = "ellipsis";
-    nameEl.style.flex = "1";
-    const statusRow = document.createElement("div");
-    statusRow.style.display = "flex";
-    statusRow.style.alignItems = "center";
-    statusRow.style.gap = "6px";
-    const statusIndicator = document.createElement("span");
-    statusIndicator.style.width = "10px";
-    statusIndicator.style.height = "10px";
-    statusIndicator.style.borderRadius = "50%";
-    statusIndicator.style.background = isFriendOnline ? "#34d399" : "#f87171";
-    statusIndicator.style.display = "inline-block";
-    const statusText = document.createElement("span");
-    statusText.textContent = isFriendOnline ? "Online" : "Offline";
-    statusText.style.fontSize = "11px";
-    statusText.style.opacity = "0.7";
-    statusRow.append(statusIndicator, statusText);
-    const metaColumn = document.createElement("div");
-    metaColumn.style.display = "flex";
-    metaColumn.style.flexDirection = "column";
-    metaColumn.style.alignItems = "flex-end";
-    metaColumn.style.justifyContent = "flex-start";
-    metaColumn.style.height = "100%";
-    metaColumn.style.minHeight = "38px";
-    metaColumn.style.alignSelf = "stretch";
-    metaColumn.style.gap = "4px";
-    const lastSeenText = formatLastSeen3(friend.lastEventAt);
-    let lastSeenEl = null;
-    if (lastSeenText) {
-      lastSeenEl = document.createElement("div");
-      lastSeenEl.style.fontSize = "11px";
-      lastSeenEl.style.opacity = "0.65";
-      lastSeenEl.style.whiteSpace = "nowrap";
-      lastSeenEl.textContent = `Last seen ${lastSeenText}`;
-    }
-    textStack.append(nameEl, statusRow);
-    if (lastSeenEl) {
-      textStack.append(lastSeenEl);
-    }
-    textGrid.append(textStack, metaColumn);
-    infoColumn.append(avatar, textGrid);
-    const actionBlock = document.createElement("div");
-    actionBlock.style.display = "grid";
-    actionBlock.style.justifyItems = "end";
-    actionBlock.style.alignItems = "end";
-    actionBlock.style.alignContent = "stretch";
-    actionBlock.style.gridAutoFlow = "row";
-    actionBlock.style.gridTemplateRows = "repeat(3, min-content)";
-    actionBlock.style.gap = "6px";
-    const chevron = document.createElement("span");
-    chevron.textContent = "\u25BE";
-    chevron.style.display = "inline-block";
-    chevron.style.transition = "transform 0.2s ease";
-    chevron.style.transform = "rotate(-90deg)";
-    const detailsBtn = ui.btn("Details", { size: "sm", variant: "ghost", icon: chevron });
-    detailsBtn.style.minWidth = "86px";
-    detailsBtn.style.justifyContent = "center";
-    detailsBtn.title = "Show friend privacy badges and coins information when available.";
-    const joinButton = ui.btn("Join", { size: "sm", variant: "primary" });
-    joinButton.style.minWidth = "86px";
-    joinButton.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
-    ui.setButtonEnabled(joinButton, canJoinRoom);
-    joinButton.title = joinButtonTitle;
-    joinButton.addEventListener("click", () => {
-      if (!canJoinRoom || !joinRoomId) return;
-      RoomService.joinPublicRoom({ idRoom: joinRoomId });
-    });
-    const joinControl = document.createElement("div");
-    joinControl.style.display = "grid";
-    joinControl.style.gap = "4px";
-    joinControl.style.justifyItems = "center";
-    joinControl.append(joinButton);
-    const seatsInfo = document.createElement("div");
-    seatsInfo.style.fontSize = "11px";
-    seatsInfo.style.opacity = "0.6";
-    seatsInfo.style.whiteSpace = "nowrap";
-    seatsInfo.style.textAlign = "center";
-    seatsInfo.style.margin = "0";
-    if (roomIsPrivate) {
-      seatsInfo.textContent = "Private";
-    } else if (!isFriendOnline) {
-      seatsInfo.textContent = "";
-    } else if (seatsLeft !== null) {
-      seatsInfo.textContent = seatsLeft > 0 ? `${seatsLeft} slot${seatsLeft === 1 ? "" : "s"} left` : "Room full";
-    } else {
-      seatsInfo.textContent = "";
-    }
-    joinControl.appendChild(seatsInfo);
-    actionBlock.append(detailsBtn, joinControl);
-    const rowHeader = document.createElement("div");
-    rowHeader.style.display = "grid";
-    rowHeader.style.gridTemplateColumns = "minmax(0, 1fr) auto";
-    rowHeader.style.alignItems = "stretch";
-    rowHeader.style.gap = "10px";
-    rowHeader.append(infoColumn, actionBlock);
-    const detailsContainer = document.createElement("div");
-    detailsContainer.style.overflow = "hidden";
-    detailsContainer.style.maxHeight = "0";
-    detailsContainer.style.opacity = "0";
-    detailsContainer.style.marginTop = "0";
-    detailsContainer.style.transition = "max-height 160ms ease, opacity 160ms ease, margin-top 160ms ease";
-    const coinsText = formatCoinAmount(friend.coins);
-    const detailsContent = document.createElement("div");
-    detailsContent.style.display = "grid";
-    detailsContent.style.gridTemplateColumns = "minmax(0, 1fr)";
-    detailsContent.style.alignItems = "stretch";
-    detailsContent.style.gap = "6px";
-    detailsContent.style.padding = "6px 0 0 0";
-    const badgesRow = document.createElement("div");
-    badgesRow.style.display = "flex";
-    badgesRow.style.alignItems = "center";
-    badgesRow.style.gap = "0";
-    badgesRow.style.flexWrap = "nowrap";
-    badgesRow.style.minHeight = "0";
-    badgesRow.style.justifyContent = "flex-start";
-    badgesRow.style.width = "auto";
-    [
-      { label: "\u{1F4B0}", enabled: Boolean(friend.privacy?.showCoins) },
-      { label: "\u{1F392}", enabled: Boolean(friend.privacy?.showInventory) },
-      { label: "\u{1F331}", enabled: Boolean(friend.privacy?.showGarden) },
-      { label: "\u{1F4CB}", enabled: Boolean(friend.privacy?.showActivityLog) },
-      { label: "\u{1F4F0}", enabled: Boolean(friend.privacy?.showJournal) },
-      { label: "\u{1F4CA}", enabled: Boolean(friend.privacy?.showStats) }
-    ].forEach(({ label: label2, enabled }) => {
-      badgesRow.append(createPrivacyBadge(label2, enabled));
-    });
-    if (coinsText) {
-      const coinsRow = document.createElement("div");
-      coinsRow.style.display = "flex";
-      coinsRow.style.justifyContent = "flex-start";
-      const coinsEl = document.createElement("div");
-      coinsEl.textContent = `${coinsText} coins`;
-      coinsEl.style.fontSize = "12px";
-      coinsEl.style.opacity = "0.8";
-      coinsEl.style.whiteSpace = "nowrap";
-      coinsEl.style.justifySelf = "start";
-      coinsRow.append(coinsEl);
-      detailsContent.append(coinsRow);
-    }
-    if (joinRoomId && isFriendOnline) {
-      const roomRow = document.createElement("div");
-      roomRow.style.display = "flex";
-      roomRow.style.alignItems = "center";
-      roomRow.style.gap = "8px";
-      roomRow.style.paddingRight = "16px";
-      const roomLabel = document.createElement("span");
-      roomLabel.textContent = "Room";
-      roomLabel.style.fontSize = "12px";
-      roomLabel.style.fontWeight = "600";
-      roomLabel.style.opacity = "0.8";
-      const roomValue = document.createElement("span");
-      roomValue.textContent = joinRoomId;
-      roomValue.style.fontSize = "12px";
-      roomValue.style.opacity = "0.9";
-      roomValue.style.whiteSpace = "nowrap";
-      roomRow.append(roomLabel);
-      if (roomIsPrivate) {
-        const lockIcon = document.createElement("span");
-        lockIcon.textContent = "\u{1F512}";
-        lockIcon.style.fontSize = "12px";
-        lockIcon.style.opacity = "0.8";
-        lockIcon.style.display = "inline-flex";
-        lockIcon.style.alignItems = "center";
-        lockIcon.style.justifyContent = "center";
-        lockIcon.style.lineHeight = "1";
-        lockIcon.title = "Room is private";
-        roomRow.append(lockIcon);
-      } else {
-        roomRow.append(roomValue);
-      }
-      detailsContent.append(roomRow);
-    }
-    const privacyRow = document.createElement("div");
-    privacyRow.style.display = "flex";
-    privacyRow.style.alignItems = "center";
-    privacyRow.style.gap = "8px";
-    const privacyLabel = document.createElement("span");
-    privacyLabel.textContent = "Privacy";
-    privacyLabel.style.fontSize = "12px";
-    privacyLabel.style.fontWeight = "600";
-    privacyLabel.style.opacity = "0.8";
-    privacyRow.append(privacyLabel, badgesRow);
-    detailsContent.append(privacyRow);
-    const styleDetailButton = (btn) => {
-      btn.style.textTransform = "none";
-      btn.style.padding = "6px 10px";
-      btn.style.background = "rgba(148, 163, 184, 0.12)";
-      btn.style.color = "#f8fafc";
-      btn.style.border = "1px solid rgba(248, 250, 252, 0.3)";
-      btn.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.2)";
-      btn.addEventListener("mouseenter", () => {
-        btn.style.background = "rgba(248, 250, 252, 0.12)";
-      });
-      btn.addEventListener("mouseleave", () => {
-        btn.style.background = "rgba(148, 163, 184, 0.12)";
-      });
-    };
-    let gardenToggleBtn = null;
-    const buttonRow = ui.flexRow({ gap: 6, align: "center" });
-    buttonRow.style.flexWrap = "wrap";
-    buttonRow.style.marginTop = "4px";
-    buttonRow.style.justifyContent = "flex-start";
-    buttonRow.style.alignSelf = "flex-start";
-    const detailButton = (label2, section, resolver, showModal) => {
-      const btn = ui.btn(label2, { size: "sm", variant: "ghost" });
-      styleDetailButton(btn);
-      btn.addEventListener("click", async () => {
-        if (!friend.playerId) return;
-        btn.disabled = true;
-        try {
-          const views = await fetchPlayersView([friend.playerId], { sections: [section] });
-          const view = views[0];
-          const payload = resolver(view);
-          if (!payload) {
-            await toastSimple(label2, `${label2} data unavailable.`, "info");
-            return;
-          }
-          await showModal(payload);
-        } catch (error) {
-          console.error(`[FriendsMenu] Failed to load ${label2.toLowerCase()}`, error);
-          await toastSimple(label2, `Unable to load ${label2.toLowerCase()}.`, "error");
-        } finally {
-          btn.disabled = false;
-        }
-      });
-      return btn;
-    };
-    buttonRow.appendChild(
-      detailButton(
-        "Inventory",
-        "inventory",
-        (view) => view?.state?.inventory ?? null,
-        (payload) => fakeInventoryShow(payload, { open: true })
-      )
-    );
-    gardenToggleBtn = ui.btn("Garden", { size: "sm", variant: "ghost" });
-    styleDetailButton(gardenToggleBtn);
-    gardenToggleBtn.dataset.gardenDefaultLabel = "Garden";
-    const setGardenButtonLabel = (label2) => {
-      if (gardenToggleBtn) {
-        gardenToggleBtn.textContent = label2;
-      }
-    };
-    gardenToggleBtn.addEventListener("click", async () => {
-      if (!gardenToggleBtn) return;
-      const isActive = activeGardenPreview?.button === gardenToggleBtn;
-      gardenToggleBtn.disabled = true;
-      const resetLabel = () => setGardenButtonLabel("Garden");
-      if (isActive) {
-        try {
-          await stopActiveGardenPreview(gardenToggleBtn);
-        } finally {
-          gardenToggleBtn.disabled = false;
-          resetLabel();
-        }
-        return;
-      }
-      gardenToggleBtn.textContent = "Loading...";
-      await stopActiveGardenPreview();
-      try {
-        if (!friend.playerId) {
-          await toastSimple("Garden", "Player ID unavailable.", "error");
-          return;
-        }
-        const [view] = await fetchPlayersView([friend.playerId], { sections: ["garden"] });
-        const gardenData = view?.state?.garden ?? null;
-        if (!gardenData) {
-          await toastSimple("Garden", "Garden data unavailable.", "info");
-          return;
-        }
-        const previewFn = window.qwsEditorPreviewFriendGarden;
-        if (typeof previewFn !== "function") {
-          await toastSimple("Garden", "Garden preview unavailable.", "error");
-          return;
-        }
-        const applied = await previewFn(gardenData);
-        if (!applied) {
-          await toastSimple("Garden", "Unable to preview garden.", "error");
-          return;
-        }
-        activeGardenPreview = { button: gardenToggleBtn, playerId: friend.playerId };
-        setGardenButtonLabel("Stop garden");
-      } catch (error) {
-        console.error("[FriendsMenu] garden preview failed", error);
-        await stopActiveGardenPreview();
-        await toastSimple("Garden", "Unable to load garden.", "error");
-      } finally {
-        gardenToggleBtn.disabled = false;
-        if (activeGardenPreview?.button !== gardenToggleBtn) {
-          resetLabel();
-        }
-      }
-    });
-    buttonRow.appendChild(gardenToggleBtn);
-    buttonRow.appendChild(
-      detailButton(
-        "Activity Log",
-        "activityLog",
-        (view) => view?.state?.activityLog ?? view?.state?.activityLogs ?? null,
-        (payload) => {
-          skipNextActivityLogHistoryReopen();
-          return fakeActivityLogShow(payload, { open: true });
-        }
-      )
-    );
-    buttonRow.appendChild(
-      detailButton(
-        "Stats",
-        "stats",
-        (view) => view?.state?.stats ?? null,
-        (payload) => fakeStatsShow(payload, { open: true })
-      )
-    );
-    buttonRow.appendChild(
-      detailButton(
-        "Journal",
-        "journal",
-        (view) => view?.state?.journal ?? null,
-        (payload) => fakeJournalShow(payload, { open: true })
-      )
-    );
-    detailsContent.append(buttonRow);
-    const removeFriendBtn = ui.btn("Remove friend", { size: "sm", variant: "danger" });
-    removeFriendBtn.style.textTransform = "none";
-    removeFriendBtn.style.padding = "6px 10px";
-    removeFriendBtn.style.alignSelf = "flex-start";
-    removeFriendBtn.addEventListener("click", async () => {
-      const targetId = friend.playerId;
-      if (!targetId) return;
-      const me = await playerDatabaseUserId.get();
-      if (!me) return;
-      const original = removeFriendBtn.textContent;
-      removeFriendBtn.disabled = true;
-      removeFriendBtn.textContent = "Removing...";
-      try {
-        const removed = await removeFriend(me, targetId);
-        if (removed) {
-          removeFriendBtn.textContent = "Removed";
-          void refreshAllFriends?.({ force: true });
-          dispatchFriendsRefresh();
-        } else {
-          removeFriendBtn.textContent = original;
-        }
-      } catch (error) {
-        console.error("[FriendsMenu] removeFriend", error);
-        removeFriendBtn.textContent = original;
-      } finally {
-        removeFriendBtn.disabled = false;
-      }
-    });
-    detailsContent.append(removeFriendBtn);
-    detailsContainer.append(detailsContent);
-    const labelSpan = detailsBtn.querySelector(".label");
-    let detailsExpanded = false;
-    const applyDetailsState = () => {
-      if (detailsExpanded) {
-        const targetHeight = `${detailsContent.scrollHeight}px`;
-        detailsContainer.style.maxHeight = targetHeight;
-        detailsContainer.style.opacity = "1";
-        detailsContainer.style.marginTop = "6px";
-        detailsBtn.setAttribute("aria-expanded", "true");
-        if (labelSpan) labelSpan.textContent = "Hide details";
-        chevron.style.transform = "rotate(0deg)";
-      } else {
-        detailsContainer.style.maxHeight = "0";
-        detailsContainer.style.opacity = "0";
-        detailsContainer.style.marginTop = "0";
-        detailsBtn.setAttribute("aria-expanded", "false");
-        if (labelSpan) labelSpan.textContent = "Details";
-        chevron.style.transform = "rotate(-90deg)";
-      }
-    };
-    detailsBtn.addEventListener("click", () => {
-      detailsExpanded = !detailsExpanded;
-      applyDetailsState();
-      if (!detailsExpanded && gardenToggleBtn) {
-        void (async () => {
-          await stopActiveGardenPreview(gardenToggleBtn);
-          setGardenButtonLabel("Garden");
-        })();
-      }
-    });
-    applyDetailsState();
-    card.append(rowHeader, detailsContainer);
-    return card;
-  }
-  function renderAllTab(view, ui) {
-    view.innerHTML = "";
-    const wrap = document.createElement("div");
-    wrap.style.display = "flex";
-    wrap.style.flexDirection = "column";
-    wrap.style.gap = "10px";
-    wrap.style.position = wrap.style.position || "relative";
-    wrap.style.height = "100%";
-    wrap.style.minHeight = "0";
-    const controls = ui.flexRow({ align: "center", gap: 8 });
-    const search = ui.inputText("Search for a friend...");
-    search.style.flex = "1";
-    search.style.minWidth = "0";
-    const refresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
-    refresh.style.background = "rgba(248, 250, 252, 0.08)";
-    refresh.style.color = "#f8fafc";
-    refresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
-    refresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
-    controls.append(search, refresh);
-    const statusMessage = document.createElement("div");
-    statusMessage.style.fontSize = "12px";
-    statusMessage.style.opacity = "0.7";
-    statusMessage.textContent = "Loading friends...";
-    const listContainer = document.createElement("div");
-    listContainer.style.display = "flex";
-    listContainer.style.flexDirection = "column";
-    listContainer.style.flex = "1";
-    listContainer.style.minHeight = "0";
-    listContainer.style.position = "relative";
-    const list = document.createElement("div");
-    list.style.display = "grid";
-    list.style.gap = "8px";
-    list.style.padding = "10px";
-    list.style.borderRadius = "10px";
-    list.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    list.style.background = "rgba(255, 255, 255, 0.02)";
-    list.style.flex = "1";
-    list.style.minHeight = "0";
-    list.style.overflow = "auto";
-    listContainer.appendChild(list);
-    wrap.append(controls, statusMessage, listContainer);
-    view.appendChild(wrap);
-    let friends = [];
-    let isLoading = false;
-    let destroyed = false;
-    list.style.position = list.style.position || "relative";
-    const refreshIndicator = createRefreshIndicator(list, listContainer);
-    const renderPlaceholder = (text) => {
-      list.innerHTML = "";
-      const placeholder = document.createElement("div");
-      placeholder.textContent = text;
-      placeholder.style.opacity = "0.6";
-      placeholder.style.fontSize = "12px";
-      placeholder.style.textAlign = "center";
-      list.appendChild(placeholder);
-    };
-    const normalizeQuery = (term) => term.trim().toLowerCase();
-    const renderList = (options = {}) => {
-      if (destroyed) return;
-      const shouldForce = options.force ?? true;
-      if (isLoading && friends.length && !shouldForce) {
-        return;
-      }
-      list.innerHTML = "";
-      if (isLoading) {
-        renderPlaceholder("Loading friends...");
-        return;
-      }
-      const showOnlineOnly = getFriendSettings().showOnlineFriendsOnly;
-      const query = normalizeQuery(search.value);
-      const matching = friends.filter((friend) => {
-        const label2 = (friend.playerName ?? friend.playerId ?? "").toLowerCase();
-        return label2.includes(query);
-      });
-      const filtered = showOnlineOnly ? matching.filter((friend) => Boolean(friend.isOnline)) : matching;
-      if (!filtered.length) {
-        if (friends.length === 0) {
-          renderPlaceholder("You have no friends yet.");
-          statusMessage.textContent = "No friends available.";
-        } else if (query.length > 0) {
-          renderPlaceholder("No friends match that search.");
-          statusMessage.textContent = `${friends.length} friends loaded.`;
-        } else if (showOnlineOnly) {
-          renderPlaceholder("No online friends right now.");
-          statusMessage.textContent = `${friends.length} friends loaded (online filter).`;
-        } else {
-          renderPlaceholder("Nothing to show.");
-          statusMessage.textContent = `${friends.length} friends loaded.`;
-        }
-        return;
-      }
-      for (const friend of filtered) {
-        list.appendChild(createFriendRow(ui, friend));
-      }
-      if (showOnlineOnly) {
-        statusMessage.textContent = `${filtered.length} online friend${filtered.length !== 1 ? "s" : ""} shown.`;
-      } else {
-        statusMessage.textContent = `${filtered.length} friend${filtered.length !== 1 ? "s" : ""} shown.`;
-      }
-    };
-    const updateRefreshControls = () => {
-      const enabled = !destroyed && !isLoading;
-      ui.setButtonEnabled(refresh, enabled);
-      refresh.setAttribute("aria-busy", isLoading ? "true" : "false");
-    };
-    const loadFriends = async (options) => {
-      if (destroyed) return;
-      isLoading = true;
-      statusMessage.textContent = friends.length ? "Refreshing friends..." : "Loading friends...";
-      refreshIndicator.setVisible(true);
-      updateRefreshControls();
-      renderList({ force: friends.length === 0 });
-      try {
-        const player2 = await playerDatabaseUserId.get();
-        if (!player2) {
-          friends = [];
-          statusMessage.textContent = "Player ID unavailable.";
-          renderPlaceholder("Unable to identify your player.");
-          return;
-        }
-        if (!options?.force) {
-          const cached = getCachedFriendsWithViews();
-          if (cached.length) {
-            friends = cached;
-            statusMessage.textContent = `${friends.length} friends loaded.`;
-            return;
-          }
-        }
-        friends = await fetchFriendsWithViews(player2);
-        statusMessage.textContent = friends.length ? `${friends.length} friends loaded.` : "You have no friends yet.";
-      } catch (error) {
-        console.error("[FriendsMenu] Failed to load friends", error);
-        friends = [];
-        statusMessage.textContent = "Failed to load friends.";
-        renderPlaceholder("Unable to load friends.");
-        return;
-      } finally {
-        isLoading = false;
-        refreshIndicator.setVisible(false);
-        updateRefreshControls();
-        renderList({ force: true });
-      }
-    };
-    search.addEventListener("input", () => {
-      renderList({ force: true });
-    });
-    refresh.addEventListener("click", () => {
-      void loadFriends({ force: true });
-    });
-    const unsubscribeSettings = onFriendSettingsChange(() => {
-      if (!destroyed) {
-        renderList({ force: true });
-      }
-    });
-    refreshAllFriends = loadFriends;
-    void loadFriends();
-    view.__cleanup__ = () => {
-      destroyed = true;
-      unsubscribeSettings();
-      if (refreshAllFriends === loadFriends) {
-        refreshAllFriends = null;
-      }
-    };
-  }
-  function renderAddFriendTab(view, ui) {
-    view.innerHTML = "";
-    const layout = document.createElement("div");
-    layout.style.display = "flex";
-    layout.style.flexDirection = "column";
-    layout.style.gap = "12px";
-    layout.style.height = "100%";
-    layout.style.minHeight = "0";
-    layout.style.flex = "1";
-    const profileCard = ui.card("My profile");
-    profileCard.body.style.display = "grid";
-    profileCard.body.style.gap = "12px";
-    const profileHeader = document.createElement("div");
-    profileHeader.style.display = "flex";
-    profileHeader.style.alignItems = "center";
-    profileHeader.style.gap = "12px";
-    const avatarWrapper = document.createElement("div");
-    avatarWrapper.style.width = "48px";
-    avatarWrapper.style.height = "48px";
-    avatarWrapper.style.borderRadius = "50%";
-    avatarWrapper.style.background = "rgba(255, 255, 255, 0.04)";
-    avatarWrapper.style.display = "flex";
-    avatarWrapper.style.alignItems = "center";
-    avatarWrapper.style.justifyContent = "center";
-    avatarWrapper.style.overflow = "hidden";
-    avatarWrapper.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    const avatarImg = document.createElement("img");
-    avatarImg.alt = "Player avatar";
-    avatarImg.style.width = "100%";
-    avatarImg.style.height = "100%";
-    avatarImg.style.objectFit = "cover";
-    avatarImg.style.borderRadius = "50%";
-    avatarImg.style.display = "none";
-    const avatarFallback = document.createElement("span");
-    avatarFallback.style.fontSize = "18px";
-    avatarFallback.style.fontWeight = "600";
-    avatarFallback.style.color = "#f8fafc";
-    avatarFallback.style.display = "block";
-    avatarWrapper.append(avatarImg, avatarFallback);
-    const profileText = document.createElement("div");
-    profileText.style.display = "grid";
-    profileText.style.gap = "4px";
-    profileText.style.flex = "1";
-    const profileNameLabel = document.createElement("div");
-    profileNameLabel.textContent = "Loading profile...";
-    profileNameLabel.style.fontSize = "14px";
-    profileNameLabel.style.fontWeight = "600";
-    const profileIdLabel = document.createElement("div");
-    profileIdLabel.textContent = "Loading player ID...";
-    profileIdLabel.style.fontSize = "12px";
-    profileIdLabel.style.opacity = "0.8";
-    profileText.append(profileNameLabel, profileIdLabel);
-    profileHeader.append(avatarWrapper, profileText);
-    profileCard.body.appendChild(profileHeader);
-    const formCard = ui.card("Add friend");
-    formCard.body.style.display = "flex";
-    formCard.body.style.flexDirection = "column";
-    formCard.body.style.gap = "10px";
-    const input = ui.inputText("Player ID");
-    input.style.width = "100%";
-    const status = document.createElement("div");
-    status.style.fontSize = "12px";
-    status.style.opacity = "0.7";
-    status.style.minHeight = "18px";
-    const submit = ui.btn("Send request", { variant: "primary", fullWidth: true });
-    submit.disabled = true;
-    submit.title = "Waiting for profile info...";
-    formCard.body.append(input, status, submit);
-    layout.append(profileCard.root, formCard.root);
-    view.appendChild(layout);
-    let myId = null;
-    let isSending = false;
-    const updateSubmitState = () => {
-      const target = input.value.trim();
-      submit.disabled = isSending || !myId || !target;
-    };
-    input.addEventListener("input", updateSubmitState);
-    submit.addEventListener("click", async () => {
-      if (!myId) {
-        status.textContent = "Player ID missing.";
-        return;
-      }
-      const target = input.value.trim();
-      if (!target) {
-        status.textContent = "Enter a player ID or name.";
-        return;
-      }
-      isSending = true;
-      updateSubmitState();
-      status.textContent = "Sending request...";
-      try {
-        const sent = await sendFriendRequest(myId, target);
-        status.textContent = sent ? "Friend request sent." : "Unable to send request (maybe already friends).";
-        if (sent) {
-          input.value = "";
-        }
-      } catch (error) {
-        console.error("[FriendsMenu] sendFriendRequest failed", error);
-        status.textContent = "Failed to send request.";
-      } finally {
-        isSending = false;
-        updateSubmitState();
-      }
-    });
-    const updateProfileInfo = async () => {
-      const [resolved, playerInfo] = await Promise.all([
-        playerDatabaseUserId.get(),
-        player.get()
-      ]);
-      myId = resolved;
-      const displayName = (playerInfo?.name ?? "").trim();
-      profileNameLabel.textContent = displayName || "Your profile";
-      profileIdLabel.textContent = resolved ? `Player ID: ${resolved}` : "Player ID unavailable.";
-      const avatarUrl = (playerInfo?.discordAvatarUrl ?? "").trim();
-      if (avatarUrl) {
-        avatarImg.src = avatarUrl;
-        avatarImg.style.display = "";
-        avatarFallback.style.display = "none";
-      } else {
-        avatarImg.src = "";
-        avatarImg.style.display = "none";
-        const fallbackLabel = (displayName || resolved || "P").trim();
-        avatarFallback.textContent = fallbackLabel ? fallbackLabel.charAt(0).toUpperCase() : "P";
-        avatarFallback.style.display = "";
-      }
-      updateSubmitState();
-    };
-    void updateProfileInfo();
-  }
-  function renderFriendRequestsTab(view, ui) {
-    view.innerHTML = "";
-    const card = ui.card("Incoming requests");
-    card.root.style.display = "flex";
-    card.root.style.flexDirection = "column";
-    card.root.style.height = "100%";
-    card.root.style.minHeight = "0";
-    card.body.style.display = "flex";
-    card.body.style.flexDirection = "column";
-    card.body.style.gap = "10px";
-    card.body.style.flex = "1";
-    card.body.style.minHeight = "0";
-    const controls = ui.flexRow({ justify: "end", align: "center" });
-    const requestsRefresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
-    requestsRefresh.style.background = "rgba(248, 250, 252, 0.08)";
-    requestsRefresh.style.color = "#f8fafc";
-    requestsRefresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
-    requestsRefresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
-    requestsRefresh.title = "Reload friend requests";
-    requestsRefresh.addEventListener("click", () => {
-      void loadRequests({ force: true });
-    });
-    controls.appendChild(requestsRefresh);
-    card.body.appendChild(controls);
-    const requestsStatus = document.createElement("div");
-    requestsStatus.style.fontSize = "12px";
-    requestsStatus.style.opacity = "0.8";
-    requestsStatus.textContent = "";
-    card.body.appendChild(requestsStatus);
-    const requestsListWrapper = document.createElement("div");
-    requestsListWrapper.style.position = requestsListWrapper.style.position || "relative";
-    requestsListWrapper.style.flex = "1";
-    requestsListWrapper.style.display = "flex";
-    requestsListWrapper.style.flexDirection = "column";
-    requestsListWrapper.style.minHeight = "0";
-    const requestsList = document.createElement("div");
-    requestsList.style.display = "grid";
-    requestsList.style.gap = "8px";
-    requestsList.style.flex = "1";
-    requestsList.style.minHeight = "0";
-    requestsList.style.overflow = "auto";
-    requestsListWrapper.appendChild(requestsList);
-    card.body.appendChild(requestsListWrapper);
-    requestsList.style.position = requestsList.style.position || "relative";
-    const requestsIndicator = createRefreshIndicator(requestsList, requestsListWrapper);
-    view.appendChild(card.root);
-    let myId = null;
-    let requests = [];
-    let loadingRequests = false;
-    let destroyedRequests = false;
-    const requestActionInProgress = /* @__PURE__ */ new Set();
-    const updateRequestsRefreshControls = () => {
-      const enabled = !destroyedRequests && !loadingRequests;
-      ui.setButtonEnabled(requestsRefresh, enabled);
-      requestsRefresh.setAttribute("aria-busy", loadingRequests ? "true" : "false");
-    };
-    updateRequestsRefreshControls();
-    const getRequestsStatusText = () => {
-      if (loadingRequests) {
-        return requests.length ? "Refreshing friend requests..." : "Loading incoming friend requests...";
-      }
-      if (!requests.length) {
-        return "No incoming friend requests.";
-      }
-      return `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
-    };
-    const renderRequestsPlaceholder = (message) => {
-      const placeholder = document.createElement("div");
-      placeholder.textContent = message;
-      placeholder.style.opacity = "0.6";
-      placeholder.style.fontSize = "12px";
-      placeholder.style.textAlign = "center";
-      placeholder.style.minHeight = "48px";
-      requestsList.appendChild(placeholder);
-    };
-    const updateRequestsStatusText = () => {
-      if (!requests.length) {
-        requestsStatus.textContent = "";
-        return;
-      }
-      requestsStatus.textContent = loadingRequests ? "Refreshing friend requests..." : `${requests.length} pending request${requests.length > 1 ? "s" : ""}.`;
-    };
-    const renderRequests = (options = {}) => {
-      if (destroyedRequests) return;
-      const shouldForce = options.force ?? true;
-      if (loadingRequests && requests.length && !shouldForce) {
-        updateRequestsStatusText();
-        return;
-      }
-      requestsList.innerHTML = "";
-      if (loadingRequests && !requests.length) {
-        renderRequestsPlaceholder(getRequestsStatusText());
-        updateRequestsStatusText();
-        return;
-      }
-      if (!requests.length) {
-        renderRequestsPlaceholder(getRequestsStatusText());
-        updateRequestsStatusText();
-        return;
-      }
-      for (const request of requests) {
-        const row = document.createElement("div");
-        row.style.display = "grid";
-        row.style.gridTemplateColumns = "40px 1fr auto";
-        row.style.alignItems = "center";
-        row.style.gap = "10px";
-        row.style.padding = "8px 12px";
-        row.style.borderRadius = "10px";
-        row.style.background = "rgba(255, 255, 255, 0.03)";
-        row.style.border = "1px solid rgba(255, 255, 255, 0.04)";
-        const avatar = document.createElement("div");
-        avatar.style.width = "36px";
-        avatar.style.height = "36px";
-        avatar.style.borderRadius = "50%";
-        avatar.style.display = "grid";
-        avatar.style.placeItems = "center";
-        avatar.style.background = "rgba(255, 255, 255, 0.05)";
-        if (request.avatarUrl) {
-          const img = document.createElement("img");
-          img.src = request.avatarUrl;
-          img.alt = request.playerName ?? request.playerId ?? "Friend request avatar";
-          img.width = 36;
-          img.height = 36;
-          img.style.borderRadius = "50%";
-          img.style.objectFit = "cover";
-          avatar.appendChild(img);
-        } else {
-          const fallback = document.createElement("span");
-          const label2 = (request.playerName ?? request.playerId ?? "F").trim();
-          fallback.textContent = label2.charAt(0).toUpperCase();
-          fallback.style.fontWeight = "600";
-          fallback.style.fontSize = "15px";
-          avatar.appendChild(fallback);
-        }
-        const info = document.createElement("div");
-        info.style.display = "flex";
-        info.style.flexDirection = "column";
-        info.style.gap = "2px";
-        const nameEl = document.createElement("div");
-        nameEl.textContent = request.playerName ?? request.playerId ?? "Unknown player";
-        nameEl.style.fontWeight = "600";
-        nameEl.style.fontSize = "13px";
-        const subEl = document.createElement("div");
-        subEl.textContent = request.room?.id ? `In room ${request.room.id}` : "No room information";
-        subEl.style.fontSize = "11px";
-        subEl.style.opacity = "0.7";
-        info.append(nameEl, subEl);
-        const actions = ui.flexRow({ gap: 4, align: "center" });
-        const reject = ui.btn("\u274C", { size: "sm" });
-        reject.title = "Reject request";
-        const accept = ui.btn("\u2705", { size: "sm" });
-        accept.title = "Accept request";
-        const applyAction = (action2) => {
-          return async () => {
-            if (!myId || !request.playerId) return;
-            if (requestActionInProgress.has(request.playerId)) return;
-            requestActionInProgress.add(request.playerId);
-            requestsStatus.textContent = `${action2 === "accept" ? "Accepting" : "Rejecting"} ${request.playerName ?? request.playerId}...`;
-            try {
-              await respondFriendRequest({
-                playerId: myId,
-                otherPlayerId: request.playerId,
-                action: action2
-              });
-            } catch (error) {
-              console.error("[FriendsMenu] respondFriendRequest", error);
-            } finally {
-              requestActionInProgress.delete(request.playerId);
-              await loadRequests({ force: true });
-              void refreshAllFriends?.({ force: true });
-              dispatchFriendsRefresh();
-            }
-          };
-        };
-        reject.addEventListener("click", applyAction("reject"));
-        accept.addEventListener("click", applyAction("accept"));
-        actions.append(reject, accept);
-        row.append(avatar, info, actions);
-        requestsList.appendChild(row);
-      }
-      updateRequestsStatusText();
-    };
-    async function loadRequests(options) {
-      if (destroyedRequests) return;
-      if (!myId) {
-        requestsStatus.textContent = "Waiting for player ID to load requests...";
-        requestsList.innerHTML = "";
-        const placeholder = document.createElement("div");
-        placeholder.textContent = "Waiting for player ID to load requests.";
-        placeholder.style.opacity = "0.6";
-        placeholder.style.fontSize = "12px";
-        placeholder.style.textAlign = "center";
-        requestsList.appendChild(placeholder);
-        return;
-      }
-      loadingRequests = true;
-      requestsIndicator.setVisible(true);
-      updateRequestsRefreshControls();
-      renderRequests({ force: requests.length === 0 });
-      try {
-        if (!options?.force) {
-          const cached = getCachedIncomingRequestsWithViews();
-          if (cached.length) {
-            requests = cached;
-            return;
-          }
-        }
-        requests = await fetchIncomingRequestsWithViews(myId);
-      } catch (error) {
-        console.error("[FriendsMenu] fetchIncomingRequestsWithViews", error);
-        requests = [];
-      } finally {
-        loadingRequests = false;
-        requestsIndicator.setVisible(false);
-        updateRequestsRefreshControls();
-        renderRequests({ force: true });
-      }
-    }
-    refreshIncomingRequests = loadRequests;
-    const refreshPlayerId = async () => {
-      const resolved = await playerDatabaseUserId.get();
-      myId = resolved;
-      if (!resolved) {
-        requestsStatus.textContent = "Waiting for player ID to load requests...";
-        requestsList.innerHTML = "";
-        const placeholder = document.createElement("div");
-        placeholder.textContent = "Waiting for player ID to load requests.";
-        placeholder.style.opacity = "0.6";
-        placeholder.style.fontSize = "12px";
-        placeholder.style.textAlign = "center";
-        requestsList.appendChild(placeholder);
-        return;
-      }
-      await loadRequests();
-    };
-    void refreshPlayerId();
-    view.__cleanup__ = () => {
-      destroyedRequests = true;
-      if (refreshIncomingRequests === loadRequests) {
-        refreshIncomingRequests = null;
-      }
-    };
-  }
-  function renderSettingsTab2(view, ui) {
-    view.innerHTML = "";
-    const settings = getFriendSettings();
-    const layout = document.createElement("div");
-    layout.style.display = "flex";
-    layout.style.flexDirection = "column";
-    layout.style.gap = "12px";
-    layout.style.height = "100%";
-    layout.style.minHeight = "0";
-    layout.style.flex = "1";
-    const globalCard = ui.card("Global settings");
-    globalCard.body.style.display = "grid";
-    globalCard.body.style.gap = "12px";
-    const privacyCard = ui.card("Privacy");
-    privacyCard.body.style.display = "grid";
-    privacyCard.body.style.gap = "12px";
-    const applyPatch = (patch2) => patchFriendSettings(patch2);
-    const buildToggleRow = (label2, checked, description, onToggle) => {
-      const row = document.createElement("div");
-      row.style.display = "grid";
-      row.style.gridTemplateColumns = "1fr auto";
-      row.style.alignItems = "center";
-      row.style.gap = "12px";
-      const text = document.createElement("div");
-      text.style.display = "grid";
-      text.style.gap = "2px";
-      const labelEl = document.createElement("div");
-      labelEl.textContent = label2;
-      labelEl.style.fontWeight = "600";
-      labelEl.style.fontSize = "13px";
-      if (description) {
-        const descriptionEl = document.createElement("div");
-        descriptionEl.textContent = description;
-        descriptionEl.style.fontSize = "12px";
-        descriptionEl.style.opacity = "0.7";
-        text.append(labelEl, descriptionEl);
-      } else {
-        text.append(labelEl);
-      }
-      const toggle = ui.switch(checked);
-      toggle.addEventListener("input", () => {
-        onToggle(toggle.checked);
-      });
-      row.append(text, toggle);
-      return row;
-    };
-    globalCard.body.append(
-      buildToggleRow(
-        "Show online friends only",
-        settings.showOnlineFriendsOnly,
-        void 0,
-        (next) => applyPatch({ showOnlineFriendsOnly: next })
-      ),
-      buildToggleRow(
-        "Make my room private",
-        settings.hideRoomFromPublicList,
-        "Prevents friends from joining and hides your room from the public list.",
-        (next) => applyPatch({ hideRoomFromPublicList: next })
-      )
-    );
-    privacyCard.body.append(
-      buildToggleRow(
-        "Friends can view my garden",
-        settings.showGarden,
-        void 0,
-        (next) => applyPatch({ showGarden: next })
-      ),
-      buildToggleRow(
-        "Friends can view my inventory",
-        settings.showInventory,
-        void 0,
-        (next) => applyPatch({ showInventory: next })
-      ),
-      buildToggleRow(
-        "Friends can see my coins",
-        settings.showCoins,
-        void 0,
-        (next) => applyPatch({ showCoins: next })
-      ),
-      buildToggleRow(
-        "Friends can see my activity log",
-        settings.showActivityLog,
-        void 0,
-        (next) => applyPatch({ showActivityLog: next })
-      ),
-      buildToggleRow(
-        "Friends can view my journal",
-        settings.showJournal,
-        void 0,
-        (next) => applyPatch({ showJournal: next })
-      ),
-      buildToggleRow(
-        "Friends can see my stats",
-        settings.showStats,
-        void 0,
-        (next) => applyPatch({ showStats: next })
-      )
-    );
-    layout.append(globalCard.root, privacyCard.root);
-    view.appendChild(layout);
-  }
-  function renderFriendsMenu(root) {
-    const ui = new Menu({ id: "friends", compact: true });
-    ui.mount(root);
-    ui.root.style.width = "480px";
-    ui.root.style.maxWidth = "520px";
-    ui.root.style.minWidth = "380px";
-    ui.root.style.height = "640px";
-    ui.root.style.maxHeight = "90vh";
-    ui.root.style.flexDirection = "column";
-    const views = ui.root.querySelector(".qmm-views");
-    if (views) {
-      views.style.flex = "1";
-      views.style.maxHeight = "none";
-      views.style.minHeight = "0";
-    }
-    ui.addTabs([
-      { id: "friends-all", title: "Friend list", render: (view) => renderAllTab(view, ui) },
-      { id: "friends-add", title: "Add friend", render: (view) => renderAddFriendTab(view, ui) },
-      { id: "friends-requests", title: "Request", render: (view) => renderFriendRequestsTab(view, ui) },
-      { id: "friends-settings", title: "Settings", render: (view) => renderSettingsTab2(view, ui) }
-    ]);
-    ui.switchTo("friends-all");
-    ui.on("tab:change", (id) => {
-      if (id === "friends-all" && refreshAllFriends) {
-        void refreshAllFriends({ force: true });
-      }
-      if (id === "friends-requests" && refreshIncomingRequests) {
-        void refreshIncomingRequests({ force: true });
-      }
-    });
-    const windowEl = ui.root.closest(".qws-win");
-    if (windowEl) {
-      let lastVisible = windowEl.style.display !== "none";
-      const observer2 = new MutationObserver(() => {
-        const isVisible3 = windowEl.style.display !== "none";
-        if (isVisible3 && !lastVisible) {
-          void refreshAllFriends?.({ force: true });
-        }
-        lastVisible = isVisible3;
-      });
-      observer2.observe(windowEl, { attributes: true, attributeFilter: ["style"] });
-      const previousCleanup = root.__cleanup__;
-      root.__cleanup__ = () => {
-        observer2.disconnect();
-        if (typeof previousCleanup === "function") {
-          previousCleanup.call(root);
-        }
-      };
-    }
   }
 
   // src/utils/antiafk.ts
@@ -53976,33 +56779,6 @@ next: ${next}`;
         restoreProps();
       }
     };
-  }
-
-  // src/utils/ariesModApi.ts
-  var pageContext = pageWindow;
-  function buildDefaultServices() {
-    return {
-      PlayerService,
-      EditorService,
-      PetsService,
-      StatsService,
-      lockerService,
-      MiscService,
-      NotifierService,
-      RoomService
-    };
-  }
-  function createAriesModApi(services) {
-    return {
-      readyAt: Date.now(),
-      services: services ?? buildDefaultServices()
-    };
-  }
-  function installAriesModApi(api) {
-    const resolved = api ?? createAriesModApi();
-    pageContext.AriesMod = resolved;
-    shareGlobal("AriesMod", resolved);
-    return resolved;
   }
 
   // src/utils/payload.ts
@@ -54185,7 +56961,6 @@ next: ${next}`;
       const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
       const localVersion = getLocalVersion();
       const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
-      console.log("MOD VERSION: ", modVersion);
       const payload = {
         playerId: playerId2 != null ? String(playerId2) : null,
         playerName: privacy.showProfile ? playerName : null,
@@ -54255,23 +57030,11 @@ next: ${next}`;
   var gameReadyTriggered = false;
   var preferredReportingIntervalMs;
   var friendRefreshLoopStarted = false;
-  var autoAcceptedRequestIds = /* @__PURE__ */ new Set();
-  var autoAcceptTimer = null;
-  var autoAcceptWatcherInitialized = false;
-  var autoAcceptSettingsUnsubscribe = null;
   async function warmSupabaseInitialFetch() {
     try {
       const dbId = await playerDatabaseUserId.get();
       if (!dbId) return;
-      const requests = await fetchIncomingRequestsWithViews(dbId);
-      const acceptedCount = await maybeAutoAcceptIncomingRequests(
-        dbId,
-        requests
-      );
-      if (acceptedCount > 0) {
-        await fetchIncomingRequestsWithViews(dbId);
-      }
-      await fetchFriendsWithViews(dbId);
+      await fetchFriendsSummary(dbId);
     } catch (error) {
       console.error(
         "[PlayerPayload] Failed to prefetch friends data",
@@ -54279,75 +57042,10 @@ next: ${next}`;
       );
     }
   }
-  async function maybeAutoAcceptIncomingRequests(playerId2, requests) {
-    if (!requests || !requests.length) return 0;
-    const { autoAcceptIncomingRequests } = getFriendSettings();
-    if (!autoAcceptIncomingRequests) return 0;
-    let acceptedCount = 0;
-    for (const request of requests) {
-      const otherId = request?.playerId;
-      if (!otherId) continue;
-      if (autoAcceptedRequestIds.has(otherId)) continue;
-      try {
-        const wasAccepted = await respondFriendRequest({
-          playerId: playerId2,
-          otherPlayerId: otherId,
-          action: "accept"
-        });
-        if (wasAccepted) {
-          autoAcceptedRequestIds.add(otherId);
-          acceptedCount += 1;
-          void toastSimple(
-            "Friends",
-            `Auto-accepted incoming request from ${request.playerName ?? otherId}.`,
-            "success"
-          );
-        }
-      } catch (error) {
-        console.error("[PlayerPayload] auto-accept request failed", error);
-      }
-    }
-    return acceptedCount;
-  }
   function startFriendDataRefreshLoop() {
     if (friendRefreshLoopStarted) return;
     friendRefreshLoopStarted = true;
     void warmSupabaseInitialFetch();
-  }
-  async function pollIncomingRequestsForAutoAccept() {
-    try {
-      const playerId2 = await playerDatabaseUserId.get();
-      if (!playerId2) return;
-      const requests = await fetchIncomingRequestsWithViews(playerId2);
-      await maybeAutoAcceptIncomingRequests(playerId2, requests);
-    } catch (error) {
-      console.error("[PlayerPayload] auto-accept poll failed", error);
-    }
-  }
-  function stopAutoAcceptLoop() {
-    if (autoAcceptTimer === null) return;
-    clearInterval(autoAcceptTimer);
-    autoAcceptTimer = null;
-  }
-  function startAutoAcceptLoopIfEnabled() {
-    const { autoAcceptIncomingRequests } = getFriendSettings();
-    if (!autoAcceptIncomingRequests) {
-      stopAutoAcceptLoop();
-      return;
-    }
-    if (autoAcceptTimer !== null) return;
-    void pollIncomingRequestsForAutoAccept();
-    autoAcceptTimer = setInterval(() => {
-      void pollIncomingRequestsForAutoAccept();
-    }, 6e4);
-  }
-  function startAutoAcceptWatcher() {
-    if (autoAcceptWatcherInitialized) return;
-    autoAcceptWatcherInitialized = true;
-    startAutoAcceptLoopIfEnabled();
-    autoAcceptSettingsUnsubscribe = onFriendSettingsChange(() => {
-      startAutoAcceptLoopIfEnabled();
-    });
   }
   async function tryInitializeReporting(state3) {
     if (gameReadyTriggered) return;
@@ -54366,22 +57064,24 @@ next: ${next}`;
     void Atoms.root.state.onChange((next) => {
       void tryInitializeReporting(next);
     });
-    startAutoAcceptWatcher();
   }
   var payloadReportingTimer = null;
   var isPayloadReporting = false;
   var lastSentPayloadSnapshot = null;
   var unchangedSnapshotCount = 0;
+  var initialSendRetries = 0;
+  var MAX_INITIAL_RETRIES = 3;
   var MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
   async function buildAndSendPlayerState() {
     if (isPayloadReporting) return;
     isPayloadReporting = true;
     try {
       const payload = await buildPlayerStatePayload();
-      if (!payload) {
-        return;
-      }
-      if (!payload.playerId || payload.playerId.length < 3) {
+      if (!payload || !payload.playerId || payload.playerId.length < 3 || !payload.room.id) {
+        if (initialSendRetries < MAX_INITIAL_RETRIES) {
+          initialSendRetries += 1;
+          setTimeout(() => void buildAndSendPlayerState(), 1e4);
+        }
         return;
       }
       const snapshot = snapshotPayloadForComparison(payload);
@@ -55355,7 +58055,6 @@ next: ${next}`;
     "use strict";
     installPageWebSocketHook();
     initGameVersion();
-    const ariesMod = installAriesModApi();
     try {
       warmupSpriteCache();
     } catch {
@@ -55364,7 +58063,6 @@ next: ${next}`;
     EditorService.init();
     mountHUD({
       onRegister(register) {
-        register("players", "\u{1F465} Friends", renderFriendsMenu);
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
         register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
@@ -55384,7 +58082,6 @@ next: ${next}`;
       getPosition: () => PlayerService.getPosition(),
       move: (x, y) => PlayerService.move(x, y)
     });
-    ariesMod.antiAfkController = antiAfk;
     antiAfk.start();
     startPlayerStateReportingWhenGameReady();
   })();
