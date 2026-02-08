@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.50
+// @version      2.99.51
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26985,6 +26985,7 @@
   var SCALE_MIN = 1;
   var SCALE_MAX = 3;
   var COIN_FORMATTER = new Intl.NumberFormat("en-US");
+  var LINK_REGEX = /((?:https?:\/\/|www\.)[^\s]+)/gi;
   function findPlayersDeep(state3) {
     if (!state3 || typeof state3 !== "object") return [];
     const out = [];
@@ -27081,6 +27082,53 @@
   }
   function normalizeMutationsForSprite(list) {
     return (Array.isArray(list) ? list : []).map((label2) => normalizeMutationLabelForSprite(label2)).filter(Boolean);
+  }
+  function shortenLinkLabel(raw, maxLen = 36) {
+    const trimmed = String(raw || "");
+    const display = trimmed.replace(/^https?:\/\//i, "");
+    if (display.length <= maxLen) return display;
+    return `${display.slice(0, Math.max(0, maxLen - 3))}...`;
+  }
+  function linkifyText(text) {
+    const frag = document.createDocumentFragment();
+    const raw = String(text ?? "");
+    if (!raw) return frag;
+    let lastIndex = 0;
+    let match;
+    while ((match = LINK_REGEX.exec(raw)) !== null) {
+      const matchText = match[0];
+      const start2 = match.index;
+      const end = start2 + matchText.length;
+      if (start2 > lastIndex) {
+        frag.appendChild(document.createTextNode(raw.slice(lastIndex, start2)));
+      }
+      let linkText = matchText;
+      let trailing = "";
+      while (linkText && /[.,!?;:)\]]$/.test(linkText)) {
+        trailing = linkText.slice(-1) + trailing;
+        linkText = linkText.slice(0, -1);
+      }
+      if (linkText) {
+        const href = /^https?:\/\//i.test(linkText) ? linkText : `https://${linkText}`;
+        const a = document.createElement("a");
+        a.className = "qws-msg-link";
+        a.href = href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = shortenLinkLabel(linkText);
+        frag.appendChild(a);
+      } else {
+        frag.appendChild(document.createTextNode(matchText));
+      }
+      if (trailing) {
+        frag.appendChild(document.createTextNode(trailing));
+      }
+      lastIndex = end;
+    }
+    if (lastIndex < raw.length) {
+      frag.appendChild(document.createTextNode(raw.slice(lastIndex)));
+    }
+    return frag;
   }
   function getMaxScaleForSpecies(key2) {
     const entry = plantCatalog[key2];
@@ -27746,6 +27794,14 @@
 .qws-msg-item-price{
   color:#F3D32B;
   font-weight:700;
+}
+.qws-msg-link{
+  color:#7aa2ff;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.qws-msg-link:hover{
+  color:#9db7ff;
 }
 .qws-msg-item-badge{
   display:inline-flex;
@@ -28718,7 +28774,7 @@
         if (!hasMessage && itemPayloads) bubble.classList.add("no-text");
         const content = document.createElement("div");
         content.className = "qws-msg-content";
-        content.textContent = messageText;
+        content.appendChild(linkifyText(messageText));
         if (!hasMessage) {
           content.style.display = "none";
         }
