@@ -37,6 +37,8 @@ type ConversationState = {
   lastMessageAt: number;
   loaded: boolean;
   loading: boolean;
+  loadingOlder: boolean;
+  hasMore: boolean;
 };
 
 type FriendRowState = {
@@ -118,6 +120,9 @@ const ITEM_MESSAGE_PREFIX = "ITEM::v1::";
 const ATTACHMENT_STATUS_PREFIX = "Items attached:";
 const MAX_ATTACHMENTS = 6;
 const MAX_MESSAGE_LENGTH = 1000;
+const THREAD_INITIAL_LIMIT = 80;
+const THREAD_PAGE_LIMIT = 50;
+const LOAD_OLDER_THRESHOLD = 80;
 
 const STYLE_ID = "qws-messages-overlay-css";
 
@@ -903,13 +908,17 @@ function createItemCard(item: ChatItem): HTMLDivElement {
       const roundedMax = Math.round(maxStrength);
       const roundedCurrent = Math.round(strength);
       if (roundedCurrent >= roundedMax) {
+        const str = document.createElement("span");
+        str.className = "qws-msg-item-str";
+        str.textContent = `STR ${roundedMax}`;
+        sub.appendChild(str);
         const badge = document.createElement("span");
         badge.className = "qws-msg-item-badge";
         badge.textContent = "MAX";
         applyStrengthBadgeTone(badge, getPetMutationTone(item.mutations));
         sub.appendChild(badge);
       } else {
-        sub.textContent = `${Math.max(0, roundedCurrent)}/${roundedMax}`;
+        sub.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
       }
     } else {
       sub.textContent = getChatItemSubtitle(item);
@@ -1820,6 +1829,11 @@ class MessagesOverlay {
     this.panel = this.createPanel();
     this.installScrollGuards(this.listEl);
     this.installScrollGuards(this.threadBodyEl);
+    this.threadBodyEl.addEventListener(
+      "scroll",
+      () => this.handleThreadScroll(),
+      { passive: true },
+    );
     this.keyTrapCleanup = installInputKeyTrap(this.panel, {
       onEnter: () => {
         void this.handleSendMessage();
@@ -2074,6 +2088,8 @@ class MessagesOverlay {
         lastMessageAt: 0,
         loaded: false,
         loading: false,
+        loadingOlder: false,
+        hasMore: true,
       };
       this.convs.set(otherId, conv);
     }
@@ -2222,7 +2238,9 @@ class MessagesOverlay {
       const currentId = otherId;
       void (async () => {
         try {
-          const data = await fetchMessagesThread(this.myId!, currentId, { limit: 100 });
+          const data = await fetchMessagesThread(this.myId!, currentId, {
+            limit: THREAD_INITIAL_LIMIT,
+          });
           const normalized = Array.isArray(data)
             ? data.map(normalizeMessage).filter(Boolean)
             : [];
@@ -2236,6 +2254,7 @@ class MessagesOverlay {
               ),
             );
           }
+          conv.hasMore = normalized.length >= THREAD_INITIAL_LIMIT;
           conv.loaded = true;
           this.updateConversationMap(conv);
           this.updateUnreadFromMessages(conv);
@@ -2252,6 +2271,58 @@ class MessagesOverlay {
     } else {
       await this.markConversationRead(otherId);
       this.updateFriendRow(otherId);
+    }
+  }
+
+  private handleThreadScroll(): void {
+    if (!this.selectedId) return;
+    if (this.threadBodyEl.scrollTop > LOAD_OLDER_THRESHOLD) return;
+    void this.loadOlderMessages();
+  }
+
+  private async loadOlderMessages(): Promise<void> {
+    if (!this.myId || !this.selectedId) return;
+    const conv = this.ensureConversation(this.selectedId);
+    if (!conv.loaded || conv.loading || conv.loadingOlder) return;
+    if (conv.hasMore === false) return;
+    if (!conv.messages.length) return;
+
+    const oldestId = conv.messages[0]?.id;
+    if (!oldestId) {
+      conv.hasMore = false;
+      return;
+    }
+
+    conv.loadingOlder = true;
+    this.renderThread({ preserveScroll: true, scrollToBottom: false });
+
+    try {
+      const data = await fetchMessagesThread(this.myId, conv.otherId, {
+        beforeId: oldestId,
+        limit: THREAD_PAGE_LIMIT,
+      });
+      const normalized = Array.isArray(data)
+        ? data.map(normalizeMessage).filter(Boolean)
+        : [];
+      if (!normalized.length) {
+        conv.hasMore = false;
+      } else {
+        const olderFound = normalized.some((msg) => msg.id < oldestId);
+        if (!olderFound) {
+          conv.hasMore = false;
+        }
+      }
+      conv.messages = this.mergeMessages(conv.messages, normalized);
+      if (normalized.length < THREAD_PAGE_LIMIT) {
+        conv.hasMore = false;
+      }
+    } catch {
+      // ignore
+    } finally {
+      conv.loadingOlder = false;
+      if (this.selectedId === conv.otherId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
     }
   }
 
@@ -2448,7 +2519,11 @@ class MessagesOverlay {
     }
   }
 
-  private renderThread(): void {
+  private renderThread(options?: { preserveScroll?: boolean; scrollToBottom?: boolean }): void {
+    const preserveScroll = options?.preserveScroll ?? false;
+    const prevScrollHeight = preserveScroll ? this.threadBodyEl.scrollHeight : 0;
+    const prevScrollTop = preserveScroll ? this.threadBodyEl.scrollTop : 0;
+
     this.threadHeadEl.innerHTML = "";
     this.threadBodyEl.innerHTML = "";
     this.statusEl.textContent = "";
@@ -2491,6 +2566,15 @@ class MessagesOverlay {
     }
 
     const messages = conv.messages.slice();
+    if (conv.loadingOlder) {
+      const loading = document.createElement("div");
+      loading.className = "qws-msg-loading";
+      const dots = document.createElement("div");
+      dots.className = "qws-msg-loading-dots";
+      dots.innerHTML = "<span></span><span></span><span></span>";
+      loading.appendChild(dots);
+      this.threadBodyEl.appendChild(loading);
+    }
     if (conv.loading) {
       const loading = document.createElement("div");
       loading.className = "qws-msg-loading";
@@ -2586,7 +2670,14 @@ class MessagesOverlay {
     }
 
     this.setInputState(true);
-    this.scrollThreadToBottom();
+    if (preserveScroll) {
+      requestAnimationFrame(() => {
+        const newHeight = this.threadBodyEl.scrollHeight;
+        this.threadBodyEl.scrollTop = newHeight - prevScrollHeight + prevScrollTop;
+      });
+    } else if (options?.scrollToBottom !== false) {
+      this.scrollThreadToBottom();
+    }
   }
 
   private scrollThreadToBottom(): void {

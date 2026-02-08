@@ -26647,6 +26647,9 @@
   var ATTACHMENT_STATUS_PREFIX = "Items attached:";
   var MAX_ATTACHMENTS = 6;
   var MAX_MESSAGE_LENGTH = 1e3;
+  var THREAD_INITIAL_LIMIT = 80;
+  var THREAD_PAGE_LIMIT = 50;
+  var LOAD_OLDER_THRESHOLD = 80;
   var STYLE_ID = "qws-messages-overlay-css";
   var style2 = (el2, s) => Object.assign(el2.style, s);
   var setProps2 = (el2, props) => {
@@ -27286,13 +27289,17 @@
         const roundedMax = Math.round(maxStrength);
         const roundedCurrent = Math.round(strength);
         if (roundedCurrent >= roundedMax) {
+          const str = document.createElement("span");
+          str.className = "qws-msg-item-str";
+          str.textContent = `STR ${roundedMax}`;
+          sub.appendChild(str);
           const badge = document.createElement("span");
           badge.className = "qws-msg-item-badge";
           badge.textContent = "MAX";
           applyStrengthBadgeTone(badge, getPetMutationTone(item.mutations));
           sub.appendChild(badge);
         } else {
-          sub.textContent = `${Math.max(0, roundedCurrent)}/${roundedMax}`;
+          sub.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
         }
       } else {
         sub.textContent = getChatItemSubtitle(item);
@@ -28162,6 +28169,11 @@
       this.panel = this.createPanel();
       this.installScrollGuards(this.listEl);
       this.installScrollGuards(this.threadBodyEl);
+      this.threadBodyEl.addEventListener(
+        "scroll",
+        () => this.handleThreadScroll(),
+        { passive: true }
+      );
       this.keyTrapCleanup = installInputKeyTrap(this.panel, {
         onEnter: () => {
           void this.handleSendMessage();
@@ -28380,7 +28392,9 @@
           unread: 0,
           lastMessageAt: 0,
           loaded: false,
-          loading: false
+          loading: false,
+          loadingOlder: false,
+          hasMore: true
         };
         this.convs.set(otherId, conv);
       }
@@ -28512,7 +28526,9 @@
         const currentId = otherId;
         void (async () => {
           try {
-            const data = await fetchMessagesThread(this.myId, currentId, { limit: 100 });
+            const data = await fetchMessagesThread(this.myId, currentId, {
+              limit: THREAD_INITIAL_LIMIT
+            });
             const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
             conv.messages = this.mergeMessages(conv.messages, normalized);
             if (conv.messages.length) {
@@ -28524,6 +28540,7 @@
                 )
               );
             }
+            conv.hasMore = normalized.length >= THREAD_INITIAL_LIMIT;
             conv.loaded = true;
             this.updateConversationMap(conv);
             this.updateUnreadFromMessages(conv);
@@ -28540,6 +28557,50 @@
       } else {
         await this.markConversationRead(otherId);
         this.updateFriendRow(otherId);
+      }
+    }
+    handleThreadScroll() {
+      if (!this.selectedId) return;
+      if (this.threadBodyEl.scrollTop > LOAD_OLDER_THRESHOLD) return;
+      void this.loadOlderMessages();
+    }
+    async loadOlderMessages() {
+      if (!this.myId || !this.selectedId) return;
+      const conv = this.ensureConversation(this.selectedId);
+      if (!conv.loaded || conv.loading || conv.loadingOlder) return;
+      if (conv.hasMore === false) return;
+      if (!conv.messages.length) return;
+      const oldestId = conv.messages[0]?.id;
+      if (!oldestId) {
+        conv.hasMore = false;
+        return;
+      }
+      conv.loadingOlder = true;
+      this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      try {
+        const data = await fetchMessagesThread(this.myId, conv.otherId, {
+          beforeId: oldestId,
+          limit: THREAD_PAGE_LIMIT
+        });
+        const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
+        if (!normalized.length) {
+          conv.hasMore = false;
+        } else {
+          const olderFound = normalized.some((msg) => msg.id < oldestId);
+          if (!olderFound) {
+            conv.hasMore = false;
+          }
+        }
+        conv.messages = this.mergeMessages(conv.messages, normalized);
+        if (normalized.length < THREAD_PAGE_LIMIT) {
+          conv.hasMore = false;
+        }
+      } catch {
+      } finally {
+        conv.loadingOlder = false;
+        if (this.selectedId === conv.otherId) {
+          this.renderThread({ preserveScroll: true, scrollToBottom: false });
+        }
       }
     }
     async markConversationRead(otherId) {
@@ -28700,7 +28761,10 @@
         this.listEl.scrollTop = scrollTop;
       }
     }
-    renderThread() {
+    renderThread(options) {
+      const preserveScroll = options?.preserveScroll ?? false;
+      const prevScrollHeight = preserveScroll ? this.threadBodyEl.scrollHeight : 0;
+      const prevScrollTop = preserveScroll ? this.threadBodyEl.scrollTop : 0;
       this.threadHeadEl.innerHTML = "";
       this.threadBodyEl.innerHTML = "";
       this.statusEl.textContent = "";
@@ -28738,6 +28802,15 @@
         return;
       }
       const messages = conv.messages.slice();
+      if (conv.loadingOlder) {
+        const loading = document.createElement("div");
+        loading.className = "qws-msg-loading";
+        const dots = document.createElement("div");
+        dots.className = "qws-msg-loading-dots";
+        dots.innerHTML = "<span></span><span></span><span></span>";
+        loading.appendChild(dots);
+        this.threadBodyEl.appendChild(loading);
+      }
       if (conv.loading) {
         const loading = document.createElement("div");
         loading.className = "qws-msg-loading";
@@ -28816,7 +28889,14 @@
         }
       }
       this.setInputState(true);
-      this.scrollThreadToBottom();
+      if (preserveScroll) {
+        requestAnimationFrame(() => {
+          const newHeight = this.threadBodyEl.scrollHeight;
+          this.threadBodyEl.scrollTop = newHeight - prevScrollHeight + prevScrollTop;
+        });
+      } else if (options?.scrollToBottom !== false) {
+        this.scrollThreadToBottom();
+      }
     }
     scrollThreadToBottom() {
       requestAnimationFrame(() => {
