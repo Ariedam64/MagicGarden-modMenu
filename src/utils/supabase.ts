@@ -65,6 +65,7 @@ export interface PlayerView {
   playerId: string;
   playerName: string | null;
   avatarUrl: string | null;
+  avatar?: string[] | null;
   coins: number | null;
   room: any | null;
   hasModInstalled: boolean;
@@ -530,4 +531,131 @@ export async function searchRoomsByPlayerName(
   }
 
   return results;
+}
+
+// ---------- 7) Messages (DM) ----------
+
+export interface DirectMessage {
+  id: number;
+  conversationId: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  createdAt: string;
+  deliveredAt: string;
+  readAt: string | null;
+}
+
+export interface MessagesReadResult {
+  updated: number;
+}
+
+export interface ReadReceipt {
+  conversationId: string;
+  readerId: string;
+  upToId: number;
+  readAt: string;
+}
+
+export interface MessagesStreamHandlers {
+  onConnected?: (payload: { playerId: string }) => void;
+  onMessage?: (message: DirectMessage) => void;
+  onRead?: (receipt: ReadReceipt) => void;
+  onError?: (event: Event) => void;
+}
+
+export function openMessagesStream(
+  playerId: string,
+  handlers: MessagesStreamHandlers = {},
+): EventSource | null {
+  if (!playerId) return null;
+  const url = buildUrl("messages/stream", { playerId });
+  const es = new EventSource(url);
+
+  es.addEventListener("connected", (evt) => {
+    try {
+      const data = JSON.parse((evt as MessageEvent).data);
+      handlers.onConnected?.(data);
+    } catch (e) {
+      console.error("[api] stream connected parse error:", e);
+    }
+  });
+
+  es.addEventListener("message", (evt) => {
+    try {
+      const data = JSON.parse((evt as MessageEvent).data) as DirectMessage;
+      handlers.onMessage?.(data);
+    } catch (e) {
+      console.error("[api] stream message parse error:", e);
+    }
+  });
+
+  es.addEventListener("read", (evt) => {
+    try {
+      const data = JSON.parse((evt as MessageEvent).data) as ReadReceipt;
+      handlers.onRead?.(data);
+    } catch (e) {
+      console.error("[api] stream read parse error:", e);
+    }
+  });
+
+  es.addEventListener("error", (evt) => {
+    handlers.onError?.(evt);
+  });
+
+  return es;
+}
+
+export async function sendMessage(params: {
+  fromPlayerId: string;
+  toPlayerId: string;
+  roomId: string;
+  text: string;
+}): Promise<DirectMessage | null> {
+  const { fromPlayerId, toPlayerId, roomId, text } = params;
+  if (!fromPlayerId || !toPlayerId || !roomId || !text) return null;
+  if (fromPlayerId === toPlayerId) return null;
+
+  const { status, data } = await httpPost<DirectMessage>("messages/send", {
+    fromPlayerId,
+    toPlayerId,
+    roomId,
+    text,
+  });
+
+  if (status >= 200 && status < 300 && data) return data;
+  return null;
+}
+
+export async function fetchMessagesThread(
+  playerId: string,
+  otherPlayerId: string,
+  options?: { afterId?: number; limit?: number },
+): Promise<DirectMessage[]> {
+  if (!playerId || !otherPlayerId) return [];
+  const { status, data } = await httpGet<DirectMessage[]>("messages/thread", {
+    playerId,
+    otherPlayerId,
+    afterId: options?.afterId,
+    limit: options?.limit,
+  });
+  if (status !== 200 || !Array.isArray(data)) return [];
+  return data;
+}
+
+export async function markMessagesRead(params: {
+  playerId: string;
+  otherPlayerId: string;
+  upToId: number;
+}): Promise<number> {
+  const { playerId, otherPlayerId, upToId } = params;
+  if (!playerId || !otherPlayerId || !upToId) return 0;
+
+  const { status, data } = await httpPost<MessagesReadResult>(
+    "messages/read",
+    { playerId, otherPlayerId, upToId },
+  );
+
+  if (status !== 200 || !data) return 0;
+  return data.updated ?? 0;
 }

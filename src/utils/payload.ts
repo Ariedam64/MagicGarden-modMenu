@@ -29,6 +29,7 @@ export type PlayerStatePayload = {
   playerId: string | null;
   playerName: string | null;
   avatarUrl: string | null;
+  avatar?: string[] | null;
   modVersion: string | null;
   coins: number | null;
   room: {
@@ -318,6 +319,15 @@ export async function buildPlayerStatePayload(
       slotData?.discordAvatarUrl ??
       slot?.discordAvatarUrl ??
       null;
+    const avatarRaw =
+      resolvedPlayer?.cosmetic?.avatar ??
+      slotData?.cosmetic?.avatar ??
+      slot?.cosmetic?.avatar ??
+      null;
+    const avatar =
+      Array.isArray(avatarRaw) && avatarRaw.length > 0
+        ? avatarRaw.map((entry) => String(entry))
+        : null;
 
     const coinCandidate =
       slotData?.coinsCount ??
@@ -364,6 +374,7 @@ export async function buildPlayerStatePayload(
       playerId: playerId != null ? String(playerId) : null,
       playerName: privacy.showProfile ? playerName : null,
       avatarUrl: privacy.showProfile ? avatarUrl : null,
+      avatar: privacy.showProfile ? avatar : null,
       modVersion: modVersion,
       coins: privacy.showCoins ? coinsRaw : null,
       room: {
@@ -707,4 +718,3 @@ export function stopPlayerStateReporting(): void {
   clearInterval(payloadReportingTimer);
   payloadReportingTimer = null;
 }
-

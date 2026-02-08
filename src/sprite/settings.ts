@@ -43,7 +43,7 @@ export const MUT_META: Record<MutationName, MutationMeta> = {
   Wet: { overlayTall: 'sprite/mutation-overlay/WetTallPlant', tallIconOverride: 'sprite/mutation/Puddle' },
   Chilled: { overlayTall: 'sprite/mutation-overlay/ChilledTallPlant', tallIconOverride: null },
   Frozen: { overlayTall: 'sprite/mutation-overlay/FrozenTallPlant', tallIconOverride: null },
-  Thunderstruck: { overlayTall: null, tallIconOverride: null },
+  Thunderstruck: { overlayTall: 'sprite/mutation-overlay/ThunderstruckTallPlant', tallIconOverride: 'sprite/mutation/ThunderstruckGround' },
   Dawnlit: { overlayTall: null, tallIconOverride: null },
   Ambershine: { overlayTall: null, tallIconOverride: null },
   Dawncharged: { overlayTall: null, tallIconOverride: null },

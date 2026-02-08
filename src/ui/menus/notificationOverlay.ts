@@ -158,6 +158,8 @@ class OverlayBarebone {
 
   constructor() {
     this.slot = this.createSlot();
+    this.slot.id = "qws-notifier-slot";
+    (globalThis as any).__qws_notifier_slot = this.slot;
     this.btn = this.createButton();
     this.ensureBellCSS();
     this.badge = this.createBadge();
@@ -199,6 +201,11 @@ class OverlayBarebone {
   destroy() {
     try { this.mo?.disconnect(); } catch {}
     try { this.slot.remove(); } catch {}
+    try {
+      if ((globalThis as any).__qws_notifier_slot === this.slot) {
+        delete (globalThis as any).__qws_notifier_slot;
+      }
+    } catch {}
     // Stop toutes les boucles audio liées à l’overlay
     try { audio.stopAllLoops(); } catch {}
   }
