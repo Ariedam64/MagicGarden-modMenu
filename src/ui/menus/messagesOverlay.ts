@@ -30,6 +30,13 @@ import {
 } from "../../utils/supabase";
 import "emoji-picker-element";
 
+declare global {
+  interface Window {
+    __qws_cleanup_messages_overlay?: () => void;
+    __qws_notifier_slot?: HTMLElement;
+  }
+}
+
 type ConversationState = {
   otherId: string;
   conversationId: string | null;
@@ -134,6 +141,28 @@ const setProps = (el: HTMLElement, props: Record<string, string>) => {
   for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v);
 };
 
+type UnknownRecord = Record<string, unknown>;
+
+type PlayerLike = {
+  id?: unknown;
+  name?: unknown;
+  databaseUserId?: unknown;
+  playerId?: unknown;
+  discordAvatarUrl?: unknown;
+  cosmetic?: { avatar?: unknown };
+};
+
+type PlantCatalogEntry = {
+  seed?: { name?: string; maxScale?: number };
+  crop?: { name?: string; maxScale?: number };
+  plant?: { name?: string; maxScale?: number };
+};
+
+type NamedCatalogEntry = { name?: string };
+
+const isRecord = (value: unknown): value is UnknownRecord =>
+  typeof value === "object" && value !== null;
+
 type KeyTrapCleanup = () => void;
 
 function installInputKeyTrap(
@@ -150,7 +179,7 @@ function installInputKeyTrap(
       const t = (el.type || "").toLowerCase();
       return t === "text" || t === "number" || t === "search";
     }
-    return (el as any).isContentEditable === true;
+    return el.isContentEditable === true;
   };
 
   const inScope = (node: Element | null) => {
@@ -159,9 +188,9 @@ function installInputKeyTrap(
     const picker = scope.querySelector("emoji-picker") as HTMLElement | null;
     if (!picker) return false;
     if (picker === node || picker.contains(node)) return true;
-    const shadow = (picker as any).shadowRoot as ShadowRoot | null;
+    const shadow = picker.shadowRoot;
     if (shadow && node instanceof Node && shadow.contains(node)) return true;
-    const root = (node as any).getRootNode?.();
+    const root = node.getRootNode?.();
     if (root && shadow && root === shadow) return true;
     return false;
   };
@@ -173,7 +202,7 @@ function installInputKeyTrap(
 
     const key = ev.key || "";
     const code = ev.code || "";
-    const keyCode = (ev as any).keyCode as number | undefined;
+    const keyCode = ev.keyCode;
     const isEnter = (key === "Enter" || code === "Enter" || keyCode === 13) && !ev.shiftKey;
     const shouldHandleEnter = opts.shouldHandleEnter
       ? opts.shouldHandleEnter(target, active)
@@ -181,27 +210,27 @@ function installInputKeyTrap(
     if (isEnter && !ev.isComposing && ev.type === "keydown" && shouldHandleEnter) {
       ev.preventDefault();
       ev.stopPropagation();
-      (ev as any).stopImmediatePropagation?.();
+      ev.stopImmediatePropagation();
       opts.onEnter?.();
       return;
     }
 
     ev.stopPropagation();
-    (ev as any).stopImmediatePropagation?.();
+    ev.stopImmediatePropagation();
   };
 
-  const types: (keyof WindowEventMap)[] = ["keydown", "keypress", "keyup"];
+  const types = ["keydown", "keypress", "keyup"] as const;
   types.forEach((t) => {
-    window.addEventListener(t, handler as any, { capture: true });
-    document.addEventListener(t, handler as any, { capture: true });
-    scope.addEventListener(t, handler as any, { capture: true });
+    window.addEventListener(t, handler, { capture: true });
+    document.addEventListener(t, handler, { capture: true });
+    scope.addEventListener(t, handler, { capture: true });
   });
 
   return () => {
     types.forEach((t) => {
-      window.removeEventListener(t, handler as any, { capture: true } as any);
-      document.removeEventListener(t, handler as any, { capture: true } as any);
-      scope.removeEventListener(t, handler as any, { capture: true } as any);
+      window.removeEventListener(t, handler, { capture: true });
+      document.removeEventListener(t, handler, { capture: true });
+      scope.removeEventListener(t, handler, { capture: true });
     });
   };
 }
@@ -240,14 +269,14 @@ function base64UrlDecode(input: string): string | null {
   }
 }
 
-function normalizeQuantity(raw: any): number {
+function normalizeQuantity(raw: unknown): number {
   const n = Math.floor(Number(raw ?? 1));
   if (!Number.isFinite(n) || n <= 0) return 1;
   return n;
 }
 
-function normalizeChatItem(raw: any): ChatItem | null {
-  if (!raw || typeof raw !== "object") return null;
+function normalizeChatItem(raw: unknown): ChatItem | null {
+  if (!isRecord(raw)) return null;
   const typeRaw = raw.itemType ?? raw.type ?? raw.kind ?? raw.category;
   const type = String(typeRaw ?? "").trim();
   const typeLc = type.toLowerCase();
@@ -258,7 +287,7 @@ function normalizeChatItem(raw: any): ChatItem | null {
     if (!species) return null;
     const scale = Number.isFinite(scaleCandidate) ? scaleCandidate : undefined;
     const mutations = Array.isArray(raw.mutations)
-      ? raw.mutations.map((m: any) => String(m ?? "").trim()).filter(Boolean)
+      ? raw.mutations.map((m) => String(m ?? "").trim()).filter(Boolean)
       : undefined;
     const id = raw.id != null ? String(raw.id) : undefined;
     return { itemType: "Produce", id, species, scale, mutations };
@@ -297,13 +326,14 @@ function normalizeChatItem(raw: any): ChatItem | null {
       raw.name != null && String(raw.name).trim()
         ? String(raw.name)
         : null;
-    const xpRaw = Number(raw.xp ?? raw.data?.xp);
+    const data = isRecord(raw.data) ? raw.data : null;
+    const xpRaw = Number(raw.xp ?? data?.xp);
     const xp = Number.isFinite(xpRaw) ? xpRaw : undefined;
     const mutations = Array.isArray(raw.mutations)
-      ? raw.mutations.map((m: any) => String(m ?? "").trim()).filter(Boolean)
+      ? raw.mutations.map((m) => String(m ?? "").trim()).filter(Boolean)
       : undefined;
     const abilities = Array.isArray(raw.abilities)
-      ? raw.abilities.map((a: any) => String(a ?? "").trim()).filter(Boolean)
+      ? raw.abilities.map((a) => String(a ?? "").trim()).filter(Boolean)
       : undefined;
     const targetScale = Number(raw.targetScale);
     if (!petSpecies && !name && !id) return null;
@@ -322,15 +352,15 @@ function normalizeChatItem(raw: any): ChatItem | null {
   return null;
 }
 
-function compactItem(item: ChatItem): Record<string, any> {
-  const out: Record<string, any> = {};
-  const set = (key: string, value: any) => {
+function compactItem(item: ChatItem): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const set = (key: string, value: unknown) => {
     if (value == null) return;
     if (typeof value === "string" && !value.trim()) return;
     if (Array.isArray(value) && value.length === 0) return;
     out[key] = value;
   };
-  const setNum = (key: string, value: any) => {
+  const setNum = (key: string, value: unknown) => {
     const n = Number(value);
     if (!Number.isFinite(n)) return;
     out[key] = n;
@@ -398,7 +428,7 @@ function encodeItemMessage(payload: ItemMessagePayload): string {
       ? [payload.item]
       : [];
   const compactItems = itemsRaw.map(compactItem);
-  const compactPayload: Record<string, any> = {
+  const compactPayload: Record<string, unknown> = {
     v: 1,
     k: "i",
     i: compactItems,
@@ -410,8 +440,8 @@ function encodeItemMessage(payload: ItemMessagePayload): string {
   return `${ITEM_MESSAGE_PREFIX}${json}`;
 }
 
-function decodeCompactItem(raw: any): ChatItem | null {
-  if (!raw || typeof raw !== "object") return null;
+function decodeCompactItem(raw: unknown): ChatItem | null {
+  if (!isRecord(raw)) return null;
   const t = String(raw.t ?? "").toUpperCase();
   const qty = normalizeQuantity(raw.q ?? 1);
   if (t === "S") {
@@ -439,7 +469,7 @@ function decodeCompactItem(raw: any): ChatItem | null {
     if (!species) return null;
     const scale = Number(raw.sc);
     const mutations = Array.isArray(raw.m)
-      ? raw.m.map((m: any) => String(m ?? "").trim()).filter(Boolean)
+      ? raw.m.map((m) => String(m ?? "").trim()).filter(Boolean)
       : undefined;
     const id = raw.i != null ? String(raw.i) : undefined;
     return {
@@ -467,10 +497,10 @@ function decodeCompactItem(raw: any): ChatItem | null {
     const name = raw.n != null && String(raw.n).trim() ? String(raw.n) : null;
     const xp = Number(raw.x);
     const mutations = Array.isArray(raw.m)
-      ? raw.m.map((m: any) => String(m ?? "").trim()).filter(Boolean)
+      ? raw.m.map((m) => String(m ?? "").trim()).filter(Boolean)
       : undefined;
     const abilities = Array.isArray(raw.a)
-      ? raw.a.map((a: any) => String(a ?? "").trim()).filter(Boolean)
+      ? raw.a.map((a) => String(a ?? "").trim()).filter(Boolean)
       : undefined;
     const targetScale = Number(raw.sc);
     const id = raw.i != null ? String(raw.i) : undefined;
@@ -492,7 +522,7 @@ function decodeCompactItem(raw: any): ChatItem | null {
 function decodeItemMessage(text: string): ItemMessagePayload | null {
   if (!text || !text.startsWith(ITEM_MESSAGE_PREFIX)) return null;
   const raw = text.slice(ITEM_MESSAGE_PREFIX.length);
-  let parsed: any = null;
+  let parsed: unknown = null;
   try {
     const trimmed = raw.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -502,7 +532,8 @@ function decodeItemMessage(text: string): ItemMessagePayload | null {
       if (!decoded) return null;
       parsed = JSON.parse(decoded);
     }
-    if (!parsed || (parsed.k !== "i" && parsed.kind !== "item")) return null;
+    if (!isRecord(parsed)) return null;
+    if (parsed.k !== "i" && parsed.kind !== "item") return null;
     const version = Number(parsed.v ?? parsed.version ?? 1);
     if (!Number.isFinite(version) || version !== 1) return null;
     const itemsRaw = Array.isArray(parsed.i)
@@ -513,12 +544,11 @@ function decodeItemMessage(text: string): ItemMessagePayload | null {
           ? [parsed.item]
           : [];
     const normalizedItems = itemsRaw
-      .map((entry: any) => {
-        if (entry && typeof entry === "object" && "t" in entry) {
-          return decodeCompactItem(entry);
-        }
-        return normalizeChatItem(entry);
-      })
+      .map((entry) =>
+        isRecord(entry) && "t" in entry
+          ? decodeCompactItem(entry)
+          : normalizeChatItem(entry),
+      )
       .filter((entry): entry is ChatItem => !!entry);
     if (!normalizedItems.length) return null;
     return {
@@ -542,49 +572,55 @@ const SCALE_MAX = 3;
 const COIN_FORMATTER = new Intl.NumberFormat("en-US");
 const LINK_REGEX = /((?:https?:\/\/|www\.)[^\s]+)/gi;
 
-function findPlayersDeep(state: any): any[] {
-  if (!state || typeof state !== "object") return [];
-  const out: any[] = [];
-  const seen = new Set<any>();
-  const stack = [state];
+function findPlayersDeep(state: unknown): PlayerLike[] {
+  if (!isRecord(state)) return [];
+  const out: PlayerLike[] = [];
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [state];
 
   while (stack.length) {
     const cur = stack.pop();
-    if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+    if (!isRecord(cur) || seen.has(cur)) continue;
     seen.add(cur);
-    for (const key of Object.keys(cur)) {
-      const value = (cur as any)[key];
-      if (
-        Array.isArray(value) &&
-        value.length > 0 &&
-        value.every((item) => item && typeof item === "object")
-      ) {
-        const looksLikePlayer = value.some((item) => "id" in item && "name" in item);
-        if (looksLikePlayer && /player/i.test(key)) {
-          out.push(...(value as any[]));
+    for (const [key, value] of Object.entries(cur)) {
+      if (Array.isArray(value) && value.length > 0) {
+        const records = value.filter(isRecord);
+        if (records.length === value.length) {
+          const looksLikePlayer = records.some(
+            (item) => "id" in item && "name" in item,
+          );
+          if (looksLikePlayer && /player/i.test(key)) {
+            out.push(...(records as PlayerLike[]));
+          }
         }
       }
-      if (value && typeof value === "object") {
+      if (isRecord(value)) {
         stack.push(value);
       }
     }
   }
 
-  const byId = new Map<string, any>();
+  const byId = new Map<string, PlayerLike>();
   for (const entry of out) {
-    if (entry?.id) {
+    if (entry?.id != null) {
       byId.set(String(entry.id), entry);
     }
   }
   return [...byId.values()];
 }
 
-function getPlayersArrayFromState(state: any): any[] {
+function getPlayersArrayFromState(state: unknown): PlayerLike[] {
+  if (!isRecord(state)) return [];
+  const fullState = isRecord(state.fullState) ? state.fullState : null;
+  const fullData = fullState && isRecord(fullState.data) ? fullState.data : null;
+  const data = isRecord(state.data) ? state.data : null;
   const direct =
-    state?.fullState?.data?.players ??
-    state?.data?.players ??
-    state?.players;
-  return Array.isArray(direct) ? direct : findPlayersDeep(state);
+    (fullData ? fullData.players : undefined) ??
+    (data ? data.players : undefined) ??
+    state.players;
+  return Array.isArray(direct)
+    ? direct.filter(isRecord) as PlayerLike[]
+    : findPlayersDeep(state);
 }
 
 function normalizeCosmeticName(raw: string): string | null {
@@ -900,7 +936,7 @@ function formatScaleValue(raw?: number): string | null {
 }
 
 function getMaxScaleForSpecies(key: string): number | null {
-  const entry = (plantCatalog as Record<string, any>)[key];
+  const entry = (plantCatalog as Record<string, PlantCatalogEntry>)[key];
   const candidates = [entry?.crop?.maxScale, entry?.plant?.maxScale, entry?.seed?.maxScale];
   for (const candidate of candidates) {
     const numeric = typeof candidate === "number" ? candidate : Number(candidate);
@@ -974,7 +1010,7 @@ function buildSpriteCandidates(...values: Array<string | null | undefined>): str
 
 function getChatItemLabel(item: ChatItem): string {
   if (item.itemType === "Seed") {
-    const entry = (plantCatalog as any)?.[item.species];
+    const entry = (plantCatalog as Record<string, PlantCatalogEntry>)[item.species];
     return (
       entry?.seed?.name ||
       entry?.crop?.name ||
@@ -983,7 +1019,7 @@ function getChatItemLabel(item: ChatItem): string {
     );
   }
   if (item.itemType === "Produce") {
-    const entry = (plantCatalog as any)?.[item.species];
+    const entry = (plantCatalog as Record<string, PlantCatalogEntry>)[item.species];
     return (
       entry?.crop?.name ||
       entry?.plant?.name ||
@@ -993,7 +1029,7 @@ function getChatItemLabel(item: ChatItem): string {
     );
   }
   if (item.itemType === "Plant") {
-    const entry = (plantCatalog as any)?.[item.species];
+    const entry = (plantCatalog as Record<string, PlantCatalogEntry>)[item.species];
     return (
       entry?.plant?.name ||
       entry?.crop?.name ||
@@ -1003,19 +1039,19 @@ function getChatItemLabel(item: ChatItem): string {
     );
   }
   if (item.itemType === "Egg") {
-    const entry = (eggCatalog as any)?.[item.eggId];
+    const entry = (eggCatalog as Record<string, NamedCatalogEntry>)[item.eggId];
     return entry?.name || item.eggId || "Egg";
   }
   if (item.itemType === "Decor") {
-    const entry = (decorCatalog as any)?.[item.decorId];
+    const entry = (decorCatalog as Record<string, NamedCatalogEntry>)[item.decorId];
     return entry?.name || item.decorId || "Decor";
   }
   if (item.itemType === "Tool") {
-    const entry = (toolCatalog as any)?.[item.toolId];
+    const entry = (toolCatalog as Record<string, NamedCatalogEntry>)[item.toolId];
     return entry?.name || item.toolId || "Tool";
   }
   if (item.itemType === "Pet") {
-    const entry = (petCatalog as any)?.[item.petSpecies ?? ""];
+    const entry = (petCatalog as Record<string, NamedCatalogEntry>)[item.petSpecies ?? ""];
     if (item.name) return item.name;
     return entry?.name || item.petSpecies || "Pet";
   }
@@ -1036,7 +1072,7 @@ function getChatItemSubtitle(item: ChatItem): string {
     return `x${item.quantity}`;
   }
   if (item.itemType === "Pet") {
-    const entry = (petCatalog as any)?.[item.petSpecies ?? ""];
+    const entry = (petCatalog as Record<string, NamedCatalogEntry>)[item.petSpecies ?? ""];
     const speciesLabel = entry?.name || item.petSpecies || "Pet";
     if (item.name) return speciesLabel;
     return "";
@@ -1856,37 +1892,42 @@ function createSeparator(label: string): HTMLDivElement {
   return wrap;
 }
 
-function extractInventoryItems(rawInventory: any): any[] {
+function extractInventoryItems(rawInventory: unknown): unknown[] {
   if (!rawInventory) return [];
   if (Array.isArray(rawInventory)) return rawInventory;
+  if (!isRecord(rawInventory)) return [];
   if (Array.isArray(rawInventory.items)) return rawInventory.items;
   if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
-  if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+  const inventory = isRecord(rawInventory.inventory) ? rawInventory.inventory : null;
+  if (inventory && Array.isArray(inventory.items)) return inventory.items;
   return [];
 }
 
-function extractStorages(rawInventory: any): any[] {
+function extractStorages(rawInventory: unknown): unknown[] {
   if (!rawInventory) return [];
+  if (!isRecord(rawInventory)) return [];
   if (Array.isArray(rawInventory.storages)) return rawInventory.storages;
-  if (Array.isArray(rawInventory.inventory?.storages)) return rawInventory.inventory.storages;
+  const inventory = isRecord(rawInventory.inventory) ? rawInventory.inventory : null;
+  if (inventory && Array.isArray(inventory.storages)) return inventory.storages;
   return [];
 }
 
-function unwrapInventoryItem(entry: any): any {
-  if (!entry || typeof entry !== "object") return entry;
-  if (entry.item && typeof entry.item === "object") return entry.item;
-  if (entry.data && typeof entry.data === "object" && entry.data.itemType) return entry.data;
+function unwrapInventoryItem(entry: unknown): unknown {
+  if (!isRecord(entry)) return entry;
+  if (isRecord(entry.item)) return entry.item;
+  const data = isRecord(entry.data) ? entry.data : null;
+  if (data && "itemType" in data) return data;
   return entry;
 }
 
-function isPlantInventoryItem(item: any): boolean {
-  if (!item || typeof item !== "object") return false;
+function isPlantInventoryItem(item: unknown): boolean {
+  if (!isRecord(item)) return false;
   const type = String(item.itemType ?? item.type ?? item.kind ?? "").toLowerCase();
   return type === "plant";
 }
 
-function getStackKey(item: any): string | null {
-  if (!item || typeof item !== "object") return null;
+function getStackKey(item: unknown): string | null {
+  if (!isRecord(item)) return null;
   const qty = Number(item.quantity);
   if (!Number.isFinite(qty)) return null;
   const type = String(item.itemType ?? item.type ?? "").toLowerCase();
@@ -1904,13 +1945,13 @@ function getStackKey(item: any): string | null {
   return `${type}:${id}`;
 }
 
-function mergeInventoryItems(entries: any[]): any[] {
-  const out: any[] = [];
-  const stack = new Map<string, any>();
+function mergeInventoryItems(entries: unknown[]): UnknownRecord[] {
+  const out: UnknownRecord[] = [];
+  const stack = new Map<string, UnknownRecord>();
 
   for (const raw of entries) {
     const item = unwrapInventoryItem(raw);
-    if (!item || typeof item !== "object") continue;
+    if (!isRecord(item)) continue;
     if (isPlantInventoryItem(item)) continue;
     const key = getStackKey(item);
     if (!key) {
@@ -1957,8 +1998,8 @@ function formatLastSeen(raw?: string | null): string | null {
   return `Last seen ${days}d`;
 }
 
-function normalizeMessage(raw: any): DirectMessage | null {
-  if (!raw || typeof raw !== "object") return null;
+function normalizeMessage(raw: unknown): DirectMessage | null {
+  if (!isRecord(raw)) return null;
   const idRaw = raw.id ?? raw.message_id ?? raw.messageId ?? raw.msgId ?? raw.msg_id;
   const id = typeof idRaw === "number" ? idRaw : Number(idRaw);
   if (!Number.isFinite(id)) return null;
@@ -1975,7 +2016,8 @@ function normalizeMessage(raw: any): DirectMessage | null {
   const recipientId = recipientIdRaw ? String(recipientIdRaw) : "";
   const createdAt = createdAtRaw ? String(createdAtRaw) : new Date().toISOString();
   const deliveredAt = deliveredAtRaw ? String(deliveredAtRaw) : "";
-  const readAt = raw.readAt ?? raw.read_at ?? null;
+  const readAtRaw = raw.readAt ?? raw.read_at ?? null;
+  const readAt = readAtRaw == null ? null : String(readAtRaw);
   return {
     id,
     conversationId,
@@ -2439,15 +2481,18 @@ class MessagesOverlay {
     if (!opts?.forceRender && this.friendsFingerprint === fingerprint) return;
     this.friendsFingerprint = fingerprint;
     this.renderFriendList({ preserveScroll: true });
+    if (this.selectedId) {
+      this.renderThread({ preserveScroll: true, scrollToBottom: false });
+    }
   }
 
   private async loadFriends(force = false): Promise<void> {
     if (!this.myId) return;
-    if (!force) {
-      const cached = getCachedFriendsWithViews();
-      if (cached.length) {
-        this.applyFriends(cached, { forceRender: this.friendsFingerprint == null });
-      }
+    const cached = getCachedFriendsWithViews();
+    if (cached.length) {
+      this.applyFriends(cached, {
+        forceRender: this.friendsFingerprint == null || this.friends.length === 0,
+      });
     }
 
     try {
@@ -2457,9 +2502,13 @@ class MessagesOverlay {
         void this.refreshUnreadCounts(next);
       }
     } catch {
-      this.friends = [];
-      this.friendsFingerprint = null;
-      this.renderFriendList({ preserveScroll: true });
+      if (!this.friends.length) {
+        this.friends = [];
+        this.friendsFingerprint = null;
+        this.renderFriendList({ preserveScroll: true });
+      } else if (this.selectedId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
     }
   }
 
@@ -3132,7 +3181,7 @@ class MessagesOverlay {
       const raw = await Atoms.inventory.myInventory.get();
       const items = extractInventoryItems(raw);
       const storages = extractStorages(raw);
-      const storageItems: any[] = [];
+      const storageItems: unknown[] = [];
       for (const storage of storages) {
         const storageList = Array.isArray(storage?.items) ? storage.items : [];
         storageItems.push(...storageList);
@@ -3527,7 +3576,7 @@ class MessagesOverlay {
       void this.handleSendMessage();
     };
     this.inputEl.addEventListener("keydown", enterHandler, { capture: true });
-    this.inputEl.addEventListener("keypress", enterHandler as any, { capture: true } as any);
+    this.inputEl.addEventListener("keypress", enterHandler, { capture: true });
     this.inputEl.addEventListener("keyup", enterHandler, { capture: true });
 
     const emojiWrap = document.createElement("div");
@@ -3543,7 +3592,9 @@ class MessagesOverlay {
     picker.className = "qws-msg-emoji-picker";
     picker.classList.add("dark");
     picker.addEventListener("emoji-click", (event: Event) => {
-      const detail = (event as CustomEvent).detail as any;
+      const detail = (
+        event as CustomEvent<{ unicode?: string; emoji?: { unicode?: string } }>
+      ).detail;
       const unicode = detail?.unicode ?? detail?.emoji?.unicode ?? "";
       if (unicode) {
         this.insertEmoji(String(unicode));
@@ -3567,7 +3618,7 @@ class MessagesOverlay {
       if (!node) return false;
       if (emojiWrap.contains(node)) return true;
       const pickerHost = emojiMenu.querySelector("emoji-picker") as HTMLElement | null;
-      const shadow = pickerHost ? (pickerHost as any).shadowRoot as ShadowRoot | null : null;
+      const shadow = pickerHost?.shadowRoot ?? null;
       return !!(shadow && node instanceof Node && shadow.contains(node));
     };
 
@@ -3683,12 +3734,12 @@ class MessagesOverlay {
   }
 
   private installScrollGuards(el: HTMLElement) {
-    const stop = (e: Event) => {
+    const stop: EventListener = (e) => {
       e.stopPropagation();
     };
     el.addEventListener("wheel", stop, { passive: true, capture: true });
-    el.addEventListener("mousewheel", stop as any, { passive: true, capture: true } as any);
-    el.addEventListener("DOMMouseScroll", stop as any, { passive: true, capture: true } as any);
+    el.addEventListener("mousewheel", stop, { passive: true, capture: true });
+    el.addEventListener("DOMMouseScroll", stop, { passive: true, capture: true });
     el.addEventListener("touchmove", stop, { passive: true, capture: true });
   }
 
@@ -3777,7 +3828,7 @@ class MessagesOverlay {
   private shouldSendOnEnter(e: KeyboardEvent): boolean {
     const key = e.key || "";
     const code = e.code || "";
-    const keyCode = (e as any).keyCode as number | undefined;
+    const keyCode = e.keyCode;
     if (e.isComposing) return false;
     if (e.shiftKey) return false;
     if (e.type !== "keydown") return false;
@@ -3788,7 +3839,7 @@ class MessagesOverlay {
   private consumeEnterEvent(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopPropagation();
-    (e as any).stopImmediatePropagation?.();
+    e.stopImmediatePropagation();
   }
 
   private setEmojiMenu(open: boolean): void {
@@ -3871,7 +3922,7 @@ class MessagesOverlay {
     style(this.btn, { position: "relative" });
   }
   private findNotifierSlot(): HTMLElement | null {
-    const fromGlobal = (globalThis as any).__qws_notifier_slot as HTMLElement | undefined;
+    const fromGlobal = window.__qws_notifier_slot;
     if (fromGlobal && fromGlobal.isConnected) return fromGlobal;
     const el = document.getElementById("qws-notifier-slot");
     return el && el.isConnected ? el : null;
@@ -3937,7 +3988,7 @@ class MessagesOverlay {
   private insertLeftOf(block: Element, el: Element) {
     const parent = block.parentElement;
     if (!parent) return;
-    if (!(block as any).isConnected || !(parent as any).isConnected) return;
+    if (!block.isConnected || !parent.isConnected) return;
 
     const cs = getComputedStyle(parent);
     const isFlex = cs.display.includes("flex");
@@ -3955,7 +4006,7 @@ class MessagesOverlay {
   private attachFallback(): void {
     const canvas = this.findTargetCanvas();
     const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
-    if (!block || !block.parentElement || !(block as any).isConnected) {
+    if (!block || !block.parentElement || !block.isConnected) {
       let fixed = document.getElementById("qws-messages-fallback") as HTMLDivElement | null;
       if (!fixed) {
         fixed = document.createElement("div");
@@ -4015,7 +4066,7 @@ class MessagesOverlay {
 }
 
 export async function renderMessagesOverlay(): Promise<void> {
-  const prev = (window as any).__qws_cleanup_messages_overlay;
+  const prev = window.__qws_cleanup_messages_overlay;
   if (typeof prev === "function") {
     try {
       prev();
@@ -4025,7 +4076,7 @@ export async function renderMessagesOverlay(): Promise<void> {
   const overlay = new MessagesOverlay();
   await overlay.init();
 
-  (window as any).__qws_cleanup_messages_overlay = () => {
+  window.__qws_cleanup_messages_overlay = () => {
     try {
       overlay.destroy();
     } catch {}

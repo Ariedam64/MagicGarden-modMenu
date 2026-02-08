@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.53
+// @version      2.99.55
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26656,6 +26656,7 @@
   var setProps2 = (el2, props) => {
     for (const [k, v] of Object.entries(props)) el2.style.setProperty(k, v);
   };
+  var isRecord2 = (value) => typeof value === "object" && value !== null;
   function installInputKeyTrap(scope, opts = {}) {
     const isEditable = (el2) => {
       if (!el2 || !(el2 instanceof HTMLElement)) return false;
@@ -26690,12 +26691,12 @@
       if (isEnter && !ev.isComposing && ev.type === "keydown" && shouldHandleEnter) {
         ev.preventDefault();
         ev.stopPropagation();
-        ev.stopImmediatePropagation?.();
+        ev.stopImmediatePropagation();
         opts.onEnter?.();
         return;
       }
       ev.stopPropagation();
-      ev.stopImmediatePropagation?.();
+      ev.stopImmediatePropagation();
     };
     const types = ["keydown", "keypress", "keyup"];
     types.forEach((t) => {
@@ -26734,7 +26735,7 @@
     return n;
   }
   function normalizeChatItem(raw) {
-    if (!raw || typeof raw !== "object") return null;
+    if (!isRecord2(raw)) return null;
     const typeRaw = raw.itemType ?? raw.type ?? raw.kind ?? raw.category;
     const type = String(typeRaw ?? "").trim();
     const typeLc = type.toLowerCase();
@@ -26778,7 +26779,8 @@
       const petSpecies = String(raw.petSpecies ?? raw.species ?? "").trim();
       const id = raw.id != null ? String(raw.id) : void 0;
       const name = raw.name != null && String(raw.name).trim() ? String(raw.name) : null;
-      const xpRaw = Number(raw.xp ?? raw.data?.xp);
+      const data = isRecord2(raw.data) ? raw.data : null;
+      const xpRaw = Number(raw.xp ?? data?.xp);
       const xp = Number.isFinite(xpRaw) ? xpRaw : void 0;
       const mutations = Array.isArray(raw.mutations) ? raw.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : void 0;
       const abilities = Array.isArray(raw.abilities) ? raw.abilities.map((a) => String(a ?? "").trim()).filter(Boolean) : void 0;
@@ -26878,7 +26880,7 @@
     return `${ITEM_MESSAGE_PREFIX}${json}`;
   }
   function decodeCompactItem(raw) {
-    if (!raw || typeof raw !== "object") return null;
+    if (!isRecord2(raw)) return null;
     const t = String(raw.t ?? "").toUpperCase();
     const qty = normalizeQuantity(raw.q ?? 1);
     if (t === "S") {
@@ -26962,16 +26964,14 @@
         if (!decoded) return null;
         parsed = JSON.parse(decoded);
       }
-      if (!parsed || parsed.k !== "i" && parsed.kind !== "item") return null;
+      if (!isRecord2(parsed)) return null;
+      if (parsed.k !== "i" && parsed.kind !== "item") return null;
       const version = Number(parsed.v ?? parsed.version ?? 1);
       if (!Number.isFinite(version) || version !== 1) return null;
       const itemsRaw = Array.isArray(parsed.i) ? parsed.i : Array.isArray(parsed.items) ? parsed.items : parsed.item ? [parsed.item] : [];
-      const normalizedItems = itemsRaw.map((entry) => {
-        if (entry && typeof entry === "object" && "t" in entry) {
-          return decodeCompactItem(entry);
-        }
-        return normalizeChatItem(entry);
-      }).filter((entry) => !!entry);
+      const normalizedItems = itemsRaw.map(
+        (entry) => isRecord2(entry) && "t" in entry ? decodeCompactItem(entry) : normalizeChatItem(entry)
+      ).filter((entry) => !!entry);
       if (!normalizedItems.length) return null;
       return {
         v: 1,
@@ -26991,38 +26991,46 @@
   var COIN_FORMATTER = new Intl.NumberFormat("en-US");
   var LINK_REGEX = /((?:https?:\/\/|www\.)[^\s]+)/gi;
   function findPlayersDeep(state3) {
-    if (!state3 || typeof state3 !== "object") return [];
+    if (!isRecord2(state3)) return [];
     const out = [];
     const seen = /* @__PURE__ */ new Set();
     const stack = [state3];
     while (stack.length) {
       const cur = stack.pop();
-      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      if (!isRecord2(cur) || seen.has(cur)) continue;
       seen.add(cur);
-      for (const key2 of Object.keys(cur)) {
-        const value = cur[key2];
-        if (Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === "object")) {
-          const looksLikePlayer = value.some((item) => "id" in item && "name" in item);
-          if (looksLikePlayer && /player/i.test(key2)) {
-            out.push(...value);
+      for (const [key2, value] of Object.entries(cur)) {
+        if (Array.isArray(value) && value.length > 0) {
+          const records = value.filter(isRecord2);
+          if (records.length === value.length) {
+            const looksLikePlayer = records.some(
+              (item) => "id" in item && "name" in item
+            );
+            if (looksLikePlayer && /player/i.test(key2)) {
+              out.push(...records);
+            }
           }
         }
-        if (value && typeof value === "object") {
+        if (isRecord2(value)) {
           stack.push(value);
         }
       }
     }
     const byId = /* @__PURE__ */ new Map();
     for (const entry of out) {
-      if (entry?.id) {
+      if (entry?.id != null) {
         byId.set(String(entry.id), entry);
       }
     }
     return [...byId.values()];
   }
   function getPlayersArrayFromState(state3) {
-    const direct = state3?.fullState?.data?.players ?? state3?.data?.players ?? state3?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep(state3);
+    if (!isRecord2(state3)) return [];
+    const fullState = isRecord2(state3.fullState) ? state3.fullState : null;
+    const fullData = fullState && isRecord2(fullState.data) ? fullState.data : null;
+    const data = isRecord2(state3.data) ? state3.data : null;
+    const direct = (fullData ? fullData.players : void 0) ?? (data ? data.players : void 0) ?? state3.players;
+    return Array.isArray(direct) ? direct.filter(isRecord2) : findPlayersDeep(state3);
   }
   function normalizeCosmeticName(raw) {
     const source = String(raw ?? "").trim();
@@ -27053,6 +27061,140 @@
     if (seen.has("rainbow")) return "rainbow";
     if (seen.has("gold") || seen.has("golden")) return "gold";
     return "normal";
+  }
+  function getAbilityChipColors(id) {
+    const key2 = String(id || "");
+    const base2 = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
+    const is = (prefix) => key2.startsWith(prefix) || base2 === prefix.toLowerCase();
+    if (is("MoonKisser")) {
+      return { bg: "rgba(250,166,35,0.9)", hover: "rgba(250,166,35,1)" };
+    }
+    if (is("DawnKisser")) {
+      return { bg: "rgba(162,92,242,0.9)", hover: "rgba(162,92,242,1)" };
+    }
+    if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
+      return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
+    }
+    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
+      return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
+    }
+    if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
+      return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
+    }
+    if (is("PetAgeBoost")) {
+      return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
+    }
+    if (is("PetHatchSizeBoost")) {
+      return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
+    }
+    if (is("PetXpBoost") || is("SnowyPetXpBoost")) {
+      return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
+    }
+    if (is("HungerBoost") || is("SnowyHungerBoost")) {
+      return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
+    }
+    if (is("HungerRestore") || is("SnowyHungerRestore")) {
+      return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
+    }
+    if (is("SellBoost")) {
+      return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
+    }
+    if (is("CoinFinder") || is("SnowyCoinFinder")) {
+      return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
+    }
+    if (is("SeedFinder")) {
+      return { bg: "rgba(168,102,38,0.9)", hover: "rgba(168,102,38,1)" };
+    }
+    if (is("ProduceMutationBoost")) {
+      return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
+    }
+    if (is("PetMutationBoost")) {
+      return { bg: "rgba(160,50,100,0.9)", hover: "rgba(160,50,100,1)" };
+    }
+    if (is("DoubleHarvest")) {
+      return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
+    }
+    if (is("DoubleHatch")) {
+      return { bg: "rgba(60,90,180,0.9)", hover: "rgba(60,90,180,1)" };
+    }
+    if (is("ProduceEater")) {
+      return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
+    }
+    if (is("ProduceRefund")) {
+      return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
+    }
+    if (is("PetRefund")) {
+      return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
+    }
+    if (is("Copycat")) {
+      return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+    }
+    if (is("GoldGranter")) {
+      return {
+        bg: "linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",
+        hover: "linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)"
+      };
+    }
+    if (is("RainbowGranter")) {
+      return {
+        bg: "linear-gradient(45deg, rgba(200,0,0,0.9), rgba(200,120,0,0.9), rgba(160,170,30,0.9), rgba(60,170,60,0.9), rgba(50,170,170,0.9), rgba(40,150,180,0.9), rgba(20,90,180,0.9), rgba(70,30,150,0.9))",
+        hover: "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))"
+      };
+    }
+    if (is("RainDance")) {
+      return { bg: "rgba(102,204,216,0.9)", hover: "rgba(102,204,216,1)" };
+    }
+    if (is("SnowGranter")) {
+      return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+    }
+    if (is("FrostGranter")) {
+      return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+    }
+    return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
+  }
+  function createAbilityBadges(abilities) {
+    const ids = Array.isArray(abilities) ? abilities.map((a) => String(a ?? "").trim()).filter(Boolean) : [];
+    if (!ids.length) return null;
+    const wrap = document.createElement("span");
+    wrap.className = "qws-msg-ability-badges";
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.lineHeight = "1";
+    wrap.style.flexWrap = "wrap";
+    wrap.style.columnGap = "8px";
+    wrap.style.rowGap = "4px";
+    wrap.style.maxWidth = "100%";
+    const size = 12;
+    const radius = 3;
+    ids.forEach((id) => {
+      const chip = document.createElement("span");
+      chip.className = "qws-msg-ability-chip";
+      const { bg, hover } = getAbilityChipColors(id);
+      chip.title = PetsService.getAbilityName?.(id) || id;
+      chip.setAttribute("aria-label", chip.title);
+      Object.assign(chip.style, {
+        display: "inline-block",
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: `${radius}px`,
+        background: bg,
+        transition: "transform 80ms ease, box-shadow 120ms ease, background 120ms ease",
+        cursor: "default",
+        boxShadow: "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a"
+      });
+      chip.onmouseenter = () => {
+        chip.style.background = hover;
+        chip.style.transform = "scale(1.08)";
+        chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff33";
+      };
+      chip.onmouseleave = () => {
+        chip.style.background = bg;
+        chip.style.transform = "none";
+        chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a";
+      };
+      wrap.appendChild(chip);
+    });
+    return wrap;
   }
   function applyStrengthBadgeTone(badge, tone) {
     badge.dataset.tmStrengthTone = tone;
@@ -27198,31 +27340,31 @@
   }
   function getChatItemLabel(item) {
     if (item.itemType === "Seed") {
-      const entry = plantCatalog?.[item.species];
+      const entry = plantCatalog[item.species];
       return entry?.seed?.name || entry?.crop?.name || item.species || "Seed";
     }
     if (item.itemType === "Produce") {
-      const entry = plantCatalog?.[item.species];
+      const entry = plantCatalog[item.species];
       return entry?.crop?.name || entry?.plant?.name || entry?.seed?.name || item.species || "Produce";
     }
     if (item.itemType === "Plant") {
-      const entry = plantCatalog?.[item.species];
+      const entry = plantCatalog[item.species];
       return entry?.plant?.name || entry?.crop?.name || entry?.seed?.name || item.species || "Plant";
     }
     if (item.itemType === "Egg") {
-      const entry = eggCatalog?.[item.eggId];
+      const entry = eggCatalog[item.eggId];
       return entry?.name || item.eggId || "Egg";
     }
     if (item.itemType === "Decor") {
-      const entry = decorCatalog?.[item.decorId];
+      const entry = decorCatalog[item.decorId];
       return entry?.name || item.decorId || "Decor";
     }
     if (item.itemType === "Tool") {
-      const entry = toolCatalog?.[item.toolId];
+      const entry = toolCatalog[item.toolId];
       return entry?.name || item.toolId || "Tool";
     }
     if (item.itemType === "Pet") {
-      const entry = petCatalog?.[item.petSpecies ?? ""];
+      const entry = petCatalog[item.petSpecies ?? ""];
       if (item.name) return item.name;
       return entry?.name || item.petSpecies || "Pet";
     }
@@ -27242,7 +27384,7 @@
       return `x${item.quantity}`;
     }
     if (item.itemType === "Pet") {
-      const entry = petCatalog?.[item.petSpecies ?? ""];
+      const entry = petCatalog[item.petSpecies ?? ""];
       const speciesLabel = entry?.name || item.petSpecies || "Pet";
       if (item.name) return speciesLabel;
       return "";
@@ -27278,6 +27420,17 @@
     sub.className = "qws-msg-item-sub";
     if (item.itemType === "Pet") {
       const petSpecies = item.petSpecies ?? "";
+      const abilitiesEl = createAbilityBadges(item.abilities);
+      if (abilitiesEl) sub.classList.add("has-abilities");
+      let statsRow = null;
+      const ensureStatsRow = () => {
+        if (!statsRow) {
+          statsRow = document.createElement("div");
+          statsRow.className = "qws-msg-item-sub-row";
+          sub.appendChild(statsRow);
+        }
+        return statsRow;
+      };
       const petLike = {
         petSpecies,
         xp: item.xp ?? 0,
@@ -27293,17 +27446,31 @@
           const str = document.createElement("span");
           str.className = "qws-msg-item-str";
           str.textContent = `STR ${roundedMax}`;
-          sub.appendChild(str);
+          ensureStatsRow().appendChild(str);
           const badge = document.createElement("span");
           badge.className = "qws-msg-item-badge";
           badge.textContent = "MAX";
           applyStrengthBadgeTone(badge, getPetMutationTone(item.mutations));
-          sub.appendChild(badge);
+          ensureStatsRow().appendChild(badge);
         } else {
-          sub.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
+          const str = document.createElement("span");
+          str.className = "qws-msg-item-str";
+          str.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
+          ensureStatsRow().appendChild(str);
         }
       } else {
-        sub.textContent = getChatItemSubtitle(item);
+        const fallback2 = getChatItemSubtitle(item);
+        if (fallback2) {
+          const label2 = document.createElement("span");
+          label2.textContent = fallback2;
+          ensureStatsRow().appendChild(label2);
+        }
+      }
+      if (abilitiesEl) {
+        const abilitiesRow = document.createElement("div");
+        abilitiesRow.className = "qws-msg-item-sub-row";
+        abilitiesRow.appendChild(abilitiesEl);
+        sub.appendChild(abilitiesRow);
       }
     } else if (item.itemType === "Produce") {
       const produceMeta = getProduceMeta(item);
@@ -27799,6 +27966,26 @@
   text-overflow:ellipsis;
   min-height:14px;
 }
+.qws-msg-item-sub.has-abilities{
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+}
+.qws-msg-item-sub-row{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.qws-msg-ability-badges{
+  display:inline-flex;
+  flex-wrap:wrap;
+  gap:8px;
+  max-width:100%;
+}
 .qws-msg-item-price{
   color:#F3D32B;
   font-weight:700;
@@ -28003,30 +28190,35 @@
   function extractInventoryItems2(rawInventory) {
     if (!rawInventory) return [];
     if (Array.isArray(rawInventory)) return rawInventory;
+    if (!isRecord2(rawInventory)) return [];
     if (Array.isArray(rawInventory.items)) return rawInventory.items;
     if (Array.isArray(rawInventory.inventory)) return rawInventory.inventory;
-    if (Array.isArray(rawInventory.inventory?.items)) return rawInventory.inventory.items;
+    const inventory = isRecord2(rawInventory.inventory) ? rawInventory.inventory : null;
+    if (inventory && Array.isArray(inventory.items)) return inventory.items;
     return [];
   }
   function extractStorages(rawInventory) {
     if (!rawInventory) return [];
+    if (!isRecord2(rawInventory)) return [];
     if (Array.isArray(rawInventory.storages)) return rawInventory.storages;
-    if (Array.isArray(rawInventory.inventory?.storages)) return rawInventory.inventory.storages;
+    const inventory = isRecord2(rawInventory.inventory) ? rawInventory.inventory : null;
+    if (inventory && Array.isArray(inventory.storages)) return inventory.storages;
     return [];
   }
   function unwrapInventoryItem(entry) {
-    if (!entry || typeof entry !== "object") return entry;
-    if (entry.item && typeof entry.item === "object") return entry.item;
-    if (entry.data && typeof entry.data === "object" && entry.data.itemType) return entry.data;
+    if (!isRecord2(entry)) return entry;
+    if (isRecord2(entry.item)) return entry.item;
+    const data = isRecord2(entry.data) ? entry.data : null;
+    if (data && "itemType" in data) return data;
     return entry;
   }
   function isPlantInventoryItem(item) {
-    if (!item || typeof item !== "object") return false;
+    if (!isRecord2(item)) return false;
     const type = String(item.itemType ?? item.type ?? item.kind ?? "").toLowerCase();
     return type === "plant";
   }
   function getStackKey(item) {
-    if (!item || typeof item !== "object") return null;
+    if (!isRecord2(item)) return null;
     const qty = Number(item.quantity);
     if (!Number.isFinite(qty)) return null;
     const type = String(item.itemType ?? item.type ?? "").toLowerCase();
@@ -28039,7 +28231,7 @@
     const stack = /* @__PURE__ */ new Map();
     for (const raw of entries) {
       const item = unwrapInventoryItem(raw);
-      if (!item || typeof item !== "object") continue;
+      if (!isRecord2(item)) continue;
       if (isPlantInventoryItem(item)) continue;
       const key2 = getStackKey(item);
       if (!key2) {
@@ -28084,7 +28276,7 @@
     return `Last seen ${days}d`;
   }
   function normalizeMessage(raw) {
-    if (!raw || typeof raw !== "object") return null;
+    if (!isRecord2(raw)) return null;
     const idRaw = raw.id ?? raw.message_id ?? raw.messageId ?? raw.msgId ?? raw.msg_id;
     const id = typeof idRaw === "number" ? idRaw : Number(idRaw);
     if (!Number.isFinite(id)) return null;
@@ -28100,7 +28292,8 @@
     const recipientId = recipientIdRaw ? String(recipientIdRaw) : "";
     const createdAt = createdAtRaw ? String(createdAtRaw) : (/* @__PURE__ */ new Date()).toISOString();
     const deliveredAt = deliveredAtRaw ? String(deliveredAtRaw) : "";
-    const readAt = raw.readAt ?? raw.read_at ?? null;
+    const readAtRaw = raw.readAt ?? raw.read_at ?? null;
+    const readAt = readAtRaw == null ? null : String(readAtRaw);
     return {
       id,
       conversationId,
@@ -28167,6 +28360,8 @@
         if (!this.myId) return;
         void this.loadFriends(true);
       });
+      __publicField(this, "unreadRefreshInFlight", false);
+      __publicField(this, "lastUnreadRefreshAt", 0);
       ensureMessagesOverlayStyle();
       this.slot = this.createSlot();
       this.btn = this.createButton();
@@ -28506,21 +28701,75 @@
       if (!opts?.forceRender && this.friendsFingerprint === fingerprint) return;
       this.friendsFingerprint = fingerprint;
       this.renderFriendList({ preserveScroll: true });
+      if (this.selectedId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
     }
     async loadFriends(force = false) {
       if (!this.myId) return;
-      if (!force) {
-        const cached = getCachedFriendsWithViews();
-        if (cached.length) {
-          this.applyFriends(cached, { forceRender: this.friendsFingerprint == null });
-        }
+      const cached = getCachedFriendsWithViews();
+      if (cached.length) {
+        this.applyFriends(cached, {
+          forceRender: this.friendsFingerprint == null || this.friends.length === 0
+        });
       }
       try {
         const next = await fetchFriendsWithViews(this.myId);
         this.applyFriends(next);
+        if (force) {
+          void this.refreshUnreadCounts(next);
+        }
       } catch {
-        this.friends = [];
-        this.friendsFingerprint = null;
+        if (!this.friends.length) {
+          this.friends = [];
+          this.friendsFingerprint = null;
+          this.renderFriendList({ preserveScroll: true });
+        } else if (this.selectedId) {
+          this.renderThread({ preserveScroll: true, scrollToBottom: false });
+        }
+      }
+    }
+    async refreshUnreadCounts(friends) {
+      if (!this.myId) return;
+      if (this.unreadRefreshInFlight) return;
+      const now2 = Date.now();
+      if (now2 - this.lastUnreadRefreshAt < 1500) return;
+      this.unreadRefreshInFlight = true;
+      this.lastUnreadRefreshAt = now2;
+      try {
+        for (const friend of friends) {
+          const otherId = normalizeId(friend?.playerId);
+          if (!otherId) continue;
+          const conv = this.ensureConversation(otherId);
+          const data = await fetchMessagesThread(this.myId, otherId, {
+            limit: THREAD_PAGE_LIMIT
+          });
+          const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
+          if (!normalized.length) {
+            conv.unread = 0;
+            continue;
+          }
+          const unread = normalized.filter(
+            (msg) => msg.senderId !== this.myId && !msg.readAt
+          ).length;
+          const hasReadIncoming = normalized.some(
+            (msg) => msg.senderId !== this.myId && !!msg.readAt
+          );
+          const isExact = normalized.length < THREAD_PAGE_LIMIT || hasReadIncoming;
+          conv.unread = isExact ? unread : Math.max(conv.unread, unread);
+          conv.conversationId = normalized[0]?.conversationId ?? conv.conversationId;
+          const lastTs = normalized.reduce((acc, msg) => {
+            const ts = parseMessageTime(msg);
+            return ts > acc ? ts : acc;
+          }, 0);
+          if (lastTs) {
+            conv.lastMessageAt = Math.max(conv.lastMessageAt, lastTs);
+          }
+        }
+      } catch {
+      } finally {
+        this.unreadRefreshInFlight = false;
+        this.updateButtonBadge();
         this.renderFriendList({ preserveScroll: true });
       }
     }
@@ -29437,7 +29686,7 @@
         if (!node) return false;
         if (emojiWrap.contains(node)) return true;
         const pickerHost = emojiMenu.querySelector("emoji-picker");
-        const shadow = pickerHost ? pickerHost.shadowRoot : null;
+        const shadow = pickerHost?.shadowRoot ?? null;
         return !!(shadow && node instanceof Node && shadow.contains(node));
       };
       this.sendBtn = document.createElement("button");
@@ -29635,7 +29884,7 @@
     consumeEnterEvent(e) {
       e.preventDefault();
       e.stopPropagation();
-      e.stopImmediatePropagation?.();
+      e.stopImmediatePropagation();
     }
     setEmojiMenu(open) {
       this.emojiMenuEl.style.display = open ? "flex" : "none";
@@ -29708,7 +29957,7 @@
       style2(this.btn, { position: "relative" });
     }
     findNotifierSlot() {
-      const fromGlobal = globalThis.__qws_notifier_slot;
+      const fromGlobal = window.__qws_notifier_slot;
       if (fromGlobal && fromGlobal.isConnected) return fromGlobal;
       const el2 = document.getElementById("qws-notifier-slot");
       return el2 && el2.isConnected ? el2 : null;
@@ -45519,7 +45768,7 @@ next: ${next}`;
   }
 
   // src/ui/menus/pets.ts
-  function getAbilityChipColors(id) {
+  function getAbilityChipColors2(id) {
     const key2 = String(id || "");
     const base2 = (PetsService.getAbilityNameWithoutLevel?.(key2) || "").replace(/[\s\-_]+/g, "").toLowerCase();
     const is = (prefix) => key2.startsWith(prefix) || base2 === prefix.toLowerCase();
@@ -45783,7 +46032,7 @@ next: ${next}`;
       }
       ids.forEach((id, i) => {
         const chip = document.createElement("span");
-        const { bg, hover } = getAbilityChipColors(id);
+        const { bg, hover } = getAbilityChipColors2(id);
         chip.title = PetsService.getAbilityName(id) || id;
         chip.setAttribute("aria-label", chip.title);
         Object.assign(chip.style, {
