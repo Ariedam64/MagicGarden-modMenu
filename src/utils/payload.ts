@@ -1,18 +1,13 @@
 import { Atoms, playerDatabaseUserId } from "../store/atoms";
 import type { GardenState } from "../store/atoms";
-import { toastSimple } from "../ui/toast";
 import { shareGlobal } from "./page-context";
 import {
-  fetchFriendsWithViews,
-  fetchIncomingRequestsWithViews,
-  respondFriendRequest,
+  fetchFriendsSummary,
   sendPlayerState,
-  type PlayerView,
 } from "./supabase";
-import { getFriendSettings, onFriendSettingsChange } from "./friendSettings";
+import { getFriendSettings } from "./friendSettings";
 import { readAriesPath } from "./localStorage";
 import { getLocalVersion } from "./version";
-import { PlayersService } from "../services/players";
 
 export type PlayerPrivacyPayload = {
   showProfile: boolean;
@@ -367,8 +362,6 @@ export async function buildPlayerStatePayload(
 
     const localVersion = getLocalVersion();
     const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
-    console.log("MOD VERSION: ", modVersion)
-
 
     const payload: PlayerStatePayload = {
       playerId: playerId != null ? String(playerId) : null,
@@ -406,14 +399,6 @@ export async function buildPlayerStatePayload(
     return null;
   }
 }
-
-const STATE_KEYS: Array<keyof PlayerStatePayload["state"]> = [
-  "garden",
-  "inventory",
-  "stats",
-  "activityLog",
-  "journal",
-];
 
 function sanitizeActivityLogForCompare(
   log: PlayerStatePayload["state"]["activityLog"] | undefined | null,
@@ -461,14 +446,6 @@ function snapshotPayloadForComparison(
   }
 }
 
-function tryStringifyValue(value: unknown): string | null {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return null;
-  }
-}
-
 export async function logPlayerStatePayload(
   options?: BuildPlayerStatePayloadOptions,
 ): Promise<PlayerStatePayload | null> {
@@ -482,24 +459,12 @@ let gameReadyWatcherInitialized = false;
 let gameReadyTriggered = false;
 let preferredReportingIntervalMs: number | undefined;
 let friendRefreshLoopStarted = false;
-const autoAcceptedRequestIds = new Set<string>();
-let autoAcceptTimer: ReturnType<typeof setInterval> | null = null;
-let autoAcceptWatcherInitialized = false;
-let autoAcceptSettingsUnsubscribe: (() => void) | null = null;
 
 async function warmSupabaseInitialFetch(): Promise<void> {
   try {
     const dbId = await playerDatabaseUserId.get();
     if (!dbId) return;
-    const requests = await fetchIncomingRequestsWithViews(dbId);
-    const acceptedCount = await maybeAutoAcceptIncomingRequests(
-      dbId,
-      requests,
-    );
-    if (acceptedCount > 0) {
-      await fetchIncomingRequestsWithViews(dbId);
-    }
-    await fetchFriendsWithViews(dbId);
+    await fetchFriendsSummary(dbId);
   } catch (error) {
     console.error(
       "[PlayerPayload] Failed to prefetch friends data",
@@ -508,94 +473,10 @@ async function warmSupabaseInitialFetch(): Promise<void> {
   }
 }
 
-async function maybeAutoAcceptIncomingRequests(
-  playerId: string,
-  requests: PlayerView[],
-): Promise<number> {
-  if (!requests || !requests.length) return 0;
-  const { autoAcceptIncomingRequests } = getFriendSettings();
-  if (!autoAcceptIncomingRequests) return 0;
-
-  let acceptedCount = 0;
-  for (const request of requests) {
-    const otherId = request?.playerId;
-    if (!otherId) continue;
-    if (autoAcceptedRequestIds.has(otherId)) continue;
-    try {
-      const wasAccepted = await respondFriendRequest({
-        playerId,
-        otherPlayerId: otherId,
-        action: "accept",
-      });
-      if (wasAccepted) {
-        autoAcceptedRequestIds.add(otherId);
-        acceptedCount += 1;
-        void toastSimple(
-          "Friends",
-          `Auto-accepted incoming request from ${
-            request.playerName ?? otherId
-          }.`,
-          "success",
-        );
-      }
-    } catch (error) {
-      console.error("[PlayerPayload] auto-accept request failed", error);
-    }
-  }
-  return acceptedCount;
-}
-
 function startFriendDataRefreshLoop(): void {
   if (friendRefreshLoopStarted) return;
   friendRefreshLoopStarted = true;
   void warmSupabaseInitialFetch();
-}
-
-async function pollIncomingRequestsForAutoAccept(): Promise<void> {
-  try {
-    const playerId = await playerDatabaseUserId.get();
-    if (!playerId) return;
-    const requests = await fetchIncomingRequestsWithViews(playerId);
-    await maybeAutoAcceptIncomingRequests(playerId, requests);
-  } catch (error) {
-    console.error("[PlayerPayload] auto-accept poll failed", error);
-  }
-}
-
-function stopAutoAcceptLoop(): void {
-  if (autoAcceptTimer === null) return;
-  clearInterval(autoAcceptTimer);
-  autoAcceptTimer = null;
-}
-
-function startAutoAcceptLoopIfEnabled(): void {
-  const { autoAcceptIncomingRequests } = getFriendSettings();
-  if (!autoAcceptIncomingRequests) {
-    stopAutoAcceptLoop();
-    return;
-  }
-  if (autoAcceptTimer !== null) return;
-  void pollIncomingRequestsForAutoAccept();
-  autoAcceptTimer = setInterval(() => {
-    void pollIncomingRequestsForAutoAccept();
-  }, 60_000);
-}
-
-function startAutoAcceptWatcher(): void {
-  if (autoAcceptWatcherInitialized) return;
-  autoAcceptWatcherInitialized = true;
-  startAutoAcceptLoopIfEnabled();
-  autoAcceptSettingsUnsubscribe = onFriendSettingsChange(() => {
-    startAutoAcceptLoopIfEnabled();
-  });
-}
-
-function stopAutoAcceptWatcher(): void {
-  if (autoAcceptSettingsUnsubscribe) {
-    autoAcceptSettingsUnsubscribe();
-    autoAcceptSettingsUnsubscribe = null;
-  }
-  stopAutoAcceptLoop();
 }
 
 async function tryInitializeReporting(state?: any): Promise<void> {
@@ -620,7 +501,6 @@ export function startPlayerStateReportingWhenGameReady(
   void Atoms.root.state.onChange((next) => {
     void tryInitializeReporting(next);
   });
-  startAutoAcceptWatcher();
 }
 
 // ---------- Heartbeat + AFK logic ----------
@@ -629,6 +509,8 @@ let payloadReportingTimer: ReturnType<typeof setInterval> | null = null;
 let isPayloadReporting = false;
 let lastSentPayloadSnapshot: string | null = null;
 let unchangedSnapshotCount = 0;
+let initialSendRetries = 0;
+const MAX_INITIAL_RETRIES = 3;
 
 // 5 ticks * 60s = 5 min AFK keep-alive
 const MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
@@ -646,11 +528,11 @@ async function buildAndSendPlayerState(): Promise<void> {
   isPayloadReporting = true;
   try {
     const payload = await buildPlayerStatePayload();
-    if (!payload) {
-      return;
-    }
-
-    if (!payload.playerId || payload.playerId.length < 3) {
+    if (!payload || !payload.playerId || payload.playerId.length < 3 || !payload.room.id) {
+      if (initialSendRetries < MAX_INITIAL_RETRIES) {
+        initialSendRetries += 1;
+        setTimeout(() => void buildAndSendPlayerState(), 10_000);
+      }
       return;
     }
 

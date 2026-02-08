@@ -16,8 +16,24 @@ let _captureInProgress = false;
 let _captureError: unknown = null;
 let _lastCapturedVia: "fiber" | "write" | "polyfill" | null = null;
 
+/** Maximum time to wait for jotaiAtomCache to appear (Discord Activity loads slowly). */
+const ATOM_CACHE_WAIT_MS = 20_000;
+/** Time to wait for an atom write once cache is found. */
+const WRITE_ONCE_MS = 5_000;
+
 const getAtomCache = () =>
   (pageWindow as any).jotaiAtomCache?.cache as Map<any, any> | undefined;
+
+/** Poll until jotaiAtomCache.cache appears or timeout. */
+async function waitForAtomCache(): Promise<Map<any, any> | null> {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ATOM_CACHE_WAIT_MS) {
+    const cache = getAtomCache();
+    if (cache) return cache;
+    await new Promise<void>((r) => setTimeout(r, 100));
+  }
+  return null;
+}
 
 /* ============================ Store bridge ============================ */
 
@@ -59,15 +75,30 @@ function findStoreViaFiber(): JotaiStore | null {
   return null;
 }
 
+function makePolyfillStore(): JotaiStore {
+  return {
+    get: () => { throw new Error("Store non capturé: get indisponible"); },
+    set: () => { throw new Error("Store non capturé: set indisponible"); },
+    sub: () => () => {},
+    __polyfill: true,
+  };
+}
+
 /**
  * Fallback: capture store by temporarily patching atoms' write() to grab (get,set).
- * If nothing writes within timeout, returns a polyfilled store (read-only error).
+ * Waits up to ATOM_CACHE_WAIT_MS for jotaiAtomCache to appear (handles slow Discord loads),
+ * then waits up to WRITE_ONCE_MS for an atom write to capture the store.
  */
-async function captureViaWriteOnce(timeoutMs = 5000): Promise<JotaiStore> {
-  const cache = getAtomCache();
+async function captureViaWriteOnce(): Promise<JotaiStore> {
+  let cache = getAtomCache() ?? null;
+  if (!cache) {
+    console.log("[jotai-bridge] Waiting for jotaiAtomCache...");
+    cache = await waitForAtomCache();
+  }
   if (!cache) {
     console.warn("[jotai-bridge] jotaiAtomCache.cache introuvable");
-    throw new Error("jotaiAtomCache.cache introuvable");
+    _lastCapturedVia = "polyfill";
+    return makePolyfillStore();
   }
 
   let capturedGet: any = null;
@@ -110,7 +141,7 @@ async function captureViaWriteOnce(timeoutMs = 5000): Promise<JotaiStore> {
     pageWindow.dispatchEvent?.(new pageWindow.Event("visibilitychange"));
   } catch {}
 
-  while (!capturedSet && Date.now() - t0 < timeoutMs) {
+  while (!capturedSet && Date.now() - t0 < WRITE_ONCE_MS) {
     await wait(50);
   }
 
@@ -165,9 +196,9 @@ export async function ensureStore(): Promise<JotaiStore> {
   if (_store && !_store.__polyfill) return _store;
 
   if (_captureInProgress) {
-    // Wait up to the longest capture duration (writeOnce timeout) + cushion
+    // Wait up to the longest capture duration (cache wait + write wait) + cushion
     const t0 = Date.now();
-    const maxWait = 5500;
+    const maxWait = ATOM_CACHE_WAIT_MS + WRITE_ONCE_MS + 1000;
     while (!_store && Date.now() - t0 < maxWait) {
       await new Promise((r) => setTimeout(r, 25));
     }

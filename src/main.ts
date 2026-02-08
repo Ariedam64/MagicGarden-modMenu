@@ -38,7 +38,6 @@ import "./sprite";
 
   installPageWebSocketHook();
   initGameVersion();
-  const ariesMod: AriesModApi = installAriesModApi();
 
   try {warmupSpriteCache();} catch {}
     tos.init()
@@ -47,7 +46,6 @@ import "./sprite";
 
   mountHUD({
     onRegister(register) {
-      register('players', '👥 Friends', renderFriendsMenu);
       register('pets', '🐾 Pets', renderPetsMenu);
       register('room', '🏠 Room', renderRoomMenu);
       register('locker', '🔒 Locker', renderLockerMenu);
@@ -69,8 +67,6 @@ import "./sprite";
     getPosition: () => PlayerService.getPosition(),
     move: (x, y) => PlayerService.move(x, y),
   });
-
-  ariesMod.antiAfkController = antiAfk;
 
   antiAfk.start();
 

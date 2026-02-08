@@ -19,7 +19,7 @@ import {
 } from "../services/keybinds";
 import { PlayerService } from "../services/player";
 import { renderOverlay } from "./menus/notificationOverlay";
-import { renderMessagesOverlay } from "./menus/messagesOverlay";
+import { renderFriendOverlay } from "./menus/friendOverlay";
 import { getSpriteWarmupState, onSpriteWarmupProgress } from "./spriteIconCache";
 import { setupBuyAll, startReorderObserver } from "../utils/shopUtility";
 import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
@@ -1079,7 +1079,7 @@ export function initWatchers(){
       await startActivityLogHistoryWatcher()
       startActivityLogFilter();
       await renderOverlay()
-      await renderMessagesOverlay()
+      await renderFriendOverlay()
       setupBuyAll()
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();

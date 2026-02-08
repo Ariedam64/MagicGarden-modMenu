@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.55
+// @version      2.99.60
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -11,13 +11,16 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_info
 // @grant        GM_openInTab 
-// @grant        GM_registerMenuCommand
-// @connect      raw.githubusercontent.com
-// @connect      api.github.com
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // @grant        GM_download
+// @connect      raw.githubusercontent.com
+// @connect      api.github.com
 // @connect      ariesmod-api.ariedam.fr
+// @connect      ariedam.fr
+// @connect      cdn.pixabay.com
+// @connect      cdn.jsdelivr.net
 // @connect      magicgarden.gg
 // @connect      imgur.com
 

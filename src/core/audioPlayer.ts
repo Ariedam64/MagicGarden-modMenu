@@ -473,6 +473,16 @@ export class AudioPlayer {
     return this.playBy("Break_Stone")
   }
 
+  /** Joue une URL à un volume fixe (0-1), indépendamment du volume SFX du jeu. */
+  playAt(url: string, volume: number): void {
+    const clampedVol = Math.max(0, Math.min(1, volume));
+    try {
+      const a = new Audio(url);
+      a.volume = clampedVol;
+      void a.play().catch(() => {});
+    } catch { /* ignore */ }
+  }
+
   playSellNotification(): IHowl | HTMLAudioElement | null {
     return this.playBy("Score_PlusOne")
   }
@@ -487,6 +497,4 @@ export class AudioPlayer {
 
 }
 
-
 export const audioPlayer = new AudioPlayer({ autoScan: true });
-;(window as any).__audioPlayer = audioPlayer;

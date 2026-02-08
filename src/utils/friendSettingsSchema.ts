@@ -1,7 +1,8 @@
 export type FriendSettings = {
   showOnlineFriendsOnly: boolean;
-  autoAcceptIncomingRequests: boolean;
   hideRoomFromPublicList: boolean;
+  messageSoundEnabled: boolean;
+  friendRequestSoundEnabled: boolean;
   showGarden: boolean;
   showInventory: boolean;
   showCoins: boolean;
@@ -14,8 +15,9 @@ export const FRIEND_SETTINGS_PATH = "friends.settings";
 
 export const DEFAULT_FRIEND_SETTINGS: FriendSettings = {
   showOnlineFriendsOnly: false,
-  autoAcceptIncomingRequests: false,
   hideRoomFromPublicList: false,
+  messageSoundEnabled: true,
+  friendRequestSoundEnabled: true,
   showGarden: true,
   showInventory: true,
   showCoins: true,

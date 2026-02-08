@@ -17,18 +17,31 @@ import { getPetMaxStrength, getPetStrength } from "../../utils/petCalcul";
 import { DefaultPricing, estimateProduceValue } from "../../utils/calculators";
 import { MGAssets } from "../../utils/mgAssets";
 import { PetsService } from "../../services/pets";
+import { audioPlayer } from "../../core/audioPlayer";
+import { getFriendSettings } from "../../utils/friendSettings";
+
+const MSG_NOTIFICATION_URL = "https://cdn.pixabay.com/audio/2024/01/11/audio_8e3b99318b.mp3";
 import {
-  fetchFriendsWithViews,
+  fetchFriendsSummary,
   fetchMessagesThread,
-  getCachedFriendsWithViews,
+  getAudioUrlSafe,
+  getCachedFriendsSummary,
   markMessagesRead,
   openMessagesStream,
   sendMessage,
+  setImageSafe,
+  installEmojiDataFetchInterceptor,
   type DirectMessage,
-  type PlayerView,
+  type FriendSummary,
+  type StreamHandle,
   type ReadReceipt,
 } from "../../utils/supabase";
 import "emoji-picker-element";
+
+// Install fetch interceptor BEFORE any emoji-picker element hits the DOM.
+// This intercepts window.fetch for jsDelivr so the picker's data loads
+// via GM_xmlhttpRequest (bypasses CSP + blob: HEAD issue).
+installEmojiDataFetchInterceptor();
 
 declare global {
   interface Window {
@@ -124,7 +137,18 @@ type ItemMessagePayload = {
   items?: ChatItem[];
 };
 
+type RoomInvitePayload = {
+  v: 1;
+  kind: "room";
+  message?: string;
+  roomId: string;
+  roomName?: string;
+  playersCount?: number;
+  maxPlayers?: number;
+};
+
 const ITEM_MESSAGE_PREFIX = "ITEM::v1::";
+const ROOM_INVITE_PREFIX = "ROOM::v1::";
 const ATTACHMENT_STATUS_PREFIX = "Items attached:";
 const MAX_ATTACHMENTS = 6;
 const MAX_MESSAGE_LENGTH = 1000;
@@ -132,6 +156,7 @@ const THREAD_INITIAL_LIMIT = 80;
 const THREAD_PAGE_LIMIT = 50;
 const LOAD_OLDER_THRESHOLD = 80;
 const FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
+const FRIEND_REMOVED_EVENT = "qws-friend-removed";
 
 const STYLE_ID = "qws-messages-overlay-css";
 
@@ -164,6 +189,11 @@ const isRecord = (value: unknown): value is UnknownRecord =>
   typeof value === "object" && value !== null;
 
 type KeyTrapCleanup = () => void;
+
+export type MessagesOverlayOptions = {
+  embedded?: boolean;
+  onUnreadChange?: (total: number) => void;
+};
 
 function installInputKeyTrap(
   scope: HTMLElement,
@@ -556,6 +586,51 @@ function decodeItemMessage(text: string): ItemMessagePayload | null {
       kind: "item",
       message: typeof parsed.m === "string" ? parsed.m : typeof parsed.message === "string" ? parsed.message : "",
       items: normalizedItems,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function encodeRoomInvite(payload: RoomInvitePayload): string {
+  const compact: Record<string, unknown> = {
+    v: 1,
+    k: "r",
+    r: payload.roomId,
+  };
+  if (payload.message && payload.message.trim()) compact.m = payload.message;
+  if (payload.roomName) compact.n = payload.roomName;
+  if (typeof payload.playersCount === "number") compact.p = payload.playersCount;
+  if (typeof payload.maxPlayers === "number") compact.x = payload.maxPlayers;
+  const json = JSON.stringify(compact);
+  return `${ROOM_INVITE_PREFIX}${json}`;
+}
+
+function decodeRoomInvite(text: string): RoomInvitePayload | null {
+  if (!text || !text.startsWith(ROOM_INVITE_PREFIX)) return null;
+  const raw = text.slice(ROOM_INVITE_PREFIX.length);
+  try {
+    let parsed: unknown = null;
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      parsed = JSON.parse(trimmed);
+    } else {
+      const decoded = base64UrlDecode(raw);
+      if (!decoded) return null;
+      parsed = JSON.parse(decoded);
+    }
+    if (!isRecord(parsed)) return null;
+    if (parsed.k !== "r" && parsed.kind !== "room") return null;
+    const roomId = String(parsed.r ?? parsed.roomId ?? "").trim();
+    if (!roomId) return null;
+    return {
+      v: 1,
+      kind: "room",
+      message: typeof parsed.m === "string" ? parsed.m : typeof parsed.message === "string" ? parsed.message : "",
+      roomId,
+      roomName: typeof parsed.n === "string" ? parsed.n : typeof parsed.roomName === "string" ? parsed.roomName : undefined,
+      playersCount: typeof parsed.p === "number" ? parsed.p : typeof parsed.playersCount === "number" ? parsed.playersCount : undefined,
+      maxPlayers: typeof parsed.x === "number" ? parsed.x : typeof parsed.maxPlayers === "number" ? parsed.maxPlayers : undefined,
     };
   } catch {
     return null;
@@ -1227,8 +1302,8 @@ function createItemCard(item: ChatItem): HTMLDivElement {
 }
 
 function ensureMessagesOverlayStyle(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const st = document.createElement("style");
+  const existing = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  const st = existing ?? document.createElement("style");
   st.id = STYLE_ID;
   st.textContent = `
 .qws-msg-panel{
@@ -1247,6 +1322,27 @@ function ensureMessagesOverlayStyle(): void {
   box-shadow:var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45));
   overflow:hidden;
   z-index:var(--chakra-zIndices-DialogModal, 7010);
+}
+.qws-msg-panel.qws-msg-panel-embedded{
+  position:relative;
+  top:auto;
+  right:auto;
+  left:auto;
+  bottom:auto;
+  width:100%;
+  height:100%;
+  max-height:none;
+  display:flex;
+  flex-direction:column;
+  border-radius:16px;
+  z-index:auto;
+}
+.qws-msg-panel.qws-msg-panel-embedded .qws-msg-head{
+  cursor:default;
+  display:none;
+}
+.qws-msg-panel.qws-msg-panel-embedded .qws-msg-body{
+  height:100%;
 }
 .qws-msg-panel *{ box-sizing:border-box; }
 .qws-msg-head{
@@ -1818,6 +1914,48 @@ function ensureMessagesOverlayStyle(): void {
   text-align:center;
   margin:auto;
 }
+.qws-msg-room-invite{
+  position:relative;
+}
+.qws-msg-room-invite .qws-msg-item-icon svg{
+  width:20px;
+  height:20px;
+  opacity:0.8;
+}
+.qws-msg-room-btn-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  align-items:flex-end;
+  margin-left:auto;
+}
+.qws-msg-room-join-btn{
+  padding:6px 12px;
+  border-radius:8px;
+  border:1px solid rgba(122,162,255,.45);
+  background:rgba(122,162,255,.22);
+  color:#d6e5ff;
+  font-weight:600;
+  font-size:11px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all 0.15s ease;
+}
+.qws-msg-room-join-btn:hover:not(:disabled){
+  background:rgba(122,162,255,.32);
+  border-color:rgba(122,162,255,.6);
+  transform:translateY(-1px);
+}
+.qws-msg-room-join-btn:disabled{
+  opacity:0.5;
+  cursor:not-allowed;
+}
+.qws-msg-room-hint{
+  font-size:10px;
+  opacity:0.65;
+  white-space:nowrap;
+  text-align:right;
+}
 @media (max-width: 700px){
   .qws-msg-body{
     grid-template-columns:1fr;
@@ -1829,20 +1967,22 @@ function ensureMessagesOverlayStyle(): void {
   }
 }
 `;
-  document.head.appendChild(st);
+  if (!existing) {
+    document.head.appendChild(st);
+  }
 }
 
 function normalizeId(value: unknown): string {
   return value == null ? "" : String(value);
 }
 
-function formatFriendName(friend: PlayerView | null, fallbackId: string): string {
+function formatFriendName(friend: FriendSummary | null, fallbackId: string): string {
   const name = friend?.playerName ?? friend?.playerId ?? fallbackId;
   const trimmed = String(name ?? "").trim();
   return trimmed || fallbackId || "Unknown";
 }
 
-function formatStatus(friend: PlayerView | null): string {
+function formatStatus(friend: FriendSummary | null): string {
   if (!friend) return "";
   if (friend.isOnline) return "Online";
   const seen = formatLastSeen(friend.lastEventAt);
@@ -2043,7 +2183,7 @@ async function getCurrentRoomId(): Promise<string | null> {
     return null;
   }
 }
-class MessagesOverlay {
+export class MessagesOverlay {
   private slot: HTMLDivElement = document.createElement("div");
   private btn: HTMLButtonElement = document.createElement("button");
   private badge: HTMLSpanElement = document.createElement("span");
@@ -2062,15 +2202,17 @@ class MessagesOverlay {
   private attachmentsEl: HTMLDivElement = document.createElement("div");
   private charCountEl: HTMLDivElement = document.createElement("div");
   private maxTextLength = MAX_MESSAGE_LENGTH;
+  private opts: MessagesOverlayOptions;
+  private embedded = false;
 
   private myId: string | null = null;
-  private friends: PlayerView[] = [];
+  private friends: FriendSummary[] = [];
   private friendsFingerprint: string | null = null;
   private convs = new Map<string, ConversationState>();
   private convByConversationId = new Map<string, string>();
   private selectedId: string | null = null;
   private panelOpen = false;
-  private stream: EventSource | null = null;
+  private stream: StreamHandle | null = null;
   private mo: MutationObserver | null = null;
   private unsubPlayerId: (() => void) | null = null;
   private keyTrapCleanup: KeyTrapCleanup | null = null;
@@ -2078,8 +2220,10 @@ class MessagesOverlay {
   private panelDetached = false;
   private importPending = false;
   private importRestoreOpen = false;
+  private importRestoreFriendOverlay = false;
   private importUnsubs: Array<() => void> = [];
   private pendingImportItems: ChatItem[] = [];
+  private pendingRoomInvite: RoomInvitePayload | null = null;
   private rowById = new Map<string, FriendRowState>();
   private myAvatarUrl: string | null = null;
   private myAvatar: string[] | null = null;
@@ -2090,10 +2234,28 @@ class MessagesOverlay {
     if (!this.myId) return;
     void this.loadFriends(true);
   };
+
+  private handleFriendRemoved = (event: Event) => {
+    const playerId = (event as CustomEvent<{ playerId?: string }>).detail?.playerId;
+    if (!playerId) return;
+    const id = normalizeId(playerId);
+    if (!id) return;
+    this.convs.delete(id);
+    this.convByConversationId.forEach((otherId, convId) => {
+      if (normalizeId(otherId) === id) this.convByConversationId.delete(convId);
+    });
+    if (this.selectedId === id) {
+      this.selectedId = null;
+      this.renderThread();
+    }
+    this.renderFriendList({ preserveScroll: true });
+  };
   private unreadRefreshInFlight = false;
   private lastUnreadRefreshAt = 0;
 
-  constructor() {
+  constructor(options: MessagesOverlayOptions = {}) {
+    this.opts = options;
+    this.embedded = Boolean(options.embedded);
     ensureMessagesOverlayStyle();
     this.slot = this.createSlot();
     this.btn = this.createButton();
@@ -2107,53 +2269,59 @@ class MessagesOverlay {
       { passive: true },
     );
     window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
+    window.addEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved as EventListener);
     this.keyTrapCleanup = installInputKeyTrap(this.panel, {
       onEnter: () => {
         void this.handleSendMessage();
       },
       shouldHandleEnter: (_target, active) => active === this.inputEl,
     });
-    this.installPanelDrag();
 
-    this.btn.onclick = () => {
-      if (this.importPending) return;
-      this.setEmojiMenu(false);
-      const next = this.panel.style.display !== "block";
-      this.panel.style.display = next ? "block" : "none";
-      this.panelOpen = next;
-      if (next) {
-        if (!this.panelDetached) {
-          this.panel.style.position = "absolute";
-          this.panel.style.left = "";
-          this.panel.style.top = "";
-          this.panel.style.right = "0";
-          this.panel.style.bottom = "";
+    if (this.embedded) {
+      this.panel.classList.add("qws-msg-panel-embedded");
+      this.panel.style.display = "block";
+    } else {
+      this.installPanelDrag();
+      this.btn.onclick = () => {
+        if (this.importPending) return;
+        this.setEmojiMenu(false);
+        const next = this.panel.style.display !== "block";
+        this.panel.style.display = next ? "block" : "none";
+        this.panelOpen = next;
+        if (next) {
+          if (!this.panelDetached) {
+            this.panel.style.position = "absolute";
+            this.panel.style.left = "";
+            this.panel.style.top = "";
+            this.panel.style.right = "0";
+            this.panel.style.bottom = "";
+          }
+          this.loadFriends(true);
+          this.renderAttachments();
+          this.updateAttachmentStatus();
+          if (this.selectedId) {
+            void this.selectConversation(this.selectedId);
+          } else {
+            this.renderThread();
+          }
+          this.fitPanelWithinViewport();
         }
-        this.loadFriends(true);
-        this.renderAttachments();
-        this.updateAttachmentStatus();
-        if (this.selectedId) {
-          void this.selectConversation(this.selectedId);
-        } else {
-          this.renderThread();
+        this.updateButtonBadge();
+      };
+
+      this.slot.append(this.btn, this.badge, this.panel);
+      this.attach();
+      this.observeDomForRelocation();
+
+      window.addEventListener("pointerdown", (e) => {
+        if (!this.panelOpen) return;
+        const t = e.target as Node;
+        if (!this.slot.contains(t)) {
+          this.panel.style.display = "none";
+          this.panelOpen = false;
         }
-        this.fitPanelWithinViewport();
-      }
-      this.updateButtonBadge();
-    };
-
-    this.slot.append(this.btn, this.badge, this.panel);
-    this.attach();
-    this.observeDomForRelocation();
-
-    window.addEventListener("pointerdown", (e) => {
-      if (!this.panelOpen) return;
-      const t = e.target as Node;
-      if (!this.slot.contains(t)) {
-        this.panel.style.display = "none";
-        this.panelOpen = false;
-      }
-    });
+      });
+    }
   }
 
   async init(): Promise<void> {
@@ -2181,6 +2349,7 @@ class MessagesOverlay {
     } catch {}
     try {
       window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
+      window.removeEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved as EventListener);
     } catch {}
     try {
       this.clearImportWatchers();
@@ -2191,6 +2360,27 @@ class MessagesOverlay {
     try {
       this.slot.remove();
     } catch {}
+    if (this.embedded) {
+      try {
+        this.panel.remove();
+      } catch {}
+    }
+  }
+
+  mount(container: HTMLElement): void {
+    if (!this.embedded) return;
+    if (!container.contains(this.panel)) {
+      container.appendChild(this.panel);
+    }
+  }
+
+  setActive(active: boolean): void {
+    if (!this.embedded) return;
+    this.panelOpen = active;
+    if (active && this.selectedId) {
+      void this.markConversationRead(this.selectedId);
+      this.updateFriendRow(this.selectedId);
+    }
   }
 
   private setMyId(next: string | null): void {
@@ -2270,7 +2460,7 @@ class MessagesOverlay {
       if (!name) return;
       const url = this.buildCosmeticUrl(name);
       if (!url) return;
-      img.src = url;
+      setImageSafe(img, url);
       img.removeAttribute("data-cosmetic");
     });
   }
@@ -2299,7 +2489,7 @@ class MessagesOverlay {
         img.style.zIndex = String(index + 1);
         const url = this.buildCosmeticUrl(entry);
         if (url) {
-          img.src = url;
+          setImageSafe(img, url);
         } else {
           img.dataset.cosmetic = entry;
         }
@@ -2313,7 +2503,7 @@ class MessagesOverlay {
       img.decoding = "async";
       img.loading = "lazy";
       img.className = "qws-msg-avatar-photo";
-      img.src = fallbackUrl;
+      setImageSafe(img, fallbackUrl);
       wrap.appendChild(img);
       return wrap;
     }
@@ -2333,6 +2523,70 @@ class MessagesOverlay {
       friend?.avatarUrl ?? null,
       friend?.playerName ?? senderId,
     );
+  }
+
+  private createRoomInviteCard(invite: RoomInvitePayload, outgoing: boolean): HTMLDivElement {
+    const card = document.createElement("div");
+    card.className = "qws-msg-item-card qws-msg-room-invite";
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "qws-msg-item-icon";
+    iconWrap.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 22 9 12 15 12 15 22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    const meta = document.createElement("div");
+    meta.className = "qws-msg-item-meta";
+
+    const title = document.createElement("div");
+    title.className = "qws-msg-item-title";
+    title.textContent = invite.roomName || "Join my room";
+
+    const sub = document.createElement("div");
+    sub.className = "qws-msg-item-sub";
+    if (typeof invite.playersCount === "number" && typeof invite.maxPlayers === "number") {
+      sub.textContent = `${invite.playersCount}/${invite.maxPlayers} players`;
+    } else {
+      sub.textContent = "Room invite";
+    }
+
+    meta.append(title, sub);
+
+    const isDiscord = window.location.hostname.endsWith("discordsays.com");
+    const isFull = typeof invite.playersCount === "number" && typeof invite.maxPlayers === "number" && invite.playersCount >= invite.maxPlayers;
+
+    const btnWrap = document.createElement("div");
+    btnWrap.className = "qws-msg-room-btn-wrap";
+
+    const joinBtn = document.createElement("button");
+    joinBtn.type = "button";
+    joinBtn.className = "qws-msg-room-join-btn";
+    joinBtn.textContent = "Join";
+    joinBtn.disabled = outgoing || isDiscord || isFull;
+
+    if (outgoing) {
+      joinBtn.title = "Cannot join your own room";
+    } else if (isFull) {
+      joinBtn.title = "Room is full";
+    } else if (isDiscord) {
+      joinBtn.title = "Cannot join rooms from Discord Activity";
+    }
+
+    joinBtn.addEventListener("click", () => {
+      if (outgoing || isDiscord || isFull || !invite.roomId) return;
+      const roomUrl = `${window.location.origin}/r/${encodeURIComponent(invite.roomId)}`;
+      window.location.href = roomUrl;
+    });
+
+    btnWrap.appendChild(joinBtn);
+
+    if (isDiscord) {
+      const hint = document.createElement("div");
+      hint.className = "qws-msg-room-hint";
+      hint.textContent = "Can't join rooms on Discord Activity";
+      btnWrap.appendChild(hint);
+    }
+
+    card.append(iconWrap, meta, btnWrap);
+    return card;
   }
 
   private resetStream(): void {
@@ -2424,6 +2678,11 @@ class MessagesOverlay {
         void this.markConversationRead(conv.otherId);
       } else {
         conv.unread += 1;
+        if (getFriendSettings().messageSoundEnabled) {
+          void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url) => {
+            audioPlayer.playAt(url, 0.2);
+          });
+        }
       }
     }
 
@@ -2459,7 +2718,7 @@ class MessagesOverlay {
     }
   }
 
-  private computeFriendsFingerprint(friends: PlayerView[]): string {
+  private computeFriendsFingerprint(friends: FriendSummary[]): string {
     const parts = friends.map((friend) => {
       const avatar = Array.isArray(friend.avatar) ? friend.avatar.map(String).join("|") : "";
       return [
@@ -2475,7 +2734,7 @@ class MessagesOverlay {
     return parts.join("||");
   }
 
-  private applyFriends(next: PlayerView[], opts?: { forceRender?: boolean }): void {
+  private applyFriends(next: FriendSummary[], opts?: { forceRender?: boolean }): void {
     this.friends = next;
     const fingerprint = this.computeFriendsFingerprint(next);
     if (!opts?.forceRender && this.friendsFingerprint === fingerprint) return;
@@ -2488,7 +2747,7 @@ class MessagesOverlay {
 
   private async loadFriends(force = false): Promise<void> {
     if (!this.myId) return;
-    const cached = getCachedFriendsWithViews();
+    const cached = getCachedFriendsSummary();
     if (cached.length) {
       this.applyFriends(cached, {
         forceRender: this.friendsFingerprint == null || this.friends.length === 0,
@@ -2496,7 +2755,7 @@ class MessagesOverlay {
     }
 
     try {
-      const next = await fetchFriendsWithViews(this.myId);
+      const next = await fetchFriendsSummary(this.myId);
       this.applyFriends(next);
       if (force) {
         void this.refreshUnreadCounts(next);
@@ -2512,7 +2771,7 @@ class MessagesOverlay {
     }
   }
 
-  private async refreshUnreadCounts(friends: PlayerView[]): Promise<void> {
+  private async refreshUnreadCounts(friends: FriendSummary[]): Promise<void> {
     if (!this.myId) return;
     if (this.unreadRefreshInFlight) return;
     const now = Date.now();
@@ -2696,13 +2955,13 @@ class MessagesOverlay {
     }
   }
 
-  private getFriendById(id: string): PlayerView | null {
+  private getFriendById(id: string): FriendSummary | null {
     return this.friends.find((f) => normalizeId(f.playerId) === normalizeId(id)) ?? null;
   }
 
   private buildFriendEntries(): Array<{
     id: string;
-    friend: PlayerView | null;
+    friend: FriendSummary | null;
     unread: number;
     lastMessageAt: number;
     online: boolean;
@@ -2710,7 +2969,7 @@ class MessagesOverlay {
   }> {
     const entries: Array<{
       id: string;
-      friend: PlayerView | null;
+      friend: FriendSummary | null;
       unread: number;
       lastMessageAt: number;
       online: boolean;
@@ -2718,23 +2977,33 @@ class MessagesOverlay {
     }> = [];
 
     const seen = new Set<string>();
+    const shouldInclude = (id: string, conv?: ConversationState | null) => {
+      if (this.selectedId && id === this.selectedId) return true;
+      if (!conv) return false;
+      if (conv.lastMessageAt > 0) return true;
+      if (conv.messages.length > 0) return true;
+      return false;
+    };
     for (const friend of this.friends) {
       const id = normalizeId(friend.playerId);
       if (!id) continue;
       const conv = this.convs.get(id);
-      entries.push({
-        id,
-        friend,
-        unread: conv?.unread ?? 0,
-        lastMessageAt: conv?.lastMessageAt ?? 0,
-        online: Boolean(friend.isOnline),
-        lastSeenAt: parseLastSeen(friend.lastEventAt),
-      });
-      seen.add(id);
+      if (shouldInclude(id, conv)) {
+        entries.push({
+          id,
+          friend,
+          unread: conv?.unread ?? 0,
+          lastMessageAt: conv?.lastMessageAt ?? 0,
+          online: Boolean(friend.isOnline),
+          lastSeenAt: parseLastSeen(friend.lastEventAt),
+        });
+        seen.add(id);
+      }
     }
 
     for (const [id, conv] of this.convs) {
       if (seen.has(id)) continue;
+      if (!shouldInclude(id, conv)) continue;
       entries.push({
         id,
         friend: null,
@@ -2746,15 +3015,6 @@ class MessagesOverlay {
     }
 
     entries.sort((a, b) => {
-      const aUnread = a.unread > 0 ? 1 : 0;
-      const bUnread = b.unread > 0 ? 1 : 0;
-      if (aUnread !== bUnread) return bUnread - aUnread;
-      const aOnline = a.online ? 1 : 0;
-      const bOnline = b.online ? 1 : 0;
-      if (aOnline !== bOnline) return bOnline - aOnline;
-      if (!a.online && !b.online && a.lastSeenAt !== b.lastSeenAt) {
-        return b.lastSeenAt - a.lastSeenAt;
-      }
       if (a.lastMessageAt !== b.lastMessageAt) return b.lastMessageAt - a.lastMessageAt;
       const nameA = formatFriendName(a.friend, a.id).toLowerCase();
       const nameB = formatFriendName(b.friend, b.id).toLowerCase();
@@ -2773,7 +3033,7 @@ class MessagesOverlay {
     if (!entries.length) {
       const empty = document.createElement("div");
       empty.className = "qws-msg-empty";
-      empty.textContent = "No friends yet.";
+      empty.textContent = "No conversations yet.";
       this.listEl.appendChild(empty);
       return;
     }
@@ -2793,7 +3053,7 @@ class MessagesOverlay {
         img.className = "qws-msg-avatar-photo";
         img.decoding = "async";
         img.loading = "lazy";
-        img.src = entry.friend.avatarUrl;
+        setImageSafe(img, entry.friend.avatarUrl);
         img.alt = formatFriendName(entry.friend, entry.id);
         img.width = 32;
         img.height = 32;
@@ -2939,19 +3199,21 @@ class MessagesOverlay {
       }
 
       const parsed = decodeItemMessage(msg.body ?? "");
+      const roomInvite = decodeRoomInvite(msg.body ?? "");
       const itemPayloads =
         parsed?.items && parsed.items.length
           ? parsed.items
           : null;
-      const messageText =
-        typeof parsed?.message === "string" ? parsed.message : msg.body ?? "";
+      const messageText = roomInvite
+        ? (typeof roomInvite.message === "string" ? roomInvite.message : "")
+        : (typeof parsed?.message === "string" ? parsed.message : msg.body ?? "");
       const hasMessage = messageText.trim().length > 0;
 
       const bubble = document.createElement("div");
       bubble.className = "qws-msg-bubble";
       const outgoing = msg.senderId === this.myId;
       bubble.classList.add(outgoing ? "outgoing" : "incoming");
-      if (!hasMessage && itemPayloads) bubble.classList.add("no-text");
+      if (!hasMessage && (itemPayloads || roomInvite)) bubble.classList.add("no-text");
       const content = document.createElement("div");
       content.className = "qws-msg-content";
       content.appendChild(linkifyText(messageText));
@@ -2968,11 +3230,18 @@ class MessagesOverlay {
         }
       }
 
+      let roomCard: HTMLDivElement | null = null;
+      if (roomInvite) {
+        roomCard = this.createRoomInviteCard(roomInvite, outgoing);
+      }
+
       if (itemStack) {
         if (itemPayloads && itemPayloads.length > 1) {
           bubble.classList.add("has-multi-items");
         }
         bubble.append(content, itemStack);
+      } else if (roomCard) {
+        bubble.append(content, roomCard);
       } else {
         bubble.append(content);
       }
@@ -3026,16 +3295,34 @@ class MessagesOverlay {
     if (!this.selectedId) return false;
     const hasText = !!this.inputEl.value.trim();
     const hasItem = this.pendingImportItems.length > 0;
-    return hasText || hasItem;
+    const hasRoomInvite = !!this.pendingRoomInvite;
+    return hasText || hasItem || hasRoomInvite;
   }
 
-  private buildMessageBody(): { body: string; usedItems: boolean } | null {
+  private buildMessageBody(): { body: string; usedItems: boolean; usedRoomInvite?: boolean } | null {
     const text = this.inputEl.value.trim();
     const pendingItems = this.pendingImportItems.slice(0, MAX_ATTACHMENTS);
-    if (!text && !pendingItems.length) return null;
+    const pendingRoom = this.pendingRoomInvite;
+
+    if (!text && !pendingItems.length && !pendingRoom) return null;
+
+    if (pendingRoom) {
+      const payload: RoomInvitePayload = {
+        ...pendingRoom,
+        message: text || pendingRoom.message,
+      };
+      try {
+        const body = encodeRoomInvite(payload);
+        return { body, usedItems: false, usedRoomInvite: true };
+      } catch {
+        return null;
+      }
+    }
+
     if (!pendingItems.length) {
       return { body: text, usedItems: false };
     }
+
     const payload: ItemMessagePayload = {
       v: 1,
       kind: "item",
@@ -3107,7 +3394,7 @@ class MessagesOverlay {
     const length = this.getMessageLength();
     const overLimit = length > MAX_MESSAGE_LENGTH;
     this.sendBtn.disabled = this.inputEl.disabled || !this.canSend() || overLimit;
-    this.inputEl.placeholder = this.pendingImportItems.length > 0
+    this.inputEl.placeholder = (this.pendingImportItems.length > 0 || this.pendingRoomInvite)
       ? "Add a message (optional)..."
       : "Type a message...";
     this.updateCharCount(length);
@@ -3125,7 +3412,17 @@ class MessagesOverlay {
       }
       return;
     }
-    if (this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+    if (this.pendingRoomInvite) {
+      if (!this.statusEl.textContent || this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX) || this.statusEl.textContent.includes("Room invite")) {
+        const roomName = this.pendingRoomInvite.roomName || "Room";
+        const playerInfo = typeof this.pendingRoomInvite.playersCount === "number" && typeof this.pendingRoomInvite.maxPlayers === "number"
+          ? ` (${this.pendingRoomInvite.playersCount}/${this.pendingRoomInvite.maxPlayers})`
+          : "";
+        this.statusEl.textContent = `Room invite attached: ${roomName}${playerInfo}`;
+      }
+      return;
+    }
+    if (this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX) || this.statusEl.textContent.includes("Room invite")) {
       this.statusEl.textContent = "";
     }
   }
@@ -3176,6 +3473,7 @@ class MessagesOverlay {
       this.statusEl.textContent = `You can attach up to ${MAX_ATTACHMENTS} items.`;
       return;
     }
+    this.pendingRoomInvite = null;
     this.beginImportSuspend();
     try {
       const raw = await Atoms.inventory.myInventory.get();
@@ -3223,12 +3521,69 @@ class MessagesOverlay {
     }
   }
 
+  private async handleRoomInvite(): Promise<void> {
+    if (this.pendingRoomInvite) {
+      this.statusEl.textContent = "You already have a pending room invite.";
+      return;
+    }
+
+    try {
+      const roomId = await getCurrentRoomId();
+      if (!roomId) {
+        this.statusEl.textContent = "You are not in a room.";
+        return;
+      }
+
+      const maxPlayers = 6;
+      let playersCount = 0;
+      try {
+        const numPlayers = await Atoms.server.numPlayers.get();
+        playersCount = Math.max(1, Math.min(6, Math.floor(Number(numPlayers))));
+      } catch {
+        playersCount = 1;
+      }
+
+      if (playersCount >= maxPlayers) {
+        this.statusEl.textContent = "Your room is full. Cannot invite.";
+        return;
+      }
+
+      const state = await Atoms.root.state.get();
+      const players = getPlayersArrayFromState(state);
+      const myPlayerId = await Atoms.player.playerId.get();
+      const myPlayer = players.find((p) => String(p?.id ?? "") === String(myPlayerId ?? ""));
+      const roomName = myPlayer?.name ? `${myPlayer.name}'s room` : undefined;
+
+      this.pendingImportItems = [];
+      this.renderAttachments();
+
+      this.pendingRoomInvite = {
+        v: 1,
+        kind: "room",
+        roomId,
+        roomName,
+        playersCount,
+        maxPlayers,
+      };
+
+      this.updateAttachmentStatus();
+      this.updateSendState();
+    } catch (error) {
+      console.error("[MessagesOverlay] room invite failed", error);
+      this.statusEl.textContent = "Unable to attach room invite.";
+    }
+  }
+
   private beginImportSuspend(): void {
     if (this.importPending) return;
     this.importPending = true;
     this.importRestoreOpen = this.panelOpen;
     this.panel.style.display = "none";
     this.panelOpen = false;
+    this.importRestoreFriendOverlay = !!document.querySelector(".qws-fo-panel.open");
+    if (this.importRestoreFriendOverlay) {
+      window.dispatchEvent(new CustomEvent("qws-friend-overlay-close"));
+    }
   }
 
   private startImportResumeWatchers(): void {
@@ -3333,22 +3688,45 @@ class MessagesOverlay {
     if (!this.importPending) return;
     this.clearImportWatchers();
     this.importPending = false;
-    if (this.importRestoreOpen) {
+    if (this.importRestoreFriendOverlay) {
+      this.importRestoreFriendOverlay = false;
+      window.dispatchEvent(new CustomEvent("qws-friend-overlay-open"));
+    }
+    const shouldRestore = this.embedded ? true : this.importRestoreOpen;
+    if (shouldRestore) {
       this.panel.style.display = "block";
-      this.panelOpen = true;
+      if (!this.embedded) {
+        this.panelOpen = true;
+      }
       this.renderThread();
-      this.fitPanelWithinViewport();
+      if (!this.embedded) {
+        this.fitPanelWithinViewport();
+      }
       this.renderAttachments();
       this.updateSendState();
       this.updateAttachmentStatus();
     }
   }
 
+  openConversation(otherId: string): void {
+    if (!otherId) return;
+    const conv = this.ensureConversation(otherId);
+    if (!conv.lastMessageAt) {
+      conv.lastMessageAt = Date.now();
+    }
+    this.updateConversationMap(conv);
+    void this.selectConversation(otherId);
+    this.renderFriendList({ preserveScroll: true });
+  }
+
   private updateButtonBadge(): void {
     let total = 0;
     for (const conv of this.convs.values()) total += conv.unread;
-    this.badge.textContent = total ? String(total) : "";
-    style(this.badge, { display: total ? "inline-flex" : "none" });
+    if (!this.embedded) {
+      this.badge.textContent = total ? String(total) : "";
+      style(this.badge, { display: total ? "inline-flex" : "none" });
+    }
+    this.opts.onUnreadChange?.(total);
   }
 
   private adjustBubbleWidth(
@@ -3540,6 +3918,7 @@ class MessagesOverlay {
     importMenu.className = "qws-msg-import-menu";
     const importOptions = [
       { id: "item", label: "Import item" },
+      { id: "room", label: "Invite to room" },
     ];
     for (const opt of importOptions) {
       const btn = document.createElement("button");
@@ -3550,6 +3929,8 @@ class MessagesOverlay {
         importMenu.style.display = "none";
         if (opt.id === "item") {
           void this.handleImportItems();
+        } else if (opt.id === "room") {
+          void this.handleRoomInvite();
         }
       });
       importMenu.appendChild(btn);
@@ -3591,6 +3972,8 @@ class MessagesOverlay {
     const picker = document.createElement("emoji-picker") as HTMLElement;
     picker.className = "qws-msg-emoji-picker";
     picker.classList.add("dark");
+    // No data-source needed — installEmojiDataFetchInterceptor() patches
+    // window.fetch to serve the data from GM cache (handles GET + HEAD).
     picker.addEventListener("emoji-click", (event: Event) => {
       const detail = (
         event as CustomEvent<{ unicode?: string; emoji?: { unicode?: string } }>
@@ -3694,6 +4077,7 @@ class MessagesOverlay {
 
     const body = built.body;
     const usedItems = built.usedItems;
+    const usedRoomInvite = built.usedRoomInvite;
 
     try {
       const msg = await sendMessage({
@@ -3718,6 +4102,10 @@ class MessagesOverlay {
         if (usedItems) {
           this.pendingImportItems = [];
           this.renderAttachments();
+          this.updateAttachmentStatus();
+        }
+        if (usedRoomInvite) {
+          this.pendingRoomInvite = null;
           this.updateAttachmentStatus();
         }
         this.updateFriendRow(this.selectedId);

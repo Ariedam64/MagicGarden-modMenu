@@ -3,12 +3,14 @@ import { player, playerDatabaseUserId } from "../../store/atoms";
 import {
   fetchFriendsWithViews,
   fetchIncomingRequestsWithViews,
+  fetchModPlayers,
   fetchPlayersView,
   getCachedFriendsWithViews,
   getCachedIncomingRequestsWithViews,
   respondFriendRequest,
   removeFriend,
   sendFriendRequest,
+  type ModPlayerSummary,
   type PlayerView,
   type PlayerViewSection,
 } from "../../utils/supabase";
@@ -25,7 +27,7 @@ import {
   fakeStatsShow,
   fakeJournalShow,
 } from "../../services/fakeModal";
-import { skipNextActivityLogHistoryReopen } from "../../services/activityLogHistory";
+import { skipNextActivityLogHistoryReopen } from "../../services/activityLogsHistory";
 import { toastSimple } from "../../ui/toast";
 
 type LoadFriendsOptions = {
@@ -1033,11 +1035,47 @@ function renderAddFriendTab(view: HTMLElement, ui: Menu) {
 
   formCard.body.append(input, status, submit);
 
-  layout.append(profileCard.root, formCard.root);
+  const modCard = ui.card("Mod players");
+  modCard.body.style.display = "grid";
+  modCard.body.style.gap = "8px";
+
+  const modControls = ui.flexRow({ align: "center", gap: 8 });
+  const modSearch = ui.inputText("Search mod players...");
+  modSearch.style.flex = "1";
+  modSearch.style.minWidth = "0";
+  const modRefresh = ui.btn("Refresh", { size: "sm", variant: "ghost" });
+  modRefresh.style.background = "rgba(248, 250, 252, 0.08)";
+  modRefresh.style.color = "#f8fafc";
+  modRefresh.style.border = "1px solid rgba(248, 250, 252, 0.15)";
+  modRefresh.style.boxShadow = "0 2px 6px rgba(0,0,0,0.35)";
+  modRefresh.title = "Reload mod players list";
+  modControls.append(modSearch, modRefresh);
+
+  const modStatus = document.createElement("div");
+  modStatus.style.fontSize = "12px";
+  modStatus.style.opacity = "0.7";
+  modStatus.style.minHeight = "18px";
+
+  const modList = document.createElement("div");
+  modList.style.display = "grid";
+  modList.style.gap = "6px";
+  modList.style.maxHeight = "260px";
+  modList.style.overflow = "auto";
+  modList.style.paddingRight = "4px";
+
+  modCard.body.append(modControls, modStatus, modList);
+
+  layout.append(profileCard.root, formCard.root, modCard.root);
   view.appendChild(layout);
 
   let myId: string | null = null;
   let isSending = false;
+  let modPlayers: ModPlayerSummary[] = [];
+  let modLoading = false;
+  let modDestroyed = false;
+  let modSearchTimer: number | null = null;
+  const modRequestPending = new Set<string>();
+  const modRequestSent = new Set<string>();
 
   const updateSubmitState = () => {
     const target = input.value.trim();
@@ -1078,6 +1116,198 @@ function renderAddFriendTab(view: HTMLElement, ui: Menu) {
     }
   });
 
+  const renderModPlayers = () => {
+    if (modDestroyed) return;
+    modList.innerHTML = "";
+
+    if (modLoading) {
+      const loading = document.createElement("div");
+      loading.textContent = "Loading mod players...";
+      loading.style.opacity = "0.6";
+      loading.style.fontSize = "12px";
+      loading.style.textAlign = "center";
+      modList.appendChild(loading);
+      return;
+    }
+
+    if (!modPlayers.length) {
+      const empty = document.createElement("div");
+      empty.textContent = "No mod players found.";
+      empty.style.opacity = "0.6";
+      empty.style.fontSize = "12px";
+      empty.style.textAlign = "center";
+      modList.appendChild(empty);
+      return;
+    }
+
+    for (const entry of modPlayers) {
+      const row = document.createElement("div");
+      row.style.display = "grid";
+      row.style.gridTemplateColumns = "32px 1fr auto";
+      row.style.alignItems = "center";
+      row.style.gap = "8px";
+      row.style.padding = "6px 8px";
+      row.style.borderRadius = "8px";
+      row.style.background = "rgba(255, 255, 255, 0.03)";
+      row.style.border = "1px solid rgba(255, 255, 255, 0.05)";
+
+      const avatar = document.createElement("div");
+      avatar.style.width = "32px";
+      avatar.style.height = "32px";
+      avatar.style.borderRadius = "50%";
+      avatar.style.display = "grid";
+      avatar.style.placeItems = "center";
+      avatar.style.background = "rgba(255, 255, 255, 0.05)";
+      avatar.style.overflow = "hidden";
+
+      if (entry.avatarUrl) {
+        const img = document.createElement("img");
+        img.src = entry.avatarUrl;
+        img.alt = entry.playerName ?? entry.playerId;
+        img.width = 32;
+        img.height = 32;
+        img.style.borderRadius = "50%";
+        img.style.objectFit = "cover";
+        avatar.appendChild(img);
+      } else {
+        const fallback = document.createElement("span");
+        const label = (entry.playerName || entry.playerId || "P").trim();
+        fallback.textContent = label.charAt(0).toUpperCase();
+        fallback.style.fontWeight = "600";
+        fallback.style.fontSize = "13px";
+        avatar.appendChild(fallback);
+      }
+
+      const text = document.createElement("div");
+      text.style.display = "grid";
+      text.style.gap = "2px";
+      text.style.minWidth = "0";
+
+      const nameEl = document.createElement("div");
+      nameEl.textContent = entry.playerName || entry.playerId;
+      nameEl.style.fontWeight = "600";
+      nameEl.style.fontSize = "12px";
+      nameEl.style.whiteSpace = "nowrap";
+      nameEl.style.overflow = "hidden";
+      nameEl.style.textOverflow = "ellipsis";
+
+      const lastSeen = formatLastSeen(entry.lastEventAt);
+      if (lastSeen) {
+        const seenEl = document.createElement("div");
+        seenEl.textContent = `Last seen ${lastSeen}`;
+        seenEl.style.fontSize = "11px";
+        seenEl.style.opacity = "0.6";
+        text.append(nameEl, seenEl);
+      } else {
+        text.append(nameEl);
+      }
+
+      const addBtn = ui.btn("Add", { size: "sm", variant: "ghost" });
+      addBtn.style.textTransform = "none";
+      addBtn.style.padding = "6px 10px";
+      addBtn.style.background = "rgba(148, 163, 184, 0.12)";
+      addBtn.style.color = "#f8fafc";
+      addBtn.style.border = "1px solid rgba(248, 250, 252, 0.3)";
+      addBtn.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.2)";
+
+      const targetId = entry.playerId;
+      const isSelf = !!myId && targetId === myId;
+      const isPending = modRequestPending.has(targetId);
+      const isSent = modRequestSent.has(targetId);
+
+      if (!myId) {
+        addBtn.disabled = true;
+        addBtn.title = "Player ID unavailable.";
+      } else if (isSelf) {
+        addBtn.disabled = true;
+        addBtn.title = "You cannot add yourself.";
+      } else if (isSent) {
+        addBtn.disabled = true;
+        addBtn.textContent = "Sent";
+        addBtn.title = "Friend request already sent.";
+      } else if (isPending) {
+        addBtn.disabled = true;
+        addBtn.textContent = "Sending...";
+      }
+
+      addBtn.addEventListener("mouseenter", () => {
+        if (!addBtn.disabled) {
+          addBtn.style.background = "rgba(248, 250, 252, 0.12)";
+        }
+      });
+      addBtn.addEventListener("mouseleave", () => {
+        if (!addBtn.disabled) {
+          addBtn.style.background = "rgba(148, 163, 184, 0.12)";
+        }
+      });
+
+      addBtn.addEventListener("click", async () => {
+        if (!myId || !targetId || isSelf || modRequestPending.has(targetId)) return;
+        modRequestPending.add(targetId);
+        renderModPlayers();
+        try {
+          const sent = await sendFriendRequest(myId, targetId);
+          if (sent) {
+            modRequestSent.add(targetId);
+            await toastSimple("Friend request", `Request sent to ${entry.playerName ?? targetId}.`, "success");
+          } else {
+            await toastSimple("Friend request", "Unable to send request.", "info");
+          }
+        } catch (error) {
+          console.error("[FriendsMenu] sendFriendRequest (mod list)", error);
+          await toastSimple("Friend request", "Failed to send request.", "error");
+        } finally {
+          modRequestPending.delete(targetId);
+          renderModPlayers();
+        }
+      });
+
+      row.append(avatar, text, addBtn);
+      modList.appendChild(row);
+    }
+  };
+
+  const loadModPlayers = async () => {
+    if (modDestroyed) return;
+    modLoading = true;
+    modStatus.textContent = modSearch.value.trim()
+      ? "Searching mod players..."
+      : "Loading latest mod players...";
+    renderModPlayers();
+    try {
+      const query = modSearch.value.trim();
+      const result = await fetchModPlayers({
+        query: query.length ? query : undefined,
+        limit: 10,
+        offset: 0,
+      });
+      modPlayers = result;
+      modStatus.textContent = modPlayers.length
+        ? `Showing ${modPlayers.length} mod player${modPlayers.length > 1 ? "s" : ""}.`
+        : "No mod players found.";
+    } catch (error) {
+      console.error("[FriendsMenu] fetchModPlayers failed", error);
+      modPlayers = [];
+      modStatus.textContent = "Failed to load mod players.";
+    } finally {
+      modLoading = false;
+      renderModPlayers();
+    }
+  };
+
+  modSearch.addEventListener("input", () => {
+    if (modSearchTimer) {
+      window.clearTimeout(modSearchTimer);
+    }
+    modSearchTimer = window.setTimeout(() => {
+      modSearchTimer = null;
+      void loadModPlayers();
+    }, 300);
+  });
+  modRefresh.addEventListener("click", () => {
+    void loadModPlayers();
+  });
+
   const updateProfileInfo = async () => {
     const [resolved, playerInfo] = await Promise.all([
       playerDatabaseUserId.get(),
@@ -1106,9 +1336,19 @@ function renderAddFriendTab(view: HTMLElement, ui: Menu) {
     }
 
     updateSubmitState();
+    renderModPlayers();
   };
 
   void updateProfileInfo();
+  void loadModPlayers();
+
+  (view as any).__cleanup__ = () => {
+    modDestroyed = true;
+    if (modSearchTimer) {
+      window.clearTimeout(modSearchTimer);
+      modSearchTimer = null;
+    }
+  };
 }
 
 function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
@@ -1176,6 +1416,14 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
   };
   updateRequestsRefreshControls();
 
+  const updateRequestsBadge = () => {
+    if (!requests.length) {
+      ui.setTabBadge("friends-requests", null);
+    } else {
+      ui.setTabBadge("friends-requests", String(requests.length));
+    }
+  };
+
   const getRequestsStatusText = (): string => {
     if (loadingRequests) {
       return requests.length
@@ -1213,17 +1461,20 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
     const shouldForce = options.force ?? true;
     if (loadingRequests && requests.length && !shouldForce) {
       updateRequestsStatusText();
+      updateRequestsBadge();
       return;
     }
     requestsList.innerHTML = "";
     if (loadingRequests && !requests.length) {
       renderRequestsPlaceholder(getRequestsStatusText());
       updateRequestsStatusText();
+      updateRequestsBadge();
       return;
     }
     if (!requests.length) {
       renderRequestsPlaceholder(getRequestsStatusText());
       updateRequestsStatusText();
+      updateRequestsBadge();
       return;
     }
 
@@ -1318,6 +1569,7 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
       requestsList.appendChild(row);
     }
     updateRequestsStatusText();
+    updateRequestsBadge();
   };
 
   async function loadRequests(options?: { force?: boolean }) {
@@ -1331,6 +1583,7 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
       placeholder.style.fontSize = "12px";
       placeholder.style.textAlign = "center";
       requestsList.appendChild(placeholder);
+      ui.setTabBadge("friends-requests", null);
       return;
     }
     loadingRequests = true;
@@ -1342,6 +1595,7 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
         const cached = getCachedIncomingRequestsWithViews();
         if (cached.length) {
           requests = cached;
+          updateRequestsBadge();
           return;
         }
       }

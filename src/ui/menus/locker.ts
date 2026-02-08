@@ -151,7 +151,7 @@ const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
 )
   .filter((entry): entry is [WeatherTag, number] => {
     const [key, value] = entry;
-    if (key === "Puddle" || key === "Thunderstruck" || key === "ThunderstruckGround") {
+    if (key === "Puddle" || key === "ThunderstruckGround") {
       return false;
     }
     return typeof value === "number" && Number.isFinite(value);
@@ -199,6 +199,7 @@ const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
   Wet: "condition",
   Chilled: "condition",
   Frozen: "condition",
+  Thunderstruck: "condition",
   Dawnlit: "lighting",
   Amberlit: "lighting",
   Dawncharged: "lighting",
@@ -206,7 +207,7 @@ const WEATHER_RECIPE_GROUPS: Partial<Record<WeatherTag, WeatherRecipeGroup>> = {
 };
 
 const WEATHER_RECIPE_GROUP_MEMBERS: Record<WeatherRecipeGroup, WeatherTag[]> = {
-  condition: ["Wet", "Chilled", "Frozen"],
+  condition: ["Wet", "Chilled", "Frozen", "Thunderstruck"],
   lighting: ["Dawnlit", "Amberlit", "Dawncharged", "Ambercharged"],
 };
 

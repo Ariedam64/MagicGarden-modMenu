@@ -19,6 +19,7 @@ const SPRITE_PRELOAD_CATEGORIES = [
 ] as const;
 
 const spriteDataUrlCache = new Map<string, Promise<string | null>>();
+const spriteDataUrlResolved = new Map<string, string>();
 let spriteWarmupQueued = false;
 let spriteWarmupStarted = false;
 type SpriteWarmupState = { total: number; done: number; completed: boolean };
@@ -75,6 +76,7 @@ export function primeSpriteData(category: string, spriteId: string, dataUrl: str
   if (!spriteDataUrlCache.has(cacheKey)) {
     spriteDataUrlCache.set(cacheKey, Promise.resolve(dataUrl));
   }
+  spriteDataUrlResolved.set(cacheKey, dataUrl);
   if (!warmupCompletedKeys.has(cacheKey)) {
     warmupCompletedKeys.add(cacheKey);
     const nextDone = warmupState.done + 1;
@@ -179,7 +181,11 @@ async function ensureSpriteDataCached(
           mutations: mutationList,
         });
         if (!canvas) return null;
-        return canvas.toDataURL("image/png");
+        const dataUrl = canvas.toDataURL("image/png");
+        if (dataUrl) {
+          spriteDataUrlResolved.set(cacheKey, dataUrl);
+        }
+        return dataUrl;
       } catch (error) {
         console.error("[SpriteIconCache]", "failed to cache sprite", { category, spriteId, logTag, error });
         return null;
@@ -195,6 +201,21 @@ const spriteMatchCache = new Map<string, { category: string; spriteId: string } 
 function getMatchCacheKey(categories: string[], id: string): string {
   const normalizedCategories = categories.map(category => category.toLowerCase()).join("|");
   return `${normalizedCategories}|${normalizeSpriteId(id)}`;
+}
+
+function findCachedSpriteMatch(
+  categories: string[],
+  candidateIds: string[],
+): { match: { category: string; spriteId: string }; candidate: string } | null {
+  for (const candidate of candidateIds) {
+    const cacheKey = getMatchCacheKey(categories, candidate);
+    if (!spriteMatchCache.has(cacheKey)) continue;
+    const match = spriteMatchCache.get(cacheKey);
+    if (match) {
+      return { match, candidate };
+    }
+  }
+  return null;
 }
 
 function findSpriteMatch(
@@ -276,12 +297,51 @@ export function attachSpriteIcon(
   logTag: string,
   options?: AttachSpriteIconOptions,
 ): void {
-  const service = getSpriteService();
-  if (!service?.renderToCanvas) return;
   const candidateIds = Array.isArray(id)
     ? id.map(value => String(value ?? "").trim()).filter(Boolean)
     : [String(id ?? "").trim()].filter(Boolean);
   if (!candidateIds.length) return;
+
+  const cachedMatch = findCachedSpriteMatch(categories, candidateIds);
+  if (cachedMatch) {
+    const { match, candidate } = cachedMatch;
+    const { key: mutationKey } = normalizeMutationList(options?.mutations);
+    const spriteKey = `${match.category}:${match.spriteId}${mutationKey}`;
+    const cacheKey = cacheKeyFor(match.category, match.spriteId, mutationKey);
+    const cachedUrl = spriteDataUrlResolved.get(cacheKey);
+    const existingImg = target.querySelector<HTMLImageElement>("img[data-sprite-key]");
+    if (existingImg && existingImg.dataset.spriteKey === spriteKey) {
+      return;
+    }
+    if (cachedUrl) {
+      const img = document.createElement("img");
+      img.src = cachedUrl;
+      img.width = size;
+      img.height = size;
+      img.alt = "";
+      img.decoding = "async";
+      (img as any).loading = "lazy";
+      img.draggable = false;
+      img.style.width = `${size}px`;
+      img.style.height = `${size}px`;
+      img.style.objectFit = "contain";
+      img.style.imageRendering = "auto";
+      img.style.display = "block";
+      img.dataset.spriteKey = spriteKey;
+      img.dataset.spriteCategory = match.category;
+      img.dataset.spriteId = match.spriteId;
+      target.replaceChildren(img);
+      options?.onSpriteApplied?.(img, {
+        category: match.category,
+        spriteId: match.spriteId,
+        candidate,
+      });
+      return;
+    }
+  }
+
+  const service = getSpriteService();
+  if (!service?.renderToCanvas) return;
   void whenServiceReady(service).then(() =>
     scheduleNonBlocking(async () => {
       let selected:
