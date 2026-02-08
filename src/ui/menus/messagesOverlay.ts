@@ -16,6 +16,7 @@ import { attachSpriteIcon } from "../spriteIconCache";
 import { getPetMaxStrength, getPetStrength } from "../../utils/petCalcul";
 import { DefaultPricing, estimateProduceValue } from "../../utils/calculators";
 import { MGAssets } from "../../utils/mgAssets";
+import { PetsService } from "../../services/pets";
 import {
   fetchFriendsWithViews,
   fetchMessagesThread,
@@ -619,6 +620,183 @@ function getPetMutationTone(mutations?: string[]): StrengthBadgeTone {
   return "normal";
 }
 
+function getAbilityChipColors(id: string): { bg: string; hover: string } {
+  const key = String(id || "");
+  const base = (PetsService.getAbilityNameWithoutLevel?.(key) || "")
+    .replace(/[\s\-_]+/g, "")
+    .toLowerCase();
+
+  const is = (prefix: string) =>
+    key.startsWith(prefix) || base === prefix.toLowerCase();
+
+  if (is("MoonKisser")) {
+    return { bg: "rgba(250,166,35,0.9)", hover: "rgba(250,166,35,1)" };
+  }
+
+  if (is("DawnKisser")) {
+    return { bg: "rgba(162,92,242,0.9)", hover: "rgba(162,92,242,1)" };
+  }
+
+  if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
+    return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
+  }
+
+  if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
+    return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
+  }
+
+  if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
+    return { bg: "rgba(180,90,240,0.9)", hover: "rgba(180,90,240,1)" };
+  }
+
+  if (is("PetAgeBoost")) {
+    return { bg: "rgba(147,112,219,0.9)", hover: "rgba(147,112,219,1)" };
+  }
+
+  if (is("PetHatchSizeBoost")) {
+    return { bg: "rgba(128,0,128,0.9)", hover: "rgba(128,0,128,1)" };
+  }
+
+  if (is("PetXpBoost") || is("SnowyPetXpBoost")) {
+    return { bg: "rgba(30,144,255,0.9)", hover: "rgba(30,144,255,1)" };
+  }
+
+  if (is("HungerBoost") || is("SnowyHungerBoost")) {
+    return { bg: "rgba(255,20,147,0.9)", hover: "rgba(255,20,147,1)" };
+  }
+
+  if (is("HungerRestore") || is("SnowyHungerRestore")) {
+    return { bg: "rgba(255,105,180,0.9)", hover: "rgba(255,105,180,1)" };
+  }
+
+  if (is("SellBoost")) {
+    return { bg: "rgba(220,20,60,0.9)", hover: "rgba(220,20,60,1)" };
+  }
+
+  if (is("CoinFinder") || is("SnowyCoinFinder")) {
+    return { bg: "rgba(180,150,0,0.9)", hover: "rgba(180,150,0,1)" };
+  }
+
+  if (is("SeedFinder")) {
+    return { bg: "rgba(168,102,38,0.9)", hover: "rgba(168,102,38,1)" };
+  }
+
+  if (is("ProduceMutationBoost")) {
+    return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
+  }
+
+  if (is("PetMutationBoost")) {
+    return { bg: "rgba(160,50,100,0.9)", hover: "rgba(160,50,100,1)" };
+  }
+
+  if (is("DoubleHarvest")) {
+    return { bg: "rgba(0,120,180,0.9)", hover: "rgba(0,120,180,1)" };
+  }
+
+  if (is("DoubleHatch")) {
+    return { bg: "rgba(60,90,180,0.9)", hover: "rgba(60,90,180,1)" };
+  }
+
+  if (is("ProduceEater")) {
+    return { bg: "rgba(255,69,0,0.9)", hover: "rgba(255,69,0,1)" };
+  }
+
+  if (is("ProduceRefund")) {
+    return { bg: "rgba(255,99,71,0.9)", hover: "rgba(255,99,71,1)" };
+  }
+
+  if (is("PetRefund")) {
+    return { bg: "rgba(0,80,120,0.9)", hover: "rgba(0,80,120,1)" };
+  }
+
+  if (is("Copycat")) {
+    return { bg: "rgba(255,140,0,0.9)", hover: "rgba(255,140,0,1)" };
+  }
+
+  if (is("GoldGranter")) {
+    return {
+      bg: "linear-gradient(135deg, rgba(225,200,55,0.9) 0%, rgba(225,180,10,0.9) 40%, rgba(215,185,45,0.9) 70%, rgba(210,185,45,0.9) 100%)",
+      hover:
+        "linear-gradient(135deg, rgba(220,200,70,1) 0%, rgba(210,175,5,1) 40%, rgba(210,185,55,1) 70%, rgba(200,175,30,1) 100%)",
+    };
+  }
+
+  if (is("RainbowGranter")) {
+    return {
+      bg: "linear-gradient(45deg, rgba(200,0,0,0.9), rgba(200,120,0,0.9), rgba(160,170,30,0.9), rgba(60,170,60,0.9), rgba(50,170,170,0.9), rgba(40,150,180,0.9), rgba(20,90,180,0.9), rgba(70,30,150,0.9))",
+      hover:
+        "linear-gradient(45deg, rgba(200,0,0,1), rgba(200,120,0,1), rgba(160,170,30,1), rgba(60,170,60,1), rgba(50,170,170,1), rgba(40,150,180,1), rgba(20,90,180,1), rgba(70,30,150,1))",
+    };
+  }
+
+  if (is("RainDance")) {
+    return { bg: "rgba(102,204,216,0.9)", hover: "rgba(102,204,216,1)" };
+  }
+
+  if (is("SnowGranter")) {
+    return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+  }
+
+  if (is("FrostGranter")) {
+    return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+  }
+
+  return { bg: "rgba(100,100,100,0.9)", hover: "rgba(150,150,150,1)" };
+}
+
+function createAbilityBadges(abilities?: string[]): HTMLSpanElement | null {
+  const ids = Array.isArray(abilities)
+    ? abilities.map((a) => String(a ?? "").trim()).filter(Boolean)
+    : [];
+  if (!ids.length) return null;
+
+  const wrap = document.createElement("span");
+  wrap.className = "qws-msg-ability-badges";
+  wrap.style.display = "inline-flex";
+  wrap.style.alignItems = "center";
+  wrap.style.lineHeight = "1";
+  wrap.style.flexWrap = "wrap";
+  wrap.style.columnGap = "8px";
+  wrap.style.rowGap = "4px";
+  wrap.style.maxWidth = "100%";
+
+  const size = 12;
+  const radius = 3;
+
+  ids.forEach((id) => {
+    const chip = document.createElement("span");
+    chip.className = "qws-msg-ability-chip";
+    const { bg, hover } = getAbilityChipColors(id);
+    chip.title = PetsService.getAbilityName?.(id) || id;
+    chip.setAttribute("aria-label", chip.title);
+    Object.assign(chip.style, {
+      display: "inline-block",
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: `${radius}px`,
+      background: bg,
+      transition: "transform 80ms ease, box-shadow 120ms ease, background 120ms ease",
+      cursor: "default",
+      boxShadow: "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a",
+    } as CSSStyleDeclaration);
+
+    chip.onmouseenter = () => {
+      chip.style.background = hover;
+      chip.style.transform = "scale(1.08)";
+      chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff33";
+    };
+    chip.onmouseleave = () => {
+      chip.style.background = bg;
+      chip.style.transform = "none";
+      chip.style.boxShadow = "0 0 0 1px #0006 inset, 0 0 0 1px #ffffff1a";
+    };
+
+    wrap.appendChild(chip);
+  });
+
+  return wrap;
+}
+
 function applyStrengthBadgeTone(
   badge: HTMLSpanElement,
   tone: StrengthBadgeTone,
@@ -897,6 +1075,17 @@ function createItemCard(item: ChatItem): HTMLDivElement {
   sub.className = "qws-msg-item-sub";
   if (item.itemType === "Pet") {
     const petSpecies = item.petSpecies ?? "";
+    const abilitiesEl = createAbilityBadges(item.abilities);
+    if (abilitiesEl) sub.classList.add("has-abilities");
+    let statsRow: HTMLDivElement | null = null;
+    const ensureStatsRow = () => {
+      if (!statsRow) {
+        statsRow = document.createElement("div");
+        statsRow.className = "qws-msg-item-sub-row";
+        sub.appendChild(statsRow);
+      }
+      return statsRow;
+    };
     const petLike = {
       petSpecies,
       xp: item.xp ?? 0,
@@ -912,17 +1101,31 @@ function createItemCard(item: ChatItem): HTMLDivElement {
         const str = document.createElement("span");
         str.className = "qws-msg-item-str";
         str.textContent = `STR ${roundedMax}`;
-        sub.appendChild(str);
+        ensureStatsRow().appendChild(str);
         const badge = document.createElement("span");
         badge.className = "qws-msg-item-badge";
         badge.textContent = "MAX";
         applyStrengthBadgeTone(badge, getPetMutationTone(item.mutations));
-        sub.appendChild(badge);
+        ensureStatsRow().appendChild(badge);
       } else {
-        sub.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
+        const str = document.createElement("span");
+        str.className = "qws-msg-item-str";
+        str.textContent = `STR ${Math.max(0, roundedCurrent)}/${roundedMax}`;
+        ensureStatsRow().appendChild(str);
       }
     } else {
-      sub.textContent = getChatItemSubtitle(item);
+      const fallback = getChatItemSubtitle(item);
+      if (fallback) {
+        const label = document.createElement("span");
+        label.textContent = fallback;
+        ensureStatsRow().appendChild(label);
+      }
+    }
+    if (abilitiesEl) {
+      const abilitiesRow = document.createElement("div");
+      abilitiesRow.className = "qws-msg-item-sub-row";
+      abilitiesRow.appendChild(abilitiesEl);
+      sub.appendChild(abilitiesRow);
     }
   } else if (item.itemType === "Produce") {
     const produceMeta = getProduceMeta(item);
@@ -1424,6 +1627,26 @@ function ensureMessagesOverlayStyle(): void {
   text-overflow:ellipsis;
   min-height:14px;
 }
+.qws-msg-item-sub.has-abilities{
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+}
+.qws-msg-item-sub-row{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+}
+.qws-msg-ability-badges{
+  display:inline-flex;
+  flex-wrap:wrap;
+  gap:8px;
+  max-width:100%;
+}
 .qws-msg-item-price{
   color:#F3D32B;
   font-weight:700;
@@ -1825,6 +2048,8 @@ class MessagesOverlay {
     if (!this.myId) return;
     void this.loadFriends(true);
   };
+  private unreadRefreshInFlight = false;
+  private lastUnreadRefreshAt = 0;
 
   constructor() {
     ensureMessagesOverlayStyle();
@@ -2228,9 +2453,62 @@ class MessagesOverlay {
     try {
       const next = await fetchFriendsWithViews(this.myId);
       this.applyFriends(next);
+      if (force) {
+        void this.refreshUnreadCounts(next);
+      }
     } catch {
       this.friends = [];
       this.friendsFingerprint = null;
+      this.renderFriendList({ preserveScroll: true });
+    }
+  }
+
+  private async refreshUnreadCounts(friends: PlayerView[]): Promise<void> {
+    if (!this.myId) return;
+    if (this.unreadRefreshInFlight) return;
+    const now = Date.now();
+    if (now - this.lastUnreadRefreshAt < 1500) return;
+    this.unreadRefreshInFlight = true;
+    this.lastUnreadRefreshAt = now;
+
+    try {
+      for (const friend of friends) {
+        const otherId = normalizeId(friend?.playerId);
+        if (!otherId) continue;
+        const conv = this.ensureConversation(otherId);
+        const data = await fetchMessagesThread(this.myId, otherId, {
+          limit: THREAD_PAGE_LIMIT,
+        });
+        const normalized = Array.isArray(data)
+          ? data.map(normalizeMessage).filter(Boolean)
+          : [];
+        if (!normalized.length) {
+          conv.unread = 0;
+          continue;
+        }
+        const unread = normalized.filter(
+          (msg) => msg.senderId !== this.myId && !msg.readAt,
+        ).length;
+        const hasReadIncoming = normalized.some(
+          (msg) => msg.senderId !== this.myId && !!msg.readAt,
+        );
+        const isExact =
+          normalized.length < THREAD_PAGE_LIMIT || hasReadIncoming;
+        conv.unread = isExact ? unread : Math.max(conv.unread, unread);
+        conv.conversationId = normalized[0]?.conversationId ?? conv.conversationId;
+        const lastTs = normalized.reduce((acc, msg) => {
+          const ts = parseMessageTime(msg);
+          return ts > acc ? ts : acc;
+        }, 0);
+        if (lastTs) {
+          conv.lastMessageAt = Math.max(conv.lastMessageAt, lastTs);
+        }
+      }
+    } catch {
+      // ignore
+    } finally {
+      this.unreadRefreshInFlight = false;
+      this.updateButtonBadge();
       this.renderFriendList({ preserveScroll: true });
     }
   }
