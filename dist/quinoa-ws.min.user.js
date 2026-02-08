@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.51
+// @version      2.99.53
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26650,6 +26650,7 @@
   var THREAD_INITIAL_LIMIT = 80;
   var THREAD_PAGE_LIMIT = 50;
   var LOAD_OLDER_THRESHOLD = 80;
+  var FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
   var STYLE_ID = "qws-messages-overlay-css";
   var style2 = (el2, s) => Object.assign(el2.style, s);
   var setProps2 = (el2, props) => {
@@ -28162,6 +28163,10 @@
       __publicField(this, "myName", null);
       __publicField(this, "cosmeticBaseUrl", null);
       __publicField(this, "cosmeticBasePromise", null);
+      __publicField(this, "handleFriendsRefresh", () => {
+        if (!this.myId) return;
+        void this.loadFriends(true);
+      });
       ensureMessagesOverlayStyle();
       this.slot = this.createSlot();
       this.btn = this.createButton();
@@ -28174,6 +28179,7 @@
         () => this.handleThreadScroll(),
         { passive: true }
       );
+      window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
       this.keyTrapCleanup = installInputKeyTrap(this.panel, {
         onEnter: () => {
           void this.handleSendMessage();
@@ -28195,7 +28201,7 @@
             this.panel.style.right = "0";
             this.panel.style.bottom = "";
           }
-          this.loadFriends();
+          this.loadFriends(true);
           this.renderAttachments();
           this.updateAttachmentStatus();
           if (this.selectedId) {
@@ -28240,6 +28246,10 @@
       }
       try {
         this.keyTrapCleanup?.();
+      } catch {
+      }
+      try {
+        window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
       } catch {
       }
       try {
@@ -52247,6 +52257,13 @@ next: ${next}`;
 
   // src/ui/menus/friends.ts
   var FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
+  var FRIENDS_REFRESH_EVENT2 = "qws-friends-refresh";
+  var dispatchFriendsRefresh = () => {
+    try {
+      window.dispatchEvent(new CustomEvent(FRIENDS_REFRESH_EVENT2));
+    } catch {
+    }
+  };
   function ensureFriendsMenuRefreshStyle() {
     if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
     const style3 = document.createElement("style");
@@ -52819,6 +52836,7 @@ next: ${next}`;
         if (removed) {
           removeFriendBtn.textContent = "Removed";
           void refreshAllFriends?.({ force: true });
+          dispatchFriendsRefresh();
         } else {
           removeFriendBtn.textContent = original;
         }
@@ -53328,6 +53346,7 @@ next: ${next}`;
               requestActionInProgress.delete(request.playerId);
               await loadRequests({ force: true });
               void refreshAllFriends?.({ force: true });
+              dispatchFriendsRefresh();
             }
           };
         };

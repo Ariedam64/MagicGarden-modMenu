@@ -33,6 +33,15 @@ type LoadFriendsOptions = {
 };
 
 const FRIENDS_MENU_REFRESH_STYLE_ID = "friends-menu-refresh-style";
+const FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
+
+const dispatchFriendsRefresh = () => {
+  try {
+    window.dispatchEvent(new CustomEvent(FRIENDS_REFRESH_EVENT));
+  } catch {
+    // ignore
+  }
+};
 
 function ensureFriendsMenuRefreshStyle(): void {
   if (document.getElementById(FRIENDS_MENU_REFRESH_STYLE_ID)) return;
@@ -704,6 +713,7 @@ function createFriendRow(ui: Menu, friend: PlayerView) {
       if (removed) {
         removeFriendBtn.textContent = "Removed";
         void refreshAllFriends?.({ force: true });
+        dispatchFriendsRefresh();
       } else {
         removeFriendBtn.textContent = original;
       }
@@ -1294,6 +1304,7 @@ function renderFriendRequestsTab(view: HTMLElement, ui: Menu) {
             requestActionInProgress.delete(request.playerId);
             await loadRequests({ force: true });
             void refreshAllFriends?.({ force: true });
+            dispatchFriendsRefresh();
           }
         };
       };

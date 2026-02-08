@@ -123,6 +123,7 @@ const MAX_MESSAGE_LENGTH = 1000;
 const THREAD_INITIAL_LIMIT = 80;
 const THREAD_PAGE_LIMIT = 50;
 const LOAD_OLDER_THRESHOLD = 80;
+const FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
 
 const STYLE_ID = "qws-messages-overlay-css";
 
@@ -1820,6 +1821,10 @@ class MessagesOverlay {
   private myName: string | null = null;
   private cosmeticBaseUrl: string | null = null;
   private cosmeticBasePromise: Promise<string> | null = null;
+  private handleFriendsRefresh = () => {
+    if (!this.myId) return;
+    void this.loadFriends(true);
+  };
 
   constructor() {
     ensureMessagesOverlayStyle();
@@ -1834,6 +1839,7 @@ class MessagesOverlay {
       () => this.handleThreadScroll(),
       { passive: true },
     );
+    window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
     this.keyTrapCleanup = installInputKeyTrap(this.panel, {
       onEnter: () => {
         void this.handleSendMessage();
@@ -1856,7 +1862,7 @@ class MessagesOverlay {
           this.panel.style.right = "0";
           this.panel.style.bottom = "";
         }
-        this.loadFriends();
+        this.loadFriends(true);
         this.renderAttachments();
         this.updateAttachmentStatus();
         if (this.selectedId) {
@@ -1905,6 +1911,9 @@ class MessagesOverlay {
     } catch {}
     try {
       this.keyTrapCleanup?.();
+    } catch {}
+    try {
+      window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
     } catch {}
     try {
       this.clearImportWatchers();
