@@ -2,21 +2,17 @@ import { createFriendsTab } from "./friendsTab";
 import { createRequestsTab } from "./requestsTab";
 import { createAddFriendTab } from "./addFriendTab";
 import { createButton, setButtonEnabled } from "../ui";
-import { attachSpriteIcon } from "../../../spriteIconCache";
 import { coin } from "../../../../data/hardcoded-data.clean";
 import {
   fetchPlayersView,
   fetchPlayerView,
-  fetchGroups,
   getCachedFriendsSummary,
   openPresenceStream,
-  addGroupMember,
   removeFriend,
   setImageSafe,
   type PlayerView,
   type PlayerViewSection,
   type FriendSummary,
-  type GroupSummary,
   type PresencePayload,
   type StreamHandle,
 } from "../../../../utils/supabase";
@@ -40,8 +36,109 @@ const PRESENCE_TOAST_STYLE_ID = "qws-presence-toast-css";
 const PRESENCE_TOAST_HOST_ID = "qws-presence-toast-host";
 const PRESENCE_TOAST_DURATION_MS = 3500;
 const PRESENCE_TOAST_MAX = 3;
-const GROUPS_REFRESH_EVENT = "qws-groups-refresh";
+const LEADERBOARD_NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+const LEADERBOARD_COINS_FORMATTER = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const COIN_TONE_CLASSES = [
+  "is-coin-trillion",
+  "is-coin-billion",
+  "is-coin-million",
+  "is-coin-base",
+] as const;
 
+const toFiniteNumber = (value: unknown): number | null => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const toRankNumber = (value: unknown): number | null => {
+  const num = toFiniteNumber(value);
+  if (!Number.isFinite(num)) return null;
+  return Math.max(1, Math.floor(num));
+};
+
+const formatCoinsValue = (value: number | null): string => {
+  if (!Number.isFinite(value ?? NaN)) return "-";
+  const num = value as number;
+  const abs = Math.abs(num);
+  const units = [
+    { value: 1e12, suffix: "T" },
+    { value: 1e9, suffix: "B" },
+    { value: 1e6, suffix: "M" },
+    { value: 1e3, suffix: "K" },
+  ];
+  for (const unit of units) {
+    if (abs >= unit.value) {
+      const scaled = num / unit.value;
+      return `${scaled.toFixed(2)}${unit.suffix}`;
+    }
+  }
+  return LEADERBOARD_COINS_FORMATTER.format(num);
+};
+
+const formatCountValue = (value: number | null): string => {
+  if (!Number.isFinite(value ?? NaN)) return "-";
+  return LEADERBOARD_NUMBER_FORMATTER.format(value as number);
+};
+
+const readLeaderboardRank = (entry: unknown): number | null => {
+  if (!entry || typeof entry !== "object") return null;
+  const raw = (entry as { rank?: unknown; position?: unknown; place?: unknown }).rank
+    ?? (entry as { position?: unknown }).position
+    ?? (entry as { place?: unknown }).place;
+  return toRankNumber(raw);
+};
+
+const readLeaderboardValue = (
+  entry: unknown,
+  rowKey: "coins" | "eggsHatched",
+  fallbackKeys: string[] = [],
+): number | null => {
+  if (!entry || typeof entry !== "object") return null;
+  const record = entry as Record<string, unknown>;
+  const directCandidates = [record[rowKey], ...fallbackKeys.map((key) => record[key])];
+  for (const candidate of directCandidates) {
+    const num = toFiniteNumber(candidate);
+    if (num != null) return num;
+  }
+  const row = record.row;
+  if (row && typeof row === "object") {
+    const num = toFiniteNumber((row as Record<string, unknown>)[rowKey]);
+    if (num != null) return num;
+  }
+  return null;
+};
+
+const readEggsFromStats = (stats: Record<string, any> | null | undefined): number | null => {
+  if (!stats || typeof stats !== "object") return null;
+  const raw =
+    stats.eggsHatched ??
+    stats.eggs_hatched ??
+    stats.eggs ??
+    stats.petsHatched ??
+    stats.pets_hatched ??
+    null;
+  return toFiniteNumber(raw);
+};
+
+const applyRankTone = (el: HTMLElement, rank: number | null): void => {
+  el.classList.remove("is-top1", "is-top2", "is-top3");
+  if (rank === 1) el.classList.add("is-top1");
+  if (rank === 2) el.classList.add("is-top2");
+  if (rank === 3) el.classList.add("is-top3");
+};
+
+const applyCoinTone = (el: HTMLElement, value: number | null): void => {
+  COIN_TONE_CLASSES.forEach((cls) => el.classList.remove(cls));
+  if (!Number.isFinite(value ?? NaN)) return;
+  const abs = Math.abs(value as number);
+  if (abs >= 1e12) el.classList.add("is-coin-trillion");
+  else if (abs >= 1e9) el.classList.add("is-coin-billion");
+  else if (abs >= 1e6) el.classList.add("is-coin-million");
+  else el.classList.add("is-coin-base");
+};
 const ensurePresenceToastStyles = (): void => {
   if (document.getElementById(PRESENCE_TOAST_STYLE_ID)) return;
   const style = document.createElement("style");
@@ -267,11 +364,6 @@ export function createCommunityTab(options: {
   let presenceUnsub: (() => void) | null = null;
   const presenceState = new Map<string, boolean>();
   let currentPlayerId: string | null = null;
-  let ownerGroups: GroupSummary[] = [];
-  let ownerGroupsLoaded = false;
-  let ownerGroupsLoading = false;
-  let ownerGroupsRefreshPending = false;
-
   const normalizePresenceId = (value: string | null | undefined) =>
     value ? String(value).trim() : "";
 
@@ -464,6 +556,35 @@ export function createCommunityTab(options: {
   inspectGrid.className = "qws-fo-inspect-grid";
   inspectSection.append(inspectTitle, inspectGrid);
 
+  const createLeaderboardRow = (label: string) => {
+    const row = document.createElement("div");
+    row.className = "qws-fo-profile-leaderboard-row";
+    const labelEl = document.createElement("div");
+    labelEl.className = "qws-fo-profile-leaderboard-label";
+    labelEl.textContent = label;
+    const meta = document.createElement("div");
+    meta.className = "qws-fo-profile-leaderboard-meta";
+    const rank = document.createElement("div");
+    rank.className = "qws-fo-leaderboard-rank qws-fo-profile-leaderboard-rank";
+    const value = document.createElement("div");
+    value.className = "qws-fo-leaderboard-value qws-fo-profile-leaderboard-value";
+    meta.append(rank, value);
+    row.append(labelEl, meta);
+    return { row, rank, value };
+  };
+
+  const leaderboardSection = document.createElement("div");
+  leaderboardSection.className = "qws-fo-profile-section qws-fo-profile-leaderboard";
+  const leaderboardTitle = document.createElement("div");
+  leaderboardTitle.className = "qws-fo-profile-section-title";
+  leaderboardTitle.textContent = "Leaderboard";
+  const leaderboardGrid = document.createElement("div");
+  leaderboardGrid.className = "qws-fo-profile-leaderboard-grid";
+  const coinsLeaderboardRow = createLeaderboardRow("Coins");
+  const eggsLeaderboardRow = createLeaderboardRow("Eggs hatched");
+  leaderboardGrid.append(coinsLeaderboardRow.row, eggsLeaderboardRow.row);
+  leaderboardSection.append(leaderboardTitle, leaderboardGrid);
+
   const profileCoins = document.createElement("div");
   profileCoins.className = "qws-fo-profile-coins";
   const profileCoinsIcon = document.createElement("img");
@@ -474,23 +595,8 @@ export function createCommunityTab(options: {
   profileCoinsValue.className = "qws-fo-profile-coins-value";
   profileCoins.append(profileCoinsIcon, profileCoinsValue);
 
-  const groupInvite = document.createElement("div");
-  groupInvite.className = "qws-fo-profile-group";
-  const groupInviteTitle = document.createElement("div");
-  groupInviteTitle.className = "qws-fo-profile-group-title";
-  groupInviteTitle.textContent = "Invite to group";
-  const groupInviteRow = document.createElement("div");
-  groupInviteRow.className = "qws-fo-profile-group-row";
-  const groupSelect = document.createElement("select");
-  groupSelect.className = "qws-fo-profile-group-select";
-  const groupInviteBtn = createButton("Invite", { size: "sm", variant: "primary" });
-  groupInviteRow.append(groupSelect, groupInviteBtn);
-  const groupInviteStatus = document.createElement("div");
-  groupInviteStatus.className = "qws-fo-profile-group-status";
-  groupInvite.append(groupInviteTitle, groupInviteRow, groupInviteStatus);
-
-  profileGrid.append(inspectSection);
-  profileCard.append(profileHeader, profileCoins, groupInvite, profileGrid);
+  profileGrid.append(inspectSection, leaderboardSection);
+  profileCard.append(profileHeader, profileCoins, profileGrid);
   profileWrap.append(profileTop, profileCard);
 
   const runInspect = async (
@@ -528,29 +634,14 @@ export function createCommunityTab(options: {
     }
   };
 
-  const createInspectCard = (label: string, iconContent: string | { category: string; id: string | string[] }): HTMLButtonElement => {
+  const createInspectCard = (label: string, iconContent: string): HTMLButtonElement => {
     const card = document.createElement("button");
     card.type = "button";
     card.className = "qws-fo-inspect-card";
     const icon = document.createElement("div");
     icon.className = "qws-fo-inspect-icon";
 
-    if (typeof iconContent === "string") {
-      icon.innerHTML = iconContent;
-    } else {
-      const spriteContainer = document.createElement("span");
-      spriteContainer.style.display = "flex";
-      spriteContainer.style.alignItems = "center";
-      spriteContainer.style.justifyContent = "center";
-      spriteContainer.style.width = "100%";
-      spriteContainer.style.height = "100%";
-      icon.appendChild(spriteContainer);
-      attachSpriteIcon(spriteContainer, [iconContent.category], iconContent.id, 28, "friend-inspect", {
-        onNoSpriteFound: (meta) => {
-          console.warn("[FriendOverlay] Sprite not found:", meta);
-        },
-      });
-    }
+    icon.innerHTML = iconContent;
 
     const labelEl = document.createElement("div");
     labelEl.className = "qws-fo-inspect-label";
@@ -573,6 +664,12 @@ export function createCommunityTab(options: {
   inspectGrid.append(gardenBtn, inventoryBtn, statsBtn, journalBtn, activityBtn);
 
   let joinRoomId: string | null = null;
+  const setGardenButtonLabel = (label: string) => {
+    const labelEl = gardenBtn.querySelector(".qws-fo-inspect-label");
+    if (labelEl) {
+      labelEl.textContent = label;
+    }
+  };
 
   const setGardenPreviewUI = (open: boolean, friendLabel?: string | null) => {
     previewOverlay.classList.toggle("active", open);
@@ -593,7 +690,7 @@ export function createCommunityTab(options: {
       } catch {}
     }
     activeGardenPlayerId = null;
-    gardenBtn.textContent = "Garden";
+    setGardenButtonLabel("Garden");
     setGardenPreviewUI(false);
     try {
       window.dispatchEvent(new CustomEvent("qws-friend-overlay-open"));
@@ -623,7 +720,7 @@ export function createCommunityTab(options: {
     const applied = await previewFn(gardenData);
     if (applied) {
       activeGardenPlayerId = activeFriend.playerId;
-      gardenBtn.textContent = "Stop garden";
+      setGardenButtonLabel("Stop garden");
       setGardenPreviewUI(true, activeFriend.playerName ?? activeFriend.playerId);
       try {
         window.dispatchEvent(new CustomEvent("qws-friend-overlay-close"));
@@ -693,132 +790,51 @@ export function createCommunityTab(options: {
     }
   });
 
-  const resolveGroupId = (group: GroupSummary) =>
-    (group.id ?? (group as any).groupId ?? (group as any).group_id ?? "").toString();
+  const updateLeaderboardRow = (
+    target: { rank: HTMLDivElement; value: HTMLDivElement },
+    options: {
+      rank: number | null;
+      value: number | null;
+      kind: "coins" | "eggs";
+      hidden: boolean;
+    },
+  ) => {
+    const { rank, value } = target;
+    rank.classList.remove("is-muted");
+    value.classList.remove("is-muted", "is-coins", "is-eggs", ...COIN_TONE_CLASSES);
+    applyRankTone(rank, null);
 
-  const resolveGroupName = (group: GroupSummary) =>
-    (group.name ?? (group as any).group_name ?? "Untitled group").toString();
-
-  const resolveGroupCount = (group: GroupSummary) => {
-    const raw =
-      (group as any).memberCount ??
-      (group as any).member_count ??
-      (group as any).membersCount ??
-      (group as any).members_count ??
-      (group as any).members?.length ??
-      null;
-    const num = Number(raw);
-    return Number.isFinite(num) ? Math.max(0, Math.floor(num)) : null;
-  };
-
-  const renderGroupInvite = () => {
-    const hasFriend = Boolean(activeFriend?.playerId);
-    groupInvite.style.display = hasFriend ? "flex" : "none";
-    if (!hasFriend) return;
-
-    groupSelect.innerHTML = "";
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = ownerGroupsLoading
-      ? "Loading groups..."
-      : ownerGroups.length
-        ? "Select a group..."
-        : "No groups available";
-    placeholder.disabled = true;
-    placeholder.selected = true;
-    groupSelect.appendChild(placeholder);
-
-    for (const group of ownerGroups) {
-      const id = resolveGroupId(group);
-      if (!id) continue;
-      const opt = document.createElement("option");
-      opt.value = id;
-      const count = resolveGroupCount(group);
-      opt.textContent = count !== null
-        ? `${resolveGroupName(group)} (${count}/12)`
-        : resolveGroupName(group);
-      groupSelect.appendChild(opt);
+    if (options.hidden) {
+      rank.textContent = "Hidden";
+      value.textContent = "Hidden";
+      rank.classList.add("is-muted");
+      value.classList.add("is-muted");
+      return;
     }
 
-    const enableInvite = Boolean(activeFriend?.playerId) && ownerGroups.length > 0 && !ownerGroupsLoading;
-    setButtonEnabled(groupInviteBtn, enableInvite);
-    groupSelect.disabled = !enableInvite;
-    groupInviteStatus.textContent = ownerGroupsLoading
-      ? "Loading your groups..."
-      : ownerGroups.length
-        ? ""
-        : "Create a group to invite friends.";
-  };
+    if (Number.isFinite(options.rank ?? NaN)) {
+      rank.textContent = `#${options.rank}`;
+      applyRankTone(rank, options.rank);
+    } else {
+      rank.textContent = "—";
+      rank.classList.add("is-muted");
+      applyRankTone(rank, null);
+    }
 
-  const ensureOwnerGroupsLoaded = async () => {
-    if (ownerGroupsLoading || ownerGroupsLoaded) return;
-    ownerGroupsLoading = true;
-    renderGroupInvite();
-    try {
-      const me = currentPlayerId ?? await playerDatabaseUserId.get();
-      if (!me) {
-        ownerGroups = [];
-        ownerGroupsLoaded = true;
-        return;
+    if (Number.isFinite(options.value ?? NaN)) {
+      if (options.kind === "coins") {
+        value.textContent = formatCoinsValue(options.value);
+        value.classList.add("is-coins");
+        applyCoinTone(value, options.value);
+      } else {
+        value.textContent = formatCountValue(options.value);
+        value.classList.add("is-eggs");
       }
-      const groups = await fetchGroups(me);
-      ownerGroups = (groups ?? []).filter((g) => {
-        const role = String((g as any).role ?? "").toLowerCase();
-        if (role === "owner") return true;
-        const ownerId = (g as any).ownerId ?? (g as any).owner_id;
-        return ownerId ? String(ownerId) === String(me) : false;
-      });
-      ownerGroupsLoaded = true;
-    } finally {
-      ownerGroupsLoading = false;
-      renderGroupInvite();
-      if (ownerGroupsRefreshPending) {
-        ownerGroupsRefreshPending = false;
-        ownerGroupsLoaded = false;
-        if (profileOpen) {
-          void ensureOwnerGroupsLoaded();
-        }
-      }
+    } else {
+      value.textContent = "—";
+      value.classList.add("is-muted");
     }
   };
-
-  const handleGroupsRefresh = () => {
-    ownerGroupsLoaded = false;
-    ownerGroupsRefreshPending = true;
-    if (profileOpen && !ownerGroupsLoading) {
-      ownerGroupsRefreshPending = false;
-      void ensureOwnerGroupsLoaded();
-      renderGroupInvite();
-    }
-  };
-
-  groupInviteBtn.addEventListener("click", async () => {
-    const friendId = activeFriend?.playerId ?? null;
-    const groupId = groupSelect.value;
-    if (!friendId || !groupId) return;
-    const me = currentPlayerId ?? await playerDatabaseUserId.get();
-    if (!me) return;
-    setButtonEnabled(groupInviteBtn, false);
-    groupInviteStatus.textContent = "Sending invite...";
-    try {
-      const ok = await addGroupMember({
-        groupId,
-        playerId: me,
-        memberId: friendId,
-      });
-      if (!ok) {
-        await toastSimple("Groups", "Unable to add member.", "error");
-        groupInviteStatus.textContent = "Invite failed.";
-        return;
-      }
-      await toastSimple("Groups", "Member added.", "success");
-      groupInviteStatus.textContent = "Invite sent.";
-      ownerGroupsLoaded = false;
-      void ensureOwnerGroupsLoaded();
-    } finally {
-      renderGroupInvite();
-    }
-  });
 
   const updateProfile = (friend: PlayerView) => {
     activeFriend = friend;
@@ -945,18 +961,57 @@ export function createCommunityTab(options: {
     seatInfo.textContent = "";
     seatInfo.style.display = "none";
 
-    const coinsValue = Number(friend.coins);
-    if (Number.isFinite(coinsValue)) {
-      profileCoinsValue.textContent = coinsValue.toLocaleString("en-US");
+    const allowCoins = friend.privacy?.showCoins !== false;
+    const leaderboard = friend.leaderboard ?? null;
+    const leaderboardCoins = (leaderboard as Record<string, unknown> | null)?.coins
+      ?? (leaderboard as Record<string, unknown> | null)?.coin
+      ?? null;
+    const leaderboardEggs = (leaderboard as Record<string, unknown> | null)?.eggsHatched
+      ?? (leaderboard as Record<string, unknown> | null)?.eggs
+      ?? null;
+
+    const coinsRank = readLeaderboardRank(leaderboardCoins);
+    const eggsRank = readLeaderboardRank(leaderboardEggs);
+
+    const coinsValueRaw = toFiniteNumber(friend.coins);
+    const coinsValue =
+      coinsValueRaw ??
+      readLeaderboardValue(leaderboardCoins, "coins", ["value", "total"]);
+    const eggsFromLeaderboard = readLeaderboardValue(leaderboardEggs, "eggsHatched", ["value", "total", "eggs"]);
+    const eggsFromStats = readEggsFromStats(friend.state?.stats);
+    const eggsValue = eggsFromLeaderboard ?? eggsFromStats;
+
+    updateLeaderboardRow(coinsLeaderboardRow, {
+      rank: coinsRank,
+      value: coinsValue,
+      kind: "coins",
+      hidden: !allowCoins,
+    });
+    updateLeaderboardRow(eggsLeaderboardRow, {
+      rank: eggsRank,
+      value: eggsValue,
+      kind: "eggs",
+      hidden: !allowStats,
+    });
+    const shouldShowLeaderboard =
+      !allowCoins ||
+      !allowStats ||
+      coinsRank != null ||
+      eggsRank != null ||
+      coinsValue != null ||
+      eggsValue != null;
+    leaderboardSection.style.display = shouldShowLeaderboard ? "flex" : "none";
+
+    if (allowCoins && Number.isFinite(coinsValueRaw ?? NaN)) {
+      profileCoinsValue.textContent = (coinsValueRaw as number).toLocaleString("en-US");
       profileCoins.style.display = "flex";
     } else {
       profileCoinsValue.textContent = "";
       profileCoins.style.display = "none";
     }
+
     setButtonEnabled(chatBtn, Boolean(friend.playerId));
     chatBtn.title = friend.playerId ? "Open chat" : "Player ID unavailable";
-    void ensureOwnerGroupsLoaded();
-    renderGroupInvite();
   };
 
   const setProfileOpen = (open: boolean) => {
@@ -994,13 +1049,11 @@ export function createCommunityTab(options: {
 
   backBtn.addEventListener("click", () => setProfileOpen(false));
   window.addEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
-  window.addEventListener(GROUPS_REFRESH_EVENT, handleGroupsRefresh as EventListener);
 
   playerDatabaseUserId
     .onChangeNow((next) => {
       const id = next ? String(next) : null;
       currentPlayerId = id;
-      ownerGroupsLoaded = false;
       resetPresenceStream(id);
     })
     .then((unsub) => {
@@ -1021,7 +1074,6 @@ export function createCommunityTab(options: {
     },
     destroy: () => {
       window.removeEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
-      window.removeEventListener(GROUPS_REFRESH_EVENT, handleGroupsRefresh as EventListener);
       friendsTab.destroy();
       addTab.destroy();
       requestsTab.destroy();

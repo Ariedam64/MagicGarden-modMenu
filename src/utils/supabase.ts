@@ -449,12 +449,28 @@ export interface PlayerViewState {
   activityLogs?: any[] | null;
 }
 
+export interface PlayerLeaderboardEntry {
+  rank: number | null;
+  total: number | null;
+  value: number | null;
+  row?: LeaderboardRow | null;
+  coins?: number | null;
+  eggsHatched?: number | null;
+}
+
+export interface PlayerLeaderboard {
+  coins?: PlayerLeaderboardEntry | null;
+  eggsHatched?: PlayerLeaderboardEntry | null;
+  eggs?: PlayerLeaderboardEntry | null;
+}
+
 export interface PlayerView {
   playerId: string;
   playerName: string | null;
   avatarUrl: string | null;
   avatar?: string[] | null;
   coins: number | null;
+  leaderboard?: PlayerLeaderboard | null;
   room: any | null;
   hasModInstalled: boolean;
   modVersion?: string | null;
@@ -619,6 +635,7 @@ export type PlayerViewSection =
   | "stats"
   | "activityLog"
   | "journal"
+  | "leaderboard"
   | "room";
 
 // ---------- Helpers HTTP ----------

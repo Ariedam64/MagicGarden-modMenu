@@ -45,10 +45,13 @@ function installInputKeyTrap(scope: HTMLElement): KeyTrapCleanup {
 
   const inScope = (node: Element | null) =>
     !!(node && (scope.contains(node) || (node as HTMLElement).closest?.(".qws-fo-panel")));
+  const inMessagesOverlay = (node: Element | null) =>
+    !!(node && (node as HTMLElement).closest?.(".qws-msg-panel"));
 
   const handler = (ev: KeyboardEvent) => {
     const target = ev.target as HTMLElement | null;
     const active = document.activeElement as HTMLElement | null;
+    if (inMessagesOverlay(target) || inMessagesOverlay(active)) return;
     if (!((inScope(target) && isEditable(target)) || (inScope(active) && isEditable(active)))) return;
     ev.stopPropagation();
     (ev as any).stopImmediatePropagation?.();
@@ -288,6 +291,8 @@ function ensureFriendOverlayStyle(): void {
   gap:12px;
   flex:1;
   min-height:0;
+  overflow:auto;
+  scrollbar-gutter:stable;
 }
 .qws-fo-community-profile.active{
   display:flex;
@@ -739,6 +744,14 @@ function ensureFriendOverlayStyle(): void {
   text-transform:uppercase;
   letter-spacing:0.1em;
   color:rgba(147,197,253,0.8);
+}
+.qws-fo-group-search{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-group-search-input{
+  width:100%;
 }
 .qws-fo-group-info-grid{
   display:grid;
@@ -1258,6 +1271,47 @@ function ensureFriendOverlayStyle(): void {
   height:12px;
   background:linear-gradient(180deg, #3b82f6, #8b5cf6);
   border-radius:999px;
+}
+.qws-fo-profile-leaderboard{
+  gap:10px;
+}
+.qws-fo-profile-leaderboard-grid{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-fo-profile-leaderboard-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(2,6,23,0.35);
+}
+.qws-fo-profile-leaderboard-label{
+  font-size:12px;
+  font-weight:600;
+  color:#e2e8f0;
+}
+.qws-fo-profile-leaderboard-meta{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.qws-fo-profile-leaderboard-rank{
+  min-width:38px;
+  text-align:center;
+}
+.qws-fo-profile-leaderboard-value{
+  min-width:72px;
+  text-align:right;
+}
+.qws-fo-profile-leaderboard-rank.is-muted,
+.qws-fo-profile-leaderboard-value.is-muted{
+  color:rgba(226,232,240,0.6);
+  font-weight:600;
 }
 .qws-fo-privacy-list{
   display:grid;

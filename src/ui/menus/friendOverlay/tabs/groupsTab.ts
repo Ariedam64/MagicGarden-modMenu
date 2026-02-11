@@ -1,13 +1,16 @@
 import { MessagesOverlay } from "../../messagesOverlay";
 import { playerDatabaseUserId } from "../../../../store/atoms";
 import {
+  addGroupMember,
   createGroup,
   deleteGroup,
+  fetchFriendsSummary,
   fetchGroupDetails,
   leaveGroup,
   removeGroupMember,
   setImageSafe,
   updateGroupName,
+  type FriendSummary,
   type GroupDetails,
   type GroupMember,
 } from "../../../../utils/supabase";
@@ -128,10 +131,40 @@ export function createGroupsTab(options?: {
 
   let currentGroupId: string | null = null;
   let myId: string | null = null;
+  let myIdPromise: Promise<string | null> | null = null;
   let unsubPlayer: (() => void) | null = null;
   let createOpen = false;
   let createValue = "";
   let creating = false;
+  const ownerByGroupId = new Map<string, string>();
+  const ownerFetchPending = new Set<string>();
+  let addMemberOpenToken = 0;
+  let addMemberGroupId: string | null = null;
+  let addMemberGroupName = "";
+  let addMemberMemberCount = 0;
+  let addMemberMembers = new Set<string>();
+  let addMemberFriends: FriendSummary[] = [];
+  let addMemberPending = new Set<string>();
+  let addMemberGroupFull = false;
+  let addMemberPlayerId: string | null = null;
+  let addMemberSearch = "";
+  let openAddMember: (groupId: string) => void = () => {};
+  let closeAddMemberModal: () => void = () => {};
+
+  const ensureMyId = async (): Promise<string | null> => {
+    if (myId) return myId;
+    if (myIdPromise) return myIdPromise;
+    myIdPromise = playerDatabaseUserId
+      .get()
+      .then((next) => {
+        myId = next ? String(next) : null;
+        return myId;
+      })
+      .finally(() => {
+        myIdPromise = null;
+      });
+    return myIdPromise;
+  };
 
   const overlay = new MessagesOverlay({
     embedded: true,
@@ -240,17 +273,70 @@ export function createGroupsTab(options?: {
       if (!selectedId) return;
       const actions = document.createElement("div");
       actions.className = "qws-msg-thread-actions";
-      const infoBtn = document.createElement("button");
-      infoBtn.type = "button";
-      infoBtn.className = "qws-msg-thread-action-btn";
-      infoBtn.textContent = "Info";
-      infoBtn.disabled = !selectedId;
+      const infoBtn = createButton("Info", { size: "sm", variant: "primary" });
+      infoBtn.setAttribute("aria-label", "Group info");
+      infoBtn.title = "Group info";
+      setButtonEnabled(infoBtn, !!selectedId);
       infoBtn.addEventListener("click", () => {
         if (!selectedId) return;
         void openDetails(selectedId);
       });
       actions.appendChild(infoBtn);
       head.appendChild(actions);
+
+      const maybeAddOwnerButton = () => {
+        if (!actions.isConnected) return;
+        if (!myId || !selectedId) return;
+        // Check overlay cache first (populated by ensureGroupMembers)
+        let ownerId = overlay.getGroupOwner(selectedId);
+        // Fall back to local cache
+        if (!ownerId) {
+          ownerId = ownerByGroupId.get(selectedId) ?? null;
+        } else if (!ownerByGroupId.has(selectedId)) {
+          // Sync local cache from overlay
+          ownerByGroupId.set(selectedId, ownerId);
+        }
+        if (!ownerId || ownerId !== myId) return;
+        if (actions.querySelector(".qws-msg-thread-add-member")) return;
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.className = "qws-msg-thread-action-btn qws-msg-thread-add-member";
+        addBtn.textContent = "+ Add member";
+        addBtn.addEventListener("click", () => {
+          if (!selectedId) return;
+          openAddMember(selectedId);
+        });
+        actions.insertBefore(addBtn, infoBtn);
+      };
+
+      const maybeFetchOwner = () => {
+        if (!myId || !selectedId) return;
+        if (ownerByGroupId.has(selectedId) || ownerFetchPending.has(selectedId)) return;
+        ownerFetchPending.add(selectedId);
+        void fetchGroupDetails(selectedId, myId)
+          .then((details) => {
+            if (!details) return;
+            const ownerId = resolveOwnerId(details);
+            if (ownerId) ownerByGroupId.set(selectedId, String(ownerId));
+            if (currentGroupId === selectedId) {
+              maybeAddOwnerButton();
+            }
+          })
+          .finally(() => {
+            ownerFetchPending.delete(selectedId);
+          });
+      };
+
+      maybeAddOwnerButton();
+      maybeFetchOwner();
+
+      if (!myId) {
+        void ensureMyId().then((resolved) => {
+          if (!resolved || currentGroupId !== selectedId) return;
+          maybeAddOwnerButton();
+          maybeFetchOwner();
+        });
+      }
     },
   });
 
@@ -289,6 +375,315 @@ export function createGroupsTab(options?: {
   });
   closeBtn.addEventListener("click", closeModal);
 
+  const addMemberModal = document.createElement("div");
+  addMemberModal.className = "qws-fo-group-modal";
+  addMemberModal.style.display = "none";
+
+  const addMemberCard = document.createElement("div");
+  addMemberCard.className = "qws-fo-group-modal-card";
+
+  const addMemberHead = document.createElement("div");
+  addMemberHead.className = "qws-fo-group-modal-head";
+  const addMemberTitle = document.createElement("div");
+  addMemberTitle.className = "qws-fo-group-modal-title";
+  addMemberTitle.textContent = "Add members";
+  const addMemberClose = createButton("Close", { size: "sm", variant: "ghost" });
+  addMemberHead.append(addMemberTitle, addMemberClose);
+
+  const addMemberBody = document.createElement("div");
+  addMemberBody.className = "qws-fo-group-details";
+
+  addMemberCard.append(addMemberHead, addMemberBody);
+  addMemberModal.appendChild(addMemberCard);
+  root.appendChild(addMemberModal);
+
+  closeAddMemberModal = () => {
+    addMemberModal.style.display = "none";
+    addMemberOpenToken += 1;
+    addMemberGroupId = null;
+    addMemberPlayerId = null;
+    addMemberSearch = "";
+  };
+
+  addMemberModal.addEventListener("click", (e) => {
+    if (e.target === addMemberModal) closeAddMemberModal();
+  });
+  addMemberClose.addEventListener("click", closeAddMemberModal);
+
+  const renderAddMemberList = () => {
+    const active = document.activeElement;
+    const shouldRestoreSearchFocus =
+      active instanceof HTMLInputElement &&
+      active.classList.contains("qws-fo-group-search-input");
+    const prevSelectionStart = shouldRestoreSearchFocus ? active.selectionStart : null;
+    const prevSelectionEnd = shouldRestoreSearchFocus ? active.selectionEnd : null;
+
+    addMemberBody.innerHTML = "";
+
+    const searchQuery = addMemberSearch.trim().toLowerCase();
+    const filteredFriends = searchQuery
+      ? addMemberFriends.filter((friend) => {
+          const name = String(friend.playerName ?? "").toLowerCase();
+          const id = String(friend.playerId ?? "").toLowerCase();
+          return name.includes(searchQuery) || id.includes(searchQuery);
+        })
+      : addMemberFriends;
+
+    const hero = document.createElement("div");
+    hero.className = "qws-fo-group-hero";
+    const heroTitle = document.createElement("div");
+    heroTitle.className = "qws-fo-group-hero-title";
+    heroTitle.textContent = addMemberGroupName || "Group";
+    const heroMeta = document.createElement("div");
+    heroMeta.className = "qws-fo-group-hero-meta";
+    const metaMembers = document.createElement("span");
+    metaMembers.className = "qws-fo-group-chip";
+    metaMembers.textContent = `${addMemberMemberCount}/12 members`;
+    const metaFriends = document.createElement("span");
+    metaFriends.className = "qws-fo-group-chip";
+    metaFriends.textContent = searchQuery
+      ? `${filteredFriends.length}/${addMemberFriends.length} friends`
+      : `${addMemberFriends.length} friends`;
+    heroMeta.append(metaMembers, metaFriends);
+    hero.append(heroTitle, heroMeta);
+    addMemberBody.appendChild(hero);
+
+    const section = document.createElement("div");
+    section.className = "qws-fo-group-section";
+    const sectionTitle = document.createElement("div");
+    sectionTitle.className = "qws-fo-group-section-title";
+    sectionTitle.textContent = "Invite friends";
+    section.appendChild(sectionTitle);
+
+    if (addMemberGroupFull) {
+      const fullHint = document.createElement("div");
+      fullHint.className = "qws-fo-group-danger-hint";
+      fullHint.textContent = "This group is full (12 members).";
+      section.appendChild(fullHint);
+    }
+
+    if (addMemberFriends.length) {
+      const searchRow = document.createElement("div");
+      searchRow.className = "qws-fo-group-search";
+      const searchInput = document.createElement("input");
+      searchInput.type = "text";
+      searchInput.className = "qws-fo-group-input qws-fo-group-search-input";
+      searchInput.placeholder = "Search friends...";
+      searchInput.value = addMemberSearch;
+      searchInput.addEventListener("input", () => {
+        addMemberSearch = searchInput.value;
+        renderAddMemberList();
+      });
+      searchRow.appendChild(searchInput);
+      section.appendChild(searchRow);
+
+      if (shouldRestoreSearchFocus) {
+        requestAnimationFrame(() => {
+          searchInput.focus();
+          const max = searchInput.value.length;
+          const start = prevSelectionStart == null ? max : Math.min(prevSelectionStart, max);
+          const end = prevSelectionEnd == null ? max : Math.min(prevSelectionEnd, max);
+          searchInput.setSelectionRange(start, end);
+        });
+      }
+    }
+
+    if (!addMemberFriends.length) {
+      const empty = document.createElement("div");
+      empty.className = "qws-fo-group-empty";
+      empty.textContent = "No friends to invite.";
+      section.appendChild(empty);
+      addMemberBody.appendChild(section);
+      return;
+    }
+
+    const listWrap = document.createElement("div");
+    listWrap.className = "qws-fo-group-members-list";
+    if (!filteredFriends.length) {
+      const empty = document.createElement("div");
+      empty.className = "qws-fo-group-empty";
+      empty.textContent = "No friends match your search.";
+      section.appendChild(empty);
+      addMemberBody.appendChild(section);
+      return;
+    }
+
+    for (const friend of filteredFriends) {
+      const friendId = String(friend.playerId ?? "").trim();
+      if (!friendId) continue;
+
+      const row = document.createElement("div");
+      row.className = "qws-fo-group-member-row";
+
+      const avatar = document.createElement("div");
+      avatar.className = "qws-fo-group-member-avatar";
+      const avatarList = Array.isArray(friend.avatar)
+        ? friend.avatar.map((entry) => String(entry)).filter(Boolean)
+        : [];
+      if (avatarList.length) {
+        avatarList.forEach((entry, index) => {
+          const img = document.createElement("img");
+          img.className = "qws-fo-group-member-avatar-layer";
+          img.alt = friend.playerName ?? friendId;
+          img.decoding = "async";
+          img.loading = "lazy";
+          img.style.zIndex = String(index + 1);
+          applyCosmeticImg(img, entry);
+          avatar.appendChild(img);
+        });
+      } else if (friend.avatarUrl) {
+        const img = document.createElement("img");
+        img.alt = friend.playerName ?? friendId;
+        img.decoding = "async";
+        img.loading = "lazy";
+        setImageSafe(img, friend.avatarUrl);
+        avatar.appendChild(img);
+      } else {
+        const avatarLetter = (friend.playerName ?? friendId ?? "?").trim().slice(0, 1).toUpperCase() || "?";
+        avatar.textContent = avatarLetter;
+      }
+
+      const textWrap = document.createElement("div");
+      textWrap.className = "qws-fo-group-member-text";
+      const name = document.createElement("div");
+      name.className = "qws-fo-group-member-name";
+      name.textContent = friend.playerName ?? friendId;
+      const meta = document.createElement("div");
+      meta.className = "qws-fo-group-member-meta";
+      const idEl = document.createElement("span");
+      idEl.className = "qws-fo-group-member-id";
+      idEl.textContent = friendId;
+      meta.appendChild(idEl);
+      textWrap.append(name, meta);
+
+      const actions = document.createElement("div");
+      actions.className = "qws-fo-group-member-actions";
+      const isSelf = addMemberPlayerId != null && friendId === addMemberPlayerId;
+      const isMember = addMemberMembers.has(friendId);
+      const isPending = addMemberPending.has(friendId);
+      const canInvite = !isSelf && !isMember && !isPending && !addMemberGroupFull;
+      const label = isMember ? "Member" : isPending ? "Inviting..." : "Invite";
+      const inviteBtn = createButton(label, {
+        size: "sm",
+        variant: isMember ? "ghost" : "primary",
+      });
+      setButtonEnabled(inviteBtn, canInvite);
+      if (isSelf) {
+        inviteBtn.title = "You cannot invite yourself.";
+      } else if (addMemberGroupFull) {
+        inviteBtn.title = "Group is full.";
+      } else if (isMember) {
+        inviteBtn.title = "Already a member.";
+      } else if (isPending) {
+        inviteBtn.title = "Inviting...";
+      }
+
+      inviteBtn.addEventListener("click", async () => {
+        if (!addMemberGroupId || !addMemberPlayerId) return;
+        if (!canInvite) return;
+        addMemberPending.add(friendId);
+        renderAddMemberList();
+        try {
+          const ok = await addGroupMember({
+            groupId: addMemberGroupId,
+            playerId: addMemberPlayerId,
+            memberId: friendId,
+          });
+          if (!ok) {
+            await toastSimple("Groups", "Unable to invite friend.", "error");
+            return;
+          }
+          if (!addMemberMembers.has(friendId)) {
+            addMemberMembers.add(friendId);
+            addMemberMemberCount = Math.max(addMemberMemberCount, addMemberMembers.size);
+            addMemberGroupFull = addMemberMemberCount >= 12;
+          }
+          await toastSimple("Groups", `Invited ${friend.playerName ?? friendId}.`, "success");
+          overlay.refresh();
+          notifyGroupsRefresh();
+        } finally {
+          addMemberPending.delete(friendId);
+          renderAddMemberList();
+        }
+      });
+
+      actions.appendChild(inviteBtn);
+      row.append(avatar, textWrap, actions);
+      listWrap.appendChild(row);
+    }
+
+    section.appendChild(listWrap);
+    addMemberBody.appendChild(section);
+
+    void ensureCosmeticBase().then(() => {
+      populateCosmeticImages(addMemberBody);
+    });
+  };
+
+  openAddMember = (groupId: string) => {
+    const token = ++addMemberOpenToken;
+    closeModal();
+    addMemberModal.style.display = "flex";
+    addMemberTitle.textContent = "Add members";
+    addMemberBody.innerHTML = "";
+    addMemberSearch = "";
+    const loading = document.createElement("div");
+    loading.className = "qws-fo-group-empty";
+    loading.textContent = "Loading friends...";
+    addMemberBody.appendChild(loading);
+
+    void (async () => {
+      const playerId = myId ?? await playerDatabaseUserId.get();
+      if (token !== addMemberOpenToken) return;
+      if (!playerId) {
+        addMemberBody.innerHTML = "";
+        const empty = document.createElement("div");
+        empty.className = "qws-fo-group-empty";
+        empty.textContent = "Player id unavailable.";
+        addMemberBody.appendChild(empty);
+        return;
+      }
+      addMemberPlayerId = String(playerId);
+      addMemberGroupId = groupId;
+
+      try {
+        const [friends, details] = await Promise.all([
+          fetchFriendsSummary(playerId),
+          fetchGroupDetails(groupId, playerId),
+        ]);
+        if (token !== addMemberOpenToken) return;
+
+        addMemberFriends = Array.isArray(friends) ? friends : [];
+        if (details) {
+          addMemberGroupName = resolveGroupName(details);
+          const members = resolveMembers(details);
+          addMemberMemberCount = members.length;
+          addMemberMembers = new Set(
+            members
+              .map((m) => String(m.playerId ?? "").trim())
+              .filter(Boolean),
+          );
+          addMemberGroupFull = addMemberMemberCount >= 12;
+        } else {
+          addMemberGroupName = groupId;
+          addMemberMemberCount = 0;
+          addMemberMembers = new Set<string>();
+          addMemberGroupFull = false;
+          await toastSimple("Groups", "Unable to load group info.", "info");
+        }
+        addMemberPending = new Set<string>();
+        renderAddMemberList();
+      } catch {
+        if (token !== addMemberOpenToken) return;
+        addMemberBody.innerHTML = "";
+        const empty = document.createElement("div");
+        empty.className = "qws-fo-group-empty";
+        empty.textContent = "Unable to load friends list.";
+        addMemberBody.appendChild(empty);
+      }
+    })();
+  };
+
   const renderDetails = (details: GroupDetails, playerId: string) => {
     modalBody.innerHTML = "";
     const ownerId = resolveOwnerId(details);
@@ -323,6 +718,9 @@ export function createGroupsTab(options?: {
 
     modalBody.append(hero);
 
+    if (ownerId) {
+      ownerByGroupId.set(String(currentGroupId ?? ""), String(ownerId));
+    }
     const isOwner = Boolean(ownerId && playerId && ownerId === playerId);
     if (isOwner && currentGroupId) {
       const manageSection = document.createElement("div");
@@ -524,6 +922,7 @@ export function createGroupsTab(options?: {
   };
 
   const openDetails = async (groupId: string) => {
+    closeAddMemberModal();
     const playerId = myId ?? await playerDatabaseUserId.get();
     if (!playerId) return;
     try {
@@ -559,6 +958,7 @@ export function createGroupsTab(options?: {
       } catch {}
       overlay.destroy();
       modal.remove();
+      addMemberModal.remove();
     },
   };
 }

@@ -235,7 +235,9 @@ function installInputKeyTrap(
 
   const inScope = (node: Element | null) => {
     if (!node) return false;
-    if (scope.contains(node) || (node as HTMLElement).closest?.(".qws-msg-panel")) return true;
+    if (scope.contains(node)) return true;
+    const panel = (node as HTMLElement).closest?.(".qws-msg-panel");
+    if (panel && panel === scope) return true;
     const picker = scope.querySelector("emoji-picker") as HTMLElement | null;
     if (!picker) return false;
     if (picker === node || picker.contains(node)) return true;
@@ -1539,6 +1541,15 @@ function ensureMessagesOverlayStyle(): void {
   .qws-msg-thread-action-btn:hover{
     background:rgba(59,130,246,0.18);
     border-color:rgba(59,130,246,0.4);
+  }
+  .qws-msg-thread-action-btn.qws-msg-thread-add-member{
+    background:rgba(34,197,94,0.22);
+    border-color:rgba(34,197,94,0.6);
+    color:#dcfce7;
+  }
+  .qws-msg-thread-action-btn.qws-msg-thread-add-member:hover{
+    background:rgba(34,197,94,0.32);
+    border-color:rgba(34,197,94,0.8);
   }
 .qws-msg-thread-body{
   flex:1;
@@ -3258,8 +3269,13 @@ export class MessagesOverlay {
       }
       if (this.selectedId === groupId) {
         this.renderThread({ preserveScroll: true, scrollToBottom: false });
+        // Notify callback that group details are loaded (for Add member button)
+        if (this.onThreadHeadRender) {
+          this.onThreadHeadRender(this.threadHeadEl, this.selectedId);
+        }
       }
-      this.renderFriendList({ preserveScroll: true });
+      // Update just the selected group row, no full list refresh
+      this.updateFriendRow(groupId);
     } catch {
       this.groupMembersLoaded.delete(groupId);
     }
@@ -4923,6 +4939,11 @@ export class MessagesOverlay {
 
   rerenderList(): void {
     this.renderFriendList({ preserveScroll: true });
+  }
+
+  getGroupOwner(groupId: string): string | null {
+    if (this.mode !== "group") return null;
+    return this.groupOwnerByGroup.get(groupId) ?? null;
   }
 
   private updateButtonBadge(): void {
