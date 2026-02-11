@@ -22,9 +22,7 @@ import { createAntiAfkController } from "./utils/antiafk";
 import { EditorService } from "./services/editor";
 
 import { initGameVersion } from "./utils/gameVersion";
-import { migrateLocalStorageToAries } from "./utils/localStorage";
-import type { AriesModApi } from "./utils/ariesModApi";
-import { installAriesModApi } from "./utils/ariesModApi";
+import { MGVersion } from "./utils/mgVersion";
 import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 
 import { warmupSpriteCache } from "./ui/spriteIconCache";
@@ -38,6 +36,7 @@ import "./sprite";
 
   installPageWebSocketHook();
   initGameVersion();
+  MGVersion.prefetch();
 
   try {warmupSpriteCache();} catch {}
     tos.init()

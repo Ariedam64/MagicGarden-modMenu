@@ -589,6 +589,28 @@ export interface ModPlayerSummary {
   lastEventAt: string | null;
 }
 
+// ---------- Leaderboards ----------
+
+export interface LeaderboardRow {
+  playerId: string | null;
+  playerName: string | null;
+  avatarUrl: string | null;
+  avatar: string[] | null;
+  coins: number | null;
+  eggsHatched: number | null;
+  lastEventAt: string | null;
+}
+
+export interface LeaderboardResponse {
+  rows: LeaderboardRow[];
+}
+
+export interface LeaderboardRankResponse {
+  rank: number;
+  total: number;
+  row: LeaderboardRow | null;
+}
+
 // sections possibles pour get-players-view
 export type PlayerViewSection =
   | "profile"
@@ -1097,6 +1119,54 @@ export async function fetchOutgoingRequestsWithViews(
   return fetchPlayersView(ids, { sections: ["profile"] });
 }
 
+// ---------- Leaderboards ----------
+
+export async function fetchLeaderboardCoins(
+  limit = 50,
+  offset = 0,
+): Promise<LeaderboardRow[]> {
+  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/coins", {
+    limit,
+    offset,
+  });
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+  return data.rows;
+}
+
+export async function fetchLeaderboardEggsHatched(
+  limit = 50,
+  offset = 0,
+): Promise<LeaderboardRow[]> {
+  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/eggs-hatched", {
+    limit,
+    offset,
+  });
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+  return data.rows;
+}
+
+export async function fetchLeaderboardCoinsRank(
+  playerId: string,
+): Promise<LeaderboardRankResponse | null> {
+  if (!playerId) return null;
+  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/coins/rank", {
+    playerId,
+  });
+  if (status !== 200 || !data) return null;
+  return data;
+}
+
+export async function fetchLeaderboardEggsHatchedRank(
+  playerId: string,
+): Promise<LeaderboardRankResponse | null> {
+  if (!playerId) return null;
+  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/eggs-hatched/rank", {
+    playerId,
+  });
+  if (status !== 200 || !data) return null;
+  return data;
+}
+
 
 export function openFriendRequestsStream(
   playerId: string,
@@ -1292,6 +1362,12 @@ export interface GroupSummary {
   ownerId: string;
   memberCount?: number;
   membersCount?: number;
+  previewMembers?: Array<{
+    playerId: string;
+    playerName?: string | null;
+    discordAvatarUrl?: string | null;
+    avatarUrl?: string | null;
+  }>;
   createdAt?: string;
   updatedAt?: string;
   lastMessageAt?: string | null;

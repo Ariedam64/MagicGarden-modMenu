@@ -51,6 +51,10 @@ function _isImgUrlSafe(url: string): boolean {
  */
 export function setImageSafe(img: HTMLImageElement, url: string | null | undefined): void {
   if (!url) return;
+  if (!isDiscordActivityContext()) {
+    img.src = url;
+    return;
+  }
   if (_isImgUrlSafe(url)) {
     img.src = url;
     return;

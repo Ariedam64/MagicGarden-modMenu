@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      2.99.60
+// @version      2.99.61
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -12970,7 +12970,7 @@
     spriteMatchCache.set(cacheKey, null);
     return null;
   }
-  function attachSpriteIcon2(target, categories, id, size, logTag, options) {
+  function attachSpriteIcon(target, categories, id, size, logTag, options) {
     const candidateIds = Array.isArray(id) ? id.map((value) => String(value ?? "").trim()).filter(Boolean) : [String(id ?? "").trim()].filter(Boolean);
     if (!candidateIds.length) return;
     const cachedMatch = findCachedSpriteMatch(categories, candidateIds);
@@ -13072,7 +13072,7 @@
   }
   function attachWeatherSpriteIcon(target, tag, size) {
     if (tag === "NoWeatherEffect") return;
-    attachSpriteIcon2(target, ["mutation"], tag, size, "weather");
+    attachSpriteIcon(target, ["mutation"], tag, size, "weather");
   }
   function warmupSpriteCache() {
     if (spriteWarmupQueued || spriteWarmupStarted || typeof window === "undefined") return;
@@ -13273,7 +13273,7 @@
       categories = ["tallplant", "tallPlant", "plant"];
     }
     if (candidates.length) {
-      attachSpriteIcon2(wrap, categories, candidates, size, "editor", {
+      attachSpriteIcon(wrap, categories, candidates, size, "editor", {
         onNoSpriteFound: applyFallback
       });
     } else {
@@ -20812,7 +20812,7 @@
         const species = String(entry.pet.petSpecies || "").trim();
         const mutations = Array.isArray(entry.mutations) ? entry.mutations.map((m) => String(m ?? "").trim()).filter(Boolean) : [];
         if (species) {
-          attachSpriteIcon2(
+          attachSpriteIcon(
             imgWrap,
             ["pet"],
             [species, entry.pet.name || ""],
@@ -23482,7 +23482,7 @@
       const iconized = originals.map((value) => value.replace(/icon$/i, "")).filter(Boolean).map((value) => `${value}Icon`);
       const candidates = Array.from(/* @__PURE__ */ new Set([...originals, ...iconized])).filter(Boolean);
       if (candidates.length) {
-        attachSpriteIcon2(wrap, categories, candidates, size, "alerts-overlay");
+        attachSpriteIcon(wrap, categories, candidates, size, "alerts-overlay");
       }
     }
     return wrap;
@@ -24336,37 +24336,143 @@
   var sleep2 = (ms) => new Promise((resolve2) => setTimeout(resolve2, ms));
 
   // src/utils/mgVersion.ts
-  var gameVersion = null;
-  function init(doc) {
-    if (gameVersion !== null) return;
+  var VERSION_PATH = "/platform/v1/version";
+  var VERSION_CACHE_TTL = 60 * 1e3;
+  var pendingPromise = null;
+  var cachedVersion = null;
+  var cachedAt = 0;
+  function nowMs() {
+    return Date.now();
+  }
+  function setCachedVersion(version) {
+    cachedVersion = version;
+    cachedAt = nowMs();
+  }
+  function getCachedVersion() {
+    if (!cachedVersion) return null;
+    if (nowMs() - cachedAt < VERSION_CACHE_TTL) return cachedVersion;
+    return null;
+  }
+  function readVersionFromGlobals() {
+    const root = globalThis.unsafeWindow || globalThis;
+    const gv = root?.gameVersion || root?.MG_gameVersion || root?.__MG_GAME_VERSION__;
+    if (!gv) return null;
+    try {
+      if (typeof gv.getVersion === "function") {
+        const v = gv.getVersion();
+        return v ? String(v) : null;
+      }
+      if (typeof gv.get === "function") {
+        const v = gv.get();
+        return v ? String(v) : null;
+      }
+      if (typeof gv === "string") return gv;
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  function readVersionFromDom(doc) {
     const d = doc ?? (typeof document !== "undefined" ? document : null);
-    if (!d) return;
+    if (!d) return null;
     const scripts = d.scripts;
     for (let i = 0; i < scripts.length; i++) {
       const s = scripts.item(i);
       const src = s?.src;
       if (!src) continue;
       const m = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
-      if (m && m[1]) {
-        gameVersion = m[1];
-        return;
-      }
+      if (m && m[1]) return m[1];
+    }
+    const links = Array.from(d.querySelectorAll("link[href]"));
+    for (const link of links) {
+      const href = link.href;
+      if (!href) continue;
+      const m = href.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
+      if (m && m[1]) return m[1];
+    }
+    return null;
+  }
+  function init(doc) {
+    const cached = getCachedVersion();
+    if (cached) return;
+    const fromGlobals = readVersionFromGlobals();
+    if (fromGlobals) {
+      setCachedVersion(fromGlobals);
+      return;
+    }
+    const fromDom = readVersionFromDom(doc);
+    if (fromDom) {
+      setCachedVersion(fromDom);
     }
   }
   function get() {
     init(document);
-    return gameVersion;
+    return getCachedVersion() ?? cachedVersion ?? null;
+  }
+  async function fetchGameVersion(options) {
+    const cached = getCachedVersion();
+    if (cached) return cached;
+    if (pendingPromise) return pendingPromise;
+    const origin = options?.origin || (typeof location !== "undefined" && location.origin ? location.origin : ORIGIN);
+    pendingPromise = (async () => {
+      try {
+        const url2 = new URL(VERSION_PATH, origin).toString();
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timeoutId = controller ? setTimeout(() => controller.abort(), 8e3) : null;
+        const res = await fetch(url2, {
+          headers: { "User-Agent": "MG-API/1.0" },
+          signal: controller?.signal
+        });
+        if (timeoutId) clearTimeout(timeoutId);
+        if (!res.ok) {
+          throw new Error(`Version fetch failed (${res.status})`);
+        }
+        const data = await res.json();
+        const version = typeof data?.version === "string" ? data.version.trim() : "";
+        if (!version) {
+          throw new Error("Version not found in response");
+        }
+        setCachedVersion(version);
+        return version;
+      } finally {
+        pendingPromise = null;
+      }
+    })();
+    return pendingPromise;
   }
   async function wait(timeoutMs = 15e3) {
-    const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
-    while ((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0 < timeoutMs) {
+    init(document);
+    const cached = getCachedVersion();
+    if (cached) return cached;
+    const startedAt = nowMs();
+    try {
+      return await fetchGameVersion();
+    } catch {
+    }
+    while (nowMs() - startedAt < timeoutMs) {
       init(document);
-      if (gameVersion) return gameVersion;
+      const v = getCachedVersion() ?? cachedVersion;
+      if (v) return v;
       await sleep2(50);
     }
     throw new Error("MGVersion timeout (gameVersion not found)");
   }
-  var MGVersion = { init, get, wait };
+  function invalidateVersionCache() {
+    cachedVersion = null;
+    cachedAt = 0;
+  }
+  function prefetch() {
+    void fetchGameVersion().catch(() => {
+    });
+  }
+  var MGVersion = {
+    init,
+    get,
+    wait,
+    fetchGameVersion,
+    invalidateVersionCache,
+    prefetch
+  };
 
   // src/utils/mgAssets.ts
   var _baseP = null;
@@ -24472,6 +24578,10 @@
   }
   function setImageSafe(img, url2) {
     if (!url2) return;
+    if (!isDiscordActivityContext()) {
+      img.src = url2;
+      return;
+    }
     if (_isImgUrlSafe(url2)) {
       img.src = url2;
       return;
@@ -25222,6 +25332,38 @@
     };
     cachedOutgoingRequests = result.outgoing;
     return result;
+  }
+  async function fetchLeaderboardCoins(limit = 50, offset = 0) {
+    const { status, data } = await httpGet("leaderboard/coins", {
+      limit,
+      offset
+    });
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+    return data.rows;
+  }
+  async function fetchLeaderboardEggsHatched(limit = 50, offset = 0) {
+    const { status, data } = await httpGet("leaderboard/eggs-hatched", {
+      limit,
+      offset
+    });
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+    return data.rows;
+  }
+  async function fetchLeaderboardCoinsRank(playerId2) {
+    if (!playerId2) return null;
+    const { status, data } = await httpGet("leaderboard/coins/rank", {
+      playerId: playerId2
+    });
+    if (status !== 200 || !data) return null;
+    return data;
+  }
+  async function fetchLeaderboardEggsHatchedRank(playerId2) {
+    if (!playerId2) return null;
+    const { status, data } = await httpGet("leaderboard/eggs-hatched/rank", {
+      playerId: playerId2
+    });
+    if (status !== 200 || !data) return null;
+    return data;
   }
   function openFriendRequestsStream(playerId2, handlers = {}) {
     if (!playerId2) return null;
@@ -27566,6 +27708,7 @@
   var LOAD_OLDER_THRESHOLD = 80;
   var FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
   var FRIEND_REMOVED_EVENT = "qws-friend-removed";
+  var GROUPS_REFRESH_EVENT = "qws-groups-refresh";
   var STYLE_ID = "qws-messages-overlay-css";
   var style2 = (el2, s) => Object.assign(el2.style, s);
   var setProps2 = (el2, props) => {
@@ -28481,7 +28624,7 @@
         ...candidates,
         getChatItemLabel(item)
       );
-      attachSpriteIcon2(iconWrap, categories, expandedCandidates, 34, "messages-item", {
+      attachSpriteIcon(iconWrap, categories, expandedCandidates, 34, "messages-item", {
         mutations
       });
     }
@@ -28590,26 +28733,52 @@
 }
 .qws-msg-list-create{
   display:flex;
+  flex-direction:column;
   gap:6px;
-  align-items:center;
-  padding:6px;
-  border-radius:10px;
+  padding:8px;
+  border-radius:12px;
   border:1px solid rgba(255,255,255,0.08);
-  background:rgba(15,23,42,0.55);
+  background:linear-gradient(180deg, rgba(15,23,42,0.65) 0%, rgba(10,16,28,0.65) 100%);
+}
+.qws-msg-list-create-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-msg-list-create-field{
+  flex:1;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 8px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(8,12,22,0.6);
+  transition:border-color 120ms ease, box-shadow 120ms ease;
+}
+.qws-msg-list-create-field:focus-within{
+  border-color:rgba(122,162,255,.5);
+  box-shadow:0 0 0 1px rgba(122,162,255,.25);
 }
 .qws-msg-list-input{
   flex:1;
   min-width:0;
-  border-radius:8px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.7);
+  border:none;
+  background:transparent;
   color:#f8fafc;
-  padding:6px 8px;
+  padding:4px 0;
   font-size:12px;
+}
+.qws-msg-list-input:focus{ outline:none; }
+.qws-msg-list-create-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
 }
 .qws-msg-list-action{
   border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.6);
+  background:rgba(15,23,42,0.5);
   color:#f8fafc;
   border-radius:8px;
   padding:5px 8px;
@@ -28621,6 +28790,29 @@
 .qws-msg-list-action:hover{
   background:rgba(59,130,246,0.18);
   border-color:rgba(59,130,246,0.4);
+}
+.qws-msg-list-action-primary{
+  background:rgba(122,162,255,0.9);
+  color:#0b1017;
+  border-color:rgba(122,162,255,0.9);
+}
+.qws-msg-list-action-primary:hover{
+  background:rgba(142,176,255,0.95);
+  border-color:rgba(142,176,255,0.95);
+}
+.qws-msg-list-action-ghost{
+  background:transparent;
+  border-color:transparent;
+  color:rgba(226,232,240,0.8);
+}
+.qws-msg-list-action-ghost:hover{
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(255,255,255,0.12);
+}
+.qws-msg-list-create-hint{
+  font-size:10px;
+  color:rgba(226,232,240,0.65);
+  padding-left:2px;
 }
 .qws-msg-thread{
   display:flex;
@@ -28820,6 +29012,31 @@
   background:rgba(255,255,255,0.02);
   cursor:pointer;
 }
+.qws-msg-list.qws-msg-list-group .qws-msg-friend{
+  position:relative;
+  padding-right:42px;
+  padding-top:12px;
+  padding-bottom:14px;
+  min-height:56px;
+}
+.qws-msg-group-count{
+  position:absolute;
+  top:6px;
+  right:8px;
+  min-width:32px;
+  height:18px;
+  padding:0 6px;
+  border-radius:999px;
+  background:rgba(122,162,255,.16);
+  border:1px solid rgba(122,162,255,.35);
+  color:#d6e5ff;
+  font-size:10px;
+  font-weight:700;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  letter-spacing:0.02em;
+}
 .qws-msg-friend.active{
   border-color:#9db7ff66;
   background:rgba(122,162,255,.16);
@@ -28844,6 +29061,34 @@
   font-size:12px;
   font-weight:600;
 }
+.qws-msg-group-avatars-row{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-top:4px;
+  padding-bottom:2px;
+  flex-wrap:nowrap;
+}
+.qws-msg-group-avatars-row .qws-msg-avatar{
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,0.28);
+  background:rgba(10,16,28,0.7);
+  box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  font-size:10px;
+  overflow:hidden;
+  flex:0 0 22px;
+  line-height:0;
+  aspect-ratio:1 / 1;
+}
+.qws-msg-group-avatars-row .qws-msg-avatar img{
+  border-radius:50%;
+  object-fit:cover;
+}
+.qws-msg-group-avatar-anon{
+  color:#cbd5f5;
+}
 .qws-msg-status-dot{
   width:8px;
   height:8px;
@@ -28866,6 +29111,10 @@
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+}
+.qws-msg-list.qws-msg-list-group .qws-msg-friend-name{
+  font-size:14px;
+  letter-spacing:0.01em;
 }
 .qws-msg-friend-sub{
   font-size:11px;
@@ -29255,21 +29504,16 @@
   }
   function formatStatus(friend, mode = "dm") {
     if (!friend) return "";
-    if (mode !== "group") {
-      if (friend.isOnline) return "Online";
-      const seen2 = formatLastSeen2(friend.lastEventAt);
-      return seen2 ? `Offline \xB7 ${seen2}` : "Offline";
-    }
-    const isGroup = Boolean(friend.isGroup);
-    const rawCount = friend.memberCount ?? friend.member_count ?? friend.membersCount ?? friend.members_count ?? null;
-    const count = Number(rawCount);
-    if (Number.isFinite(count)) {
-      return `${Math.max(0, Math.floor(count))}/12 members`;
-    }
-    if (isGroup) return "Group";
+    if (mode === "group") return "";
     if (friend.isOnline) return "Online";
     const seen = formatLastSeen2(friend.lastEventAt);
     return seen ? `Offline \xB7 ${seen}` : "Offline";
+  }
+  function getGroupMemberCount(friend) {
+    if (!friend) return null;
+    const rawCount = friend.memberCount ?? friend.member_count ?? friend.membersCount ?? friend.members_count ?? null;
+    const count = Number(rawCount);
+    return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null;
   }
   function parseMessageTime(msg) {
     const raw = msg.createdAt || msg.deliveredAt || msg.readAt || "";
@@ -29544,6 +29788,8 @@
       __publicField(this, "rowById", /* @__PURE__ */ new Map());
       __publicField(this, "groupMemberCache", /* @__PURE__ */ new Map());
       __publicField(this, "groupMembersLoaded", /* @__PURE__ */ new Set());
+      __publicField(this, "groupMembersByGroup", /* @__PURE__ */ new Map());
+      __publicField(this, "groupOwnerByGroup", /* @__PURE__ */ new Map());
       __publicField(this, "groupReadAt", /* @__PURE__ */ new Map());
       __publicField(this, "groupReadStorageKey", null);
       __publicField(this, "lastNotificationSoundAt", 0);
@@ -29556,6 +29802,10 @@
       __publicField(this, "myName", null);
       __publicField(this, "cosmeticBaseUrl", null);
       __publicField(this, "cosmeticBasePromise", null);
+      __publicField(this, "cosmeticBaseStartedAt", null);
+      __publicField(this, "cosmeticDebug", false);
+      __publicField(this, "threadFingerprintById", /* @__PURE__ */ new Map());
+      __publicField(this, "lastRenderedThreadKey", null);
       __publicField(this, "handleFriendsRefresh", () => {
         if (!this.myId) return;
         void this.loadFriends(true);
@@ -29587,6 +29837,7 @@
       this.btn = this.createButton();
       this.badge = this.createBadge();
       this.panel = this.createPanel();
+      this.ensureCosmeticBase();
       this.installScrollGuards(this.listEl);
       this.installScrollGuards(this.threadBodyEl);
       this.threadBodyEl.addEventListener(
@@ -29718,6 +29969,8 @@
       this.myId = normalized;
       this.groupMemberCache.clear();
       this.groupMembersLoaded.clear();
+      this.groupMembersByGroup.clear();
+      this.groupOwnerByGroup.clear();
       this.groupReadAt.clear();
       this.groupReadStorageKey = null;
       this.groupIds.clear();
@@ -29755,15 +30008,61 @@
       } catch {
       }
     }
+    nowMs() {
+      if (typeof performance !== "undefined" && typeof performance.now === "function") {
+        return performance.now();
+      }
+      return Date.now();
+    }
+    logCosmetic(message, detail) {
+      if (!this.cosmeticDebug) return;
+      if (detail === void 0) {
+        console.debug(`[MessagesOverlay][cosmetic] ${message}`);
+      } else {
+        console.debug(`[MessagesOverlay][cosmetic] ${message}`, detail);
+      }
+    }
+    computeThreadFingerprint(conv, options) {
+      const count = conv.messages.length;
+      const label2 = options?.label ?? "";
+      const mode = options?.mode ?? "dm";
+      if (!count) {
+        return [
+          "empty",
+          mode,
+          label2,
+          conv.loading ? 1 : 0,
+          conv.loadingOlder ? 1 : 0
+        ].join("|");
+      }
+      const first = conv.messages[0];
+      const last = conv.messages[count - 1];
+      const lastMeta = last && last.senderId === this.myId ? `${last.readAt ?? ""}|${last.deliveredAt ?? ""}` : "";
+      return [
+        mode,
+        label2,
+        count,
+        first?.id ?? "",
+        last?.id ?? "",
+        lastMeta,
+        conv.loading ? 1 : 0,
+        conv.loadingOlder ? 1 : 0
+      ].join("|");
+    }
     ensureCosmeticBase() {
       if (this.cosmeticBaseUrl || this.cosmeticBasePromise) return;
+      this.cosmeticBaseStartedAt = this.nowMs();
+      this.logCosmetic("Requesting cosmetic base URL");
       this.cosmeticBasePromise = MGAssets.base().then((base2) => {
         this.cosmeticBaseUrl = base2;
         this.cosmeticBasePromise = null;
+        const elapsed = this.cosmeticBaseStartedAt ? Math.round(this.nowMs() - this.cosmeticBaseStartedAt) : null;
+        this.logCosmetic("Cosmetic base resolved", { base: base2, ms: elapsed });
         this.populateCosmeticImages();
         return base2;
-      }).catch(() => {
+      }).catch((error) => {
         this.cosmeticBasePromise = null;
+        this.logCosmetic("Cosmetic base failed", error);
       });
     }
     buildCosmeticUrl(name) {
@@ -29776,11 +30075,16 @@
     populateCosmeticImages() {
       if (!this.cosmeticBaseUrl) return;
       const imgs = this.panel.querySelectorAll("img[data-cosmetic]");
+      this.logCosmetic("Populating queued cosmetic images", { count: imgs.length });
       imgs.forEach((img) => {
         const name = img.dataset.cosmetic;
         if (!name) return;
         const url2 = this.buildCosmeticUrl(name);
-        if (!url2) return;
+        if (!url2) {
+          this.logCosmetic("Missing cosmetic URL", { name });
+          return;
+        }
+        this.logCosmetic("Setting cosmetic image", { name, url: url2 });
         setImageSafe(img, url2);
         img.removeAttribute("data-cosmetic");
       });
@@ -29797,10 +30101,29 @@
           img.decoding = "async";
           img.loading = "eager";
           img.style.zIndex = String(index + 1);
+          if (this.cosmeticDebug) {
+            const startedAt = this.nowMs();
+            const labelValue = label2 ?? "unknown";
+            img.addEventListener("load", () => {
+              const elapsed = Math.round(this.nowMs() - startedAt);
+              this.logCosmetic("Cosmetic layer loaded", { name: entry, label: labelValue, ms: elapsed });
+            }, { once: true });
+            img.addEventListener("error", () => {
+              const elapsed = Math.round(this.nowMs() - startedAt);
+              this.logCosmetic("Cosmetic layer failed", {
+                name: entry,
+                label: labelValue,
+                ms: elapsed,
+                src: img.currentSrc || img.src || null
+              });
+            }, { once: true });
+          }
           const url2 = this.buildCosmeticUrl(entry);
           if (url2) {
+            this.logCosmetic("Cosmetic layer set immediately", { name: entry, url: url2 });
             setImageSafe(img, url2);
           } else {
+            this.logCosmetic("Cosmetic layer deferred (base not ready)", { name: entry });
             img.dataset.cosmetic = entry;
           }
           wrap.appendChild(img);
@@ -29820,6 +30143,57 @@
       wrap.textContent = fallbackLetter;
       return wrap;
     }
+    buildGroupAvatarRow(friend, groupId) {
+      const row = document.createElement("div");
+      row.className = "qws-msg-group-avatars-row";
+      this.populateGroupAvatarRow(row, friend, groupId);
+      return row;
+    }
+    populateGroupAvatarRow(row, friend, groupId) {
+      const members = this.groupMembersByGroup.get(groupId) ?? [];
+      const ownerIdRaw = this.groupOwnerByGroup.get(groupId) ?? friend?.ownerId ?? friend?.owner_id ?? null;
+      const ownerId = ownerIdRaw != null ? String(ownerIdRaw) : null;
+      let ordered = members;
+      if (ownerId) {
+        const ownerIndex = members.findIndex((entry) => entry.id === ownerId);
+        if (ownerIndex > 0) {
+          const ownerEntry = members[ownerIndex];
+          ordered = [ownerEntry, ...members.slice(0, ownerIndex), ...members.slice(ownerIndex + 1)];
+        }
+      }
+      const unique = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const entry of ordered) {
+        if (!entry || !entry.id || seen.has(entry.id)) continue;
+        seen.add(entry.id);
+        unique.push(entry);
+        if (unique.length >= 6) break;
+      }
+      const avatarKey = unique.length ? unique.map((entry) => {
+        const avatarList = Array.isArray(entry.avatar) ? entry.avatar.join(",") : "";
+        return `${entry.id}:${entry.avatarUrl ?? ""}:${avatarList}:${entry.name ?? ""}`;
+      }).join("|") : "empty";
+      if (row.dataset.avatarKey === avatarKey) {
+        return;
+      }
+      row.dataset.avatarKey = avatarKey;
+      row.innerHTML = "";
+      if (unique.length === 0) {
+        const anon = document.createElement("div");
+        anon.className = "qws-msg-avatar qws-msg-group-avatar-anon";
+        anon.textContent = "?";
+        row.appendChild(anon);
+        return;
+      }
+      for (const entry of unique) {
+        const avatarEl = this.buildAvatarElement(
+          null,
+          entry.avatarUrl ?? null,
+          entry.name ?? ""
+        );
+        row.appendChild(avatarEl);
+      }
+    }
     createMessageAvatar(msg, outgoing) {
       if (outgoing) {
         return this.buildAvatarElement(this.myAvatar, this.myAvatarUrl, this.myName ?? "You");
@@ -29827,26 +30201,24 @@
       if (this.mode === "group") {
         const raw = msg;
         const avatarListRaw = raw.senderAvatar ?? raw.sender_avatar ?? raw.avatar ?? raw.avatar_list ?? raw.avatarList ?? null;
-        const avatarUrlRaw = raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
+        const avatarUrlRaw = raw.discordAvatarUrl ?? raw.discord_avatar_url ?? raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
         const senderNameRaw = raw.senderName ?? raw.sender_name ?? raw.playerName ?? raw.player_name ?? raw.name ?? null;
         const avatarList = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : null;
         const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : null;
         const senderName = senderNameRaw ? String(senderNameRaw) : null;
-        if (avatarList || avatarUrl || senderName) {
-          return this.buildAvatarElement(
-            avatarList,
-            avatarUrl,
-            senderName ?? msg.senderId
-          );
-        }
         const cached = this.groupMemberCache.get(msg.senderId);
-        if (cached) {
+        const cachedList = cached?.avatar && cached.avatar.length ? cached.avatar : null;
+        const finalAvatarList = avatarList && avatarList.length ? avatarList : cachedList;
+        const finalAvatarUrl = avatarUrl ?? cached?.avatarUrl ?? null;
+        const finalName = senderName ?? cached?.name ?? null;
+        if (finalAvatarList || finalAvatarUrl || finalName) {
           return this.buildAvatarElement(
-            cached.avatar ?? null,
-            cached.avatarUrl ?? null,
-            cached.name ?? msg.senderId
+            finalAvatarList,
+            finalAvatarUrl,
+            finalName ?? msg.senderId
           );
         }
+        return this.buildAvatarElement(null, null, senderName ?? msg.senderId);
       }
       const friend = this.getFriendById(msg.senderId) ?? this.getFriendById(this.selectedId ?? "");
       return this.buildAvatarElement(
@@ -29860,7 +30232,7 @@
       const raw = msg;
       const senderId = msg.senderId ? String(msg.senderId) : "";
       if (!senderId) return;
-      const avatarUrlRaw = raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
+      const avatarUrlRaw = raw.discordAvatarUrl ?? raw.discord_avatar_url ?? raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
       const avatarListRaw = raw.senderAvatar ?? raw.sender_avatar ?? raw.avatar ?? raw.avatar_list ?? raw.avatarList ?? null;
       const senderNameRaw = raw.senderName ?? raw.sender_name ?? raw.playerName ?? raw.player_name ?? raw.name ?? null;
       const avatar = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : typeof avatarListRaw === "string" && avatarListRaw.trim() ? [avatarListRaw.trim()] : void 0;
@@ -29868,6 +30240,20 @@
       const name = senderNameRaw ? String(senderNameRaw) : void 0;
       if (!avatar && !avatarUrl && !name) return;
       this.groupMemberCache.set(senderId, { avatar, avatarUrl, name });
+      const groupId = String(msg.conversationId ?? msg.recipientId ?? "").trim();
+      if (groupId) {
+        const list = this.groupMembersByGroup.get(groupId) ?? [];
+        const idx = list.findIndex((entry) => entry.id === senderId);
+        const nextEntry = {
+          id: senderId,
+          avatar: avatar ?? list[idx]?.avatar,
+          avatarUrl: avatarUrl ?? list[idx]?.avatarUrl,
+          name: name ?? list[idx]?.name
+        };
+        if (idx >= 0) list[idx] = nextEntry;
+        else list.push(nextEntry);
+        this.groupMembersByGroup.set(groupId, list);
+      }
     }
     async ensureGroupMembers(groupId) {
       if (this.mode !== "group") return;
@@ -29880,18 +30266,23 @@
           this.groupMembersLoaded.delete(groupId);
           return;
         }
+        const groupMeta = details.group ?? details;
+        const ownerIdRaw = groupMeta?.ownerId ?? groupMeta?.owner_id ?? null;
+        if (ownerIdRaw) {
+          this.groupOwnerByGroup.set(groupId, String(ownerIdRaw));
+        }
         const membersRaw = details.members ?? details.groupMembers ?? details.membersList ?? [];
         if (!Array.isArray(membersRaw)) {
           this.groupMembersLoaded.delete(groupId);
           return;
         }
-        let cachedAny = false;
+        const membersLite = [];
         for (const member of membersRaw) {
           if (!member) continue;
           const idRaw = member.playerId ?? member.player_id ?? member.id ?? "";
           const id = String(idRaw ?? "").trim();
           if (!id) continue;
-          const avatarUrlRaw = member.avatarUrl ?? member.avatar_url ?? member.discordAvatarUrl ?? member.discord_avatar_url ?? null;
+          const avatarUrlRaw = member.discordAvatarUrl ?? member.discord_avatar_url ?? member.avatarUrl ?? member.avatar_url ?? member.discordAvatarUrl ?? member.discord_avatar_url ?? null;
           const avatarListRaw = member.avatar ?? member.avatar_list ?? member.avatarList ?? member.cosmeticAvatar ?? member.cosmetic_avatar ?? null;
           const nameRaw = member.name ?? member.playerName ?? member.player_name ?? null;
           const avatar = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : typeof avatarListRaw === "string" && avatarListRaw.trim() ? [avatarListRaw.trim()] : void 0;
@@ -29903,11 +30294,20 @@
             avatarUrl: avatarUrl ?? prev?.avatarUrl,
             name: name ?? prev?.name
           });
-          cachedAny = true;
+          membersLite.push({
+            id,
+            avatar: avatar ?? prev?.avatar,
+            avatarUrl: avatarUrl ?? prev?.avatarUrl,
+            name: name ?? prev?.name
+          });
         }
-        if (cachedAny && this.selectedId === groupId) {
+        if (membersLite.length) {
+          this.groupMembersByGroup.set(groupId, membersLite);
+        }
+        if (this.selectedId === groupId) {
           this.renderThread({ preserveScroll: true, scrollToBottom: false });
         }
+        this.renderFriendList({ preserveScroll: true });
       } catch {
         this.groupMembersLoaded.delete(groupId);
       }
@@ -30022,7 +30422,34 @@
           },
           onMessage: (payload) => this.handleIncomingGroupMessage(payload),
           onMemberAdded: () => void this.loadGroups(true),
-          onMemberRemoved: () => void this.loadGroups(true),
+          onMemberRemoved: (payload) => {
+            const raw = payload;
+            const gidRaw = raw?.groupId ?? raw?.group_id ?? raw?.id ?? raw?.group?.id ?? raw?.group?.groupId ?? raw?.group?.group_id ?? "";
+            const memberRaw = raw?.memberId ?? raw?.member_id ?? raw?.removedId ?? raw?.removed_id ?? raw?.playerId ?? raw?.player_id ?? raw?.targetId ?? raw?.target_id ?? "";
+            const gid = normalizeId(gidRaw);
+            const memberId = normalizeId(memberRaw);
+            if (this.myId && memberId && memberId === normalizeId(this.myId)) {
+              if (gid) {
+                this.convs.delete(gid);
+                this.convByConversationId.forEach((otherId, convId) => {
+                  if (normalizeId(otherId) === gid) this.convByConversationId.delete(convId);
+                });
+                this.groupReadAt.delete(gid);
+              }
+              if (!gid || this.selectedId === gid) {
+                this.selectedId = null;
+                this.renderThread();
+              }
+              this.saveGroupReadState();
+              this.updateButtonBadge();
+              this.renderFriendList({ preserveScroll: true });
+              try {
+                window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT));
+              } catch {
+              }
+            }
+            void this.loadGroups(true);
+          },
           onUpdated: () => void this.loadGroups(true),
           onDeleted: (payload) => {
             const gidRaw = payload?.groupId ?? payload?.group_id ?? "";
@@ -30036,6 +30463,10 @@
                 this.selectedId = null;
                 this.renderThread();
               }
+            }
+            try {
+              window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT));
+            } catch {
             }
             void this.loadGroups(true);
             this.renderFriendList({ preserveScroll: true });
@@ -30293,7 +30724,35 @@
       if (!this.myId) return;
       try {
         const data = await fetchGroups(this.myId);
-        const mapped = Array.isArray(data) ? data.map(mapGroupToFriendSummary).filter((g) => !!g) : [];
+        const rawGroups = Array.isArray(data) ? data : [];
+        for (const group of rawGroups) {
+          const idRaw = group.id ?? group.groupId ?? group.group_id ?? "";
+          const id = normalizeId(idRaw);
+          if (!id) continue;
+          const ownerIdRaw = group.ownerId ?? group.owner_id ?? null;
+          if (ownerIdRaw) {
+            this.groupOwnerByGroup.set(id, String(ownerIdRaw));
+          }
+          const previewRaw = group.previewMembers ?? group.preview_members ?? null;
+          if (Array.isArray(previewRaw)) {
+            const membersLite = [];
+            for (const entry of previewRaw) {
+              if (!entry) continue;
+              const memberIdRaw = entry.playerId ?? entry.player_id ?? entry.id ?? "";
+              const memberId = String(memberIdRaw ?? "").trim();
+              if (!memberId) continue;
+              const nameRaw = entry.playerName ?? entry.player_name ?? entry.name ?? null;
+              const avatarUrlRaw = entry.discordAvatarUrl ?? entry.discord_avatar_url ?? entry.avatarUrl ?? entry.avatar_url ?? null;
+              membersLite.push({
+                id: memberId,
+                avatarUrl: avatarUrlRaw ? String(avatarUrlRaw) : void 0,
+                name: nameRaw ? String(nameRaw) : void 0
+              });
+            }
+            this.groupMembersByGroup.set(id, membersLite);
+          }
+        }
+        const mapped = rawGroups.map(mapGroupToFriendSummary).filter((g) => !!g);
         this.applyFriends(mapped, { forceRender: true });
         this.groupIdsLoaded = true;
         const nextIds = new Set(mapped.map((g) => normalizeId(g.playerId)));
@@ -30317,9 +30776,22 @@
             removedAny = true;
           }
         }
+        for (const key2 of Array.from(this.groupMembersByGroup.keys())) {
+          if (!nextIds.has(key2)) {
+            this.groupMembersByGroup.delete(key2);
+            removedAny = true;
+          }
+        }
+        for (const key2 of Array.from(this.groupOwnerByGroup.keys())) {
+          if (!nextIds.has(key2)) {
+            this.groupOwnerByGroup.delete(key2);
+            removedAny = true;
+          }
+        }
         if (removedAny) {
           if (this.selectedId && !nextIds.has(this.selectedId)) {
             this.selectedId = null;
+            this.renderThread();
           }
           this.saveGroupReadState();
           this.updateButtonBadge();
@@ -30615,48 +31087,68 @@
         row.className = "qws-msg-friend";
         if (entry.unread > 0) row.classList.add("unread");
         if (this.selectedId === entry.id) row.classList.add("active");
-        const avatarWrap = document.createElement("div");
-        avatarWrap.className = "qws-msg-friend-avatar-wrap";
-        const avatar = document.createElement("div");
-        avatar.className = "qws-msg-friend-avatar";
-        if (entry.friend?.avatarUrl) {
-          const img = document.createElement("img");
-          img.className = "qws-msg-avatar-photo";
-          img.decoding = "async";
-          img.loading = "lazy";
-          setImageSafe(img, entry.friend.avatarUrl);
-          img.alt = formatFriendName(entry.friend, entry.id);
-          img.width = 32;
-          img.height = 32;
-          avatar.appendChild(img);
-        } else {
-          const fallback = document.createElement("span");
-          fallback.textContent = formatFriendName(entry.friend, entry.id).charAt(0).toUpperCase();
-          avatar.appendChild(fallback);
+        let avatarWrap = null;
+        if (this.mode !== "group") {
+          avatarWrap = document.createElement("div");
+          avatarWrap.className = "qws-msg-friend-avatar-wrap";
+          const avatar = document.createElement("div");
+          avatar.className = "qws-msg-friend-avatar";
+          if (entry.friend?.avatarUrl) {
+            const img = document.createElement("img");
+            img.className = "qws-msg-avatar-photo";
+            img.decoding = "async";
+            img.loading = "lazy";
+            setImageSafe(img, entry.friend.avatarUrl);
+            img.alt = formatFriendName(entry.friend, entry.id);
+            img.width = 32;
+            img.height = 32;
+            avatar.appendChild(img);
+          } else {
+            const fallback = document.createElement("span");
+            fallback.textContent = formatFriendName(entry.friend, entry.id).charAt(0).toUpperCase();
+            avatar.appendChild(fallback);
+          }
+          avatarWrap.appendChild(avatar);
         }
-        avatarWrap.appendChild(avatar);
         const meta = document.createElement("div");
         meta.className = "qws-msg-friend-meta";
         const name = document.createElement("div");
         name.className = "qws-msg-friend-name";
         name.textContent = formatFriendName(entry.friend, entry.id);
-        const sub = document.createElement("div");
-        sub.className = "qws-msg-friend-sub";
-        sub.textContent = formatStatus(entry.friend, this.mode);
+        const sub = this.mode === "group" ? this.buildGroupAvatarRow(entry.friend, entry.id) : (() => {
+          const el2 = document.createElement("div");
+          el2.className = "qws-msg-friend-sub";
+          el2.textContent = formatStatus(entry.friend, this.mode);
+          return el2;
+        })();
         meta.append(name, sub);
         let dot = null;
-        if (entry.friend?.isOnline) {
+        if (entry.friend?.isOnline && this.mode !== "group" && avatarWrap) {
           dot = document.createElement("span");
           dot.className = "qws-msg-status-dot";
           avatarWrap.appendChild(dot);
         }
-        row.append(avatarWrap, meta);
+        if (avatarWrap) {
+          row.append(avatarWrap, meta);
+        } else {
+          row.append(meta);
+        }
         let badge = null;
         if (entry.unread > 0) {
           badge = document.createElement("span");
           badge.className = "qws-msg-unread-badge";
           badge.textContent = String(entry.unread);
           row.appendChild(badge);
+        }
+        let groupCountBadge = null;
+        if (this.mode === "group") {
+          const count = getGroupMemberCount(entry.friend);
+          if (count !== null) {
+            groupCountBadge = document.createElement("span");
+            groupCountBadge.className = "qws-msg-group-count";
+            groupCountBadge.textContent = `${count}/12`;
+            row.appendChild(groupCountBadge);
+          }
         }
         row.addEventListener("click", () => {
           void this.selectConversation(entry.id);
@@ -30666,7 +31158,8 @@
           badge,
           avatarWrap,
           statusDot: dot,
-          sub
+          sub,
+          groupCountBadge
         });
         this.listEl.appendChild(row);
       }
@@ -30678,10 +31171,11 @@
       const preserveScroll = options?.preserveScroll ?? false;
       const prevScrollHeight = preserveScroll ? this.threadBodyEl.scrollHeight : 0;
       const prevScrollTop = preserveScroll ? this.threadBodyEl.scrollTop : 0;
-      this.threadHeadEl.innerHTML = "";
-      this.threadBodyEl.innerHTML = "";
-      this.statusEl.textContent = "";
       if (!this.selectedId) {
+        this.threadHeadEl.innerHTML = "";
+        this.threadBodyEl.innerHTML = "";
+        this.statusEl.textContent = "";
+        this.lastRenderedThreadKey = null;
         const empty = document.createElement("div");
         empty.className = "qws-msg-empty";
         empty.textContent = this.mode === "group" ? "Select a group to start chatting." : "Select a friend to start chatting.";
@@ -30690,15 +31184,27 @@
         this.onThreadHeadRender?.(this.threadHeadEl, null);
         return;
       }
+      const threadKey = `${this.mode}:${this.selectedId}`;
+      const conv = this.ensureConversation(this.selectedId);
       const friend = this.getFriendById(this.selectedId);
+      const label2 = formatFriendName(friend, this.selectedId);
+      const fingerprint = this.computeThreadFingerprint(conv, { label: label2, mode: this.mode });
+      const prevFingerprint = this.threadFingerprintById.get(threadKey);
+      if (prevFingerprint === fingerprint && !conv.loading && !conv.loadingOlder && this.lastRenderedThreadKey === threadKey) {
+        return;
+      }
+      this.threadFingerprintById.set(threadKey, fingerprint);
+      this.lastRenderedThreadKey = threadKey;
+      this.threadHeadEl.innerHTML = "";
+      this.threadBodyEl.innerHTML = "";
+      this.statusEl.textContent = "";
       const title = document.createElement("div");
-      title.textContent = formatFriendName(friend, this.selectedId);
+      title.textContent = label2;
       title.style.fontWeight = "700";
       this.threadHeadEl.appendChild(title);
       if (this.onThreadHeadRender) {
         this.onThreadHeadRender(this.threadHeadEl, this.selectedId);
       }
-      const conv = this.ensureConversation(this.selectedId);
       if (conv.loading && !conv.messages.length) {
         const loading = document.createElement("div");
         loading.className = "qws-msg-loading";
@@ -31256,7 +31762,26 @@
       const friend = this.getFriendById(id);
       const conv = this.convs.get(id);
       const unread = conv?.unread ?? 0;
-      state3.sub.textContent = formatStatus(friend, this.mode);
+      if (this.mode === "group") {
+        this.populateGroupAvatarRow(state3.sub, friend, id);
+        const count = getGroupMemberCount(friend);
+        if (count !== null) {
+          if (!state3.groupCountBadge) {
+            const badge = document.createElement("span");
+            badge.className = "qws-msg-group-count";
+            badge.textContent = `${count}/12`;
+            state3.row.appendChild(badge);
+            state3.groupCountBadge = badge;
+          } else {
+            state3.groupCountBadge.textContent = `${count}/12`;
+          }
+        } else if (state3.groupCountBadge) {
+          state3.groupCountBadge.remove();
+          state3.groupCountBadge = null;
+        }
+      } else {
+        state3.sub.textContent = formatStatus(friend, this.mode);
+      }
       if (unread > 0) {
         state3.row.classList.add("unread");
         if (!state3.badge) {
@@ -31275,8 +31800,8 @@
           state3.badge = null;
         }
       }
-      const isOnline = Boolean(friend?.isOnline);
-      if (isOnline && !state3.statusDot) {
+      const isOnline = this.mode !== "group" && Boolean(friend?.isOnline);
+      if (isOnline && !state3.statusDot && state3.avatarWrap) {
         const dot = document.createElement("span");
         dot.className = "qws-msg-status-dot";
         state3.avatarWrap.appendChild(dot);
@@ -33639,6 +34164,7 @@
   var PRESENCE_TOAST_HOST_ID = "qws-presence-toast-host";
   var PRESENCE_TOAST_DURATION_MS = 3500;
   var PRESENCE_TOAST_MAX = 3;
+  var GROUPS_REFRESH_EVENT2 = "qws-groups-refresh";
   var ensurePresenceToastStyles = () => {
     if (document.getElementById(PRESENCE_TOAST_STYLE_ID)) return;
     const style4 = document.createElement("style");
@@ -33834,6 +34360,7 @@
     let ownerGroups = [];
     let ownerGroupsLoaded = false;
     let ownerGroupsLoading = false;
+    let ownerGroupsRefreshPending = false;
     const normalizePresenceId = (value) => value ? String(value).trim() : "";
     const seedPresenceState = () => {
       presenceState.clear();
@@ -34235,7 +34762,7 @@
       const enableInvite = Boolean(activeFriend?.playerId) && ownerGroups.length > 0 && !ownerGroupsLoading;
       setButtonEnabled(groupInviteBtn, enableInvite);
       groupSelect.disabled = !enableInvite;
-      groupInviteStatus.textContent = ownerGroupsLoading ? "Loading your groups..." : ownerGroups.length ? "Select a group to invite this friend." : "Create a group to invite friends.";
+      groupInviteStatus.textContent = ownerGroupsLoading ? "Loading your groups..." : ownerGroups.length ? "" : "Create a group to invite friends.";
     };
     const ensureOwnerGroupsLoaded = async () => {
       if (ownerGroupsLoading || ownerGroupsLoaded) return;
@@ -34258,6 +34785,22 @@
         ownerGroupsLoaded = true;
       } finally {
         ownerGroupsLoading = false;
+        renderGroupInvite();
+        if (ownerGroupsRefreshPending) {
+          ownerGroupsRefreshPending = false;
+          ownerGroupsLoaded = false;
+          if (profileOpen) {
+            void ensureOwnerGroupsLoaded();
+          }
+        }
+      }
+    };
+    const handleGroupsRefresh = () => {
+      ownerGroupsLoaded = false;
+      ownerGroupsRefreshPending = true;
+      if (profileOpen && !ownerGroupsLoading) {
+        ownerGroupsRefreshPending = false;
+        void ensureOwnerGroupsLoaded();
         renderGroupInvite();
       }
     };
@@ -34413,6 +34956,7 @@
     };
     backBtn.addEventListener("click", () => setProfileOpen(false));
     window.addEventListener("qws-friend-info-open", handleFriendOpen);
+    window.addEventListener(GROUPS_REFRESH_EVENT2, handleGroupsRefresh);
     playerDatabaseUserId.onChangeNow((next) => {
       const id = next ? String(next) : null;
       currentPlayerId = id;
@@ -34434,6 +34978,7 @@
       },
       destroy: () => {
         window.removeEventListener("qws-friend-info-open", handleFriendOpen);
+        window.removeEventListener(GROUPS_REFRESH_EVENT2, handleGroupsRefresh);
         friendsTab.destroy();
         addTab.destroy();
         requestsTab.destroy();
@@ -34454,6 +34999,7 @@
   }
 
   // src/ui/menus/friendOverlay/tabs/groupsTab.ts
+  var GROUPS_REFRESH_EVENT3 = "qws-groups-refresh";
   var resolveOwnerId = (details) => {
     const group = details.group ?? details;
     return group?.ownerId ?? group?.owner_id ?? null;
@@ -34531,6 +35077,12 @@
   function createGroupsTab(options) {
     const root = document.createElement("div");
     root.className = "qws-fo-groups-tab";
+    const notifyGroupsRefresh = () => {
+      try {
+        window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT3));
+      } catch {
+      }
+    };
     let currentGroupId = null;
     let myId = null;
     let unsubPlayer = null;
@@ -34562,6 +35114,10 @@
         const form = document.createElement("div");
         form.className = "qws-msg-list-create";
         form.style.display = createOpen ? "flex" : "none";
+        const row = document.createElement("div");
+        row.className = "qws-msg-list-create-row";
+        const field = document.createElement("div");
+        field.className = "qws-msg-list-create-field";
         const input = document.createElement("input");
         input.type = "text";
         input.className = "qws-msg-list-input";
@@ -34573,9 +35129,12 @@
           const enabled = createValue.trim().length > 0 && !creating;
           createBtn.disabled = !enabled;
         });
+        field.appendChild(input);
+        const actions = document.createElement("div");
+        actions.className = "qws-msg-list-create-actions";
         const createBtn = document.createElement("button");
         createBtn.type = "button";
-        createBtn.className = "qws-msg-list-action";
+        createBtn.className = "qws-msg-list-action qws-msg-list-action-primary";
         createBtn.textContent = creating ? "Creating..." : "Create";
         createBtn.disabled = createValue.trim().length === 0 || creating;
         createBtn.addEventListener("click", async () => {
@@ -34595,6 +35154,7 @@
             createValue = "";
             createOpen = false;
             overlay.refresh();
+            notifyGroupsRefresh();
           } finally {
             creating = false;
             overlay.rerenderList();
@@ -34602,14 +35162,24 @@
         });
         const cancelBtn = document.createElement("button");
         cancelBtn.type = "button";
-        cancelBtn.className = "qws-msg-list-action";
+        cancelBtn.className = "qws-msg-list-action qws-msg-list-action-ghost";
         cancelBtn.textContent = "Cancel";
         cancelBtn.addEventListener("click", () => {
           createOpen = false;
           overlay.rerenderList();
         });
-        form.append(input, createBtn, cancelBtn);
+        actions.append(createBtn, cancelBtn);
+        row.append(field, actions);
+        const hint = document.createElement("div");
+        hint.className = "qws-msg-list-create-hint";
+        hint.textContent = "Pick a short name (3-32 characters).";
+        form.append(row, hint);
         list.appendChild(form);
+        if (createOpen) {
+          requestAnimationFrame(() => {
+            input.focus();
+          });
+        }
       },
       onThreadHeadRender: (head, selectedId) => {
         currentGroupId = selectedId;
@@ -34723,6 +35293,7 @@
               return;
             }
             overlay.refresh();
+            notifyGroupsRefresh();
             void openDetails(currentGroupId);
           } finally {
             setButtonEnabled(saveBtn, true);
@@ -34740,6 +35311,7 @@
             closeModal2();
             currentGroupId = null;
             overlay.refresh();
+            notifyGroupsRefresh();
           } finally {
             setButtonEnabled(deleteBtn, true);
           }
@@ -34771,6 +35343,7 @@
             closeModal2();
             currentGroupId = null;
             overlay.refresh();
+            notifyGroupsRefresh();
           } finally {
             setButtonEnabled(leaveBtn, true);
           }
@@ -34850,6 +35423,7 @@
                 return;
               }
               overlay.refresh();
+              notifyGroupsRefresh();
               void openDetails(currentGroupId);
             } finally {
               setButtonEnabled(kickBtn, true);
@@ -34899,6 +35473,332 @@
         }
         overlay.destroy();
         modal.remove();
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/leaderboardTab.ts
+  var NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
+  var COIN_FORMATTER2 = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+  var normalizeLeaderboardId = (value) => {
+    const raw = value == null ? "" : String(value);
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.toLowerCase() === "null") return null;
+    return trimmed;
+  };
+  var formatCoinsValue = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "-";
+    const abs = Math.abs(num);
+    const units = [
+      { value: 1e12, suffix: "T" },
+      { value: 1e9, suffix: "B" },
+      { value: 1e6, suffix: "M" },
+      { value: 1e3, suffix: "K" }
+    ];
+    for (const unit of units) {
+      if (abs >= unit.value) {
+        const scaled = num / unit.value;
+        return `${scaled.toFixed(2)}${unit.suffix}`;
+      }
+    }
+    return COIN_FORMATTER2.format(num);
+  };
+  var formatLeaderboardValue = (value, category) => {
+    if (category === "coins") return formatCoinsValue(value);
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "-";
+    return NUMBER_FORMATTER.format(num);
+  };
+  var isAnonymousRow = (row) => {
+    const name = (row.playerName ?? "").trim().toLowerCase();
+    const id = normalizeLeaderboardId(row.playerId);
+    return name === "anonymous" || !id;
+  };
+  var createAnonymousAvatar = () => {
+    const wrap = document.createElement("span");
+    wrap.className = "qws-fo-leaderboard-anon";
+    wrap.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 12a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" fill="currentColor"/><path d="M4 20a8 8 0 0 1 16 0v.5H4V20Z" fill="currentColor" opacity="0.7"/></svg>';
+    return wrap;
+  };
+  function createLeaderboardTab() {
+    const root = document.createElement("div");
+    root.className = "qws-fo-tab qws-fo-tab-leaderboard";
+    const card = document.createElement("div");
+    card.className = "qws-fo-card qws-fo-leaderboard-card";
+    const head = document.createElement("div");
+    head.className = "qws-fo-card__head qws-fo-leaderboard-head";
+    const headTitle = document.createElement("div");
+    headTitle.className = "qws-fo-leaderboard-head-title";
+    headTitle.textContent = "Leaderboard";
+    const refreshBtn = document.createElement("button");
+    refreshBtn.type = "button";
+    refreshBtn.className = "qws-fo-btn qws-fo-btn--sm qws-fo-leaderboard-refresh";
+    refreshBtn.textContent = "Refresh";
+    head.append(headTitle, refreshBtn);
+    const body = document.createElement("div");
+    body.className = "qws-fo-card__body qws-fo-leaderboard-body";
+    card.append(head, body);
+    root.appendChild(card);
+    const tabsRow = document.createElement("div");
+    tabsRow.className = "qws-fo-leaderboard-tabs";
+    const coinsBtn = document.createElement("button");
+    coinsBtn.type = "button";
+    coinsBtn.className = "qws-fo-leaderboard-tab";
+    coinsBtn.textContent = "Coins";
+    const eggsBtn = document.createElement("button");
+    eggsBtn.type = "button";
+    eggsBtn.className = "qws-fo-leaderboard-tab";
+    eggsBtn.textContent = "Eggs hatched";
+    tabsRow.append(coinsBtn, eggsBtn);
+    const hintEl = document.createElement("div");
+    hintEl.className = "qws-fo-leaderboard-hint";
+    const statusEl = document.createElement("div");
+    statusEl.className = "qws-fo-leaderboard-status";
+    const list = document.createElement("div");
+    list.className = "qws-fo-leaderboard-list";
+    const footer = document.createElement("div");
+    footer.className = "qws-fo-leaderboard-footer";
+    body.append(tabsRow, hintEl, statusEl, list, footer);
+    let myId = null;
+    let visible = false;
+    let activeCategory = "coins";
+    let unsubscribePlayerId = null;
+    const stateByCategory = {
+      coins: {
+        rows: [],
+        rank: null,
+        loading: false,
+        loaded: false,
+        rankLoading: false,
+        error: null
+      },
+      eggs: {
+        rows: [],
+        rank: null,
+        loading: false,
+        loaded: false,
+        rankLoading: false,
+        error: null
+      }
+    };
+    const renderPlaceholder = (text) => {
+      const empty = document.createElement("div");
+      empty.className = "qws-fo-leaderboard-empty";
+      empty.textContent = text;
+      list.appendChild(empty);
+    };
+    const buildRow = (row, rank, markMe, isFooter = false) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "qws-fo-leaderboard-row";
+      if (markMe) rowEl.classList.add("is-me");
+      if (isFooter) rowEl.classList.add("is-footer");
+      const rankEl = document.createElement("div");
+      rankEl.className = "qws-fo-leaderboard-rank";
+      rankEl.textContent = `#${rank}`;
+      if (rank === 1) rankEl.classList.add("is-top1");
+      if (rank === 2) rankEl.classList.add("is-top2");
+      if (rank === 3) rankEl.classList.add("is-top3");
+      const avatar = document.createElement("div");
+      avatar.className = "qws-fo-leaderboard-avatar";
+      const anon = isAnonymousRow(row);
+      const displayName = anon ? "Anonymous" : row.playerName ?? "Unknown";
+      if (row.avatarUrl && !anon) {
+        const img = document.createElement("img");
+        img.alt = displayName;
+        img.decoding = "async";
+        setImageSafe(img, row.avatarUrl);
+        avatar.appendChild(img);
+      } else if (anon) {
+        avatar.classList.add("is-anon");
+        avatar.appendChild(createAnonymousAvatar());
+      } else {
+        const fallback = displayName.trim().slice(0, 1).toUpperCase() || "?";
+        avatar.textContent = fallback;
+      }
+      const name = document.createElement("div");
+      name.className = "qws-fo-leaderboard-name";
+      name.textContent = displayName;
+      const value = document.createElement("div");
+      value.className = `qws-fo-leaderboard-value ${activeCategory === "coins" ? "is-coins" : "is-eggs"}`;
+      const rawValue = activeCategory === "coins" ? row.coins : row.eggsHatched;
+      value.textContent = formatLeaderboardValue(rawValue, activeCategory);
+      if (activeCategory === "coins") {
+        const abs = Math.abs(Number(rawValue));
+        if (Number.isFinite(abs)) {
+          if (abs >= 1e12) value.classList.add("is-coin-trillion");
+          else if (abs >= 1e9) value.classList.add("is-coin-billion");
+          else if (abs >= 1e6) value.classList.add("is-coin-million");
+          else value.classList.add("is-coin-base");
+        }
+      }
+      rowEl.append(rankEl, avatar, name, value);
+      return rowEl;
+    };
+    const renderFooter = (state3) => {
+      footer.innerHTML = "";
+      footer.style.display = "flex";
+      const renderNote = (text) => {
+        const note = document.createElement("div");
+        note.className = "qws-fo-leaderboard-footer-note";
+        note.textContent = text;
+        footer.appendChild(note);
+      };
+      if (!myId) {
+        renderNote("Sign in to see your rank.");
+        return;
+      }
+      if (state3.rankLoading) {
+        renderNote("Loading your rank...");
+        return;
+      }
+      if (!state3.rank || typeof state3.rank.rank !== "number") {
+        renderNote("Rank unavailable.");
+        return;
+      }
+      if (state3.rank.rank <= 10) {
+        footer.style.display = "none";
+        return;
+      }
+      const fallbackRow = {
+        playerId: myId,
+        playerName: "You",
+        avatarUrl: null,
+        avatar: null,
+        coins: null,
+        eggsHatched: null,
+        lastEventAt: null
+      };
+      const row = state3.rank.row ?? fallbackRow;
+      footer.appendChild(buildRow(row, state3.rank.rank, true, true));
+    };
+    const render2 = () => {
+      const state3 = stateByCategory[activeCategory];
+      coinsBtn.classList.toggle("active", activeCategory === "coins");
+      eggsBtn.classList.toggle("active", activeCategory === "eggs");
+      refreshBtn.disabled = state3.loading;
+      refreshBtn.classList.toggle("is-disabled", state3.loading);
+      refreshBtn.textContent = state3.loading ? "Refreshing..." : "Refresh";
+      hintEl.textContent = activeCategory === "coins" ? "Players who hide coin privacy in My profile appear as Anonymous on this leaderboard" : "Players who hide stats privacy in My profile appear as Anonymous on this leaderboard";
+      statusEl.textContent = "";
+      list.innerHTML = "";
+      if (state3.loading && !state3.rows.length) {
+        renderPlaceholder("Loading leaderboard...");
+        renderFooter(state3);
+        return;
+      }
+      if (state3.error && !state3.rows.length) {
+        renderPlaceholder(state3.error);
+        renderFooter(state3);
+        return;
+      }
+      if (!state3.rows.length) {
+        renderPlaceholder("No leaderboard data yet.");
+        renderFooter(state3);
+        return;
+      }
+      if (state3.loading) {
+        statusEl.textContent = "Refreshing leaderboard...";
+      }
+      state3.rows.slice(0, 10).forEach((row, index) => {
+        const rowId = normalizeLeaderboardId(row.playerId);
+        const isMe = rowId && myId ? rowId === myId : false;
+        list.appendChild(buildRow(row, index + 1, isMe));
+      });
+      renderFooter(state3);
+    };
+    const loadCategory = async (category, force = false) => {
+      const state3 = stateByCategory[category];
+      if (state3.loading) return;
+      if (state3.loaded && !force) {
+        render2();
+        return;
+      }
+      state3.loading = true;
+      state3.error = null;
+      state3.rankLoading = Boolean(myId);
+      render2();
+      try {
+        const listPromise = category === "coins" ? fetchLeaderboardCoins(10, 0) : fetchLeaderboardEggsHatched(10, 0);
+        const rankPromise = myId ? category === "coins" ? fetchLeaderboardCoinsRank(myId) : fetchLeaderboardEggsHatchedRank(myId) : Promise.resolve(null);
+        const [rows, rank] = await Promise.all([listPromise, rankPromise]);
+        state3.rows = Array.isArray(rows) ? rows.slice(0, 10) : [];
+        state3.rank = rank;
+        state3.loaded = true;
+      } catch {
+        state3.error = "Unable to load leaderboard.";
+      } finally {
+        state3.loading = false;
+        state3.rankLoading = false;
+        render2();
+      }
+    };
+    const loadRank = async (category) => {
+      const state3 = stateByCategory[category];
+      if (!myId || state3.rankLoading) {
+        render2();
+        return;
+      }
+      state3.rankLoading = true;
+      renderFooter(state3);
+      try {
+        const rank = category === "coins" ? await fetchLeaderboardCoinsRank(myId) : await fetchLeaderboardEggsHatchedRank(myId);
+        state3.rank = rank;
+      } catch {
+        state3.rank = null;
+      } finally {
+        state3.rankLoading = false;
+        renderFooter(state3);
+      }
+    };
+    const setCategory = (category) => {
+      if (activeCategory === category) return;
+      activeCategory = category;
+      render2();
+      if (visible) {
+        void loadCategory(category);
+      }
+    };
+    const setPlayerId = (id) => {
+      const normalized = id ? String(id) : null;
+      if (myId === normalized) return;
+      myId = normalized;
+      render2();
+      if (visible) {
+        void loadRank(activeCategory);
+      }
+    };
+    coinsBtn.addEventListener("click", () => setCategory("coins"));
+    eggsBtn.addEventListener("click", () => setCategory("eggs"));
+    refreshBtn.addEventListener("click", () => {
+      void loadCategory(activeCategory, true);
+    });
+    playerDatabaseUserId.onChangeNow((next) => setPlayerId(next ? String(next) : null)).then((unsub) => {
+      unsubscribePlayerId = unsub;
+    }).catch(() => {
+    });
+    render2();
+    return {
+      root,
+      show: () => {
+        visible = true;
+        void loadCategory(activeCategory);
+      },
+      hide: () => {
+        visible = false;
+      },
+      refresh: () => {
+        if (!visible) return;
+        void loadCategory(activeCategory, true);
+      },
+      destroy: () => {
+        try {
+          unsubscribePlayerId?.();
+        } catch {
+        }
       }
     };
   }
@@ -35379,6 +36279,221 @@
 .qws-fo-community-profile.active{
   display:flex;
 }
+.qws-fo-tab-leaderboard{
+  height:100%;
+}
+.qws-fo-leaderboard-card{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+.qws-fo-leaderboard-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.qws-fo-leaderboard-head-title{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-leaderboard-refresh{
+  text-transform:none;
+  letter-spacing:0;
+}
+.qws-fo-leaderboard-body{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+.qws-fo-leaderboard-tabs{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:4px;
+  border-radius:999px;
+  background:rgba(15,23,42,0.7);
+  border:1px solid rgba(255,255,255,0.08);
+  width:max-content;
+}
+.qws-fo-leaderboard-tab{
+  border:none;
+  background:transparent;
+  color:rgba(226,232,240,0.7);
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  transition:background 120ms ease, border 120ms ease, color 120ms ease;
+}
+.qws-fo-leaderboard-tab.active{
+  background:linear-gradient(120deg, rgba(59,130,246,0.35), rgba(56,189,248,0.28));
+  color:#f8fafc;
+  box-shadow:0 0 0 1px rgba(125,211,252,0.35) inset;
+}
+.qws-fo-leaderboard-hint{
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  padding-left:4px;
+}
+.qws-fo-leaderboard-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
+  min-height:14px;
+}
+.qws-fo-leaderboard-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding-right:4px;
+}
+.qws-fo-leaderboard-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+}
+.qws-fo-leaderboard-row.is-me{
+  border-color:rgba(59,130,246,0.45);
+  background:rgba(59,130,246,0.16);
+}
+.qws-fo-leaderboard-rank{
+  font-size:11px;
+  font-weight:700;
+  color:rgba(226,232,240,0.8);
+  text-align:center;
+  width:32px;
+}
+.qws-fo-leaderboard-rank.is-top1{
+  font-weight:800;
+  color:#f5d342;
+  text-shadow:0 0 6px rgba(245,211,66,0.35);
+}
+.qws-fo-leaderboard-rank.is-top2{
+  font-weight:800;
+  color:#d7dbe3;
+  text-shadow:0 0 6px rgba(215,219,227,0.28);
+}
+.qws-fo-leaderboard-rank.is-top3{
+  font-weight:800;
+  color:#e0a46b;
+  text-shadow:0 0 6px rgba(224,164,107,0.28);
+}
+.qws-fo-leaderboard-avatar{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-leaderboard-avatar.is-anon{
+  background:rgba(148,163,184,0.18);
+  color:#e2e8f0;
+}
+.qws-fo-leaderboard-anon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+}
+.qws-fo-leaderboard-anon svg{
+  width:16px;
+  height:16px;
+  display:block;
+}
+.qws-fo-leaderboard-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-leaderboard-name{
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+  flex:1;
+}
+.qws-fo-leaderboard-value{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+  text-align:right;
+}
+.qws-fo-leaderboard-value.is-coins{
+  color:var(--chakra-colors-MagicWhite, #f8fafc);
+}
+.qws-fo-leaderboard-value.is-coin-trillion{
+  color:rgb(200, 140, 255);
+}
+.qws-fo-leaderboard-value.is-coin-billion{
+  color:var(--chakra-colors-Blue-Light, #93c5fd);
+}
+.qws-fo-leaderboard-value.is-coin-million{
+  color:var(--chakra-colors-Yellow-Magic, #F3D32B);
+}
+.qws-fo-leaderboard-value.is-coin-base{
+  color:var(--chakra-colors-MagicWhite, #f8fafc);
+}
+.qws-fo-leaderboard-value.is-eggs{
+  color:#93c5fd;
+}
+.qws-fo-leaderboard-footer{
+  margin-top:auto;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:11px;
+  color:rgba(226,232,240,0.75);
+}
+.qws-fo-leaderboard-footer-note{
+  text-align:center;
+  padding:6px 0;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-leaderboard-footer-meta{
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-leaderboard-footer-value{
+  font-weight:700;
+}
+.qws-fo-leaderboard-footer-value.is-coins{
+  color:#F3D32B;
+}
+.qws-fo-leaderboard-footer-value.is-eggs{
+  color:#93c5fd;
+}
+.qws-fo-leaderboard-empty{
+  font-size:12px;
+  opacity:0.6;
+  text-align:center;
+  padding:12px 0;
+}
 .qws-fo-groups-layout{
   display:grid;
   grid-template-columns:240px 1fr;
@@ -35846,39 +36961,87 @@
   background:rgba(15,23,42,0.65);
 }
 .qws-fo-profile-group{
+  position:relative;
+  overflow:hidden;
   display:flex;
   flex-direction:column;
-  gap:6px;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.1);
-  background:rgba(15,23,42,0.5);
+  gap:10px;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid rgba(59,130,246,0.18);
+  background:linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.9) 100%);
+  box-shadow:0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.qws-fo-profile-group::after{
+  content:'';
+  position:absolute;
+  top:-60px;
+  right:-40px;
+  width:160px;
+  height:160px;
+  background:radial-gradient(circle, rgba(56,189,248,0.25) 0%, rgba(56,189,248,0) 70%);
+  pointer-events:none;
 }
 .qws-fo-profile-group-title{
   font-size:11px;
   font-weight:700;
   text-transform:uppercase;
-  letter-spacing:0.08em;
-  color:rgba(147,197,253,0.8);
+  letter-spacing:0.1em;
+  color:rgba(226,232,240,0.85);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-profile-group-title::before{
+  content:'';
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  box-shadow:0 0 0 2px rgba(59,130,246,0.25);
 }
 .qws-fo-profile-group-row{
   display:flex;
   align-items:center;
   gap:8px;
+  padding:6px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(2,6,23,0.35);
 }
 .qws-fo-profile-group-select{
   flex:1;
   min-width:0;
   border-radius:10px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.7);
+  border:1px solid transparent;
+  background:rgba(15,23,42,0.55);
   color:#f8fafc;
-  padding:6px 8px;
+  padding:7px 10px;
   font-size:12px;
+  outline:none;
+}
+.qws-fo-profile-group-select:focus{
+  border-color:rgba(56,189,248,0.6);
+  box-shadow:0 0 0 2px rgba(56,189,248,0.2);
+}
+.qws-fo-profile-group-row .qws-fo-btn{
+  border-radius:12px;
+  box-shadow:0 6px 16px rgba(34,211,238,0.2);
 }
 .qws-fo-profile-group-status{
   font-size:11px;
-  color:rgba(226,232,240,0.65);
+  color:rgba(226,232,240,0.7);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:14px;
+}
+.qws-fo-profile-group-status:not(:empty)::before{
+  content:'';
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  background:rgba(148,163,184,0.7);
 }
 .qws-fo-profile-coins-icon{
   width:18px;
@@ -36529,7 +37692,7 @@
       this.btn = this.createButton();
       this.badge = this.createBadge();
       const lastTab = window.__qws_friend_overlay_last_tab;
-      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "settings") {
+      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "leaderboard" || lastTab === "settings") {
         this.activeTab = lastTab;
       }
       this.panel = this.createPanel();
@@ -36772,6 +37935,22 @@
               root: tab.root,
               show: tab.show,
               hide: tab.hide,
+              destroy: tab.destroy
+            };
+          }
+        },
+        {
+          id: "leaderboard",
+          label: "Leaderboard",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 4h10v3a5 5 0 0 1-4 4.9V14h3v2H8v-2h3v-2.1A5 5 0 0 1 7 7V4Z" fill="currentColor"/><path d="M5 6H3c0 3 2 5 4 5V9A3 3 0 0 1 5 6Z" fill="currentColor" opacity="0.7"/><path d="M19 6h2c0 3-2 5-4 5V9a3 3 0 0 0 2-3Z" fill="currentColor" opacity="0.7"/></svg>',
+          build: () => {
+            const tab = createLeaderboardTab();
+            return {
+              id: "leaderboard",
+              root: tab.root,
+              show: tab.show,
+              hide: tab.hide,
+              refresh: tab.refresh,
               destroy: tab.destroy
             };
           }
@@ -45543,7 +46722,7 @@ next: ${next}`;
         iconSlot.className = "dd-sprite-grid__icon";
         iconSlot.textContent = "\u2026";
         imgWrap.appendChild(iconSlot);
-        attachSpriteIcon2(
+        attachSpriteIcon(
           iconSlot,
           [parsed.category],
           buildSpriteCandidates3(parsed),
@@ -46173,7 +47352,7 @@ next: ${next}`;
       justifyContent: "center"
     });
     wrap.appendChild(createEmojiIcon(fallback, size));
-    attachSpriteIcon2(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
+    attachSpriteIcon(wrap, ["plant", "tallplant", "crop"], seedKey, size, "plant");
     return wrap;
   }
   function createEggIcon(eggId, label2, size = 32) {
@@ -46202,7 +47381,7 @@ next: ${next}`;
     add(eggId);
     add(label2);
     if (candidates.size) {
-      attachSpriteIcon2(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
+      attachSpriteIcon(wrap, ["pet"], Array.from(candidates), size, "locker-eggs");
     }
     return wrap;
   }
@@ -48634,7 +49813,7 @@ next: ${next}`;
     wrap.textContent = fallback && fallback.trim().length > 0 ? fallback : "??";
     const candidates = buildSpriteCandidates4(option.key, option);
     const categories = getSpriteCategoriesForKey(option?.key, option?.seedName, option?.cropName);
-    attachSpriteIcon2(wrap, categories, candidates, size, logTag);
+    attachSpriteIcon(wrap, categories, candidates, size, logTag);
     return wrap;
   }
   function applyCropSimulationSprite(el2, speciesKey, options = {}) {
@@ -48651,7 +49830,7 @@ next: ${next}`;
     const categories = options.categories && options.categories.length ? options.categories : getSpriteCategoriesForKey(speciesKey);
     const updateLoadedState = () => syncCropSpriteLoadedState(el2, layer);
     updateLoadedState();
-    attachSpriteIcon2(
+    attachSpriteIcon(
       layer,
       categories,
       candidates,
@@ -50824,7 +52003,7 @@ next: ${next}`;
         addCandidate(row.name);
         const candidates = Array.from(candidatesSet).filter(Boolean);
         if (candidates.length) {
-          attachSpriteIcon2(iconWrap, spriteCategories, candidates, ICON, "alerts");
+          attachSpriteIcon(iconWrap, spriteCategories, candidates, ICON, "alerts");
         }
       }
       const col = document.createElement("div");
@@ -51155,7 +52334,7 @@ next: ${next}`;
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
           avatar.appendChild(span);
-          attachSpriteIcon2(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
+          attachSpriteIcon(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
             mutations: Array.isArray(mutations2) ? mutations2 : void 0
           });
         };
@@ -51327,7 +52506,7 @@ next: ${next}`;
         ).values()
       ).filter(Boolean);
       if (candidates.length) {
-        attachSpriteIcon2(iconWrap, weatherCategories, candidates, ICON, "alerts-weather");
+        attachSpriteIcon(iconWrap, weatherCategories, candidates, ICON, "alerts-weather");
       }
       const col = document.createElement("div");
       Object.assign(col.style, {
@@ -52114,7 +53293,7 @@ next: ${next}`;
     if (candidates.length === 0) {
       candidates.push(`${normalized || sanitize(entry.lookupId)}Icon`);
     }
-    attachSpriteIcon2(iconWrap, categories, candidates, 28, "stats-weather");
+    attachSpriteIcon(iconWrap, categories, candidates, 28, "stats-weather");
     const label2 = document.createElement("span");
     label2.className = "stats-weather__label";
     label2.textContent = entry.label;
@@ -52287,7 +53466,7 @@ next: ${next}`;
     iconWrap.className = "stats-pet__icon";
     iconWrap.textContent = species?.trim().charAt(0).toUpperCase() || "?";
     iconWrap.setAttribute("aria-hidden", "true");
-    attachSpriteIcon2(iconWrap, ["pet"], species, 28, "stats-pet");
+    attachSpriteIcon(iconWrap, ["pet"], species, 28, "stats-pet");
     const label2 = document.createElement("span");
     label2.className = "stats-pet__label";
     label2.textContent = species;
@@ -52680,7 +53859,7 @@ next: ${next}`;
         applyImg(cached);
         return holder;
       }
-      attachSpriteIcon2(holder, ["pet"], species, size, "pet-team-mini", {
+      attachSpriteIcon(holder, ["pet"], species, size, "pet-team-mini", {
         mutations: pet.mutations,
         onSpriteApplied: (img) => {
           miniSpriteCache.set(cacheKey, img.src);
@@ -53304,7 +54483,7 @@ next: ${next}`;
             return;
           }
           iconWrap.dataset.iconKey = key2;
-          attachSpriteIcon2(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
+          attachSpriteIcon(iconWrap, ["pet"], speciesLabel, ICON, "pet-slot", {
             mutations,
             onNoSpriteFound: () => {
               iconWrap.replaceChildren();
@@ -53659,7 +54838,7 @@ next: ${next}`;
         });
         const label2 = String(item.title || "Pet");
         iconWrap.textContent = label2.charAt(0).toUpperCase();
-        attachSpriteIcon2(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
+        attachSpriteIcon(iconWrap, ["pet"], item.id, size, "pet-feeding-list", {
           onNoSpriteFound: () => {
             iconWrap.textContent = label2.charAt(0).toUpperCase();
           }
@@ -53966,7 +55145,7 @@ next: ${next}`;
       const letter = (log2.petName || species || "pet").charAt(0).toUpperCase();
       holder.textContent = letter || "\u{1F43E}";
       if (species) {
-        attachSpriteIcon2(holder, ["pet"], species, size, "pet-log", {
+        attachSpriteIcon(holder, ["pet"], species, size, "pet-log", {
           mutations,
           onSpriteApplied: (img) => {
             petSpriteCache.set(cacheKey, img.src);
@@ -54850,9 +56029,9 @@ next: ${next}`;
   }
 
   // src/utils/gameVersion.ts
-  var gameVersion2 = null;
+  var gameVersion = null;
   function initGameVersion(doc) {
-    if (gameVersion2 !== null) {
+    if (gameVersion !== null) {
       return;
     }
     const d = doc ?? (typeof document !== "undefined" ? document : null);
@@ -54867,7 +56046,7 @@ next: ${next}`;
       if (!src) continue;
       const match = src.match(/\/(?:r\/\d+\/)?version\/([^/]+)/);
       if (match && match[1]) {
-        gameVersion2 = match[1];
+        gameVersion = match[1];
         return;
       }
     }
@@ -55401,7 +56580,7 @@ next: ${next}`;
     const safeNavigator = typeof navigator !== "undefined" ? navigator : null;
     const safeLocation = typeof location !== "undefined" ? location : null;
     const environment = safeWindow ? detectEnvironment() : null;
-    const resolvedGameVersion = gameVersion2 ?? "unknown";
+    const resolvedGameVersion = gameVersion ?? "unknown";
     const resolvedModVersion = getLocalVersion() ?? "unknown";
     const infoCard = ui.card("Runtime infos");
     infoCard.body.style.display = "flex";
@@ -59853,7 +61032,7 @@ next: ${next}`;
   function detectGameVersion() {
     try {
       initGameVersion();
-      if (gameVersion2) return gameVersion2;
+      if (gameVersion) return gameVersion;
     } catch {
     }
     const root = globalThis.unsafeWindow || globalThis;
@@ -60241,6 +61420,7 @@ next: ${next}`;
     "use strict";
     installPageWebSocketHook();
     initGameVersion();
+    MGVersion.prefetch();
     try {
       warmupSpriteCache();
     } catch {

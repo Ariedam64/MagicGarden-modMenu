@@ -15,6 +15,8 @@ import { MGAssets } from "../../../../utils/mgAssets";
 import { toastSimple } from "../../../../ui/toast";
 import { createButton, createInput, setButtonEnabled } from "../ui";
 
+const GROUPS_REFRESH_EVENT = "qws-groups-refresh";
+
 type GroupsTabHandle = {
   root: HTMLDivElement;
   show: () => void;
@@ -118,6 +120,12 @@ export function createGroupsTab(options?: {
   const root = document.createElement("div");
   root.className = "qws-fo-groups-tab";
 
+  const notifyGroupsRefresh = () => {
+    try {
+      window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT));
+    } catch {}
+  };
+
   let currentGroupId: string | null = null;
   let myId: string | null = null;
   let unsubPlayer: (() => void) | null = null;
@@ -151,6 +159,10 @@ export function createGroupsTab(options?: {
       const form = document.createElement("div");
       form.className = "qws-msg-list-create";
       form.style.display = createOpen ? "flex" : "none";
+      const row = document.createElement("div");
+      row.className = "qws-msg-list-create-row";
+      const field = document.createElement("div");
+      field.className = "qws-msg-list-create-field";
       const input = document.createElement("input");
       input.type = "text";
       input.className = "qws-msg-list-input";
@@ -163,9 +175,13 @@ export function createGroupsTab(options?: {
         createBtn.disabled = !enabled;
       });
 
+      field.appendChild(input);
+
+      const actions = document.createElement("div");
+      actions.className = "qws-msg-list-create-actions";
       const createBtn = document.createElement("button");
       createBtn.type = "button";
-      createBtn.className = "qws-msg-list-action";
+      createBtn.className = "qws-msg-list-action qws-msg-list-action-primary";
       createBtn.textContent = creating ? "Creating..." : "Create";
       createBtn.disabled = createValue.trim().length === 0 || creating;
       createBtn.addEventListener("click", async () => {
@@ -185,6 +201,7 @@ export function createGroupsTab(options?: {
           createValue = "";
           createOpen = false;
           overlay.refresh();
+          notifyGroupsRefresh();
         } finally {
           creating = false;
           overlay.rerenderList();
@@ -193,15 +210,28 @@ export function createGroupsTab(options?: {
 
       const cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
-      cancelBtn.className = "qws-msg-list-action";
+      cancelBtn.className = "qws-msg-list-action qws-msg-list-action-ghost";
       cancelBtn.textContent = "Cancel";
       cancelBtn.addEventListener("click", () => {
         createOpen = false;
         overlay.rerenderList();
       });
 
-      form.append(input, createBtn, cancelBtn);
+      actions.append(createBtn, cancelBtn);
+      row.append(field, actions);
+
+      const hint = document.createElement("div");
+      hint.className = "qws-msg-list-create-hint";
+      hint.textContent = "Pick a short name (3-32 characters).";
+
+      form.append(row, hint);
       list.appendChild(form);
+
+      if (createOpen) {
+        requestAnimationFrame(() => {
+          input.focus();
+        });
+      }
     },
     onThreadHeadRender: (head, selectedId) => {
       currentGroupId = selectedId;
@@ -334,6 +364,7 @@ export function createGroupsTab(options?: {
             return;
           }
           overlay.refresh();
+          notifyGroupsRefresh();
           void openDetails(currentGroupId);
         } finally {
           setButtonEnabled(saveBtn, true);
@@ -352,6 +383,7 @@ export function createGroupsTab(options?: {
           closeModal();
           currentGroupId = null;
           overlay.refresh();
+          notifyGroupsRefresh();
         } finally {
           setButtonEnabled(deleteBtn, true);
         }
@@ -384,6 +416,7 @@ export function createGroupsTab(options?: {
           closeModal();
           currentGroupId = null;
           overlay.refresh();
+          notifyGroupsRefresh();
         } finally {
           setButtonEnabled(leaveBtn, true);
         }
@@ -471,6 +504,7 @@ export function createGroupsTab(options?: {
               return;
             }
             overlay.refresh();
+            notifyGroupsRefresh();
             void openDetails(currentGroupId);
           } finally {
             setButtonEnabled(kickBtn, true);

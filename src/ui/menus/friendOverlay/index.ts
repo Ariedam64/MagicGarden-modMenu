@@ -1,6 +1,7 @@
 import { createMessagesTab, type MessagesTabHandle } from "./tabs/messagesTab";
 import { createCommunityTab } from "./tabs/communityTab";
 import { createGroupsTab } from "./tabs/groupsTab";
+import { createLeaderboardTab } from "./tabs/leaderboardTab";
 import { createSettingsTab } from "./tabs/settingsTab";
 
 const STYLE_ID = "qws-friend-overlay-css";
@@ -11,7 +12,7 @@ const setProps = (el: HTMLElement, props: Record<string, string>) => {
   for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v);
 };
 
-type TabId = "messages" | "community" | "groups" | "settings";
+type TabId = "messages" | "community" | "groups" | "leaderboard" | "settings";
 
 declare global {
   interface Window {
@@ -290,6 +291,221 @@ function ensureFriendOverlayStyle(): void {
 }
 .qws-fo-community-profile.active{
   display:flex;
+}
+.qws-fo-tab-leaderboard{
+  height:100%;
+}
+.qws-fo-leaderboard-card{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+}
+.qws-fo-leaderboard-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.qws-fo-leaderboard-head-title{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-leaderboard-refresh{
+  text-transform:none;
+  letter-spacing:0;
+}
+.qws-fo-leaderboard-body{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+.qws-fo-leaderboard-tabs{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:4px;
+  border-radius:999px;
+  background:rgba(15,23,42,0.7);
+  border:1px solid rgba(255,255,255,0.08);
+  width:max-content;
+}
+.qws-fo-leaderboard-tab{
+  border:none;
+  background:transparent;
+  color:rgba(226,232,240,0.7);
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  transition:background 120ms ease, border 120ms ease, color 120ms ease;
+}
+.qws-fo-leaderboard-tab.active{
+  background:linear-gradient(120deg, rgba(59,130,246,0.35), rgba(56,189,248,0.28));
+  color:#f8fafc;
+  box-shadow:0 0 0 1px rgba(125,211,252,0.35) inset;
+}
+.qws-fo-leaderboard-hint{
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  padding-left:4px;
+}
+.qws-fo-leaderboard-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
+  min-height:14px;
+}
+.qws-fo-leaderboard-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding-right:4px;
+}
+.qws-fo-leaderboard-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 8px;
+  border-radius:10px;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+}
+.qws-fo-leaderboard-row.is-me{
+  border-color:rgba(59,130,246,0.45);
+  background:rgba(59,130,246,0.16);
+}
+.qws-fo-leaderboard-rank{
+  font-size:11px;
+  font-weight:700;
+  color:rgba(226,232,240,0.8);
+  text-align:center;
+  width:32px;
+}
+.qws-fo-leaderboard-rank.is-top1{
+  font-weight:800;
+  color:#f5d342;
+  text-shadow:0 0 6px rgba(245,211,66,0.35);
+}
+.qws-fo-leaderboard-rank.is-top2{
+  font-weight:800;
+  color:#d7dbe3;
+  text-shadow:0 0 6px rgba(215,219,227,0.28);
+}
+.qws-fo-leaderboard-rank.is-top3{
+  font-weight:800;
+  color:#e0a46b;
+  text-shadow:0 0 6px rgba(224,164,107,0.28);
+}
+.qws-fo-leaderboard-avatar{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-leaderboard-avatar.is-anon{
+  background:rgba(148,163,184,0.18);
+  color:#e2e8f0;
+}
+.qws-fo-leaderboard-anon{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+}
+.qws-fo-leaderboard-anon svg{
+  width:16px;
+  height:16px;
+  display:block;
+}
+.qws-fo-leaderboard-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-leaderboard-name{
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+  flex:1;
+}
+.qws-fo-leaderboard-value{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+  text-align:right;
+}
+.qws-fo-leaderboard-value.is-coins{
+  color:var(--chakra-colors-MagicWhite, #f8fafc);
+}
+.qws-fo-leaderboard-value.is-coin-trillion{
+  color:rgb(200, 140, 255);
+}
+.qws-fo-leaderboard-value.is-coin-billion{
+  color:var(--chakra-colors-Blue-Light, #93c5fd);
+}
+.qws-fo-leaderboard-value.is-coin-million{
+  color:var(--chakra-colors-Yellow-Magic, #F3D32B);
+}
+.qws-fo-leaderboard-value.is-coin-base{
+  color:var(--chakra-colors-MagicWhite, #f8fafc);
+}
+.qws-fo-leaderboard-value.is-eggs{
+  color:#93c5fd;
+}
+.qws-fo-leaderboard-footer{
+  margin-top:auto;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  font-size:11px;
+  color:rgba(226,232,240,0.75);
+}
+.qws-fo-leaderboard-footer-note{
+  text-align:center;
+  padding:6px 0;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-leaderboard-footer-meta{
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-leaderboard-footer-value{
+  font-weight:700;
+}
+.qws-fo-leaderboard-footer-value.is-coins{
+  color:#F3D32B;
+}
+.qws-fo-leaderboard-footer-value.is-eggs{
+  color:#93c5fd;
+}
+.qws-fo-leaderboard-empty{
+  font-size:12px;
+  opacity:0.6;
+  text-align:center;
+  padding:12px 0;
 }
 .qws-fo-groups-layout{
   display:grid;
@@ -758,39 +974,87 @@ function ensureFriendOverlayStyle(): void {
   background:rgba(15,23,42,0.65);
 }
 .qws-fo-profile-group{
+  position:relative;
+  overflow:hidden;
   display:flex;
   flex-direction:column;
-  gap:6px;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,0.1);
-  background:rgba(15,23,42,0.5);
+  gap:10px;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid rgba(59,130,246,0.18);
+  background:linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.9) 100%);
+  box-shadow:0 10px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.qws-fo-profile-group::after{
+  content:'';
+  position:absolute;
+  top:-60px;
+  right:-40px;
+  width:160px;
+  height:160px;
+  background:radial-gradient(circle, rgba(56,189,248,0.25) 0%, rgba(56,189,248,0) 70%);
+  pointer-events:none;
 }
 .qws-fo-profile-group-title{
   font-size:11px;
   font-weight:700;
   text-transform:uppercase;
-  letter-spacing:0.08em;
-  color:rgba(147,197,253,0.8);
+  letter-spacing:0.1em;
+  color:rgba(226,232,240,0.85);
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-profile-group-title::before{
+  content:'';
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  box-shadow:0 0 0 2px rgba(59,130,246,0.25);
 }
 .qws-fo-profile-group-row{
   display:flex;
   align-items:center;
   gap:8px;
+  padding:6px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(2,6,23,0.35);
 }
 .qws-fo-profile-group-select{
   flex:1;
   min-width:0;
   border-radius:10px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.7);
+  border:1px solid transparent;
+  background:rgba(15,23,42,0.55);
   color:#f8fafc;
-  padding:6px 8px;
+  padding:7px 10px;
   font-size:12px;
+  outline:none;
+}
+.qws-fo-profile-group-select:focus{
+  border-color:rgba(56,189,248,0.6);
+  box-shadow:0 0 0 2px rgba(56,189,248,0.2);
+}
+.qws-fo-profile-group-row .qws-fo-btn{
+  border-radius:12px;
+  box-shadow:0 6px 16px rgba(34,211,238,0.2);
 }
 .qws-fo-profile-group-status{
   font-size:11px;
-  color:rgba(226,232,240,0.65);
+  color:rgba(226,232,240,0.7);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-height:14px;
+}
+.qws-fo-profile-group-status:not(:empty)::before{
+  content:'';
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  background:rgba(148,163,184,0.7);
 }
 .qws-fo-profile-coins-icon{
   width:18px;
@@ -1443,9 +1707,15 @@ class FriendOverlay {
     this.btn = this.createButton();
     this.badge = this.createBadge();
     const lastTab = window.__qws_friend_overlay_last_tab;
-      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "settings") {
-        this.activeTab = lastTab;
-      }
+    if (
+      lastTab === "community" ||
+      lastTab === "messages" ||
+      lastTab === "groups" ||
+      lastTab === "leaderboard" ||
+      lastTab === "settings"
+    ) {
+      this.activeTab = lastTab;
+    }
     this.panel = this.createPanel();
     this.keyTrapCleanup = installInputKeyTrap(this.panel);
 
@@ -1719,6 +1989,27 @@ class FriendOverlay {
             root: tab.root,
             show: tab.show,
             hide: tab.hide,
+            destroy: tab.destroy,
+          };
+        },
+      },
+      {
+        id: "leaderboard",
+        label: "Leaderboard",
+        icon:
+          '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+          '<path d="M7 4h10v3a5 5 0 0 1-4 4.9V14h3v2H8v-2h3v-2.1A5 5 0 0 1 7 7V4Z" fill="currentColor"/>' +
+          '<path d="M5 6H3c0 3 2 5 4 5V9A3 3 0 0 1 5 6Z" fill="currentColor" opacity="0.7"/>' +
+          '<path d="M19 6h2c0 3-2 5-4 5V9a3 3 0 0 0 2-3Z" fill="currentColor" opacity="0.7"/>' +
+          "</svg>",
+        build: () => {
+          const tab = createLeaderboardTab();
+          return {
+            id: "leaderboard",
+            root: tab.root,
+            show: tab.show,
+            hide: tab.hide,
+            refresh: tab.refresh,
             destroy: tab.destroy,
           };
         },

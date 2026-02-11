@@ -2,6 +2,7 @@ import { createFriendsTab } from "./friendsTab";
 import { createRequestsTab } from "./requestsTab";
 import { createAddFriendTab } from "./addFriendTab";
 import { createButton, setButtonEnabled } from "../ui";
+import { attachSpriteIcon } from "../../../spriteIconCache";
 import { coin } from "../../../../data/hardcoded-data.clean";
 import {
   fetchPlayersView,
@@ -39,6 +40,7 @@ const PRESENCE_TOAST_STYLE_ID = "qws-presence-toast-css";
 const PRESENCE_TOAST_HOST_ID = "qws-presence-toast-host";
 const PRESENCE_TOAST_DURATION_MS = 3500;
 const PRESENCE_TOAST_MAX = 3;
+const GROUPS_REFRESH_EVENT = "qws-groups-refresh";
 
 const ensurePresenceToastStyles = (): void => {
   if (document.getElementById(PRESENCE_TOAST_STYLE_ID)) return;
@@ -139,7 +141,6 @@ const getPresenceToastHost = (): HTMLDivElement => {
   }
   return host;
 };
-
 type CommunitySubTab = "friends" | "add" | "requests";
 
 type CommunityTabHandle = {
@@ -269,6 +270,7 @@ export function createCommunityTab(options: {
   let ownerGroups: GroupSummary[] = [];
   let ownerGroupsLoaded = false;
   let ownerGroupsLoading = false;
+  let ownerGroupsRefreshPending = false;
 
   const normalizePresenceId = (value: string | null | undefined) =>
     value ? String(value).trim() : "";
@@ -744,7 +746,7 @@ export function createCommunityTab(options: {
     groupInviteStatus.textContent = ownerGroupsLoading
       ? "Loading your groups..."
       : ownerGroups.length
-        ? "Select a group to invite this friend."
+        ? ""
         : "Create a group to invite friends.";
   };
 
@@ -769,6 +771,23 @@ export function createCommunityTab(options: {
       ownerGroupsLoaded = true;
     } finally {
       ownerGroupsLoading = false;
+      renderGroupInvite();
+      if (ownerGroupsRefreshPending) {
+        ownerGroupsRefreshPending = false;
+        ownerGroupsLoaded = false;
+        if (profileOpen) {
+          void ensureOwnerGroupsLoaded();
+        }
+      }
+    }
+  };
+
+  const handleGroupsRefresh = () => {
+    ownerGroupsLoaded = false;
+    ownerGroupsRefreshPending = true;
+    if (profileOpen && !ownerGroupsLoading) {
+      ownerGroupsRefreshPending = false;
+      void ensureOwnerGroupsLoaded();
       renderGroupInvite();
     }
   };
@@ -975,6 +994,7 @@ export function createCommunityTab(options: {
 
   backBtn.addEventListener("click", () => setProfileOpen(false));
   window.addEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
+  window.addEventListener(GROUPS_REFRESH_EVENT, handleGroupsRefresh as EventListener);
 
   playerDatabaseUserId
     .onChangeNow((next) => {
@@ -1001,6 +1021,7 @@ export function createCommunityTab(options: {
     },
     destroy: () => {
       window.removeEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
+      window.removeEventListener(GROUPS_REFRESH_EVENT, handleGroupsRefresh as EventListener);
       friendsTab.destroy();
       addTab.destroy();
       requestsTab.destroy();

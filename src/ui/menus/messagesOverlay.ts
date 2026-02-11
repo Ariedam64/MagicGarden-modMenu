@@ -73,9 +73,10 @@ type ConversationState = {
 type FriendRowState = {
   row: HTMLDivElement;
   badge: HTMLSpanElement | null;
-  avatarWrap: HTMLDivElement;
+  avatarWrap: HTMLDivElement | null;
   statusDot: HTMLSpanElement | null;
   sub: HTMLDivElement;
+  groupCountBadge?: HTMLSpanElement | null;
 };
 
 type ChatSeedItem = {
@@ -165,6 +166,7 @@ const THREAD_PAGE_LIMIT = 50;
 const LOAD_OLDER_THRESHOLD = 80;
 const FRIENDS_REFRESH_EVENT = "qws-friends-refresh";
 const FRIEND_REMOVED_EVENT = "qws-friend-removed";
+const GROUPS_REFRESH_EVENT = "qws-groups-refresh";
 
 const STYLE_ID = "qws-messages-overlay-css";
 
@@ -183,6 +185,13 @@ type PlayerLike = {
   playerId?: unknown;
   discordAvatarUrl?: unknown;
   cosmetic?: { avatar?: unknown };
+};
+
+type GroupMemberLite = {
+  id: string;
+  name?: string;
+  avatarUrl?: string;
+  avatar?: string[];
 };
 
 type PlantCatalogEntry = {
@@ -1416,26 +1425,52 @@ function ensureMessagesOverlayStyle(): void {
 }
 .qws-msg-list-create{
   display:flex;
+  flex-direction:column;
   gap:6px;
-  align-items:center;
-  padding:6px;
-  border-radius:10px;
+  padding:8px;
+  border-radius:12px;
   border:1px solid rgba(255,255,255,0.08);
-  background:rgba(15,23,42,0.55);
+  background:linear-gradient(180deg, rgba(15,23,42,0.65) 0%, rgba(10,16,28,0.65) 100%);
+}
+.qws-msg-list-create-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-msg-list-create-field{
+  flex:1;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 8px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(8,12,22,0.6);
+  transition:border-color 120ms ease, box-shadow 120ms ease;
+}
+.qws-msg-list-create-field:focus-within{
+  border-color:rgba(122,162,255,.5);
+  box-shadow:0 0 0 1px rgba(122,162,255,.25);
 }
 .qws-msg-list-input{
   flex:1;
   min-width:0;
-  border-radius:8px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.7);
+  border:none;
+  background:transparent;
   color:#f8fafc;
-  padding:6px 8px;
+  padding:4px 0;
   font-size:12px;
+}
+.qws-msg-list-input:focus{ outline:none; }
+.qws-msg-list-create-actions{
+  display:flex;
+  align-items:center;
+  gap:6px;
 }
 .qws-msg-list-action{
   border:1px solid rgba(255,255,255,0.12);
-  background:rgba(15,23,42,0.6);
+  background:rgba(15,23,42,0.5);
   color:#f8fafc;
   border-radius:8px;
   padding:5px 8px;
@@ -1447,6 +1482,29 @@ function ensureMessagesOverlayStyle(): void {
 .qws-msg-list-action:hover{
   background:rgba(59,130,246,0.18);
   border-color:rgba(59,130,246,0.4);
+}
+.qws-msg-list-action-primary{
+  background:rgba(122,162,255,0.9);
+  color:#0b1017;
+  border-color:rgba(122,162,255,0.9);
+}
+.qws-msg-list-action-primary:hover{
+  background:rgba(142,176,255,0.95);
+  border-color:rgba(142,176,255,0.95);
+}
+.qws-msg-list-action-ghost{
+  background:transparent;
+  border-color:transparent;
+  color:rgba(226,232,240,0.8);
+}
+.qws-msg-list-action-ghost:hover{
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(255,255,255,0.12);
+}
+.qws-msg-list-create-hint{
+  font-size:10px;
+  color:rgba(226,232,240,0.65);
+  padding-left:2px;
 }
 .qws-msg-thread{
   display:flex;
@@ -1646,6 +1704,31 @@ function ensureMessagesOverlayStyle(): void {
   background:rgba(255,255,255,0.02);
   cursor:pointer;
 }
+.qws-msg-list.qws-msg-list-group .qws-msg-friend{
+  position:relative;
+  padding-right:42px;
+  padding-top:12px;
+  padding-bottom:14px;
+  min-height:56px;
+}
+.qws-msg-group-count{
+  position:absolute;
+  top:6px;
+  right:8px;
+  min-width:32px;
+  height:18px;
+  padding:0 6px;
+  border-radius:999px;
+  background:rgba(122,162,255,.16);
+  border:1px solid rgba(122,162,255,.35);
+  color:#d6e5ff;
+  font-size:10px;
+  font-weight:700;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  letter-spacing:0.02em;
+}
 .qws-msg-friend.active{
   border-color:#9db7ff66;
   background:rgba(122,162,255,.16);
@@ -1670,6 +1753,34 @@ function ensureMessagesOverlayStyle(): void {
   font-size:12px;
   font-weight:600;
 }
+.qws-msg-group-avatars-row{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-top:4px;
+  padding-bottom:2px;
+  flex-wrap:nowrap;
+}
+.qws-msg-group-avatars-row .qws-msg-avatar{
+  width:22px;
+  height:22px;
+  border-radius:50%;
+  border:1px solid rgba(255,255,255,0.28);
+  background:rgba(10,16,28,0.7);
+  box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  font-size:10px;
+  overflow:hidden;
+  flex:0 0 22px;
+  line-height:0;
+  aspect-ratio:1 / 1;
+}
+.qws-msg-group-avatars-row .qws-msg-avatar img{
+  border-radius:50%;
+  object-fit:cover;
+}
+.qws-msg-group-avatar-anon{
+  color:#cbd5f5;
+}
 .qws-msg-status-dot{
   width:8px;
   height:8px;
@@ -1692,6 +1803,10 @@ function ensureMessagesOverlayStyle(): void {
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+}
+.qws-msg-list.qws-msg-list-group .qws-msg-friend-name{
+  font-size:14px;
+  letter-spacing:0.01em;
 }
 .qws-msg-friend-sub{
   font-size:11px;
@@ -2084,12 +2199,14 @@ function formatFriendName(friend: FriendSummary | null, fallbackId: string): str
 
 function formatStatus(friend: FriendSummary | null, mode: "dm" | "group" = "dm"): string {
   if (!friend) return "";
-  if (mode !== "group") {
-    if (friend.isOnline) return "Online";
-    const seen = formatLastSeen(friend.lastEventAt);
-    return seen ? `Offline · ${seen}` : "Offline";
-  }
-  const isGroup = Boolean((friend as any).isGroup);
+  if (mode === "group") return "";
+  if (friend.isOnline) return "Online";
+  const seen = formatLastSeen(friend.lastEventAt);
+  return seen ? `Offline · ${seen}` : "Offline";
+}
+
+function getGroupMemberCount(friend: FriendSummary | null): number | null {
+  if (!friend) return null;
   const rawCount =
     (friend as any).memberCount ??
     (friend as any).member_count ??
@@ -2097,13 +2214,7 @@ function formatStatus(friend: FriendSummary | null, mode: "dm" | "group" = "dm")
     (friend as any).members_count ??
     null;
   const count = Number(rawCount);
-  if (Number.isFinite(count)) {
-    return `${Math.max(0, Math.floor(count))}/12 members`;
-  }
-  if (isGroup) return "Group";
-  if (friend.isOnline) return "Online";
-  const seen = formatLastSeen(friend.lastEventAt);
-  return seen ? `Offline · ${seen}` : "Offline";
+  return Number.isFinite(count) ? Math.max(0, Math.floor(count)) : null;
 }
 
 function parseMessageTime(msg: DirectMessage): number {
@@ -2486,6 +2597,8 @@ export class MessagesOverlay {
   private rowById = new Map<string, FriendRowState>();
   private groupMemberCache = new Map<string, { name?: string; avatarUrl?: string; avatar?: string[] }>();
   private groupMembersLoaded = new Set<string>();
+  private groupMembersByGroup = new Map<string, GroupMemberLite[]>();
+  private groupOwnerByGroup = new Map<string, string>();
   private groupReadAt = new Map<string, number>();
   private groupReadStorageKey: string | null = null;
   private lastNotificationSoundAt = 0;
@@ -2498,6 +2611,10 @@ export class MessagesOverlay {
   private myName: string | null = null;
   private cosmeticBaseUrl: string | null = null;
   private cosmeticBasePromise: Promise<string> | null = null;
+  private cosmeticBaseStartedAt: number | null = null;
+  private cosmeticDebug = false;
+  private threadFingerprintById = new Map<string, string>();
+  private lastRenderedThreadKey: string | null = null;
   private handleFriendsRefresh = () => {
     if (!this.myId) return;
     void this.loadFriends(true);
@@ -2532,6 +2649,7 @@ export class MessagesOverlay {
     this.btn = this.createButton();
     this.badge = this.createBadge();
     this.panel = this.createPanel();
+    this.ensureCosmeticBase();
     this.installScrollGuards(this.listEl);
     this.installScrollGuards(this.threadBodyEl);
     this.threadBodyEl.addEventListener(
@@ -2664,6 +2782,8 @@ export class MessagesOverlay {
     this.myId = normalized;
     this.groupMemberCache.clear();
     this.groupMembersLoaded.clear();
+    this.groupMembersByGroup.clear();
+    this.groupOwnerByGroup.clear();
     this.groupReadAt.clear();
     this.groupReadStorageKey = null;
     this.groupIds.clear();
@@ -2715,17 +2835,73 @@ export class MessagesOverlay {
     }
   }
 
+  private nowMs(): number {
+    if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      return performance.now();
+    }
+    return Date.now();
+  }
+
+  private logCosmetic(message: string, detail?: unknown): void {
+    if (!this.cosmeticDebug) return;
+    if (detail === undefined) {
+      console.debug(`[MessagesOverlay][cosmetic] ${message}`);
+    } else {
+      console.debug(`[MessagesOverlay][cosmetic] ${message}`, detail);
+    }
+  }
+
+  private computeThreadFingerprint(
+    conv: ConversationState,
+    options?: { label?: string; mode?: "dm" | "group" },
+  ): string {
+    const count = conv.messages.length;
+    const label = options?.label ?? "";
+    const mode = options?.mode ?? "dm";
+    if (!count) {
+      return [
+        "empty",
+        mode,
+        label,
+        conv.loading ? 1 : 0,
+        conv.loadingOlder ? 1 : 0,
+      ].join("|");
+    }
+    const first = conv.messages[0];
+    const last = conv.messages[count - 1];
+    const lastMeta = last && last.senderId === this.myId
+      ? `${last.readAt ?? ""}|${last.deliveredAt ?? ""}`
+      : "";
+    return [
+      mode,
+      label,
+      count,
+      first?.id ?? "",
+      last?.id ?? "",
+      lastMeta,
+      conv.loading ? 1 : 0,
+      conv.loadingOlder ? 1 : 0,
+    ].join("|");
+  }
+
   private ensureCosmeticBase(): void {
     if (this.cosmeticBaseUrl || this.cosmeticBasePromise) return;
+    this.cosmeticBaseStartedAt = this.nowMs();
+    this.logCosmetic("Requesting cosmetic base URL");
     this.cosmeticBasePromise = MGAssets.base()
       .then((base) => {
         this.cosmeticBaseUrl = base;
         this.cosmeticBasePromise = null;
+        const elapsed = this.cosmeticBaseStartedAt
+          ? Math.round(this.nowMs() - this.cosmeticBaseStartedAt)
+          : null;
+        this.logCosmetic("Cosmetic base resolved", { base, ms: elapsed });
         this.populateCosmeticImages();
         return base;
       })
-      .catch(() => {
+      .catch((error) => {
         this.cosmeticBasePromise = null;
+        this.logCosmetic("Cosmetic base failed", error);
       });
   }
 
@@ -2740,11 +2916,16 @@ export class MessagesOverlay {
   private populateCosmeticImages(): void {
     if (!this.cosmeticBaseUrl) return;
     const imgs = this.panel.querySelectorAll<HTMLImageElement>("img[data-cosmetic]");
+    this.logCosmetic("Populating queued cosmetic images", { count: imgs.length });
     imgs.forEach((img) => {
       const name = img.dataset.cosmetic;
       if (!name) return;
       const url = this.buildCosmeticUrl(name);
-      if (!url) return;
+      if (!url) {
+        this.logCosmetic("Missing cosmetic URL", { name });
+        return;
+      }
+      this.logCosmetic("Setting cosmetic image", { name, url });
       setImageSafe(img, url);
       img.removeAttribute("data-cosmetic");
     });
@@ -2772,10 +2953,29 @@ export class MessagesOverlay {
         img.decoding = "async";
         img.loading = "eager";
         img.style.zIndex = String(index + 1);
+        if (this.cosmeticDebug) {
+          const startedAt = this.nowMs();
+          const labelValue = label ?? "unknown";
+          img.addEventListener("load", () => {
+            const elapsed = Math.round(this.nowMs() - startedAt);
+            this.logCosmetic("Cosmetic layer loaded", { name: entry, label: labelValue, ms: elapsed });
+          }, { once: true });
+          img.addEventListener("error", () => {
+            const elapsed = Math.round(this.nowMs() - startedAt);
+            this.logCosmetic("Cosmetic layer failed", {
+              name: entry,
+              label: labelValue,
+              ms: elapsed,
+              src: img.currentSrc || img.src || null,
+            });
+          }, { once: true });
+        }
         const url = this.buildCosmeticUrl(entry);
         if (url) {
+          this.logCosmetic("Cosmetic layer set immediately", { name: entry, url });
           setImageSafe(img, url);
         } else {
+          this.logCosmetic("Cosmetic layer deferred (base not ready)", { name: entry });
           img.dataset.cosmetic = entry;
         }
         wrap.appendChild(img);
@@ -2798,6 +2998,80 @@ export class MessagesOverlay {
     return wrap;
   }
 
+  private buildGroupAvatarRow(
+    friend: FriendSummary | null,
+    groupId: string,
+  ): HTMLDivElement {
+    const row = document.createElement("div");
+    row.className = "qws-msg-group-avatars-row";
+    this.populateGroupAvatarRow(row, friend, groupId);
+    return row;
+  }
+
+  private populateGroupAvatarRow(
+    row: HTMLDivElement,
+    friend: FriendSummary | null,
+    groupId: string,
+  ): void {
+    const members = this.groupMembersByGroup.get(groupId) ?? [];
+    const ownerIdRaw =
+      this.groupOwnerByGroup.get(groupId) ??
+      (friend as any)?.ownerId ??
+      (friend as any)?.owner_id ??
+      null;
+    const ownerId = ownerIdRaw != null ? String(ownerIdRaw) : null;
+
+    let ordered = members;
+    if (ownerId) {
+      const ownerIndex = members.findIndex((entry) => entry.id === ownerId);
+      if (ownerIndex > 0) {
+        const ownerEntry = members[ownerIndex];
+        ordered = [ownerEntry, ...members.slice(0, ownerIndex), ...members.slice(ownerIndex + 1)];
+      }
+    }
+
+    const unique: GroupMemberLite[] = [];
+    const seen = new Set<string>();
+    for (const entry of ordered) {
+      if (!entry || !entry.id || seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      unique.push(entry);
+      if (unique.length >= 6) break;
+    }
+
+    const avatarKey = unique.length
+      ? unique
+          .map((entry) => {
+            const avatarList = Array.isArray(entry.avatar) ? entry.avatar.join(",") : "";
+            return `${entry.id}:${entry.avatarUrl ?? ""}:${avatarList}:${entry.name ?? ""}`;
+          })
+          .join("|")
+      : "empty";
+
+    if (row.dataset.avatarKey === avatarKey) {
+      return;
+    }
+    row.dataset.avatarKey = avatarKey;
+    row.innerHTML = "";
+
+    if (unique.length === 0) {
+      const anon = document.createElement("div");
+      anon.className = "qws-msg-avatar qws-msg-group-avatar-anon";
+      anon.textContent = "?";
+      row.appendChild(anon);
+      return;
+    }
+
+    for (const entry of unique) {
+      const avatarEl = this.buildAvatarElement(
+        null,
+        entry.avatarUrl ?? null,
+        entry.name ?? "",
+      );
+      row.appendChild(avatarEl);
+    }
+  }
+
   private createMessageAvatar(msg: DirectMessage, outgoing: boolean): HTMLDivElement {
     if (outgoing) {
       return this.buildAvatarElement(this.myAvatar, this.myAvatarUrl, this.myName ?? "You");
@@ -2812,6 +3086,8 @@ export class MessagesOverlay {
         raw.avatarList ??
         null;
       const avatarUrlRaw =
+        raw.discordAvatarUrl ??
+        raw.discord_avatar_url ??
         raw.senderAvatarUrl ??
         raw.sender_avatar_url ??
         raw.avatarUrl ??
@@ -2829,21 +3105,21 @@ export class MessagesOverlay {
         : null;
       const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : null;
       const senderName = senderNameRaw ? String(senderNameRaw) : null;
-      if (avatarList || avatarUrl || senderName) {
-        return this.buildAvatarElement(
-          avatarList,
-          avatarUrl,
-          senderName ?? msg.senderId,
-        );
-      }
       const cached = this.groupMemberCache.get(msg.senderId);
-      if (cached) {
+      const cachedList =
+        cached?.avatar && cached.avatar.length ? cached.avatar : null;
+      const finalAvatarList =
+        avatarList && avatarList.length ? avatarList : cachedList;
+      const finalAvatarUrl = avatarUrl ?? cached?.avatarUrl ?? null;
+      const finalName = senderName ?? cached?.name ?? null;
+      if (finalAvatarList || finalAvatarUrl || finalName) {
         return this.buildAvatarElement(
-          cached.avatar ?? null,
-          cached.avatarUrl ?? null,
-          cached.name ?? msg.senderId,
+          finalAvatarList,
+          finalAvatarUrl,
+          finalName ?? msg.senderId,
         );
       }
+      return this.buildAvatarElement(null, null, senderName ?? msg.senderId);
     }
     const friend = this.getFriendById(msg.senderId) ?? this.getFriendById(this.selectedId ?? "");
     return this.buildAvatarElement(
@@ -2859,6 +3135,8 @@ export class MessagesOverlay {
     const senderId = msg.senderId ? String(msg.senderId) : "";
     if (!senderId) return;
     const avatarUrlRaw =
+      raw.discordAvatarUrl ??
+      raw.discord_avatar_url ??
       raw.senderAvatarUrl ??
       raw.sender_avatar_url ??
       raw.avatarUrl ??
@@ -2887,6 +3165,21 @@ export class MessagesOverlay {
     const name = senderNameRaw ? String(senderNameRaw) : undefined;
     if (!avatar && !avatarUrl && !name) return;
     this.groupMemberCache.set(senderId, { avatar, avatarUrl, name });
+
+    const groupId = String(msg.conversationId ?? msg.recipientId ?? "").trim();
+    if (groupId) {
+      const list = this.groupMembersByGroup.get(groupId) ?? [];
+      const idx = list.findIndex((entry) => entry.id === senderId);
+      const nextEntry: GroupMemberLite = {
+        id: senderId,
+        avatar: avatar ?? list[idx]?.avatar,
+        avatarUrl: avatarUrl ?? list[idx]?.avatarUrl,
+        name: name ?? list[idx]?.name,
+      };
+      if (idx >= 0) list[idx] = nextEntry;
+      else list.push(nextEntry);
+      this.groupMembersByGroup.set(groupId, list);
+    }
   }
 
   private async ensureGroupMembers(groupId: string): Promise<void> {
@@ -2900,6 +3193,11 @@ export class MessagesOverlay {
         this.groupMembersLoaded.delete(groupId);
         return;
       }
+      const groupMeta = (details as any).group ?? details;
+      const ownerIdRaw = groupMeta?.ownerId ?? groupMeta?.owner_id ?? null;
+      if (ownerIdRaw) {
+        this.groupOwnerByGroup.set(groupId, String(ownerIdRaw));
+      }
       const membersRaw =
         (details as any).members ??
         (details as any).groupMembers ??
@@ -2909,13 +3207,15 @@ export class MessagesOverlay {
         this.groupMembersLoaded.delete(groupId);
         return;
       }
-      let cachedAny = false;
+      const membersLite: GroupMemberLite[] = [];
       for (const member of membersRaw) {
         if (!member) continue;
         const idRaw = (member as any).playerId ?? (member as any).player_id ?? (member as any).id ?? "";
         const id = String(idRaw ?? "").trim();
         if (!id) continue;
         const avatarUrlRaw =
+          (member as any).discordAvatarUrl ??
+          (member as any).discord_avatar_url ??
           (member as any).avatarUrl ??
           (member as any).avatar_url ??
           (member as any).discordAvatarUrl ??
@@ -2946,11 +3246,20 @@ export class MessagesOverlay {
           avatarUrl: avatarUrl ?? prev?.avatarUrl,
           name: name ?? prev?.name,
         });
-        cachedAny = true;
+        membersLite.push({
+          id,
+          avatar: avatar ?? prev?.avatar,
+          avatarUrl: avatarUrl ?? prev?.avatarUrl,
+          name: name ?? prev?.name,
+        });
       }
-      if (cachedAny && this.selectedId === groupId) {
+      if (membersLite.length) {
+        this.groupMembersByGroup.set(groupId, membersLite);
+      }
+      if (this.selectedId === groupId) {
         this.renderThread({ preserveScroll: true, scrollToBottom: false });
       }
+      this.renderFriendList({ preserveScroll: true });
     } catch {
       this.groupMembersLoaded.delete(groupId);
     }
@@ -3086,7 +3395,50 @@ export class MessagesOverlay {
         },
         onMessage: (payload) => this.handleIncomingGroupMessage(payload),
         onMemberAdded: () => void this.loadGroups(true),
-        onMemberRemoved: () => void this.loadGroups(true),
+        onMemberRemoved: (payload) => {
+          const raw = payload as any;
+          const gidRaw =
+            raw?.groupId ??
+            raw?.group_id ??
+            raw?.id ??
+            raw?.group?.id ??
+            raw?.group?.groupId ??
+            raw?.group?.group_id ??
+            "";
+          const memberRaw =
+            raw?.memberId ??
+            raw?.member_id ??
+            raw?.removedId ??
+            raw?.removed_id ??
+            raw?.playerId ??
+            raw?.player_id ??
+            raw?.targetId ??
+            raw?.target_id ??
+            "";
+          const gid = normalizeId(gidRaw);
+          const memberId = normalizeId(memberRaw);
+
+          if (this.myId && memberId && memberId === normalizeId(this.myId)) {
+            if (gid) {
+              this.convs.delete(gid);
+              this.convByConversationId.forEach((otherId, convId) => {
+                if (normalizeId(otherId) === gid) this.convByConversationId.delete(convId);
+              });
+              this.groupReadAt.delete(gid);
+            }
+            if (!gid || this.selectedId === gid) {
+              this.selectedId = null;
+              this.renderThread();
+            }
+            this.saveGroupReadState();
+            this.updateButtonBadge();
+            this.renderFriendList({ preserveScroll: true });
+            try {
+              window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT));
+            } catch {}
+          }
+          void this.loadGroups(true);
+        },
         onUpdated: () => void this.loadGroups(true),
         onDeleted: (payload) => {
           const gidRaw = (payload as any)?.groupId ?? (payload as any)?.group_id ?? "";
@@ -3101,6 +3453,9 @@ export class MessagesOverlay {
               this.renderThread();
             }
           }
+          try {
+            window.dispatchEvent(new CustomEvent(GROUPS_REFRESH_EVENT));
+          } catch {}
           void this.loadGroups(true);
           this.renderFriendList({ preserveScroll: true });
         },
@@ -3389,9 +3744,60 @@ export class MessagesOverlay {
     if (!this.myId) return;
     try {
       const data = await fetchGroups(this.myId);
-      const mapped = Array.isArray(data)
-        ? data.map(mapGroupToFriendSummary).filter((g): g is FriendSummary => !!g)
-        : [];
+      const rawGroups = Array.isArray(data) ? data : [];
+      for (const group of rawGroups) {
+        const idRaw =
+          (group as any).id ??
+          (group as any).groupId ??
+          (group as any).group_id ??
+          "";
+        const id = normalizeId(idRaw);
+        if (!id) continue;
+
+        const ownerIdRaw = (group as any).ownerId ?? (group as any).owner_id ?? null;
+        if (ownerIdRaw) {
+          this.groupOwnerByGroup.set(id, String(ownerIdRaw));
+        }
+
+        const previewRaw =
+          (group as any).previewMembers ??
+          (group as any).preview_members ??
+          null;
+        if (Array.isArray(previewRaw)) {
+          const membersLite: GroupMemberLite[] = [];
+          for (const entry of previewRaw) {
+            if (!entry) continue;
+            const memberIdRaw =
+              (entry as any).playerId ??
+              (entry as any).player_id ??
+              (entry as any).id ??
+              "";
+            const memberId = String(memberIdRaw ?? "").trim();
+            if (!memberId) continue;
+            const nameRaw =
+              (entry as any).playerName ??
+              (entry as any).player_name ??
+              (entry as any).name ??
+              null;
+            const avatarUrlRaw =
+              (entry as any).discordAvatarUrl ??
+              (entry as any).discord_avatar_url ??
+              (entry as any).avatarUrl ??
+              (entry as any).avatar_url ??
+              null;
+            membersLite.push({
+              id: memberId,
+              avatarUrl: avatarUrlRaw ? String(avatarUrlRaw) : undefined,
+              name: nameRaw ? String(nameRaw) : undefined,
+            });
+          }
+          this.groupMembersByGroup.set(id, membersLite);
+        }
+      }
+
+      const mapped = rawGroups
+        .map(mapGroupToFriendSummary)
+        .filter((g): g is FriendSummary => !!g);
       this.applyFriends(mapped, { forceRender: true });
       this.groupIdsLoaded = true;
       const nextIds = new Set<string>(mapped.map((g) => normalizeId(g.playerId)));
@@ -3417,9 +3823,22 @@ export class MessagesOverlay {
           removedAny = true;
         }
       }
+      for (const key of Array.from(this.groupMembersByGroup.keys())) {
+        if (!nextIds.has(key)) {
+          this.groupMembersByGroup.delete(key);
+          removedAny = true;
+        }
+      }
+      for (const key of Array.from(this.groupOwnerByGroup.keys())) {
+        if (!nextIds.has(key)) {
+          this.groupOwnerByGroup.delete(key);
+          removedAny = true;
+        }
+      }
       if (removedAny) {
         if (this.selectedId && !nextIds.has(this.selectedId)) {
           this.selectedId = null;
+          this.renderThread();
         }
         this.saveGroupReadState();
         this.updateButtonBadge();
@@ -3770,48 +4189,61 @@ export class MessagesOverlay {
       if (entry.unread > 0) row.classList.add("unread");
       if (this.selectedId === entry.id) row.classList.add("active");
 
-      const avatarWrap = document.createElement("div");
-      avatarWrap.className = "qws-msg-friend-avatar-wrap";
-      const avatar = document.createElement("div");
-      avatar.className = "qws-msg-friend-avatar";
-      if (entry.friend?.avatarUrl) {
-        const img = document.createElement("img");
-        img.className = "qws-msg-avatar-photo";
-        img.decoding = "async";
-        img.loading = "lazy";
-        setImageSafe(img, entry.friend.avatarUrl);
-        img.alt = formatFriendName(entry.friend, entry.id);
-        img.width = 32;
-        img.height = 32;
-        avatar.appendChild(img);
-      } else {
-        const fallback = document.createElement("span");
-        fallback.textContent = formatFriendName(entry.friend, entry.id)
-          .charAt(0)
-          .toUpperCase();
-        avatar.appendChild(fallback);
-      }
+      let avatarWrap: HTMLDivElement | null = null;
+      if (this.mode !== "group") {
+        avatarWrap = document.createElement("div");
+        avatarWrap.className = "qws-msg-friend-avatar-wrap";
+        const avatar = document.createElement("div");
+        avatar.className = "qws-msg-friend-avatar";
+        if (entry.friend?.avatarUrl) {
+          const img = document.createElement("img");
+          img.className = "qws-msg-avatar-photo";
+          img.decoding = "async";
+          img.loading = "lazy";
+          setImageSafe(img, entry.friend.avatarUrl);
+          img.alt = formatFriendName(entry.friend, entry.id);
+          img.width = 32;
+          img.height = 32;
+          avatar.appendChild(img);
+        } else {
+          const fallback = document.createElement("span");
+          fallback.textContent = formatFriendName(entry.friend, entry.id)
+            .charAt(0)
+            .toUpperCase();
+          avatar.appendChild(fallback);
+        }
 
-      avatarWrap.appendChild(avatar);
+        avatarWrap.appendChild(avatar);
+      }
 
       const meta = document.createElement("div");
       meta.className = "qws-msg-friend-meta";
       const name = document.createElement("div");
       name.className = "qws-msg-friend-name";
       name.textContent = formatFriendName(entry.friend, entry.id);
-      const sub = document.createElement("div");
-      sub.className = "qws-msg-friend-sub";
-      sub.textContent = formatStatus(entry.friend, this.mode);
+      const sub =
+        this.mode === "group"
+          ? this.buildGroupAvatarRow(entry.friend, entry.id)
+          : (() => {
+              const el = document.createElement("div");
+              el.className = "qws-msg-friend-sub";
+              el.textContent = formatStatus(entry.friend, this.mode);
+              return el;
+            })();
       meta.append(name, sub);
 
       let dot: HTMLSpanElement | null = null;
-      if (entry.friend?.isOnline) {
+      if (entry.friend?.isOnline && this.mode !== "group" && avatarWrap) {
         dot = document.createElement("span");
         dot.className = "qws-msg-status-dot";
         avatarWrap.appendChild(dot);
       }
 
-      row.append(avatarWrap, meta);
+      if (avatarWrap) {
+        row.append(avatarWrap, meta);
+      } else {
+        row.append(meta);
+      }
 
       let badge: HTMLSpanElement | null = null;
       if (entry.unread > 0) {
@@ -3819,6 +4251,17 @@ export class MessagesOverlay {
         badge.className = "qws-msg-unread-badge";
         badge.textContent = String(entry.unread);
         row.appendChild(badge);
+      }
+
+      let groupCountBadge: HTMLSpanElement | null = null;
+      if (this.mode === "group") {
+        const count = getGroupMemberCount(entry.friend);
+        if (count !== null) {
+          groupCountBadge = document.createElement("span");
+          groupCountBadge.className = "qws-msg-group-count";
+          groupCountBadge.textContent = `${count}/12`;
+          row.appendChild(groupCountBadge);
+        }
       }
 
       row.addEventListener("click", () => {
@@ -3831,6 +4274,7 @@ export class MessagesOverlay {
         avatarWrap,
         statusDot: dot,
         sub,
+        groupCountBadge,
       });
 
       this.listEl.appendChild(row);
@@ -3846,11 +4290,11 @@ export class MessagesOverlay {
     const prevScrollHeight = preserveScroll ? this.threadBodyEl.scrollHeight : 0;
     const prevScrollTop = preserveScroll ? this.threadBodyEl.scrollTop : 0;
 
-    this.threadHeadEl.innerHTML = "";
-    this.threadBodyEl.innerHTML = "";
-    this.statusEl.textContent = "";
-
     if (!this.selectedId) {
+      this.threadHeadEl.innerHTML = "";
+      this.threadBodyEl.innerHTML = "";
+      this.statusEl.textContent = "";
+      this.lastRenderedThreadKey = null;
       const empty = document.createElement("div");
       empty.className = "qws-msg-empty";
       empty.textContent = this.mode === "group"
@@ -3862,16 +4306,34 @@ export class MessagesOverlay {
       return;
     }
 
+    const threadKey = `${this.mode}:${this.selectedId}`;
+    const conv = this.ensureConversation(this.selectedId);
     const friend = this.getFriendById(this.selectedId);
+    const label = formatFriendName(friend, this.selectedId);
+    const fingerprint = this.computeThreadFingerprint(conv, { label, mode: this.mode });
+    const prevFingerprint = this.threadFingerprintById.get(threadKey);
+    if (
+      prevFingerprint === fingerprint &&
+      !conv.loading &&
+      !conv.loadingOlder &&
+      this.lastRenderedThreadKey === threadKey
+    ) {
+      return;
+    }
+    this.threadFingerprintById.set(threadKey, fingerprint);
+    this.lastRenderedThreadKey = threadKey;
+
+    this.threadHeadEl.innerHTML = "";
+    this.threadBodyEl.innerHTML = "";
+    this.statusEl.textContent = "";
+
     const title = document.createElement("div");
-    title.textContent = formatFriendName(friend, this.selectedId);
+    title.textContent = label;
     title.style.fontWeight = "700";
     this.threadHeadEl.appendChild(title);
     if (this.onThreadHeadRender) {
       this.onThreadHeadRender(this.threadHeadEl, this.selectedId);
     }
-
-    const conv = this.ensureConversation(this.selectedId);
     if (conv.loading && !conv.messages.length) {
       const loading = document.createElement("div");
       loading.className = "qws-msg-loading";
@@ -4518,7 +4980,26 @@ export class MessagesOverlay {
     const conv = this.convs.get(id);
     const unread = conv?.unread ?? 0;
 
-    state.sub.textContent = formatStatus(friend, this.mode);
+    if (this.mode === "group") {
+      this.populateGroupAvatarRow(state.sub, friend, id);
+      const count = getGroupMemberCount(friend);
+      if (count !== null) {
+        if (!state.groupCountBadge) {
+          const badge = document.createElement("span");
+          badge.className = "qws-msg-group-count";
+          badge.textContent = `${count}/12`;
+          state.row.appendChild(badge);
+          state.groupCountBadge = badge;
+        } else {
+          state.groupCountBadge.textContent = `${count}/12`;
+        }
+      } else if (state.groupCountBadge) {
+        state.groupCountBadge.remove();
+        state.groupCountBadge = null;
+      }
+    } else {
+      state.sub.textContent = formatStatus(friend, this.mode);
+    }
 
     if (unread > 0) {
       state.row.classList.add("unread");
@@ -4539,8 +5020,8 @@ export class MessagesOverlay {
       }
     }
 
-    const isOnline = Boolean(friend?.isOnline);
-    if (isOnline && !state.statusDot) {
+    const isOnline = this.mode !== "group" && Boolean(friend?.isOnline);
+    if (isOnline && !state.statusDot && state.avatarWrap) {
       const dot = document.createElement("span");
       dot.className = "qws-msg-status-dot";
       state.avatarWrap.appendChild(dot);
