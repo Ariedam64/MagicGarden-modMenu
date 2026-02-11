@@ -1,11 +1,18 @@
 // api.ts
 // Point d'entrée unique pour parler à ton backend ariesmod-api.ariedam.fr
 
+import { isDiscordActivityContext } from "./discordCsp";
+export {
+  setImageSafe,
+  getAudioUrlSafe,
+  installEmojiDataFetchInterceptor,
+} from "./discordCsp";
+
 const API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
 
 // Si tu n'as pas les types Tampermonkey, ça évite que TS hurle
 declare function GM_xmlhttpRequest(details: {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   url: string;
   headers?: Record<string, string>;
   data?: string;
@@ -15,158 +22,11 @@ declare function GM_xmlhttpRequest(details: {
   onprogress?: (response: { status: number; readyState: number; responseText: string; loaded: number; total: number }) => void;
 }): { abort(): void };
 
-/** Hosts autorisés par le CSP Discord pour img-src. */
-const _SAFE_IMG_HOSTS = ["cdn.discordapp.com", "media.discordapp.net"];
-/** Cache des blob: URL générées pour contourner le CSP img-src. */
-const _gmImgCache = new Map<string, string>();
-/** Requêtes en cours : évite de lancer plusieurs GM fetches pour la même URL. */
-const _gmImgPending = new Map<string, HTMLImageElement[]>();
-const _extMimeMap: Record<string, string> = {
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-  gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
-};
-
-function _isImgUrlSafe(url: string): boolean {
-  if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("/")) return true;
-  try {
-    const { hostname } = new URL(url);
-    return _SAFE_IMG_HOSTS.some((h) => hostname === h || hostname.endsWith("." + h));
-  } catch {
-    return true;
-  }
-}
-
-/**
- * Définit img.src de façon sûre vis-à-vis du CSP Discord :
- * les images externes non autorisées sont récupérées via GM_xmlhttpRequest
- * et servies comme blob: URL (autorisées par img-src blob:).
- */
-export function setImageSafe(img: HTMLImageElement, url: string | null | undefined): void {
-  if (!url) return;
-  if (_isImgUrlSafe(url)) {
-    img.src = url;
-    return;
-  }
-  const cached = _gmImgCache.get(url);
-  if (cached) {
-    img.src = cached;
-    return;
-  }
-  // Deduplicate in-flight requests for the same URL
-  const pending = _gmImgPending.get(url);
-  if (pending) {
-    pending.push(img);
-    return;
-  }
-  _gmImgPending.set(url, [img]);
-  GM_xmlhttpRequest({
-    method: "GET",
-    url,
-    headers: {},
-    responseType: "arraybuffer",
-    onload: (res) => {
-      const imgs = _gmImgPending.get(url) ?? [];
-      _gmImgPending.delete(url);
-      if (!res.response) {
-        for (const el of imgs) el.src = url;
-        return;
-      }
-      const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "png";
-      const mime = _extMimeMap[ext] ?? "image/png";
-      const blob = new Blob([res.response as ArrayBuffer], { type: mime });
-      const blobUrl = URL.createObjectURL(blob);
-      _gmImgCache.set(url, blobUrl);
-      for (const el of imgs) el.src = blobUrl;
-    },
-    onerror: () => {
-      const imgs = _gmImgPending.get(url) ?? [];
-      _gmImgPending.delete(url);
-      for (const el of imgs) el.src = url;
-    },
-  });
-}
-
-/** Cache des blob: URL pour les fichiers audio externes (contournement CSP media-src Discord). */
-const _gmAudioCache = new Map<string, string>();
-/** Requêtes audio en cours : évite de lancer plusieurs GM fetches pour la même URL. */
-const _gmAudioPending = new Map<string, Array<(url: string) => void>>();
-
-/**
- * Retourne une URL audio safe pour Discord CSP (media-src 'self' blob: data:).
- * Si on n'est pas sur Discord, retourne l'URL originale.
- * Sinon, fetch via GM et retourne un blob: URL.
- */
-export function getAudioUrlSafe(url: string): Promise<string> {
-  return new Promise((resolve) => {
-    if (!url) {
-      resolve(url);
-      return;
-    }
-    // Si pas sur Discord, pas besoin de contourner le CSP
-    if (!isDiscordActivityContext()) {
-      resolve(url);
-      return;
-    }
-    // Si déjà en cache, retourner immédiatement
-    const cached = _gmAudioCache.get(url);
-    if (cached) {
-      resolve(cached);
-      return;
-    }
-    // Si requête en cours, attendre
-    const pending = _gmAudioPending.get(url);
-    if (pending) {
-      pending.push(resolve);
-      return;
-    }
-    _gmAudioPending.set(url, [resolve]);
-    GM_xmlhttpRequest({
-      method: "GET",
-      url,
-      headers: {},
-      responseType: "arraybuffer",
-      onload: (res) => {
-        const callbacks = _gmAudioPending.get(url) ?? [];
-        _gmAudioPending.delete(url);
-        if (!res.response) {
-          for (const cb of callbacks) cb(url);
-          return;
-        }
-        // Déterminer le type MIME (mp3, ogg, wav, etc.)
-        const ext = url.split(".").pop()?.toLowerCase().split("?")[0] ?? "mp3";
-        const audioMimeMap: Record<string, string> = {
-          mp3: "audio/mpeg",
-          ogg: "audio/ogg",
-          wav: "audio/wav",
-          m4a: "audio/mp4",
-        };
-        const mime = audioMimeMap[ext] ?? "audio/mpeg";
-        const blob = new Blob([res.response as ArrayBuffer], { type: mime });
-        const blobUrl = URL.createObjectURL(blob);
-        _gmAudioCache.set(url, blobUrl);
-        for (const cb of callbacks) cb(blobUrl);
-      },
-      onerror: () => {
-        const callbacks = _gmAudioPending.get(url) ?? [];
-        _gmAudioPending.delete(url);
-        for (const cb of callbacks) cb(url);
-      },
-    });
-  });
-}
-
 /** Handle retourné par les fonctions de stream SSE (remplace EventSource). */
 export interface StreamHandle {
   close(): void;
 }
 
-function isDiscordActivityContext(): boolean {
-  try {
-    return window.location.hostname.endsWith("discordsays.com");
-  } catch {
-    return false;
-  }
-}
 
 /** Known SSE event names across all streams. */
 const SSE_EVENT_NAMES = [
@@ -178,6 +38,12 @@ const SSE_EVENT_NAMES = [
   "message",
   "read",
   "ping",
+  "presence",
+  "group_message",
+  "group_member_added",
+  "group_member_removed",
+  "group_updated",
+  "group_deleted",
 ] as const;
 
 function openGMSSEStream(
@@ -187,14 +53,6 @@ function openGMSSEStream(
 ): StreamHandle {
   let closed = false;
   let source: EventSource | null = null;
-  const tag = (() => {
-    try {
-      return `[SSE ${new URL(url).pathname.split("/").slice(-2).join("/")}]`;
-    } catch {
-      return "[SSE]";
-    }
-  })();
-
   source = new EventSource(url);
 
   const handleEvent = (event: Event, name: string) => {
@@ -213,7 +71,6 @@ function openGMSSEStream(
 
   source.addEventListener("error", (e) => {
     if (closed) return;
-    console.warn(tag, "error", e);
     onError?.();
   });
 
@@ -226,89 +83,322 @@ function openGMSSEStream(
   };
 }
 
-// ---------- Emoji data fetch interceptor (bypass CSP + blob HEAD issue) ----------
+// ---------- Unified events (SSE + long-poll) ----------
 
-const EMOJI_DATA_CDN_PREFIX =
-  "https://cdn.jsdelivr.net/npm/emoji-picker-element-data";
-let _emojiJson: string | null = null;
-let _emojiPending: Array<(json: string | null) => void> = [];
-let _emojiInterceptorInstalled = false;
-
-function _emojiMakeResponse(json: string, method: string): Response {
-  if (method === "HEAD") {
-    return new Response(null, {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  return new Response(json, {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+interface UnifiedEvent {
+  id: number;
+  type: string;
+  data: any;
+  ts: string;
 }
 
-/**
- * Installe un intercepteur sur window.fetch pour servir les données
- * emoji-picker-element depuis le cache GM (contourne CSP + HEAD sur blob:).
- * Idempotent — à appeler le plus tôt possible (avant tout emoji-picker dans le DOM).
- */
-export function installEmojiDataFetchInterceptor(): void {
-  if (_emojiInterceptorInstalled) return;
-  _emojiInterceptorInstalled = true;
+interface UnifiedPollResponse {
+  playerId: string;
+  lastEventId: number;
+  events: UnifiedEvent[];
+}
 
-  const _origFetch = window.fetch.bind(window);
-  window.fetch = function (
-    input: RequestInfo | URL,
-    init?: RequestInit,
-  ): Promise<Response> {
-    const url =
-      typeof input === "string"
-        ? input
-        : input instanceof URL
-          ? input.href
-          : (input as Request).url;
-    if (!url.startsWith(EMOJI_DATA_CDN_PREFIX)) {
-      return _origFetch(input, init);
-    }
-    const method = (
-      init?.method ??
-      (input instanceof Request ? (input as Request).method : "GET")
-    ).toUpperCase();
-    if (_emojiJson) {
-      return Promise.resolve(_emojiMakeResponse(_emojiJson, method));
-    }
-    // Queue until GM fetch completes
-    return new Promise<Response>((resolve) => {
-      _emojiPending.push((json) => {
-        resolve(
-          json
-            ? _emojiMakeResponse(json, method)
-            : new Response(null, { status: 503 }),
-        );
-      });
+type UnifiedSubscriber = {
+  onConnected?: (payload: { playerId: string; lastEventId?: number }) => void;
+  onEvent: (eventName: string, data: any) => void;
+  onError?: (event: Event) => void;
+};
+
+type UnifiedConnection = {
+  playerId: string;
+  mode: "sse" | "poll";
+  subscribers: Set<UnifiedSubscriber>;
+  handle: StreamHandle | null;
+  lastEventId: number;
+  connectedNotified: boolean;
+  closed: boolean;
+  pollPaused: boolean;
+  pollAbort?: () => void;
+  pollKick?: () => void;
+  pollRunning: boolean;
+  pollToken: number;
+};
+
+const _unifiedConnections = new Map<string, UnifiedConnection>();
+
+function safeJsonParse(value: any): any {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function notifyConnected(
+  conn: UnifiedConnection,
+  payload: { playerId: string; lastEventId?: number },
+): void {
+  if (conn.connectedNotified) return;
+  conn.connectedNotified = true;
+  for (const sub of conn.subscribers) {
+    sub.onConnected?.(payload);
+  }
+}
+
+function dispatchUnifiedEvent(
+  conn: UnifiedConnection,
+  eventName: string,
+  data: any,
+): void {
+  for (const sub of conn.subscribers) {
+    sub.onEvent(eventName, data);
+  }
+}
+
+function startUnifiedSSE(conn: UnifiedConnection): void {
+  const url = buildUrl("events/stream", { playerId: conn.playerId });
+
+  conn.handle = openGMSSEStream(
+    url,
+    (eventName, raw) => {
+      const data = safeJsonParse(raw);
+
+      if (eventName === "connected") {
+        const payload =
+          data && typeof data === "object"
+            ? (data as any)
+            : { playerId: conn.playerId };
+
+        const lastId = Number(payload.lastEventId);
+        if (Number.isFinite(lastId)) {
+          conn.lastEventId = Math.max(conn.lastEventId, lastId);
+        }
+
+        notifyConnected(conn, {
+          playerId: payload.playerId ?? conn.playerId,
+          lastEventId: Number.isFinite(lastId) ? lastId : undefined,
+        });
+        return;
+      }
+
+      dispatchUnifiedEvent(conn, eventName, data);
+    },
+    () => {
+      for (const sub of conn.subscribers) {
+        sub.onError?.(new Event("error"));
+      }
+    },
+  );
+}
+
+type GmLongPollResult<T> = {
+  status: number;
+  data: T | null;
+  aborted?: boolean;
+};
+
+function gmLongPoll<T>(
+  url: string,
+): { abort: () => void; promise: Promise<GmLongPollResult<T>> } {
+  let aborted = false;
+  let req: { abort(): void } | null = null;
+  const promise = new Promise<GmLongPollResult<T>>((resolve) => {
+    req = GM_xmlhttpRequest({
+      method: "GET",
+      url,
+      headers: {},
+      onload: (res) => {
+        if (res.status >= 200 && res.status < 300) {
+          try {
+            const parsed = res.responseText
+              ? (JSON.parse(res.responseText) as T)
+              : null;
+            resolve({ status: res.status, data: parsed });
+          } catch (e) {
+            resolve({ status: res.status, data: null });
+          }
+        } else {
+          resolve({ status: res.status, data: null });
+        }
+      },
+      onerror: (err) => {
+        if (aborted) {
+          resolve({ status: 0, data: null, aborted: true });
+          return;
+        }
+        resolve({ status: 0, data: null });
+      },
     });
+  });
+
+  return {
+    abort: () => {
+      aborted = true;
+      try {
+        req?.abort();
+      } catch {}
+    },
+    promise,
+  };
+}
+
+function startUnifiedLongPoll(conn: UnifiedConnection): void {
+  const POLL_TIMEOUT_MS = 25000;
+  let backoff = 1000;
+  const BACKOFF_MAX = 30000;
+  let inFlight: { abort: () => void } | null = null;
+
+  const schedule = (delay: number) => {
+    if (conn.closed || conn.pollPaused) return;
+    setTimeout(poll, delay);
   };
 
-  GM_xmlhttpRequest({
-    method: "GET",
-    url: `${EMOJI_DATA_CDN_PREFIX}@^1/en/emojibase/data.json`,
-    headers: {},
-    onload: (res) => {
-      if (res.status >= 200 && res.status < 300 && res.responseText) {
-        _emojiJson = res.responseText;
-        for (const cb of _emojiPending) cb(_emojiJson);
-      } else {
-        console.error("[api] emoji fetch failed:", res.status);
-        for (const cb of _emojiPending) cb(null);
+  const poll = async (): Promise<void> => {
+    if (conn.closed || conn.pollPaused || conn.pollRunning) return;
+    conn.pollRunning = true;
+    const token = ++conn.pollToken;
+
+    const url = buildUrl("events/poll", {
+      playerId: conn.playerId,
+      since: conn.lastEventId,
+      timeoutMs: POLL_TIMEOUT_MS,
+    });
+    const pollReq = gmLongPoll<UnifiedPollResponse>(url);
+    inFlight = { abort: pollReq.abort };
+    const { status, data, aborted } = await pollReq.promise;
+    inFlight = null;
+    conn.pollRunning = false;
+
+    if (conn.closed || conn.pollPaused || aborted || token !== conn.pollToken) return;
+
+    if (status === 200 && data) {
+      const lastId = Number(data.lastEventId);
+      if (Number.isFinite(lastId)) {
+        conn.lastEventId = Math.max(conn.lastEventId, lastId);
       }
-      _emojiPending = [];
+
+      notifyConnected(conn, {
+        playerId: data.playerId ?? conn.playerId,
+        lastEventId: Number.isFinite(lastId) ? lastId : undefined,
+      });
+
+      if (Array.isArray(data.events)) {
+        for (const evt of data.events) {
+          if (!evt || typeof evt.type !== "string") continue;
+          if (typeof evt.id === "number") {
+            conn.lastEventId = Math.max(conn.lastEventId, evt.id);
+          }
+          dispatchUnifiedEvent(conn, evt.type, evt.data);
+        }
+      }
+
+      backoff = 1000;
+      schedule(0);
+      return;
+    }
+
+    for (const sub of conn.subscribers) {
+      sub.onError?.(new Event("error"));
+    }
+
+    schedule(backoff);
+    backoff = Math.min(BACKOFF_MAX, Math.floor(backoff * 1.7));
+  };
+
+  poll();
+
+  conn.handle = {
+    close: () => {
+      conn.closed = true;
+      conn.pollToken += 1;
+      conn.pollRunning = false;
+      inFlight?.abort();
     },
-    onerror: (err) => {
-      console.error("[api] emoji fetch error:", err);
-      for (const cb of _emojiPending) cb(null);
-      _emojiPending = [];
+  };
+
+  conn.pollAbort = () => {
+    conn.pollToken += 1;
+    conn.pollRunning = false;
+    inFlight?.abort();
+  };
+
+  conn.pollKick = () => {
+    if (conn.closed || conn.pollPaused || conn.pollRunning) return;
+    poll();
+  };
+}
+
+function openUnifiedEvents(
+  playerId: string,
+  subscriber: UnifiedSubscriber,
+): StreamHandle {
+  let conn = _unifiedConnections.get(playerId);
+  if (!conn) {
+    conn = {
+      playerId,
+      mode: isDiscordActivityContext() ? "poll" : "sse",
+      subscribers: new Set<UnifiedSubscriber>(),
+      handle: null,
+      lastEventId: 0,
+      connectedNotified: false,
+      closed: false,
+      pollPaused: false,
+      pollRunning: false,
+      pollToken: 0,
+    };
+    _unifiedConnections.set(playerId, conn);
+
+    if (conn.mode === "poll") {
+      startUnifiedLongPoll(conn);
+    } else {
+      startUnifiedSSE(conn);
+    }
+  }
+
+  conn.subscribers.add(subscriber);
+
+  return {
+    close: () => {
+      conn!.subscribers.delete(subscriber);
+      if (conn!.subscribers.size === 0) {
+        conn!.closed = true;
+        conn!.handle?.close();
+        _unifiedConnections.delete(playerId);
+      }
     },
-  });
+  };
+}
+
+let _pollPauseDepth = 0;
+
+function pauseDiscordLongPolls(): void {
+  if (!isDiscordActivityContext()) return;
+  _pollPauseDepth += 1;
+  for (const conn of _unifiedConnections.values()) {
+    if (conn.mode !== "poll") continue;
+    conn.pollPaused = true;
+    conn.pollToken += 1;
+    conn.pollRunning = false;
+    conn.pollAbort?.();
+  }
+}
+
+function resumeDiscordLongPolls(): void {
+  if (!isDiscordActivityContext()) return;
+  _pollPauseDepth = Math.max(0, _pollPauseDepth - 1);
+  if (_pollPauseDepth > 0) return;
+  for (const conn of _unifiedConnections.values()) {
+    if (conn.mode !== "poll") continue;
+    conn.pollPaused = false;
+    conn.pollKick?.();
+  }
+}
+
+async function withDiscordPollPause<T>(fn: () => Promise<T>): Promise<T> {
+  if (!isDiscordActivityContext()) return await fn();
+  pauseDiscordLongPolls();
+  try {
+    return await fn();
+  } finally {
+    resumeDiscordLongPolls();
+  }
 }
 
 import type {
@@ -525,12 +615,34 @@ function buildUrl(
   return url.toString();
 }
 
-function httpGet<T>(
-  path: string,
-  query?: Record<string, string | number | undefined>,
+async function fetchJson<T>(
+  url: string,
+  options: RequestInit,
+  label: "GET" | "POST" | "PATCH" | "DELETE",
+): Promise<{ status: number; data: T | null }> {
+  try {
+    const res = await fetch(url, {
+      ...options,
+      credentials: options.credentials ?? "omit",
+    });
+    const text = await res.text();
+    let parsed: T | null = null;
+    if (text) {
+      try {
+        parsed = JSON.parse(text) as T;
+      } catch (e) {
+      }
+    }
+    return { status: res.status, data: parsed };
+  } catch (err) {
+    throw err;
+  }
+}
+
+function gmGet<T>(
+  url: string,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
-    const url = buildUrl(path, query);
     GM_xmlhttpRequest({
       method: "GET",
       url,
@@ -543,28 +655,24 @@ function httpGet<T>(
               : null;
             resolve({ status: res.status, data: parsed });
           } catch (e) {
-            console.error("[api] GET parse error:", e, res.responseText);
             resolve({ status: res.status, data: null });
           }
         } else {
-          console.error("[api] GET error:", res.status, res.responseText);
           resolve({ status: res.status, data: null });
         }
       },
       onerror: (err) => {
-        console.error("[api] GET request failed:", err);
         resolve({ status: 0, data: null });
       },
     });
   });
 }
 
-function httpPost<T>(
-  path: string,
+function gmPost<T>(
+  url: string,
   body: unknown,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
-    const url = buildUrl(path);
     GM_xmlhttpRequest({
       method: "POST",
       url,
@@ -580,20 +688,167 @@ function httpPost<T>(
               : null;
             resolve({ status: res.status, data: parsed });
           } catch (e) {
-            console.error("[api] POST parse error:", e, res.responseText);
             resolve({ status: res.status, data: null });
           }
         } else {
-          console.error("[api] POST error:", res.status, res.responseText);
           resolve({ status: res.status, data: null });
         }
       },
       onerror: (err) => {
-        console.error("[api] POST request failed:", err);
         resolve({ status: 0, data: null });
       },
     });
   });
+}
+
+function gmPatch<T>(
+  url: string,
+  body: unknown,
+): Promise<{ status: number; data: T | null }> {
+  return new Promise((resolve) => {
+    GM_xmlhttpRequest({
+      method: "PATCH",
+      url,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: JSON.stringify(body),
+      onload: (res) => {
+        if (res.status >= 200 && res.status < 300) {
+          try {
+            const parsed = res.responseText
+              ? (JSON.parse(res.responseText) as T)
+              : null;
+            resolve({ status: res.status, data: parsed });
+          } catch (e) {
+            resolve({ status: res.status, data: null });
+          }
+        } else {
+          resolve({ status: res.status, data: null });
+        }
+      },
+      onerror: (err) => {
+        resolve({ status: 0, data: null });
+      },
+    });
+  });
+}
+
+function gmDelete<T>(
+  url: string,
+  body?: unknown,
+): Promise<{ status: number; data: T | null }> {
+  return new Promise((resolve) => {
+    GM_xmlhttpRequest({
+      method: "DELETE",
+      url,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: body !== undefined ? JSON.stringify(body) : undefined,
+      onload: (res) => {
+        if (res.status >= 200 && res.status < 300) {
+          try {
+            const parsed = res.responseText
+              ? (JSON.parse(res.responseText) as T)
+              : null;
+            resolve({ status: res.status, data: parsed });
+          } catch (e) {
+            resolve({ status: res.status, data: null });
+          }
+        } else {
+          resolve({ status: res.status, data: null });
+        }
+      },
+      onerror: (err) => {
+        resolve({ status: 0, data: null });
+      },
+    });
+  });
+}
+
+async function httpGet<T>(
+  path: string,
+  query?: Record<string, string | number | undefined>,
+): Promise<{ status: number; data: T | null }> {
+  const url = buildUrl(path, query);
+  if (!isDiscordActivityContext()) {
+    try {
+      return await fetchJson<T>(url, { method: "GET" }, "GET");
+    } catch {
+      // fallback to GM
+    }
+  }
+  return withDiscordPollPause(() => gmGet<T>(url));
+}
+
+async function httpPost<T>(
+  path: string,
+  body: unknown,
+): Promise<{ status: number; data: T | null }> {
+  const url = buildUrl(path);
+  if (!isDiscordActivityContext()) {
+    try {
+      return await fetchJson<T>(
+        url,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        "POST",
+      );
+    } catch {
+      // fallback to GM
+    }
+  }
+  return withDiscordPollPause(() => gmPost<T>(url, body));
+}
+
+async function httpPatch<T>(
+  path: string,
+  body: unknown,
+): Promise<{ status: number; data: T | null }> {
+  const url = buildUrl(path);
+  if (!isDiscordActivityContext()) {
+    try {
+      return await fetchJson<T>(
+        url,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+        "PATCH",
+      );
+    } catch {
+      // fallback to GM
+    }
+  }
+  return withDiscordPollPause(() => gmPatch<T>(url, body));
+}
+
+async function httpDelete<T>(
+  path: string,
+  body?: unknown,
+): Promise<{ status: number; data: T | null }> {
+  const url = buildUrl(path);
+  if (!isDiscordActivityContext()) {
+    try {
+      return await fetchJson<T>(
+        url,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        },
+        "DELETE",
+      );
+    } catch {
+      // fallback to GM
+    }
+  }
+  return withDiscordPollPause(() => gmDelete<T>(url, body));
 }
 
 
@@ -842,128 +1097,56 @@ export async function fetchOutgoingRequestsWithViews(
   return fetchPlayersView(ids, { sections: ["profile"] });
 }
 
-function openDiscordFriendRequestsPoller(
-  playerId: string,
-  handlers: FriendRequestsStreamHandlers,
-): StreamHandle {
-  const LOG = "[friend-poll]";
-  let closed = false;
-  let prevIncomingKeys = new Set<string>();
-  let prevOutgoingKeys = new Set<string>();
-  let prevFriendKeys = new Set<string>();
-  let initialized = false;
-  let pollCount = 0;
-
-  handlers.onConnected?.({ playerId });
-
-  async function poll() {
-    if (closed) return;
-    pollCount++;
-    try {
-      const [result, friendIds] = await Promise.all([
-        fetchFriendRequests(playerId),
-        fetchFriendsIds(playerId),
-      ]);
-
-      const newIncomingKeys = new Set(result.incoming.map((r) => r.fromPlayerId));
-      const newOutgoingKeys = new Set(result.outgoing.map((r) => r.toPlayerId));
-      const newFriendKeys = new Set(friendIds);
-
-      if (initialized) {
-        // New incoming requests
-        for (const req of result.incoming) {
-          if (!prevIncomingKeys.has(req.fromPlayerId)) {
-            handlers.onRequest?.({ requesterId: req.fromPlayerId, targetId: playerId, createdAt: req.createdAt });
-          }
-        }
-        // Cancelled incoming requests
-        for (const key of prevIncomingKeys) {
-          if (!newIncomingKeys.has(key)) {
-            handlers.onCancelled?.({ requesterId: key, targetId: playerId });
-          }
-        }
-        // Outgoing request disappeared → accepted or rejected
-        for (const key of prevOutgoingKeys) {
-          if (!newOutgoingKeys.has(key)) {
-            const now = new Date().toISOString();
-            if (newFriendKeys.has(key)) {
-              handlers.onAccepted?.({ requesterId: playerId, responderId: key, updatedAt: now });
-            } else {
-              handlers.onRejected?.({ requesterId: playerId, responderId: key, updatedAt: now });
-            }
-          }
-        }
-        // Friend removed us
-        for (const key of prevFriendKeys) {
-          if (!newFriendKeys.has(key)) {
-            handlers.onRemoved?.({ removerId: key, removedId: playerId, removedAt: new Date().toISOString() });
-          }
-        }
-      }
-
-      prevIncomingKeys = newIncomingKeys;
-      prevOutgoingKeys = newOutgoingKeys;
-      prevFriendKeys = newFriendKeys;
-      initialized = true;
-    } catch (e) {
-      console.error(LOG, "poll error:", e);
-    }
-    if (!closed) setTimeout(poll, 5000);
-  }
-
-  poll();
-  return { close: () => { closed = true; } };
-}
 
 export function openFriendRequestsStream(
   playerId: string,
   handlers: FriendRequestsStreamHandlers = {},
 ): StreamHandle | null {
   if (!playerId) return null;
-  if (isDiscordActivityContext()) return openDiscordFriendRequestsPoller(playerId, handlers);
 
-  const url = buildUrl("friend-requests/stream", { playerId });
+  return openUnifiedEvents(playerId, {
+    onConnected: (payload) => {
+      handlers.onConnected?.({ playerId: payload.playerId ?? playerId });
+    },
+    onError: (event) => {
+      handlers.onError?.(event);
+    },
+    onEvent: (eventName, data) => {
+      const parsed = safeJsonParse(data);
 
-  const LOG = "[friend-stream]";
-  return openGMSSEStream(
-    url,
-    (eventName, data) => {
-      try {
-        const parsed = JSON.parse(data);
-        switch (eventName) {
-          case "connected":
-            handlers.onConnected?.(parsed as FriendRequestStreamConnected);
-            break;
-          case "friend_request":
-            handlers.onRequest?.(parsed as FriendRequestStreamRequest);
-            break;
-          case "friend_response": {
-            const resp = parsed as FriendRequestStreamResponse;
-            handlers.onResponse?.(resp);
-            if (resp.action === "accept") {
-              handlers.onAccepted?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
-            } else if (resp.action === "reject") {
-              handlers.onRejected?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
-            }
-            break;
+      switch (eventName) {
+        case "friend_request":
+          handlers.onRequest?.(parsed as FriendRequestStreamRequest);
+          break;
+        case "friend_response": {
+          const resp = parsed as FriendRequestStreamResponse;
+          handlers.onResponse?.(resp);
+          if (resp.action === "accept") {
+            handlers.onAccepted?.({
+              requesterId: resp.requesterId,
+              responderId: resp.responderId,
+              updatedAt: resp.updatedAt,
+            });
+          } else if (resp.action === "reject") {
+            handlers.onRejected?.({
+              requesterId: resp.requesterId,
+              responderId: resp.responderId,
+              updatedAt: resp.updatedAt,
+            });
           }
-          case "friend_cancelled":
-            handlers.onCancelled?.(parsed as FriendRequestStreamCancelled);
-            break;
-          case "friend_removed":
-            handlers.onRemoved?.(parsed as FriendRequestStreamRemoved);
-            break;
-          default:
-            break;
+          break;
         }
-      } catch (e) {
-        console.error(LOG, "parse error:", e, "raw:", data);
+        case "friend_cancelled":
+          handlers.onCancelled?.(parsed as FriendRequestStreamCancelled);
+          break;
+        case "friend_removed":
+          handlers.onRemoved?.(parsed as FriendRequestStreamRemoved);
+          break;
+        default:
+          break;
       }
     },
-    () => {
-      handlers.onError?.(new Event("error"));
-    },
-  );
+  });
 }
 
 export async function cancelFriendRequest(
@@ -1101,6 +1284,163 @@ export async function fetchModPlayers(options?: {
   return data;
 }
 
+// ---------- 6c) Groups ----------
+
+export interface GroupSummary {
+  id: string;
+  name: string;
+  ownerId: string;
+  memberCount?: number;
+  membersCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  lastMessageAt?: string | null;
+  [key: string]: any;
+}
+
+export interface GroupMember {
+  playerId: string;
+  name?: string | null;
+  avatarUrl?: string | null;
+  avatar?: string[] | null;
+  joinedAt?: string;
+  role?: "owner" | "member";
+  [key: string]: any;
+}
+
+export interface GroupDetails {
+  group?: GroupSummary;
+  members?: GroupMember[];
+  [key: string]: any;
+}
+
+export interface GroupMessage {
+  id: number;
+  groupId: string;
+  senderId: string;
+  text?: string;
+  body?: string;
+  createdAt: string;
+  [key: string]: any;
+}
+
+export async function createGroup(params: {
+  ownerId: string;
+  name: string;
+}): Promise<GroupSummary | null> {
+  const { ownerId, name } = params;
+  if (!ownerId || !name) return null;
+  const { status, data } = await httpPost<GroupSummary>("groups", { ownerId, name });
+  if (status >= 200 && status < 300 && data) return data;
+  return null;
+}
+
+export async function fetchGroups(playerId: string): Promise<GroupSummary[]> {
+  if (!playerId) return [];
+  const { status, data } = await httpGet<GroupSummary[] | { playerId?: string; groups?: GroupSummary[] }>(
+    "groups",
+    { playerId },
+  );
+  if (status !== 200 || !data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data.groups)) return data.groups;
+  return [];
+}
+
+export async function fetchGroupDetails(
+  groupId: string,
+  playerId: string,
+): Promise<GroupDetails | null> {
+  if (!groupId || !playerId) return null;
+  const { status, data } = await httpGet<GroupDetails>(`groups/${groupId}`, { playerId });
+  if (status !== 200 || !data) return null;
+  return data;
+}
+
+export async function updateGroupName(params: {
+  groupId: string;
+  playerId: string;
+  name: string;
+}): Promise<boolean> {
+  const { groupId, playerId, name } = params;
+  if (!groupId || !playerId || !name) return false;
+  const { status } = await httpPatch<null>(`groups/${groupId}`, { playerId, name });
+  return status >= 200 && status < 300;
+}
+
+export async function deleteGroup(params: {
+  groupId: string;
+  playerId: string;
+}): Promise<boolean> {
+  const { groupId, playerId } = params;
+  if (!groupId || !playerId) return false;
+  const { status } = await httpDelete<null>(`groups/${groupId}`, { playerId });
+  return status >= 200 && status < 300;
+}
+
+export async function addGroupMember(params: {
+  groupId: string;
+  playerId: string;
+  memberId: string;
+}): Promise<boolean> {
+  const { groupId, playerId, memberId } = params;
+  if (!groupId || !playerId || !memberId) return false;
+  const { status } = await httpPost<null>(`groups/${groupId}/members`, { playerId, memberId });
+  return status >= 200 && status < 300;
+}
+
+export async function removeGroupMember(params: {
+  groupId: string;
+  playerId: string;
+  memberId: string;
+}): Promise<boolean> {
+  const { groupId, playerId, memberId } = params;
+  if (!groupId || !playerId || !memberId) return false;
+  const { status } = await httpDelete<null>(`groups/${groupId}/members/${memberId}`, { playerId });
+  return status >= 200 && status < 300;
+}
+
+export async function leaveGroup(params: {
+  groupId: string;
+  playerId: string;
+}): Promise<boolean> {
+  const { groupId, playerId } = params;
+  if (!groupId || !playerId) return false;
+  const { status } = await httpPost<null>(`groups/${groupId}/leave`, { playerId });
+  return status >= 200 && status < 300;
+}
+
+export async function sendGroupMessage(params: {
+  groupId: string;
+  playerId: string;
+  text: string;
+}): Promise<GroupMessage | null> {
+  const { groupId, playerId, text } = params;
+  if (!groupId || !playerId || !text) return null;
+  const { status, data } = await httpPost<GroupMessage>(`groups/${groupId}/messages`, { playerId, text });
+  if (status >= 200 && status < 300 && data) return data;
+  return null;
+}
+
+export async function fetchGroupMessages(
+  groupId: string,
+  playerId: string,
+  options?: { afterId?: number; beforeId?: number; limit?: number },
+): Promise<GroupMessage[]> {
+  if (!groupId || !playerId) return [];
+  const { status, data } = await httpGet<GroupMessage[]>(
+    `groups/${groupId}/messages`,
+    {
+      playerId,
+      afterId: options?.afterId,
+      beforeId: options?.beforeId,
+      limit: options?.limit,
+    },
+  );
+  if (status !== 200 || !Array.isArray(data)) return [];
+  return data;
+}
+
 // ---------- 7) Messages (DM) ----------
 
 export interface DirectMessage {
@@ -1132,75 +1472,105 @@ export interface MessagesStreamHandlers {
   onError?: (event: Event) => void;
 }
 
-function openDiscordMessagesPoller(
-  playerId: string,
-  handlers: MessagesStreamHandlers,
-): StreamHandle {
-  let closed = false;
-  let since = new Date().toISOString();
-  const seenIds = new Set<number>();
-
-  handlers.onConnected?.({ playerId });
-
-  async function poll() {
-    if (closed) return;
-    try {
-      const { status, data } = await httpGet<DirectMessage[]>("messages/poll", { playerId, since });
-      if (status === 200 && Array.isArray(data)) {
-        for (const msg of data) {
-          const numId = Number(msg?.id);
-          if (!isNaN(numId) && !seenIds.has(numId)) {
-            seenIds.add(numId);
-            const normalized = { ...msg, id: numId };
-            if (normalized.createdAt > since) since = normalized.createdAt;
-            handlers.onMessage?.(normalized);
-          }
-        }
-      }
-    } catch {}
-    if (!closed) setTimeout(poll, 2000);
-  }
-
-  poll();
-  return { close: () => { closed = true; } };
+export interface PresencePayload {
+  playerId: string;
+  online: boolean;
+  lastEventAt: string;
+  roomId: string | null;
 }
+
+export interface GroupEventHandlers {
+  onConnected?: (payload: { playerId: string; lastEventId?: number }) => void;
+  onMessage?: (payload: any) => void;
+  onMemberAdded?: (payload: any) => void;
+  onMemberRemoved?: (payload: any) => void;
+  onUpdated?: (payload: any) => void;
+  onDeleted?: (payload: any) => void;
+  onError?: (event: Event) => void;
+}
+
+export function openGroupsStream(
+  playerId: string,
+  handlers: GroupEventHandlers = {},
+): StreamHandle | null {
+  if (!playerId) return null;
+
+  return openUnifiedEvents(playerId, {
+    onConnected: (payload) => {
+      handlers.onConnected?.(payload);
+    },
+    onError: (event) => {
+      handlers.onError?.(event);
+    },
+    onEvent: (eventName, data) => {
+      const parsed = safeJsonParse(data);
+      switch (eventName) {
+        case "group_message":
+          handlers.onMessage?.(parsed);
+          break;
+        case "group_member_added":
+          handlers.onMemberAdded?.(parsed);
+          break;
+        case "group_member_removed":
+          handlers.onMemberRemoved?.(parsed);
+          break;
+        case "group_updated":
+          handlers.onUpdated?.(parsed);
+          break;
+        case "group_deleted":
+          handlers.onDeleted?.(parsed);
+          break;
+        default:
+          break;
+      }
+    },
+  });
+}
+
 
 export function openMessagesStream(
   playerId: string,
   handlers: MessagesStreamHandlers = {},
 ): StreamHandle | null {
   if (!playerId) return null;
-  if (isDiscordActivityContext()) return openDiscordMessagesPoller(playerId, handlers);
 
-  const url = buildUrl("messages/stream", { playerId });
+  return openUnifiedEvents(playerId, {
+    onConnected: (payload) => {
+      handlers.onConnected?.({ playerId: payload.playerId ?? playerId });
+    },
+    onError: (event) => {
+      handlers.onError?.(event);
+    },
+    onEvent: (eventName, data) => {
+      const parsed = safeJsonParse(data);
 
-  const MLOG = "[messages-stream]";
-  return openGMSSEStream(
-    url,
-    (eventName, data) => {
-      try {
-        const parsed = JSON.parse(data);
-        switch (eventName) {
-          case "connected":
-            handlers.onConnected?.(parsed);
-            break;
-          case "message":
-            handlers.onMessage?.(parsed as DirectMessage);
-            break;
-          case "read":
-            handlers.onRead?.(parsed as ReadReceipt);
-            break;
-          default:
-            break;
-        }
-      } catch (e) {
-        console.error(MLOG, "parse error:", e, "raw:", data);
+      switch (eventName) {
+        case "message":
+          handlers.onMessage?.(parsed as DirectMessage);
+          break;
+        case "read":
+          handlers.onRead?.(parsed as ReadReceipt);
+          break;
+        default:
+          break;
       }
     },
-    () => {
-      handlers.onError?.(new Event("error"));
+  });
+}
+
+export function openPresenceStream(
+  playerId: string,
+  onPresence: (payload: PresencePayload) => void,
+): StreamHandle | null {
+  if (!playerId) return null;
+
+  return openUnifiedEvents(playerId, {
+    onEvent: (eventName, data) => {
+      if (eventName !== "presence") return;
+      const parsed = safeJsonParse(data);
+      onPresence(parsed as PresencePayload);
     },
-  );
+  });
 }
 
 export async function sendMessage(params: {

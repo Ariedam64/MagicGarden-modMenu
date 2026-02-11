@@ -1,5 +1,6 @@
 import { createMessagesTab, type MessagesTabHandle } from "./tabs/messagesTab";
 import { createCommunityTab } from "./tabs/communityTab";
+import { createGroupsTab } from "./tabs/groupsTab";
 import { createSettingsTab } from "./tabs/settingsTab";
 
 const STYLE_ID = "qws-friend-overlay-css";
@@ -10,7 +11,7 @@ const setProps = (el: HTMLElement, props: Record<string, string>) => {
   for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v);
 };
 
-type TabId = "messages" | "community" | "settings";
+type TabId = "messages" | "community" | "groups" | "settings";
 
 declare global {
   interface Window {
@@ -290,6 +291,401 @@ function ensureFriendOverlayStyle(): void {
 .qws-fo-community-profile.active{
   display:flex;
 }
+.qws-fo-groups-layout{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  gap:12px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-groups-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-height:0;
+  padding:10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+}
+.qws-fo-groups-list-title{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+}
+.qws-fo-groups-create{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.qws-fo-groups-create .qws-fo-input{
+  flex:1;
+  min-width:0;
+}
+.qws-fo-groups-list-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-groups-list-body{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  overflow:auto;
+  min-height:0;
+  padding-right:4px;
+}
+.qws-fo-groups-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.6);
+  text-align:center;
+  padding:12px 8px;
+}
+.qws-fo-group-row{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,20,30,0.6);
+  cursor:pointer;
+  transition:background 140ms ease, border 140ms ease;
+}
+.qws-fo-group-row:hover{
+  border-color:rgba(59,130,246,0.3);
+  background:rgba(30,41,59,0.55);
+}
+.qws-fo-group-row.active{
+  border-color:rgba(59,130,246,0.45);
+  background:rgba(30,41,59,0.7);
+}
+.qws-fo-group-row-title{
+  font-size:12px;
+  font-weight:700;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-row-meta{
+  font-size:10px;
+  color:rgba(226,232,240,0.65);
+}
+.qws-fo-group-chat{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  flex:1;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(12,16,24,0.6);
+}
+.qws-fo-group-head{
+  padding:10px 12px;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.qws-fo-group-head-left{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.qws-fo-group-head-title{
+  font-size:13px;
+  font-weight:700;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-head-meta{
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+}
+.qws-fo-group-body{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  flex:1;
+}
+.qws-fo-group-messages{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.6);
+  text-align:center;
+  margin:auto;
+}
+.qws-fo-group-message{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  max-width:80%;
+}
+.qws-fo-group-message.me{
+  align-self:flex-end;
+  text-align:right;
+}
+.qws-fo-group-msg-name{
+  font-size:10px;
+  color:rgba(226,232,240,0.6);
+}
+.qws-fo-group-bubble{
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(30,41,59,0.7);
+  border:1px solid rgba(255,255,255,0.06);
+  font-size:12px;
+  color:#f8fafc;
+  line-height:1.4;
+  white-space:pre-wrap;
+}
+.qws-fo-group-message.me .qws-fo-group-bubble{
+  background:rgba(34,211,238,0.18);
+  border-color:rgba(34,211,238,0.35);
+}
+.qws-fo-group-input-row{
+  display:flex;
+  gap:8px;
+  padding:10px;
+  border-top:1px solid rgba(255,255,255,0.08);
+}
+.qws-fo-group-input{
+  flex:1;
+  min-width:0;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.65);
+  color:#f8fafc;
+  padding:8px 10px;
+  font-size:12px;
+}
+.qws-fo-group-details{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-hero{
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:linear-gradient(135deg, rgba(30,41,59,0.55), rgba(17,24,39,0.8));
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-fo-group-hero-title{
+  font-size:16px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-group-hero-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.qws-fo-group-chip{
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:rgba(226,232,240,0.85);
+  font-size:11px;
+  font-weight:600;
+}
+.qws-fo-group-section{
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-section-title{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.1em;
+  color:rgba(147,197,253,0.8);
+}
+.qws-fo-group-info-grid{
+  display:grid;
+  gap:8px;
+}
+.qws-fo-group-info-row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+  color:#e2e8f0;
+}
+.qws-fo-group-info-label{
+  font-weight:700;
+  color:rgba(226,232,240,0.65);
+}
+.qws-fo-group-info-value{
+  font-weight:600;
+  color:#f8fafc;
+}
+.qws-fo-group-manage-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-group-input{
+  flex:1;
+  min-width:0;
+}
+.qws-fo-group-danger-hint{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
+  flex:1;
+}
+.qws-fo-group-members-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.qws-fo-group-member-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,23,42,0.6);
+}
+.qws-fo-group-member-avatar{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.08);
+  display:grid;
+  place-items:center;
+  font-size:12px;
+  font-weight:700;
+  color:#f8fafc;
+  flex:0 0 32px;
+  overflow:hidden;
+  position:relative;
+}
+.qws-fo-group-member-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-group-member-avatar img.qws-fo-group-member-avatar-layer{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  transform:scale(1.8);
+  transform-origin:50% 18%;
+}
+.qws-fo-group-member-text{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+  flex:1;
+}
+.qws-fo-group-member-name{
+  font-size:12px;
+  font-weight:600;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-member-meta{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-member-id{
+  color:rgba(226,232,240,0.6);
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-role-badge{
+  padding:2px 6px;
+  border-radius:999px;
+  border:1px solid rgba(59,130,246,0.35);
+  background:rgba(59,130,246,0.18);
+  color:#dbeafe;
+  font-weight:700;
+  text-transform:capitalize;
+  white-space:nowrap;
+}
+.qws-fo-group-member-actions{
+  display:flex;
+  gap:6px;
+  margin-left:auto;
+}
+.qws-fo-group-modal{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(5, 8, 15, 0.6);
+  backdrop-filter:blur(6px);
+  z-index:20;
+}
+.qws-fo-group-modal-card{
+  width:min(520px, 92%);
+  max-height:80%;
+  overflow:auto;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(10,14,20,0.95);
+  box-shadow:0 18px 44px rgba(0,0,0,0.5);
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.qws-fo-group-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.qws-fo-group-modal-title{
+  font-size:13px;
+  font-weight:700;
+  color:#f8fafc;
+}
+@media (max-width: 820px){
+  .qws-fo-groups-layout{
+    grid-template-columns:1fr;
+  }
+  .qws-fo-groups-list{
+    max-height:200px;
+  }
+}
 .qws-fo-garden-preview{
   position:fixed;
   inset:0;
@@ -360,6 +756,41 @@ function ensureFriendOverlayStyle(): void {
   border-radius:12px;
   border:1px solid rgba(255,255,255,0.1);
   background:rgba(15,23,42,0.65);
+}
+.qws-fo-profile-group{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(15,23,42,0.5);
+}
+.qws-fo-profile-group-title{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(147,197,253,0.8);
+}
+.qws-fo-profile-group-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-profile-group-select{
+  flex:1;
+  min-width:0;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:#f8fafc;
+  padding:6px 8px;
+  font-size:12px;
+}
+.qws-fo-profile-group-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
 }
 .qws-fo-profile-coins-icon{
   width:18px;
@@ -984,6 +1415,7 @@ class FriendOverlay {
   private activeTab: TabId = "community";
   private panelOpen = false;
   private unreadMessages = 0;
+  private unreadGroups = 0;
   private pendingRequests = 0;
   private mo: MutationObserver | null = null;
   private panelHeadEl: HTMLDivElement | null = null;
@@ -1011,9 +1443,9 @@ class FriendOverlay {
     this.btn = this.createButton();
     this.badge = this.createBadge();
     const lastTab = window.__qws_friend_overlay_last_tab;
-    if (lastTab === "community" || lastTab === "messages" || lastTab === "settings") {
-      this.activeTab = lastTab;
-    }
+      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "settings") {
+        this.activeTab = lastTab;
+      }
     this.panel = this.createPanel();
     this.keyTrapCleanup = installInputKeyTrap(this.panel);
 
@@ -1148,7 +1580,7 @@ class FriendOverlay {
   }
 
   private updateButtonBadge(): void {
-    const total = this.unreadMessages + this.pendingRequests;
+    const total = this.unreadMessages + this.unreadGroups + this.pendingRequests;
     this.badge.textContent = total ? String(total) : "";
     style(this.badge, { display: total ? "inline-flex" : "none" });
   }
@@ -1227,6 +1659,34 @@ class FriendOverlay {
           });
           return {
             id: "community",
+            root: tab.root,
+            refresh: tab.refresh,
+            show: tab.show,
+            hide: tab.hide,
+            destroy: tab.destroy,
+          };
+        },
+      },
+      {
+        id: "groups",
+        label: "Groups",
+        icon:
+          '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+          '<path d="M7.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/>' +
+          '<path d="M16.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor" opacity="0.8"/>' +
+          '<path d="M2.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor"/>' +
+          '<path d="M12.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor" opacity="0.7"/>' +
+          "</svg>",
+        build: () => {
+          const tab = createGroupsTab({
+            onUnreadChange: (total) => {
+              this.unreadGroups = total;
+              this.setTabBadge("groups", total ? String(total) : null);
+              this.updateButtonBadge();
+            },
+          });
+          return {
+            id: "groups",
             root: tab.root,
             refresh: tab.refresh,
             show: tab.show,

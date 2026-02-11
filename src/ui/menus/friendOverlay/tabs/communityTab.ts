@@ -6,12 +6,20 @@ import { coin } from "../../../../data/hardcoded-data.clean";
 import {
   fetchPlayersView,
   fetchPlayerView,
+  fetchGroups,
+  getCachedFriendsSummary,
+  openPresenceStream,
+  addGroupMember,
+  removeFriend,
+  setImageSafe,
   type PlayerView,
   type PlayerViewSection,
   type FriendSummary,
+  type GroupSummary,
+  type PresencePayload,
+  type StreamHandle,
 } from "../../../../utils/supabase";
 import { RoomService } from "../../../../services/room";
-import { removeFriend } from "../../../../utils/supabase";
 import { playerDatabaseUserId } from "../../../../store/atoms";
 import {
   fakeActivityLogShow,
@@ -26,6 +34,111 @@ import {
 import { skipNextActivityLogHistoryReopen } from "../../../../services/activityLogHistory";
 import { toastSimple } from "../../../../ui/toast";
 import { formatLastSeen } from "../utils";
+
+const PRESENCE_TOAST_STYLE_ID = "qws-presence-toast-css";
+const PRESENCE_TOAST_HOST_ID = "qws-presence-toast-host";
+const PRESENCE_TOAST_DURATION_MS = 3500;
+const PRESENCE_TOAST_MAX = 3;
+
+const ensurePresenceToastStyles = (): void => {
+  if (document.getElementById(PRESENCE_TOAST_STYLE_ID)) return;
+  const style = document.createElement("style");
+  style.id = PRESENCE_TOAST_STYLE_ID;
+  style.textContent = `
+.qws-presence-toasts{
+  position:fixed;
+  top:calc(14px + var(--sait, 0px));
+  right:calc(14px + var(--sair, 0px));
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:var(--chakra-zIndices-PresentableOverlay, 5100);
+  pointer-events:none;
+}
+.qws-presence-toast{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  border-radius:12px;
+  background:rgba(12, 16, 30, 0.92);
+  border:1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:0 10px 26px rgba(0,0,0,0.35);
+  color:#f8fafc;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:0.2px;
+  pointer-events:auto;
+  animation:qws-presence-enter 220ms ease;
+}
+.qws-presence-toast[data-state="leaving"]{
+  animation:qws-presence-exit 180ms ease forwards;
+}
+.qws-presence-avatar{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border-radius:50%;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,0.08);
+  color:#f8fafc;
+  font-weight:700;
+  font-size:12px;
+}
+.qws-presence-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:50% 20%;
+  transform:scale(1.08);
+  transform-origin:50% 20%;
+}
+.qws-presence-text{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+.qws-presence-name{
+  font-size:12.5px;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-presence-sub{
+  font-size:11px;
+  font-weight:600;
+  color:rgba(226,232,240,0.72);
+}
+@keyframes qws-presence-enter{
+  from{opacity:0; transform:translateX(12px);}
+  to{opacity:1; transform:translateX(0);}
+}
+@keyframes qws-presence-exit{
+  from{opacity:1; transform:translateX(0);}
+  to{opacity:0; transform:translateX(12px);}
+}
+@media (prefers-reduced-motion: reduce){
+  .qws-presence-toast{ animation:none; }
+  .qws-presence-toast[data-state="leaving"]{ animation:none; opacity:0; }
+}
+  `;
+  document.head.appendChild(style);
+};
+
+const getPresenceToastHost = (): HTMLDivElement => {
+  let host = document.getElementById(PRESENCE_TOAST_HOST_ID) as HTMLDivElement | null;
+  if (!host) {
+    host = document.createElement("div");
+    host.id = PRESENCE_TOAST_HOST_ID;
+    host.className = "qws-presence-toasts";
+    document.body.appendChild(host);
+  }
+  return host;
+};
 
 type CommunitySubTab = "friends" | "add" | "requests";
 
@@ -149,6 +262,107 @@ export function createCommunityTab(options: {
   let profileOpen = false;
   let activeFriend: PlayerView | null = null;
   let activeGardenPlayerId: string | null = null;
+  let presenceStream: StreamHandle | null = null;
+  let presenceUnsub: (() => void) | null = null;
+  const presenceState = new Map<string, boolean>();
+  let currentPlayerId: string | null = null;
+  let ownerGroups: GroupSummary[] = [];
+  let ownerGroupsLoaded = false;
+  let ownerGroupsLoading = false;
+
+  const normalizePresenceId = (value: string | null | undefined) =>
+    value ? String(value).trim() : "";
+
+  const seedPresenceState = () => {
+    presenceState.clear();
+    const cached = getCachedFriendsSummary();
+    for (const friend of cached) {
+      const id = normalizePresenceId(friend.playerId);
+      if (id) presenceState.set(id, Boolean(friend.isOnline));
+    }
+  };
+
+  const showOnlineToast = (friend: FriendSummary) => {
+    const label = friend.playerName ?? friend.playerId ?? "Friend";
+    const host = getPresenceToastHost();
+    ensurePresenceToastStyles();
+
+    while (host.childElementCount >= PRESENCE_TOAST_MAX) {
+      host.lastElementChild?.remove();
+    }
+
+    const toast = document.createElement("div");
+    toast.className = "qws-presence-toast";
+
+    const avatar = document.createElement("div");
+    avatar.className = "qws-presence-avatar";
+    const avatarUrl = friend.avatarUrl ?? "";
+    if (avatarUrl) {
+      const img = document.createElement("img");
+      img.alt = label;
+      img.decoding = "async";
+      setImageSafe(img, avatarUrl);
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = label.trim().slice(0, 1).toUpperCase() || "?";
+    }
+
+    const text = document.createElement("div");
+    text.className = "qws-presence-text";
+    const name = document.createElement("div");
+    name.className = "qws-presence-name";
+    name.textContent = label;
+    const sub = document.createElement("div");
+    sub.className = "qws-presence-sub";
+    sub.textContent = "is online";
+    text.append(name, sub);
+
+    toast.append(avatar, text);
+    host.prepend(toast);
+
+    const clear = () => {
+      if (!toast.isConnected) return;
+      toast.setAttribute("data-state", "leaving");
+      window.setTimeout(() => {
+        toast.remove();
+        if (!host.childElementCount && host.parentElement) host.remove();
+      }, 200);
+    };
+    const timer = window.setTimeout(clear, PRESENCE_TOAST_DURATION_MS);
+    toast.addEventListener("click", () => {
+      window.clearTimeout(timer);
+      clear();
+    });
+  };
+
+  const handlePresence = (payload: PresencePayload) => {
+    const id = normalizePresenceId(payload?.playerId);
+    if (!id) return;
+    const cached = getCachedFriendsSummary();
+    const friend = cached.find((f) => normalizePresenceId(f.playerId) === id);
+    const nextOnline = Boolean(payload?.online);
+    const prevOnline = presenceState.get(id);
+    presenceState.set(id, nextOnline);
+
+    void friendsTab.refresh({ force: true });
+
+    if (friend && prevOnline === false && nextOnline) {
+      showOnlineToast(friend);
+    }
+  };
+
+  const resetPresenceStream = (playerId: string | null) => {
+    if (presenceStream) {
+      try {
+        presenceStream.close();
+      } catch {}
+      presenceStream = null;
+    }
+    presenceState.clear();
+    if (!playerId) return;
+    seedPresenceState();
+    presenceStream = openPresenceStream(playerId, handlePresence);
+  };
   const previewOverlay = document.createElement("div");
   previewOverlay.className = "qws-fo-garden-preview";
   const previewCard = document.createElement("div");
@@ -258,8 +472,23 @@ export function createCommunityTab(options: {
   profileCoinsValue.className = "qws-fo-profile-coins-value";
   profileCoins.append(profileCoinsIcon, profileCoinsValue);
 
+  const groupInvite = document.createElement("div");
+  groupInvite.className = "qws-fo-profile-group";
+  const groupInviteTitle = document.createElement("div");
+  groupInviteTitle.className = "qws-fo-profile-group-title";
+  groupInviteTitle.textContent = "Invite to group";
+  const groupInviteRow = document.createElement("div");
+  groupInviteRow.className = "qws-fo-profile-group-row";
+  const groupSelect = document.createElement("select");
+  groupSelect.className = "qws-fo-profile-group-select";
+  const groupInviteBtn = createButton("Invite", { size: "sm", variant: "primary" });
+  groupInviteRow.append(groupSelect, groupInviteBtn);
+  const groupInviteStatus = document.createElement("div");
+  groupInviteStatus.className = "qws-fo-profile-group-status";
+  groupInvite.append(groupInviteTitle, groupInviteRow, groupInviteStatus);
+
   profileGrid.append(inspectSection);
-  profileCard.append(profileHeader, profileCoins, profileGrid);
+  profileCard.append(profileHeader, profileCoins, groupInvite, profileGrid);
   profileWrap.append(profileTop, profileCard);
 
   const runInspect = async (
@@ -462,6 +691,116 @@ export function createCommunityTab(options: {
     }
   });
 
+  const resolveGroupId = (group: GroupSummary) =>
+    (group.id ?? (group as any).groupId ?? (group as any).group_id ?? "").toString();
+
+  const resolveGroupName = (group: GroupSummary) =>
+    (group.name ?? (group as any).group_name ?? "Untitled group").toString();
+
+  const resolveGroupCount = (group: GroupSummary) => {
+    const raw =
+      (group as any).memberCount ??
+      (group as any).member_count ??
+      (group as any).membersCount ??
+      (group as any).members_count ??
+      (group as any).members?.length ??
+      null;
+    const num = Number(raw);
+    return Number.isFinite(num) ? Math.max(0, Math.floor(num)) : null;
+  };
+
+  const renderGroupInvite = () => {
+    const hasFriend = Boolean(activeFriend?.playerId);
+    groupInvite.style.display = hasFriend ? "flex" : "none";
+    if (!hasFriend) return;
+
+    groupSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = ownerGroupsLoading
+      ? "Loading groups..."
+      : ownerGroups.length
+        ? "Select a group..."
+        : "No groups available";
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    groupSelect.appendChild(placeholder);
+
+    for (const group of ownerGroups) {
+      const id = resolveGroupId(group);
+      if (!id) continue;
+      const opt = document.createElement("option");
+      opt.value = id;
+      const count = resolveGroupCount(group);
+      opt.textContent = count !== null
+        ? `${resolveGroupName(group)} (${count}/12)`
+        : resolveGroupName(group);
+      groupSelect.appendChild(opt);
+    }
+
+    const enableInvite = Boolean(activeFriend?.playerId) && ownerGroups.length > 0 && !ownerGroupsLoading;
+    setButtonEnabled(groupInviteBtn, enableInvite);
+    groupSelect.disabled = !enableInvite;
+    groupInviteStatus.textContent = ownerGroupsLoading
+      ? "Loading your groups..."
+      : ownerGroups.length
+        ? "Select a group to invite this friend."
+        : "Create a group to invite friends.";
+  };
+
+  const ensureOwnerGroupsLoaded = async () => {
+    if (ownerGroupsLoading || ownerGroupsLoaded) return;
+    ownerGroupsLoading = true;
+    renderGroupInvite();
+    try {
+      const me = currentPlayerId ?? await playerDatabaseUserId.get();
+      if (!me) {
+        ownerGroups = [];
+        ownerGroupsLoaded = true;
+        return;
+      }
+      const groups = await fetchGroups(me);
+      ownerGroups = (groups ?? []).filter((g) => {
+        const role = String((g as any).role ?? "").toLowerCase();
+        if (role === "owner") return true;
+        const ownerId = (g as any).ownerId ?? (g as any).owner_id;
+        return ownerId ? String(ownerId) === String(me) : false;
+      });
+      ownerGroupsLoaded = true;
+    } finally {
+      ownerGroupsLoading = false;
+      renderGroupInvite();
+    }
+  };
+
+  groupInviteBtn.addEventListener("click", async () => {
+    const friendId = activeFriend?.playerId ?? null;
+    const groupId = groupSelect.value;
+    if (!friendId || !groupId) return;
+    const me = currentPlayerId ?? await playerDatabaseUserId.get();
+    if (!me) return;
+    setButtonEnabled(groupInviteBtn, false);
+    groupInviteStatus.textContent = "Sending invite...";
+    try {
+      const ok = await addGroupMember({
+        groupId,
+        playerId: me,
+        memberId: friendId,
+      });
+      if (!ok) {
+        await toastSimple("Groups", "Unable to add member.", "error");
+        groupInviteStatus.textContent = "Invite failed.";
+        return;
+      }
+      await toastSimple("Groups", "Member added.", "success");
+      groupInviteStatus.textContent = "Invite sent.";
+      ownerGroupsLoaded = false;
+      void ensureOwnerGroupsLoaded();
+    } finally {
+      renderGroupInvite();
+    }
+  });
+
   const updateProfile = (friend: PlayerView) => {
     activeFriend = friend;
     const displayName = friend.playerName ?? friend.playerId ?? "Unknown friend";
@@ -597,6 +936,8 @@ export function createCommunityTab(options: {
     }
     setButtonEnabled(chatBtn, Boolean(friend.playerId));
     chatBtn.title = friend.playerId ? "Open chat" : "Player ID unavailable";
+    void ensureOwnerGroupsLoaded();
+    renderGroupInvite();
   };
 
   const setProfileOpen = (open: boolean) => {
@@ -635,6 +976,18 @@ export function createCommunityTab(options: {
   backBtn.addEventListener("click", () => setProfileOpen(false));
   window.addEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
 
+  playerDatabaseUserId
+    .onChangeNow((next) => {
+      const id = next ? String(next) : null;
+      currentPlayerId = id;
+      ownerGroupsLoaded = false;
+      resetPresenceStream(id);
+    })
+    .then((unsub) => {
+      presenceUnsub = unsub;
+    })
+    .catch(() => {});
+
   return {
     root,
     show: () => {
@@ -651,6 +1004,15 @@ export function createCommunityTab(options: {
       friendsTab.destroy();
       addTab.destroy();
       requestsTab.destroy();
+      try {
+        presenceUnsub?.();
+      } catch {}
+      if (presenceStream) {
+        try {
+          presenceStream.close();
+        } catch {}
+        presenceStream = null;
+      }
       previewOverlay.remove();
     },
   };

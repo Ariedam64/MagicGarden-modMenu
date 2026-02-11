@@ -23,16 +23,24 @@ import { getFriendSettings } from "../../utils/friendSettings";
 const MSG_NOTIFICATION_URL = "https://cdn.pixabay.com/audio/2024/01/11/audio_8e3b99318b.mp3";
 import {
   fetchFriendsSummary,
+  fetchGroups,
+  fetchGroupDetails,
   fetchMessagesThread,
+  fetchGroupMessages,
   getAudioUrlSafe,
   getCachedFriendsSummary,
   markMessagesRead,
+  openGroupsStream,
   openMessagesStream,
+  openPresenceStream,
+  sendGroupMessage,
   sendMessage,
   setImageSafe,
   installEmojiDataFetchInterceptor,
   type DirectMessage,
   type FriendSummary,
+  type GroupSummary,
+  type PresencePayload,
   type StreamHandle,
   type ReadReceipt,
 } from "../../utils/supabase";
@@ -193,6 +201,10 @@ type KeyTrapCleanup = () => void;
 export type MessagesOverlayOptions = {
   embedded?: boolean;
   onUnreadChange?: (total: number) => void;
+  mode?: "dm" | "group";
+  title?: string;
+  onThreadHeadRender?: (head: HTMLDivElement, selectedId: string | null) => void;
+  onListHeadRender?: (list: HTMLDivElement) => void;
 };
 
 function installInputKeyTrap(
@@ -1369,19 +1381,107 @@ function ensureMessagesOverlayStyle(): void {
   flex-direction:column;
   gap:6px;
 }
+.qws-msg-list.qws-msg-list-group .qws-msg-friend-avatar-wrap{
+  display:none;
+}
+.qws-msg-list.qws-msg-list-group .qws-msg-friend{
+  padding-left:10px;
+}
+.qws-msg-list-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:6px 6px 2px 6px;
+}
+.qws-msg-list-title{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+}
+.qws-msg-list-new{
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.6);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:4px 8px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background 120ms ease, border 120ms ease;
+}
+.qws-msg-list-new:hover{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.4);
+}
+.qws-msg-list-create{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  padding:6px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,23,42,0.55);
+}
+.qws-msg-list-input{
+  flex:1;
+  min-width:0;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:#f8fafc;
+  padding:6px 8px;
+  font-size:12px;
+}
+.qws-msg-list-action{
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.6);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:5px 8px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background 120ms ease, border 120ms ease;
+}
+.qws-msg-list-action:hover{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.4);
+}
 .qws-msg-thread{
   display:flex;
   flex-direction:column;
   min-height:0;
 }
-.qws-msg-thread-head{
-  padding:10px 12px;
-  border-bottom:1px solid var(--qws-border, #ffffff22);
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-height:44px;
-}
+  .qws-msg-thread-head{
+    padding:10px 12px;
+    border-bottom:1px solid var(--qws-border, #ffffff22);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:44px;
+  }
+  .qws-msg-thread-actions{
+    margin-left:auto;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .qws-msg-thread-action-btn{
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(15,23,42,0.6);
+    color:#f8fafc;
+    border-radius:8px;
+    padding:4px 8px;
+    font-size:11px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background 120ms ease, border 120ms ease;
+  }
+  .qws-msg-thread-action-btn:hover{
+    background:rgba(59,130,246,0.18);
+    border-color:rgba(59,130,246,0.4);
+  }
 .qws-msg-thread-body{
   flex:1;
   overflow:auto;
@@ -1982,8 +2082,25 @@ function formatFriendName(friend: FriendSummary | null, fallbackId: string): str
   return trimmed || fallbackId || "Unknown";
 }
 
-function formatStatus(friend: FriendSummary | null): string {
+function formatStatus(friend: FriendSummary | null, mode: "dm" | "group" = "dm"): string {
   if (!friend) return "";
+  if (mode !== "group") {
+    if (friend.isOnline) return "Online";
+    const seen = formatLastSeen(friend.lastEventAt);
+    return seen ? `Offline · ${seen}` : "Offline";
+  }
+  const isGroup = Boolean((friend as any).isGroup);
+  const rawCount =
+    (friend as any).memberCount ??
+    (friend as any).member_count ??
+    (friend as any).membersCount ??
+    (friend as any).members_count ??
+    null;
+  const count = Number(rawCount);
+  if (Number.isFinite(count)) {
+    return `${Math.max(0, Math.floor(count))}/12 members`;
+  }
+  if (isGroup) return "Group";
   if (friend.isOnline) return "Online";
   const seen = formatLastSeen(friend.lastEventAt);
   return seen ? `Offline · ${seen}` : "Offline";
@@ -2170,6 +2287,144 @@ function normalizeMessage(raw: unknown): DirectMessage | null {
   };
 }
 
+function mapGroupToFriendSummary(group: GroupSummary): FriendSummary | null {
+  if (!group) return null;
+  const idRaw = (group as any).id ?? (group as any).groupId ?? (group as any).group_id ?? "";
+  const id = String(idRaw ?? "").trim();
+  if (!id) return null;
+  const nameRaw = (group as any).name ?? (group as any).group_name ?? id;
+  const memberCountRaw =
+    (group as any).memberCount ??
+    (group as any).member_count ??
+    (group as any).membersCount ??
+    (group as any).members_count ??
+    null;
+  const memberCount = Number(memberCountRaw);
+  const lastEventAt =
+    (group as any).updatedAt ??
+    (group as any).updated_at ??
+    (group as any).createdAt ??
+    (group as any).created_at ??
+    null;
+  return {
+    playerId: id,
+    playerName: nameRaw ? String(nameRaw) : id,
+    avatarUrl: null,
+    avatar: null,
+    lastEventAt: lastEventAt ? String(lastEventAt) : null,
+    isOnline: false,
+    roomId: null,
+    isGroup: true,
+    ...(Number.isFinite(memberCount) ? { memberCount: Math.max(0, Math.floor(memberCount)) } : {}),
+  } as FriendSummary;
+}
+
+function normalizeGroupMessage(raw: unknown): DirectMessage | null {
+  if (!isRecord(raw)) return null;
+  const msg = isRecord((raw as any).message) ? ((raw as any).message as UnknownRecord) : raw;
+  const groupIdRaw =
+    (raw as any).groupId ??
+    (raw as any).group_id ??
+    (msg as any).groupId ??
+    (msg as any).group_id ??
+    "";
+  const groupId = String(groupIdRaw ?? "").trim();
+  if (!groupId) return null;
+  const senderRaw =
+    (msg as any).senderId ??
+    (msg as any).sender_id ??
+    (msg as any).playerId ??
+    (msg as any).player_id ??
+    (raw as any).senderId ??
+    (raw as any).sender_id ??
+    (raw as any).playerId ??
+    (raw as any).player_id ??
+    "";
+  const senderId = senderRaw ? String(senderRaw) : "";
+  const idRaw =
+    (msg as any).id ??
+    (msg as any).message_id ??
+    (msg as any).messageId ??
+    (msg as any).msgId ??
+    (msg as any).msg_id ??
+    "";
+  let id = typeof idRaw === "number" ? idRaw : Number(idRaw);
+  if (!Number.isFinite(id)) {
+    id = Date.now();
+  }
+  const bodyRaw =
+    (msg as any).body ??
+    (msg as any).text ??
+    (msg as any).content ??
+    (msg as any).message ??
+    (msg as any).msg ??
+    "";
+  const body = bodyRaw == null ? "" : String(bodyRaw);
+  const createdAtRaw =
+    (msg as any).createdAt ??
+    (msg as any).created_at ??
+    (raw as any).createdAt ??
+    (raw as any).created_at ??
+    null;
+  const createdAt = createdAtRaw ? String(createdAtRaw) : new Date().toISOString();
+  const avatarUrlRaw =
+    (msg as any).senderAvatarUrl ??
+    (msg as any).sender_avatar_url ??
+    (msg as any).avatarUrl ??
+    (msg as any).avatar_url ??
+    (raw as any).senderAvatarUrl ??
+    (raw as any).sender_avatar_url ??
+    (raw as any).avatarUrl ??
+    (raw as any).avatar_url ??
+    null;
+  const avatarListRaw =
+    (msg as any).senderAvatar ??
+    (msg as any).sender_avatar ??
+    (msg as any).avatar ??
+    (msg as any).avatar_list ??
+    (msg as any).avatarList ??
+    (raw as any).senderAvatar ??
+    (raw as any).sender_avatar ??
+    (raw as any).avatar ??
+    (raw as any).avatar_list ??
+    (raw as any).avatarList ??
+    null;
+  const senderNameRaw =
+    (msg as any).senderName ??
+    (msg as any).sender_name ??
+    (msg as any).playerName ??
+    (msg as any).player_name ??
+    (msg as any).name ??
+    (raw as any).senderName ??
+    (raw as any).sender_name ??
+    (raw as any).playerName ??
+    (raw as any).player_name ??
+    (raw as any).name ??
+    null;
+  const normalized = {
+    id,
+    conversationId: groupId,
+    senderId,
+    recipientId: groupId,
+    body,
+    createdAt,
+    deliveredAt: createdAt,
+    readAt: null,
+  } as DirectMessage & {
+    senderAvatarUrl?: string;
+    senderAvatar?: string[];
+    senderName?: string;
+  };
+  if (avatarUrlRaw) normalized.senderAvatarUrl = String(avatarUrlRaw);
+  if (Array.isArray(avatarListRaw)) {
+    normalized.senderAvatar = avatarListRaw.map((entry) => String(entry));
+  } else if (typeof avatarListRaw === "string" && avatarListRaw.trim()) {
+    normalized.senderAvatar = [avatarListRaw.trim()];
+  }
+  if (senderNameRaw) normalized.senderName = String(senderNameRaw);
+  return normalized;
+}
+
 async function getCurrentRoomId(): Promise<string | null> {
   try {
     const state = await Atoms.root.state.get();
@@ -2204,6 +2459,9 @@ export class MessagesOverlay {
   private maxTextLength = MAX_MESSAGE_LENGTH;
   private opts: MessagesOverlayOptions;
   private embedded = false;
+  private mode: "dm" | "group" = "dm";
+  private onThreadHeadRender?: (head: HTMLDivElement, selectedId: string | null) => void;
+  private onListHeadRender?: (list: HTMLDivElement) => void;
 
   private myId: string | null = null;
   private friends: FriendSummary[] = [];
@@ -2213,6 +2471,7 @@ export class MessagesOverlay {
   private selectedId: string | null = null;
   private panelOpen = false;
   private stream: StreamHandle | null = null;
+  private presenceStream: StreamHandle | null = null;
   private mo: MutationObserver | null = null;
   private unsubPlayerId: (() => void) | null = null;
   private keyTrapCleanup: KeyTrapCleanup | null = null;
@@ -2225,6 +2484,15 @@ export class MessagesOverlay {
   private pendingImportItems: ChatItem[] = [];
   private pendingRoomInvite: RoomInvitePayload | null = null;
   private rowById = new Map<string, FriendRowState>();
+  private groupMemberCache = new Map<string, { name?: string; avatarUrl?: string; avatar?: string[] }>();
+  private groupMembersLoaded = new Set<string>();
+  private groupReadAt = new Map<string, number>();
+  private groupReadStorageKey: string | null = null;
+  private lastNotificationSoundAt = 0;
+  private notificationSoundCooldownMs = 1500;
+  private suppressSoundUntil = 0;
+  private groupIds = new Set<string>();
+  private groupIdsLoaded = false;
   private myAvatarUrl: string | null = null;
   private myAvatar: string[] | null = null;
   private myName: string | null = null;
@@ -2256,6 +2524,9 @@ export class MessagesOverlay {
   constructor(options: MessagesOverlayOptions = {}) {
     this.opts = options;
     this.embedded = Boolean(options.embedded);
+    this.mode = options.mode ?? "dm";
+    this.onThreadHeadRender = options.onThreadHeadRender;
+    this.onListHeadRender = options.onListHeadRender;
     ensureMessagesOverlayStyle();
     this.slot = this.createSlot();
     this.btn = this.createButton();
@@ -2342,6 +2613,9 @@ export class MessagesOverlay {
       this.stream?.close();
     } catch {}
     try {
+      this.presenceStream?.close();
+    } catch {}
+    try {
       this.mo?.disconnect();
     } catch {}
     try {
@@ -2380,6 +2654,7 @@ export class MessagesOverlay {
     if (active && this.selectedId) {
       void this.markConversationRead(this.selectedId);
       this.updateFriendRow(this.selectedId);
+      this.renderThread({ scrollToBottom: true });
     }
   }
 
@@ -2387,8 +2662,18 @@ export class MessagesOverlay {
     const normalized = next ? String(next) : null;
     if (this.myId === normalized) return;
     this.myId = normalized;
+    this.groupMemberCache.clear();
+    this.groupMembersLoaded.clear();
+    this.groupReadAt.clear();
+    this.groupReadStorageKey = null;
+    this.groupIds.clear();
+    this.groupIdsLoaded = false;
+    if (this.mode === "group" && this.myId) {
+      this.loadGroupReadState();
+    }
     void this.refreshMyProfile();
     this.resetStream();
+    this.resetPresenceStream();
     this.loadFriends(true);
     this.renderFriendList({ preserveScroll: true });
     this.renderThread();
@@ -2513,16 +2798,211 @@ export class MessagesOverlay {
     return wrap;
   }
 
-  private createMessageAvatar(senderId: string, outgoing: boolean): HTMLDivElement {
+  private createMessageAvatar(msg: DirectMessage, outgoing: boolean): HTMLDivElement {
     if (outgoing) {
       return this.buildAvatarElement(this.myAvatar, this.myAvatarUrl, this.myName ?? "You");
     }
-    const friend = this.getFriendById(senderId) ?? this.getFriendById(this.selectedId ?? "");
+    if (this.mode === "group") {
+      const raw = msg as any;
+      const avatarListRaw =
+        raw.senderAvatar ??
+        raw.sender_avatar ??
+        raw.avatar ??
+        raw.avatar_list ??
+        raw.avatarList ??
+        null;
+      const avatarUrlRaw =
+        raw.senderAvatarUrl ??
+        raw.sender_avatar_url ??
+        raw.avatarUrl ??
+        raw.avatar_url ??
+        null;
+      const senderNameRaw =
+        raw.senderName ??
+        raw.sender_name ??
+        raw.playerName ??
+        raw.player_name ??
+        raw.name ??
+        null;
+      const avatarList = Array.isArray(avatarListRaw)
+        ? avatarListRaw.map((entry) => String(entry))
+        : null;
+      const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : null;
+      const senderName = senderNameRaw ? String(senderNameRaw) : null;
+      if (avatarList || avatarUrl || senderName) {
+        return this.buildAvatarElement(
+          avatarList,
+          avatarUrl,
+          senderName ?? msg.senderId,
+        );
+      }
+      const cached = this.groupMemberCache.get(msg.senderId);
+      if (cached) {
+        return this.buildAvatarElement(
+          cached.avatar ?? null,
+          cached.avatarUrl ?? null,
+          cached.name ?? msg.senderId,
+        );
+      }
+    }
+    const friend = this.getFriendById(msg.senderId) ?? this.getFriendById(this.selectedId ?? "");
     return this.buildAvatarElement(
       friend?.avatar ?? null,
       friend?.avatarUrl ?? null,
-      friend?.playerName ?? senderId,
+      friend?.playerName ?? msg.senderId,
     );
+  }
+
+  private cacheGroupMemberFromMessage(msg: DirectMessage): void {
+    if (this.mode !== "group") return;
+    const raw = msg as any;
+    const senderId = msg.senderId ? String(msg.senderId) : "";
+    if (!senderId) return;
+    const avatarUrlRaw =
+      raw.senderAvatarUrl ??
+      raw.sender_avatar_url ??
+      raw.avatarUrl ??
+      raw.avatar_url ??
+      null;
+    const avatarListRaw =
+      raw.senderAvatar ??
+      raw.sender_avatar ??
+      raw.avatar ??
+      raw.avatar_list ??
+      raw.avatarList ??
+      null;
+    const senderNameRaw =
+      raw.senderName ??
+      raw.sender_name ??
+      raw.playerName ??
+      raw.player_name ??
+      raw.name ??
+      null;
+    const avatar = Array.isArray(avatarListRaw)
+      ? avatarListRaw.map((entry) => String(entry))
+      : typeof avatarListRaw === "string" && avatarListRaw.trim()
+        ? [avatarListRaw.trim()]
+        : undefined;
+    const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : undefined;
+    const name = senderNameRaw ? String(senderNameRaw) : undefined;
+    if (!avatar && !avatarUrl && !name) return;
+    this.groupMemberCache.set(senderId, { avatar, avatarUrl, name });
+  }
+
+  private async ensureGroupMembers(groupId: string): Promise<void> {
+    if (this.mode !== "group") return;
+    if (!this.myId || !groupId) return;
+    if (this.groupMembersLoaded.has(groupId)) return;
+    this.groupMembersLoaded.add(groupId);
+    try {
+      const details = await fetchGroupDetails(groupId, this.myId);
+      if (!details) {
+        this.groupMembersLoaded.delete(groupId);
+        return;
+      }
+      const membersRaw =
+        (details as any).members ??
+        (details as any).groupMembers ??
+        (details as any).membersList ??
+        [];
+      if (!Array.isArray(membersRaw)) {
+        this.groupMembersLoaded.delete(groupId);
+        return;
+      }
+      let cachedAny = false;
+      for (const member of membersRaw) {
+        if (!member) continue;
+        const idRaw = (member as any).playerId ?? (member as any).player_id ?? (member as any).id ?? "";
+        const id = String(idRaw ?? "").trim();
+        if (!id) continue;
+        const avatarUrlRaw =
+          (member as any).avatarUrl ??
+          (member as any).avatar_url ??
+          (member as any).discordAvatarUrl ??
+          (member as any).discord_avatar_url ??
+          null;
+        const avatarListRaw =
+          (member as any).avatar ??
+          (member as any).avatar_list ??
+          (member as any).avatarList ??
+          (member as any).cosmeticAvatar ??
+          (member as any).cosmetic_avatar ??
+          null;
+        const nameRaw =
+          (member as any).name ??
+          (member as any).playerName ??
+          (member as any).player_name ??
+          null;
+        const avatar = Array.isArray(avatarListRaw)
+          ? avatarListRaw.map((entry) => String(entry))
+          : typeof avatarListRaw === "string" && avatarListRaw.trim()
+            ? [avatarListRaw.trim()]
+            : undefined;
+        const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : undefined;
+        const name = nameRaw ? String(nameRaw) : undefined;
+        const prev = this.groupMemberCache.get(id);
+        this.groupMemberCache.set(id, {
+          avatar: avatar ?? prev?.avatar,
+          avatarUrl: avatarUrl ?? prev?.avatarUrl,
+          name: name ?? prev?.name,
+        });
+        cachedAny = true;
+      }
+      if (cachedAny && this.selectedId === groupId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
+    } catch {
+      this.groupMembersLoaded.delete(groupId);
+    }
+  }
+
+  private loadGroupReadState(): void {
+    if (this.mode !== "group" || !this.myId) return;
+    const key = `qws-group-read:${this.myId}`;
+    this.groupReadStorageKey = key;
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      if (!parsed || typeof parsed !== "object") return;
+      for (const [gid, ts] of Object.entries(parsed)) {
+        const num = Number(ts);
+        if (Number.isFinite(num)) this.groupReadAt.set(gid, num);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private saveGroupReadState(): void {
+    if (this.mode !== "group" || !this.groupReadStorageKey) return;
+    const payload: Record<string, number> = {};
+    for (const [gid, ts] of this.groupReadAt.entries()) {
+      if (Number.isFinite(ts)) payload[gid] = ts;
+    }
+    try {
+      localStorage.setItem(this.groupReadStorageKey, JSON.stringify(payload));
+    } catch {
+      // ignore
+    }
+  }
+
+  private playNotificationSound(): void {
+    if (!getFriendSettings().messageSoundEnabled) return;
+    const now = Date.now();
+    if (now < this.suppressSoundUntil) return;
+    if (now - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
+    this.lastNotificationSoundAt = now;
+    void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url) => {
+      audioPlayer.playAt(url, 0.2);
+    });
+  }
+
+  private suppressNotificationSound(ms = 2500): void {
+    const until = Date.now() + ms;
+    if (until > this.suppressSoundUntil) {
+      this.suppressSoundUntil = until;
+    }
   }
 
   private createRoomInviteCard(invite: RoomInvitePayload, outgoing: boolean): HTMLDivElement {
@@ -2598,12 +3078,91 @@ export class MessagesOverlay {
     }
 
     if (!this.myId) return;
+    this.suppressNotificationSound();
+    if (this.mode === "group") {
+      const es = openGroupsStream(this.myId, {
+        onConnected: () => {
+          this.suppressNotificationSound();
+        },
+        onMessage: (payload) => this.handleIncomingGroupMessage(payload),
+        onMemberAdded: () => void this.loadGroups(true),
+        onMemberRemoved: () => void this.loadGroups(true),
+        onUpdated: () => void this.loadGroups(true),
+        onDeleted: (payload) => {
+          const gidRaw = (payload as any)?.groupId ?? (payload as any)?.group_id ?? "";
+          const gid = normalizeId(gidRaw);
+          if (gid) {
+            this.convs.delete(gid);
+            this.convByConversationId.forEach((otherId, convId) => {
+              if (normalizeId(otherId) === gid) this.convByConversationId.delete(convId);
+            });
+            if (this.selectedId === gid) {
+              this.selectedId = null;
+              this.renderThread();
+            }
+          }
+          void this.loadGroups(true);
+          this.renderFriendList({ preserveScroll: true });
+        },
+        onError: () => {},
+      });
+      this.stream = es ?? null;
+      return;
+    }
     const es = openMessagesStream(this.myId, {
+      onConnected: () => {
+        this.suppressNotificationSound();
+      },
       onMessage: (msg) => this.handleIncomingMessage(msg),
       onRead: (receipt) => this.handleReadReceipt(receipt),
       onError: () => {},
     });
     this.stream = es ?? null;
+  }
+
+  private resetPresenceStream(): void {
+    if (this.mode === "group") return;
+    if (this.presenceStream) {
+      try {
+        this.presenceStream.close();
+      } catch {}
+      this.presenceStream = null;
+    }
+    if (!this.myId) return;
+    this.presenceStream = openPresenceStream(this.myId, (payload) => {
+      this.handlePresence(payload);
+    });
+  }
+
+  private handlePresence(payload: PresencePayload): void {
+    if (this.mode === "group") return;
+    const id = normalizeId(payload?.playerId);
+    if (!id) return;
+    let changed = false;
+    const next = this.friends.map((friend) => {
+      if (normalizeId(friend.playerId) !== id) return friend;
+      const nextOnline = Boolean(payload?.online);
+      const nextLastEventAt = payload?.lastEventAt ?? friend.lastEventAt;
+      const nextRoomId =
+        payload?.roomId !== undefined ? payload.roomId : friend.roomId ?? null;
+      if (
+        friend.isOnline === nextOnline &&
+        friend.lastEventAt === nextLastEventAt &&
+        (friend.roomId ?? null) === nextRoomId
+      ) {
+        return friend;
+      }
+      changed = true;
+      return {
+        ...friend,
+        isOnline: nextOnline,
+        lastEventAt: nextLastEventAt,
+        roomId: nextRoomId,
+      };
+    });
+    if (changed) {
+      this.applyFriends(next, { forceRender: true });
+    }
   }
 
   private ensureConversation(otherIdRaw: string): ConversationState {
@@ -2676,13 +3235,56 @@ export class MessagesOverlay {
       const shouldMarkRead = this.panelOpen && this.selectedId === conv.otherId;
       if (shouldMarkRead) {
         void this.markConversationRead(conv.otherId);
-      } else {
+      } else if (!normalized.readAt) {
         conv.unread += 1;
-        if (getFriendSettings().messageSoundEnabled) {
-          void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url) => {
-            audioPlayer.playAt(url, 0.2);
-          });
-        }
+        this.playNotificationSound();
+      }
+    }
+
+    this.updateButtonBadge();
+    if (!this.updateFriendRow(conv.otherId)) {
+      this.renderFriendList({ preserveScroll: true });
+    }
+    if (this.selectedId === conv.otherId) {
+      this.renderThread();
+    }
+  }
+
+  private handleIncomingGroupMessage(payload: unknown): void {
+    if (!this.myId) return;
+    const normalized = normalizeGroupMessage(payload);
+    if (!normalized) return;
+    this.cacheGroupMemberFromMessage(normalized);
+    const groupId = normalized.conversationId || normalized.recipientId;
+    if (!groupId) return;
+    if (this.groupIdsLoaded && !this.groupIds.has(groupId)) {
+      return;
+    }
+    const conv = this.ensureConversation(groupId);
+    conv.messages = this.mergeMessages(conv.messages, [normalized]);
+    conv.conversationId = groupId;
+    conv.lastMessageAt = Math.max(
+      conv.lastMessageAt,
+      Number.isFinite(Date.parse(normalized.createdAt))
+        ? Date.parse(normalized.createdAt)
+        : 0,
+    );
+    this.updateConversationMap(conv);
+
+    const isOutgoing = normalized.senderId === this.myId;
+    if (!isOutgoing) {
+      const shouldMarkRead = this.panelOpen && this.selectedId === conv.otherId;
+      const msgTsRaw = parseMessageTime(normalized) || Date.now();
+      const lastRead = this.groupReadAt.get(conv.otherId) ?? 0;
+      const alreadyRead = Number.isFinite(lastRead) && msgTsRaw <= lastRead;
+      if (shouldMarkRead) {
+        const nextRead = Math.max(lastRead, msgTsRaw);
+        this.groupReadAt.set(conv.otherId, nextRead);
+        this.saveGroupReadState();
+        void this.markConversationRead(conv.otherId);
+      } else if (!alreadyRead) {
+        conv.unread += 1;
+        this.playNotificationSound();
       }
     }
 
@@ -2696,6 +3298,7 @@ export class MessagesOverlay {
   }
 
   private handleReadReceipt(receipt: ReadReceipt): void {
+    if (this.mode === "group") return;
     if (!receipt?.conversationId) return;
     const otherId = this.convByConversationId.get(receipt.conversationId);
     if (!otherId) return;
@@ -2721,11 +3324,18 @@ export class MessagesOverlay {
   private computeFriendsFingerprint(friends: FriendSummary[]): string {
     const parts = friends.map((friend) => {
       const avatar = Array.isArray(friend.avatar) ? friend.avatar.map(String).join("|") : "";
+      const memberCount =
+        (friend as any).memberCount ??
+        (friend as any).member_count ??
+        (friend as any).membersCount ??
+        (friend as any).members_count ??
+        "";
       return [
         String(friend.playerId ?? ""),
         friend.playerName ?? "",
         friend.avatarUrl ?? "",
         avatar,
+        memberCount,
         friend.isOnline ? "1" : "0",
         friend.lastEventAt ?? "",
       ].join("~");
@@ -2746,6 +3356,10 @@ export class MessagesOverlay {
   }
 
   private async loadFriends(force = false): Promise<void> {
+    if (this.mode === "group") {
+      await this.loadGroups(force);
+      return;
+    }
     if (!this.myId) return;
     const cached = getCachedFriendsSummary();
     if (cached.length) {
@@ -2771,7 +3385,59 @@ export class MessagesOverlay {
     }
   }
 
+  private async loadGroups(_force = false): Promise<void> {
+    if (!this.myId) return;
+    try {
+      const data = await fetchGroups(this.myId);
+      const mapped = Array.isArray(data)
+        ? data.map(mapGroupToFriendSummary).filter((g): g is FriendSummary => !!g)
+        : [];
+      this.applyFriends(mapped, { forceRender: true });
+      this.groupIdsLoaded = true;
+      const nextIds = new Set<string>(mapped.map((g) => normalizeId(g.playerId)));
+      this.groupIds = nextIds;
+
+      // Drop conversations/read markers for groups that no longer exist.
+      let removedAny = false;
+      for (const [id] of this.convs) {
+        if (!nextIds.has(id)) {
+          this.convs.delete(id);
+          removedAny = true;
+        }
+      }
+      for (const [convId, otherId] of this.convByConversationId) {
+        if (!nextIds.has(otherId)) {
+          this.convByConversationId.delete(convId);
+          removedAny = true;
+        }
+      }
+      for (const key of Array.from(this.groupReadAt.keys())) {
+        if (!nextIds.has(key)) {
+          this.groupReadAt.delete(key);
+          removedAny = true;
+        }
+      }
+      if (removedAny) {
+        if (this.selectedId && !nextIds.has(this.selectedId)) {
+          this.selectedId = null;
+        }
+        this.saveGroupReadState();
+        this.updateButtonBadge();
+        this.renderFriendList({ preserveScroll: true });
+      }
+    } catch {
+      if (!this.friends.length) {
+        this.friends = [];
+        this.friendsFingerprint = null;
+        this.renderFriendList({ preserveScroll: true });
+      } else if (this.selectedId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
+    }
+  }
+
   private async refreshUnreadCounts(friends: FriendSummary[]): Promise<void> {
+    if (this.mode === "group") return;
     if (!this.myId) return;
     if (this.unreadRefreshInFlight) return;
     const now = Date.now();
@@ -2823,9 +3489,13 @@ export class MessagesOverlay {
   private async selectConversation(otherId: string): Promise<void> {
     this.selectedId = otherId;
     const conv = this.ensureConversation(otherId);
+    const hadUnreadAtOpen = conv.unread > 0;
     this.updateSelection();
     this.renderThread();
     this.updateSendState();
+    if (this.mode === "group") {
+      void this.ensureGroupMembers(otherId);
+    }
 
     if (this.myId && !conv.loaded && !conv.loading) {
       conv.loading = true;
@@ -2833,12 +3503,25 @@ export class MessagesOverlay {
       const currentId = otherId;
       void (async () => {
         try {
-          const data = await fetchMessagesThread(this.myId!, currentId, {
-            limit: THREAD_INITIAL_LIMIT,
-          });
+          const data = this.mode === "group"
+            ? await fetchGroupMessages(currentId, this.myId!, {
+              limit: THREAD_INITIAL_LIMIT,
+            })
+            : await fetchMessagesThread(this.myId!, currentId, {
+              limit: THREAD_INITIAL_LIMIT,
+            });
           const normalized = Array.isArray(data)
-            ? data.map(normalizeMessage).filter(Boolean)
+            ? data
+              .map((msg) =>
+                this.mode === "group"
+                  ? normalizeGroupMessage({ ...(msg as any), groupId: currentId })
+                  : normalizeMessage(msg),
+              )
+              .filter(Boolean)
             : [];
+          if (this.mode === "group") {
+            normalized.forEach((msg) => this.cacheGroupMemberFromMessage(msg));
+          }
           conv.messages = this.mergeMessages(conv.messages, normalized);
           if (conv.messages.length) {
             conv.conversationId = conv.messages[0]?.conversationId ?? conv.conversationId;
@@ -2860,12 +3543,20 @@ export class MessagesOverlay {
             this.renderThread();
           }
           this.updateFriendRow(currentId);
+          const shouldScroll = this.mode === "group" && (conv.unread > 0 || hadUnreadAtOpen);
           await this.markConversationRead(currentId);
+          if (shouldScroll && this.selectedId === currentId) {
+            this.scrollThreadToBottom();
+          }
         }
       })();
     } else {
+      const shouldScroll = this.mode === "group" && hadUnreadAtOpen;
       await this.markConversationRead(otherId);
       this.updateFriendRow(otherId);
+      if (shouldScroll && this.selectedId === otherId) {
+        this.scrollThreadToBottom();
+      }
     }
   }
 
@@ -2892,13 +3583,27 @@ export class MessagesOverlay {
     this.renderThread({ preserveScroll: true, scrollToBottom: false });
 
     try {
-      const data = await fetchMessagesThread(this.myId, conv.otherId, {
-        beforeId: oldestId,
-        limit: THREAD_PAGE_LIMIT,
-      });
+      const data = this.mode === "group"
+        ? await fetchGroupMessages(conv.otherId, this.myId, {
+          beforeId: oldestId,
+          limit: THREAD_PAGE_LIMIT,
+        })
+        : await fetchMessagesThread(this.myId, conv.otherId, {
+          beforeId: oldestId,
+          limit: THREAD_PAGE_LIMIT,
+        });
       const normalized = Array.isArray(data)
-        ? data.map(normalizeMessage).filter(Boolean)
+        ? data
+          .map((msg) =>
+            this.mode === "group"
+              ? normalizeGroupMessage({ ...(msg as any), groupId: conv.otherId })
+              : normalizeMessage(msg),
+          )
+          .filter(Boolean)
         : [];
+      if (this.mode === "group") {
+        normalized.forEach((msg) => this.cacheGroupMemberFromMessage(msg));
+      }
       if (!normalized.length) {
         conv.hasMore = false;
       } else {
@@ -2925,6 +3630,20 @@ export class MessagesOverlay {
     if (!this.myId) return;
     const conv = this.convs.get(otherId);
     if (!conv) return;
+    if (this.mode === "group") {
+      conv.unread = 0;
+      let lastReadAt = Date.now();
+      if (conv.messages.length) {
+        const last = conv.messages[conv.messages.length - 1];
+        const ts = parseMessageTime(last);
+        if (ts) lastReadAt = ts;
+      }
+      this.groupReadAt.set(otherId, lastReadAt);
+      this.saveGroupReadState();
+      this.updateButtonBadge();
+      this.updateFriendRow(otherId);
+      return;
+    }
     const unreadMsgs = conv.messages.filter(
       (m) => m.senderId !== this.myId && !m.readAt,
     );
@@ -2978,6 +3697,7 @@ export class MessagesOverlay {
 
     const seen = new Set<string>();
     const shouldInclude = (id: string, conv?: ConversationState | null) => {
+      if (this.mode === "group") return true;
       if (this.selectedId && id === this.selectedId) return true;
       if (!conv) return false;
       if (conv.lastMessageAt > 0) return true;
@@ -3001,17 +3721,19 @@ export class MessagesOverlay {
       }
     }
 
-    for (const [id, conv] of this.convs) {
-      if (seen.has(id)) continue;
-      if (!shouldInclude(id, conv)) continue;
-      entries.push({
-        id,
-        friend: null,
-        unread: conv.unread,
-        lastMessageAt: conv.lastMessageAt,
-        online: false,
-        lastSeenAt: 0,
-      });
+    if (this.mode !== "group") {
+      for (const [id, conv] of this.convs) {
+        if (seen.has(id)) continue;
+        if (!shouldInclude(id, conv)) continue;
+        entries.push({
+          id,
+          friend: null,
+          unread: conv.unread,
+          lastMessageAt: conv.lastMessageAt,
+          online: false,
+          lastSeenAt: 0,
+        });
+      }
     }
 
     entries.sort((a, b) => {
@@ -3029,14 +3751,18 @@ export class MessagesOverlay {
     const scrollTop = preserveScroll ? this.listEl.scrollTop : 0;
     this.listEl.innerHTML = "";
     this.rowById.clear();
+    this.listEl.classList.toggle("qws-msg-list-group", this.mode === "group");
+    this.onListHeadRender?.(this.listEl);
     const entries = this.buildFriendEntries();
-    if (!entries.length) {
-      const empty = document.createElement("div");
-      empty.className = "qws-msg-empty";
-      empty.textContent = "No conversations yet.";
-      this.listEl.appendChild(empty);
-      return;
-    }
+      if (!entries.length) {
+        const empty = document.createElement("div");
+        empty.className = "qws-msg-empty";
+        empty.textContent = this.mode === "group"
+          ? "No groups yet."
+          : "No conversations yet.";
+        this.listEl.appendChild(empty);
+        return;
+      }
 
     for (const entry of entries) {
       const row = document.createElement("div");
@@ -3075,7 +3801,7 @@ export class MessagesOverlay {
       name.textContent = formatFriendName(entry.friend, entry.id);
       const sub = document.createElement("div");
       sub.className = "qws-msg-friend-sub";
-      sub.textContent = formatStatus(entry.friend);
+      sub.textContent = formatStatus(entry.friend, this.mode);
       meta.append(name, sub);
 
       let dot: HTMLSpanElement | null = null;
@@ -3127,9 +3853,12 @@ export class MessagesOverlay {
     if (!this.selectedId) {
       const empty = document.createElement("div");
       empty.className = "qws-msg-empty";
-      empty.textContent = "Select a friend to start chatting.";
+      empty.textContent = this.mode === "group"
+        ? "Select a group to start chatting."
+        : "Select a friend to start chatting.";
       this.threadBodyEl.appendChild(empty);
       this.setInputState(false);
+      this.onThreadHeadRender?.(this.threadHeadEl, null);
       return;
     }
 
@@ -3138,6 +3867,9 @@ export class MessagesOverlay {
     title.textContent = formatFriendName(friend, this.selectedId);
     title.style.fontWeight = "700";
     this.threadHeadEl.appendChild(title);
+    if (this.onThreadHeadRender) {
+      this.onThreadHeadRender(this.threadHeadEl, this.selectedId);
+    }
 
     const conv = this.ensureConversation(this.selectedId);
     if (conv.loading && !conv.messages.length) {
@@ -3246,7 +3978,7 @@ export class MessagesOverlay {
         bubble.append(content);
       }
 
-      const avatarEl = this.createMessageAvatar(msg.senderId, outgoing);
+      const avatarEl = this.createMessageAvatar(msg, outgoing);
 
       const row = document.createElement("div");
       row.className = "qws-msg-row";
@@ -3719,6 +4451,18 @@ export class MessagesOverlay {
     this.renderFriendList({ preserveScroll: true });
   }
 
+  refresh(): void {
+    this.loadFriends(true);
+    this.renderFriendList({ preserveScroll: true });
+    if (this.selectedId) {
+      this.renderThread({ preserveScroll: true, scrollToBottom: false });
+    }
+  }
+
+  rerenderList(): void {
+    this.renderFriendList({ preserveScroll: true });
+  }
+
   private updateButtonBadge(): void {
     let total = 0;
     for (const conv of this.convs.values()) total += conv.unread;
@@ -3774,7 +4518,7 @@ export class MessagesOverlay {
     const conv = this.convs.get(id);
     const unread = conv?.unread ?? 0;
 
-    state.sub.textContent = formatStatus(friend);
+    state.sub.textContent = formatStatus(friend, this.mode);
 
     if (unread > 0) {
       state.row.classList.add("unread");
@@ -3886,7 +4630,7 @@ export class MessagesOverlay {
 
     const head = document.createElement("div");
     head.className = "qws-msg-head";
-    head.textContent = "Messages";
+    head.textContent = this.opts.title ?? (this.mode === "group" ? "Groups" : "Messages");
     this.panelHeadEl = head;
 
     const body = document.createElement("div");
@@ -4049,6 +4793,10 @@ export class MessagesOverlay {
   }
 
   private async handleSendMessage(): Promise<void> {
+    if (this.mode === "group") {
+      await this.handleSendGroupMessage();
+      return;
+    }
     if (!this.myId || !this.selectedId) return;
     const built = this.buildMessageBody();
     if (!built) {
@@ -4091,6 +4839,73 @@ export class MessagesOverlay {
         const conv = this.ensureConversation(this.selectedId);
         conv.messages = this.mergeMessages(conv.messages, [normalized]);
         conv.conversationId = normalized.conversationId ?? conv.conversationId;
+        conv.lastMessageAt = Math.max(
+          conv.lastMessageAt,
+          Number.isFinite(Date.parse(normalized.createdAt))
+            ? Date.parse(normalized.createdAt)
+            : 0,
+        );
+        this.updateConversationMap(conv);
+        this.inputEl.value = "";
+        if (usedItems) {
+          this.pendingImportItems = [];
+          this.renderAttachments();
+          this.updateAttachmentStatus();
+        }
+        if (usedRoomInvite) {
+          this.pendingRoomInvite = null;
+          this.updateAttachmentStatus();
+        }
+        this.updateFriendRow(this.selectedId);
+        this.updateSelection();
+        this.renderThread();
+      } else {
+        this.statusEl.textContent = "Message failed to send.";
+      }
+    } catch {
+      this.statusEl.textContent = "Message failed to send.";
+    } finally {
+      this.updateSendState();
+    }
+  }
+
+  private async handleSendGroupMessage(): Promise<void> {
+    if (!this.myId || !this.selectedId) return;
+    const built = this.buildMessageBody();
+    if (!built) {
+      if (this.pendingImportItems.length) {
+        this.statusEl.textContent = "Unable to attach item.";
+      }
+      return;
+    }
+    this.sendBtn.disabled = true;
+    if (!this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+      this.statusEl.textContent = "";
+    }
+
+    if (built.body.length > MAX_MESSAGE_LENGTH) {
+      this.statusEl.textContent = `Message too long (${built.body.length}/${MAX_MESSAGE_LENGTH}).`;
+      this.updateSendState();
+      return;
+    }
+
+    const body = built.body;
+    const usedItems = built.usedItems;
+    const usedRoomInvite = built.usedRoomInvite;
+
+    try {
+      const msg = await sendGroupMessage({
+        groupId: this.selectedId,
+        playerId: this.myId,
+        text: body,
+      });
+      const normalized = msg
+        ? normalizeGroupMessage({ ...(msg as any), groupId: this.selectedId })
+        : null;
+      if (normalized) {
+        const conv = this.ensureConversation(this.selectedId);
+        conv.messages = this.mergeMessages(conv.messages, [normalized]);
+        conv.conversationId = this.selectedId;
         conv.lastMessageAt = Math.max(
           conv.lastMessageAt,
           Number.isFinite(Date.parse(normalized.createdAt))
