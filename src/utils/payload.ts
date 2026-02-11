@@ -365,11 +365,11 @@ export async function buildPlayerStatePayload(
 
     const payload: PlayerStatePayload = {
       playerId: playerId != null ? String(playerId) : null,
-      playerName: privacy.showProfile ? playerName : null,
-      avatarUrl: privacy.showProfile ? avatarUrl : null,
-      avatar: privacy.showProfile ? avatar : null,
+      playerName: playerName ?? null,
+      avatarUrl: avatarUrl ?? null,
+      avatar: avatar ?? null,
       modVersion: modVersion,
-      coins: privacy.showCoins ? coinsRaw : null,
+      coins: coinsRaw,
       room: {
         id: roomId,
         isPrivate: privacy.hideRoomFromPublicList ?? null,
@@ -378,18 +378,15 @@ export async function buildPlayerStatePayload(
       },
       privacy,
       state: {
-        garden: privacy.showGarden ? slotData?.garden ?? null : null,
-        inventory: privacy.showInventory
-          ? slotData?.inventory ?? slot?.inventory ?? null
-          : null,
+        garden: slotData?.garden ?? null,
+        inventory: slotData?.inventory ?? slot?.inventory ?? null,
         stats:
-          privacy.showStats &&
           typeof slotData?.stats === "object" &&
           slotData?.stats
             ? slotData.stats
             : null,
-        activityLog: privacy.showActivityLog ? activityLog : null,
-        journal: privacy.showJournal ? journalEntry : null,
+        activityLog: activityLog ?? null,
+        journal: journalEntry ?? null,
       },
     };
 
