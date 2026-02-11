@@ -24442,8 +24442,14 @@
     return () => subscribers.delete(cb);
   }
 
-  // src/utils/supabase.ts
-  var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
+  // src/utils/discordCsp.ts
+  function isDiscordActivityContext() {
+    try {
+      return window.location.hostname.endsWith("discordsays.com");
+    } catch {
+      return false;
+    }
+  }
   var _SAFE_IMG_HOSTS = ["cdn.discordapp.com", "media.discordapp.net"];
   var _gmImgCache = /* @__PURE__ */ new Map();
   var _gmImgPending = /* @__PURE__ */ new Map();
@@ -24563,57 +24569,6 @@
       });
     });
   }
-  function isDiscordActivityContext() {
-    try {
-      return window.location.hostname.endsWith("discordsays.com");
-    } catch {
-      return false;
-    }
-  }
-  var SSE_EVENT_NAMES = [
-    "connected",
-    "friend_request",
-    "friend_response",
-    "friend_cancelled",
-    "friend_removed",
-    "message",
-    "read",
-    "ping"
-  ];
-  function openGMSSEStream(url2, onEvent, onError) {
-    let closed = false;
-    let source = null;
-    const tag = (() => {
-      try {
-        return `[SSE ${new URL(url2).pathname.split("/").slice(-2).join("/")}]`;
-      } catch {
-        return "[SSE]";
-      }
-    })();
-    source = new EventSource(url2);
-    const handleEvent = (event, name) => {
-      if (closed) return;
-      const data = event.data;
-      onEvent(name, data);
-    };
-    for (const name of SSE_EVENT_NAMES) {
-      source.addEventListener(name, (e) => handleEvent(e, name));
-    }
-    source.addEventListener("open", () => {
-    });
-    source.addEventListener("error", (e) => {
-      if (closed) return;
-      console.warn(tag, "error", e);
-      onError?.();
-    });
-    return {
-      close: () => {
-        closed = true;
-        source?.close();
-        source = null;
-      }
-    };
-  }
   var EMOJI_DATA_CDN_PREFIX = "https://cdn.jsdelivr.net/npm/emoji-picker-element-data";
   var _emojiJson = null;
   var _emojiPending = [];
@@ -24672,6 +24627,276 @@
       }
     });
   }
+
+  // src/utils/supabase.ts
+  var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
+  var SSE_EVENT_NAMES = [
+    "connected",
+    "friend_request",
+    "friend_response",
+    "friend_cancelled",
+    "friend_removed",
+    "message",
+    "read",
+    "ping",
+    "presence",
+    "group_message",
+    "group_member_added",
+    "group_member_removed",
+    "group_updated",
+    "group_deleted"
+  ];
+  function openGMSSEStream(url2, onEvent, onError) {
+    let closed = false;
+    let source = null;
+    source = new EventSource(url2);
+    const handleEvent = (event, name) => {
+      if (closed) return;
+      const data = event.data;
+      onEvent(name, data);
+    };
+    for (const name of SSE_EVENT_NAMES) {
+      source.addEventListener(name, (e) => handleEvent(e, name));
+    }
+    source.addEventListener("open", () => {
+    });
+    source.addEventListener("error", (e) => {
+      if (closed) return;
+      onError?.();
+    });
+    return {
+      close: () => {
+        closed = true;
+        source?.close();
+        source = null;
+      }
+    };
+  }
+  var _unifiedConnections = /* @__PURE__ */ new Map();
+  function safeJsonParse(value) {
+    if (value === null || value === void 0) return value;
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  function notifyConnected(conn, payload) {
+    if (conn.connectedNotified) return;
+    conn.connectedNotified = true;
+    for (const sub of conn.subscribers) {
+      sub.onConnected?.(payload);
+    }
+  }
+  function dispatchUnifiedEvent(conn, eventName, data) {
+    for (const sub of conn.subscribers) {
+      sub.onEvent(eventName, data);
+    }
+  }
+  function startUnifiedSSE(conn) {
+    const url2 = buildUrl("events/stream", { playerId: conn.playerId });
+    conn.handle = openGMSSEStream(
+      url2,
+      (eventName, raw) => {
+        const data = safeJsonParse(raw);
+        if (eventName === "connected") {
+          const payload = data && typeof data === "object" ? data : { playerId: conn.playerId };
+          const lastId = Number(payload.lastEventId);
+          if (Number.isFinite(lastId)) {
+            conn.lastEventId = Math.max(conn.lastEventId, lastId);
+          }
+          notifyConnected(conn, {
+            playerId: payload.playerId ?? conn.playerId,
+            lastEventId: Number.isFinite(lastId) ? lastId : void 0
+          });
+          return;
+        }
+        dispatchUnifiedEvent(conn, eventName, data);
+      },
+      () => {
+        for (const sub of conn.subscribers) {
+          sub.onError?.(new Event("error"));
+        }
+      }
+    );
+  }
+  function gmLongPoll(url2) {
+    let aborted = false;
+    let req = null;
+    const promise2 = new Promise((resolve2) => {
+      req = GM_xmlhttpRequest({
+        method: "GET",
+        url: url2,
+        headers: {},
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          if (aborted) {
+            resolve2({ status: 0, data: null, aborted: true });
+            return;
+          }
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+    return {
+      abort: () => {
+        aborted = true;
+        try {
+          req?.abort();
+        } catch {
+        }
+      },
+      promise: promise2
+    };
+  }
+  function startUnifiedLongPoll(conn) {
+    const POLL_TIMEOUT_MS = 25e3;
+    let backoff = 1e3;
+    const BACKOFF_MAX = 3e4;
+    let inFlight = null;
+    const schedule = (delay4) => {
+      if (conn.closed || conn.pollPaused) return;
+      setTimeout(poll, delay4);
+    };
+    const poll = async () => {
+      if (conn.closed || conn.pollPaused || conn.pollRunning) return;
+      conn.pollRunning = true;
+      const token = ++conn.pollToken;
+      const url2 = buildUrl("events/poll", {
+        playerId: conn.playerId,
+        since: conn.lastEventId,
+        timeoutMs: POLL_TIMEOUT_MS
+      });
+      const pollReq = gmLongPoll(url2);
+      inFlight = { abort: pollReq.abort };
+      const { status, data, aborted } = await pollReq.promise;
+      inFlight = null;
+      conn.pollRunning = false;
+      if (conn.closed || conn.pollPaused || aborted || token !== conn.pollToken) return;
+      if (status === 200 && data) {
+        const lastId = Number(data.lastEventId);
+        if (Number.isFinite(lastId)) {
+          conn.lastEventId = Math.max(conn.lastEventId, lastId);
+        }
+        notifyConnected(conn, {
+          playerId: data.playerId ?? conn.playerId,
+          lastEventId: Number.isFinite(lastId) ? lastId : void 0
+        });
+        if (Array.isArray(data.events)) {
+          for (const evt of data.events) {
+            if (!evt || typeof evt.type !== "string") continue;
+            if (typeof evt.id === "number") {
+              conn.lastEventId = Math.max(conn.lastEventId, evt.id);
+            }
+            dispatchUnifiedEvent(conn, evt.type, evt.data);
+          }
+        }
+        backoff = 1e3;
+        schedule(0);
+        return;
+      }
+      for (const sub of conn.subscribers) {
+        sub.onError?.(new Event("error"));
+      }
+      schedule(backoff);
+      backoff = Math.min(BACKOFF_MAX, Math.floor(backoff * 1.7));
+    };
+    poll();
+    conn.handle = {
+      close: () => {
+        conn.closed = true;
+        conn.pollToken += 1;
+        conn.pollRunning = false;
+        inFlight?.abort();
+      }
+    };
+    conn.pollAbort = () => {
+      conn.pollToken += 1;
+      conn.pollRunning = false;
+      inFlight?.abort();
+    };
+    conn.pollKick = () => {
+      if (conn.closed || conn.pollPaused || conn.pollRunning) return;
+      poll();
+    };
+  }
+  function openUnifiedEvents(playerId2, subscriber) {
+    let conn = _unifiedConnections.get(playerId2);
+    if (!conn) {
+      conn = {
+        playerId: playerId2,
+        mode: isDiscordActivityContext() ? "poll" : "sse",
+        subscribers: /* @__PURE__ */ new Set(),
+        handle: null,
+        lastEventId: 0,
+        connectedNotified: false,
+        closed: false,
+        pollPaused: false,
+        pollRunning: false,
+        pollToken: 0
+      };
+      _unifiedConnections.set(playerId2, conn);
+      if (conn.mode === "poll") {
+        startUnifiedLongPoll(conn);
+      } else {
+        startUnifiedSSE(conn);
+      }
+    }
+    conn.subscribers.add(subscriber);
+    return {
+      close: () => {
+        conn.subscribers.delete(subscriber);
+        if (conn.subscribers.size === 0) {
+          conn.closed = true;
+          conn.handle?.close();
+          _unifiedConnections.delete(playerId2);
+        }
+      }
+    };
+  }
+  var _pollPauseDepth = 0;
+  function pauseDiscordLongPolls() {
+    if (!isDiscordActivityContext()) return;
+    _pollPauseDepth += 1;
+    for (const conn of _unifiedConnections.values()) {
+      if (conn.mode !== "poll") continue;
+      conn.pollPaused = true;
+      conn.pollToken += 1;
+      conn.pollRunning = false;
+      conn.pollAbort?.();
+    }
+  }
+  function resumeDiscordLongPolls() {
+    if (!isDiscordActivityContext()) return;
+    _pollPauseDepth = Math.max(0, _pollPauseDepth - 1);
+    if (_pollPauseDepth > 0) return;
+    for (const conn of _unifiedConnections.values()) {
+      if (conn.mode !== "poll") continue;
+      conn.pollPaused = false;
+      conn.pollKick?.();
+    }
+  }
+  async function withDiscordPollPause(fn) {
+    if (!isDiscordActivityContext()) return await fn();
+    pauseDiscordLongPolls();
+    try {
+      return await fn();
+    } finally {
+      resumeDiscordLongPolls();
+    }
+  }
   var ONLINE_THRESHOLD_MS = 6 * 60 * 1e3;
   function computeIsOnline(lastEventAt) {
     if (!lastEventAt) return false;
@@ -24693,9 +24918,27 @@
     }
     return url2.toString();
   }
-  function httpGet(path, query) {
+  async function fetchJson(url2, options, label2) {
+    try {
+      const res = await fetch(url2, {
+        ...options,
+        credentials: options.credentials ?? "omit"
+      });
+      const text = await res.text();
+      let parsed = null;
+      if (text) {
+        try {
+          parsed = JSON.parse(text);
+        } catch (e) {
+        }
+      }
+      return { status: res.status, data: parsed };
+    } catch (err) {
+      throw err;
+    }
+  }
+  function gmGet(url2) {
     return new Promise((resolve2) => {
-      const url2 = buildUrl(path, query);
       GM_xmlhttpRequest({
         method: "GET",
         url: url2,
@@ -24706,24 +24949,20 @@
               const parsed = res.responseText ? JSON.parse(res.responseText) : null;
               resolve2({ status: res.status, data: parsed });
             } catch (e) {
-              console.error("[api] GET parse error:", e, res.responseText);
               resolve2({ status: res.status, data: null });
             }
           } else {
-            console.error("[api] GET error:", res.status, res.responseText);
             resolve2({ status: res.status, data: null });
           }
         },
         onerror: (err) => {
-          console.error("[api] GET request failed:", err);
           resolve2({ status: 0, data: null });
         }
       });
     });
   }
-  function httpPost(path, body) {
+  function gmPost(url2, body) {
     return new Promise((resolve2) => {
-      const url2 = buildUrl(path);
       GM_xmlhttpRequest({
         method: "POST",
         url: url2,
@@ -24737,20 +24976,135 @@
               const parsed = res.responseText ? JSON.parse(res.responseText) : null;
               resolve2({ status: res.status, data: parsed });
             } catch (e) {
-              console.error("[api] POST parse error:", e, res.responseText);
               resolve2({ status: res.status, data: null });
             }
           } else {
-            console.error("[api] POST error:", res.status, res.responseText);
             resolve2({ status: res.status, data: null });
           }
         },
         onerror: (err) => {
-          console.error("[api] POST request failed:", err);
           resolve2({ status: 0, data: null });
         }
       });
     });
+  }
+  function gmPatch(url2, body) {
+    return new Promise((resolve2) => {
+      GM_xmlhttpRequest({
+        method: "PATCH",
+        url: url2,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: JSON.stringify(body),
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  function gmDelete(url2, body) {
+    return new Promise((resolve2) => {
+      GM_xmlhttpRequest({
+        method: "DELETE",
+        url: url2,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        data: body !== void 0 ? JSON.stringify(body) : void 0,
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) {
+            try {
+              const parsed = res.responseText ? JSON.parse(res.responseText) : null;
+              resolve2({ status: res.status, data: parsed });
+            } catch (e) {
+              resolve2({ status: res.status, data: null });
+            }
+          } else {
+            resolve2({ status: res.status, data: null });
+          }
+        },
+        onerror: (err) => {
+          resolve2({ status: 0, data: null });
+        }
+      });
+    });
+  }
+  async function httpGet(path, query) {
+    const url2 = buildUrl(path, query);
+    if (!isDiscordActivityContext()) {
+      try {
+        return await fetchJson(url2, { method: "GET" }, "GET");
+      } catch {
+      }
+    }
+    return withDiscordPollPause(() => gmGet(url2));
+  }
+  async function httpPost(path, body) {
+    const url2 = buildUrl(path);
+    if (!isDiscordActivityContext()) {
+      try {
+        return await fetchJson(
+          url2,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          },
+          "POST"
+        );
+      } catch {
+      }
+    }
+    return withDiscordPollPause(() => gmPost(url2, body));
+  }
+  async function httpPatch(path, body) {
+    const url2 = buildUrl(path);
+    if (!isDiscordActivityContext()) {
+      try {
+        return await fetchJson(
+          url2,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+          },
+          "PATCH"
+        );
+      } catch {
+      }
+    }
+    return withDiscordPollPause(() => gmPatch(url2, body));
+  }
+  async function httpDelete(path, body) {
+    const url2 = buildUrl(path);
+    if (!isDiscordActivityContext()) {
+      try {
+        return await fetchJson(
+          url2,
+          {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: body !== void 0 ? JSON.stringify(body) : void 0
+          },
+          "DELETE"
+        );
+      } catch {
+      }
+    }
+    return withDiscordPollPause(() => gmDelete(url2, body));
   }
   async function sendPlayerState(payload) {
     if (!payload) {
@@ -24850,10 +25204,6 @@
     cachedFriendsSummary = result;
     return [...result];
   }
-  async function fetchFriendsIds(playerId2) {
-    const friends = await fetchFriendsSummary(playerId2);
-    return friends.map((f) => f.playerId);
-  }
   async function fetchFriendRequests(playerId2) {
     if (!playerId2) {
       return { playerId: "", incoming: [], outgoing: [] };
@@ -24873,111 +25223,50 @@
     cachedOutgoingRequests = result.outgoing;
     return result;
   }
-  function openDiscordFriendRequestsPoller(playerId2, handlers) {
-    const LOG = "[friend-poll]";
-    let closed = false;
-    let prevIncomingKeys = /* @__PURE__ */ new Set();
-    let prevOutgoingKeys = /* @__PURE__ */ new Set();
-    let prevFriendKeys = /* @__PURE__ */ new Set();
-    let initialized2 = false;
-    let pollCount = 0;
-    handlers.onConnected?.({ playerId: playerId2 });
-    async function poll() {
-      if (closed) return;
-      pollCount++;
-      try {
-        const [result, friendIds] = await Promise.all([
-          fetchFriendRequests(playerId2),
-          fetchFriendsIds(playerId2)
-        ]);
-        const newIncomingKeys = new Set(result.incoming.map((r) => r.fromPlayerId));
-        const newOutgoingKeys = new Set(result.outgoing.map((r) => r.toPlayerId));
-        const newFriendKeys = new Set(friendIds);
-        if (initialized2) {
-          for (const req of result.incoming) {
-            if (!prevIncomingKeys.has(req.fromPlayerId)) {
-              handlers.onRequest?.({ requesterId: req.fromPlayerId, targetId: playerId2, createdAt: req.createdAt });
-            }
-          }
-          for (const key2 of prevIncomingKeys) {
-            if (!newIncomingKeys.has(key2)) {
-              handlers.onCancelled?.({ requesterId: key2, targetId: playerId2 });
-            }
-          }
-          for (const key2 of prevOutgoingKeys) {
-            if (!newOutgoingKeys.has(key2)) {
-              const now2 = (/* @__PURE__ */ new Date()).toISOString();
-              if (newFriendKeys.has(key2)) {
-                handlers.onAccepted?.({ requesterId: playerId2, responderId: key2, updatedAt: now2 });
-              } else {
-                handlers.onRejected?.({ requesterId: playerId2, responderId: key2, updatedAt: now2 });
-              }
-            }
-          }
-          for (const key2 of prevFriendKeys) {
-            if (!newFriendKeys.has(key2)) {
-              handlers.onRemoved?.({ removerId: key2, removedId: playerId2, removedAt: (/* @__PURE__ */ new Date()).toISOString() });
-            }
-          }
-        }
-        prevIncomingKeys = newIncomingKeys;
-        prevOutgoingKeys = newOutgoingKeys;
-        prevFriendKeys = newFriendKeys;
-        initialized2 = true;
-      } catch (e) {
-        console.error(LOG, "poll error:", e);
-      }
-      if (!closed) setTimeout(poll, 5e3);
-    }
-    poll();
-    return { close: () => {
-      closed = true;
-    } };
-  }
   function openFriendRequestsStream(playerId2, handlers = {}) {
     if (!playerId2) return null;
-    if (isDiscordActivityContext()) return openDiscordFriendRequestsPoller(playerId2, handlers);
-    const url2 = buildUrl("friend-requests/stream", { playerId: playerId2 });
-    const LOG = "[friend-stream]";
-    return openGMSSEStream(
-      url2,
-      (eventName, data) => {
-        try {
-          const parsed = JSON.parse(data);
-          switch (eventName) {
-            case "connected":
-              handlers.onConnected?.(parsed);
-              break;
-            case "friend_request":
-              handlers.onRequest?.(parsed);
-              break;
-            case "friend_response": {
-              const resp = parsed;
-              handlers.onResponse?.(resp);
-              if (resp.action === "accept") {
-                handlers.onAccepted?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
-              } else if (resp.action === "reject") {
-                handlers.onRejected?.({ requesterId: resp.requesterId, responderId: resp.responderId, updatedAt: resp.updatedAt });
-              }
-              break;
-            }
-            case "friend_cancelled":
-              handlers.onCancelled?.(parsed);
-              break;
-            case "friend_removed":
-              handlers.onRemoved?.(parsed);
-              break;
-            default:
-              break;
-          }
-        } catch (e) {
-          console.error(LOG, "parse error:", e, "raw:", data);
-        }
+    return openUnifiedEvents(playerId2, {
+      onConnected: (payload) => {
+        handlers.onConnected?.({ playerId: payload.playerId ?? playerId2 });
       },
-      () => {
-        handlers.onError?.(new Event("error"));
+      onError: (event) => {
+        handlers.onError?.(event);
+      },
+      onEvent: (eventName, data) => {
+        const parsed = safeJsonParse(data);
+        switch (eventName) {
+          case "friend_request":
+            handlers.onRequest?.(parsed);
+            break;
+          case "friend_response": {
+            const resp = parsed;
+            handlers.onResponse?.(resp);
+            if (resp.action === "accept") {
+              handlers.onAccepted?.({
+                requesterId: resp.requesterId,
+                responderId: resp.responderId,
+                updatedAt: resp.updatedAt
+              });
+            } else if (resp.action === "reject") {
+              handlers.onRejected?.({
+                requesterId: resp.requesterId,
+                responderId: resp.responderId,
+                updatedAt: resp.updatedAt
+              });
+            }
+            break;
+          }
+          case "friend_cancelled":
+            handlers.onCancelled?.(parsed);
+            break;
+          case "friend_removed":
+            handlers.onRemoved?.(parsed);
+            break;
+          default:
+            break;
+        }
       }
-    );
+    });
   }
   async function cancelFriendRequest(playerId2, otherPlayerId) {
     if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
@@ -25033,66 +25322,147 @@
     if (status !== 200 || !Array.isArray(data)) return [];
     return data;
   }
-  function openDiscordMessagesPoller(playerId2, handlers) {
-    let closed = false;
-    let since = (/* @__PURE__ */ new Date()).toISOString();
-    const seenIds = /* @__PURE__ */ new Set();
-    handlers.onConnected?.({ playerId: playerId2 });
-    async function poll() {
-      if (closed) return;
-      try {
-        const { status, data } = await httpGet("messages/poll", { playerId: playerId2, since });
-        if (status === 200 && Array.isArray(data)) {
-          for (const msg of data) {
-            const numId = Number(msg?.id);
-            if (!isNaN(numId) && !seenIds.has(numId)) {
-              seenIds.add(numId);
-              const normalized = { ...msg, id: numId };
-              if (normalized.createdAt > since) since = normalized.createdAt;
-              handlers.onMessage?.(normalized);
-            }
-          }
-        }
-      } catch {
+  async function createGroup(params) {
+    const { ownerId, name } = params;
+    if (!ownerId || !name) return null;
+    const { status, data } = await httpPost("groups", { ownerId, name });
+    if (status >= 200 && status < 300 && data) return data;
+    return null;
+  }
+  async function fetchGroups(playerId2) {
+    if (!playerId2) return [];
+    const { status, data } = await httpGet(
+      "groups",
+      { playerId: playerId2 }
+    );
+    if (status !== 200 || !data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data.groups)) return data.groups;
+    return [];
+  }
+  async function fetchGroupDetails(groupId, playerId2) {
+    if (!groupId || !playerId2) return null;
+    const { status, data } = await httpGet(`groups/${groupId}`, { playerId: playerId2 });
+    if (status !== 200 || !data) return null;
+    return data;
+  }
+  async function updateGroupName(params) {
+    const { groupId, playerId: playerId2, name } = params;
+    if (!groupId || !playerId2 || !name) return false;
+    const { status } = await httpPatch(`groups/${groupId}`, { playerId: playerId2, name });
+    return status >= 200 && status < 300;
+  }
+  async function deleteGroup(params) {
+    const { groupId, playerId: playerId2 } = params;
+    if (!groupId || !playerId2) return false;
+    const { status } = await httpDelete(`groups/${groupId}`, { playerId: playerId2 });
+    return status >= 200 && status < 300;
+  }
+  async function addGroupMember(params) {
+    const { groupId, playerId: playerId2, memberId } = params;
+    if (!groupId || !playerId2 || !memberId) return false;
+    const { status } = await httpPost(`groups/${groupId}/members`, { playerId: playerId2, memberId });
+    return status >= 200 && status < 300;
+  }
+  async function removeGroupMember(params) {
+    const { groupId, playerId: playerId2, memberId } = params;
+    if (!groupId || !playerId2 || !memberId) return false;
+    const { status } = await httpDelete(`groups/${groupId}/members/${memberId}`, { playerId: playerId2 });
+    return status >= 200 && status < 300;
+  }
+  async function leaveGroup(params) {
+    const { groupId, playerId: playerId2 } = params;
+    if (!groupId || !playerId2) return false;
+    const { status } = await httpPost(`groups/${groupId}/leave`, { playerId: playerId2 });
+    return status >= 200 && status < 300;
+  }
+  async function sendGroupMessage(params) {
+    const { groupId, playerId: playerId2, text } = params;
+    if (!groupId || !playerId2 || !text) return null;
+    const { status, data } = await httpPost(`groups/${groupId}/messages`, { playerId: playerId2, text });
+    if (status >= 200 && status < 300 && data) return data;
+    return null;
+  }
+  async function fetchGroupMessages(groupId, playerId2, options) {
+    if (!groupId || !playerId2) return [];
+    const { status, data } = await httpGet(
+      `groups/${groupId}/messages`,
+      {
+        playerId: playerId2,
+        afterId: options?.afterId,
+        beforeId: options?.beforeId,
+        limit: options?.limit
       }
-      if (!closed) setTimeout(poll, 2e3);
-    }
-    poll();
-    return { close: () => {
-      closed = true;
-    } };
+    );
+    if (status !== 200 || !Array.isArray(data)) return [];
+    return data;
+  }
+  function openGroupsStream(playerId2, handlers = {}) {
+    if (!playerId2) return null;
+    return openUnifiedEvents(playerId2, {
+      onConnected: (payload) => {
+        handlers.onConnected?.(payload);
+      },
+      onError: (event) => {
+        handlers.onError?.(event);
+      },
+      onEvent: (eventName, data) => {
+        const parsed = safeJsonParse(data);
+        switch (eventName) {
+          case "group_message":
+            handlers.onMessage?.(parsed);
+            break;
+          case "group_member_added":
+            handlers.onMemberAdded?.(parsed);
+            break;
+          case "group_member_removed":
+            handlers.onMemberRemoved?.(parsed);
+            break;
+          case "group_updated":
+            handlers.onUpdated?.(parsed);
+            break;
+          case "group_deleted":
+            handlers.onDeleted?.(parsed);
+            break;
+          default:
+            break;
+        }
+      }
+    });
   }
   function openMessagesStream(playerId2, handlers = {}) {
     if (!playerId2) return null;
-    if (isDiscordActivityContext()) return openDiscordMessagesPoller(playerId2, handlers);
-    const url2 = buildUrl("messages/stream", { playerId: playerId2 });
-    const MLOG = "[messages-stream]";
-    return openGMSSEStream(
-      url2,
-      (eventName, data) => {
-        try {
-          const parsed = JSON.parse(data);
-          switch (eventName) {
-            case "connected":
-              handlers.onConnected?.(parsed);
-              break;
-            case "message":
-              handlers.onMessage?.(parsed);
-              break;
-            case "read":
-              handlers.onRead?.(parsed);
-              break;
-            default:
-              break;
-          }
-        } catch (e) {
-          console.error(MLOG, "parse error:", e, "raw:", data);
-        }
+    return openUnifiedEvents(playerId2, {
+      onConnected: (payload) => {
+        handlers.onConnected?.({ playerId: payload.playerId ?? playerId2 });
       },
-      () => {
-        handlers.onError?.(new Event("error"));
+      onError: (event) => {
+        handlers.onError?.(event);
+      },
+      onEvent: (eventName, data) => {
+        const parsed = safeJsonParse(data);
+        switch (eventName) {
+          case "message":
+            handlers.onMessage?.(parsed);
+            break;
+          case "read":
+            handlers.onRead?.(parsed);
+            break;
+          default:
+            break;
+        }
       }
-    );
+    });
+  }
+  function openPresenceStream(playerId2, onPresence) {
+    if (!playerId2) return null;
+    return openUnifiedEvents(playerId2, {
+      onEvent: (eventName, data) => {
+        if (eventName !== "presence") return;
+        const parsed = safeJsonParse(data);
+        onPresence(parsed);
+      }
+    });
   }
   async function sendMessage(params) {
     const { fromPlayerId, toPlayerId, roomId, text } = params;
@@ -28185,19 +28555,107 @@
   flex-direction:column;
   gap:6px;
 }
+.qws-msg-list.qws-msg-list-group .qws-msg-friend-avatar-wrap{
+  display:none;
+}
+.qws-msg-list.qws-msg-list-group .qws-msg-friend{
+  padding-left:10px;
+}
+.qws-msg-list-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:6px 6px 2px 6px;
+}
+.qws-msg-list-title{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+}
+.qws-msg-list-new{
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.6);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:4px 8px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background 120ms ease, border 120ms ease;
+}
+.qws-msg-list-new:hover{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.4);
+}
+.qws-msg-list-create{
+  display:flex;
+  gap:6px;
+  align-items:center;
+  padding:6px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,23,42,0.55);
+}
+.qws-msg-list-input{
+  flex:1;
+  min-width:0;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:#f8fafc;
+  padding:6px 8px;
+  font-size:12px;
+}
+.qws-msg-list-action{
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.6);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:5px 8px;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background 120ms ease, border 120ms ease;
+}
+.qws-msg-list-action:hover{
+  background:rgba(59,130,246,0.18);
+  border-color:rgba(59,130,246,0.4);
+}
 .qws-msg-thread{
   display:flex;
   flex-direction:column;
   min-height:0;
 }
-.qws-msg-thread-head{
-  padding:10px 12px;
-  border-bottom:1px solid var(--qws-border, #ffffff22);
-  display:flex;
-  align-items:center;
-  gap:8px;
-  min-height:44px;
-}
+  .qws-msg-thread-head{
+    padding:10px 12px;
+    border-bottom:1px solid var(--qws-border, #ffffff22);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:44px;
+  }
+  .qws-msg-thread-actions{
+    margin-left:auto;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .qws-msg-thread-action-btn{
+    border:1px solid rgba(255,255,255,0.12);
+    background:rgba(15,23,42,0.6);
+    color:#f8fafc;
+    border-radius:8px;
+    padding:4px 8px;
+    font-size:11px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background 120ms ease, border 120ms ease;
+  }
+  .qws-msg-thread-action-btn:hover{
+    background:rgba(59,130,246,0.18);
+    border-color:rgba(59,130,246,0.4);
+  }
 .qws-msg-thread-body{
   flex:1;
   overflow:auto;
@@ -28795,8 +29253,20 @@
     const trimmed = String(name ?? "").trim();
     return trimmed || fallbackId || "Unknown";
   }
-  function formatStatus(friend) {
+  function formatStatus(friend, mode = "dm") {
     if (!friend) return "";
+    if (mode !== "group") {
+      if (friend.isOnline) return "Online";
+      const seen2 = formatLastSeen2(friend.lastEventAt);
+      return seen2 ? `Offline \xB7 ${seen2}` : "Offline";
+    }
+    const isGroup = Boolean(friend.isGroup);
+    const rawCount = friend.memberCount ?? friend.member_count ?? friend.membersCount ?? friend.members_count ?? null;
+    const count = Number(rawCount);
+    if (Number.isFinite(count)) {
+      return `${Math.max(0, Math.floor(count))}/12 members`;
+    }
+    if (isGroup) return "Group";
     if (friend.isOnline) return "Online";
     const seen = formatLastSeen2(friend.lastEventAt);
     return seen ? `Offline \xB7 ${seen}` : "Offline";
@@ -28958,6 +29428,66 @@
       readAt
     };
   }
+  function mapGroupToFriendSummary(group) {
+    if (!group) return null;
+    const idRaw = group.id ?? group.groupId ?? group.group_id ?? "";
+    const id = String(idRaw ?? "").trim();
+    if (!id) return null;
+    const nameRaw = group.name ?? group.group_name ?? id;
+    const memberCountRaw = group.memberCount ?? group.member_count ?? group.membersCount ?? group.members_count ?? null;
+    const memberCount = Number(memberCountRaw);
+    const lastEventAt = group.updatedAt ?? group.updated_at ?? group.createdAt ?? group.created_at ?? null;
+    return {
+      playerId: id,
+      playerName: nameRaw ? String(nameRaw) : id,
+      avatarUrl: null,
+      avatar: null,
+      lastEventAt: lastEventAt ? String(lastEventAt) : null,
+      isOnline: false,
+      roomId: null,
+      isGroup: true,
+      ...Number.isFinite(memberCount) ? { memberCount: Math.max(0, Math.floor(memberCount)) } : {}
+    };
+  }
+  function normalizeGroupMessage(raw) {
+    if (!isRecord2(raw)) return null;
+    const msg = isRecord2(raw.message) ? raw.message : raw;
+    const groupIdRaw = raw.groupId ?? raw.group_id ?? msg.groupId ?? msg.group_id ?? "";
+    const groupId = String(groupIdRaw ?? "").trim();
+    if (!groupId) return null;
+    const senderRaw = msg.senderId ?? msg.sender_id ?? msg.playerId ?? msg.player_id ?? raw.senderId ?? raw.sender_id ?? raw.playerId ?? raw.player_id ?? "";
+    const senderId = senderRaw ? String(senderRaw) : "";
+    const idRaw = msg.id ?? msg.message_id ?? msg.messageId ?? msg.msgId ?? msg.msg_id ?? "";
+    let id = typeof idRaw === "number" ? idRaw : Number(idRaw);
+    if (!Number.isFinite(id)) {
+      id = Date.now();
+    }
+    const bodyRaw = msg.body ?? msg.text ?? msg.content ?? msg.message ?? msg.msg ?? "";
+    const body = bodyRaw == null ? "" : String(bodyRaw);
+    const createdAtRaw = msg.createdAt ?? msg.created_at ?? raw.createdAt ?? raw.created_at ?? null;
+    const createdAt = createdAtRaw ? String(createdAtRaw) : (/* @__PURE__ */ new Date()).toISOString();
+    const avatarUrlRaw = msg.senderAvatarUrl ?? msg.sender_avatar_url ?? msg.avatarUrl ?? msg.avatar_url ?? raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
+    const avatarListRaw = msg.senderAvatar ?? msg.sender_avatar ?? msg.avatar ?? msg.avatar_list ?? msg.avatarList ?? raw.senderAvatar ?? raw.sender_avatar ?? raw.avatar ?? raw.avatar_list ?? raw.avatarList ?? null;
+    const senderNameRaw = msg.senderName ?? msg.sender_name ?? msg.playerName ?? msg.player_name ?? msg.name ?? raw.senderName ?? raw.sender_name ?? raw.playerName ?? raw.player_name ?? raw.name ?? null;
+    const normalized = {
+      id,
+      conversationId: groupId,
+      senderId,
+      recipientId: groupId,
+      body,
+      createdAt,
+      deliveredAt: createdAt,
+      readAt: null
+    };
+    if (avatarUrlRaw) normalized.senderAvatarUrl = String(avatarUrlRaw);
+    if (Array.isArray(avatarListRaw)) {
+      normalized.senderAvatar = avatarListRaw.map((entry) => String(entry));
+    } else if (typeof avatarListRaw === "string" && avatarListRaw.trim()) {
+      normalized.senderAvatar = [avatarListRaw.trim()];
+    }
+    if (senderNameRaw) normalized.senderName = String(senderNameRaw);
+    return normalized;
+  }
   async function getCurrentRoomId() {
     try {
       const state3 = await Atoms.root.state.get();
@@ -28988,6 +29518,9 @@
       __publicField(this, "maxTextLength", MAX_MESSAGE_LENGTH);
       __publicField(this, "opts");
       __publicField(this, "embedded", false);
+      __publicField(this, "mode", "dm");
+      __publicField(this, "onThreadHeadRender");
+      __publicField(this, "onListHeadRender");
       __publicField(this, "myId", null);
       __publicField(this, "friends", []);
       __publicField(this, "friendsFingerprint", null);
@@ -28996,6 +29529,7 @@
       __publicField(this, "selectedId", null);
       __publicField(this, "panelOpen", false);
       __publicField(this, "stream", null);
+      __publicField(this, "presenceStream", null);
       __publicField(this, "mo", null);
       __publicField(this, "unsubPlayerId", null);
       __publicField(this, "keyTrapCleanup", null);
@@ -29008,6 +29542,15 @@
       __publicField(this, "pendingImportItems", []);
       __publicField(this, "pendingRoomInvite", null);
       __publicField(this, "rowById", /* @__PURE__ */ new Map());
+      __publicField(this, "groupMemberCache", /* @__PURE__ */ new Map());
+      __publicField(this, "groupMembersLoaded", /* @__PURE__ */ new Set());
+      __publicField(this, "groupReadAt", /* @__PURE__ */ new Map());
+      __publicField(this, "groupReadStorageKey", null);
+      __publicField(this, "lastNotificationSoundAt", 0);
+      __publicField(this, "notificationSoundCooldownMs", 1500);
+      __publicField(this, "suppressSoundUntil", 0);
+      __publicField(this, "groupIds", /* @__PURE__ */ new Set());
+      __publicField(this, "groupIdsLoaded", false);
       __publicField(this, "myAvatarUrl", null);
       __publicField(this, "myAvatar", null);
       __publicField(this, "myName", null);
@@ -29036,6 +29579,9 @@
       __publicField(this, "lastUnreadRefreshAt", 0);
       this.opts = options;
       this.embedded = Boolean(options.embedded);
+      this.mode = options.mode ?? "dm";
+      this.onThreadHeadRender = options.onThreadHeadRender;
+      this.onListHeadRender = options.onListHeadRender;
       ensureMessagesOverlayStyle();
       this.slot = this.createSlot();
       this.btn = this.createButton();
@@ -29116,6 +29662,10 @@
       } catch {
       }
       try {
+        this.presenceStream?.close();
+      } catch {
+      }
+      try {
         this.mo?.disconnect();
       } catch {
       }
@@ -29159,14 +29709,25 @@
       if (active && this.selectedId) {
         void this.markConversationRead(this.selectedId);
         this.updateFriendRow(this.selectedId);
+        this.renderThread({ scrollToBottom: true });
       }
     }
     setMyId(next) {
       const normalized = next ? String(next) : null;
       if (this.myId === normalized) return;
       this.myId = normalized;
+      this.groupMemberCache.clear();
+      this.groupMembersLoaded.clear();
+      this.groupReadAt.clear();
+      this.groupReadStorageKey = null;
+      this.groupIds.clear();
+      this.groupIdsLoaded = false;
+      if (this.mode === "group" && this.myId) {
+        this.loadGroupReadState();
+      }
       void this.refreshMyProfile();
       this.resetStream();
+      this.resetPresenceStream();
       this.loadFriends(true);
       this.renderFriendList({ preserveScroll: true });
       this.renderThread();
@@ -29259,16 +29820,140 @@
       wrap.textContent = fallbackLetter;
       return wrap;
     }
-    createMessageAvatar(senderId, outgoing) {
+    createMessageAvatar(msg, outgoing) {
       if (outgoing) {
         return this.buildAvatarElement(this.myAvatar, this.myAvatarUrl, this.myName ?? "You");
       }
-      const friend = this.getFriendById(senderId) ?? this.getFriendById(this.selectedId ?? "");
+      if (this.mode === "group") {
+        const raw = msg;
+        const avatarListRaw = raw.senderAvatar ?? raw.sender_avatar ?? raw.avatar ?? raw.avatar_list ?? raw.avatarList ?? null;
+        const avatarUrlRaw = raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
+        const senderNameRaw = raw.senderName ?? raw.sender_name ?? raw.playerName ?? raw.player_name ?? raw.name ?? null;
+        const avatarList = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : null;
+        const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : null;
+        const senderName = senderNameRaw ? String(senderNameRaw) : null;
+        if (avatarList || avatarUrl || senderName) {
+          return this.buildAvatarElement(
+            avatarList,
+            avatarUrl,
+            senderName ?? msg.senderId
+          );
+        }
+        const cached = this.groupMemberCache.get(msg.senderId);
+        if (cached) {
+          return this.buildAvatarElement(
+            cached.avatar ?? null,
+            cached.avatarUrl ?? null,
+            cached.name ?? msg.senderId
+          );
+        }
+      }
+      const friend = this.getFriendById(msg.senderId) ?? this.getFriendById(this.selectedId ?? "");
       return this.buildAvatarElement(
         friend?.avatar ?? null,
         friend?.avatarUrl ?? null,
-        friend?.playerName ?? senderId
+        friend?.playerName ?? msg.senderId
       );
+    }
+    cacheGroupMemberFromMessage(msg) {
+      if (this.mode !== "group") return;
+      const raw = msg;
+      const senderId = msg.senderId ? String(msg.senderId) : "";
+      if (!senderId) return;
+      const avatarUrlRaw = raw.senderAvatarUrl ?? raw.sender_avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null;
+      const avatarListRaw = raw.senderAvatar ?? raw.sender_avatar ?? raw.avatar ?? raw.avatar_list ?? raw.avatarList ?? null;
+      const senderNameRaw = raw.senderName ?? raw.sender_name ?? raw.playerName ?? raw.player_name ?? raw.name ?? null;
+      const avatar = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : typeof avatarListRaw === "string" && avatarListRaw.trim() ? [avatarListRaw.trim()] : void 0;
+      const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : void 0;
+      const name = senderNameRaw ? String(senderNameRaw) : void 0;
+      if (!avatar && !avatarUrl && !name) return;
+      this.groupMemberCache.set(senderId, { avatar, avatarUrl, name });
+    }
+    async ensureGroupMembers(groupId) {
+      if (this.mode !== "group") return;
+      if (!this.myId || !groupId) return;
+      if (this.groupMembersLoaded.has(groupId)) return;
+      this.groupMembersLoaded.add(groupId);
+      try {
+        const details = await fetchGroupDetails(groupId, this.myId);
+        if (!details) {
+          this.groupMembersLoaded.delete(groupId);
+          return;
+        }
+        const membersRaw = details.members ?? details.groupMembers ?? details.membersList ?? [];
+        if (!Array.isArray(membersRaw)) {
+          this.groupMembersLoaded.delete(groupId);
+          return;
+        }
+        let cachedAny = false;
+        for (const member of membersRaw) {
+          if (!member) continue;
+          const idRaw = member.playerId ?? member.player_id ?? member.id ?? "";
+          const id = String(idRaw ?? "").trim();
+          if (!id) continue;
+          const avatarUrlRaw = member.avatarUrl ?? member.avatar_url ?? member.discordAvatarUrl ?? member.discord_avatar_url ?? null;
+          const avatarListRaw = member.avatar ?? member.avatar_list ?? member.avatarList ?? member.cosmeticAvatar ?? member.cosmetic_avatar ?? null;
+          const nameRaw = member.name ?? member.playerName ?? member.player_name ?? null;
+          const avatar = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)) : typeof avatarListRaw === "string" && avatarListRaw.trim() ? [avatarListRaw.trim()] : void 0;
+          const avatarUrl = avatarUrlRaw ? String(avatarUrlRaw) : void 0;
+          const name = nameRaw ? String(nameRaw) : void 0;
+          const prev = this.groupMemberCache.get(id);
+          this.groupMemberCache.set(id, {
+            avatar: avatar ?? prev?.avatar,
+            avatarUrl: avatarUrl ?? prev?.avatarUrl,
+            name: name ?? prev?.name
+          });
+          cachedAny = true;
+        }
+        if (cachedAny && this.selectedId === groupId) {
+          this.renderThread({ preserveScroll: true, scrollToBottom: false });
+        }
+      } catch {
+        this.groupMembersLoaded.delete(groupId);
+      }
+    }
+    loadGroupReadState() {
+      if (this.mode !== "group" || !this.myId) return;
+      const key2 = `qws-group-read:${this.myId}`;
+      this.groupReadStorageKey = key2;
+      try {
+        const raw = localStorage.getItem(key2);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return;
+        for (const [gid, ts] of Object.entries(parsed)) {
+          const num = Number(ts);
+          if (Number.isFinite(num)) this.groupReadAt.set(gid, num);
+        }
+      } catch {
+      }
+    }
+    saveGroupReadState() {
+      if (this.mode !== "group" || !this.groupReadStorageKey) return;
+      const payload = {};
+      for (const [gid, ts] of this.groupReadAt.entries()) {
+        if (Number.isFinite(ts)) payload[gid] = ts;
+      }
+      try {
+        localStorage.setItem(this.groupReadStorageKey, JSON.stringify(payload));
+      } catch {
+      }
+    }
+    playNotificationSound() {
+      if (!getFriendSettings().messageSoundEnabled) return;
+      const now2 = Date.now();
+      if (now2 < this.suppressSoundUntil) return;
+      if (now2 - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
+      this.lastNotificationSoundAt = now2;
+      void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url2) => {
+        audioPlayer.playAt(url2, 0.2);
+      });
+    }
+    suppressNotificationSound(ms = 2500) {
+      const until = Date.now() + ms;
+      if (until > this.suppressSoundUntil) {
+        this.suppressSoundUntil = until;
+      }
     }
     createRoomInviteCard(invite, outgoing) {
       const card = document.createElement("div");
@@ -29329,13 +30014,87 @@
         this.stream = null;
       }
       if (!this.myId) return;
+      this.suppressNotificationSound();
+      if (this.mode === "group") {
+        const es2 = openGroupsStream(this.myId, {
+          onConnected: () => {
+            this.suppressNotificationSound();
+          },
+          onMessage: (payload) => this.handleIncomingGroupMessage(payload),
+          onMemberAdded: () => void this.loadGroups(true),
+          onMemberRemoved: () => void this.loadGroups(true),
+          onUpdated: () => void this.loadGroups(true),
+          onDeleted: (payload) => {
+            const gidRaw = payload?.groupId ?? payload?.group_id ?? "";
+            const gid = normalizeId(gidRaw);
+            if (gid) {
+              this.convs.delete(gid);
+              this.convByConversationId.forEach((otherId, convId) => {
+                if (normalizeId(otherId) === gid) this.convByConversationId.delete(convId);
+              });
+              if (this.selectedId === gid) {
+                this.selectedId = null;
+                this.renderThread();
+              }
+            }
+            void this.loadGroups(true);
+            this.renderFriendList({ preserveScroll: true });
+          },
+          onError: () => {
+          }
+        });
+        this.stream = es2 ?? null;
+        return;
+      }
       const es = openMessagesStream(this.myId, {
+        onConnected: () => {
+          this.suppressNotificationSound();
+        },
         onMessage: (msg) => this.handleIncomingMessage(msg),
         onRead: (receipt) => this.handleReadReceipt(receipt),
         onError: () => {
         }
       });
       this.stream = es ?? null;
+    }
+    resetPresenceStream() {
+      if (this.mode === "group") return;
+      if (this.presenceStream) {
+        try {
+          this.presenceStream.close();
+        } catch {
+        }
+        this.presenceStream = null;
+      }
+      if (!this.myId) return;
+      this.presenceStream = openPresenceStream(this.myId, (payload) => {
+        this.handlePresence(payload);
+      });
+    }
+    handlePresence(payload) {
+      if (this.mode === "group") return;
+      const id = normalizeId(payload?.playerId);
+      if (!id) return;
+      let changed = false;
+      const next = this.friends.map((friend) => {
+        if (normalizeId(friend.playerId) !== id) return friend;
+        const nextOnline = Boolean(payload?.online);
+        const nextLastEventAt = payload?.lastEventAt ?? friend.lastEventAt;
+        const nextRoomId = payload?.roomId !== void 0 ? payload.roomId : friend.roomId ?? null;
+        if (friend.isOnline === nextOnline && friend.lastEventAt === nextLastEventAt && (friend.roomId ?? null) === nextRoomId) {
+          return friend;
+        }
+        changed = true;
+        return {
+          ...friend,
+          isOnline: nextOnline,
+          lastEventAt: nextLastEventAt,
+          roomId: nextRoomId
+        };
+      });
+      if (changed) {
+        this.applyFriends(next, { forceRender: true });
+      }
     }
     ensureConversation(otherIdRaw) {
       const otherId = normalizeId(otherIdRaw);
@@ -29397,13 +30156,51 @@
         const shouldMarkRead = this.panelOpen && this.selectedId === conv.otherId;
         if (shouldMarkRead) {
           void this.markConversationRead(conv.otherId);
-        } else {
+        } else if (!normalized.readAt) {
           conv.unread += 1;
-          if (getFriendSettings().messageSoundEnabled) {
-            void getAudioUrlSafe(MSG_NOTIFICATION_URL).then((url2) => {
-              audioPlayer.playAt(url2, 0.2);
-            });
-          }
+          this.playNotificationSound();
+        }
+      }
+      this.updateButtonBadge();
+      if (!this.updateFriendRow(conv.otherId)) {
+        this.renderFriendList({ preserveScroll: true });
+      }
+      if (this.selectedId === conv.otherId) {
+        this.renderThread();
+      }
+    }
+    handleIncomingGroupMessage(payload) {
+      if (!this.myId) return;
+      const normalized = normalizeGroupMessage(payload);
+      if (!normalized) return;
+      this.cacheGroupMemberFromMessage(normalized);
+      const groupId = normalized.conversationId || normalized.recipientId;
+      if (!groupId) return;
+      if (this.groupIdsLoaded && !this.groupIds.has(groupId)) {
+        return;
+      }
+      const conv = this.ensureConversation(groupId);
+      conv.messages = this.mergeMessages(conv.messages, [normalized]);
+      conv.conversationId = groupId;
+      conv.lastMessageAt = Math.max(
+        conv.lastMessageAt,
+        Number.isFinite(Date.parse(normalized.createdAt)) ? Date.parse(normalized.createdAt) : 0
+      );
+      this.updateConversationMap(conv);
+      const isOutgoing = normalized.senderId === this.myId;
+      if (!isOutgoing) {
+        const shouldMarkRead = this.panelOpen && this.selectedId === conv.otherId;
+        const msgTsRaw = parseMessageTime(normalized) || Date.now();
+        const lastRead = this.groupReadAt.get(conv.otherId) ?? 0;
+        const alreadyRead = Number.isFinite(lastRead) && msgTsRaw <= lastRead;
+        if (shouldMarkRead) {
+          const nextRead = Math.max(lastRead, msgTsRaw);
+          this.groupReadAt.set(conv.otherId, nextRead);
+          this.saveGroupReadState();
+          void this.markConversationRead(conv.otherId);
+        } else if (!alreadyRead) {
+          conv.unread += 1;
+          this.playNotificationSound();
         }
       }
       this.updateButtonBadge();
@@ -29415,6 +30212,7 @@
       }
     }
     handleReadReceipt(receipt) {
+      if (this.mode === "group") return;
       if (!receipt?.conversationId) return;
       const otherId = this.convByConversationId.get(receipt.conversationId);
       if (!otherId) return;
@@ -29439,11 +30237,13 @@
     computeFriendsFingerprint(friends) {
       const parts = friends.map((friend) => {
         const avatar = Array.isArray(friend.avatar) ? friend.avatar.map(String).join("|") : "";
+        const memberCount = friend.memberCount ?? friend.member_count ?? friend.membersCount ?? friend.members_count ?? "";
         return [
           String(friend.playerId ?? ""),
           friend.playerName ?? "",
           friend.avatarUrl ?? "",
           avatar,
+          memberCount,
           friend.isOnline ? "1" : "0",
           friend.lastEventAt ?? ""
         ].join("~");
@@ -29462,6 +30262,10 @@
       }
     }
     async loadFriends(force = false) {
+      if (this.mode === "group") {
+        await this.loadGroups(force);
+        return;
+      }
       if (!this.myId) return;
       const cached = getCachedFriendsSummary();
       if (cached.length) {
@@ -29485,7 +30289,54 @@
         }
       }
     }
+    async loadGroups(_force = false) {
+      if (!this.myId) return;
+      try {
+        const data = await fetchGroups(this.myId);
+        const mapped = Array.isArray(data) ? data.map(mapGroupToFriendSummary).filter((g) => !!g) : [];
+        this.applyFriends(mapped, { forceRender: true });
+        this.groupIdsLoaded = true;
+        const nextIds = new Set(mapped.map((g) => normalizeId(g.playerId)));
+        this.groupIds = nextIds;
+        let removedAny = false;
+        for (const [id] of this.convs) {
+          if (!nextIds.has(id)) {
+            this.convs.delete(id);
+            removedAny = true;
+          }
+        }
+        for (const [convId, otherId] of this.convByConversationId) {
+          if (!nextIds.has(otherId)) {
+            this.convByConversationId.delete(convId);
+            removedAny = true;
+          }
+        }
+        for (const key2 of Array.from(this.groupReadAt.keys())) {
+          if (!nextIds.has(key2)) {
+            this.groupReadAt.delete(key2);
+            removedAny = true;
+          }
+        }
+        if (removedAny) {
+          if (this.selectedId && !nextIds.has(this.selectedId)) {
+            this.selectedId = null;
+          }
+          this.saveGroupReadState();
+          this.updateButtonBadge();
+          this.renderFriendList({ preserveScroll: true });
+        }
+      } catch {
+        if (!this.friends.length) {
+          this.friends = [];
+          this.friendsFingerprint = null;
+          this.renderFriendList({ preserveScroll: true });
+        } else if (this.selectedId) {
+          this.renderThread({ preserveScroll: true, scrollToBottom: false });
+        }
+      }
+    }
     async refreshUnreadCounts(friends) {
+      if (this.mode === "group") return;
       if (!this.myId) return;
       if (this.unreadRefreshInFlight) return;
       const now2 = Date.now();
@@ -29532,19 +30383,30 @@
     async selectConversation(otherId) {
       this.selectedId = otherId;
       const conv = this.ensureConversation(otherId);
+      const hadUnreadAtOpen = conv.unread > 0;
       this.updateSelection();
       this.renderThread();
       this.updateSendState();
+      if (this.mode === "group") {
+        void this.ensureGroupMembers(otherId);
+      }
       if (this.myId && !conv.loaded && !conv.loading) {
         conv.loading = true;
         this.renderThread();
         const currentId = otherId;
         void (async () => {
           try {
-            const data = await fetchMessagesThread(this.myId, currentId, {
+            const data = this.mode === "group" ? await fetchGroupMessages(currentId, this.myId, {
+              limit: THREAD_INITIAL_LIMIT
+            }) : await fetchMessagesThread(this.myId, currentId, {
               limit: THREAD_INITIAL_LIMIT
             });
-            const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
+            const normalized = Array.isArray(data) ? data.map(
+              (msg) => this.mode === "group" ? normalizeGroupMessage({ ...msg, groupId: currentId }) : normalizeMessage(msg)
+            ).filter(Boolean) : [];
+            if (this.mode === "group") {
+              normalized.forEach((msg) => this.cacheGroupMemberFromMessage(msg));
+            }
             conv.messages = this.mergeMessages(conv.messages, normalized);
             if (conv.messages.length) {
               conv.conversationId = conv.messages[0]?.conversationId ?? conv.conversationId;
@@ -29566,12 +30428,20 @@
               this.renderThread();
             }
             this.updateFriendRow(currentId);
+            const shouldScroll = this.mode === "group" && (conv.unread > 0 || hadUnreadAtOpen);
             await this.markConversationRead(currentId);
+            if (shouldScroll && this.selectedId === currentId) {
+              this.scrollThreadToBottom();
+            }
           }
         })();
       } else {
+        const shouldScroll = this.mode === "group" && hadUnreadAtOpen;
         await this.markConversationRead(otherId);
         this.updateFriendRow(otherId);
+        if (shouldScroll && this.selectedId === otherId) {
+          this.scrollThreadToBottom();
+        }
       }
     }
     handleThreadScroll() {
@@ -29593,11 +30463,19 @@
       conv.loadingOlder = true;
       this.renderThread({ preserveScroll: true, scrollToBottom: false });
       try {
-        const data = await fetchMessagesThread(this.myId, conv.otherId, {
+        const data = this.mode === "group" ? await fetchGroupMessages(conv.otherId, this.myId, {
+          beforeId: oldestId,
+          limit: THREAD_PAGE_LIMIT
+        }) : await fetchMessagesThread(this.myId, conv.otherId, {
           beforeId: oldestId,
           limit: THREAD_PAGE_LIMIT
         });
-        const normalized = Array.isArray(data) ? data.map(normalizeMessage).filter(Boolean) : [];
+        const normalized = Array.isArray(data) ? data.map(
+          (msg) => this.mode === "group" ? normalizeGroupMessage({ ...msg, groupId: conv.otherId }) : normalizeMessage(msg)
+        ).filter(Boolean) : [];
+        if (this.mode === "group") {
+          normalized.forEach((msg) => this.cacheGroupMemberFromMessage(msg));
+        }
         if (!normalized.length) {
           conv.hasMore = false;
         } else {
@@ -29622,6 +30500,20 @@
       if (!this.myId) return;
       const conv = this.convs.get(otherId);
       if (!conv) return;
+      if (this.mode === "group") {
+        conv.unread = 0;
+        let lastReadAt = Date.now();
+        if (conv.messages.length) {
+          const last2 = conv.messages[conv.messages.length - 1];
+          const ts = parseMessageTime(last2);
+          if (ts) lastReadAt = ts;
+        }
+        this.groupReadAt.set(otherId, lastReadAt);
+        this.saveGroupReadState();
+        this.updateButtonBadge();
+        this.updateFriendRow(otherId);
+        return;
+      }
       const unreadMsgs = conv.messages.filter(
         (m) => m.senderId !== this.myId && !m.readAt
       );
@@ -29658,6 +30550,7 @@
       const entries = [];
       const seen = /* @__PURE__ */ new Set();
       const shouldInclude = (id, conv) => {
+        if (this.mode === "group") return true;
         if (this.selectedId && id === this.selectedId) return true;
         if (!conv) return false;
         if (conv.lastMessageAt > 0) return true;
@@ -29680,17 +30573,19 @@
           seen.add(id);
         }
       }
-      for (const [id, conv] of this.convs) {
-        if (seen.has(id)) continue;
-        if (!shouldInclude(id, conv)) continue;
-        entries.push({
-          id,
-          friend: null,
-          unread: conv.unread,
-          lastMessageAt: conv.lastMessageAt,
-          online: false,
-          lastSeenAt: 0
-        });
+      if (this.mode !== "group") {
+        for (const [id, conv] of this.convs) {
+          if (seen.has(id)) continue;
+          if (!shouldInclude(id, conv)) continue;
+          entries.push({
+            id,
+            friend: null,
+            unread: conv.unread,
+            lastMessageAt: conv.lastMessageAt,
+            online: false,
+            lastSeenAt: 0
+          });
+        }
       }
       entries.sort((a, b) => {
         if (a.lastMessageAt !== b.lastMessageAt) return b.lastMessageAt - a.lastMessageAt;
@@ -29705,11 +30600,13 @@
       const scrollTop = preserveScroll ? this.listEl.scrollTop : 0;
       this.listEl.innerHTML = "";
       this.rowById.clear();
+      this.listEl.classList.toggle("qws-msg-list-group", this.mode === "group");
+      this.onListHeadRender?.(this.listEl);
       const entries = this.buildFriendEntries();
       if (!entries.length) {
         const empty = document.createElement("div");
         empty.className = "qws-msg-empty";
-        empty.textContent = "No conversations yet.";
+        empty.textContent = this.mode === "group" ? "No groups yet." : "No conversations yet.";
         this.listEl.appendChild(empty);
         return;
       }
@@ -29745,7 +30642,7 @@
         name.textContent = formatFriendName(entry.friend, entry.id);
         const sub = document.createElement("div");
         sub.className = "qws-msg-friend-sub";
-        sub.textContent = formatStatus(entry.friend);
+        sub.textContent = formatStatus(entry.friend, this.mode);
         meta.append(name, sub);
         let dot = null;
         if (entry.friend?.isOnline) {
@@ -29787,9 +30684,10 @@
       if (!this.selectedId) {
         const empty = document.createElement("div");
         empty.className = "qws-msg-empty";
-        empty.textContent = "Select a friend to start chatting.";
+        empty.textContent = this.mode === "group" ? "Select a group to start chatting." : "Select a friend to start chatting.";
         this.threadBodyEl.appendChild(empty);
         this.setInputState(false);
+        this.onThreadHeadRender?.(this.threadHeadEl, null);
         return;
       }
       const friend = this.getFriendById(this.selectedId);
@@ -29797,6 +30695,9 @@
       title.textContent = formatFriendName(friend, this.selectedId);
       title.style.fontWeight = "700";
       this.threadHeadEl.appendChild(title);
+      if (this.onThreadHeadRender) {
+        this.onThreadHeadRender(this.threadHeadEl, this.selectedId);
+      }
       const conv = this.ensureConversation(this.selectedId);
       if (conv.loading && !conv.messages.length) {
         const loading = document.createElement("div");
@@ -29890,7 +30791,7 @@
         } else {
           bubble.append(content);
         }
-        const avatarEl = this.createMessageAvatar(msg.senderId, outgoing);
+        const avatarEl = this.createMessageAvatar(msg, outgoing);
         const row = document.createElement("div");
         row.className = "qws-msg-row";
         row.classList.add(outgoing ? "outgoing" : "incoming");
@@ -30302,6 +31203,16 @@
       void this.selectConversation(otherId);
       this.renderFriendList({ preserveScroll: true });
     }
+    refresh() {
+      this.loadFriends(true);
+      this.renderFriendList({ preserveScroll: true });
+      if (this.selectedId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
+    }
+    rerenderList() {
+      this.renderFriendList({ preserveScroll: true });
+    }
     updateButtonBadge() {
       let total = 0;
       for (const conv of this.convs.values()) total += conv.unread;
@@ -30345,7 +31256,7 @@
       const friend = this.getFriendById(id);
       const conv = this.convs.get(id);
       const unread = conv?.unread ?? 0;
-      state3.sub.textContent = formatStatus(friend);
+      state3.sub.textContent = formatStatus(friend, this.mode);
       if (unread > 0) {
         state3.row.classList.add("unread");
         if (!state3.badge) {
@@ -30446,7 +31357,7 @@
       panel.className = "qws-msg-panel";
       const head = document.createElement("div");
       head.className = "qws-msg-head";
-      head.textContent = "Messages";
+      head.textContent = this.opts.title ?? (this.mode === "group" ? "Groups" : "Messages");
       this.panelHeadEl = head;
       const body = document.createElement("div");
       body.className = "qws-msg-body";
@@ -30586,6 +31497,10 @@
       return panel;
     }
     async handleSendMessage() {
+      if (this.mode === "group") {
+        await this.handleSendGroupMessage();
+        return;
+      }
       if (!this.myId || !this.selectedId) return;
       const built = this.buildMessageBody();
       if (!built) {
@@ -30624,6 +31539,65 @@
           const conv = this.ensureConversation(this.selectedId);
           conv.messages = this.mergeMessages(conv.messages, [normalized]);
           conv.conversationId = normalized.conversationId ?? conv.conversationId;
+          conv.lastMessageAt = Math.max(
+            conv.lastMessageAt,
+            Number.isFinite(Date.parse(normalized.createdAt)) ? Date.parse(normalized.createdAt) : 0
+          );
+          this.updateConversationMap(conv);
+          this.inputEl.value = "";
+          if (usedItems) {
+            this.pendingImportItems = [];
+            this.renderAttachments();
+            this.updateAttachmentStatus();
+          }
+          if (usedRoomInvite) {
+            this.pendingRoomInvite = null;
+            this.updateAttachmentStatus();
+          }
+          this.updateFriendRow(this.selectedId);
+          this.updateSelection();
+          this.renderThread();
+        } else {
+          this.statusEl.textContent = "Message failed to send.";
+        }
+      } catch {
+        this.statusEl.textContent = "Message failed to send.";
+      } finally {
+        this.updateSendState();
+      }
+    }
+    async handleSendGroupMessage() {
+      if (!this.myId || !this.selectedId) return;
+      const built = this.buildMessageBody();
+      if (!built) {
+        if (this.pendingImportItems.length) {
+          this.statusEl.textContent = "Unable to attach item.";
+        }
+        return;
+      }
+      this.sendBtn.disabled = true;
+      if (!this.statusEl.textContent.startsWith(ATTACHMENT_STATUS_PREFIX)) {
+        this.statusEl.textContent = "";
+      }
+      if (built.body.length > MAX_MESSAGE_LENGTH) {
+        this.statusEl.textContent = `Message too long (${built.body.length}/${MAX_MESSAGE_LENGTH}).`;
+        this.updateSendState();
+        return;
+      }
+      const body = built.body;
+      const usedItems = built.usedItems;
+      const usedRoomInvite = built.usedRoomInvite;
+      try {
+        const msg = await sendGroupMessage({
+          groupId: this.selectedId,
+          playerId: this.myId,
+          text: body
+        });
+        const normalized = msg ? normalizeGroupMessage({ ...msg, groupId: this.selectedId }) : null;
+        if (normalized) {
+          const conv = this.ensureConversation(this.selectedId);
+          conv.messages = this.mergeMessages(conv.messages, [normalized]);
+          conv.conversationId = this.selectedId;
           conv.lastMessageAt = Math.max(
             conv.lastMessageAt,
             Number.isFinite(Date.parse(normalized.createdAt)) ? Date.parse(normalized.createdAt) : 0
@@ -32661,6 +33635,108 @@
   }
 
   // src/ui/menus/friendOverlay/tabs/communityTab.ts
+  var PRESENCE_TOAST_STYLE_ID = "qws-presence-toast-css";
+  var PRESENCE_TOAST_HOST_ID = "qws-presence-toast-host";
+  var PRESENCE_TOAST_DURATION_MS = 3500;
+  var PRESENCE_TOAST_MAX = 3;
+  var ensurePresenceToastStyles = () => {
+    if (document.getElementById(PRESENCE_TOAST_STYLE_ID)) return;
+    const style4 = document.createElement("style");
+    style4.id = PRESENCE_TOAST_STYLE_ID;
+    style4.textContent = `
+.qws-presence-toasts{
+  position:fixed;
+  top:calc(14px + var(--sait, 0px));
+  right:calc(14px + var(--sair, 0px));
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:var(--chakra-zIndices-PresentableOverlay, 5100);
+  pointer-events:none;
+}
+.qws-presence-toast{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 12px;
+  border-radius:12px;
+  background:rgba(12, 16, 30, 0.92);
+  border:1px solid rgba(255, 255, 255, 0.12);
+  box-shadow:0 10px 26px rgba(0,0,0,0.35);
+  color:#f8fafc;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:0.2px;
+  pointer-events:auto;
+  animation:qws-presence-enter 220ms ease;
+}
+.qws-presence-toast[data-state="leaving"]{
+  animation:qws-presence-exit 180ms ease forwards;
+}
+.qws-presence-avatar{
+  width:32px;
+  height:32px;
+  flex:0 0 32px;
+  border-radius:50%;
+  overflow:hidden;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(255,255,255,0.08);
+  color:#f8fafc;
+  font-weight:700;
+  font-size:12px;
+}
+.qws-presence-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  object-position:50% 20%;
+  transform:scale(1.08);
+  transform-origin:50% 20%;
+}
+.qws-presence-text{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+}
+.qws-presence-name{
+  font-size:12.5px;
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-presence-sub{
+  font-size:11px;
+  font-weight:600;
+  color:rgba(226,232,240,0.72);
+}
+@keyframes qws-presence-enter{
+  from{opacity:0; transform:translateX(12px);}
+  to{opacity:1; transform:translateX(0);}
+}
+@keyframes qws-presence-exit{
+  from{opacity:1; transform:translateX(0);}
+  to{opacity:0; transform:translateX(12px);}
+}
+@media (prefers-reduced-motion: reduce){
+  .qws-presence-toast{ animation:none; }
+  .qws-presence-toast[data-state="leaving"]{ animation:none; opacity:0; }
+}
+  `;
+    document.head.appendChild(style4);
+  };
+  var getPresenceToastHost = () => {
+    let host = document.getElementById(PRESENCE_TOAST_HOST_ID);
+    if (!host) {
+      host = document.createElement("div");
+      host.id = PRESENCE_TOAST_HOST_ID;
+      host.className = "qws-presence-toasts";
+      document.body.appendChild(host);
+    }
+    return host;
+  };
   function createCommunityTab(options) {
     const root = document.createElement("div");
     root.className = "qws-fo-tab qws-fo-tab-community";
@@ -32751,6 +33827,94 @@
     let profileOpen = false;
     let activeFriend = null;
     let activeGardenPlayerId = null;
+    let presenceStream = null;
+    let presenceUnsub = null;
+    const presenceState = /* @__PURE__ */ new Map();
+    let currentPlayerId = null;
+    let ownerGroups = [];
+    let ownerGroupsLoaded = false;
+    let ownerGroupsLoading = false;
+    const normalizePresenceId = (value) => value ? String(value).trim() : "";
+    const seedPresenceState = () => {
+      presenceState.clear();
+      const cached = getCachedFriendsSummary();
+      for (const friend of cached) {
+        const id = normalizePresenceId(friend.playerId);
+        if (id) presenceState.set(id, Boolean(friend.isOnline));
+      }
+    };
+    const showOnlineToast = (friend) => {
+      const label2 = friend.playerName ?? friend.playerId ?? "Friend";
+      const host = getPresenceToastHost();
+      ensurePresenceToastStyles();
+      while (host.childElementCount >= PRESENCE_TOAST_MAX) {
+        host.lastElementChild?.remove();
+      }
+      const toast2 = document.createElement("div");
+      toast2.className = "qws-presence-toast";
+      const avatar = document.createElement("div");
+      avatar.className = "qws-presence-avatar";
+      const avatarUrl = friend.avatarUrl ?? "";
+      if (avatarUrl) {
+        const img = document.createElement("img");
+        img.alt = label2;
+        img.decoding = "async";
+        setImageSafe(img, avatarUrl);
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = label2.trim().slice(0, 1).toUpperCase() || "?";
+      }
+      const text = document.createElement("div");
+      text.className = "qws-presence-text";
+      const name = document.createElement("div");
+      name.className = "qws-presence-name";
+      name.textContent = label2;
+      const sub = document.createElement("div");
+      sub.className = "qws-presence-sub";
+      sub.textContent = "is online";
+      text.append(name, sub);
+      toast2.append(avatar, text);
+      host.prepend(toast2);
+      const clear = () => {
+        if (!toast2.isConnected) return;
+        toast2.setAttribute("data-state", "leaving");
+        window.setTimeout(() => {
+          toast2.remove();
+          if (!host.childElementCount && host.parentElement) host.remove();
+        }, 200);
+      };
+      const timer = window.setTimeout(clear, PRESENCE_TOAST_DURATION_MS);
+      toast2.addEventListener("click", () => {
+        window.clearTimeout(timer);
+        clear();
+      });
+    };
+    const handlePresence = (payload) => {
+      const id = normalizePresenceId(payload?.playerId);
+      if (!id) return;
+      const cached = getCachedFriendsSummary();
+      const friend = cached.find((f) => normalizePresenceId(f.playerId) === id);
+      const nextOnline = Boolean(payload?.online);
+      const prevOnline = presenceState.get(id);
+      presenceState.set(id, nextOnline);
+      void friendsTab.refresh({ force: true });
+      if (friend && prevOnline === false && nextOnline) {
+        showOnlineToast(friend);
+      }
+    };
+    const resetPresenceStream = (playerId2) => {
+      if (presenceStream) {
+        try {
+          presenceStream.close();
+        } catch {
+        }
+        presenceStream = null;
+      }
+      presenceState.clear();
+      if (!playerId2) return;
+      seedPresenceState();
+      presenceStream = openPresenceStream(playerId2, handlePresence);
+    };
     const previewOverlay = document.createElement("div");
     previewOverlay.className = "qws-fo-garden-preview";
     const previewCard = document.createElement("div");
@@ -32842,8 +34006,22 @@
     const profileCoinsValue = document.createElement("span");
     profileCoinsValue.className = "qws-fo-profile-coins-value";
     profileCoins.append(profileCoinsIcon, profileCoinsValue);
+    const groupInvite = document.createElement("div");
+    groupInvite.className = "qws-fo-profile-group";
+    const groupInviteTitle = document.createElement("div");
+    groupInviteTitle.className = "qws-fo-profile-group-title";
+    groupInviteTitle.textContent = "Invite to group";
+    const groupInviteRow = document.createElement("div");
+    groupInviteRow.className = "qws-fo-profile-group-row";
+    const groupSelect = document.createElement("select");
+    groupSelect.className = "qws-fo-profile-group-select";
+    const groupInviteBtn = createButton2("Invite", { size: "sm", variant: "primary" });
+    groupInviteRow.append(groupSelect, groupInviteBtn);
+    const groupInviteStatus = document.createElement("div");
+    groupInviteStatus.className = "qws-fo-profile-group-status";
+    groupInvite.append(groupInviteTitle, groupInviteRow, groupInviteStatus);
     profileGrid.append(inspectSection);
-    profileCard.append(profileHeader, profileCoins, profileGrid);
+    profileCard.append(profileHeader, profileCoins, groupInvite, profileGrid);
     profileWrap.append(profileTop, profileCard);
     const runInspect = async (section, label2, resolver, showModal, waitClose) => {
       if (!activeFriend?.playerId) return;
@@ -33027,6 +34205,89 @@
         removeBtn.disabled = false;
       }
     });
+    const resolveGroupId = (group) => (group.id ?? group.groupId ?? group.group_id ?? "").toString();
+    const resolveGroupName2 = (group) => (group.name ?? group.group_name ?? "Untitled group").toString();
+    const resolveGroupCount = (group) => {
+      const raw = group.memberCount ?? group.member_count ?? group.membersCount ?? group.members_count ?? group.members?.length ?? null;
+      const num = Number(raw);
+      return Number.isFinite(num) ? Math.max(0, Math.floor(num)) : null;
+    };
+    const renderGroupInvite = () => {
+      const hasFriend = Boolean(activeFriend?.playerId);
+      groupInvite.style.display = hasFriend ? "flex" : "none";
+      if (!hasFriend) return;
+      groupSelect.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = ownerGroupsLoading ? "Loading groups..." : ownerGroups.length ? "Select a group..." : "No groups available";
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      groupSelect.appendChild(placeholder);
+      for (const group of ownerGroups) {
+        const id = resolveGroupId(group);
+        if (!id) continue;
+        const opt = document.createElement("option");
+        opt.value = id;
+        const count = resolveGroupCount(group);
+        opt.textContent = count !== null ? `${resolveGroupName2(group)} (${count}/12)` : resolveGroupName2(group);
+        groupSelect.appendChild(opt);
+      }
+      const enableInvite = Boolean(activeFriend?.playerId) && ownerGroups.length > 0 && !ownerGroupsLoading;
+      setButtonEnabled(groupInviteBtn, enableInvite);
+      groupSelect.disabled = !enableInvite;
+      groupInviteStatus.textContent = ownerGroupsLoading ? "Loading your groups..." : ownerGroups.length ? "Select a group to invite this friend." : "Create a group to invite friends.";
+    };
+    const ensureOwnerGroupsLoaded = async () => {
+      if (ownerGroupsLoading || ownerGroupsLoaded) return;
+      ownerGroupsLoading = true;
+      renderGroupInvite();
+      try {
+        const me = currentPlayerId ?? await playerDatabaseUserId.get();
+        if (!me) {
+          ownerGroups = [];
+          ownerGroupsLoaded = true;
+          return;
+        }
+        const groups2 = await fetchGroups(me);
+        ownerGroups = (groups2 ?? []).filter((g) => {
+          const role = String(g.role ?? "").toLowerCase();
+          if (role === "owner") return true;
+          const ownerId = g.ownerId ?? g.owner_id;
+          return ownerId ? String(ownerId) === String(me) : false;
+        });
+        ownerGroupsLoaded = true;
+      } finally {
+        ownerGroupsLoading = false;
+        renderGroupInvite();
+      }
+    };
+    groupInviteBtn.addEventListener("click", async () => {
+      const friendId = activeFriend?.playerId ?? null;
+      const groupId = groupSelect.value;
+      if (!friendId || !groupId) return;
+      const me = currentPlayerId ?? await playerDatabaseUserId.get();
+      if (!me) return;
+      setButtonEnabled(groupInviteBtn, false);
+      groupInviteStatus.textContent = "Sending invite...";
+      try {
+        const ok = await addGroupMember({
+          groupId,
+          playerId: me,
+          memberId: friendId
+        });
+        if (!ok) {
+          await toastSimple("Groups", "Unable to add member.", "error");
+          groupInviteStatus.textContent = "Invite failed.";
+          return;
+        }
+        await toastSimple("Groups", "Member added.", "success");
+        groupInviteStatus.textContent = "Invite sent.";
+        ownerGroupsLoaded = false;
+        void ensureOwnerGroupsLoaded();
+      } finally {
+        renderGroupInvite();
+      }
+    });
     const updateProfile = (friend) => {
       activeFriend = friend;
       const displayName = friend.playerName ?? friend.playerId ?? "Unknown friend";
@@ -33120,6 +34381,8 @@
       }
       setButtonEnabled(chatBtn, Boolean(friend.playerId));
       chatBtn.title = friend.playerId ? "Open chat" : "Player ID unavailable";
+      void ensureOwnerGroupsLoaded();
+      renderGroupInvite();
     };
     const setProfileOpen = (open) => {
       profileOpen = open;
@@ -33150,6 +34413,15 @@
     };
     backBtn.addEventListener("click", () => setProfileOpen(false));
     window.addEventListener("qws-friend-info-open", handleFriendOpen);
+    playerDatabaseUserId.onChangeNow((next) => {
+      const id = next ? String(next) : null;
+      currentPlayerId = id;
+      ownerGroupsLoaded = false;
+      resetPresenceStream(id);
+    }).then((unsub) => {
+      presenceUnsub = unsub;
+    }).catch(() => {
+    });
     return {
       root,
       show: () => {
@@ -33165,7 +34437,468 @@
         friendsTab.destroy();
         addTab.destroy();
         requestsTab.destroy();
+        try {
+          presenceUnsub?.();
+        } catch {
+        }
+        if (presenceStream) {
+          try {
+            presenceStream.close();
+          } catch {
+          }
+          presenceStream = null;
+        }
         previewOverlay.remove();
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/groupsTab.ts
+  var resolveOwnerId = (details) => {
+    const group = details.group ?? details;
+    return group?.ownerId ?? group?.owner_id ?? null;
+  };
+  var resolveCreatedAt = (details) => {
+    const group = details.group ?? details;
+    return group?.createdAt ?? group?.created_at ?? null;
+  };
+  var resolveGroupName = (details) => {
+    const group = details.group ?? details;
+    return group?.name ?? group?.group_name ?? "Untitled group";
+  };
+  var resolveMembers = (details) => {
+    const members = details.members ?? details.groupMembers ?? details.membersList ?? [];
+    return Array.isArray(members) ? members : [];
+  };
+  var cosmeticBaseUrl = null;
+  var cosmeticBasePromise = null;
+  var normalizeCosmeticName2 = (raw) => {
+    const source = String(raw ?? "").trim();
+    if (!source) return null;
+    let value = source;
+    const lower = value.toLowerCase();
+    const idx = lower.lastIndexOf("cosmetic/");
+    if (idx >= 0) {
+      value = value.slice(idx + "cosmetic/".length);
+    }
+    value = value.replace(/^\/+/, "");
+    const q = value.indexOf("?");
+    if (q >= 0) value = value.slice(0, q);
+    const h = value.indexOf("#");
+    if (h >= 0) value = value.slice(0, h);
+    return value.trim() ? value.trim() : null;
+  };
+  var ensureCosmeticBase = () => {
+    if (cosmeticBaseUrl) return Promise.resolve(cosmeticBaseUrl);
+    if (cosmeticBasePromise) return cosmeticBasePromise.catch(() => null);
+    cosmeticBasePromise = MGAssets.base().then((base2) => {
+      cosmeticBaseUrl = base2;
+      cosmeticBasePromise = null;
+      return base2;
+    }).catch(() => {
+      cosmeticBasePromise = null;
+      return null;
+    });
+    return cosmeticBasePromise;
+  };
+  var buildCosmeticUrl = (name) => {
+    if (!cosmeticBaseUrl) return null;
+    const normalized = normalizeCosmeticName2(name);
+    if (!normalized) return null;
+    const base2 = cosmeticBaseUrl.replace(/\/?$/, "/");
+    return `${base2}cosmetic/${normalized}`;
+  };
+  var applyCosmeticImg = (img, name) => {
+    const url2 = buildCosmeticUrl(name);
+    if (url2) {
+      setImageSafe(img, url2);
+    } else {
+      img.dataset.cosmetic = name;
+    }
+  };
+  var populateCosmeticImages = (root) => {
+    if (!cosmeticBaseUrl) return;
+    const imgs = root.querySelectorAll("img[data-cosmetic]");
+    imgs.forEach((img) => {
+      const name = img.dataset.cosmetic;
+      if (!name) return;
+      const url2 = buildCosmeticUrl(name);
+      if (!url2) return;
+      setImageSafe(img, url2);
+      img.removeAttribute("data-cosmetic");
+    });
+  };
+  function createGroupsTab(options) {
+    const root = document.createElement("div");
+    root.className = "qws-fo-groups-tab";
+    let currentGroupId = null;
+    let myId = null;
+    let unsubPlayer = null;
+    let createOpen = false;
+    let createValue = "";
+    let creating = false;
+    const overlay = new MessagesOverlay({
+      embedded: true,
+      mode: "group",
+      title: "Groups",
+      onUnreadChange: options?.onUnreadChange,
+      onListHeadRender: (list) => {
+        const head = document.createElement("div");
+        head.className = "qws-msg-list-head";
+        const title = document.createElement("div");
+        title.className = "qws-msg-list-title";
+        title.textContent = "Groups";
+        const newBtn = document.createElement("button");
+        newBtn.type = "button";
+        newBtn.className = "qws-msg-list-new";
+        newBtn.textContent = "New";
+        newBtn.disabled = creating;
+        newBtn.addEventListener("click", () => {
+          createOpen = !createOpen;
+          overlay.rerenderList();
+        });
+        head.append(title, newBtn);
+        list.appendChild(head);
+        const form = document.createElement("div");
+        form.className = "qws-msg-list-create";
+        form.style.display = createOpen ? "flex" : "none";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "qws-msg-list-input";
+        input.placeholder = "Group name...";
+        input.maxLength = 32;
+        input.value = createValue;
+        input.addEventListener("input", () => {
+          createValue = input.value;
+          const enabled = createValue.trim().length > 0 && !creating;
+          createBtn.disabled = !enabled;
+        });
+        const createBtn = document.createElement("button");
+        createBtn.type = "button";
+        createBtn.className = "qws-msg-list-action";
+        createBtn.textContent = creating ? "Creating..." : "Create";
+        createBtn.disabled = createValue.trim().length === 0 || creating;
+        createBtn.addEventListener("click", async () => {
+          const name = createValue.trim();
+          if (!name) return;
+          const playerId2 = myId ?? await playerDatabaseUserId.get();
+          if (!playerId2) return;
+          creating = true;
+          createBtn.textContent = "Creating...";
+          createBtn.disabled = true;
+          try {
+            const group = await createGroup({ ownerId: playerId2, name });
+            if (!group) {
+              await toastSimple("Groups", "Unable to create group.", "error");
+              return;
+            }
+            createValue = "";
+            createOpen = false;
+            overlay.refresh();
+          } finally {
+            creating = false;
+            overlay.rerenderList();
+          }
+        });
+        const cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
+        cancelBtn.className = "qws-msg-list-action";
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", () => {
+          createOpen = false;
+          overlay.rerenderList();
+        });
+        form.append(input, createBtn, cancelBtn);
+        list.appendChild(form);
+      },
+      onThreadHeadRender: (head, selectedId) => {
+        currentGroupId = selectedId;
+        const existing = head.querySelector(".qws-msg-thread-actions");
+        if (existing) existing.remove();
+        if (!selectedId) return;
+        const actions = document.createElement("div");
+        actions.className = "qws-msg-thread-actions";
+        const infoBtn = document.createElement("button");
+        infoBtn.type = "button";
+        infoBtn.className = "qws-msg-thread-action-btn";
+        infoBtn.textContent = "Info";
+        infoBtn.disabled = !selectedId;
+        infoBtn.addEventListener("click", () => {
+          if (!selectedId) return;
+          void openDetails(selectedId);
+        });
+        actions.appendChild(infoBtn);
+        head.appendChild(actions);
+      }
+    });
+    overlay.mount(root);
+    void overlay.init();
+    const modal = document.createElement("div");
+    modal.className = "qws-fo-group-modal";
+    modal.style.display = "none";
+    const card = document.createElement("div");
+    card.className = "qws-fo-group-modal-card";
+    const modalHead = document.createElement("div");
+    modalHead.className = "qws-fo-group-modal-head";
+    const modalTitle = document.createElement("div");
+    modalTitle.className = "qws-fo-group-modal-title";
+    modalTitle.textContent = "Group info";
+    const closeBtn = createButton2("Close", { size: "sm", variant: "ghost" });
+    modalHead.append(modalTitle, closeBtn);
+    const modalBody = document.createElement("div");
+    modalBody.className = "qws-fo-group-details";
+    card.append(modalHead, modalBody);
+    modal.appendChild(card);
+    root.appendChild(modal);
+    const closeModal2 = () => {
+      modal.style.display = "none";
+      modalTitle.textContent = "Group info";
+    };
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal2();
+    });
+    closeBtn.addEventListener("click", closeModal2);
+    const renderDetails = (details, playerId2) => {
+      modalBody.innerHTML = "";
+      const ownerId = resolveOwnerId(details);
+      const createdAt = resolveCreatedAt(details);
+      const groupName = resolveGroupName(details);
+      const members = resolveMembers(details);
+      modalTitle.textContent = `Group info - ${groupName}`;
+      const ownerName = members.find((m) => m.playerId === ownerId)?.name ?? ownerId ?? "Unknown";
+      const createdText = createdAt ? new Date(createdAt).toLocaleString() : "Unknown";
+      const hero = document.createElement("div");
+      hero.className = "qws-fo-group-hero";
+      const heroTitle = document.createElement("div");
+      heroTitle.className = "qws-fo-group-hero-title";
+      heroTitle.textContent = groupName;
+      const heroMeta = document.createElement("div");
+      heroMeta.className = "qws-fo-group-hero-meta";
+      const metaMembers = document.createElement("span");
+      metaMembers.className = "qws-fo-group-chip";
+      metaMembers.textContent = `${members.length}/12 members`;
+      const metaOwner = document.createElement("span");
+      metaOwner.className = "qws-fo-group-chip";
+      metaOwner.textContent = `Owner: ${ownerName}`;
+      const metaCreated = document.createElement("span");
+      metaCreated.className = "qws-fo-group-chip";
+      metaCreated.textContent = `Created: ${createdText}`;
+      heroMeta.append(metaMembers, metaOwner, metaCreated);
+      hero.append(heroTitle, heroMeta);
+      modalBody.append(hero);
+      const isOwner = Boolean(ownerId && playerId2 && ownerId === playerId2);
+      if (isOwner && currentGroupId) {
+        const manageSection = document.createElement("div");
+        manageSection.className = "qws-fo-group-section";
+        const manageTitle = document.createElement("div");
+        manageTitle.className = "qws-fo-group-section-title";
+        manageTitle.textContent = "Manage";
+        const editWrap = document.createElement("div");
+        editWrap.className = "qws-fo-group-manage-row";
+        const editInput = createInput("Rename group...", groupName);
+        editInput.classList.add("qws-fo-group-input");
+        const saveBtn = createButton2("Save", { size: "sm", variant: "primary" });
+        editWrap.append(editInput, saveBtn);
+        const deleteWrap = document.createElement("div");
+        deleteWrap.className = "qws-fo-group-manage-row";
+        const deleteHint = document.createElement("div");
+        deleteHint.className = "qws-fo-group-danger-hint";
+        deleteHint.textContent = "Delete the group permanently.";
+        const deleteBtn = createButton2("Delete group", { size: "sm", variant: "danger" });
+        deleteWrap.append(deleteHint, deleteBtn);
+        manageSection.append(manageTitle, editWrap, deleteWrap);
+        modalBody.appendChild(manageSection);
+        saveBtn.addEventListener("click", async () => {
+          const nextName = editInput.value.trim();
+          if (!nextName || !currentGroupId) return;
+          setButtonEnabled(saveBtn, false);
+          try {
+            const ok = await updateGroupName({
+              groupId: currentGroupId,
+              playerId: playerId2,
+              name: nextName
+            });
+            if (!ok) {
+              await toastSimple("Groups", "Unable to rename group.", "error");
+              return;
+            }
+            overlay.refresh();
+            void openDetails(currentGroupId);
+          } finally {
+            setButtonEnabled(saveBtn, true);
+          }
+        });
+        deleteBtn.addEventListener("click", async () => {
+          if (!currentGroupId) return;
+          setButtonEnabled(deleteBtn, false);
+          try {
+            const ok = await deleteGroup({ groupId: currentGroupId, playerId: playerId2 });
+            if (!ok) {
+              await toastSimple("Groups", "Unable to delete group.", "error");
+              return;
+            }
+            closeModal2();
+            currentGroupId = null;
+            overlay.refresh();
+          } finally {
+            setButtonEnabled(deleteBtn, true);
+          }
+        });
+      } else if (currentGroupId) {
+        const leaveSection = document.createElement("div");
+        leaveSection.className = "qws-fo-group-section";
+        const leaveTitle = document.createElement("div");
+        leaveTitle.className = "qws-fo-group-section-title";
+        leaveTitle.textContent = "Membership";
+        const leaveRow = document.createElement("div");
+        leaveRow.className = "qws-fo-group-manage-row";
+        const leaveHint = document.createElement("div");
+        leaveHint.className = "qws-fo-group-danger-hint";
+        leaveHint.textContent = "Leave this group and stop receiving messages.";
+        const leaveBtn = createButton2("Leave", { size: "sm", variant: "danger" });
+        leaveRow.append(leaveHint, leaveBtn);
+        leaveSection.append(leaveTitle, leaveRow);
+        modalBody.appendChild(leaveSection);
+        leaveBtn.addEventListener("click", async () => {
+          if (!currentGroupId) return;
+          setButtonEnabled(leaveBtn, false);
+          try {
+            const ok = await leaveGroup({ groupId: currentGroupId, playerId: playerId2 });
+            if (!ok) {
+              await toastSimple("Groups", "Unable to leave group.", "error");
+              return;
+            }
+            closeModal2();
+            currentGroupId = null;
+            overlay.refresh();
+          } finally {
+            setButtonEnabled(leaveBtn, true);
+          }
+        });
+      }
+      const memberSection = document.createElement("div");
+      memberSection.className = "qws-fo-group-section";
+      const memberTitle = document.createElement("div");
+      memberTitle.className = "qws-fo-group-section-title";
+      memberTitle.textContent = `Members (${members.length}/12)`;
+      memberSection.appendChild(memberTitle);
+      const listWrap = document.createElement("div");
+      listWrap.className = "qws-fo-group-members-list";
+      for (const member of members) {
+        const row = document.createElement("div");
+        row.className = "qws-fo-group-member-row";
+        const avatar = document.createElement("div");
+        avatar.className = "qws-fo-group-member-avatar";
+        const avatarListRaw = member.avatar ?? member.avatar_list ?? member.avatarList ?? null;
+        const avatarList = Array.isArray(avatarListRaw) ? avatarListRaw.map((entry) => String(entry)).filter(Boolean) : [];
+        if (avatarList.length) {
+          avatarList.forEach((entry, index) => {
+            const img = document.createElement("img");
+            img.className = "qws-fo-group-member-avatar-layer";
+            img.alt = member.name ?? member.playerId ?? "Member";
+            img.decoding = "async";
+            img.loading = "lazy";
+            img.style.zIndex = String(index + 1);
+            applyCosmeticImg(img, entry);
+            avatar.appendChild(img);
+          });
+        } else {
+          const avatarLetter = (member.name ?? member.playerId ?? "?").trim().slice(0, 1).toUpperCase() || "?";
+          avatar.textContent = avatarLetter;
+        }
+        const name = document.createElement("div");
+        name.className = "qws-fo-group-member-name";
+        name.textContent = member.name ?? member.playerId ?? "Member";
+        const meta = document.createElement("div");
+        meta.className = "qws-fo-group-member-meta";
+        if (member.playerId) {
+          const idEl = document.createElement("span");
+          idEl.className = "qws-fo-group-member-id";
+          idEl.textContent = member.playerId;
+          meta.appendChild(idEl);
+        }
+        let roleLabel = null;
+        if (member.playerId && ownerId && member.playerId === ownerId) {
+          roleLabel = "Owner";
+        } else if (member.role) {
+          roleLabel = String(member.role);
+        }
+        if (roleLabel) {
+          const badge = document.createElement("span");
+          badge.className = "qws-fo-group-role-badge";
+          badge.textContent = roleLabel;
+          meta.appendChild(badge);
+        }
+        const textWrap = document.createElement("div");
+        textWrap.className = "qws-fo-group-member-text";
+        textWrap.append(name, meta);
+        const actions = document.createElement("div");
+        actions.className = "qws-fo-group-member-actions";
+        if (isOwner && member.playerId && member.playerId !== ownerId && currentGroupId) {
+          const kickBtn = createButton2("Remove", { size: "sm", variant: "danger" });
+          kickBtn.addEventListener("click", async () => {
+            if (!currentGroupId) return;
+            setButtonEnabled(kickBtn, false);
+            try {
+              const ok = await removeGroupMember({
+                groupId: currentGroupId,
+                playerId: playerId2,
+                memberId: member.playerId
+              });
+              if (!ok) {
+                await toastSimple("Groups", "Unable to remove member.", "error");
+                return;
+              }
+              overlay.refresh();
+              void openDetails(currentGroupId);
+            } finally {
+              setButtonEnabled(kickBtn, true);
+            }
+          });
+          actions.appendChild(kickBtn);
+        }
+        row.append(avatar, textWrap, actions);
+        listWrap.appendChild(row);
+      }
+      memberSection.appendChild(listWrap);
+      modalBody.appendChild(memberSection);
+      void ensureCosmeticBase().then(() => {
+        populateCosmeticImages(modalBody);
+      });
+    };
+    const openDetails = async (groupId) => {
+      const playerId2 = myId ?? await playerDatabaseUserId.get();
+      if (!playerId2) return;
+      try {
+        const details = await fetchGroupDetails(groupId, playerId2);
+        if (!details) {
+          await toastSimple("Groups", "Unable to load group info.", "error");
+          return;
+        }
+        renderDetails(details, playerId2);
+        modal.style.display = "flex";
+      } catch {
+        await toastSimple("Groups", "Unable to load group info.", "error");
+      }
+    };
+    playerDatabaseUserId.onChangeNow((next) => {
+      myId = next ? String(next) : null;
+    }).then((unsub) => {
+      unsubPlayer = unsub;
+    }).catch(() => {
+    });
+    return {
+      root,
+      show: () => overlay.setActive(true),
+      hide: () => overlay.setActive(false),
+      refresh: () => overlay.refresh(),
+      destroy: () => {
+        try {
+          unsubPlayer?.();
+        } catch {
+        }
+        overlay.destroy();
+        modal.remove();
       }
     };
   }
@@ -33646,6 +35379,401 @@
 .qws-fo-community-profile.active{
   display:flex;
 }
+.qws-fo-groups-layout{
+  display:grid;
+  grid-template-columns:240px 1fr;
+  gap:12px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-groups-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-height:0;
+  padding:10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+}
+.qws-fo-groups-list-title{
+  font-size:12px;
+  font-weight:700;
+  color:#e2e8f0;
+}
+.qws-fo-groups-create{
+  display:flex;
+  gap:6px;
+  align-items:center;
+}
+.qws-fo-groups-create .qws-fo-input{
+  flex:1;
+  min-width:0;
+}
+.qws-fo-groups-list-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-groups-list-body{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  overflow:auto;
+  min-height:0;
+  padding-right:4px;
+}
+.qws-fo-groups-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.6);
+  text-align:center;
+  padding:12px 8px;
+}
+.qws-fo-group-row{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,20,30,0.6);
+  cursor:pointer;
+  transition:background 140ms ease, border 140ms ease;
+}
+.qws-fo-group-row:hover{
+  border-color:rgba(59,130,246,0.3);
+  background:rgba(30,41,59,0.55);
+}
+.qws-fo-group-row.active{
+  border-color:rgba(59,130,246,0.45);
+  background:rgba(30,41,59,0.7);
+}
+.qws-fo-group-row-title{
+  font-size:12px;
+  font-weight:700;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-row-meta{
+  font-size:10px;
+  color:rgba(226,232,240,0.65);
+}
+.qws-fo-group-chat{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  flex:1;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(12,16,24,0.6);
+}
+.qws-fo-group-head{
+  padding:10px 12px;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.qws-fo-group-head-left{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.qws-fo-group-head-title{
+  font-size:13px;
+  font-weight:700;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-head-meta{
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+}
+.qws-fo-group-body{
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+  flex:1;
+}
+.qws-fo-group-messages{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.6);
+  text-align:center;
+  margin:auto;
+}
+.qws-fo-group-message{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  max-width:80%;
+}
+.qws-fo-group-message.me{
+  align-self:flex-end;
+  text-align:right;
+}
+.qws-fo-group-msg-name{
+  font-size:10px;
+  color:rgba(226,232,240,0.6);
+}
+.qws-fo-group-bubble{
+  padding:8px 10px;
+  border-radius:12px;
+  background:rgba(30,41,59,0.7);
+  border:1px solid rgba(255,255,255,0.06);
+  font-size:12px;
+  color:#f8fafc;
+  line-height:1.4;
+  white-space:pre-wrap;
+}
+.qws-fo-group-message.me .qws-fo-group-bubble{
+  background:rgba(34,211,238,0.18);
+  border-color:rgba(34,211,238,0.35);
+}
+.qws-fo-group-input-row{
+  display:flex;
+  gap:8px;
+  padding:10px;
+  border-top:1px solid rgba(255,255,255,0.08);
+}
+.qws-fo-group-input{
+  flex:1;
+  min-width:0;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.65);
+  color:#f8fafc;
+  padding:8px 10px;
+  font-size:12px;
+}
+.qws-fo-group-details{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-hero{
+  padding:12px 14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:linear-gradient(135deg, rgba(30,41,59,0.55), rgba(17,24,39,0.8));
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-fo-group-hero-title{
+  font-size:16px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-group-hero-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.qws-fo-group-chip{
+  padding:3px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:rgba(226,232,240,0.85);
+  font-size:11px;
+  font-weight:600;
+}
+.qws-fo-group-section{
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-group-section-title{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.1em;
+  color:rgba(147,197,253,0.8);
+}
+.qws-fo-group-info-grid{
+  display:grid;
+  gap:8px;
+}
+.qws-fo-group-info-row{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:12px;
+  color:#e2e8f0;
+}
+.qws-fo-group-info-label{
+  font-weight:700;
+  color:rgba(226,232,240,0.65);
+}
+.qws-fo-group-info-value{
+  font-weight:600;
+  color:#f8fafc;
+}
+.qws-fo-group-manage-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-group-input{
+  flex:1;
+  min-width:0;
+}
+.qws-fo-group-danger-hint{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
+  flex:1;
+}
+.qws-fo-group-members-list{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.qws-fo-group-member-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(15,23,42,0.6);
+}
+.qws-fo-group-member-avatar{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.08);
+  display:grid;
+  place-items:center;
+  font-size:12px;
+  font-weight:700;
+  color:#f8fafc;
+  flex:0 0 32px;
+  overflow:hidden;
+  position:relative;
+}
+.qws-fo-group-member-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-group-member-avatar img.qws-fo-group-member-avatar-layer{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  transform:scale(1.8);
+  transform-origin:50% 18%;
+}
+.qws-fo-group-member-text{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+  flex:1;
+}
+.qws-fo-group-member-name{
+  font-size:12px;
+  font-weight:600;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-member-meta{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-member-id{
+  color:rgba(226,232,240,0.6);
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.qws-fo-group-role-badge{
+  padding:2px 6px;
+  border-radius:999px;
+  border:1px solid rgba(59,130,246,0.35);
+  background:rgba(59,130,246,0.18);
+  color:#dbeafe;
+  font-weight:700;
+  text-transform:capitalize;
+  white-space:nowrap;
+}
+.qws-fo-group-member-actions{
+  display:flex;
+  gap:6px;
+  margin-left:auto;
+}
+.qws-fo-group-modal{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(5, 8, 15, 0.6);
+  backdrop-filter:blur(6px);
+  z-index:20;
+}
+.qws-fo-group-modal-card{
+  width:min(520px, 92%);
+  max-height:80%;
+  overflow:auto;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(10,14,20,0.95);
+  box-shadow:0 18px 44px rgba(0,0,0,0.5);
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.qws-fo-group-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.qws-fo-group-modal-title{
+  font-size:13px;
+  font-weight:700;
+  color:#f8fafc;
+}
+@media (max-width: 820px){
+  .qws-fo-groups-layout{
+    grid-template-columns:1fr;
+  }
+  .qws-fo-groups-list{
+    max-height:200px;
+  }
+}
 .qws-fo-garden-preview{
   position:fixed;
   inset:0;
@@ -33716,6 +35844,41 @@
   border-radius:12px;
   border:1px solid rgba(255,255,255,0.1);
   background:rgba(15,23,42,0.65);
+}
+.qws-fo-profile-group{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.1);
+  background:rgba(15,23,42,0.5);
+}
+.qws-fo-profile-group-title{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(147,197,253,0.8);
+}
+.qws-fo-profile-group-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-profile-group-select{
+  flex:1;
+  min-width:0;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(15,23,42,0.7);
+  color:#f8fafc;
+  padding:6px 8px;
+  font-size:12px;
+}
+.qws-fo-profile-group-status{
+  font-size:11px;
+  color:rgba(226,232,240,0.65);
 }
 .qws-fo-profile-coins-icon{
   width:18px;
@@ -34340,6 +36503,7 @@
       __publicField(this, "activeTab", "community");
       __publicField(this, "panelOpen", false);
       __publicField(this, "unreadMessages", 0);
+      __publicField(this, "unreadGroups", 0);
       __publicField(this, "pendingRequests", 0);
       __publicField(this, "mo", null);
       __publicField(this, "panelHeadEl", null);
@@ -34365,7 +36529,7 @@
       this.btn = this.createButton();
       this.badge = this.createBadge();
       const lastTab = window.__qws_friend_overlay_last_tab;
-      if (lastTab === "community" || lastTab === "messages" || lastTab === "settings") {
+      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "settings") {
         this.activeTab = lastTab;
       }
       this.panel = this.createPanel();
@@ -34496,7 +36660,7 @@
       });
     }
     updateButtonBadge() {
-      const total = this.unreadMessages + this.pendingRequests;
+      const total = this.unreadMessages + this.unreadGroups + this.pendingRequests;
       this.badge.textContent = total ? String(total) : "";
       style3(this.badge, { display: total ? "inline-flex" : "none" });
     }
@@ -34560,6 +36724,28 @@
             });
             return {
               id: "community",
+              root: tab.root,
+              refresh: tab.refresh,
+              show: tab.show,
+              hide: tab.hide,
+              destroy: tab.destroy
+            };
+          }
+        },
+        {
+          id: "groups",
+          label: "Groups",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/><path d="M16.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor" opacity="0.8"/><path d="M2.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor"/><path d="M12.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor" opacity="0.7"/></svg>',
+          build: () => {
+            const tab = createGroupsTab({
+              onUnreadChange: (total) => {
+                this.unreadGroups = total;
+                this.setTabBadge("groups", total ? String(total) : null);
+                this.updateButtonBadge();
+              }
+            });
+            return {
+              id: "groups",
               root: tab.root,
               refresh: tab.refresh,
               show: tab.show,
