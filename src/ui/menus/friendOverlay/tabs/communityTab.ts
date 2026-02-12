@@ -1059,14 +1059,6 @@ export function createCommunityTab(options: {
     })
     .catch(() => {});
 
-  const handleAuthUpdate = () => {
-    // Petit délai pour s'assurer que l'API key est bien disponible
-    setTimeout(() => {
-      resetPresenceStream(currentPlayerId);
-    }, 100);
-  };
-  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
-
   return {
     root,
     show: () => {
@@ -1076,17 +1068,13 @@ export function createCommunityTab(options: {
       // keep state when switching/closing
     },
     refresh: () => {
+      // Reset presence stream on refresh (auth update)
+      resetPresenceStream(currentPlayerId);
       void friendsTab.refresh({ force: true });
       void requestsTab.refresh({ force: true });
     },
     destroy: () => {
       window.removeEventListener("qws-friend-info-open", handleFriendOpen as EventListener);
-      try {
-        window.removeEventListener(
-          "qws-friend-overlay-auth-update",
-          handleAuthUpdate as EventListener,
-        );
-      } catch {}
       friendsTab.destroy();
       addTab.destroy();
       requestsTab.destroy();

@@ -2614,7 +2614,7 @@ export class MessagesOverlay {
   private groupReadStorageKey: string | null = null;
   private lastNotificationSoundAt = 0;
   private notificationSoundCooldownMs = 1500;
-  private suppressSoundUntil = 0;
+  private suppressSoundUntil = Date.now() + 10000; // Bloquer les sons pendant 10s au démarrage
   private groupIds = new Set<string>();
   private groupIdsLoaded = false;
   private myAvatarUrl: string | null = null;
@@ -2660,6 +2660,7 @@ export class MessagesOverlay {
   };
   private unreadRefreshInFlight = false;
   private lastUnreadRefreshAt = 0;
+  private initialDmSyncDone = false;
 
   constructor(options: MessagesOverlayOptions = {}) {
     this.opts = options;
@@ -2813,6 +2814,7 @@ export class MessagesOverlay {
     this.groupReadStorageKey = null;
     this.groupIds.clear();
     this.groupIdsLoaded = false;
+    this.initialDmSyncDone = false; // Réinitialiser pour attendre la nouvelle sync DB
     if (this.mode === "group" && this.myId) {
       this.loadGroupReadState();
     }
@@ -3328,6 +3330,8 @@ export class MessagesOverlay {
 
   private playNotificationSound(): void {
     if (!getFriendSettings().messageSoundEnabled) return;
+    // En mode DM, attendre la première sync DB avant de jouer des sons
+    if (this.mode === "dm" && !this.initialDmSyncDone) return;
     const now = Date.now();
     if (now < this.suppressSoundUntil) return;
     if (now - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
@@ -3417,11 +3421,11 @@ export class MessagesOverlay {
     }
 
     if (!this.myId) return;
-    this.suppressNotificationSound();
+    this.suppressNotificationSound(5000); // 5 secondes pour laisser le temps à la sync initiale
     if (this.mode === "group") {
       const es = openGroupsStream(this.myId, {
         onConnected: () => {
-          this.suppressNotificationSound();
+          this.suppressNotificationSound(5000); // 5 secondes pour laisser le temps à la sync initiale
         },
         onMessage: (payload) => this.handleIncomingGroupMessage(payload),
         onMemberAdded: () => void this.loadGroups(true),
@@ -3496,7 +3500,7 @@ export class MessagesOverlay {
     }
     const es = openMessagesStream(this.myId, {
       onConnected: () => {
-        this.suppressNotificationSound();
+        this.suppressNotificationSound(5000); // 5 secondes pour laisser le temps à la sync initiale
       },
       onMessage: (msg) => this.handleIncomingMessage(msg),
       onRead: (receipt) => this.handleReadReceipt(receipt),
@@ -3591,10 +3595,18 @@ export class MessagesOverlay {
   }
 
   private updateUnreadFromMessages(conv: ConversationState): void {
+    // En mode DM, on laisse refreshUnreadCounts gérer les compteurs depuis la DB
+    if (this.mode !== "group") return;
     if (!this.myId) return;
+
+    // En mode group, utiliser groupReadAt (localStorage) pour déterminer les messages lus
+    const lastRead = this.groupReadAt.get(conv.otherId) ?? 0;
     let unread = 0;
     for (const msg of conv.messages) {
-      if (msg.senderId !== this.myId && !msg.readAt) unread += 1;
+      if (msg.senderId === this.myId) continue;
+      const msgTs = parseMessageTime(msg) ?? 0;
+      const isRead = Number.isFinite(lastRead) && msgTs <= lastRead;
+      if (!isRead) unread += 1;
     }
     conv.unread = unread;
   }
@@ -3621,8 +3633,14 @@ export class MessagesOverlay {
       if (shouldMarkRead) {
         void this.markConversationRead(conv.otherId);
       } else if (!normalized.readAt) {
-        conv.unread += 1;
-        this.playNotificationSound();
+        // En mode DM, attendre la première sync DB avant d'incrémenter les compteurs
+        // pour éviter les notifications fantômes au démarrage
+        if (this.mode === "dm" && !this.initialDmSyncDone) {
+          // Skip - refreshUnreadCounts va synchroniser les compteurs depuis la DB
+        } else {
+          conv.unread += 1;
+          this.playNotificationSound();
+        }
       }
     }
 
@@ -3882,6 +3900,11 @@ export class MessagesOverlay {
       } else if (this.selectedId) {
         this.renderThread({ preserveScroll: true, scrollToBottom: false });
       }
+    } finally {
+      // Débloquer le son pour les groupes après le chargement initial
+      if (this.mode === "group" && this.groupIdsLoaded) {
+        this.suppressSoundUntil = 0;
+      }
     }
   }
 
@@ -3931,6 +3954,11 @@ export class MessagesOverlay {
       // ignore
     } finally {
       this.unreadRefreshInFlight = false;
+      if (this.mode === "dm") {
+        this.initialDmSyncDone = true;
+        // Débloquer le son maintenant que la sync DB est terminée
+        this.suppressSoundUntil = 0;
+      }
       this.updateButtonBadge();
       this.renderFriendList({ preserveScroll: true });
     }

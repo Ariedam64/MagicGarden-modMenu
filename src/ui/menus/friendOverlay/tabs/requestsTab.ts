@@ -96,6 +96,7 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
   const actionInProgress = new Set<string>();
   let unsubscribePlayerId: (() => void) | null = null;
   let stream: StreamHandle | null = null;
+  let suppressSoundUntil = Date.now() + 10000; // Bloquer le son pendant 10s au démarrage
 
   const updateBadge = () => {
     options.onCountChange?.(incoming.length);
@@ -304,6 +305,8 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
     } finally {
       loading = false;
       renderAll();
+      // Débloquer le son après le premier chargement des demandes
+      suppressSoundUntil = 0;
     }
   }
 
@@ -317,7 +320,7 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
     if (!myId) return;
     stream = openFriendRequestsStream(myId, {
       onRequest: () => {
-        if (getFriendSettings().friendRequestSoundEnabled) {
+        if (getFriendSettings().friendRequestSoundEnabled && Date.now() >= suppressSoundUntil) {
           void getAudioUrlSafe(FRIEND_REQUEST_NOTIFICATION_URL).then((url) => {
             audioPlayer.playAt(url, 0.2);
           });
@@ -355,15 +358,6 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
     })
     .catch(() => {});
 
-  const handleAuthUpdate = () => {
-    // Petit délai pour s'assurer que l'API key est bien disponible
-    setTimeout(() => {
-      resetStream();
-      void loadRequests({ force: true });
-    }, 100);
-  };
-  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
-
   return {
     root,
     refresh: (opts?: { force?: boolean }) => loadRequests(opts),
@@ -371,12 +365,6 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
       destroyed = true;
       try {
         unsubscribePlayerId?.();
-      } catch {}
-      try {
-        window.removeEventListener(
-          "qws-friend-overlay-auth-update",
-          handleAuthUpdate as EventListener,
-        );
       } catch {}
       if (stream) {
         try {

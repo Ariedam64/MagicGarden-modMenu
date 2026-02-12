@@ -317,14 +317,6 @@ export function createRoomTab(): RoomTabHandle {
     void refreshRooms();
   });
 
-  const handleAuthUpdate = () => {
-    // Petit délai pour s'assurer que l'API key est bien disponible
-    setTimeout(() => {
-      void refreshRooms();
-    }, 100);
-  };
-  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
-
   updateRefreshState();
   setListMessage("Loading rooms...");
 
@@ -339,12 +331,6 @@ export function createRoomTab(): RoomTabHandle {
     },
     destroy: () => {
       destroyed = true;
-      try {
-        window.removeEventListener(
-          "qws-friend-overlay-auth-update",
-          handleAuthUpdate as EventListener,
-        );
-      } catch {}
     },
   };
 }
