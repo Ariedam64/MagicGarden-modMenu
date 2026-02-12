@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.0.0
+// @version      3.0.2
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -29980,7 +29980,8 @@
       __publicField(this, "groupReadStorageKey", null);
       __publicField(this, "lastNotificationSoundAt", 0);
       __publicField(this, "notificationSoundCooldownMs", 1500);
-      __publicField(this, "suppressSoundUntil", 0);
+      __publicField(this, "suppressSoundUntil", Date.now() + 1e4);
+      // Bloquer les sons pendant 10s au démarrage
       __publicField(this, "groupIds", /* @__PURE__ */ new Set());
       __publicField(this, "groupIdsLoaded", false);
       __publicField(this, "myAvatarUrl", null);
@@ -30024,6 +30025,7 @@
       });
       __publicField(this, "unreadRefreshInFlight", false);
       __publicField(this, "lastUnreadRefreshAt", 0);
+      __publicField(this, "initialDmSyncDone", false);
       this.opts = options;
       this.embedded = Boolean(options.embedded);
       this.mode = options.mode ?? "dm";
@@ -30174,6 +30176,7 @@
       this.groupReadStorageKey = null;
       this.groupIds.clear();
       this.groupIdsLoaded = false;
+      this.initialDmSyncDone = false;
       if (this.mode === "group" && this.myId) {
         this.loadGroupReadState();
       }
@@ -30543,6 +30546,7 @@
     }
     playNotificationSound() {
       if (!getFriendSettings().messageSoundEnabled) return;
+      if (this.mode === "dm" && !this.initialDmSyncDone) return;
       const now2 = Date.now();
       if (now2 < this.suppressSoundUntil) return;
       if (now2 - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
@@ -30616,11 +30620,11 @@
         this.stream = null;
       }
       if (!this.myId) return;
-      this.suppressNotificationSound();
+      this.suppressNotificationSound(5e3);
       if (this.mode === "group") {
         const es2 = openGroupsStream(this.myId, {
           onConnected: () => {
-            this.suppressNotificationSound();
+            this.suppressNotificationSound(5e3);
           },
           onMessage: (payload) => this.handleIncomingGroupMessage(payload),
           onMemberAdded: () => void this.loadGroups(true),
@@ -30681,7 +30685,7 @@
       }
       const es = openMessagesStream(this.myId, {
         onConnected: () => {
-          this.suppressNotificationSound();
+          this.suppressNotificationSound(5e3);
         },
         onMessage: (msg) => this.handleIncomingMessage(msg),
         onRead: (receipt) => this.handleReadReceipt(receipt),
@@ -30764,10 +30768,15 @@
       return Array.from(map2.values()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
     }
     updateUnreadFromMessages(conv) {
+      if (this.mode !== "group") return;
       if (!this.myId) return;
+      const lastRead = this.groupReadAt.get(conv.otherId) ?? 0;
       let unread = 0;
       for (const msg of conv.messages) {
-        if (msg.senderId !== this.myId && !msg.readAt) unread += 1;
+        if (msg.senderId === this.myId) continue;
+        const msgTs = parseMessageTime(msg) ?? 0;
+        const isRead = Number.isFinite(lastRead) && msgTs <= lastRead;
+        if (!isRead) unread += 1;
       }
       conv.unread = unread;
     }
@@ -30790,8 +30799,11 @@
         if (shouldMarkRead) {
           void this.markConversationRead(conv.otherId);
         } else if (!normalized.readAt) {
-          conv.unread += 1;
-          this.playNotificationSound();
+          if (this.mode === "dm" && !this.initialDmSyncDone) {
+          } else {
+            conv.unread += 1;
+            this.playNotificationSound();
+          }
         }
       }
       this.updateButtonBadge();
@@ -31007,6 +31019,10 @@
         } else if (this.selectedId) {
           this.renderThread({ preserveScroll: true, scrollToBottom: false });
         }
+      } finally {
+        if (this.mode === "group" && this.groupIdsLoaded) {
+          this.suppressSoundUntil = 0;
+        }
       }
     }
     async refreshUnreadCounts(friends) {
@@ -31050,6 +31066,10 @@
       } catch {
       } finally {
         this.unreadRefreshInFlight = false;
+        if (this.mode === "dm") {
+          this.initialDmSyncDone = true;
+          this.suppressSoundUntil = 0;
+        }
         this.updateButtonBadge();
         this.renderFriendList({ preserveScroll: true });
       }
@@ -33113,12 +33133,6 @@
       unsubscribePlayerId = unsub;
     }).catch(() => {
     });
-    const handleAuthUpdate = () => {
-      setTimeout(() => {
-        void loadFriends({ force: true });
-      }, 100);
-    };
-    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     void loadFriends();
     return {
       root,
@@ -33128,13 +33142,6 @@
         unsubscribeSettings();
         try {
           unsubscribePlayerId?.();
-        } catch {
-        }
-        try {
-          window.removeEventListener(
-            "qws-friend-overlay-auth-update",
-            handleAuthUpdate
-          );
         } catch {
         }
       }
@@ -33193,6 +33200,7 @@
     const actionInProgress = /* @__PURE__ */ new Set();
     let unsubscribePlayerId = null;
     let stream = null;
+    let suppressSoundUntil = Date.now() + 1e4;
     const updateBadge = () => {
       options.onCountChange?.(incoming.length);
     };
@@ -33367,6 +33375,7 @@
       } finally {
         loading = false;
         renderAll();
+        suppressSoundUntil = 0;
       }
     }
     const resetStream = () => {
@@ -33380,7 +33389,7 @@
       if (!myId) return;
       stream = openFriendRequestsStream(myId, {
         onRequest: () => {
-          if (getFriendSettings().friendRequestSoundEnabled) {
+          if (getFriendSettings().friendRequestSoundEnabled && Date.now() >= suppressSoundUntil) {
             void getAudioUrlSafe(FRIEND_REQUEST_NOTIFICATION_URL).then((url2) => {
               audioPlayer.playAt(url2, 0.2);
             });
@@ -33415,13 +33424,6 @@
       unsubscribePlayerId = unsub;
     }).catch(() => {
     });
-    const handleAuthUpdate = () => {
-      setTimeout(() => {
-        resetStream();
-        void loadRequests({ force: true });
-      }, 100);
-    };
-    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     return {
       root,
       refresh: (opts) => loadRequests(opts),
@@ -33429,13 +33431,6 @@
         destroyed = true;
         try {
           unsubscribePlayerId?.();
-        } catch {
-        }
-        try {
-          window.removeEventListener(
-            "qws-friend-overlay-auth-update",
-            handleAuthUpdate
-          );
         } catch {
         }
         if (stream) {
@@ -35234,12 +35229,6 @@
       presenceUnsub = unsub;
     }).catch(() => {
     });
-    const handleAuthUpdate = () => {
-      setTimeout(() => {
-        resetPresenceStream(currentPlayerId);
-      }, 100);
-    };
-    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     return {
       root,
       show: () => {
@@ -35248,18 +35237,12 @@
       hide: () => {
       },
       refresh: () => {
+        resetPresenceStream(currentPlayerId);
         void friendsTab.refresh({ force: true });
         void requestsTab.refresh({ force: true });
       },
       destroy: () => {
         window.removeEventListener("qws-friend-info-open", handleFriendOpen);
-        try {
-          window.removeEventListener(
-            "qws-friend-overlay-auth-update",
-            handleAuthUpdate
-          );
-        } catch {
-        }
         friendsTab.destroy();
         addTab.destroy();
         requestsTab.destroy();
@@ -35518,12 +35501,6 @@
     refreshBtn.addEventListener("click", () => {
       void refreshRooms();
     });
-    const handleAuthUpdate = () => {
-      setTimeout(() => {
-        void refreshRooms();
-      }, 100);
-    };
-    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     updateRefreshState();
     setListMessage("Loading rooms...");
     return {
@@ -35538,13 +35515,6 @@
       },
       destroy: () => {
         destroyed = true;
-        try {
-          window.removeEventListener(
-            "qws-friend-overlay-auth-update",
-            handleAuthUpdate
-          );
-        } catch {
-        }
       }
     };
   }
