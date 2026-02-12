@@ -6,6 +6,7 @@
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
+// @match        https://ariesmod-api.ariedam.fr/*
 // @run-at       document-start
 // @inject-into  page
 // @grant        GM_xmlhttpRequest
@@ -4396,6 +4397,8 @@
   // src/utils/localStorage.ts
   var ARIES_STORAGE_KEY = "aries_mod";
   var ARIES_STORAGE_VERSION = 1;
+  var API_KEY_STORAGE_KEY = "aries_api_key";
+  var AUTH_DECLINED_STORAGE_KEY = "aries_auth_declined";
   var DEFAULT_ARIES_STORAGE = {
     version: ARIES_STORAGE_VERSION,
     friends: {
@@ -4584,6 +4587,81 @@
       const next = updater(currentValue);
       setValueAtPath(state3, parts, next);
     });
+  }
+  function setApiKey(apiKey) {
+    try {
+      if (typeof GM_setValue === "function") {
+        GM_setValue(API_KEY_STORAGE_KEY, apiKey);
+        return;
+      }
+      getHostStorage()?.setItem(API_KEY_STORAGE_KEY, apiKey);
+    } catch (e) {
+      console.error("Failed to store API key:", e);
+    }
+  }
+  function getApiKey() {
+    try {
+      if (typeof GM_getValue === "function") {
+        return GM_getValue(API_KEY_STORAGE_KEY, null) ?? null;
+      }
+      return getHostStorage()?.getItem(API_KEY_STORAGE_KEY) ?? null;
+    } catch (e) {
+      console.error("Failed to retrieve API key:", e);
+      return null;
+    }
+  }
+  function clearApiKey() {
+    try {
+      if (typeof GM_deleteValue === "function") {
+        GM_deleteValue(API_KEY_STORAGE_KEY);
+        return;
+      }
+      getHostStorage()?.removeItem(API_KEY_STORAGE_KEY);
+    } catch (e) {
+      console.error("Failed to clear API key:", e);
+    }
+  }
+  function hasApiKey() {
+    const key2 = getApiKey();
+    return key2 !== null && key2.length > 0;
+  }
+  function readAuthDeclinedRaw() {
+    try {
+      if (typeof GM_getValue === "function") {
+        const raw = GM_getValue(AUTH_DECLINED_STORAGE_KEY, null);
+        if (raw == null) return null;
+        if (typeof raw === "string") return raw;
+        if (typeof raw === "boolean") return raw ? "1" : null;
+        return String(raw);
+      }
+      return getHostStorage()?.getItem(AUTH_DECLINED_STORAGE_KEY) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function hasDeclinedApiAuth() {
+    const raw = readAuthDeclinedRaw();
+    if (!raw) return false;
+    const val = String(raw).trim().toLowerCase();
+    return val === "1" || val === "true" || val === "yes";
+  }
+  function setDeclinedApiAuth(declined) {
+    try {
+      if (declined) {
+        if (typeof GM_setValue === "function") {
+          GM_setValue(AUTH_DECLINED_STORAGE_KEY, "1");
+          return;
+        }
+        getHostStorage()?.setItem(AUTH_DECLINED_STORAGE_KEY, "1");
+        return;
+      }
+      if (typeof GM_deleteValue === "function") {
+        GM_deleteValue(AUTH_DECLINED_STORAGE_KEY);
+        return;
+      }
+      getHostStorage()?.removeItem(AUTH_DECLINED_STORAGE_KEY);
+    } catch {
+    }
   }
 
   // src/services/locker.ts
@@ -24740,6 +24818,98 @@
 
   // src/utils/supabase.ts
   var API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
+  var API_ORIGIN = API_BASE_URL.replace(/\/$/, "");
+  var hasCommunityAccess = () => hasApiKey();
+  function requestApiKey() {
+    return new Promise((resolve2) => {
+      const authUrl = `${API_ORIGIN}/auth/discord/login`;
+      const width = 600;
+      const height = 700;
+      const screenW = typeof screen !== "undefined" ? screen.width : window.innerWidth;
+      const screenH = typeof screen !== "undefined" ? screen.height : window.innerHeight;
+      const left = Math.max(0, Math.floor((screenW - width) / 2));
+      const top = Math.max(0, Math.floor((screenH - height) / 2));
+      const preferGmTab = isDiscordActivityContext();
+      const popup = preferGmTab ? null : window.open(
+        authUrl,
+        "aries_discord_auth",
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes`
+      );
+      let openedWithGm = false;
+      if (!popup) {
+        if (typeof GM_openInTab === "function") {
+          try {
+            GM_openInTab(authUrl, { active: true, insert: true, setParent: true });
+            openedWithGm = true;
+            console.warn("[Auth] Popup blocked. Opened Discord auth in a new tab.");
+          } catch (error) {
+            console.warn("[Auth] GM_openInTab failed:", error);
+          }
+        }
+        if (!openedWithGm) {
+          console.error("Failed to open Discord auth popup - popup blocked?");
+          resolve2(null);
+          return;
+        }
+      }
+      let done = false;
+      const finish = (value) => {
+        if (done) return;
+        done = true;
+        resolve2(value);
+      };
+      let checkClosed = null;
+      let pollKey = null;
+      const cleanup2 = () => {
+        clearTimeout(timeout);
+        if (checkClosed !== null) {
+          clearInterval(checkClosed);
+          checkClosed = null;
+        }
+        if (pollKey !== null) {
+          clearInterval(pollKey);
+          pollKey = null;
+        }
+        window.removeEventListener("message", handleMessage);
+      };
+      const timeout = window.setTimeout(() => {
+        cleanup2();
+        console.warn("Discord auth popup timed out");
+        finish(null);
+      }, 5 * 60 * 1e3);
+      const handleMessage = (event) => {
+        if (event.origin !== API_ORIGIN) return;
+        const data = event.data;
+        if (!data || data.type !== "aries_discord_auth" || !data.apiKey) return;
+        cleanup2();
+        const apiKey = String(data.apiKey);
+        const discordId = data.discordId ? String(data.discordId) : "";
+        const discordUsername = data.discordUsername ? String(data.discordUsername) : "";
+        console.log(`[Auth] Successfully authenticated as ${discordUsername} (${discordId})`);
+        setApiKey(apiKey);
+        try {
+          popup.close();
+        } catch {
+        }
+        finish(apiKey);
+      };
+      window.addEventListener("message", handleMessage);
+      if (popup) {
+        checkClosed = window.setInterval(() => {
+          if (!popup.closed) return;
+          cleanup2();
+          finish(null);
+        }, 500);
+      } else if (openedWithGm) {
+        pollKey = window.setInterval(() => {
+          const key2 = getApiKey();
+          if (!key2) return;
+          cleanup2();
+          finish(key2);
+        }, 800);
+      }
+    });
+  }
   var SSE_EVENT_NAMES = [
     "connected",
     "friend_request",
@@ -25030,8 +25200,16 @@
   }
   async function fetchJson(url2, options, label2) {
     try {
+      const apiKey = getApiKey();
+      const headers = {
+        ...options.headers
+      };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
       const res = await fetch(url2, {
         ...options,
+        headers,
         credentials: options.credentials ?? "omit"
       });
       const text = await res.text();
@@ -25049,10 +25227,15 @@
   }
   function gmGet(url2) {
     return new Promise((resolve2) => {
+      const apiKey = getApiKey();
+      const headers = {};
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
       GM_xmlhttpRequest({
         method: "GET",
         url: url2,
-        headers: {},
+        headers,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
             try {
@@ -25073,12 +25256,17 @@
   }
   function gmPost(url2, body) {
     return new Promise((resolve2) => {
+      const apiKey = getApiKey();
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
       GM_xmlhttpRequest({
         method: "POST",
         url: url2,
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers,
         data: JSON.stringify(body),
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
@@ -25100,12 +25288,17 @@
   }
   function gmPatch(url2, body) {
     return new Promise((resolve2) => {
+      const apiKey = getApiKey();
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
       GM_xmlhttpRequest({
         method: "PATCH",
         url: url2,
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers,
         data: JSON.stringify(body),
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
@@ -25127,12 +25320,17 @@
   }
   function gmDelete(url2, body) {
     return new Promise((resolve2) => {
+      const apiKey = getApiKey();
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (apiKey) {
+        headers["Authorization"] = `Bearer ${apiKey}`;
+      }
       GM_xmlhttpRequest({
         method: "DELETE",
         url: url2,
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers,
         data: body !== void 0 ? JSON.stringify(body) : void 0,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
@@ -25217,17 +25415,20 @@
     return withDiscordPollPause(() => gmDelete(url2, body));
   }
   async function sendPlayerState(payload) {
-    if (!payload) {
-      return false;
-    }
-    const { status } = await httpPost("collect-state", payload);
+    if (!hasCommunityAccess()) return false;
+    if (!payload) return false;
+    const { playerId: playerId2, avatarUrl, ...cleanPayload } = payload;
+    const { status } = await httpPost("collect-state", cleanPayload);
     if (status === 204) return true;
     if (status === 429) {
       console.error("[api] sendPlayerState rate-limited");
+    } else if (status === 401) {
+      console.error("[api] sendPlayerState unauthorized - invalid or missing API key");
     }
     return false;
   }
   async function fetchAvailableRooms(limit = 50) {
+    if (!hasCommunityAccess()) return [];
     const { data } = await httpGet("rooms", { limit });
     if (!data || !Array.isArray(data)) return [];
     return data.map((r) => ({
@@ -25243,14 +25444,14 @@
     }));
   }
   async function fetchPlayerView(playerId2) {
+    if (!hasCommunityAccess()) return null;
     if (!playerId2) return null;
-    const { status, data } = await httpGet("get-player-view", {
-      playerId: playerId2
-    });
+    const { status, data } = await httpGet("get-player-view", { playerId: playerId2 });
     if (status === 404) return null;
     return data;
   }
   async function fetchPlayersView(playerIds, options) {
+    if (!hasCommunityAccess()) return [];
     const ids = Array.from(
       new Set(
         (playerIds ?? []).map((x) => String(x).trim()).filter((x) => x.length >= 3)
@@ -25261,43 +25462,48 @@
     if (options?.sections) {
       body.sections = Array.isArray(options.sections) ? options.sections : [options.sections];
     }
-    const { status, data } = await httpPost(
-      "get-players-view",
-      body
-    );
+    const { status, data } = await httpPost("get-players-view", body);
     if (status !== 200 || !Array.isArray(data)) return [];
     return data;
   }
-  async function sendFriendRequest(fromPlayerId, toPlayerId) {
-    if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-request", {
-      fromPlayerId,
-      toPlayerId
-    });
+  async function sendFriendRequest(toPlayerId) {
+    if (!hasCommunityAccess()) return false;
+    if (!toPlayerId) return false;
+    const { status } = await httpPost("friend-request", { toPlayerId });
     if (status === 204) return true;
-    if (status === 409) {
-      console.warn("[api] friend-request conflict (already exists)");
-    }
+    if (status === 409) console.warn("[api] friend-request conflict (already exists)");
+    else if (status === 401) console.error("[api] sendFriendRequest unauthorized");
     return false;
   }
   async function respondFriendRequest(params) {
-    const { playerId: playerId2, otherPlayerId, action: action2 } = params;
-    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-respond", {
-      playerId: playerId2,
-      otherPlayerId,
-      action: action2
-    });
+    if (!hasCommunityAccess()) return false;
+    const { otherPlayerId, action: action2 } = params;
+    if (!otherPlayerId) return false;
+    const { status } = await httpPost("friend-respond", { otherPlayerId, action: action2 });
     if (status === 204) return true;
+    if (status === 401) console.error("[api] respondFriendRequest unauthorized");
     return false;
   }
+  async function cancelFriendRequest(otherPlayerId) {
+    if (!hasCommunityAccess()) return false;
+    if (!otherPlayerId) return false;
+    const { status } = await httpPost("friend-cancel", { otherPlayerId });
+    if (status === 401) console.error("[api] cancelFriendRequest unauthorized");
+    return status === 204;
+  }
+  async function removeFriend(otherPlayerId) {
+    if (!hasCommunityAccess()) return false;
+    if (!otherPlayerId) return false;
+    const { status } = await httpPost("friend-remove", { otherPlayerId });
+    if (status === 401) console.error("[api] removeFriend unauthorized");
+    return status === 204;
+  }
   async function fetchFriendsSummary(playerId2) {
-    if (!playerId2) return [];
-    const { status, data } = await httpGet("list-friends", { playerId: playerId2 });
+    if (!hasCommunityAccess()) {
+      cachedFriendsSummary = [];
+      return [];
+    }
+    const { status, data } = await httpGet("list-friends");
     if (status !== 200 || !data || !Array.isArray(data.friends)) {
       cachedFriendsSummary = [];
       return [];
@@ -25315,16 +25521,13 @@
     return [...result];
   }
   async function fetchFriendRequests(playerId2) {
-    if (!playerId2) {
-      return { playerId: "", incoming: [], outgoing: [] };
-    }
-    const { status, data } = await httpGet(
-      "list-friend-requests",
-      { playerId: playerId2 }
-    );
-    if (status !== 200 || !data) {
+    if (!hasCommunityAccess()) {
+      cachedOutgoingRequests = [];
       return { playerId: playerId2, incoming: [], outgoing: [] };
     }
+    if (!playerId2) return { playerId: "", incoming: [], outgoing: [] };
+    const { status, data } = await httpGet("list-friend-requests");
+    if (status !== 200 || !data) return { playerId: playerId2, incoming: [], outgoing: [] };
     const result = {
       playerId: data.playerId ?? playerId2,
       incoming: Array.isArray(data.incoming) ? data.incoming : [],
@@ -25333,39 +25536,8 @@
     cachedOutgoingRequests = result.outgoing;
     return result;
   }
-  async function fetchLeaderboardCoins(limit = 50, offset = 0) {
-    const { status, data } = await httpGet("leaderboard/coins", {
-      limit,
-      offset
-    });
-    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-    return data.rows;
-  }
-  async function fetchLeaderboardEggsHatched(limit = 50, offset = 0) {
-    const { status, data } = await httpGet("leaderboard/eggs-hatched", {
-      limit,
-      offset
-    });
-    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-    return data.rows;
-  }
-  async function fetchLeaderboardCoinsRank(playerId2) {
-    if (!playerId2) return null;
-    const { status, data } = await httpGet("leaderboard/coins/rank", {
-      playerId: playerId2
-    });
-    if (status !== 200 || !data) return null;
-    return data;
-  }
-  async function fetchLeaderboardEggsHatchedRank(playerId2) {
-    if (!playerId2) return null;
-    const { status, data } = await httpGet("leaderboard/eggs-hatched/rank", {
-      playerId: playerId2
-    });
-    if (status !== 200 || !data) return null;
-    return data;
-  }
   function openFriendRequestsStream(playerId2, handlers = {}) {
+    if (!hasCommunityAccess()) return null;
     if (!playerId2) return null;
     return openUnifiedEvents(playerId2, {
       onConnected: (payload) => {
@@ -25410,50 +25582,31 @@
       }
     });
   }
-  async function cancelFriendRequest(playerId2, otherPlayerId) {
-    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-cancel", {
-      playerId: playerId2,
-      otherPlayerId
-    });
-    return status === 204;
+  async function fetchLeaderboardCoins(limit = 50, offset = 0) {
+    if (!hasCommunityAccess()) return [];
+    const { status, data } = await httpGet("leaderboard/coins", { limit, offset });
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+    return data.rows;
   }
-  async function removeFriend(playerId2, otherPlayerId) {
-    if (!playerId2 || !otherPlayerId || playerId2 === otherPlayerId) {
-      return false;
-    }
-    const { status } = await httpPost("friend-remove", {
-      playerId: playerId2,
-      otherPlayerId
-    });
-    return status === 204;
+  async function fetchLeaderboardEggsHatched(limit = 50, offset = 0) {
+    if (!hasCommunityAccess()) return [];
+    const { status, data } = await httpGet("leaderboard/eggs-hatched", { limit, offset });
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+    return data.rows;
   }
-  async function searchRoomsByPlayerName(rawQuery, options) {
-    const query = rawQuery.trim();
-    const minLen = options?.minQueryLength ?? 2;
-    if (query.length < minLen) {
-      return [];
-    }
-    const limitRooms = options?.limitRooms ?? 200;
-    const qLower = query.toLowerCase();
-    const rooms = await fetchAvailableRooms(limitRooms);
-    const results = [];
-    for (const room of rooms) {
-      if (!room.userSlots || room.userSlots.length === 0) continue;
-      const matchedSlots = room.userSlots.filter((slot) => {
-        if (!slot.name) return false;
-        return slot.name.toLowerCase().includes(qLower);
-      });
-      if (matchedSlots.length > 0) {
-        results.push({
-          room,
-          matchedSlots
-        });
-      }
-    }
-    return results;
+  async function fetchLeaderboardCoinsRank(playerId2) {
+    if (!hasCommunityAccess()) return null;
+    if (!playerId2) return null;
+    const { status, data } = await httpGet("leaderboard/coins/rank", { playerId: playerId2 });
+    if (status !== 200 || !data) return null;
+    return data;
+  }
+  async function fetchLeaderboardEggsHatchedRank(playerId2) {
+    if (!hasCommunityAccess()) return null;
+    if (!playerId2) return null;
+    const { status, data } = await httpGet("leaderboard/eggs-hatched/rank", { playerId: playerId2 });
+    if (status !== 200 || !data) return null;
+    return data;
   }
   async function fetchModPlayers(options) {
     const { status, data } = await httpGet("list-mod-players", {
@@ -25465,13 +25618,16 @@
     return data;
   }
   async function createGroup(params) {
+    if (!hasCommunityAccess()) return null;
     const { ownerId, name } = params;
     if (!ownerId || !name) return null;
     const { status, data } = await httpPost("groups", { ownerId, name });
     if (status >= 200 && status < 300 && data) return data;
+    if (status === 401) console.error("[api] createGroup unauthorized");
     return null;
   }
   async function fetchGroups(playerId2) {
+    if (!hasCommunityAccess()) return [];
     if (!playerId2) return [];
     const { status, data } = await httpGet(
       "groups",
@@ -25483,63 +25639,75 @@
     return [];
   }
   async function fetchGroupDetails(groupId, playerId2) {
+    if (!hasCommunityAccess()) return null;
     if (!groupId || !playerId2) return null;
     const { status, data } = await httpGet(`groups/${groupId}`, { playerId: playerId2 });
     if (status !== 200 || !data) return null;
     return data;
   }
   async function updateGroupName(params) {
-    const { groupId, playerId: playerId2, name } = params;
-    if (!groupId || !playerId2 || !name) return false;
-    const { status } = await httpPatch(`groups/${groupId}`, { playerId: playerId2, name });
+    if (!hasCommunityAccess()) return false;
+    const { groupId, name } = params;
+    if (!groupId || !name) return false;
+    const { status } = await httpPatch(`groups/${groupId}`, { name });
+    if (status === 401) console.error("[api] updateGroupName unauthorized");
     return status >= 200 && status < 300;
   }
   async function deleteGroup(params) {
-    const { groupId, playerId: playerId2 } = params;
-    if (!groupId || !playerId2) return false;
-    const { status } = await httpDelete(`groups/${groupId}`, { playerId: playerId2 });
+    if (!hasCommunityAccess()) return false;
+    const { groupId } = params;
+    if (!groupId) return false;
+    const { status } = await httpDelete(`groups/${groupId}`, {});
+    if (status === 401) console.error("[api] deleteGroup unauthorized");
     return status >= 200 && status < 300;
   }
   async function addGroupMember(params) {
-    const { groupId, playerId: playerId2, memberId } = params;
-    if (!groupId || !playerId2 || !memberId) return false;
-    const { status } = await httpPost(`groups/${groupId}/members`, { playerId: playerId2, memberId });
+    if (!hasCommunityAccess()) return false;
+    const { groupId, memberId } = params;
+    if (!groupId || !memberId) return false;
+    const { status } = await httpPost(`groups/${groupId}/members`, { memberId });
+    if (status === 401) console.error("[api] addGroupMember unauthorized");
     return status >= 200 && status < 300;
   }
   async function removeGroupMember(params) {
-    const { groupId, playerId: playerId2, memberId } = params;
-    if (!groupId || !playerId2 || !memberId) return false;
-    const { status } = await httpDelete(`groups/${groupId}/members/${memberId}`, { playerId: playerId2 });
+    if (!hasCommunityAccess()) return false;
+    const { groupId, memberId } = params;
+    if (!groupId || !memberId) return false;
+    const { status } = await httpDelete(`groups/${groupId}/members/${memberId}`, {});
+    if (status === 401) console.error("[api] removeGroupMember unauthorized");
     return status >= 200 && status < 300;
   }
   async function leaveGroup(params) {
-    const { groupId, playerId: playerId2 } = params;
-    if (!groupId || !playerId2) return false;
-    const { status } = await httpPost(`groups/${groupId}/leave`, { playerId: playerId2 });
+    if (!hasCommunityAccess()) return false;
+    const { groupId } = params;
+    if (!groupId) return false;
+    const { status } = await httpPost(`groups/${groupId}/leave`, {});
+    if (status === 401) console.error("[api] leaveGroup unauthorized");
     return status >= 200 && status < 300;
   }
   async function sendGroupMessage(params) {
-    const { groupId, playerId: playerId2, text } = params;
-    if (!groupId || !playerId2 || !text) return null;
-    const { status, data } = await httpPost(`groups/${groupId}/messages`, { playerId: playerId2, text });
+    if (!hasCommunityAccess()) return null;
+    const { groupId, text } = params;
+    if (!groupId || !text) return null;
+    const { status, data } = await httpPost(`groups/${groupId}/messages`, { text });
     if (status >= 200 && status < 300 && data) return data;
+    if (status === 401) console.error("[api] sendGroupMessage unauthorized");
     return null;
   }
   async function fetchGroupMessages(groupId, playerId2, options) {
+    if (!hasCommunityAccess()) return [];
     if (!groupId || !playerId2) return [];
-    const { status, data } = await httpGet(
-      `groups/${groupId}/messages`,
-      {
-        playerId: playerId2,
-        afterId: options?.afterId,
-        beforeId: options?.beforeId,
-        limit: options?.limit
-      }
-    );
+    const { status, data } = await httpGet(`groups/${groupId}/messages`, {
+      playerId: playerId2,
+      afterId: options?.afterId,
+      beforeId: options?.beforeId,
+      limit: options?.limit
+    });
     if (status !== 200 || !Array.isArray(data)) return [];
     return data;
   }
   function openGroupsStream(playerId2, handlers = {}) {
+    if (!hasCommunityAccess()) return null;
     if (!playerId2) return null;
     return openUnifiedEvents(playerId2, {
       onConnected: (payload) => {
@@ -25573,6 +25741,7 @@
     });
   }
   function openMessagesStream(playerId2, handlers = {}) {
+    if (!hasCommunityAccess()) return null;
     if (!playerId2) return null;
     return openUnifiedEvents(playerId2, {
       onConnected: (payload) => {
@@ -25597,6 +25766,7 @@
     });
   }
   function openPresenceStream(playerId2, onPresence) {
+    if (!hasCommunityAccess()) return null;
     if (!playerId2) return null;
     return openUnifiedEvents(playerId2, {
       onEvent: (eventName, data) => {
@@ -25607,19 +25777,20 @@
     });
   }
   async function sendMessage(params) {
-    const { fromPlayerId, toPlayerId, roomId, text } = params;
-    if (!fromPlayerId || !toPlayerId || !roomId || !text) return null;
-    if (fromPlayerId === toPlayerId) return null;
+    if (!hasCommunityAccess()) return null;
+    const { toPlayerId, roomId, text } = params;
+    if (!toPlayerId || !roomId || !text) return null;
     const { status, data } = await httpPost("messages/send", {
-      fromPlayerId,
       toPlayerId,
       roomId,
       text
     });
     if (status >= 200 && status < 300 && data) return data;
+    if (status === 401) console.error("[api] sendMessage unauthorized - invalid or missing API key");
     return null;
   }
   async function fetchMessagesThread(playerId2, otherPlayerId, options) {
+    if (!hasCommunityAccess()) return [];
     if (!playerId2 || !otherPlayerId) return [];
     const { status, data } = await httpGet("messages/thread", {
       playerId: playerId2,
@@ -25632,13 +25803,17 @@
     return data;
   }
   async function markMessagesRead(params) {
-    const { playerId: playerId2, otherPlayerId, upToId } = params;
-    if (!playerId2 || !otherPlayerId || !upToId) return 0;
-    const { status, data } = await httpPost(
-      "messages/read",
-      { playerId: playerId2, otherPlayerId, upToId }
-    );
-    if (status !== 200 || !data) return 0;
+    if (!hasCommunityAccess()) return 0;
+    const { otherPlayerId, upToId } = params;
+    if (!otherPlayerId || !upToId) return 0;
+    const { status, data } = await httpPost("messages/read", {
+      otherPlayerId,
+      upToId
+    });
+    if (status !== 200 || !data) {
+      if (status === 401) console.error("[api] markMessagesRead unauthorized");
+      return 0;
+    }
     return data.updated ?? 0;
   }
 
@@ -29821,6 +29996,17 @@
         if (!this.myId) return;
         void this.loadFriends(true);
       });
+      __publicField(this, "handleAuthUpdate", () => {
+        setTimeout(() => {
+          this.resetStream();
+          this.resetPresenceStream();
+          this.loadFriends(true);
+          this.renderFriendList({ preserveScroll: true });
+          if (this.selectedId) {
+            this.renderThread({ preserveScroll: true, scrollToBottom: false });
+          }
+        }, 100);
+      });
       __publicField(this, "handleFriendRemoved", (event) => {
         const playerId2 = event.detail?.playerId;
         if (!playerId2) return;
@@ -29858,6 +30044,7 @@
       );
       window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
       window.addEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved);
+      window.addEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate);
       this.keyTrapCleanup = installInputKeyTrap(this.panel, {
         onEnter: () => {
           void this.handleSendMessage();
@@ -29938,6 +30125,7 @@
       try {
         window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh);
         window.removeEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved);
+        window.removeEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate);
       } catch {
       }
       try {
@@ -32481,6 +32669,7 @@
       root,
       show: () => messages.setActive(true),
       hide: () => messages.setActive(false),
+      refresh: () => messages.refresh(),
       openConversation: (playerId2) => messages.openConversation(playerId2),
       destroy: () => messages.destroy()
     };
@@ -32924,6 +33113,12 @@
       unsubscribePlayerId = unsub;
     }).catch(() => {
     });
+    const handleAuthUpdate = () => {
+      setTimeout(() => {
+        void loadFriends({ force: true });
+      }, 100);
+    };
+    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     void loadFriends();
     return {
       root,
@@ -32933,6 +33128,13 @@
         unsubscribeSettings();
         try {
           unsubscribePlayerId?.();
+        } catch {
+        }
+        try {
+          window.removeEventListener(
+            "qws-friend-overlay-auth-update",
+            handleAuthUpdate
+          );
         } catch {
         }
       }
@@ -33213,6 +33415,13 @@
       unsubscribePlayerId = unsub;
     }).catch(() => {
     });
+    const handleAuthUpdate = () => {
+      setTimeout(() => {
+        resetStream();
+        void loadRequests({ force: true });
+      }, 100);
+    };
+    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     return {
       root,
       refresh: (opts) => loadRequests(opts),
@@ -33220,6 +33429,13 @@
         destroyed = true;
         try {
           unsubscribePlayerId?.();
+        } catch {
+        }
+        try {
+          window.removeEventListener(
+            "qws-friend-overlay-auth-update",
+            handleAuthUpdate
+          );
         } catch {
         }
         if (stream) {
@@ -34931,15 +35147,15 @@
       joinRoomId = roomLabelRaw || null;
       const rawPlayerCount = roomInfo.playersCount ?? roomInfo.players_count ?? roomInfo.players ?? null;
       const playersCount = rawPlayerCount != null && Number.isFinite(Number(rawPlayerCount)) ? Math.floor(Number(rawPlayerCount)) : null;
-      const ROOM_CAPACITY = 6;
-      const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY - playersCount) : null;
+      const ROOM_CAPACITY2 = 6;
+      const seatsLeft = typeof playersCount === "number" ? Math.max(0, ROOM_CAPACITY2 - playersCount) : null;
       const isOnline = Boolean(friend.isOnline);
       const isDiscordTarget = RoomService.isDiscordActivity();
       const canJoinRoom = Boolean(joinRoomId) && !isDiscordTarget && !roomIsPrivate && isOnline && (playersCount == null || seatsLeft === null || seatsLeft > 0);
-      const joinButtonTitle = roomIsPrivate ? "Room is private" : !isOnline ? "Player is offline" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= ROOM_CAPACITY ? "Room is full" : "Unable to join this room";
+      const joinButtonTitle = roomIsPrivate ? "Room is private" : !isOnline ? "Player is offline" : isDiscordTarget ? "Joining rooms is disabled on Discord" : playersCount !== null && playersCount >= ROOM_CAPACITY2 ? "Room is full" : "Unable to join this room";
       setButtonEnabled(joinBtn, canJoinRoom);
       joinBtn.title = canJoinRoom ? "Join room" : joinButtonTitle;
-      const countLabel = isOnline && typeof playersCount === "number" ? `${playersCount}/${ROOM_CAPACITY}` : "";
+      const countLabel = isOnline && typeof playersCount === "number" ? `${playersCount}/${ROOM_CAPACITY2}` : "";
       const joinLabel = countLabel ? `Join room (${countLabel})` : "Join room";
       if (joinBtnLabel) {
         joinBtnLabel.textContent = joinLabel;
@@ -35020,6 +35236,12 @@
       presenceUnsub = unsub;
     }).catch(() => {
     });
+    const handleAuthUpdate = () => {
+      setTimeout(() => {
+        resetPresenceStream(currentPlayerId);
+      }, 100);
+    };
+    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
     return {
       root,
       show: () => {
@@ -35029,9 +35251,17 @@
       },
       refresh: () => {
         void friendsTab.refresh({ force: true });
+        void requestsTab.refresh({ force: true });
       },
       destroy: () => {
         window.removeEventListener("qws-friend-info-open", handleFriendOpen);
+        try {
+          window.removeEventListener(
+            "qws-friend-overlay-auth-update",
+            handleAuthUpdate
+          );
+        } catch {
+        }
         friendsTab.destroy();
         addTab.destroy();
         requestsTab.destroy();
@@ -35047,6 +35277,276 @@
           presenceStream = null;
         }
         previewOverlay.remove();
+      }
+    };
+  }
+
+  // src/ui/menus/friendOverlay/tabs/roomTab.ts
+  var ROOM_CAPACITY = 6;
+  var DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/i;
+  var getRoomCategory = (roomId) => DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
+  var normalizeRooms = (rooms) => {
+    const now2 = Date.now();
+    return rooms.filter((room) => !room.isPrivate && Boolean(room.id)).map((room) => {
+      const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
+      const players = Math.max(0, Math.min(ROOM_CAPACITY, rawCount));
+      const timestamp = Number.isFinite(Date.parse(room.lastUpdatedAt)) ? Date.parse(room.lastUpdatedAt) : now2;
+      return {
+        id: room.id,
+        category: getRoomCategory(room.id),
+        players,
+        capacity: ROOM_CAPACITY,
+        isFull: players >= ROOM_CAPACITY,
+        lastUpdatedAt: timestamp,
+        userSlots: Array.isArray(room.userSlots) ? room.userSlots.map((slot) => ({
+          name: slot.name,
+          avatarUrl: slot.avatarUrl ?? null
+        })) : []
+      };
+    }).sort((a, b) => {
+      const priority = (room) => {
+        if (room.players === 5) return 0;
+        if (room.players === 6) return 1;
+        if (room.players === 4) return 2;
+        if (room.players === 3) return 3;
+        if (room.players === 2) return 4;
+        if (room.players === 1) return 5;
+        return 6;
+      };
+      const diff = priority(a) - priority(b);
+      if (diff !== 0) return diff;
+      if (b.players !== a.players) return b.players - a.players;
+      return b.lastUpdatedAt - a.lastUpdatedAt;
+    });
+  };
+  var createAvatar = (slot) => {
+    const avatar = document.createElement("div");
+    avatar.className = "qws-fo-room-avatar";
+    if (!slot) {
+      avatar.classList.add("is-empty");
+      avatar.textContent = "";
+      return avatar;
+    }
+    const label2 = slot.name?.trim() || "?";
+    avatar.title = slot.name?.trim() || "Unknown player";
+    if (slot.avatarUrl) {
+      const img = document.createElement("img");
+      img.alt = label2;
+      img.decoding = "async";
+      setImageSafe(img, slot.avatarUrl);
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = label2.slice(0, 1).toUpperCase();
+    }
+    return avatar;
+  };
+  var formatRefreshLabel = (date) => {
+    if (!date) return "Last refresh: \u2014";
+    return `Last refresh: ${date.toLocaleString()}`;
+  };
+  function createRoomTab() {
+    const root = document.createElement("div");
+    root.className = "qws-fo-tab qws-fo-tab-room";
+    const layout = document.createElement("div");
+    layout.className = "qws-fo-room";
+    const shell = document.createElement("div");
+    shell.className = "qws-fo-room-shell";
+    const body = document.createElement("div");
+    body.className = "qws-fo-room-body";
+    const panel = document.createElement("div");
+    panel.className = "qws-fo-room-panel active";
+    const header = document.createElement("div");
+    header.className = "qws-fo-room-header";
+    const headerTitle = document.createElement("div");
+    headerTitle.className = "qws-fo-room-header-title";
+    headerTitle.textContent = "Public rooms";
+    const headerControls = document.createElement("div");
+    headerControls.className = "qws-fo-room-header-controls";
+    const filterWrap = document.createElement("div");
+    filterWrap.className = "qws-fo-room-filter";
+    const filterLabel = document.createElement("span");
+    filterLabel.textContent = "Players";
+    const filterSelect = document.createElement("select");
+    filterSelect.className = "qws-fo-room-select";
+    const filterOptions = [
+      { value: "5", label: "5 players" },
+      { value: "4", label: "4 players" },
+      { value: "3-1", label: "3-1 players" },
+      { value: "all", label: "All" }
+    ];
+    filterOptions.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt.value;
+      option.textContent = opt.label;
+      filterSelect.appendChild(option);
+    });
+    filterWrap.append(filterLabel, filterSelect);
+    const refreshBtn = createButton2("Refresh", { size: "sm", variant: "ghost", icon: "\u{1F504}" });
+    refreshBtn.classList.add("qws-fo-room-refresh");
+    headerControls.append(filterWrap, refreshBtn);
+    header.append(headerTitle, headerControls);
+    const discordNotice = document.createElement("div");
+    discordNotice.className = "qws-fo-room-alert";
+    discordNotice.textContent = "You are using Discord: joining rooms is disabled. Open the website to join.";
+    const listWrap = document.createElement("div");
+    listWrap.className = "qws-fo-room-list";
+    const list = document.createElement("div");
+    list.className = "qws-fo-room-list-inner";
+    listWrap.appendChild(list);
+    const footer = document.createElement("div");
+    footer.className = "qws-fo-room-footer";
+    const footerLeft = document.createElement("span");
+    footerLeft.textContent = "powered by aries mod";
+    const footerRight = document.createElement("span");
+    footerRight.textContent = formatRefreshLabel(null);
+    footer.append(footerLeft, footerRight);
+    panel.append(header);
+    if (RoomService.isDiscordActivity()) {
+      panel.appendChild(discordNotice);
+    }
+    panel.append(listWrap, footer);
+    body.appendChild(panel);
+    shell.append(body);
+    layout.appendChild(shell);
+    root.appendChild(layout);
+    let destroyed = false;
+    let requestCounter = 0;
+    let isRefreshing = false;
+    let currentRooms = [];
+    filterSelect.value = "5";
+    let selectedFilter = filterSelect.value;
+    let lastRefresh = null;
+    const setListMessage = (message) => {
+      list.innerHTML = "";
+      const empty = document.createElement("div");
+      empty.className = "qws-fo-room-empty";
+      empty.textContent = message;
+      list.appendChild(empty);
+    };
+    const updateFooter = () => {
+      footerRight.textContent = formatRefreshLabel(lastRefresh);
+    };
+    const renderRooms = () => {
+      list.innerHTML = "";
+      const visible = currentRooms.filter((room) => {
+        switch (selectedFilter) {
+          case "5":
+            return room.players === 5;
+          case "4":
+            return room.players === 4;
+          case "3-1":
+            return room.players >= 1 && room.players <= 3;
+          case "all":
+          default:
+            return true;
+        }
+      });
+      if (!visible.length) {
+        setListMessage(currentRooms.length ? "No rooms match this filter." : "No public rooms available.");
+        return;
+      }
+      const isDiscord = RoomService.isDiscordActivity();
+      for (const room of visible) {
+        const card = document.createElement("div");
+        card.className = "qws-fo-room-card";
+        const badge = document.createElement("span");
+        badge.className = "qws-fo-room-badge";
+        badge.classList.add(room.category === "Discord" ? "is-discord" : "is-web");
+        badge.textContent = room.category;
+        const id = document.createElement("div");
+        id.className = "qws-fo-room-id";
+        id.textContent = room.id;
+        id.title = room.id;
+        const avatars = document.createElement("div");
+        avatars.className = "qws-fo-room-avatars";
+        const slots = room.userSlots.slice(0, ROOM_CAPACITY);
+        for (const slot of slots) {
+          avatars.appendChild(createAvatar(slot));
+        }
+        for (let i = slots.length; i < ROOM_CAPACITY; i++) {
+          avatars.appendChild(createAvatar(null));
+        }
+        const count = document.createElement("div");
+        count.className = "qws-fo-room-count";
+        count.textContent = `${room.players}/${room.capacity}`;
+        const joinBtn = createButton2("Join", { size: "sm", variant: "primary" });
+        joinBtn.classList.add("qws-fo-room-join");
+        const canJoin = !isDiscord && !room.isFull;
+        setButtonEnabled(joinBtn, canJoin);
+        joinBtn.title = canJoin ? "Join room" : isDiscord ? "Joining rooms is disabled on Discord" : room.isFull ? "Room is full" : "Unable to join this room";
+        joinBtn.addEventListener("click", () => {
+          if (!canJoin) return;
+          RoomService.joinPublicRoom({ idRoom: room.id });
+        });
+        const actions = document.createElement("div");
+        actions.className = "qws-fo-room-actions";
+        actions.append(count, joinBtn);
+        card.append(badge, id, avatars, actions);
+        list.appendChild(card);
+      }
+    };
+    const updateRefreshState = () => {
+      const enabled = !destroyed && !isRefreshing;
+      setButtonEnabled(refreshBtn, enabled);
+      refreshBtn.setAttribute("aria-busy", isRefreshing ? "true" : "false");
+    };
+    const refreshRooms = async () => {
+      if (destroyed) return;
+      const reqId = ++requestCounter;
+      isRefreshing = true;
+      updateRefreshState();
+      setListMessage("Loading rooms...");
+      try {
+        const rooms = await fetchAvailableRooms(100);
+        if (destroyed || reqId !== requestCounter) return;
+        currentRooms = normalizeRooms(rooms);
+        lastRefresh = /* @__PURE__ */ new Date();
+        updateFooter();
+        renderRooms();
+      } catch (error) {
+        if (destroyed || reqId !== requestCounter) return;
+        setListMessage(`Failed to load rooms: ${String(error?.message || error)}`);
+      } finally {
+        if (reqId === requestCounter) {
+          isRefreshing = false;
+          updateRefreshState();
+        }
+      }
+    };
+    filterSelect.addEventListener("change", () => {
+      selectedFilter = filterSelect.value;
+      renderRooms();
+    });
+    refreshBtn.addEventListener("click", () => {
+      void refreshRooms();
+    });
+    const handleAuthUpdate = () => {
+      setTimeout(() => {
+        void refreshRooms();
+      }, 100);
+    };
+    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
+    updateRefreshState();
+    setListMessage("Loading rooms...");
+    return {
+      root,
+      show: () => {
+        void refreshRooms();
+      },
+      hide: () => {
+      },
+      refresh: () => {
+        void refreshRooms();
+      },
+      destroy: () => {
+        destroyed = true;
+        try {
+          window.removeEventListener(
+            "qws-friend-overlay-auth-update",
+            handleAuthUpdate
+          );
+        } catch {
+        }
       }
     };
   }
@@ -36265,6 +36765,25 @@
     const privacyCard = createCard("Privacy");
     privacyCard.body.style.display = "grid";
     privacyCard.body.style.gap = "12px";
+    const privacyHint = document.createElement("div");
+    privacyHint.textContent = "These settings control what your friends can see and whether you appear on leaderboards.";
+    privacyHint.style.fontSize = "12px";
+    privacyHint.style.fontWeight = "400";
+    privacyHint.style.textTransform = "none";
+    privacyHint.style.letterSpacing = "normal";
+    privacyHint.style.opacity = "0.7";
+    const privacyHead = privacyCard.root.querySelector(".qws-fo-card__head");
+    if (privacyHead) {
+      const titleText = privacyHead.textContent ?? "Privacy";
+      privacyHead.textContent = "";
+      privacyHead.style.display = "grid";
+      privacyHead.style.gap = "4px";
+      const titleEl = document.createElement("div");
+      titleEl.textContent = titleText;
+      privacyHead.append(titleEl, privacyHint);
+    } else {
+      privacyCard.root.insertBefore(privacyHint, privacyCard.body);
+    }
     const applyPatch = (patch2) => patchFriendSettings(patch2);
     const buildToggleRow = (label2, checked, description, onToggle) => {
       const row = document.createElement("div");
@@ -36326,43 +36845,89 @@
     );
     privacyCard.body.append(
       buildToggleRow(
-        "Friends can view my garden",
+        "Garden",
         settings.showGarden,
         void 0,
         (next) => applyPatch({ showGarden: next })
       ),
       buildToggleRow(
-        "Friends can view my inventory",
+        "Inventory",
         settings.showInventory,
         void 0,
         (next) => applyPatch({ showInventory: next })
       ),
       buildToggleRow(
-        "Friends can see my coins",
+        "Coins",
         settings.showCoins,
         void 0,
         (next) => applyPatch({ showCoins: next })
       ),
       buildToggleRow(
-        "Friends can see my activity log",
+        "Activity",
         settings.showActivityLog,
         void 0,
         (next) => applyPatch({ showActivityLog: next })
       ),
       buildToggleRow(
-        "Friends can view my journal",
+        "Journal",
         settings.showJournal,
         void 0,
         (next) => applyPatch({ showJournal: next })
       ),
       buildToggleRow(
-        "Friends can see my stats",
+        "Stats",
         settings.showStats,
         void 0,
         (next) => applyPatch({ showStats: next })
       )
     );
-    layout.append(profileCard.root, globalCard.root, privacyCard.root);
+    const accessCard = createCard("Community access");
+    accessCard.body.style.display = "grid";
+    accessCard.body.style.gap = "8px";
+    accessCard.body.style.justifyItems = "center";
+    accessCard.body.style.textAlign = "center";
+    const accessHead = accessCard.root.querySelector(".qws-fo-card__head");
+    if (accessHead) {
+      accessHead.style.textAlign = "center";
+    }
+    const accessNote = document.createElement("div");
+    accessNote.textContent = "Disconnecting will disable Community Hub features until you authenticate again.";
+    accessNote.style.fontSize = "12px";
+    accessNote.style.opacity = "0.7";
+    const accessStatus = document.createElement("div");
+    accessStatus.style.fontSize = "12px";
+    accessStatus.style.opacity = "0.75";
+    const disconnectBtn = document.createElement("button");
+    disconnectBtn.type = "button";
+    disconnectBtn.className = "qws-fo-btn qws-fo-btn--danger";
+    disconnectBtn.textContent = "Disconnect Discord";
+    const updateAccessState = () => {
+      if (hasApiKey()) {
+        accessStatus.textContent = "";
+        disconnectBtn.disabled = false;
+        disconnectBtn.classList.remove("is-disabled");
+        disconnectBtn.setAttribute("aria-disabled", "false");
+      } else {
+        accessStatus.textContent = "No Discord connection found.";
+        disconnectBtn.disabled = true;
+        disconnectBtn.classList.add("is-disabled");
+        disconnectBtn.setAttribute("aria-disabled", "true");
+      }
+    };
+    disconnectBtn.addEventListener("click", () => {
+      clearApiKey();
+      setDeclinedApiAuth(true);
+      disconnectBtn.disabled = true;
+      disconnectBtn.classList.add("is-disabled");
+      disconnectBtn.setAttribute("aria-disabled", "true");
+      accessStatus.textContent = "";
+      window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+    });
+    updateAccessState();
+    const handleAuthUpdate = () => updateAccessState();
+    window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate);
+    accessCard.body.append(accessNote, accessStatus, disconnectBtn);
+    layout.append(profileCard.root, globalCard.root, privacyCard.root, accessCard.root);
     root.appendChild(layout);
     const updateProfileInfo = async () => {
       const [resolved, playerInfo] = await Promise.all([
@@ -36407,6 +36972,13 @@
       destroy: () => {
         unsubscribeSettings();
         try {
+          window.removeEventListener(
+            "qws-friend-overlay-auth-update",
+            handleAuthUpdate
+          );
+        } catch {
+        }
+        try {
           unsubscribePlayerId?.();
         } catch {
         }
@@ -36416,6 +36988,464 @@
         }
       }
     };
+  }
+
+  // src/utils/version.ts
+  var REPO_OWNER = "Ariedam64";
+  var REPO_NAME = "MagicGarden-modMenu";
+  var REPO_BRANCH = "main";
+  var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
+  var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
+  var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
+  async function fetchTextWithFetch2(url2, options) {
+    const response = await fetch(url2, { cache: "no-store", ...options });
+    if (!response.ok) {
+      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  }
+  async function fetchTextWithGM2(url2, options) {
+    return new Promise((resolve2, reject) => {
+      const xhr = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
+      if (!xhr) return reject(new Error("GM_xmlhttpRequest not available"));
+      xhr({
+        method: "GET",
+        url: url2,
+        headers: options?.headers,
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300) resolve2(res.responseText);
+          else reject(new Error(`GM_xhr failed: ${res.status}`));
+        },
+        onerror: (e) => reject(e)
+      });
+    });
+  }
+  async function fetchText2(url2, options) {
+    const preferGM = isDiscordSurface();
+    const hasGM = typeof GM_xmlhttpRequest === "function" || typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function";
+    if (preferGM && hasGM) {
+      return await fetchTextWithGM2(url2, options);
+    }
+    try {
+      return await fetchTextWithFetch2(url2, options);
+    } catch (error) {
+      if (hasGM) {
+        return await fetchTextWithGM2(url2, options);
+      }
+      throw error;
+    }
+  }
+  async function fetchLatestCommitSha() {
+    try {
+      const responseText = await fetchText2(COMMITS_API_URL, {
+        headers: { Accept: "application/vnd.github+json" }
+      });
+      const data = JSON.parse(responseText);
+      if (data && typeof data.sha === "string" && data.sha.trim().length > 0) {
+        return data.sha.trim();
+      }
+    } catch (error) {
+      console.warn("[MagicGarden] Failed to resolve latest commit SHA:", error);
+    }
+    return null;
+  }
+  async function fetchScriptSource() {
+    const commitSha = await fetchLatestCommitSha();
+    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
+    return await fetchText2(scriptUrl);
+  }
+  async function fetchRemoteVersion() {
+    try {
+      const scriptSource = await fetchScriptSource();
+      const meta = extractUserscriptMetadata(scriptSource);
+      if (!meta) {
+        throw new Error("Metadata block not found in remote script");
+      }
+      const version = meta.get("version")?.[0];
+      const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
+      return {
+        version,
+        download
+      };
+    } catch (error) {
+      console.error("Unable to retrieve remote version:", error);
+      return null;
+    }
+  }
+  function extractUserscriptMetadata(source) {
+    const headerMatch = source.match(/\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/);
+    if (!headerMatch) {
+      return null;
+    }
+    const metaBlock = headerMatch[1];
+    const entries = metaBlock.matchAll(/^\/\/\s*@([^\s]+)\s+(.+)$/gm);
+    const meta = /* @__PURE__ */ new Map();
+    for (const [, rawKey, rawValue] of entries) {
+      const key2 = rawKey.trim().toLowerCase();
+      const value = rawValue.trim();
+      if (!key2) continue;
+      const current = meta.get(key2);
+      if (current) {
+        current.push(value);
+      } else {
+        meta.set(key2, [value]);
+      }
+    }
+    return meta;
+  }
+  function getLocalVersion() {
+    if (typeof GM_info !== "undefined" && GM_info?.script?.version) {
+      return GM_info.script.version;
+    }
+    return void 0;
+  }
+
+  // src/utils/payload.ts
+  var DEFAULT_PRIVACY = {
+    showProfile: true,
+    showGarden: true,
+    showInventory: true,
+    showCoins: true,
+    showActivityLog: true,
+    showJournal: true,
+    hideRoomFromPublicList: false,
+    showStats: true
+  };
+  function clampPlayers(n) {
+    const value = Math.floor(Number(n));
+    if (!Number.isFinite(value)) return 1;
+    return Math.max(1, Math.min(6, value));
+  }
+  function findPlayersDeep2(state3) {
+    if (!state3 || typeof state3 !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state3];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const key2 of Object.keys(cur)) {
+        const value = cur[key2];
+        if (Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === "object")) {
+          const looksLikePlayer = value.some(
+            (item) => "id" in item && "name" in item
+          );
+          if (looksLikePlayer && /player/i.test(key2)) {
+            out.push(...value);
+          }
+        }
+        if (value && typeof value === "object") {
+          stack.push(value);
+        }
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const entry of out) {
+      if (entry?.id) {
+        byId.set(String(entry.id), entry);
+      }
+    }
+    return [...byId.values()];
+  }
+  function getPlayersArray(state3) {
+    const direct = state3?.fullState?.data?.players ?? state3?.data?.players ?? state3?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep2(state3);
+  }
+  function getSlotsArray(state3) {
+    const raw = state3?.child?.data?.userSlots ?? state3?.fullState?.child?.data?.userSlots ?? state3?.data?.userSlots;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object") {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
+        const ai = Number(a[0]);
+        const bi = Number(b[0]);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([, value]) => value);
+    }
+    return [];
+  }
+  function selectSlot(slots, options) {
+    if (!Array.isArray(slots) || slots.length === 0) return null;
+    const { slotIndex, playerId: playerId2 } = options;
+    if (typeof slotIndex === "number" && Number.isInteger(slotIndex)) {
+      const candidate = slots[slotIndex];
+      if (candidate && typeof candidate === "object") return candidate;
+    }
+    const normalizedId = playerId2 != null ? String(playerId2) : null;
+    if (normalizedId) {
+      for (const slot of slots) {
+        if (!slot || typeof slot !== "object") continue;
+        if (String(
+          slot.databaseUserId ?? slot.playerId ?? slot.data?.databaseUserId ?? slot.data?.playerId ?? ""
+        ) === normalizedId) {
+          return slot;
+        }
+      }
+    }
+    for (const slot of slots) {
+      if (!slot || typeof slot !== "object") continue;
+      if (slot.playerId || slot.databaseUserId || slot.data) return slot;
+    }
+    return null;
+  }
+  function resolvePlayer(players, slot, options) {
+    const candidate = options.playerId ?? slot?.playerId ?? slot?.databaseUserId ?? slot?.data?.playerId ?? slot?.data?.databaseUserId ?? null;
+    const normalized = candidate != null ? String(candidate) : null;
+    if (normalized) {
+      for (const player2 of players) {
+        if (!player2 || typeof player2 !== "object") continue;
+        if (String(player2.id ?? "") === normalized) return player2;
+        if (String(player2.databaseUserId ?? "") === normalized) return player2;
+      }
+    }
+    return players[0] ?? null;
+  }
+  function normalizeActivityLog(slotData) {
+    const logs = slotData?.activityLog ?? slotData?.activityLogs ?? slotData?.activitylog;
+    return Array.isArray(logs) ? logs : null;
+  }
+  async function buildPlayerStatePayload(options = {}) {
+    try {
+      const state3 = await Atoms.root.state.get();
+      if (!state3 || typeof state3 !== "object") return null;
+      const settings = getFriendSettings();
+      const privacy = {
+        showProfile: DEFAULT_PRIVACY.showProfile,
+        showGarden: settings.showGarden,
+        showInventory: settings.showInventory,
+        showCoins: settings.showCoins,
+        showActivityLog: settings.showActivityLog,
+        showJournal: settings.showJournal,
+        showStats: settings.showStats,
+        hideRoomFromPublicList: settings.hideRoomFromPublicList
+      };
+      const players = getPlayersArray(state3);
+      const normalizedPlayers = Array.isArray(players) ? players : [];
+      const slots = getSlotsArray(state3).filter((slot2) => !!slot2);
+      const coinsById = /* @__PURE__ */ new Map();
+      for (const slot2 of slots) {
+        const slotData2 = slot2?.data ?? slot2;
+        const candidateId = slotData2?.databaseUserId ?? slot2?.databaseUserId ?? slotData2?.playerId ?? slot2?.playerId ?? null;
+        if (candidateId == null) continue;
+        const normalizedSlotId = String(candidateId);
+        const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? slotData2?.coins ?? slot2?.coins ?? null;
+        const coinValue2 = Number(coinCandidate2);
+        coinsById.set(
+          normalizedSlotId,
+          Number.isFinite(coinValue2) ? coinValue2 : null
+        );
+      }
+      const userSlots = normalizedPlayers.map((player2) => {
+        const playerDatabaseId = player2?.databaseUserId ?? player2?.playerId ?? player2?.id ?? null;
+        const normalizedPlayerId = playerDatabaseId != null ? String(playerDatabaseId) : null;
+        const slotId = normalizedPlayerId ?? (typeof player2?.id === "string" || typeof player2?.id === "number" ? String(player2.id) : null);
+        const coins = slotId ? coinsById.get(slotId) ?? null : null;
+        return {
+          name: typeof player2?.name === "string" ? player2.name : null,
+          discordAvatarUrl: typeof player2?.discordAvatarUrl === "string" ? player2.discordAvatarUrl : null,
+          playerId: slotId,
+          coins
+        };
+      });
+      const myDatabaseUserId = await playerDatabaseUserId.get();
+      if (slots.length === 0) return null;
+      const slot = selectSlot(slots, {
+        ...options,
+        playerId: options.playerId ?? myDatabaseUserId ?? void 0
+      });
+      if (!slot || typeof slot !== "object") return null;
+      const slotData = slot.data ?? slot;
+      if (!slotData || typeof slotData !== "object") return null;
+      const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
+      const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
+      const avatarRaw = resolvedPlayer?.cosmetic?.avatar ?? slotData?.cosmetic?.avatar ?? slot?.cosmetic?.avatar ?? null;
+      const avatar = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
+      const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
+      const coinValue = Number(coinCandidate);
+      const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
+      const roomId = state3?.data?.roomId ?? state3?.fullState?.data?.roomId ?? state3?.roomId ?? null;
+      let playersCount = normalizedPlayers.length > 0 ? normalizedPlayers.length : slots.length;
+      try {
+        const atomValue = await Atoms.server.numPlayers.get();
+        playersCount = clampPlayers(atomValue);
+      } catch {
+      }
+      const persistedActivityLog = readAriesPath("activityLog.history");
+      const activityLog = Array.isArray(persistedActivityLog) ? persistedActivityLog : normalizeActivityLog(slotData);
+      const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
+      const localVersion = getLocalVersion();
+      const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
+      const payload = {
+        playerName: playerName ?? null,
+        avatar: avatar ?? null,
+        modVersion,
+        coins: coinsRaw,
+        room: {
+          id: roomId,
+          isPrivate: privacy.hideRoomFromPublicList ?? null,
+          playersCount,
+          userSlots
+        },
+        privacy,
+        state: {
+          garden: slotData?.garden ?? null,
+          inventory: slotData?.inventory ?? slot?.inventory ?? null,
+          stats: typeof slotData?.stats === "object" && slotData?.stats ? slotData.stats : null,
+          activityLog: activityLog ?? null,
+          journal: journalEntry ?? null
+        }
+      };
+      return payload;
+    } catch (error) {
+      console.error("[PlayerPayload] buildPlayerStatePayload failed", error);
+      return null;
+    }
+  }
+  function sanitizeActivityLogForCompare(log2) {
+    if (!Array.isArray(log2)) return null;
+    return log2.filter((entry) => entry?.action !== "feedPet");
+  }
+  function sanitizeStateForComparison(state3) {
+    const sanitizedActivityLog = sanitizeActivityLogForCompare(
+      state3.activityLog ?? null
+    );
+    if (sanitizedActivityLog === state3.activityLog) {
+      return state3;
+    }
+    return {
+      ...state3,
+      activityLog: sanitizedActivityLog
+    };
+  }
+  function snapshotPayloadForComparison(payload) {
+    try {
+      const sanitizedState = sanitizeStateForComparison(payload.state);
+      const clone = {
+        ...payload,
+        state: sanitizedState
+      };
+      return JSON.stringify(clone);
+    } catch (error) {
+      console.error(
+        "[PlayerPayload] Failed to snapshot payload for comparison",
+        error
+      );
+      return null;
+    }
+  }
+  async function logPlayerStatePayload(options) {
+    return buildPlayerStatePayload(options);
+  }
+  shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
+  shareGlobal("logPlayerStatePayload", logPlayerStatePayload);
+  var gameReadyWatcherInitialized = false;
+  var gameReadyTriggered = false;
+  var preferredReportingIntervalMs;
+  var friendRefreshLoopStarted = false;
+  async function warmSupabaseInitialFetch() {
+    try {
+      const dbId = await playerDatabaseUserId.get();
+      if (!dbId) return;
+      await fetchFriendsSummary(dbId);
+    } catch (error) {
+      console.error(
+        "[PlayerPayload] Failed to prefetch friends data",
+        error
+      );
+    }
+  }
+  function startFriendDataRefreshLoop() {
+    if (friendRefreshLoopStarted) return;
+    friendRefreshLoopStarted = true;
+    void warmSupabaseInitialFetch();
+  }
+  async function tryInitializeReporting(state3) {
+    if (gameReadyTriggered) return;
+    const snapshot = state3 ?? await Atoms.root.state.get();
+    const players = Array.isArray(snapshot?.data?.players) ? snapshot.data.players : [];
+    if (players.length === 0) return;
+    gameReadyTriggered = true;
+    startPlayerStateReporting(preferredReportingIntervalMs);
+    startFriendDataRefreshLoop();
+  }
+  function startPlayerStateReportingWhenGameReady(intervalMs) {
+    if (gameReadyWatcherInitialized) return;
+    gameReadyWatcherInitialized = true;
+    preferredReportingIntervalMs = intervalMs;
+    void tryInitializeReporting();
+    void Atoms.root.state.onChange((next) => {
+      void tryInitializeReporting(next);
+    });
+  }
+  var payloadReportingTimer = null;
+  var isPayloadReporting = false;
+  var lastSentPayloadSnapshot = null;
+  var unchangedSnapshotCount = 0;
+  var initialSendRetries = 0;
+  var MAX_INITIAL_RETRIES = 3;
+  var MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
+  async function buildAndSendPlayerState() {
+    if (isPayloadReporting) return;
+    isPayloadReporting = true;
+    try {
+      const payload = await buildPlayerStatePayload();
+      if (!payload || !payload.room.id) {
+        if (initialSendRetries < MAX_INITIAL_RETRIES) {
+          initialSendRetries += 1;
+          setTimeout(() => void buildAndSendPlayerState(), 1e4);
+        }
+        return;
+      }
+      const snapshot = snapshotPayloadForComparison(payload);
+      let mustSend = false;
+      if (snapshot === null) {
+        mustSend = true;
+      } else if (lastSentPayloadSnapshot === null) {
+        mustSend = true;
+      } else if (snapshot !== lastSentPayloadSnapshot) {
+        mustSend = true;
+      } else if (unchangedSnapshotCount + 1 >= MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND) {
+        mustSend = true;
+      }
+      if (!mustSend) {
+        if (snapshot !== null) {
+          unchangedSnapshotCount += 1;
+        }
+        return;
+      }
+      const ok = await sendPlayerState(payload);
+      if (ok) {
+        if (snapshot !== null) {
+          lastSentPayloadSnapshot = snapshot;
+          unchangedSnapshotCount = 0;
+        }
+      } else {
+      }
+    } catch (error) {
+      console.error("[PlayerPayload] Failed to send payload:", error);
+    } finally {
+      isPayloadReporting = false;
+    }
+  }
+  function startPlayerStateReporting(intervalMs = 6e4) {
+    if (payloadReportingTimer !== null) return;
+    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
+    void buildAndSendPlayerState();
+    payloadReportingTimer = setInterval(() => {
+      void buildAndSendPlayerState();
+    }, normalizedMs);
+  }
+  async function triggerPlayerStateSyncNow(options) {
+    if (options?.force) {
+      lastSentPayloadSnapshot = null;
+      unchangedSnapshotCount = 0;
+      initialSendRetries = 0;
+    }
+    await buildAndSendPlayerState();
+    await warmSupabaseInitialFetch();
   }
 
   // src/ui/menus/friendOverlay/index.ts
@@ -36681,6 +37711,207 @@
 }
 .qws-fo-community-profile.active{
   display:flex;
+}
+.qws-fo-room{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+.qws-fo-room-shell{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+  padding:10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-room-body{
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+.qws-fo-room-panel{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-room-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.85));
+  border:1px solid rgba(255,255,255,0.1);
+}
+.qws-fo-room-header-title{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(226,232,240,0.75);
+}
+.qws-fo-room-header-controls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-room-filter{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:10px;
+  background:rgba(9,12,18,0.75);
+  border:1px solid rgba(255,255,255,0.12);
+}
+.qws-fo-room-filter span{
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-room-select{
+  background:rgba(9,12,18,0.85);
+  border:1px solid rgba(255,255,255,0.16);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:4px 22px 4px 8px;
+  font-size:12px;
+  outline:none;
+  cursor:pointer;
+}
+.qws-fo-room-select:focus{
+  border-color:rgba(59,130,246,0.4);
+}
+.qws-fo-room-alert{
+  font-size:12px;
+  color:#ffb4a2;
+  background:rgba(46,31,31,0.9);
+  border:1px solid rgba(255, 140, 105, 0.35);
+  padding:8px 10px;
+  border-radius:10px;
+}
+.qws-fo-room-list{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding-right:4px;
+  scrollbar-gutter:stable;
+}
+.qws-fo-room-list-inner{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-room-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.65);
+  text-align:center;
+  padding:12px 0;
+}
+.qws-fo-room-card{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(17,24,39,0.6);
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-room-badge{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid;
+  flex-shrink:0;
+}
+.qws-fo-room-badge.is-discord{
+  background:rgba(168,85,247,0.18);
+  border-color:rgba(168,85,247,0.4);
+  color:#e9d5ff;
+}
+.qws-fo-room-badge.is-web{
+  background:rgba(56,189,248,0.18);
+  border-color:rgba(56,189,248,0.35);
+  color:#bae6fd;
+}
+.qws-fo-room-id{
+  font-size:12px;
+  font-weight:600;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+  flex:1 1 auto;
+}
+.qws-fo-room-avatars{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex-shrink:0;
+}
+.qws-fo-room-avatar{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  font-weight:600;
+  color:#f8fafc;
+}
+.qws-fo-room-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-room-avatar.is-empty{
+  background:rgba(255,255,255,0.04);
+  border-style:dashed;
+  color:rgba(226,232,240,0.4);
+}
+.qws-fo-room-count{
+  font-size:12px;
+  font-weight:600;
+  color:rgba(226,232,240,0.8);
+  min-width:44px;
+  text-align:right;
+}
+.qws-fo-room-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+.qws-fo-room-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  padding-top:6px;
+  border-top:1px solid rgba(255,255,255,0.06);
 }
 .qws-fo-tab-leaderboard{
   height:100%;
@@ -38091,6 +39322,184 @@
   line-height:18px;
   pointer-events:none;
 }
+.qws-fo-auth-overlay{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  background:rgba(7,10,16,0.76);
+  backdrop-filter:blur(6px);
+  z-index:6;
+}
+.qws-fo-auth-overlay.is-visible{
+  display:flex;
+}
+.qws-fo-auth-card{
+  width:min(520px, 92%);
+  background:radial-gradient(140% 140% at 0% 0%, rgba(28,36,56,0.98), rgba(12,16,26,0.98));
+  border:1px solid rgba(148,163,184,0.22);
+  border-radius:16px;
+  padding:16px 18px;
+  color:#e2e8f0;
+  box-shadow:0 20px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  font-family:var(--chakra-fonts-body, "Space Grotesk"), system-ui, sans-serif;
+}
+.qws-fo-auth-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.qws-fo-auth-brand{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.12em;
+  padding:3px 10px;
+  border-radius:999px;
+  border:1px solid rgba(56,189,248,0.4);
+  background:rgba(56,189,248,0.12);
+  color:#bae6fd;
+  margin-left:auto;
+}
+.qws-fo-auth-icon{
+  width:36px;
+  height:36px;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:rgba(59,130,246,0.18);
+  border:1px solid rgba(59,130,246,0.55);
+  color:#dbeafe;
+  flex-shrink:0;
+}
+.qws-fo-auth-icon svg{
+  width:20px;
+  height:20px;
+  display:block;
+}
+.qws-fo-auth-title{
+  font-size:15px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-auth-subtitle{
+  font-size:12px;
+  color:rgba(226,232,240,0.72);
+}
+.qws-fo-auth-hidden{
+  display:none !important;
+}
+.qws-fo-auth-divider{
+  height:1px;
+  background:linear-gradient(90deg, rgba(148,163,184,0.08), rgba(148,163,184,0.3), rgba(148,163,184,0.08));
+}
+.qws-fo-auth-section{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-fo-auth-section-title{
+  font-size:12px;
+  font-weight:600;
+  color:#93c5fd;
+  letter-spacing:0.02em;
+}
+.qws-fo-auth-list{
+  display:grid;
+  gap:6px;
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-fo-auth-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-auth-bullet{
+  width:18px;
+  height:18px;
+  border-radius:6px;
+  display:grid;
+  place-items:center;
+  background:rgba(56,189,248,0.12);
+  border:1px solid rgba(56,189,248,0.35);
+  color:#7dd3fc;
+  flex-shrink:0;
+}
+.qws-fo-auth-bullet svg{
+  width:12px;
+  height:12px;
+  display:block;
+}
+.qws-fo-auth-unlocks{
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-fo-auth-unlocks strong{ color:#f8fafc; font-weight:600; }
+.qws-fo-auth-status{
+  font-size:12px;
+  color:rgba(251,191,36,0.9);
+  min-height:16px;
+}
+.qws-fo-auth-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.qws-fo-auth-input-row{
+  display:grid;
+  gap:6px;
+}
+.qws-fo-auth-input-label{
+  font-size:12px;
+  color:rgba(226,232,240,0.72);
+}
+.qws-fo-auth-input{
+  width:100%;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(8,12,20,0.75);
+  color:#f8fafc;
+  padding:8px 12px;
+  font-size:12.5px;
+  outline:none;
+}
+.qws-fo-auth-input:focus{
+  border-color:rgba(56,189,248,0.5);
+}
+.qws-fo-auth-btn{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.15);
+  background:rgba(20,28,40,0.75);
+  color:#f8fafc;
+  font-weight:600;
+  padding:8px 12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-width:180px;
+  flex:1 1 180px;
+  transition:background 140ms ease, border 140ms ease, transform 140ms ease;
+}
+.qws-fo-auth-btn:hover{ background:rgba(30,41,59,0.8); }
+.qws-fo-auth-btn.is-disabled{ opacity:0.6; cursor:not-allowed; }
+.qws-fo-auth-btn.primary{
+  background:linear-gradient(135deg, #2dd4bf 0%, #38bdf8 100%);
+  border-color:transparent;
+  color:#0b1020;
+}
+.qws-fo-auth-btn.ghost{
+  background:rgba(148,163,184,0.12);
+  border-color:rgba(248,250,252,0.2);
+}
 @media (max-width: 820px){
   .qws-fo-body{ grid-template-columns:1fr; }
   .qws-fo-nav{
@@ -38113,6 +39522,13 @@
       __publicField(this, "panel", document.createElement("div"));
       __publicField(this, "nav", document.createElement("div"));
       __publicField(this, "content", document.createElement("div"));
+      __publicField(this, "authGate", null);
+      __publicField(this, "authGateStatus", null);
+      __publicField(this, "authGateAuthBtn", null);
+      __publicField(this, "authGateManualRow", null);
+      __publicField(this, "authGateManualInput", null);
+      __publicField(this, "authGateSuppressed", false);
+      __publicField(this, "authGateManualMode", false);
       __publicField(this, "tabs", /* @__PURE__ */ new Map());
       __publicField(this, "tabButtons", /* @__PURE__ */ new Map());
       __publicField(this, "activeTab", "community");
@@ -38126,6 +39542,10 @@
       __publicField(this, "keyTrapCleanup", null);
       __publicField(this, "handleOverlayOpen", () => this.setOpen(true));
       __publicField(this, "handleOverlayClose", () => this.setOpen(false));
+      __publicField(this, "handleAuthUpdate", () => {
+        this.updateAuthGateVisibility();
+        this.refreshAuthTabs();
+      });
       __publicField(this, "handleResize", () => {
         this.attach();
         if (this.panelOpen && !this.panelDetached) {
@@ -38144,7 +39564,7 @@
       this.btn = this.createButton();
       this.badge = this.createBadge();
       const lastTab = window.__qws_friend_overlay_last_tab;
-      if (lastTab === "community" || lastTab === "messages" || lastTab === "groups" || lastTab === "leaderboard" || lastTab === "settings") {
+      if (lastTab === "community" || lastTab === "room" || lastTab === "messages" || lastTab === "groups" || lastTab === "leaderboard" || lastTab === "settings") {
         this.activeTab = lastTab;
       }
       this.panel = this.createPanel();
@@ -38160,6 +39580,12 @@
       window.addEventListener("pointerdown", this.handlePointerDown);
       window.addEventListener("qws-friend-overlay-open", this.handleOverlayOpen);
       window.addEventListener("qws-friend-overlay-close", this.handleOverlayClose);
+      window.addEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate);
+    }
+    refreshAuthTabs() {
+      this.tabs.get("community")?.refresh?.();
+      this.tabs.get("groups")?.refresh?.();
+      this.tabs.get("messages")?.refresh?.();
     }
     destroy() {
       try {
@@ -38185,6 +39611,7 @@
       try {
         window.removeEventListener("qws-friend-overlay-open", this.handleOverlayOpen);
         window.removeEventListener("qws-friend-overlay-close", this.handleOverlayClose);
+        window.removeEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate);
       } catch {
       }
       try {
@@ -38219,6 +39646,7 @@
         const active = this.tabs.get(this.activeTab);
         active?.hide?.();
       }
+      this.updateAuthGateVisibility();
       this.updateButtonBadge();
     }
     centerPanel() {
@@ -38278,6 +39706,227 @@
       const total = this.unreadMessages + this.unreadGroups + this.pendingRequests;
       this.badge.textContent = total ? String(total) : "";
       style3(this.badge, { display: total ? "inline-flex" : "none" });
+    }
+    setAuthGateButtonEnabled(button, enabled) {
+      if (!button) return;
+      button.disabled = !enabled;
+      button.classList.toggle("is-disabled", !enabled);
+      button.setAttribute("aria-disabled", (!enabled).toString());
+    }
+    ensureAuthGate() {
+      if (this.authGate) return;
+      const overlay = document.createElement("div");
+      overlay.className = "qws-fo-auth-overlay";
+      const card = document.createElement("div");
+      card.className = "qws-fo-auth-card";
+      const header = document.createElement("div");
+      header.className = "qws-fo-auth-header";
+      const icon = document.createElement("div");
+      icon.className = "qws-fo-auth-icon";
+      icon.innerHTML = '<svg viewBox="0 0.5 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_537_21_fo)"><path d="M20.317 4.54101C18.7873 3.82774 17.147 3.30224 15.4319 3.00126C15.4007 2.99545 15.3695 3.00997 15.3534 3.039C15.1424 3.4203 14.9087 3.91774 14.7451 4.30873C12.9004 4.02808 11.0652 4.02808 9.25832 4.30873C9.09465 3.90905 8.85248 3.4203 8.64057 3.039C8.62448 3.01094 8.59328 2.99642 8.56205 3.00126C6.84791 3.30128 5.20756 3.82678 3.67693 4.54101C3.66368 4.54681 3.65233 4.5565 3.64479 4.56907C0.533392 9.29283 -0.31895 13.9005 0.0991801 18.451C0.101072 18.4733 0.11337 18.4946 0.130398 18.5081C2.18321 20.0401 4.17171 20.9701 6.12328 21.5866C6.15451 21.5963 6.18761 21.5847 6.20748 21.5585C6.66913 20.9179 7.08064 20.2424 7.43348 19.532C7.4543 19.4904 7.43442 19.441 7.39186 19.4246C6.73913 19.173 6.1176 18.8662 5.51973 18.5178C5.47244 18.4897 5.46865 18.421 5.51216 18.3881C5.63797 18.2923 5.76382 18.1926 5.88396 18.0919C5.90569 18.0736 5.93598 18.0697 5.96153 18.0813C9.88928 19.9036 14.1415 19.9036 18.023 18.0813C18.0485 18.0687 18.0788 18.0726 18.1015 18.091C18.2216 18.1916 18.3475 18.2923 18.4742 18.3881C18.5177 18.421 18.5149 18.4897 18.4676 18.5178C17.8697 18.8729 17.2482 19.173 16.5945 19.4236C16.552 19.4401 16.533 19.4904 16.5538 19.532C16.9143 20.2414 17.3258 20.9169 17.7789 21.5576C17.7978 21.5847 17.8319 21.5963 17.8631 21.5866C19.8241 20.9701 21.8126 20.0401 23.8654 18.5081C23.8834 18.4946 23.8948 18.4742 23.8967 18.452C24.3971 13.1911 23.0585 8.6212 20.3482 4.57004C20.3416 4.5565 20.3303 4.54681 20.317 4.54101ZM8.02002 15.6802C6.8375 15.6802 5.86313 14.577 5.86313 13.222C5.86313 11.8671 6.8186 10.7639 8.02002 10.7639C9.23087 10.7639 10.1958 11.8768 10.1769 13.222C10.1769 14.577 9.22141 15.6802 8.02002 15.6802ZM15.9947 15.6802C14.8123 15.6802 13.8379 14.577 13.8379 13.222C13.8379 11.8671 14.7933 10.7639 15.9947 10.7639C17.2056 10.7639 18.1705 11.8768 18.1516 13.222C18.1516 14.577 17.2056 15.6802 15.9947 15.6802Z" fill="#758CA3"/></g><defs><clipPath id="clip0_537_21_fo"><rect width="24" height="24" fill="white"/></clipPath></defs></svg>';
+      const titleWrap = document.createElement("div");
+      const title = document.createElement("div");
+      title.className = "qws-fo-auth-title";
+      title.textContent = "Connect Discord to use Community Hub";
+      const subtitle = document.createElement("div");
+      subtitle.className = "qws-fo-auth-subtitle";
+      subtitle.textContent = "Community features are disabled until you connect your Discord account.";
+      titleWrap.append(title, subtitle);
+      const brand = document.createElement("span");
+      brand.className = "qws-fo-auth-brand";
+      brand.textContent = "ARIE'S MOD";
+      header.append(icon, titleWrap, brand);
+      const dividerTop = document.createElement("div");
+      dividerTop.className = "qws-fo-auth-divider";
+      const iconCheck = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4 4 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      const createListItem2 = (text) => {
+        const item = document.createElement("div");
+        item.className = "qws-fo-auth-item";
+        const bullet = document.createElement("span");
+        bullet.className = "qws-fo-auth-bullet";
+        bullet.innerHTML = iconCheck;
+        const label2 = document.createElement("span");
+        label2.textContent = text;
+        item.append(bullet, label2);
+        return item;
+      };
+      const whySection = document.createElement("div");
+      whySection.className = "qws-fo-auth-section";
+      const whyTitle = document.createElement("div");
+      whyTitle.className = "qws-fo-auth-section-title";
+      whyTitle.textContent = "Why this is needed";
+      const whyList = document.createElement("div");
+      whyList.className = "qws-fo-auth-list";
+      whyList.append(
+        createListItem2("Prevent impersonation and abuse"),
+        createListItem2("Protect leaderboards and community stats from manipulation"),
+        createListItem2("Protect against message interception")
+      );
+      whySection.append(whyTitle, whyList);
+      const dividerBottom = document.createElement("div");
+      dividerBottom.className = "qws-fo-auth-divider";
+      const infoNote = document.createElement("div");
+      infoNote.className = "qws-fo-auth-subtitle";
+      infoNote.textContent = "Arie's Mod collects in-game player information (stats, garden, inventory, etc.) to power Community Hub features.";
+      const unlocks = document.createElement("div");
+      unlocks.className = "qws-fo-auth-unlocks";
+      unlocks.innerHTML = "<strong>Unlocks</strong> Public rooms / Friends / Messages / Groups / Leaderboards";
+      const isDiscord = isDiscordActivityContext();
+      let manualInput = null;
+      let manualRow = null;
+      const status = document.createElement("div");
+      status.className = "qws-fo-auth-status";
+      status.textContent = "";
+      this.authGateStatus = status;
+      const actions = document.createElement("div");
+      actions.className = "qws-fo-auth-actions";
+      let authBtn = null;
+      let refuseBtn = null;
+      if (isDiscord) {
+        const inputRow = document.createElement("div");
+        inputRow.className = "qws-fo-auth-input-row";
+        const inputLabel = document.createElement("div");
+        inputLabel.className = "qws-fo-auth-input-label";
+        inputLabel.textContent = "Discord Activity cannot open popups. Paste your API key here.";
+        const input = document.createElement("input");
+        input.className = "qws-fo-auth-input";
+        input.type = "text";
+        input.placeholder = "Paste your API key";
+        manualInput = input;
+        inputRow.append(inputLabel, input);
+        inputRow.classList.add("qws-fo-auth-hidden");
+        manualRow = inputRow;
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "qws-fo-auth-btn primary";
+        openBtn.textContent = "Authenticate with Discord";
+        authBtn = openBtn;
+        this.authGateAuthBtn = openBtn;
+        const contBtn = document.createElement("button");
+        contBtn.type = "button";
+        contBtn.className = "qws-fo-auth-btn ghost";
+        contBtn.textContent = "Continue without Discord";
+        refuseBtn = contBtn;
+        actions.append(contBtn, openBtn);
+      } else {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "qws-fo-auth-btn primary";
+        btn.textContent = "Authenticate with Discord";
+        authBtn = btn;
+        this.authGateAuthBtn = btn;
+        actions.append(btn);
+      }
+      const cardNodes = [
+        header,
+        dividerTop,
+        whySection,
+        dividerBottom,
+        infoNote,
+        unlocks
+      ];
+      if (manualRow) cardNodes.push(manualRow);
+      cardNodes.push(status, actions);
+      card.append(...cardNodes);
+      overlay.appendChild(card);
+      this.content.appendChild(overlay);
+      if (refuseBtn) {
+        refuseBtn.addEventListener("click", () => {
+          setDeclinedApiAuth(true);
+          this.authGateSuppressed = true;
+          this.updateAuthGateVisibility();
+        });
+      }
+      if (authBtn) {
+        authBtn.addEventListener("click", async () => {
+          status.textContent = "";
+          if (isDiscord) {
+            if (!this.authGateManualMode) {
+              this.authGateManualMode = true;
+              if (manualRow) manualRow.classList.remove("qws-fo-auth-hidden");
+              authBtn.textContent = "Save API key";
+              manualInput?.focus();
+              status.textContent = "After logging in, paste your API key below.";
+              requestApiKey().then(async (apiKey2) => {
+                if (!apiKey2) return;
+                setDeclinedApiAuth(false);
+                this.authGateSuppressed = false;
+                this.updateAuthGateVisibility();
+                await triggerPlayerStateSyncNow({ force: true });
+                this.refreshTabsAfterAuth();
+                window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+              }).catch(() => {
+              });
+              return;
+            }
+            const key2 = (manualInput?.value ?? "").trim();
+            if (!key2) {
+              status.textContent = "Please paste your API key.";
+              return;
+            }
+            setApiKey(key2);
+            setDeclinedApiAuth(false);
+            this.authGateSuppressed = false;
+            this.updateAuthGateVisibility();
+            await triggerPlayerStateSyncNow({ force: true });
+            this.refreshTabsAfterAuth();
+            window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+            return;
+          }
+          this.setAuthGateButtonEnabled(authBtn, false);
+          const originalLabel = authBtn.textContent || "";
+          authBtn.textContent = "Authenticating...";
+          const apiKey = await requestApiKey();
+          if (apiKey) {
+            setDeclinedApiAuth(false);
+            this.updateAuthGateVisibility();
+            await triggerPlayerStateSyncNow({ force: true });
+            this.refreshTabsAfterAuth();
+            window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+            return;
+          }
+          status.textContent = "Authentication failed. Please allow popups and try again.";
+          authBtn.textContent = originalLabel;
+          this.setAuthGateButtonEnabled(authBtn, true);
+        });
+      }
+      if (manualInput) {
+        manualInput.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          authBtn?.click();
+        });
+      }
+      this.authGateManualRow = manualRow;
+      this.authGateManualInput = manualInput;
+      this.authGate = overlay;
+    }
+    updateAuthGateVisibility() {
+      const shouldShow = this.panelOpen && !hasApiKey() && hasDeclinedApiAuth() && !this.authGateSuppressed;
+      if (shouldShow) {
+        this.ensureAuthGate();
+        this.authGateManualMode = false;
+        if (this.authGateStatus) {
+          this.authGateStatus.textContent = "";
+        }
+        if (this.authGateAuthBtn) {
+          this.authGateAuthBtn.textContent = "Authenticate with Discord";
+          this.setAuthGateButtonEnabled(this.authGateAuthBtn, true);
+          this.authGateAuthBtn.classList.remove("qws-fo-auth-hidden");
+        }
+        if (this.authGateManualRow) {
+          this.authGateManualRow.classList.add("qws-fo-auth-hidden");
+        }
+        if (this.authGateManualInput) {
+          this.authGateManualInput.value = "";
+        }
+      }
+      if (!this.authGate) return;
+      this.authGate.classList.toggle("is-visible", shouldShow);
+    }
+    refreshTabsAfterAuth() {
+      for (const tab of this.tabs.values()) {
+        tab.refresh?.();
+      }
     }
     setTabBadge(id, text) {
       const btn = this.tabButtons.get(id);
@@ -38348,6 +39997,22 @@
           }
         },
         {
+          id: "room",
+          label: "Rooms",
+          icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 4h10a2 2 0 0 1 2 2v14H4V4Z" fill="currentColor"/><path d="M14 6h6v14h-6V6Z" fill="currentColor" opacity="0.65"/><circle cx="9" cy="12" r="1.2" fill="#0b1020"/></svg>',
+          build: () => {
+            const tab = createRoomTab();
+            return {
+              id: "room",
+              root: tab.root,
+              refresh: tab.refresh,
+              show: tab.show,
+              hide: tab.hide,
+              destroy: tab.destroy
+            };
+          }
+        },
+        {
           id: "groups",
           label: "Groups",
           icon: '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/><path d="M16.5 11a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor" opacity="0.8"/><path d="M2.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor"/><path d="M12.5 20a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v.5h-12V20Z" fill="currentColor" opacity="0.7"/></svg>',
@@ -38387,6 +40052,7 @@
               root: tab.root,
               show: tab.show,
               hide: tab.hide,
+              refresh: tab.refresh,
               destroy: tab.destroy
             };
           }
@@ -40855,116 +42521,6 @@
   }
   function removeLockIcon4(el2) {
     el2.querySelectorAll(`span.${LOCK_CLASS2}`).forEach((node) => node.remove());
-  }
-
-  // src/utils/version.ts
-  var REPO_OWNER = "Ariedam64";
-  var REPO_NAME = "MagicGarden-modMenu";
-  var REPO_BRANCH = "main";
-  var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
-  var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
-  var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
-  async function fetchTextWithFetch2(url2, options) {
-    const response = await fetch(url2, { cache: "no-store", ...options });
-    if (!response.ok) {
-      throw new Error(`Failed to load remote resource: ${response.status} ${response.statusText}`);
-    }
-    return await response.text();
-  }
-  async function fetchTextWithGM2(url2, options) {
-    return new Promise((resolve2, reject) => {
-      const xhr = typeof GM_xmlhttpRequest === "function" ? GM_xmlhttpRequest : typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function" ? GM.xmlHttpRequest : null;
-      if (!xhr) return reject(new Error("GM_xmlhttpRequest not available"));
-      xhr({
-        method: "GET",
-        url: url2,
-        headers: options?.headers,
-        onload: (res) => {
-          if (res.status >= 200 && res.status < 300) resolve2(res.responseText);
-          else reject(new Error(`GM_xhr failed: ${res.status}`));
-        },
-        onerror: (e) => reject(e)
-      });
-    });
-  }
-  async function fetchText2(url2, options) {
-    const preferGM = isDiscordSurface();
-    const hasGM = typeof GM_xmlhttpRequest === "function" || typeof GM !== "undefined" && typeof GM.xmlHttpRequest === "function";
-    if (preferGM && hasGM) {
-      return await fetchTextWithGM2(url2, options);
-    }
-    try {
-      return await fetchTextWithFetch2(url2, options);
-    } catch (error) {
-      if (hasGM) {
-        return await fetchTextWithGM2(url2, options);
-      }
-      throw error;
-    }
-  }
-  async function fetchLatestCommitSha() {
-    try {
-      const responseText = await fetchText2(COMMITS_API_URL, {
-        headers: { Accept: "application/vnd.github+json" }
-      });
-      const data = JSON.parse(responseText);
-      if (data && typeof data.sha === "string" && data.sha.trim().length > 0) {
-        return data.sha.trim();
-      }
-    } catch (error) {
-      console.warn("[MagicGarden] Failed to resolve latest commit SHA:", error);
-    }
-    return null;
-  }
-  async function fetchScriptSource() {
-    const commitSha = await fetchLatestCommitSha();
-    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
-    return await fetchText2(scriptUrl);
-  }
-  async function fetchRemoteVersion() {
-    try {
-      const scriptSource = await fetchScriptSource();
-      const meta = extractUserscriptMetadata(scriptSource);
-      if (!meta) {
-        throw new Error("Metadata block not found in remote script");
-      }
-      const version = meta.get("version")?.[0];
-      const download = meta.get("downloadurl")?.[0] ?? meta.get("updateurl")?.[0];
-      return {
-        version,
-        download
-      };
-    } catch (error) {
-      console.error("Unable to retrieve remote version:", error);
-      return null;
-    }
-  }
-  function extractUserscriptMetadata(source) {
-    const headerMatch = source.match(/\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/);
-    if (!headerMatch) {
-      return null;
-    }
-    const metaBlock = headerMatch[1];
-    const entries = metaBlock.matchAll(/^\/\/\s*@([^\s]+)\s+(.+)$/gm);
-    const meta = /* @__PURE__ */ new Map();
-    for (const [, rawKey, rawValue] of entries) {
-      const key2 = rawKey.trim().toLowerCase();
-      const value = rawValue.trim();
-      if (!key2) continue;
-      const current = meta.get(key2);
-      if (current) {
-        current.push(value);
-      } else {
-        meta.set(key2, [value]);
-      }
-    }
-    return meta;
-  }
-  function getLocalVersion() {
-    if (typeof GM_info !== "undefined" && GM_info?.script?.version) {
-      return GM_info.script.version;
-    }
-    return void 0;
   }
 
   // src/utils/inventorySelectionLogger.ts
@@ -45526,7 +47082,7 @@
     function formatNumber(value, digits = 3) {
       return value == null || Number.isNaN(value) || !Number.isFinite(value) ? "\u2014" : value.toFixed(digits);
     }
-    function setButtonEnabled2(btn, enabled) {
+    function setButtonEnabled3(btn, enabled) {
       const setter = btn.setEnabled;
       if (typeof setter === "function") setter(enabled);
       else btn.disabled = !enabled;
@@ -45534,7 +47090,7 @@
     const scanLabel = btnScan.querySelector(".label");
     const defaultScanText = scanLabel?.textContent ?? "Rescan sounds";
     function setScanButtonLoading(loading) {
-      setButtonEnabled2(btnScan, !loading);
+      setButtonEnabled3(btnScan, !loading);
       if (scanLabel) scanLabel.textContent = loading ? "Scanning\u2026" : defaultScanText;
     }
     function refreshData() {
@@ -45637,7 +47193,7 @@
       groupList.style.display = visible ? "" : "none";
       groupEmpty.textContent = groupEntries.length ? "No groups match the current filter." : "No groups detected yet. Run a rescan to populate the cache.";
       groupEmpty.style.display = visible ? "none" : "block";
-      setButtonEnabled2(btnGroupClear, groupFilter.value.trim().length > 0);
+      setButtonEnabled3(btnGroupClear, groupFilter.value.trim().length > 0);
     }
     function renderSounds() {
       const rx = safeRegex(soundFilter.value.trim() || ".*");
@@ -45698,8 +47254,8 @@
       soundList.style.display = visibleSounds.length ? "" : "none";
       soundEmpty.textContent = infoList.length ? "No sounds match the current filter." : "No sounds detected yet. Run a rescan to populate the cache.";
       soundEmpty.style.display = visibleSounds.length ? "none" : "block";
-      setButtonEnabled2(btnCopyVisible, visibleSounds.length > 0);
-      setButtonEnabled2(btnSoundClear, soundFilter.value.trim().length > 0);
+      setButtonEnabled3(btnCopyVisible, visibleSounds.length > 0);
+      setButtonEnabled3(btnSoundClear, soundFilter.value.trim().length > 0);
     }
     async function refreshAll(opts = {}) {
       if (busy) return;
@@ -45707,8 +47263,8 @@
       const { rescan = false } = opts;
       overviewError.clear();
       if (rescan) setScanButtonLoading(true);
-      else setButtonEnabled2(btnScan, false);
-      setButtonEnabled2(btnRefresh, false);
+      else setButtonEnabled3(btnScan, false);
+      setButtonEnabled3(btnRefresh, false);
       let scanError = null;
       try {
         if (rescan) {
@@ -45729,8 +47285,8 @@
         }
       } finally {
         if (rescan) setScanButtonLoading(false);
-        else setButtonEnabled2(btnScan, true);
-        setButtonEnabled2(btnRefresh, true);
+        else setButtonEnabled3(btnScan, true);
+        setButtonEnabled3(btnRefresh, true);
         busy = false;
       }
     }
@@ -58147,7 +59703,7 @@ next: ${next}`;
   }
 
   // src/services/players.ts
-  function findPlayersDeep2(state3) {
+  function findPlayersDeep3(state3) {
     if (!state3 || typeof state3 !== "object") return [];
     const out = [];
     const seen = /* @__PURE__ */ new Set();
@@ -58169,11 +59725,11 @@ next: ${next}`;
     for (const p of out) if (p?.id) byId.set(String(p.id), p);
     return [...byId.values()];
   }
-  function getPlayersArray(st) {
+  function getPlayersArray2(st) {
     const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep2(st);
+    return Array.isArray(direct) ? direct : findPlayersDeep3(st);
   }
-  function getSlotsArray(st) {
+  function getSlotsArray2(st) {
     const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
     if (Array.isArray(raw)) return raw;
     if (raw && typeof raw === "object") {
@@ -58239,12 +59795,12 @@ next: ${next}`;
     return { tileObjects, boardwalkTileObjects };
   }
   function getSlotByPlayerId(st, playerId2) {
-    for (const s of getSlotsArray(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
+    for (const s of getSlotsArray2(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
     return null;
   }
   function enrichPlayersWithSlots(players, st) {
     const byPid = /* @__PURE__ */ new Map();
-    for (const slot of getSlotsArray(st)) {
+    for (const slot of getSlotsArray2(st)) {
       if (!slot || typeof slot !== "object") continue;
       const pid = slot.playerId != null ? String(slot.playerId) : "";
       if (!pid) continue;
@@ -58258,7 +59814,7 @@ next: ${next}`;
     });
   }
   function orderPlayersBySlots(players, st) {
-    const slots = getSlotsArray(st);
+    const slots = getSlotsArray2(st);
     const mapById = /* @__PURE__ */ new Map();
     for (const p of players) mapById.set(String(p.id), p);
     const out = [];
@@ -58281,7 +59837,7 @@ next: ${next}`;
     }
     return out;
   }
-  function clampPlayers(n) {
+  function clampPlayers2(n) {
     const v = Math.floor(Number(n));
     if (!Number.isFinite(v)) return 1;
     return Math.max(1, Math.min(6, v));
@@ -58289,7 +59845,7 @@ next: ${next}`;
   async function getPlayersInRoom() {
     try {
       const raw = await Atoms.server.numPlayers.get();
-      return clampPlayers(raw);
+      return clampPlayers2(raw);
     } catch {
       return 1;
     }
@@ -58433,7 +59989,7 @@ next: ${next}`;
     async list() {
       const st = await Atoms.root.state.get();
       if (!st) return [];
-      const base2 = enrichPlayersWithSlots(getPlayersArray(st), st);
+      const base2 = enrichPlayersWithSlots(getPlayersArray2(st), st);
       const ordered = orderPlayersBySlots(base2, st);
       const spawns = await getSpawnTilesSorted();
       const players = assignGardenPositions(ordered, spawns);
@@ -58484,7 +60040,7 @@ next: ${next}`;
       try {
         const st = await Atoms.root.state.get();
         if (st) {
-          const arr = getPlayersArray(st);
+          const arr = getPlayersArray2(st);
           const p = arr.find((x) => String(x?.id) === String(playerId2));
           if (p && typeof p.name === "string" && p.name) return p.name;
         }
@@ -58816,1060 +60372,14 @@ next: ${next}`;
   };
 
   // src/ui/menus/room.ts
-  var ROOM_MENU_STYLE_ID = "mc-room-menu-loading-style";
-  function ensureRoomMenuStyles() {
-    if (document.getElementById(ROOM_MENU_STYLE_ID)) return;
-    const style4 = document.createElement("style");
-    style4.id = ROOM_MENU_STYLE_ID;
-    style4.textContent = `
-@keyframes room-menu-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.qmm.qmm-room-menu .qmm-tab[data-id="public-rooms"],
-.qmm.qmm-room-menu .qmm-tab[data-id="search-player"],
-.qmm.qmm-room-menu .qmm-tab[data-id="players"] {
-  flex: 0 1 auto;
-  min-width: 160px;
-}
-`;
-    document.head.appendChild(style4);
-  }
-  var TAB_ID = "public-rooms";
-  var SEARCH_TAB_ID = "search-player";
-  var PLAYERS_TAB_ID = "players";
   async function renderRoomMenu(root) {
-    const ui = new Menu({
-      id: "room",
-      compact: true,
-      windowSelector: ".qws-win",
-      classes: "qmm-room-menu"
-    });
-    ui.addTab(TAB_ID, "Public Rooms", (view) => renderPublicRoomsTab(view, ui));
-    ui.addTab(SEARCH_TAB_ID, "Search Player", (view) => renderSearchPlayerTab(view, ui));
-    ui.addTab(PLAYERS_TAB_ID, "Players", (view) => {
-      void renderPlayersTab(view).catch(() => {
-      });
-    });
-    ui.mount(root);
+    await renderPlayersTab(root);
   }
-  function renderPublicRoomsTab(view, ui) {
-    view.innerHTML = "";
-    ensureRoomMenuStyles();
-    const root = document.createElement("div");
-    root.style.display = "flex";
-    root.style.flexDirection = "column";
-    root.style.alignItems = "center";
-    root.style.padding = "12px";
-    root.style.boxSizing = "border-box";
-    root.style.height = "100%";
-    root.style.minHeight = "0";
-    view.appendChild(root);
-    const container = document.createElement("div");
-    container.style.display = "grid";
-    container.style.gap = "12px";
-    container.style.width = "100%";
-    container.style.maxWidth = "640px";
-    container.style.height = "100%";
-    container.style.gridTemplateRows = "max-content max-content 1fr max-content";
-    root.appendChild(container);
-    const heading = document.createElement("div");
-    heading.textContent = "Select a public room to quickly join a game.";
-    heading.style.fontSize = "14px";
-    heading.style.opacity = "0.9";
-    if (RoomService.isDiscordActivity()) {
-      const discordWarning = document.createElement("div");
-      discordWarning.textContent = "You are using Discord: direct join is disabled. Open the official website to join a room.";
-      discordWarning.style.fontSize = "13px";
-      discordWarning.style.lineHeight = "1.4";
-      discordWarning.style.padding = "10px 12px";
-      discordWarning.style.borderRadius = "8px";
-      discordWarning.style.background = "#2e1f1f";
-      discordWarning.style.color = "#ffb4a2";
-      discordWarning.style.border = "1px solid rgba(255, 140, 105, 0.35)";
-      container.appendChild(discordWarning);
-    }
-    const headerRow = document.createElement("div");
-    headerRow.style.display = "flex";
-    headerRow.style.alignItems = "center";
-    headerRow.style.gap = "12px";
-    headerRow.style.width = "100%";
-    headerRow.style.margin = "12px 0 6px";
-    headerRow.appendChild(heading);
-    container.appendChild(headerRow);
-    const listWrapper = document.createElement("div");
-    listWrapper.style.height = "54vh";
-    listWrapper.style.maxHeight = "54vh";
-    listWrapper.style.overflowY = "auto";
-    listWrapper.style.padding = "6px 2px";
-    listWrapper.style.borderRadius = "10px";
-    listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
-    listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
-    listWrapper.style.width = "100%";
-    listWrapper.style.boxSizing = "border-box";
-    listWrapper.style.position = "relative";
-    const floatingLoadingIndicator = document.createElement("div");
-    floatingLoadingIndicator.style.position = "absolute";
-    floatingLoadingIndicator.style.top = "14px";
-    floatingLoadingIndicator.style.right = "14px";
-    floatingLoadingIndicator.style.width = "28px";
-    floatingLoadingIndicator.style.height = "28px";
-    floatingLoadingIndicator.style.borderRadius = "999px";
-    floatingLoadingIndicator.style.display = "flex";
-    floatingLoadingIndicator.style.alignItems = "center";
-    floatingLoadingIndicator.style.justifyContent = "center";
-    floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
-    floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
-    floatingLoadingIndicator.style.opacity = "0";
-    floatingLoadingIndicator.style.visibility = "hidden";
-    floatingLoadingIndicator.style.pointerEvents = "none";
-    floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
-    floatingLoadingIndicator.style.zIndex = "3";
-    const floatingLoadingSpinner = document.createElement("div");
-    floatingLoadingSpinner.style.width = "16px";
-    floatingLoadingSpinner.style.height = "16px";
-    floatingLoadingSpinner.style.borderRadius = "999px";
-    floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
-    floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
-    floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
-    floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
-    const list = document.createElement("div");
-    list.style.display = "grid";
-    list.style.gap = "10px";
-    list.style.padding = "4px";
-    listWrapper.appendChild(list);
-    listWrapper.appendChild(floatingLoadingIndicator);
-    container.appendChild(listWrapper);
-    const updateFloatingLoadingIndicator = () => {
-      floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
-    };
-    let isFloatingIndicatorVisible = false;
-    const setLoadingState = (loading) => {
-      if (loading) {
-        isFloatingIndicatorVisible = true;
-        updateFloatingLoadingIndicator();
-        floatingLoadingIndicator.style.visibility = "visible";
-        floatingLoadingIndicator.style.opacity = "1";
-      } else {
-        isFloatingIndicatorVisible = false;
-        floatingLoadingIndicator.style.opacity = "0";
-        floatingLoadingIndicator.addEventListener(
-          "transitionend",
-          () => {
-            if (!isFloatingIndicatorVisible) {
-              floatingLoadingIndicator.style.visibility = "hidden";
-            }
-          },
-          { once: true }
-        );
-        window.setTimeout(() => {
-          if (!isFloatingIndicatorVisible) {
-            floatingLoadingIndicator.style.visibility = "hidden";
-          }
-        }, 220);
-      }
-    };
-    let savedScrollTop = 0;
-    listWrapper.addEventListener("scroll", () => {
-      savedScrollTop = listWrapper.scrollTop;
-      if (isFloatingIndicatorVisible) {
-        updateFloatingLoadingIndicator();
-      }
-    });
-    let destroyed = false;
-    let requestCounter = 0;
-    let firstLoad = true;
-    let selectedPlayerFilter = "any";
-    let currentRooms = [];
-    const refreshButton = ui.btn("Refresh rooms", { size: "sm", icon: "\u{1F504}" });
-    refreshButton.style.flexShrink = "0";
-    refreshButton.setAttribute("aria-label", "Refresh public rooms list");
-    const statusBar = document.createElement("div");
-    statusBar.style.fontSize = "12px";
-    statusBar.style.opacity = "0.75";
-    statusBar.style.marginLeft = "auto";
-    statusBar.style.textAlign = "right";
-    statusBar.textContent = "Loading rooms\u2026";
-    const footer = document.createElement("div");
-    footer.style.display = "flex";
-    footer.style.alignItems = "center";
-    footer.style.gap = "12px";
-    footer.style.marginTop = "8px";
-    footer.style.width = "100%";
-    footer.appendChild(refreshButton);
-    footer.appendChild(statusBar);
-    container.appendChild(footer);
-    let isRefreshing = false;
-    const updateRefreshButtonState = () => {
-      const enabled = !destroyed && !isRefreshing;
-      ui.setButtonEnabled(refreshButton, enabled);
-      refreshButton.setAttribute("aria-busy", isRefreshing ? "true" : "false");
-    };
-    const matchesPlayerFilter = (room) => {
-      switch (selectedPlayerFilter) {
-        case "any":
-          return true;
-        case "few":
-          return room.players > 0 && room.players <= 3;
-        case "crowded":
-          return !room.isFull && room.players >= 4;
-        case "full":
-          return room.isFull;
-        default:
-          return true;
-      }
-    };
-    const renderRooms = (rooms) => {
-      currentRooms = rooms;
-      list.innerHTML = "";
-      const visibleRooms = rooms.filter((room) => matchesPlayerFilter(room));
-      if (!visibleRooms.length) {
-        const empty = document.createElement("div");
-        empty.textContent = rooms.length ? "No rooms match the selected filter." : "No public rooms available.";
-        empty.style.padding = "16px";
-        empty.style.textAlign = "center";
-        empty.style.opacity = "0.7";
-        list.appendChild(empty);
-      } else {
-        for (const room of visibleRooms) {
-          list.appendChild(createRoomEntry(room, ui));
-        }
-      }
-      requestAnimationFrame(() => {
-        const maxScroll = Math.max(0, listWrapper.scrollHeight - listWrapper.clientHeight);
-        const nextScroll = Math.min(savedScrollTop, maxScroll);
-        listWrapper.scrollTop = nextScroll;
-        savedScrollTop = nextScroll;
-      });
-    };
-    const playerFilterContainer = document.createElement("div");
-    playerFilterContainer.style.display = "flex";
-    playerFilterContainer.style.alignItems = "center";
-    playerFilterContainer.style.gap = "6px";
-    playerFilterContainer.style.padding = "4px 6px";
-    playerFilterContainer.style.background = "rgba(24, 26, 36, 0.85)";
-    playerFilterContainer.style.borderRadius = "10px";
-    playerFilterContainer.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.05)";
-    const playerFilterLabel = document.createElement("span");
-    playerFilterLabel.textContent = "Players";
-    playerFilterLabel.style.fontSize = "12px";
-    playerFilterLabel.style.opacity = "0.75";
-    playerFilterLabel.style.paddingLeft = "2px";
-    playerFilterContainer.appendChild(playerFilterLabel);
-    const playerFilterSelect = document.createElement("select");
-    playerFilterSelect.style.background = "rgba(17, 18, 27, 0.95)";
-    playerFilterSelect.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    playerFilterSelect.style.color = "#f8fafc";
-    playerFilterSelect.style.borderRadius = "8px";
-    playerFilterSelect.style.padding = "4px 10px";
-    playerFilterSelect.style.fontSize = "12px";
-    playerFilterSelect.style.fontWeight = "500";
-    playerFilterSelect.style.outline = "none";
-    playerFilterSelect.style.cursor = "pointer";
-    playerFilterSelect.style.minWidth = "130px";
-    const playerFilters = [
-      { value: "any", label: "Any players" },
-      { value: "few", label: "1 - 3 players" },
-      { value: "crowded", label: "4 - 5 players" },
-      { value: "full", label: "Full rooms" }
-    ];
-    for (const option of playerFilters) {
-      const opt = document.createElement("option");
-      opt.value = option.value;
-      opt.textContent = option.label;
-      playerFilterSelect.appendChild(opt);
-    }
-    playerFilterSelect.value = selectedPlayerFilter;
-    playerFilterSelect.addEventListener("change", () => {
-      selectedPlayerFilter = playerFilterSelect.value;
-      savedScrollTop = 0;
-      renderRooms(currentRooms);
-    });
-    playerFilterContainer.appendChild(playerFilterSelect);
-    playerFilterContainer.style.marginLeft = "auto";
-    headerRow.appendChild(playerFilterContainer);
-    const refreshRooms = async () => {
-      if (destroyed) return;
-      const currentRequest = ++requestCounter;
-      isRefreshing = true;
-      updateRefreshButtonState();
-      setLoadingState(true);
-      statusBar.textContent = firstLoad ? "Loading rooms..." : "Refreshing rooms...";
-      try {
-        const available = await fetchAvailableRooms(100);
-        if (destroyed || currentRequest !== requestCounter) return;
-        const publicRooms = available.filter((room) => !room.isPrivate).map(transformSupabaseRoom).sort((a, b) => {
-          if (b.players === a.players) {
-            return b.lastUpdatedAt - a.lastUpdatedAt;
-          }
-          return b.players - a.players;
-        });
-        renderRooms(publicRooms);
-        const time = (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true
-        });
-        statusBar.textContent = `Last update: ${time}`;
-      } catch (error) {
-        if (destroyed || currentRequest !== requestCounter) return;
-        statusBar.textContent = `Failed to load rooms: ${String(error?.message || error)}`;
-      } finally {
-        if (!destroyed && currentRequest === requestCounter) {
-          setLoadingState(false);
-        }
-        if (currentRequest === requestCounter) {
-          isRefreshing = false;
-        }
-        updateRefreshButtonState();
-        firstLoad = false;
-      }
-    };
-    refreshButton.addEventListener("click", () => {
-      void refreshRooms();
-    });
-    updateRefreshButtonState();
-    refreshRooms();
-    const windowEl = view.closest(".qws-win");
-    const computeWindowVisible = (win) => !win.classList.contains("is-hidden") && getComputedStyle(win).display !== "none";
-    let visibilityObserver = null;
-    if (windowEl) {
-      let lastVisible = computeWindowVisible(windowEl);
-      visibilityObserver = new MutationObserver(() => {
-        if (destroyed) return;
-        const isVisible3 = computeWindowVisible(windowEl);
-        if (isVisible3 && !lastVisible) {
-          void refreshRooms();
-        }
-        lastVisible = isVisible3;
-      });
-      visibilityObserver.observe(windowEl, { attributes: true, attributeFilter: ["class", "style"] });
-    }
-    const previousCleanup = view.__cleanup__;
-    view.__cleanup__ = () => {
-      destroyed = true;
-      visibilityObserver?.disconnect();
-      updateRefreshButtonState();
-      if (typeof previousCleanup === "function") {
-        try {
-          previousCleanup.call(view);
-        } catch {
-        }
-      }
-    };
-  }
-  var DEFAULT_SUPABASE_ROOM_CAPACITY = 6;
-  var DISCORD_ROOM_ID_REGEX = /^I-\d{17,19}-[A-Z]{2,3}-\d{17,19}(?:-\d{17,19})?$/i;
-  function getPublicRoomCategory(roomId) {
-    return DISCORD_ROOM_ID_REGEX.test(roomId) ? "Discord" : "Web";
-  }
-  function transformSupabaseRoom(room) {
-    const rawCount = Number.isFinite(room.playersCount) ? Math.floor(room.playersCount) : 0;
-    const players = Math.max(0, rawCount);
-    const capacity = DEFAULT_SUPABASE_ROOM_CAPACITY;
-    const parsedTimestamp = Number.isFinite(Date.parse(room.lastUpdatedAt)) ? Date.parse(room.lastUpdatedAt) : Date.now();
-    const playerDetails = (room.userSlots ?? []).map((slot, index) => {
-      const name = slot?.name?.trim();
-      return {
-        name: name && name.length ? name : "Unknown player",
-        isConnected: true,
-        discordAvatarUrl: slot?.avatarUrl ?? void 0,
-        isHost: index === 0
-      };
-    });
-    return {
-      name: room.id,
-      idRoom: room.id,
-      category: getPublicRoomCategory(room.id),
-      players: Math.min(players, capacity),
-      capacity,
-      isFull: players >= capacity,
-      lastUpdatedAt: parsedTimestamp,
-      hostPlayerId: room.lastUpdatedByPlayerId ?? void 0,
-      playerDetails
-    };
-  }
-  function renderSearchPlayerTab(view, ui) {
-    view.innerHTML = "";
-    ensureRoomMenuStyles();
-    const root = document.createElement("div");
-    root.style.display = "flex";
-    root.style.flexDirection = "column";
-    root.style.alignItems = "center";
-    root.style.padding = "12px";
-    root.style.boxSizing = "border-box";
-    root.style.height = "100%";
-    view.appendChild(root);
-    const container = document.createElement("div");
-    container.style.display = "grid";
-    container.style.gap = "12px";
-    container.style.width = "100%";
-    container.style.maxWidth = "640px";
-    container.style.gridTemplateRows = "max-content max-content max-content 1fr";
-    container.style.height = "100%";
-    root.appendChild(container);
-    const heading = document.createElement("div");
-    heading.textContent = "Search for a player across all available rooms.";
-    heading.style.fontSize = "14px";
-    heading.style.opacity = "0.9";
-    container.appendChild(heading);
-    const description = document.createElement("div");
-    description.textContent = "Enter at least three characters to look for matching player names.";
-    description.style.fontSize = "12px";
-    description.style.opacity = "0.72";
-    description.style.lineHeight = "1.45";
-    container.appendChild(description);
-    const form = document.createElement("form");
-    form.style.display = "flex";
-    form.style.flexWrap = "wrap";
-    form.style.alignItems = "center";
-    form.style.gap = "8px";
-    container.appendChild(form);
-    const searchInput = document.createElement("input");
-    searchInput.type = "search";
-    searchInput.placeholder = "Player name\u2026";
-    searchInput.autocomplete = "off";
-    searchInput.spellcheck = false;
-    searchInput.style.flex = "1";
-    searchInput.style.minWidth = "200px";
-    searchInput.style.padding = "10px 12px";
-    searchInput.style.borderRadius = "10px";
-    searchInput.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    searchInput.style.background = "rgba(17, 18, 27, 0.95)";
-    searchInput.style.color = "#f8fafc";
-    searchInput.style.fontSize = "13px";
-    searchInput.style.fontWeight = "500";
-    searchInput.style.outline = "none";
-    searchInput.style.boxShadow = "0 6px 16px rgba(15, 23, 42, 0.45)";
-    form.appendChild(searchInput);
-    const searchButton = ui.btn("Search", { size: "sm", icon: "search", variant: "primary" });
-    searchButton.type = "submit";
-    searchButton.style.flexShrink = "0";
-    searchButton.title = "Search for a player across rooms";
-    form.appendChild(searchButton);
-    const statusMessage = document.createElement("div");
-    statusMessage.style.fontSize = "12px";
-    statusMessage.style.opacity = "0.75";
-    statusMessage.style.minHeight = "18px";
-    statusMessage.textContent = "Enter a player name to search across rooms.";
-    container.appendChild(statusMessage);
-    const listWrapper = document.createElement("div");
-    listWrapper.style.height = "54vh";
-    listWrapper.style.maxHeight = "54vh";
-    listWrapper.style.overflowY = "auto";
-    listWrapper.style.padding = "6px 2px";
-    listWrapper.style.borderRadius = "10px";
-    listWrapper.style.background = "rgba(12, 13, 20, 0.65)";
-    listWrapper.style.boxShadow = "inset 0 0 0 1px rgba(255, 255, 255, 0.04)";
-    listWrapper.style.width = "100%";
-    listWrapper.style.boxSizing = "border-box";
-    listWrapper.style.position = "relative";
-    const floatingLoadingIndicator = document.createElement("div");
-    floatingLoadingIndicator.style.position = "absolute";
-    floatingLoadingIndicator.style.top = "14px";
-    floatingLoadingIndicator.style.right = "14px";
-    floatingLoadingIndicator.style.width = "28px";
-    floatingLoadingIndicator.style.height = "28px";
-    floatingLoadingIndicator.style.borderRadius = "999px";
-    floatingLoadingIndicator.style.display = "flex";
-    floatingLoadingIndicator.style.alignItems = "center";
-    floatingLoadingIndicator.style.justifyContent = "center";
-    floatingLoadingIndicator.style.background = "rgba(14, 16, 25, 0.9)";
-    floatingLoadingIndicator.style.border = "1px solid rgba(255, 255, 255, 0.08)";
-    floatingLoadingIndicator.style.boxShadow = "0 10px 24px rgba(0, 0, 0, 0.45)";
-    floatingLoadingIndicator.style.opacity = "0";
-    floatingLoadingIndicator.style.visibility = "hidden";
-    floatingLoadingIndicator.style.pointerEvents = "none";
-    floatingLoadingIndicator.style.transition = "opacity 160ms ease, transform 160ms ease";
-    floatingLoadingIndicator.style.zIndex = "3";
-    const floatingLoadingSpinner = document.createElement("div");
-    floatingLoadingSpinner.style.width = "16px";
-    floatingLoadingSpinner.style.height = "16px";
-    floatingLoadingSpinner.style.borderRadius = "999px";
-    floatingLoadingSpinner.style.border = "2px solid rgba(248, 250, 252, 0.16)";
-    floatingLoadingSpinner.style.borderTopColor = "#f8fafc";
-    floatingLoadingSpinner.style.animation = "room-menu-spin 1s linear infinite";
-    floatingLoadingIndicator.appendChild(floatingLoadingSpinner);
-    const list = document.createElement("div");
-    list.style.display = "grid";
-    list.style.gap = "10px";
-    list.style.padding = "4px";
-    listWrapper.appendChild(list);
-    listWrapper.appendChild(floatingLoadingIndicator);
-    container.appendChild(listWrapper);
-    const renderEmptyState = (message) => {
-      list.innerHTML = "";
-      const empty = document.createElement("div");
-      empty.textContent = message;
-      empty.style.padding = "16px";
-      empty.style.textAlign = "center";
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "13px";
-      list.appendChild(empty);
-    };
-    renderEmptyState("Search results will appear here.");
-    const updateFloatingLoadingIndicator = () => {
-      floatingLoadingIndicator.style.transform = `translateY(${listWrapper.scrollTop}px)`;
-    };
-    let isFloatingIndicatorVisible = false;
-    const setLoadingState = (loading) => {
-      if (loading) {
-        isFloatingIndicatorVisible = true;
-        updateFloatingLoadingIndicator();
-        floatingLoadingIndicator.style.visibility = "visible";
-        floatingLoadingIndicator.style.opacity = "1";
-      } else {
-        isFloatingIndicatorVisible = false;
-        floatingLoadingIndicator.style.opacity = "0";
-        floatingLoadingIndicator.addEventListener(
-          "transitionend",
-          () => {
-            if (!isFloatingIndicatorVisible) {
-              floatingLoadingIndicator.style.visibility = "hidden";
-            }
-          },
-          { once: true }
-        );
-        window.setTimeout(() => {
-          if (!isFloatingIndicatorVisible) {
-            floatingLoadingIndicator.style.visibility = "hidden";
-          }
-        }, 220);
-      }
-    };
-    listWrapper.addEventListener("scroll", () => {
-      if (isFloatingIndicatorVisible) {
-        updateFloatingLoadingIndicator();
-      }
-    });
-    let isLoading = false;
-    let destroyed = false;
-    let requestCounter = 0;
-    let lastQueryLabel = "";
-    const updateSearchButtonState = () => {
-      const hasQuery = searchInput.value.trim().length >= 3;
-      ui.setButtonEnabled(searchButton, hasQuery && !isLoading);
-      searchButton.setAttribute("aria-busy", isLoading ? "true" : "false");
-    };
-    const normalizeSearchText = (value) => {
-      const trimmed = value.trim();
-      if (!trimmed) return "";
-      try {
-        return trimmed.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      } catch {
-        return trimmed.toLowerCase();
-      }
-    };
-    const createHighlightMatcher = (players) => {
-      const ids = /* @__PURE__ */ new Set();
-      const databaseIds = /* @__PURE__ */ new Set();
-      const names = /* @__PURE__ */ new Set();
-      for (const player2 of players) {
-        if (player2.id) ids.add(player2.id);
-        if (player2.databaseUserId) databaseIds.add(player2.databaseUserId);
-        names.add(normalizeSearchText(player2.name));
-      }
-      return (player2) => {
-        if (player2.id && ids.has(player2.id)) return true;
-        if (player2.databaseUserId && databaseIds.has(player2.databaseUserId)) return true;
-        return names.has(normalizeSearchText(player2.name));
-      };
-    };
-    const performSearch = async (rawQuery) => {
-      const trimmedQuery = rawQuery.trim();
-      const normalizedQuery = normalizeSearchText(trimmedQuery);
-      if (!normalizedQuery) {
-        statusMessage.textContent = "Enter a player name to search across rooms.";
-        renderEmptyState("Search results will appear here.");
-        lastQueryLabel = "";
-        return;
-      }
-      if (trimmedQuery.length < 3) {
-        statusMessage.textContent = "Please enter at least three characters.";
-        renderEmptyState("Type a longer name to search for players.");
-        lastQueryLabel = "";
-        return;
-      }
-      const currentRequest = ++requestCounter;
-      isLoading = true;
-      updateSearchButtonState();
-      setLoadingState(true);
-      statusMessage.textContent = "Searching players...";
-      try {
-        const results = await searchRoomsByPlayerName(trimmedQuery, {
-          limitRooms: 200,
-          minQueryLength: 3
-        });
-        if (destroyed || currentRequest !== requestCounter) return;
-        if (!results.length) {
-          statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
-          renderEmptyState("No rooms contain a player with this name.");
-          lastQueryLabel = trimmedQuery;
-          return;
-        }
-        const matches = results.map((result) => {
-          const baseRoom = transformSupabaseRoom(result.room);
-          const matchedPlayers = result.matchedSlots?.map((slot) => ({
-            name: slot.name?.trim() || "Unknown player",
-            isConnected: true,
-            isHost: false,
-            discordAvatarUrl: slot.avatarUrl ?? void 0
-          })) ?? [];
-          return {
-            room: baseRoom,
-            players: matchedPlayers
-          };
-        }).filter((match) => match.players.length > 0);
-        if (!matches.length) {
-          statusMessage.textContent = `No players found matching "${trimmedQuery}".`;
-          renderEmptyState("No rooms contain a player with this name.");
-          lastQueryLabel = trimmedQuery;
-          return;
-        }
-        matches.sort((a, b) => {
-          const diffPlayers = b.room.players - a.room.players;
-          if (diffPlayers !== 0) return diffPlayers;
-          if (b.players.length !== a.players.length) {
-            return b.players.length - a.players.length;
-          }
-          return a.room.name.localeCompare(b.room.name);
-        });
-        const totalPlayers = matches.reduce((sum, match) => sum + match.players.length, 0);
-        const roomsLabel = matches.length === 1 ? "room" : "rooms";
-        const playersLabel = totalPlayers === 1 ? "player" : "players";
-        statusMessage.textContent = `Found ${totalPlayers} ${playersLabel} in ${matches.length} ${roomsLabel}.`;
-        list.innerHTML = "";
-        let isFirstMatch = true;
-        for (const match of matches) {
-          const highlightMatcher = createHighlightMatcher(match.players);
-          const entry = createRoomEntry(match.room, ui, {
-            highlightPlayers: highlightMatcher,
-            defaultDetailsOpen: true,
-            scrollHighlightedPlayersIntoView: isFirstMatch
-          });
-          list.appendChild(entry);
-          isFirstMatch = false;
-        }
-        lastQueryLabel = trimmedQuery;
-      } catch (error) {
-        if (destroyed || currentRequest !== requestCounter) return;
-        const message = error?.message || String(error);
-        statusMessage.textContent = `Search failed: ${message}`;
-        renderEmptyState("Unable to complete the search. Please try again.");
-      } finally {
-        if (!destroyed && currentRequest === requestCounter) {
-          isLoading = false;
-          setLoadingState(false);
-          updateSearchButtonState();
-        }
-      }
-    };
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      void performSearch(searchInput.value);
-    });
-    searchInput.addEventListener("input", () => {
-      updateSearchButtonState();
-      const trimmed = searchInput.value.trim();
-      if (!trimmed && lastQueryLabel) {
-        statusMessage.textContent = "Enter a player name to search across rooms.";
-        renderEmptyState("Search results will appear here.");
-        lastQueryLabel = "";
-      } else if (!isLoading && trimmed.length > 0 && trimmed.length < 3) {
-        statusMessage.textContent = "Type at least three characters to start a search.";
-      }
-    });
-    updateSearchButtonState();
-    view.__cleanup__ = () => {
-      destroyed = true;
-    };
-  }
-  function getCurrentRoomCode() {
-    const match = /^\/r\/([^/]+)/.exec(location.pathname);
-    if (!match) return null;
-    try {
-      return decodeURIComponent(match[1]);
-    } catch {
-      return match[1];
-    }
-  }
-  var DISCORD_ROOM_DISPLAY_MAX_LENGTH = 12;
-  function formatRoomNameForDisplay(room) {
-    if (room.category === "Discord" && room.name.length > DISCORD_ROOM_DISPLAY_MAX_LENGTH) {
-      return `${room.name.slice(0, DISCORD_ROOM_DISPLAY_MAX_LENGTH)}\u2026`;
-    }
-    return room.name;
-  }
-  var DISCORD_GUILD_ID_REGEX = /^i-\d{17,19}-[a-z]{2,3}-(\d{17,19})(?:-\d{17,19})?$/i;
   var GUILD_PLANT_BADGES = Object.entries(plantCatalog).map(([plantId, entry]) => {
     const fn = entry?.seed?.getCanSpawnInGuild;
     if (typeof fn !== "function") return null;
     return { plantId, predicate: fn };
   }).filter((v) => Boolean(v));
-  function extractDiscordGuildId(roomId) {
-    const match = DISCORD_GUILD_ID_REGEX.exec(roomId);
-    if (match) return match[1];
-    const parts = roomId.split("-");
-    if (parts.length >= 4 && /^i$/i.test(parts[0])) {
-      return parts[3] || null;
-    }
-    return null;
-  }
-  function getGuildPlantBadgesForRoom(roomId) {
-    const guildId = extractDiscordGuildId(roomId);
-    if (!guildId || !GUILD_PLANT_BADGES.length) return [];
-    const badges = [];
-    for (const entry of GUILD_PLANT_BADGES) {
-      try {
-        if (entry.predicate(guildId)) badges.push(entry.plantId);
-      } catch {
-      }
-    }
-    return badges;
-  }
-  function createRoomEntry(room, ui, options) {
-    const isDiscord = RoomService.isDiscordActivity();
-    const currentRoomCode = getCurrentRoomCode();
-    const isCurrentRoom = currentRoomCode === room.idRoom;
-    const playerDetails = Array.isArray(room.playerDetails) ? room.playerDetails : [];
-    const plantBadges = room.category === "Discord" ? getGuildPlantBadgesForRoom(room.idRoom || room.name) : [];
-    const wrapper = document.createElement("div");
-    wrapper.style.display = "grid";
-    wrapper.style.gap = "8px";
-    wrapper.style.padding = "14px 16px";
-    wrapper.style.borderRadius = "14px";
-    wrapper.style.background = "linear-gradient(135deg, rgba(30, 33, 46, 0.95), rgba(18, 19, 28, 0.95))";
-    wrapper.style.boxShadow = "0 10px 20px rgba(0, 0, 0, 0.35)";
-    wrapper.style.position = "relative";
-    const detailsContainer = document.createElement("div");
-    detailsContainer.style.overflow = "hidden";
-    detailsContainer.style.maxHeight = "0";
-    detailsContainer.style.opacity = "0";
-    detailsContainer.style.transition = "max-height 0.25s ease, opacity 0.2s ease, margin-top 0.2s ease";
-    detailsContainer.style.marginTop = "0";
-    const detailsContent = document.createElement("div");
-    detailsContent.style.display = "grid";
-    detailsContent.style.gap = "10px";
-    detailsContent.style.paddingTop = "12px";
-    detailsContent.style.paddingLeft = "6px";
-    detailsContent.style.paddingRight = "6px";
-    detailsContent.style.paddingBottom = "4px";
-    detailsContent.style.borderTop = "1px solid rgba(148, 163, 184, 0.16)";
-    detailsContainer.appendChild(detailsContent);
-    const detailsTitle = document.createElement("div");
-    detailsTitle.textContent = "Players";
-    detailsTitle.style.fontSize = "13px";
-    detailsTitle.style.fontWeight = "600";
-    detailsTitle.style.letterSpacing = "0.02em";
-    detailsTitle.style.color = "#e2e8f0";
-    detailsContent.appendChild(detailsTitle);
-    const highlightedPlayerElements = [];
-    if (playerDetails.length) {
-      const list = document.createElement("ul");
-      list.style.listStyle = "none";
-      list.style.margin = "0";
-      list.style.padding = "0";
-      list.style.display = "grid";
-      list.style.gap = "10px";
-      list.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-      for (const player2 of playerDetails) {
-        const item = document.createElement("li");
-        item.style.display = "flex";
-        item.style.alignItems = "center";
-        item.style.gap = "12px";
-        item.style.padding = "6px 0";
-        const avatarWrapper = document.createElement("div");
-        avatarWrapper.style.width = "36px";
-        avatarWrapper.style.height = "36px";
-        avatarWrapper.style.borderRadius = "999px";
-        avatarWrapper.style.overflow = "hidden";
-        avatarWrapper.style.flexShrink = "0";
-        avatarWrapper.style.display = "grid";
-        avatarWrapper.style.placeItems = "center";
-        avatarWrapper.style.border = "1px solid rgba(148, 163, 184, 0.25)";
-        avatarWrapper.style.background = "linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(14, 165, 233, 0.2))";
-        if (player2.discordAvatarUrl) {
-          const img = document.createElement("img");
-          img.src = player2.discordAvatarUrl;
-          img.alt = `${player2.name}'s avatar`;
-          img.loading = "lazy";
-          img.style.width = "100%";
-          img.style.height = "100%";
-          img.style.objectFit = "cover";
-          avatarWrapper.appendChild(img);
-        } else {
-          const initials = document.createElement("span");
-          initials.textContent = player2.name.charAt(0)?.toUpperCase() || "?";
-          initials.style.fontWeight = "600";
-          initials.style.fontSize = "14px";
-          initials.style.color = "#e2e8f0";
-          avatarWrapper.appendChild(initials);
-        }
-        const playerInfo = document.createElement("div");
-        playerInfo.style.display = "grid";
-        playerInfo.style.gap = "4px";
-        const nameRow2 = document.createElement("div");
-        nameRow2.style.display = "flex";
-        nameRow2.style.alignItems = "center";
-        nameRow2.style.gap = "8px";
-        const playerName = document.createElement("div");
-        playerName.textContent = player2.name;
-        playerName.style.fontWeight = "600";
-        playerName.style.fontSize = "14px";
-        playerName.style.color = "#f8fafc";
-        nameRow2.appendChild(playerName);
-        const statusRow = document.createElement("div");
-        statusRow.style.display = "flex";
-        statusRow.style.alignItems = "center";
-        statusRow.style.gap = "10px";
-        statusRow.style.fontSize = "11px";
-        statusRow.style.color = "rgba(226, 232, 240, 0.75)";
-        const presence = document.createElement("span");
-        presence.style.display = "inline-flex";
-        presence.style.alignItems = "center";
-        presence.style.gap = "6px";
-        const presenceDot = document.createElement("span");
-        presenceDot.style.width = "8px";
-        presenceDot.style.height = "8px";
-        presenceDot.style.borderRadius = "999px";
-        presenceDot.style.background = player2.isConnected ? "#34d399" : "#f97316";
-        presence.appendChild(presenceDot);
-        presence.append(player2.isConnected ? "Online" : "Offline");
-        statusRow.appendChild(presence);
-        playerInfo.append(nameRow2, statusRow);
-        item.append(avatarWrapper, playerInfo);
-        if (options?.highlightPlayers?.(player2)) {
-          item.style.background = "rgba(34, 197, 94, 0.12)";
-          item.style.borderRadius = "12px";
-          item.style.padding = "10px";
-          item.style.margin = "-2px";
-          item.style.boxShadow = "inset 0 0 0 1px rgba(34, 197, 94, 0.35)";
-          avatarWrapper.style.border = "1px solid rgba(74, 222, 128, 0.65)";
-          playerName.style.color = "#bbf7d0";
-          statusRow.style.color = "rgba(190, 242, 100, 0.85)";
-          presenceDot.style.background = "#4ade80";
-          item.dataset.highlightedPlayer = "true";
-          highlightedPlayerElements.push(item);
-        }
-        list.appendChild(item);
-      }
-      detailsContent.appendChild(list);
-    } else {
-      const emptyState = document.createElement("div");
-      emptyState.textContent = room.error ? "Player details unavailable." : "No player details available.";
-      emptyState.style.fontSize = "12px";
-      emptyState.style.color = "rgba(226, 232, 240, 0.7)";
-      detailsContent.appendChild(emptyState);
-    }
-    const accentColor = (() => {
-      if (room.error) return "rgba(248, 180, 127, 0.9)";
-      if (room.isFull) return "rgba(248, 113, 113, 0.85)";
-      if (room.players <= 5) return "rgba(74, 222, 128, 0.75)";
-      return "rgba(96, 165, 250, 0.45)";
-    })();
-    wrapper.style.setProperty("--accent-color", accentColor);
-    wrapper.style.outline = "2px solid transparent";
-    wrapper.style.outlineOffset = "0";
-    wrapper.style.border = "1px solid rgba(255, 255, 255, 0.05)";
-    wrapper.style.boxShadow = "0 10px 20px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 0 0 2px var(--accent-color)";
-    const header = document.createElement("div");
-    header.style.display = "flex";
-    header.style.flexWrap = "wrap";
-    header.style.alignItems = "center";
-    header.style.justifyContent = "space-between";
-    header.style.gap = "12px";
-    const nameBlock = document.createElement("div");
-    nameBlock.style.display = "grid";
-    nameBlock.style.gap = "6px";
-    const nameRow = document.createElement("div");
-    nameRow.style.display = "flex";
-    nameRow.style.alignItems = "center";
-    nameRow.style.gap = "10px";
-    const name = document.createElement("div");
-    name.textContent = formatRoomNameForDisplay(room);
-    name.title = room.name;
-    name.style.fontWeight = "600";
-    name.style.fontSize = "16px";
-    name.style.letterSpacing = "0.01em";
-    name.style.color = "#f8fafc";
-    const categoryPill = document.createElement("span");
-    categoryPill.textContent = room.category;
-    categoryPill.style.fontSize = "11px";
-    categoryPill.style.letterSpacing = "0.08em";
-    categoryPill.style.textTransform = "uppercase";
-    categoryPill.style.padding = "4px 8px";
-    categoryPill.style.borderRadius = "999px";
-    categoryPill.style.background = "rgba(148, 163, 184, 0.12)";
-    categoryPill.style.border = "1px solid rgba(148, 163, 184, 0.22)";
-    categoryPill.style.color = "#cbd5f5";
-    nameRow.append(name, categoryPill);
-    nameBlock.appendChild(nameRow);
-    if (room.currentGame && room.currentGame.toLowerCase() !== "quinoa") {
-      const gameLabel = document.createElement("div");
-      gameLabel.textContent = room.currentGame;
-      gameLabel.style.fontSize = "12px";
-      gameLabel.style.opacity = "0.7";
-      gameLabel.style.color = "#e0f2fe";
-      nameBlock.appendChild(gameLabel);
-    }
-    const occupancyBlock = document.createElement("div");
-    occupancyBlock.style.display = "grid";
-    occupancyBlock.style.gap = "6px";
-    occupancyBlock.style.minWidth = "120px";
-    const meter = document.createElement("div");
-    meter.style.position = "relative";
-    meter.style.height = "20px";
-    meter.style.borderRadius = "999px";
-    meter.style.background = "rgba(255, 255, 255, 0.08)";
-    meter.style.overflow = "hidden";
-    meter.style.display = "flex";
-    meter.style.alignItems = "center";
-    meter.style.justifyContent = "center";
-    meter.style.fontWeight = "600";
-    meter.style.fontSize = "12px";
-    meter.style.color = "#f8fafc";
-    meter.style.fontVariantNumeric = "tabular-nums";
-    meter.style.textShadow = "0 1px 2px rgba(0, 0, 0, 0.55)";
-    const meterFill = document.createElement("div");
-    meterFill.style.position = "absolute";
-    meterFill.style.left = "0";
-    meterFill.style.top = "0";
-    meterFill.style.bottom = "0";
-    meterFill.style.height = "100%";
-    meterFill.style.width = `${Math.min(100, room.players / room.capacity * 100)}%`;
-    meterFill.style.background = room.isFull ? "linear-gradient(90deg, #ef4444, #f87171)" : "linear-gradient(90deg, #34d399, #2dd4bf)";
-    meterFill.style.borderRadius = "inherit";
-    meter.appendChild(meterFill);
-    const meterLabel = document.createElement("span");
-    meterLabel.textContent = `${room.players} / ${room.capacity} players`;
-    meterLabel.style.position = "relative";
-    meterLabel.style.zIndex = "1";
-    meter.appendChild(meterLabel);
-    occupancyBlock.appendChild(meter);
-    const actionBlock = document.createElement("div");
-    actionBlock.style.display = "grid";
-    actionBlock.style.justifyItems = "end";
-    actionBlock.style.gap = "6px";
-    const chevron = document.createElement("span");
-    chevron.textContent = "\u25BE";
-    chevron.style.display = "inline-block";
-    chevron.style.transition = "transform 0.2s ease";
-    chevron.style.transform = "rotate(-90deg)";
-    const detailsBtn = ui.btn("Details", { size: "sm", variant: "ghost", icon: chevron });
-    detailsBtn.style.minWidth = "86px";
-    detailsBtn.style.justifyContent = "center";
-    detailsBtn.title = playerDetails.length ? "Show the players currently in this room." : room.error ? "Player details unavailable." : "No player details available.";
-    actionBlock.appendChild(detailsBtn);
-    const joinBtn = ui.btn("Join", { size: "sm", variant: "primary" });
-    joinBtn.style.minWidth = "86px";
-    joinBtn.style.boxShadow = "0 4px 10px rgba(56, 189, 248, 0.35)";
-    actionBlock.appendChild(joinBtn);
-    if (options?.onRemove) {
-      const removeBtn = ui.btn("Remove", { size: "sm", variant: "danger" });
-      removeBtn.style.minWidth = "86px";
-      removeBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        options.onRemove?.();
-      });
-      removeBtn.title = `Remove ${room.name} from custom rooms`;
-      actionBlock.appendChild(removeBtn);
-    }
-    const reasons = [];
-    if (room.error) reasons.push("Status unavailable");
-    if (room.isFull) reasons.push("Room is full");
-    if (isDiscord) reasons.push("Join is blocked on Discord");
-    if (isCurrentRoom) reasons.push("Already in this room");
-    const canJoin = !isCurrentRoom && RoomService.canJoinPublicRoom(room);
-    ui.setButtonEnabled(joinBtn, canJoin);
-    joinBtn.title = canJoin ? `Join ${room.name}` : reasons.join(" \xB7 ");
-    joinBtn.addEventListener("click", () => {
-      if (isCurrentRoom) return;
-      if (!RoomService.canJoinPublicRoom(room)) return;
-      RoomService.joinPublicRoom(room);
-    });
-    const labelSpan = detailsBtn.querySelector(".label");
-    let detailsExpanded = options?.defaultDetailsOpen ?? false;
-    const applyDetailsState = () => {
-      if (detailsExpanded) {
-        const targetHeight = `${detailsContent.scrollHeight}px`;
-        detailsContainer.style.maxHeight = targetHeight;
-        detailsContainer.style.opacity = "1";
-        detailsContainer.style.marginTop = "8px";
-        detailsBtn.setAttribute("aria-expanded", "true");
-        if (labelSpan) labelSpan.textContent = "Hide details";
-        chevron.style.transform = "rotate(0deg)";
-      } else {
-        detailsContainer.style.maxHeight = "0";
-        detailsContainer.style.opacity = "0";
-        detailsContainer.style.marginTop = "0";
-        detailsBtn.setAttribute("aria-expanded", "false");
-        if (labelSpan) labelSpan.textContent = "Details";
-        chevron.style.transform = "rotate(-90deg)";
-      }
-    };
-    detailsBtn.addEventListener("click", () => {
-      detailsExpanded = !detailsExpanded;
-      applyDetailsState();
-    });
-    header.append(nameBlock, occupancyBlock, actionBlock);
-    wrapper.appendChild(header);
-    const badgeRow = document.createElement("div");
-    badgeRow.style.display = "flex";
-    badgeRow.style.flexWrap = "wrap";
-    badgeRow.style.gap = "6px";
-    const addBadge = (label2, color, background) => {
-      const badge = document.createElement("span");
-      badge.textContent = label2;
-      badge.style.fontSize = "11px";
-      badge.style.padding = "4px 8px";
-      badge.style.borderRadius = "999px";
-      badge.style.fontWeight = "600";
-      badge.style.letterSpacing = "0.04em";
-      badge.style.textTransform = "uppercase";
-      badge.style.color = color;
-      badge.style.background = background;
-      badge.style.border = `1px solid ${color}33`;
-      badgeRow.appendChild(badge);
-    };
-    if (isCurrentRoom) {
-      addBadge("Current room", "#86efac", "rgba(34, 197, 94, 0.12)");
-    }
-    if (room.error) {
-      addBadge("Status unavailable", "#fbbf24", "rgba(250, 204, 21, 0.1)");
-    }
-    if (isDiscord) {
-      addBadge("Discord activity", "#facc15", "rgba(251, 191, 36, 0.12)");
-    }
-    if (room.category === "Discord" && plantBadges.length) {
-      for (const badge of plantBadges) {
-        addBadge(badge, "#93c5fd", "rgba(147, 197, 253, 0.14)");
-      }
-    }
-    if (badgeRow.childElementCount > 0) {
-      wrapper.appendChild(badgeRow);
-    }
-    wrapper.appendChild(detailsContainer);
-    applyDetailsState();
-    if (detailsExpanded || options?.scrollHighlightedPlayersIntoView) {
-      window.requestAnimationFrame(() => {
-        if (!detailsExpanded) return;
-        applyDetailsState();
-        if (options?.scrollHighlightedPlayersIntoView && highlightedPlayerElements.length) {
-          const target = highlightedPlayerElements[0];
-          window.requestAnimationFrame(() => {
-            target.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          });
-        }
-      });
-    }
-    return wrapper;
-  }
   async function readPlayers() {
     return PlayersService.list();
   }
@@ -60343,7 +60853,7 @@ next: ${next}`;
       });
       actionsWrap.appendChild(resetBtn);
     }
-    const setButtonEnabled2 = (btn, enabled) => {
+    const setButtonEnabled3 = (btn, enabled) => {
       if (!btn) return;
       const setter = btn.setEnabled;
       if (setter) {
@@ -60357,11 +60867,11 @@ next: ${next}`;
     const updateButtons2 = (current) => {
       const hasHotkey = hotkeyToString(current).length > 0;
       if (clearBtn) {
-        setButtonEnabled2(clearBtn, hasHotkey);
+        setButtonEnabled3(clearBtn, hasHotkey);
       }
       if (resetBtn) {
         const isDefault = hotkeyToString(current) === defaultString;
-        setButtonEnabled2(resetBtn, !isDefault);
+        setButtonEnabled3(resetBtn, !isDefault);
       }
     };
     if (clearBtn) {
@@ -60438,6 +60948,60 @@ next: ${next}`;
       wrapper.appendChild(card.root);
     }
     view.appendChild(wrapper);
+  }
+
+  // src/utils/authBridge.ts
+  var API_ORIGIN2 = "https://ariesmod-api.ariedam.fr";
+  function normalizeAuthPayload(data) {
+    if (!data || data.type !== "aries_discord_auth" || !data.apiKey) return null;
+    return {
+      apiKey: String(data.apiKey),
+      discordId: data.discordId ? String(data.discordId) : void 0,
+      discordUsername: data.discordUsername ? String(data.discordUsername) : void 0
+    };
+  }
+  function initAuthBridgeIfNeeded() {
+    if (typeof window === "undefined") return false;
+    if (window.location.origin !== API_ORIGIN2) return false;
+    const capture = (data) => {
+      const payload = normalizeAuthPayload(data);
+      if (!payload) return;
+      setApiKey(payload.apiKey);
+      setDeclinedApiAuth(false);
+      try {
+        window.close();
+      } catch {
+      }
+    };
+    try {
+      if (!window.opener) {
+        const fakeOpener = { postMessage: (data) => capture(data) };
+        try {
+          Object.defineProperty(window, "opener", {
+            configurable: true,
+            get: () => fakeOpener
+          });
+        } catch {
+          try {
+            window.opener = fakeOpener;
+          } catch {
+          }
+        }
+      }
+    } catch {
+    }
+    window.addEventListener("message", (event) => {
+      if (event.origin !== API_ORIGIN2) return;
+      capture(event.data);
+    });
+    try {
+      const fromQuery = new URLSearchParams(window.location.search).get("apiKey");
+      const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("apiKey");
+      if (fromQuery) capture({ type: "aries_discord_auth", apiKey: fromQuery });
+      if (fromHash) capture({ type: "aries_discord_auth", apiKey: fromHash });
+    } catch {
+    }
+    return true;
   }
 
   // src/utils/antiafk.ts
@@ -60596,349 +61160,6 @@ next: ${next}`;
         restoreProps();
       }
     };
-  }
-
-  // src/utils/payload.ts
-  var DEFAULT_PRIVACY = {
-    showProfile: true,
-    showGarden: true,
-    showInventory: true,
-    showCoins: true,
-    showActivityLog: true,
-    showJournal: true,
-    hideRoomFromPublicList: false,
-    showStats: true
-  };
-  function clampPlayers2(n) {
-    const value = Math.floor(Number(n));
-    if (!Number.isFinite(value)) return 1;
-    return Math.max(1, Math.min(6, value));
-  }
-  function findPlayersDeep3(state3) {
-    if (!state3 || typeof state3 !== "object") return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    const stack = [state3];
-    while (stack.length) {
-      const cur = stack.pop();
-      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-      seen.add(cur);
-      for (const key2 of Object.keys(cur)) {
-        const value = cur[key2];
-        if (Array.isArray(value) && value.length > 0 && value.every((item) => item && typeof item === "object")) {
-          const looksLikePlayer = value.some(
-            (item) => "id" in item && "name" in item
-          );
-          if (looksLikePlayer && /player/i.test(key2)) {
-            out.push(...value);
-          }
-        }
-        if (value && typeof value === "object") {
-          stack.push(value);
-        }
-      }
-    }
-    const byId = /* @__PURE__ */ new Map();
-    for (const entry of out) {
-      if (entry?.id) {
-        byId.set(String(entry.id), entry);
-      }
-    }
-    return [...byId.values()];
-  }
-  function getPlayersArray2(state3) {
-    const direct = state3?.fullState?.data?.players ?? state3?.data?.players ?? state3?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep3(state3);
-  }
-  function getSlotsArray2(state3) {
-    const raw = state3?.child?.data?.userSlots ?? state3?.fullState?.child?.data?.userSlots ?? state3?.data?.userSlots;
-    if (Array.isArray(raw)) return raw;
-    if (raw && typeof raw === "object") {
-      const entries = Object.entries(raw);
-      entries.sort((a, b) => {
-        const ai = Number(a[0]);
-        const bi = Number(b[0]);
-        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
-        return a[0].localeCompare(b[0]);
-      });
-      return entries.map(([, value]) => value);
-    }
-    return [];
-  }
-  function selectSlot(slots, options) {
-    if (!Array.isArray(slots) || slots.length === 0) return null;
-    const { slotIndex, playerId: playerId2 } = options;
-    if (typeof slotIndex === "number" && Number.isInteger(slotIndex)) {
-      const candidate = slots[slotIndex];
-      if (candidate && typeof candidate === "object") return candidate;
-    }
-    const normalizedId = playerId2 != null ? String(playerId2) : null;
-    if (normalizedId) {
-      for (const slot of slots) {
-        if (!slot || typeof slot !== "object") continue;
-        if (String(
-          slot.databaseUserId ?? slot.playerId ?? slot.data?.databaseUserId ?? slot.data?.playerId ?? ""
-        ) === normalizedId) {
-          return slot;
-        }
-      }
-    }
-    for (const slot of slots) {
-      if (!slot || typeof slot !== "object") continue;
-      if (slot.playerId || slot.databaseUserId || slot.data) return slot;
-    }
-    return null;
-  }
-  function resolvePlayer(players, slot, options) {
-    const candidate = options.playerId ?? slot?.playerId ?? slot?.databaseUserId ?? slot?.data?.playerId ?? slot?.data?.databaseUserId ?? null;
-    const normalized = candidate != null ? String(candidate) : null;
-    if (normalized) {
-      for (const player2 of players) {
-        if (!player2 || typeof player2 !== "object") continue;
-        if (String(player2.id ?? "") === normalized) return player2;
-        if (String(player2.databaseUserId ?? "") === normalized) return player2;
-      }
-    }
-    return players[0] ?? null;
-  }
-  function normalizeActivityLog(slotData) {
-    const logs = slotData?.activityLog ?? slotData?.activityLogs ?? slotData?.activitylog;
-    return Array.isArray(logs) ? logs : null;
-  }
-  async function buildPlayerStatePayload(options = {}) {
-    try {
-      const state3 = await Atoms.root.state.get();
-      if (!state3 || typeof state3 !== "object") return null;
-      const settings = getFriendSettings();
-      const privacy = {
-        showProfile: DEFAULT_PRIVACY.showProfile,
-        showGarden: settings.showGarden,
-        showInventory: settings.showInventory,
-        showCoins: settings.showCoins,
-        showActivityLog: settings.showActivityLog,
-        showJournal: settings.showJournal,
-        showStats: settings.showStats,
-        hideRoomFromPublicList: settings.hideRoomFromPublicList
-      };
-      const players = getPlayersArray2(state3);
-      const normalizedPlayers = Array.isArray(players) ? players : [];
-      const slots = getSlotsArray2(state3).filter((slot2) => !!slot2);
-      const coinsById = /* @__PURE__ */ new Map();
-      for (const slot2 of slots) {
-        const slotData2 = slot2?.data ?? slot2;
-        const candidateId = slotData2?.databaseUserId ?? slot2?.databaseUserId ?? slotData2?.playerId ?? slot2?.playerId ?? null;
-        if (candidateId == null) continue;
-        const normalizedSlotId = String(candidateId);
-        const coinCandidate2 = slotData2?.coinsCount ?? slotData2?.data?.coinsCount ?? slot2?.coinsCount ?? slot2?.data?.coinsCount ?? slotData2?.coins ?? slot2?.coins ?? null;
-        const coinValue2 = Number(coinCandidate2);
-        coinsById.set(
-          normalizedSlotId,
-          Number.isFinite(coinValue2) ? coinValue2 : null
-        );
-      }
-      const userSlots = normalizedPlayers.map((player2) => {
-        const playerDatabaseId = player2?.databaseUserId ?? player2?.playerId ?? player2?.id ?? null;
-        const normalizedPlayerId = playerDatabaseId != null ? String(playerDatabaseId) : null;
-        const slotId = normalizedPlayerId ?? (typeof player2?.id === "string" || typeof player2?.id === "number" ? String(player2.id) : null);
-        const coins = slotId ? coinsById.get(slotId) ?? null : null;
-        return {
-          name: typeof player2?.name === "string" ? player2.name : null,
-          discordAvatarUrl: typeof player2?.discordAvatarUrl === "string" ? player2.discordAvatarUrl : null,
-          playerId: slotId,
-          coins
-        };
-      });
-      const myDatabaseUserId = await playerDatabaseUserId.get();
-      if (slots.length === 0) return null;
-      const slot = selectSlot(slots, {
-        ...options,
-        playerId: options.playerId ?? myDatabaseUserId ?? void 0
-      });
-      if (!slot || typeof slot !== "object") return null;
-      const slotData = slot.data ?? slot;
-      if (!slotData || typeof slotData !== "object") return null;
-      const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
-      const playerId2 = slot.databaseUserId ?? resolvedPlayer?.databaseUserId ?? slot.playerId ?? (resolvedPlayer?.id ?? null);
-      const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
-      const avatarUrl = resolvedPlayer?.discordAvatarUrl ?? slotData?.discordAvatarUrl ?? slot?.discordAvatarUrl ?? null;
-      const avatarRaw = resolvedPlayer?.cosmetic?.avatar ?? slotData?.cosmetic?.avatar ?? slot?.cosmetic?.avatar ?? null;
-      const avatar = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
-      const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
-      const coinValue = Number(coinCandidate);
-      const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
-      const roomId = state3?.data?.roomId ?? state3?.fullState?.data?.roomId ?? state3?.roomId ?? null;
-      let playersCount = normalizedPlayers.length > 0 ? normalizedPlayers.length : slots.length;
-      try {
-        const atomValue = await Atoms.server.numPlayers.get();
-        playersCount = clampPlayers2(atomValue);
-      } catch {
-      }
-      const persistedActivityLog = readAriesPath("activityLog.history");
-      const activityLog = Array.isArray(persistedActivityLog) ? persistedActivityLog : normalizeActivityLog(slotData);
-      const journalEntry = slotData?.journal ?? slotData?.data?.journal ?? slot?.journal ?? slot?.data?.journal ?? null;
-      const localVersion = getLocalVersion();
-      const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
-      const payload = {
-        playerId: playerId2 != null ? String(playerId2) : null,
-        playerName: playerName ?? null,
-        avatarUrl: avatarUrl ?? null,
-        avatar: avatar ?? null,
-        modVersion,
-        coins: coinsRaw,
-        room: {
-          id: roomId,
-          isPrivate: privacy.hideRoomFromPublicList ?? null,
-          playersCount,
-          userSlots
-        },
-        privacy,
-        state: {
-          garden: slotData?.garden ?? null,
-          inventory: slotData?.inventory ?? slot?.inventory ?? null,
-          stats: typeof slotData?.stats === "object" && slotData?.stats ? slotData.stats : null,
-          activityLog: activityLog ?? null,
-          journal: journalEntry ?? null
-        }
-      };
-      return payload;
-    } catch (error) {
-      console.error("[PlayerPayload] buildPlayerStatePayload failed", error);
-      return null;
-    }
-  }
-  function sanitizeActivityLogForCompare(log2) {
-    if (!Array.isArray(log2)) return null;
-    return log2.filter((entry) => entry?.action !== "feedPet");
-  }
-  function sanitizeStateForComparison(state3) {
-    const sanitizedActivityLog = sanitizeActivityLogForCompare(
-      state3.activityLog ?? null
-    );
-    if (sanitizedActivityLog === state3.activityLog) {
-      return state3;
-    }
-    return {
-      ...state3,
-      activityLog: sanitizedActivityLog
-    };
-  }
-  function snapshotPayloadForComparison(payload) {
-    try {
-      const sanitizedState = sanitizeStateForComparison(payload.state);
-      const clone = {
-        ...payload,
-        state: sanitizedState
-      };
-      return JSON.stringify(clone);
-    } catch (error) {
-      console.error(
-        "[PlayerPayload] Failed to snapshot payload for comparison",
-        error
-      );
-      return null;
-    }
-  }
-  async function logPlayerStatePayload(options) {
-    return buildPlayerStatePayload(options);
-  }
-  shareGlobal("buildPlayerStatePayload", buildPlayerStatePayload);
-  shareGlobal("logPlayerStatePayload", logPlayerStatePayload);
-  var gameReadyWatcherInitialized = false;
-  var gameReadyTriggered = false;
-  var preferredReportingIntervalMs;
-  var friendRefreshLoopStarted = false;
-  async function warmSupabaseInitialFetch() {
-    try {
-      const dbId = await playerDatabaseUserId.get();
-      if (!dbId) return;
-      await fetchFriendsSummary(dbId);
-    } catch (error) {
-      console.error(
-        "[PlayerPayload] Failed to prefetch friends data",
-        error
-      );
-    }
-  }
-  function startFriendDataRefreshLoop() {
-    if (friendRefreshLoopStarted) return;
-    friendRefreshLoopStarted = true;
-    void warmSupabaseInitialFetch();
-  }
-  async function tryInitializeReporting(state3) {
-    if (gameReadyTriggered) return;
-    const snapshot = state3 ?? await Atoms.root.state.get();
-    const players = Array.isArray(snapshot?.data?.players) ? snapshot.data.players : [];
-    if (players.length === 0) return;
-    gameReadyTriggered = true;
-    startPlayerStateReporting(preferredReportingIntervalMs);
-    startFriendDataRefreshLoop();
-  }
-  function startPlayerStateReportingWhenGameReady(intervalMs) {
-    if (gameReadyWatcherInitialized) return;
-    gameReadyWatcherInitialized = true;
-    preferredReportingIntervalMs = intervalMs;
-    void tryInitializeReporting();
-    void Atoms.root.state.onChange((next) => {
-      void tryInitializeReporting(next);
-    });
-  }
-  var payloadReportingTimer = null;
-  var isPayloadReporting = false;
-  var lastSentPayloadSnapshot = null;
-  var unchangedSnapshotCount = 0;
-  var initialSendRetries = 0;
-  var MAX_INITIAL_RETRIES = 3;
-  var MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
-  async function buildAndSendPlayerState() {
-    if (isPayloadReporting) return;
-    isPayloadReporting = true;
-    try {
-      const payload = await buildPlayerStatePayload();
-      if (!payload || !payload.playerId || payload.playerId.length < 3 || !payload.room.id) {
-        if (initialSendRetries < MAX_INITIAL_RETRIES) {
-          initialSendRetries += 1;
-          setTimeout(() => void buildAndSendPlayerState(), 1e4);
-        }
-        return;
-      }
-      const snapshot = snapshotPayloadForComparison(payload);
-      let mustSend = false;
-      if (snapshot === null) {
-        mustSend = true;
-      } else if (lastSentPayloadSnapshot === null) {
-        mustSend = true;
-      } else if (snapshot !== lastSentPayloadSnapshot) {
-        mustSend = true;
-      } else if (unchangedSnapshotCount + 1 >= MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND) {
-        mustSend = true;
-      }
-      if (!mustSend) {
-        if (snapshot !== null) {
-          unchangedSnapshotCount += 1;
-        }
-        return;
-      }
-      const ok = await sendPlayerState(payload);
-      if (ok) {
-        if (snapshot !== null) {
-          lastSentPayloadSnapshot = snapshot;
-          unchangedSnapshotCount = 0;
-        }
-      } else {
-      }
-    } catch (error) {
-      console.error("[PlayerPayload] Failed to send payload:", error);
-    } finally {
-      isPayloadReporting = false;
-    }
-  }
-  function startPlayerStateReporting(intervalMs = 6e4) {
-    if (payloadReportingTimer !== null) return;
-    const normalizedMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 6e4;
-    void buildAndSendPlayerState();
-    payloadReportingTimer = setInterval(() => {
-      void buildAndSendPlayerState();
-    }, normalizedMs);
   }
 
   // src/sprite/state.ts
@@ -61867,9 +62088,426 @@ next: ${next}`;
   var __mg_ready = start();
   __mg_ready.catch((err) => console.error("[MG SpriteCatalog] failed", err));
 
+  // src/ui/authGate.ts
+  var AUTH_MODAL_STYLE_ID = "qws-auth-modal-style";
+  var AUTH_MODAL_ID = "qws-auth-modal";
+  function ensureAuthModalStyles() {
+    if (document.getElementById(AUTH_MODAL_STYLE_ID)) return;
+    const style4 = document.createElement("style");
+    style4.id = AUTH_MODAL_STYLE_ID;
+    style4.textContent = `
+.qws-auth-overlay{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  background:rgba(6,9,14,0.72);
+  backdrop-filter:blur(8px);
+  z-index:var(--chakra-zIndices-DialogModal, 7200);
+}
+.qws-auth-card{
+  width:min(640px, 94vw);
+  background:radial-gradient(140% 140% at 0% 0%, rgba(28,36,56,0.98), rgba(12,16,26,0.98));
+  border:1px solid rgba(148,163,184,0.22);
+  border-radius:18px;
+  padding:18px 20px 16px;
+  color:#e2e8f0;
+  box-shadow:0 24px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  font-family:var(--chakra-fonts-body, "Space Grotesk"), system-ui, sans-serif;
+}
+.qws-auth-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.qws-auth-brand{
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.12em;
+  padding:4px 12px;
+  border-radius:999px;
+  border:1px solid rgba(56,189,248,0.4);
+  background:rgba(56,189,248,0.12);
+  color:#bae6fd;
+  margin-left:auto;
+  white-space:nowrap;
+}
+.qws-auth-icon{
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:rgba(59,130,246,0.18);
+  border:1px solid rgba(59,130,246,0.55);
+  color:#dbeafe;
+  flex-shrink:0;
+}
+.qws-auth-icon svg{
+  width:22px;
+  height:22px;
+  display:block;
+}
+.qws-auth-title{
+  font-size:16px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-auth-subtitle{
+  font-size:12.5px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-auth-hidden{
+  display:none !important;
+}
+.qws-auth-divider{
+  height:1px;
+  background:linear-gradient(90deg, rgba(148,163,184,0.08), rgba(148,163,184,0.3), rgba(148,163,184,0.08));
+}
+.qws-auth-section{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-auth-section-title{
+  font-size:12px;
+  font-weight:600;
+  color:#93c5fd;
+  letter-spacing:0.02em;
+}
+.qws-auth-list{
+  display:grid;
+  gap:6px;
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-auth-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-auth-bullet{
+  width:18px;
+  height:18px;
+  border-radius:6px;
+  display:grid;
+  place-items:center;
+  background:rgba(56,189,248,0.12);
+  border:1px solid rgba(56,189,248,0.35);
+  color:#7dd3fc;
+  flex-shrink:0;
+}
+.qws-auth-bullet svg{
+  width:12px;
+  height:12px;
+  display:block;
+}
+.qws-auth-link{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:12px;
+  color:#7dd3fc;
+  cursor:pointer;
+  background:none;
+  border:none;
+  padding:0;
+  text-decoration:none;
+}
+.qws-auth-link:hover{ color:#bae6fd; }
+.qws-auth-link svg{ width:12px; height:12px; }
+.qws-auth-unlocks{
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-auth-unlocks strong{ color:#f8fafc; font-weight:600; }
+.qws-auth-status{
+  font-size:12px;
+  color:rgba(251,191,36,0.9);
+  min-height:16px;
+}
+.qws-auth-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.qws-auth-input-row{
+  display:grid;
+  gap:6px;
+}
+.qws-auth-input-label{
+  font-size:12px;
+  color:rgba(226,232,240,0.72);
+}
+.qws-auth-input{
+  width:100%;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(8,12,20,0.75);
+  color:#f8fafc;
+  padding:9px 12px;
+  font-size:12.5px;
+  outline:none;
+}
+.qws-auth-input:focus{
+  border-color:rgba(56,189,248,0.5);
+}
+.qws-auth-btn{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.15);
+  background:rgba(20,28,40,0.75);
+  color:#f8fafc;
+  font-weight:600;
+  padding:9px 14px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-width:180px;
+  flex:1 1 180px;
+  transition:background 140ms ease, border 140ms ease, transform 140ms ease;
+}
+.qws-auth-btn:hover{ background:rgba(30,41,59,0.8); }
+.qws-auth-btn.is-disabled{ opacity:0.6; cursor:not-allowed; }
+.qws-auth-btn.primary{
+  background:linear-gradient(135deg, #2dd4bf 0%, #38bdf8 100%);
+  border-color:transparent;
+  color:#0b1020;
+}
+.qws-auth-btn.ghost{
+  background:rgba(148,163,184,0.12);
+  border-color:rgba(248,250,252,0.2);
+}
+`;
+    document.head.appendChild(style4);
+  }
+  function ensureBodyReady() {
+    if (document.body) return Promise.resolve();
+    return new Promise((resolve2) => {
+      window.addEventListener("DOMContentLoaded", () => resolve2(), { once: true });
+    });
+  }
+  function setButtonEnabled2(button, enabled) {
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+    button.setAttribute("aria-disabled", (!enabled).toString());
+  }
+  function createListItem(text, iconSvg) {
+    const item = document.createElement("div");
+    item.className = "qws-auth-item";
+    const bullet = document.createElement("span");
+    bullet.className = "qws-auth-bullet";
+    bullet.innerHTML = iconSvg;
+    const label2 = document.createElement("span");
+    label2.textContent = text;
+    item.append(bullet, label2);
+    return item;
+  }
+  async function promptApiAuthOnStartup() {
+    if (hasApiKey() || hasDeclinedApiAuth()) return;
+    await ensureBodyReady();
+    showAuthModal();
+  }
+  function showAuthModal() {
+    if (document.getElementById(AUTH_MODAL_ID)) return;
+    ensureAuthModalStyles();
+    const overlay = document.createElement("div");
+    overlay.id = AUTH_MODAL_ID;
+    overlay.className = "qws-auth-overlay";
+    const card = document.createElement("div");
+    card.className = "qws-auth-card";
+    const header = document.createElement("div");
+    header.className = "qws-auth-header";
+    const icon = document.createElement("div");
+    icon.className = "qws-auth-icon";
+    icon.innerHTML = '<svg viewBox="0 0.5 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#clip0_537_21)"><path d="M20.317 4.54101C18.7873 3.82774 17.147 3.30224 15.4319 3.00126C15.4007 2.99545 15.3695 3.00997 15.3534 3.039C15.1424 3.4203 14.9087 3.91774 14.7451 4.30873C12.9004 4.02808 11.0652 4.02808 9.25832 4.30873C9.09465 3.90905 8.85248 3.4203 8.64057 3.039C8.62448 3.01094 8.59328 2.99642 8.56205 3.00126C6.84791 3.30128 5.20756 3.82678 3.67693 4.54101C3.66368 4.54681 3.65233 4.5565 3.64479 4.56907C0.533392 9.29283 -0.31895 13.9005 0.0991801 18.451C0.101072 18.4733 0.11337 18.4946 0.130398 18.5081C2.18321 20.0401 4.17171 20.9701 6.12328 21.5866C6.15451 21.5963 6.18761 21.5847 6.20748 21.5585C6.66913 20.9179 7.08064 20.2424 7.43348 19.532C7.4543 19.4904 7.43442 19.441 7.39186 19.4246C6.73913 19.173 6.1176 18.8662 5.51973 18.5178C5.47244 18.4897 5.46865 18.421 5.51216 18.3881C5.63797 18.2923 5.76382 18.1926 5.88396 18.0919C5.90569 18.0736 5.93598 18.0697 5.96153 18.0813C9.88928 19.9036 14.1415 19.9036 18.023 18.0813C18.0485 18.0687 18.0788 18.0726 18.1015 18.091C18.2216 18.1916 18.3475 18.2923 18.4742 18.3881C18.5177 18.421 18.5149 18.4897 18.4676 18.5178C17.8697 18.8729 17.2482 19.173 16.5945 19.4236C16.552 19.4401 16.533 19.4904 16.5538 19.532C16.9143 20.2414 17.3258 20.9169 17.7789 21.5576C17.7978 21.5847 17.8319 21.5963 17.8631 21.5866C19.8241 20.9701 21.8126 20.0401 23.8654 18.5081C23.8834 18.4946 23.8948 18.4742 23.8967 18.452C24.3971 13.1911 23.0585 8.6212 20.3482 4.57004C20.3416 4.5565 20.3303 4.54681 20.317 4.54101ZM8.02002 15.6802C6.8375 15.6802 5.86313 14.577 5.86313 13.222C5.86313 11.8671 6.8186 10.7639 8.02002 10.7639C9.23087 10.7639 10.1958 11.8768 10.1769 13.222C10.1769 14.577 9.22141 15.6802 8.02002 15.6802ZM15.9947 15.6802C14.8123 15.6802 13.8379 14.577 13.8379 13.222C13.8379 11.8671 14.7933 10.7639 15.9947 10.7639C17.2056 10.7639 18.1705 11.8768 18.1516 13.222C18.1516 14.577 17.2056 15.6802 15.9947 15.6802Z" fill="#758CA3"/></g><defs><clipPath id="clip0_537_21"><rect width="24" height="24" fill="white"/></clipPath></defs></svg>';
+    const titleWrap = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "qws-auth-title";
+    title.textContent = "Connect Discord to use Community Hub";
+    const subtitle = document.createElement("div");
+    subtitle.className = "qws-auth-subtitle";
+    subtitle.textContent = "Optional. Skipping will disable social features.";
+    titleWrap.append(title, subtitle);
+    const brand = document.createElement("span");
+    brand.className = "qws-auth-brand";
+    brand.textContent = "ARIE'S MOD";
+    header.append(icon, titleWrap, brand);
+    const dividerTop = document.createElement("div");
+    dividerTop.className = "qws-auth-divider";
+    const iconCheck = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4 4 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const iconUser = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.4 0-8 2.2-8 5v1h16v-1c0-2.8-3.6-5-8-5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const iconId = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7.5a2.5 2.5 0 0 1 2.5-2.5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 10.5h4M8 14h7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    const iconBox = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 7.5 12 3l8.5 4.5-8.5 4.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.5 7.5V16.5L12 21l8.5-4.5V7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 12v9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    const whySection = document.createElement("div");
+    whySection.className = "qws-auth-section";
+    const whyTitle = document.createElement("div");
+    whyTitle.className = "qws-auth-section-title";
+    whyTitle.textContent = "Why this is needed";
+    const whyList = document.createElement("div");
+    whyList.className = "qws-auth-list";
+    whyList.append(
+      createListItem("Prevent impersonation and abuse", iconCheck),
+      createListItem(
+        "Protect leaderboards and community stats from manipulation",
+        iconCheck
+      ),
+      createListItem("Protect against message interception", iconCheck)
+    );
+    whySection.append(whyTitle, whyList);
+    const dividerMid = document.createElement("div");
+    dividerMid.className = "qws-auth-divider";
+    const useSection = document.createElement("div");
+    useSection.className = "qws-auth-section";
+    const useTitle = document.createElement("div");
+    useTitle.className = "qws-auth-section-title";
+    useTitle.textContent = "What Arie's Mod uses";
+    const useList = document.createElement("div");
+    useList.className = "qws-auth-list";
+    useList.append(
+      createListItem(
+        "In-game player information used by Community Hub (stats, garden, inventory, etc.)",
+        iconBox
+      )
+    );
+    useSection.append(useTitle, useList);
+    const dividerBottom = document.createElement("div");
+    dividerBottom.className = "qws-auth-divider";
+    const unlocks = document.createElement("div");
+    unlocks.className = "qws-auth-unlocks";
+    unlocks.innerHTML = "<strong>Unlocks</strong> Public rooms / Friends / Messages / Groups / Leaderboards";
+    const isDiscord = isDiscordActivityContext();
+    let manualInput = null;
+    let manualRow = null;
+    let manualMode = false;
+    const status = document.createElement("div");
+    status.className = "qws-auth-status";
+    status.textContent = "";
+    const actions = document.createElement("div");
+    actions.className = "qws-auth-actions";
+    const refuseBtn = document.createElement("button");
+    refuseBtn.type = "button";
+    refuseBtn.className = "qws-auth-btn ghost";
+    refuseBtn.textContent = "Continue without Discord";
+    let authBtn = null;
+    if (isDiscord) {
+      const inputRow = document.createElement("div");
+      inputRow.className = "qws-auth-input-row qws-auth-hidden";
+      const inputLabel = document.createElement("div");
+      inputLabel.className = "qws-auth-input-label";
+      inputLabel.textContent = "Discord Activity cannot open popups. Paste your API key here.";
+      const input = document.createElement("input");
+      input.className = "qws-auth-input";
+      input.type = "text";
+      input.placeholder = "Paste your API key";
+      manualInput = input;
+      inputRow.append(inputLabel, input);
+      manualRow = inputRow;
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "qws-auth-btn primary";
+      openBtn.textContent = "Authenticate with Discord";
+      authBtn = openBtn;
+      actions.append(refuseBtn, openBtn);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qws-auth-btn primary";
+      btn.textContent = "Authenticate with Discord";
+      authBtn = btn;
+      actions.append(refuseBtn, btn);
+    }
+    const cardNodes = [
+      header,
+      dividerTop,
+      whySection,
+      dividerMid,
+      useSection,
+      dividerBottom,
+      unlocks
+    ];
+    if (manualRow) cardNodes.push(manualRow);
+    cardNodes.push(status, actions);
+    card.append(...cardNodes);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    const closeModal2 = () => {
+      overlay.remove();
+    };
+    refuseBtn.addEventListener("click", () => {
+      setDeclinedApiAuth(true);
+      closeModal2();
+    });
+    if (authBtn) {
+      authBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        if (isDiscord) {
+          if (!manualMode) {
+            manualMode = true;
+            if (manualRow) manualRow.classList.remove("qws-auth-hidden");
+            authBtn.textContent = "Save API key";
+            manualInput?.focus();
+            status.textContent = "After logging in, paste your API key below.";
+            requestApiKey().then(async (apiKey2) => {
+              if (!apiKey2) return;
+              setDeclinedApiAuth(false);
+              await triggerPlayerStateSyncNow({ force: true });
+              window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+              closeModal2();
+            }).catch(() => {
+            });
+            return;
+          }
+          const key2 = (manualInput?.value ?? "").trim();
+          if (!key2) {
+            status.textContent = "Please paste your API key.";
+            return;
+          }
+          setApiKey(key2);
+          setDeclinedApiAuth(false);
+          await triggerPlayerStateSyncNow({ force: true });
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+          closeModal2();
+          return;
+        }
+        setButtonEnabled2(authBtn, false);
+        setButtonEnabled2(refuseBtn, false);
+        const originalLabel = authBtn.textContent || "";
+        authBtn.textContent = "Authenticating...";
+        const apiKey = await requestApiKey();
+        if (apiKey) {
+          setDeclinedApiAuth(false);
+          await triggerPlayerStateSyncNow({ force: true });
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+          closeModal2();
+          return;
+        }
+        status.textContent = "Authentication failed. Please allow popups and try again.";
+        authBtn.textContent = originalLabel;
+        setButtonEnabled2(authBtn, true);
+        setButtonEnabled2(refuseBtn, true);
+      });
+    }
+    if (manualInput) {
+      manualInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        authBtn?.click();
+      });
+    }
+  }
+
   // src/main.ts
   (async function() {
     "use strict";
+    if (initAuthBridgeIfNeeded()) return;
     installPageWebSocketHook();
     initGameVersion();
     MGVersion.prefetch();
@@ -61879,6 +62517,7 @@ next: ${next}`;
     }
     tos.init();
     EditorService.init();
+    void promptApiAuthOnStartup();
     mountHUD({
       onRegister(register) {
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
