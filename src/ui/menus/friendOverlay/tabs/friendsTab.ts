@@ -413,6 +413,14 @@ export function createFriendsTab(): FriendsTabHandle {
     })
     .catch(() => {});
 
+  const handleAuthUpdate = () => {
+    // Petit délai pour s'assurer que l'API key est bien disponible
+    setTimeout(() => {
+      void loadFriends({ force: true });
+    }, 100);
+  };
+  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
+
   void loadFriends();
 
   return {
@@ -423,6 +431,12 @@ export function createFriendsTab(): FriendsTabHandle {
       unsubscribeSettings();
       try {
         unsubscribePlayerId?.();
+      } catch {}
+      try {
+        window.removeEventListener(
+          "qws-friend-overlay-auth-update",
+          handleAuthUpdate as EventListener,
+        );
       } catch {}
     },
   };

@@ -2,6 +2,7 @@
 // Point d'entrée unique pour parler à ton backend ariesmod-api.ariedam.fr
 
 import { isDiscordActivityContext } from "./discordCsp";
+import { clearApiKey, getApiKey, hasApiKey, setApiKey } from "./localStorage";
 export {
   setImageSafe,
   getAudioUrlSafe,
@@ -9,6 +10,7 @@ export {
 } from "./discordCsp";
 
 const API_BASE_URL = "https://ariesmod-api.ariedam.fr/";
+const API_ORIGIN = API_BASE_URL.replace(/\/$/, "");
 
 // Si tu n'as pas les types Tampermonkey, ça évite que TS hurle
 declare function GM_xmlhttpRequest(details: {
@@ -22,11 +24,148 @@ declare function GM_xmlhttpRequest(details: {
   onprogress?: (response: { status: number; readyState: number; responseText: string; loaded: number; total: number }) => void;
 }): { abort(): void };
 
+declare const GM_openInTab:
+  | ((url: string, opts?: { active?: boolean; insert?: boolean; setParent?: boolean }) => void)
+  | undefined;
+
+export { clearApiKey, getApiKey, hasApiKey, setApiKey };
+
+const hasCommunityAccess = (): boolean => hasApiKey();
+
+/**
+ * Ouvre une popup Discord OAuth pour obtenir une API key.
+ * Retourne une Promise qui se résout avec l'API key ou null si échec.
+ */
+export function requestApiKey(): Promise<string | null> {
+  return new Promise((resolve) => {
+    const authUrl = `${API_ORIGIN}/auth/discord/login`;
+
+    const width = 600;
+    const height = 700;
+    const screenW = typeof screen !== "undefined" ? screen.width : window.innerWidth;
+    const screenH = typeof screen !== "undefined" ? screen.height : window.innerHeight;
+    const left = Math.max(0, Math.floor((screenW - width) / 2));
+    const top = Math.max(0, Math.floor((screenH - height) / 2));
+
+    const preferGmTab = isDiscordActivityContext();
+    const popup = preferGmTab
+      ? null
+      : window.open(
+          authUrl,
+          "aries_discord_auth",
+          `width=${width},height=${height},left=${left},top=${top},toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes`,
+        );
+
+    let openedWithGm = false;
+    if (!popup) {
+      if (typeof GM_openInTab === "function") {
+        try {
+          GM_openInTab(authUrl, { active: true, insert: true, setParent: true });
+          openedWithGm = true;
+          console.warn("[Auth] Popup blocked. Opened Discord auth in a new tab.");
+        } catch (error) {
+          console.warn("[Auth] GM_openInTab failed:", error);
+        }
+      }
+      if (!openedWithGm) {
+        console.error("Failed to open Discord auth popup - popup blocked?");
+        resolve(null);
+        return;
+      }
+    }
+
+    let done = false;
+    const finish = (value: string | null) => {
+      if (done) return;
+      done = true;
+      resolve(value);
+    };
+
+    let checkClosed: number | null = null;
+    let pollKey: number | null = null;
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      if (checkClosed !== null) {
+        clearInterval(checkClosed);
+        checkClosed = null;
+      }
+      if (pollKey !== null) {
+        clearInterval(pollKey);
+        pollKey = null;
+      }
+      window.removeEventListener("message", handleMessage);
+    };
+
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      console.warn("Discord auth popup timed out");
+      finish(null);
+    }, 5 * 60 * 1000);
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== API_ORIGIN) return;
+      const data = event.data as { type?: string; apiKey?: string; discordId?: string; discordUsername?: string };
+      if (!data || data.type !== "aries_discord_auth" || !data.apiKey) return;
+
+      cleanup();
+
+      const apiKey = String(data.apiKey);
+      const discordId = data.discordId ? String(data.discordId) : "";
+      const discordUsername = data.discordUsername ? String(data.discordUsername) : "";
+
+      console.log(`[Auth] Successfully authenticated as ${discordUsername} (${discordId})`);
+      setApiKey(apiKey);
+
+      try {
+        popup.close();
+      } catch {}
+
+      finish(apiKey);
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    if (popup) {
+      checkClosed = window.setInterval(() => {
+        if (!popup.closed) return;
+        cleanup();
+        finish(null);
+      }, 500);
+    } else if (openedWithGm) {
+      pollKey = window.setInterval(() => {
+        const key = getApiKey();
+        if (!key) return;
+        cleanup();
+        finish(key);
+      }, 800);
+    }
+  });
+}
+
+/**
+ * S'assure qu'on a une API key valide.
+ * Si pas de clé, ouvre la popup Discord OAuth.
+ */
+export async function ensureApiKey(): Promise<string | null> {
+  const existingKey = getApiKey();
+  if (existingKey) return existingKey;
+
+  console.log("[Auth] No API key found, requesting Discord authentication...");
+  const newKey = await requestApiKey();
+
+  if (!newKey) {
+    console.error("[Auth] Failed to obtain API key");
+    return null;
+  }
+
+  return newKey;
+}
+
 /** Handle retourné par les fonctions de stream SSE (remplace EventSource). */
 export interface StreamHandle {
   close(): void;
 }
-
 
 /** Known SSE event names across all streams. */
 const SSE_EVENT_NAMES = [
@@ -477,7 +616,6 @@ export interface PlayerView {
   isOnline: boolean;
   lastEventAt: string | null;
   privacy: PlayerPrivacyPayload;
-  // Sur /get-player-view (single) présent, sur /get-players-view parfois absent selon sections
   state?: PlayerViewState;
 }
 
@@ -584,6 +722,7 @@ export interface FriendRequestsStreamHandlers {
   onRemoved?: (payload: FriendRequestStreamRemoved) => void;
   onError?: (event: Event) => void;
 }
+
 export interface FriendRequestsResult {
   playerId: string;
   incoming: FriendRequestIncoming[];
@@ -605,8 +744,6 @@ export interface ModPlayerSummary {
   lastEventAt: string | null;
 }
 
-// ---------- Leaderboards ----------
-
 export interface LeaderboardRow {
   playerId: string | null;
   playerName: string | null;
@@ -627,7 +764,6 @@ export interface LeaderboardRankResponse {
   row: LeaderboardRow | null;
 }
 
-// sections possibles pour get-players-view
 export type PlayerViewSection =
   | "profile"
   | "garden"
@@ -660,8 +796,18 @@ async function fetchJson<T>(
   label: "GET" | "POST" | "PATCH" | "DELETE",
 ): Promise<{ status: number; data: T | null }> {
   try {
+    const apiKey = getApiKey();
+    const headers: Record<string, string> = {
+      ...(options.headers as Record<string, string>),
+    };
+    
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     const res = await fetch(url, {
       ...options,
+      headers,
       credentials: options.credentials ?? "omit",
     });
     const text = await res.text();
@@ -682,10 +828,16 @@ function gmGet<T>(
   url: string,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
+    const apiKey = getApiKey();
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     GM_xmlhttpRequest({
       method: "GET",
       url,
-      headers: {},
+      headers,
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
           try {
@@ -712,12 +864,18 @@ function gmPost<T>(
   body: unknown,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
+    const apiKey = getApiKey();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     GM_xmlhttpRequest({
       method: "POST",
       url,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       data: JSON.stringify(body),
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
@@ -745,12 +903,18 @@ function gmPatch<T>(
   body: unknown,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
+    const apiKey = getApiKey();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     GM_xmlhttpRequest({
       method: "PATCH",
       url,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       data: JSON.stringify(body),
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
@@ -778,12 +942,18 @@ function gmDelete<T>(
   body?: unknown,
 ): Promise<{ status: number; data: T | null }> {
   return new Promise((resolve) => {
+    const apiKey = getApiKey();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     GM_xmlhttpRequest({
       method: "DELETE",
       url,
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       data: body !== undefined ? JSON.stringify(body) : undefined,
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
@@ -890,33 +1060,30 @@ async function httpDelete<T>(
   return withDiscordPollPause(() => gmDelete<T>(url, body));
 }
 
+// ---------- 1) Player State ----------
 
-/**
- * À appeler toutes les 60s côté jeu.
- * - Si le payload a changé depuis le dernier appel -> on envoie.
- * - Si le payload est identique -> on n'envoie qu'une fois toutes les 5 minutes
- *   (5e appel identique).
- */
 export async function sendPlayerState(
   payload: PlayerStatePayload | null,
 ): Promise<boolean> {
-  if (!payload) {
-    return false;
-  }
+  if (!hasCommunityAccess()) return false;
+  if (!payload) return false;
 
-  const { status } = await httpPost<null>('collect-state', payload);
+  const { playerId, avatarUrl, ...cleanPayload } = payload as any;
+
+  const { status } = await httpPost<null>('collect-state', cleanPayload);
   if (status === 204) return true;
   if (status === 429) {
     console.error('[api] sendPlayerState rate-limited');
+  } else if (status === 401) {
+    console.error('[api] sendPlayerState unauthorized - invalid or missing API key');
   }
   return false;
 }
 
 // ---------- 2) Rooms publiques ----------
 
-export async function fetchAvailableRooms(
-  limit = 50,
-): Promise<Room[]> {
+export async function fetchAvailableRooms(limit = 50): Promise<Room[]> {
+  if (!hasCommunityAccess()) return [];
   const { data } = await httpGet<RoomDto[]>("rooms", { limit });
   if (!data || !Array.isArray(data)) return [];
 
@@ -935,28 +1102,21 @@ export async function fetchAvailableRooms(
   }));
 }
 
-// ---------- 3) Player view (un / plusieurs) ----------
+// ---------- 3) Player view ----------
 
-export async function fetchPlayerView(
-  playerId: string,
-): Promise<PlayerView | null> {
+export async function fetchPlayerView(playerId: string): Promise<PlayerView | null> {
+  if (!hasCommunityAccess()) return null;
   if (!playerId) return null;
-  const { status, data } = await httpGet<PlayerView>("get-player-view", {
-    playerId,
-  });
+  const { status, data } = await httpGet<PlayerView>("get-player-view", { playerId });
   if (status === 404) return null;
   return data;
 }
 
-/**
- * Récupère des PlayerView en batch, avec possibilité de limiter les sections.
- */
 export async function fetchPlayersView(
   playerIds: string[],
-  options?: {
-    sections?: PlayerViewSection[] | PlayerViewSection;
-  },
+  options?: { sections?: PlayerViewSection[] | PlayerViewSection },
 ): Promise<PlayerView[]> {
+  if (!hasCommunityAccess()) return [];
   const ids = Array.from(
     new Set(
       (playerIds ?? [])
@@ -967,71 +1127,67 @@ export async function fetchPlayersView(
   if (ids.length === 0) return [];
 
   const body: any = { playerIds: ids };
-
   if (options?.sections) {
-    body.sections = Array.isArray(options.sections)
-      ? options.sections
-      : [options.sections];
+    body.sections = Array.isArray(options.sections) ? options.sections : [options.sections];
   }
 
-  const { status, data } = await httpPost<PlayerView[]>(
-    "get-players-view",
-    body,
-  );
-
+  const { status, data } = await httpPost<PlayerView[]>("get-players-view", body);
   if (status !== 200 || !Array.isArray(data)) return [];
   return data;
 }
 
-// ---------- 4) Amis : demandes + réponse ----------
+// ---------- 4) Friends ----------
 
-export async function sendFriendRequest(
-  fromPlayerId: string,
-  toPlayerId: string,
-): Promise<boolean> {
-  if (!fromPlayerId || !toPlayerId || fromPlayerId === toPlayerId) {
-    return false;
-  }
+export async function sendFriendRequest(toPlayerId: string): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  if (!toPlayerId) return false;
 
-  const { status } = await httpPost<null>("friend-request", {
-    fromPlayerId,
-    toPlayerId,
-  });
-
+  const { status } = await httpPost<null>("friend-request", { toPlayerId });
   if (status === 204) return true;
-  if (status === 409) {
-    console.warn("[api] friend-request conflict (already exists)");
-  }
+  if (status === 409) console.warn("[api] friend-request conflict (already exists)");
+  else if (status === 401) console.error('[api] sendFriendRequest unauthorized');
   return false;
 }
 
 export async function respondFriendRequest(params: {
-  playerId: string;
   otherPlayerId: string;
   action: FriendAction;
 }): Promise<boolean> {
-  const { playerId, otherPlayerId, action } = params;
-  if (!playerId || !otherPlayerId || playerId === otherPlayerId) {
-    return false;
-  }
+  if (!hasCommunityAccess()) return false;
+  const { otherPlayerId, action } = params;
+  if (!otherPlayerId) return false;
 
-  const { status } = await httpPost<null>("friend-respond", {
-    playerId,
-    otherPlayerId,
-    action,
-  });
-
+  const { status } = await httpPost<null>("friend-respond", { otherPlayerId, action });
   if (status === 204) return true;
+  if (status === 401) console.error('[api] respondFriendRequest unauthorized');
   return false;
 }
 
-// ---------- 5) Amis : liste + pending ----------
+export async function cancelFriendRequest(otherPlayerId: string): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  if (!otherPlayerId) return false;
+
+  const { status } = await httpPost<null>("friend-cancel", { otherPlayerId });
+  if (status === 401) console.error('[api] cancelFriendRequest unauthorized');
+  return status === 204;
+}
+
+export async function removeFriend(otherPlayerId: string): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  if (!otherPlayerId) return false;
+
+  const { status } = await httpPost<null>("friend-remove", { otherPlayerId });
+  if (status === 401) console.error('[api] removeFriend unauthorized');
+  return status === 204;
+}
 
 export async function fetchFriendsSummary(
-  playerId: string,
+  playerId: string, // kept for API compatibility, no longer used
 ): Promise<FriendSummary[]> {
-  if (!playerId) return [];
-
+  if (!hasCommunityAccess()) {
+    cachedFriendsSummary = [];
+    return [];
+  }
   const { status, data } = await httpGet<{
     playerId: string;
     friends: Array<{
@@ -1042,7 +1198,7 @@ export async function fetchFriendsSummary(
       lastEventAt: string | null;
       roomId: string | null;
     }>;
-  }>("list-friends", { playerId });
+  }>("list-friends");
 
   if (status !== 200 || !data || !Array.isArray(data.friends)) {
     cachedFriendsSummary = [];
@@ -1063,44 +1219,34 @@ export async function fetchFriendsSummary(
   return [...result];
 }
 
-export async function fetchFriendsIds(
-  playerId: string,
-): Promise<string[]> {
+export async function fetchFriendsIds(playerId: string): Promise<string[]> {
   const friends = await fetchFriendsSummary(playerId);
   return friends.map((f) => f.playerId);
 }
 
-export async function fetchFriendsWithViews(
-  playerId: string,
-): Promise<PlayerView[]> {
+export async function fetchFriendsWithViews(playerId: string): Promise<PlayerView[]> {
   const friendIds = await fetchFriendsIds(playerId);
   if (friendIds.length === 0) {
     cachedFriendsView = [];
     return [];
   }
 
-  const result = await fetchPlayersView(friendIds, {
-    sections: ["profile", "room"],
-  });
+  const result = await fetchPlayersView(friendIds, { sections: ["profile", "room"] });
   cachedFriendsView = result;
   return [...result];
 }
 
 export async function fetchFriendRequests(
-  playerId: string,
+  playerId: string, // kept for API compatibility, no longer used
 ): Promise<FriendRequestsResult> {
-  if (!playerId) {
-    return { playerId: "", incoming: [], outgoing: [] };
-  }
-
-  const { status, data } = await httpGet<FriendRequestsResult>(
-    "list-friend-requests",
-    { playerId },
-  );
-
-  if (status !== 200 || !data) {
+  if (!hasCommunityAccess()) {
+    cachedOutgoingRequests = [];
     return { playerId, incoming: [], outgoing: [] };
   }
+  if (!playerId) return { playerId: "", incoming: [], outgoing: [] };
+
+  const { status, data } = await httpGet<FriendRequestsResult>("list-friend-requests");
+  if (status !== 200 || !data) return { playerId, incoming: [], outgoing: [] };
 
   const result: FriendRequestsResult = {
     playerId: data.playerId ?? playerId,
@@ -1111,9 +1257,7 @@ export async function fetchFriendRequests(
   return result;
 }
 
-export async function fetchIncomingRequestsWithViews(
-  playerId: string,
-): Promise<PlayerView[]> {
+export async function fetchIncomingRequestsWithViews(playerId: string): Promise<PlayerView[]> {
   const { incoming } = await fetchFriendRequests(playerId);
   const ids = incoming.map((r) => r.fromPlayerId);
   if (ids.length === 0) {
@@ -1126,69 +1270,18 @@ export async function fetchIncomingRequestsWithViews(
   return [...result];
 }
 
-export async function fetchOutgoingRequestsWithViews(
-  playerId: string,
-): Promise<PlayerView[]> {
+export async function fetchOutgoingRequestsWithViews(playerId: string): Promise<PlayerView[]> {
   const { outgoing } = await fetchFriendRequests(playerId);
   const ids = outgoing.map((r) => r.toPlayerId);
   if (ids.length === 0) return [];
-
   return fetchPlayersView(ids, { sections: ["profile"] });
 }
-
-// ---------- Leaderboards ----------
-
-export async function fetchLeaderboardCoins(
-  limit = 50,
-  offset = 0,
-): Promise<LeaderboardRow[]> {
-  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/coins", {
-    limit,
-    offset,
-  });
-  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-  return data.rows;
-}
-
-export async function fetchLeaderboardEggsHatched(
-  limit = 50,
-  offset = 0,
-): Promise<LeaderboardRow[]> {
-  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/eggs-hatched", {
-    limit,
-    offset,
-  });
-  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-  return data.rows;
-}
-
-export async function fetchLeaderboardCoinsRank(
-  playerId: string,
-): Promise<LeaderboardRankResponse | null> {
-  if (!playerId) return null;
-  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/coins/rank", {
-    playerId,
-  });
-  if (status !== 200 || !data) return null;
-  return data;
-}
-
-export async function fetchLeaderboardEggsHatchedRank(
-  playerId: string,
-): Promise<LeaderboardRankResponse | null> {
-  if (!playerId) return null;
-  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/eggs-hatched/rank", {
-    playerId,
-  });
-  if (status !== 200 || !data) return null;
-  return data;
-}
-
 
 export function openFriendRequestsStream(
   playerId: string,
   handlers: FriendRequestsStreamHandlers = {},
 ): StreamHandle | null {
+  if (!hasCommunityAccess()) return null;
   if (!playerId) return null;
 
   return openUnifiedEvents(playerId, {
@@ -1200,7 +1293,6 @@ export function openFriendRequestsStream(
     },
     onEvent: (eventName, data) => {
       const parsed = safeJsonParse(data);
-
       switch (eventName) {
         case "friend_request":
           handlers.onRequest?.(parsed as FriendRequestStreamRequest);
@@ -1236,57 +1328,50 @@ export function openFriendRequestsStream(
   });
 }
 
-export async function cancelFriendRequest(
-  playerId: string,
-  otherPlayerId: string,
-): Promise<boolean> {
-  if (!playerId || !otherPlayerId || playerId === otherPlayerId) {
-    return false;
-  }
+// ---------- 5) Leaderboards ----------
 
-  const { status } = await httpPost<null>("friend-cancel", {
-    playerId,
-    otherPlayerId,
-  });
-
-  return status === 204;
+export async function fetchLeaderboardCoins(limit = 50, offset = 0): Promise<LeaderboardRow[]> {
+  if (!hasCommunityAccess()) return [];
+  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/coins", { limit, offset });
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+  return data.rows;
 }
 
-export async function removeFriend(
-  playerId: string,
-  otherPlayerId: string,
-): Promise<boolean> {
-  if (!playerId || !otherPlayerId || playerId === otherPlayerId) {
-    return false;
-  }
-
-  const { status } = await httpPost<null>("friend-remove", {
-    playerId,
-    otherPlayerId,
-  });
-
-  return status === 204;
+export async function fetchLeaderboardEggsHatched(limit = 50, offset = 0): Promise<LeaderboardRow[]> {
+  if (!hasCommunityAccess()) return [];
+  const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/eggs-hatched", { limit, offset });
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
+  return data.rows;
 }
 
-// ---------- 6) Recherche de joueurs via les rooms publiques ----------
+export async function fetchLeaderboardCoinsRank(playerId: string): Promise<LeaderboardRankResponse | null> {
+  if (!hasCommunityAccess()) return null;
+  if (!playerId) return null;
+  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/coins/rank", { playerId });
+  if (status !== 200 || !data) return null;
+  return data;
+}
+
+export async function fetchLeaderboardEggsHatchedRank(playerId: string): Promise<LeaderboardRankResponse | null> {
+  if (!hasCommunityAccess()) return null;
+  if (!playerId) return null;
+  const { status, data } = await httpGet<LeaderboardRankResponse>("leaderboard/eggs-hatched/rank", { playerId });
+  if (status !== 200 || !data) return null;
+  return data;
+}
+
+// ---------- 6) Search ----------
 
 export async function searchPlayersByName(
   rawQuery: string,
-  options?: {
-    limitRooms?: number;
-    minQueryLength?: number;
-  },
+  options?: { limitRooms?: number; minQueryLength?: number },
 ): Promise<PlayerRoomResult[]> {
   const query = rawQuery.trim();
   const minLen = options?.minQueryLength ?? 2;
-
-  if (query.length < minLen) {
-    return [];
-  }
+  if (query.length < minLen) return [];
 
   const limitRooms = options?.limitRooms ?? 200;
   const qLower = query.toLowerCase();
-
   const rooms = await fetchAvailableRooms(limitRooms);
 
   const map = new Map<string, PlayerRoomResult>();
@@ -1317,21 +1402,14 @@ export async function searchPlayersByName(
 
 export async function searchRoomsByPlayerName(
   rawQuery: string,
-  options?: {
-    limitRooms?: number;
-    minQueryLength?: number;
-  },
+  options?: { limitRooms?: number; minQueryLength?: number },
 ): Promise<RoomSearchResult[]> {
   const query = rawQuery.trim();
   const minLen = options?.minQueryLength ?? 2;
-
-  if (query.length < minLen) {
-    return [];
-  }
+  if (query.length < minLen) return [];
 
   const limitRooms = options?.limitRooms ?? 200;
   const qLower = query.toLowerCase();
-
   const rooms = await fetchAvailableRooms(limitRooms);
 
   const results: RoomSearchResult[] = [];
@@ -1345,17 +1423,12 @@ export async function searchRoomsByPlayerName(
     });
 
     if (matchedSlots.length > 0) {
-      results.push({
-        room,
-        matchedSlots,
-      });
+      results.push({ room, matchedSlots });
     }
   }
 
   return results;
 }
-
-// ---------- 6b) Mod players list ----------
 
 export async function fetchModPlayers(options?: {
   query?: string;
@@ -1371,7 +1444,7 @@ export async function fetchModPlayers(options?: {
   return data;
 }
 
-// ---------- 6c) Groups ----------
+// ---------- 7) Groups ----------
 
 export interface GroupSummary {
   id: string;
@@ -1421,14 +1494,17 @@ export async function createGroup(params: {
   ownerId: string;
   name: string;
 }): Promise<GroupSummary | null> {
+  if (!hasCommunityAccess()) return null;
   const { ownerId, name } = params;
   if (!ownerId || !name) return null;
   const { status, data } = await httpPost<GroupSummary>("groups", { ownerId, name });
   if (status >= 200 && status < 300 && data) return data;
+  if (status === 401) console.error('[api] createGroup unauthorized');
   return null;
 }
 
 export async function fetchGroups(playerId: string): Promise<GroupSummary[]> {
+  if (!hasCommunityAccess()) return [];
   if (!playerId) return [];
   const { status, data } = await httpGet<GroupSummary[] | { playerId?: string; groups?: GroupSummary[] }>(
     "groups",
@@ -1440,78 +1516,66 @@ export async function fetchGroups(playerId: string): Promise<GroupSummary[]> {
   return [];
 }
 
-export async function fetchGroupDetails(
-  groupId: string,
-  playerId: string,
-): Promise<GroupDetails | null> {
+export async function fetchGroupDetails(groupId: string, playerId: string): Promise<GroupDetails | null> {
+  if (!hasCommunityAccess()) return null;
   if (!groupId || !playerId) return null;
   const { status, data } = await httpGet<GroupDetails>(`groups/${groupId}`, { playerId });
   if (status !== 200 || !data) return null;
   return data;
 }
 
-export async function updateGroupName(params: {
-  groupId: string;
-  playerId: string;
-  name: string;
-}): Promise<boolean> {
-  const { groupId, playerId, name } = params;
-  if (!groupId || !playerId || !name) return false;
-  const { status } = await httpPatch<null>(`groups/${groupId}`, { playerId, name });
+export async function updateGroupName(params: { groupId: string; name: string }): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  const { groupId, name } = params;
+  if (!groupId || !name) return false;
+  const { status } = await httpPatch<null>(`groups/${groupId}`, { name });
+  if (status === 401) console.error('[api] updateGroupName unauthorized');
   return status >= 200 && status < 300;
 }
 
-export async function deleteGroup(params: {
-  groupId: string;
-  playerId: string;
-}): Promise<boolean> {
-  const { groupId, playerId } = params;
-  if (!groupId || !playerId) return false;
-  const { status } = await httpDelete<null>(`groups/${groupId}`, { playerId });
+export async function deleteGroup(params: { groupId: string }): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  const { groupId } = params;
+  if (!groupId) return false;
+  const { status } = await httpDelete<null>(`groups/${groupId}`, {});
+  if (status === 401) console.error('[api] deleteGroup unauthorized');
   return status >= 200 && status < 300;
 }
 
-export async function addGroupMember(params: {
-  groupId: string;
-  playerId: string;
-  memberId: string;
-}): Promise<boolean> {
-  const { groupId, playerId, memberId } = params;
-  if (!groupId || !playerId || !memberId) return false;
-  const { status } = await httpPost<null>(`groups/${groupId}/members`, { playerId, memberId });
+export async function addGroupMember(params: { groupId: string; memberId: string }): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  const { groupId, memberId } = params;
+  if (!groupId || !memberId) return false;
+  const { status } = await httpPost<null>(`groups/${groupId}/members`, { memberId });
+  if (status === 401) console.error('[api] addGroupMember unauthorized');
   return status >= 200 && status < 300;
 }
 
-export async function removeGroupMember(params: {
-  groupId: string;
-  playerId: string;
-  memberId: string;
-}): Promise<boolean> {
-  const { groupId, playerId, memberId } = params;
-  if (!groupId || !playerId || !memberId) return false;
-  const { status } = await httpDelete<null>(`groups/${groupId}/members/${memberId}`, { playerId });
+export async function removeGroupMember(params: { groupId: string; memberId: string }): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  const { groupId, memberId } = params;
+  if (!groupId || !memberId) return false;
+  const { status } = await httpDelete<null>(`groups/${groupId}/members/${memberId}`, {});
+  if (status === 401) console.error('[api] removeGroupMember unauthorized');
   return status >= 200 && status < 300;
 }
 
-export async function leaveGroup(params: {
-  groupId: string;
-  playerId: string;
-}): Promise<boolean> {
-  const { groupId, playerId } = params;
-  if (!groupId || !playerId) return false;
-  const { status } = await httpPost<null>(`groups/${groupId}/leave`, { playerId });
+export async function leaveGroup(params: { groupId: string }): Promise<boolean> {
+  if (!hasCommunityAccess()) return false;
+  const { groupId } = params;
+  if (!groupId) return false;
+  const { status } = await httpPost<null>(`groups/${groupId}/leave`, {});
+  if (status === 401) console.error('[api] leaveGroup unauthorized');
   return status >= 200 && status < 300;
 }
 
-export async function sendGroupMessage(params: {
-  groupId: string;
-  playerId: string;
-  text: string;
-}): Promise<GroupMessage | null> {
-  const { groupId, playerId, text } = params;
-  if (!groupId || !playerId || !text) return null;
-  const { status, data } = await httpPost<GroupMessage>(`groups/${groupId}/messages`, { playerId, text });
+export async function sendGroupMessage(params: { groupId: string; text: string }): Promise<GroupMessage | null> {
+  if (!hasCommunityAccess()) return null;
+  const { groupId, text } = params;
+  if (!groupId || !text) return null;
+  const { status, data } = await httpPost<GroupMessage>(`groups/${groupId}/messages`, { text });
   if (status >= 200 && status < 300 && data) return data;
+  if (status === 401) console.error('[api] sendGroupMessage unauthorized');
   return null;
 }
 
@@ -1520,21 +1584,68 @@ export async function fetchGroupMessages(
   playerId: string,
   options?: { afterId?: number; beforeId?: number; limit?: number },
 ): Promise<GroupMessage[]> {
+  if (!hasCommunityAccess()) return [];
   if (!groupId || !playerId) return [];
-  const { status, data } = await httpGet<GroupMessage[]>(
-    `groups/${groupId}/messages`,
-    {
-      playerId,
-      afterId: options?.afterId,
-      beforeId: options?.beforeId,
-      limit: options?.limit,
-    },
-  );
+  const { status, data } = await httpGet<GroupMessage[]>(`groups/${groupId}/messages`, {
+    playerId,
+    afterId: options?.afterId,
+    beforeId: options?.beforeId,
+    limit: options?.limit,
+  });
   if (status !== 200 || !Array.isArray(data)) return [];
   return data;
 }
 
-// ---------- 7) Messages (DM) ----------
+export interface GroupEventHandlers {
+  onConnected?: (payload: { playerId: string; lastEventId?: number }) => void;
+  onMessage?: (payload: any) => void;
+  onMemberAdded?: (payload: any) => void;
+  onMemberRemoved?: (payload: any) => void;
+  onUpdated?: (payload: any) => void;
+  onDeleted?: (payload: any) => void;
+  onError?: (event: Event) => void;
+}
+
+export function openGroupsStream(
+  playerId: string,
+  handlers: GroupEventHandlers = {},
+): StreamHandle | null {
+  if (!hasCommunityAccess()) return null;
+  if (!playerId) return null;
+
+  return openUnifiedEvents(playerId, {
+    onConnected: (payload) => {
+      handlers.onConnected?.(payload);
+    },
+    onError: (event) => {
+      handlers.onError?.(event);
+    },
+    onEvent: (eventName, data) => {
+      const parsed = safeJsonParse(data);
+      switch (eventName) {
+        case "group_message":
+          handlers.onMessage?.(parsed);
+          break;
+        case "group_member_added":
+          handlers.onMemberAdded?.(parsed);
+          break;
+        case "group_member_removed":
+          handlers.onMemberRemoved?.(parsed);
+          break;
+        case "group_updated":
+          handlers.onUpdated?.(parsed);
+          break;
+        case "group_deleted":
+          handlers.onDeleted?.(parsed);
+          break;
+        default:
+          break;
+      }
+    },
+  });
+}
+
+// ---------- 8) Messages (DM) ----------
 
 export interface DirectMessage {
   id: number;
@@ -1572,59 +1683,11 @@ export interface PresencePayload {
   roomId: string | null;
 }
 
-export interface GroupEventHandlers {
-  onConnected?: (payload: { playerId: string; lastEventId?: number }) => void;
-  onMessage?: (payload: any) => void;
-  onMemberAdded?: (payload: any) => void;
-  onMemberRemoved?: (payload: any) => void;
-  onUpdated?: (payload: any) => void;
-  onDeleted?: (payload: any) => void;
-  onError?: (event: Event) => void;
-}
-
-export function openGroupsStream(
-  playerId: string,
-  handlers: GroupEventHandlers = {},
-): StreamHandle | null {
-  if (!playerId) return null;
-
-  return openUnifiedEvents(playerId, {
-    onConnected: (payload) => {
-      handlers.onConnected?.(payload);
-    },
-    onError: (event) => {
-      handlers.onError?.(event);
-    },
-    onEvent: (eventName, data) => {
-      const parsed = safeJsonParse(data);
-      switch (eventName) {
-        case "group_message":
-          handlers.onMessage?.(parsed);
-          break;
-        case "group_member_added":
-          handlers.onMemberAdded?.(parsed);
-          break;
-        case "group_member_removed":
-          handlers.onMemberRemoved?.(parsed);
-          break;
-        case "group_updated":
-          handlers.onUpdated?.(parsed);
-          break;
-        case "group_deleted":
-          handlers.onDeleted?.(parsed);
-          break;
-        default:
-          break;
-      }
-    },
-  });
-}
-
-
 export function openMessagesStream(
   playerId: string,
   handlers: MessagesStreamHandlers = {},
 ): StreamHandle | null {
+  if (!hasCommunityAccess()) return null;
   if (!playerId) return null;
 
   return openUnifiedEvents(playerId, {
@@ -1636,7 +1699,6 @@ export function openMessagesStream(
     },
     onEvent: (eventName, data) => {
       const parsed = safeJsonParse(data);
-
       switch (eventName) {
         case "message":
           handlers.onMessage?.(parsed as DirectMessage);
@@ -1655,6 +1717,7 @@ export function openPresenceStream(
   playerId: string,
   onPresence: (payload: PresencePayload) => void,
 ): StreamHandle | null {
+  if (!hasCommunityAccess()) return null;
   if (!playerId) return null;
 
   return openUnifiedEvents(playerId, {
@@ -1667,23 +1730,22 @@ export function openPresenceStream(
 }
 
 export async function sendMessage(params: {
-  fromPlayerId: string;
   toPlayerId: string;
   roomId: string;
   text: string;
 }): Promise<DirectMessage | null> {
-  const { fromPlayerId, toPlayerId, roomId, text } = params;
-  if (!fromPlayerId || !toPlayerId || !roomId || !text) return null;
-  if (fromPlayerId === toPlayerId) return null;
+  if (!hasCommunityAccess()) return null;
+  const { toPlayerId, roomId, text } = params;
+  if (!toPlayerId || !roomId || !text) return null;
 
   const { status, data } = await httpPost<DirectMessage>("messages/send", {
-    fromPlayerId,
     toPlayerId,
     roomId,
     text,
   });
 
   if (status >= 200 && status < 300 && data) return data;
+  if (status === 401) console.error('[api] sendMessage unauthorized - invalid or missing API key');
   return null;
 }
 
@@ -1692,6 +1754,7 @@ export async function fetchMessagesThread(
   otherPlayerId: string,
   options?: { afterId?: number; beforeId?: number; limit?: number },
 ): Promise<DirectMessage[]> {
+  if (!hasCommunityAccess()) return [];
   if (!playerId || !otherPlayerId) return [];
   const { status, data } = await httpGet<DirectMessage[]>("messages/thread", {
     playerId,
@@ -1705,18 +1768,21 @@ export async function fetchMessagesThread(
 }
 
 export async function markMessagesRead(params: {
-  playerId: string;
   otherPlayerId: string;
   upToId: number;
 }): Promise<number> {
-  const { playerId, otherPlayerId, upToId } = params;
-  if (!playerId || !otherPlayerId || !upToId) return 0;
+  if (!hasCommunityAccess()) return 0;
+  const { otherPlayerId, upToId } = params;
+  if (!otherPlayerId || !upToId) return 0;
 
-  const { status, data } = await httpPost<MessagesReadResult>(
-    "messages/read",
-    { playerId, otherPlayerId, upToId },
-  );
+  const { status, data } = await httpPost<MessagesReadResult>("messages/read", {
+    otherPlayerId,
+    upToId,
+  });
 
-  if (status !== 200 || !data) return 0;
+  if (status !== 200 || !data) {
+    if (status === 401) console.error('[api] markMessagesRead unauthorized');
+    return 0;
+  }
   return data.updated ?? 0;
 }

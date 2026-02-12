@@ -15,7 +15,7 @@ import { renderToolsMenu } from "./ui/menus/tools";
 import { renderEditorMenu } from "./ui/menus/editor";
 import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
-import { renderFriendsMenu } from "./ui/menus/friends";
+import { initAuthBridgeIfNeeded } from "./utils/authBridge";
 
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
@@ -28,11 +28,14 @@ import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 import { warmupSpriteCache } from "./ui/spriteIconCache";
 import { tos } from "./utils/tileObjectSystemApi";
 import "./sprite";
+import { promptApiAuthOnStartup } from "./ui/authGate";
 
 
 
 (async function () {
   "use strict";
+
+  if (initAuthBridgeIfNeeded()) return;
 
   installPageWebSocketHook();
   initGameVersion();
@@ -42,6 +45,8 @@ import "./sprite";
     tos.init()
 
   EditorService.init();
+
+   void promptApiAuthOnStartup();
 
   mountHUD({
     onRegister(register) {

@@ -4,6 +4,7 @@ export type MessagesTabHandle = {
   root: HTMLDivElement;
   show: () => void;
   hide: () => void;
+  refresh: () => void;
   openConversation: (playerId: string) => void;
   destroy: () => void;
 };
@@ -26,6 +27,7 @@ export function createMessagesTab(options: {
     root,
     show: () => messages.setActive(true),
     hide: () => messages.setActive(false),
+    refresh: () => messages.refresh(),
     openConversation: (playerId: string) => messages.openConversation(playerId),
     destroy: () => messages.destroy(),
   };

@@ -6,8 +6,16 @@
 import type { FriendSettings } from "./friendSettingsSchema";
 import { DEFAULT_FRIEND_SETTINGS } from "./friendSettingsSchema";
 
+declare const GM_getValue:
+  | ((name: string, defaultValue?: string | null) => string | null | undefined)
+  | undefined;
+declare const GM_setValue: ((name: string, value: string) => void) | undefined;
+declare const GM_deleteValue: ((name: string) => void) | undefined;
+
 export const ARIES_STORAGE_KEY = "aries_mod";
 const ARIES_STORAGE_VERSION = 1;
+const API_KEY_STORAGE_KEY = "aries_api_key";
+const AUTH_DECLINED_STORAGE_KEY = "aries_auth_declined";
 
 export type AriesStorage = {
   version: number;
@@ -553,4 +561,104 @@ export function removeLegacyStorageKeys(): void {
   const storage = getHostStorage();
   if (!storage) return;
   cleanupLegacyData(storage);
+}
+
+// ---------- API Key Storage ----------
+
+/**
+ * Stocke l'API key localement (utilise GM_setValue si disponible, sinon localStorage)
+ */
+export function setApiKey(apiKey: string): void {
+  try {
+    if (typeof GM_setValue === "function") {
+      GM_setValue(API_KEY_STORAGE_KEY, apiKey);
+      return;
+    }
+    getHostStorage()?.setItem(API_KEY_STORAGE_KEY, apiKey);
+  } catch (e) {
+    console.error("Failed to store API key:", e);
+  }
+}
+
+/**
+ * Récupère l'API key stockée localement
+ */
+export function getApiKey(): string | null {
+  try {
+    if (typeof GM_getValue === "function") {
+      return GM_getValue(API_KEY_STORAGE_KEY, null) ?? null;
+    }
+    return getHostStorage()?.getItem(API_KEY_STORAGE_KEY) ?? null;
+  } catch (e) {
+    console.error("Failed to retrieve API key:", e);
+    return null;
+  }
+}
+
+/**
+ * Supprime l'API key stockée
+ */
+export function clearApiKey(): void {
+  try {
+    if (typeof GM_deleteValue === "function") {
+      GM_deleteValue(API_KEY_STORAGE_KEY);
+      return;
+    }
+    getHostStorage()?.removeItem(API_KEY_STORAGE_KEY);
+  } catch (e) {
+    console.error("Failed to clear API key:", e);
+  }
+}
+
+/**
+ * Vérifie si l'utilisateur a une API key
+ */
+export function hasApiKey(): boolean {
+  const key = getApiKey();
+  return key !== null && key.length > 0;
+}
+
+// ---------- Auth declined flag ----------
+
+function readAuthDeclinedRaw(): string | null {
+  try {
+    if (typeof GM_getValue === "function") {
+      const raw = GM_getValue(AUTH_DECLINED_STORAGE_KEY, null);
+      if (raw == null) return null;
+      if (typeof raw === "string") return raw;
+      if (typeof raw === "boolean") return raw ? "1" : null;
+      return String(raw);
+    }
+    return getHostStorage()?.getItem(AUTH_DECLINED_STORAGE_KEY) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function hasDeclinedApiAuth(): boolean {
+  const raw = readAuthDeclinedRaw();
+  if (!raw) return false;
+  const val = String(raw).trim().toLowerCase();
+  return val === "1" || val === "true" || val === "yes";
+}
+
+export function setDeclinedApiAuth(declined: boolean): void {
+  try {
+    if (declined) {
+      if (typeof GM_setValue === "function") {
+        GM_setValue(AUTH_DECLINED_STORAGE_KEY, "1");
+        return;
+      }
+      getHostStorage()?.setItem(AUTH_DECLINED_STORAGE_KEY, "1");
+      return;
+    }
+
+    if (typeof GM_deleteValue === "function") {
+      GM_deleteValue(AUTH_DECLINED_STORAGE_KEY);
+      return;
+    }
+    getHostStorage()?.removeItem(AUTH_DECLINED_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }

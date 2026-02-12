@@ -21,9 +21,7 @@ export type PlayerPrivacyPayload = {
 };
 
 export type PlayerStatePayload = {
-  playerId: string | null;
   playerName: string | null;
-  avatarUrl: string | null;
   avatar?: string[] | null;
   modVersion: string | null;
   coins: number | null;
@@ -300,20 +298,9 @@ export async function buildPlayerStatePayload(
 
     const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
 
-    const playerId =
-      slot.databaseUserId ??
-      resolvedPlayer?.databaseUserId ??
-      slot.playerId ??
-      (resolvedPlayer?.id ?? null);
-
     const playerName =
       resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
 
-    const avatarUrl =
-      resolvedPlayer?.discordAvatarUrl ??
-      slotData?.discordAvatarUrl ??
-      slot?.discordAvatarUrl ??
-      null;
     const avatarRaw =
       resolvedPlayer?.cosmetic?.avatar ??
       slotData?.cosmetic?.avatar ??
@@ -364,9 +351,7 @@ export async function buildPlayerStatePayload(
     const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
 
     const payload: PlayerStatePayload = {
-      playerId: playerId != null ? String(playerId) : null,
       playerName: playerName ?? null,
-      avatarUrl: avatarUrl ?? null,
       avatar: avatar ?? null,
       modVersion: modVersion,
       coins: coinsRaw,
@@ -515,7 +500,7 @@ const MAX_UNCHANGED_TICKS_BEFORE_FORCE_SEND = 5;
 /**
  * Tick de heartbeat :
  * - build payload
- * - si null ou playerId invalide → rien
+ * - si null ou room invalide → rien
  * - compare snapshot complet avec le dernier envoyé
  *   - change → envoi
  *   - identique → on skip sauf toutes les 5 fois (keep-alive)
@@ -525,7 +510,7 @@ async function buildAndSendPlayerState(): Promise<void> {
   isPayloadReporting = true;
   try {
     const payload = await buildPlayerStatePayload();
-    if (!payload || !payload.playerId || payload.playerId.length < 3 || !payload.room.id) {
+    if (!payload || !payload.room.id) {
       if (initialSendRetries < MAX_INITIAL_RETRIES) {
         initialSendRetries += 1;
         setTimeout(() => void buildAndSendPlayerState(), 10_000);
@@ -596,4 +581,14 @@ export function stopPlayerStateReporting(): void {
   if (payloadReportingTimer === null) return;
   clearInterval(payloadReportingTimer);
   payloadReportingTimer = null;
+}
+
+export async function triggerPlayerStateSyncNow(options?: { force?: boolean }): Promise<void> {
+  if (options?.force) {
+    lastSentPayloadSnapshot = null;
+    unchangedSnapshotCount = 0;
+    initialSendRetries = 0;
+  }
+  await buildAndSendPlayerState();
+  await warmSupabaseInitialFetch();
 }

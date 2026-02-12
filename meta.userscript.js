@@ -6,6 +6,7 @@
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
 // @match        https://starweaver.org/r/*
+// @match        https://ariesmod-api.ariedam.fr/*
 // @run-at       document-start
 // @inject-into  page
 // @grant        GM_xmlhttpRequest

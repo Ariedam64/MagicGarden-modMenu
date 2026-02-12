@@ -2630,6 +2630,18 @@ export class MessagesOverlay {
     if (!this.myId) return;
     void this.loadFriends(true);
   };
+  private handleAuthUpdate = () => {
+    // Petit délai pour s'assurer que l'API key est bien disponible
+    setTimeout(() => {
+      this.resetStream();
+      this.resetPresenceStream();
+      this.loadFriends(true);
+      this.renderFriendList({ preserveScroll: true });
+      if (this.selectedId) {
+        this.renderThread({ preserveScroll: true, scrollToBottom: false });
+      }
+    }, 100);
+  };
 
   private handleFriendRemoved = (event: Event) => {
     const playerId = (event as CustomEvent<{ playerId?: string }>).detail?.playerId;
@@ -2670,6 +2682,7 @@ export class MessagesOverlay {
     );
     window.addEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
     window.addEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved as EventListener);
+    window.addEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate as EventListener);
     this.keyTrapCleanup = installInputKeyTrap(this.panel, {
       onEnter: () => {
         void this.handleSendMessage();
@@ -2753,6 +2766,7 @@ export class MessagesOverlay {
     try {
       window.removeEventListener(FRIENDS_REFRESH_EVENT, this.handleFriendsRefresh as EventListener);
       window.removeEventListener(FRIEND_REMOVED_EVENT, this.handleFriendRemoved as EventListener);
+      window.removeEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate as EventListener);
     } catch {}
     try {
       this.clearImportWatchers();

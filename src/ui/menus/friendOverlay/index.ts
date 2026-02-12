@@ -1,8 +1,18 @@
 import { createMessagesTab, type MessagesTabHandle } from "./tabs/messagesTab";
 import { createCommunityTab } from "./tabs/communityTab";
+import { createRoomTab } from "./tabs/roomTab";
 import { createGroupsTab } from "./tabs/groupsTab";
 import { createLeaderboardTab } from "./tabs/leaderboardTab";
 import { createSettingsTab } from "./tabs/settingsTab";
+import { requestApiKey } from "../../../utils/supabase";
+import {
+  hasApiKey,
+  hasDeclinedApiAuth,
+  setApiKey,
+  setDeclinedApiAuth,
+} from "../../../utils/localStorage";
+import { isDiscordActivityContext } from "../../../utils/discordCsp";
+import { triggerPlayerStateSyncNow } from "../../../utils/payload";
 
 const STYLE_ID = "qws-friend-overlay-css";
 
@@ -12,12 +22,13 @@ const setProps = (el: HTMLElement, props: Record<string, string>) => {
   for (const [k, v] of Object.entries(props)) el.style.setProperty(k, v);
 };
 
-type TabId = "messages" | "community" | "groups" | "leaderboard" | "settings";
+type TabId = "messages" | "community" | "room" | "groups" | "leaderboard" | "settings";
 
 declare global {
   interface Window {
     __qws_friend_overlay_last_tab?: TabId;
     __qws_friend_overlay_last_community_tab?: "friends" | "add" | "requests";
+    __qws_friend_overlay_last_room_tab?: "public";
   }
 }
 
@@ -296,6 +307,207 @@ function ensureFriendOverlayStyle(): void {
 }
 .qws-fo-community-profile.active{
   display:flex;
+}
+.qws-fo-room{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  height:100%;
+  min-height:0;
+}
+.qws-fo-room-shell{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+  padding:10px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(10,14,20,0.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-room-body{
+  flex:1;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+}
+.qws-fo-room-panel{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:1;
+  min-height:0;
+}
+.qws-fo-room-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:linear-gradient(135deg, rgba(30,41,59,0.6), rgba(15,23,42,0.85));
+  border:1px solid rgba(255,255,255,0.1);
+}
+.qws-fo-room-header-title{
+  font-size:12px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:rgba(226,232,240,0.75);
+}
+.qws-fo-room-header-controls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-room-filter{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 10px;
+  border-radius:10px;
+  background:rgba(9,12,18,0.75);
+  border:1px solid rgba(255,255,255,0.12);
+}
+.qws-fo-room-filter span{
+  font-size:11px;
+  color:rgba(226,232,240,0.7);
+}
+.qws-fo-room-select{
+  background:rgba(9,12,18,0.85);
+  border:1px solid rgba(255,255,255,0.16);
+  color:#f8fafc;
+  border-radius:8px;
+  padding:4px 22px 4px 8px;
+  font-size:12px;
+  outline:none;
+  cursor:pointer;
+}
+.qws-fo-room-select:focus{
+  border-color:rgba(59,130,246,0.4);
+}
+.qws-fo-room-alert{
+  font-size:12px;
+  color:#ffb4a2;
+  background:rgba(46,31,31,0.9);
+  border:1px solid rgba(255, 140, 105, 0.35);
+  padding:8px 10px;
+  border-radius:10px;
+}
+.qws-fo-room-list{
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding-right:4px;
+  scrollbar-gutter:stable;
+}
+.qws-fo-room-list-inner{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.qws-fo-room-empty{
+  font-size:12px;
+  color:rgba(226,232,240,0.65);
+  text-align:center;
+  padding:12px 0;
+}
+.qws-fo-room-card{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(17,24,39,0.6);
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.qws-fo-room-badge{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid;
+  flex-shrink:0;
+}
+.qws-fo-room-badge.is-discord{
+  background:rgba(168,85,247,0.18);
+  border-color:rgba(168,85,247,0.4);
+  color:#e9d5ff;
+}
+.qws-fo-room-badge.is-web{
+  background:rgba(56,189,248,0.18);
+  border-color:rgba(56,189,248,0.35);
+  color:#bae6fd;
+}
+.qws-fo-room-id{
+  font-size:12px;
+  font-weight:600;
+  color:#f8fafc;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  min-width:0;
+  flex:1 1 auto;
+}
+.qws-fo-room-avatars{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex-shrink:0;
+}
+.qws-fo-room-avatar{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,0.18);
+  background:rgba(255,255,255,0.08);
+  font-size:11px;
+  font-weight:600;
+  color:#f8fafc;
+}
+.qws-fo-room-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.qws-fo-room-avatar.is-empty{
+  background:rgba(255,255,255,0.04);
+  border-style:dashed;
+  color:rgba(226,232,240,0.4);
+}
+.qws-fo-room-count{
+  font-size:12px;
+  font-weight:600;
+  color:rgba(226,232,240,0.8);
+  min-width:44px;
+  text-align:right;
+}
+.qws-fo-room-actions{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+.qws-fo-room-footer{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-size:11px;
+  color:rgba(226,232,240,0.6);
+  padding-top:6px;
+  border-top:1px solid rgba(255,255,255,0.06);
 }
 .qws-fo-tab-leaderboard{
   height:100%;
@@ -1706,6 +1918,184 @@ function ensureFriendOverlayStyle(): void {
   line-height:18px;
   pointer-events:none;
 }
+.qws-fo-auth-overlay{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  background:rgba(7,10,16,0.76);
+  backdrop-filter:blur(6px);
+  z-index:6;
+}
+.qws-fo-auth-overlay.is-visible{
+  display:flex;
+}
+.qws-fo-auth-card{
+  width:min(520px, 92%);
+  background:radial-gradient(140% 140% at 0% 0%, rgba(28,36,56,0.98), rgba(12,16,26,0.98));
+  border:1px solid rgba(148,163,184,0.22);
+  border-radius:16px;
+  padding:16px 18px;
+  color:#e2e8f0;
+  box-shadow:0 20px 44px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  font-family:var(--chakra-fonts-body, "Space Grotesk"), system-ui, sans-serif;
+}
+.qws-fo-auth-header{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.qws-fo-auth-brand{
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:0.12em;
+  padding:3px 10px;
+  border-radius:999px;
+  border:1px solid rgba(56,189,248,0.4);
+  background:rgba(56,189,248,0.12);
+  color:#bae6fd;
+  margin-left:auto;
+}
+.qws-fo-auth-icon{
+  width:36px;
+  height:36px;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:rgba(59,130,246,0.18);
+  border:1px solid rgba(59,130,246,0.55);
+  color:#dbeafe;
+  flex-shrink:0;
+}
+.qws-fo-auth-icon svg{
+  width:20px;
+  height:20px;
+  display:block;
+}
+.qws-fo-auth-title{
+  font-size:15px;
+  font-weight:700;
+  color:#f8fafc;
+}
+.qws-fo-auth-subtitle{
+  font-size:12px;
+  color:rgba(226,232,240,0.72);
+}
+.qws-fo-auth-hidden{
+  display:none !important;
+}
+.qws-fo-auth-divider{
+  height:1px;
+  background:linear-gradient(90deg, rgba(148,163,184,0.08), rgba(148,163,184,0.3), rgba(148,163,184,0.08));
+}
+.qws-fo-auth-section{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.qws-fo-auth-section-title{
+  font-size:12px;
+  font-weight:600;
+  color:#93c5fd;
+  letter-spacing:0.02em;
+}
+.qws-fo-auth-list{
+  display:grid;
+  gap:6px;
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-fo-auth-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.qws-fo-auth-bullet{
+  width:18px;
+  height:18px;
+  border-radius:6px;
+  display:grid;
+  place-items:center;
+  background:rgba(56,189,248,0.12);
+  border:1px solid rgba(56,189,248,0.35);
+  color:#7dd3fc;
+  flex-shrink:0;
+}
+.qws-fo-auth-bullet svg{
+  width:12px;
+  height:12px;
+  display:block;
+}
+.qws-fo-auth-unlocks{
+  font-size:12.5px;
+  color:rgba(226,232,240,0.82);
+}
+.qws-fo-auth-unlocks strong{ color:#f8fafc; font-weight:600; }
+.qws-fo-auth-status{
+  font-size:12px;
+  color:rgba(251,191,36,0.9);
+  min-height:16px;
+}
+.qws-fo-auth-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.qws-fo-auth-input-row{
+  display:grid;
+  gap:6px;
+}
+.qws-fo-auth-input-label{
+  font-size:12px;
+  color:rgba(226,232,240,0.72);
+}
+.qws-fo-auth-input{
+  width:100%;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(8,12,20,0.75);
+  color:#f8fafc;
+  padding:8px 12px;
+  font-size:12.5px;
+  outline:none;
+}
+.qws-fo-auth-input:focus{
+  border-color:rgba(56,189,248,0.5);
+}
+.qws-fo-auth-btn{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.15);
+  background:rgba(20,28,40,0.75);
+  color:#f8fafc;
+  font-weight:600;
+  padding:8px 12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  min-width:180px;
+  flex:1 1 180px;
+  transition:background 140ms ease, border 140ms ease, transform 140ms ease;
+}
+.qws-fo-auth-btn:hover{ background:rgba(30,41,59,0.8); }
+.qws-fo-auth-btn.is-disabled{ opacity:0.6; cursor:not-allowed; }
+.qws-fo-auth-btn.primary{
+  background:linear-gradient(135deg, #2dd4bf 0%, #38bdf8 100%);
+  border-color:transparent;
+  color:#0b1020;
+}
+.qws-fo-auth-btn.ghost{
+  background:rgba(148,163,184,0.12);
+  border-color:rgba(248,250,252,0.2);
+}
 @media (max-width: 820px){
   .qws-fo-body{ grid-template-columns:1fr; }
   .qws-fo-nav{
@@ -1728,6 +2118,13 @@ class FriendOverlay {
   private panel: HTMLDivElement = document.createElement("div");
   private nav: HTMLDivElement = document.createElement("div");
   private content: HTMLDivElement = document.createElement("div");
+  private authGate: HTMLDivElement | null = null;
+  private authGateStatus: HTMLDivElement | null = null;
+  private authGateAuthBtn: HTMLButtonElement | null = null;
+  private authGateManualRow: HTMLDivElement | null = null;
+  private authGateManualInput: HTMLInputElement | null = null;
+  private authGateSuppressed = false;
+  private authGateManualMode = false;
   private tabs = new Map<TabId, TabInstance>();
   private tabButtons = new Map<TabId, HTMLButtonElement>();
   private activeTab: TabId = "community";
@@ -1741,6 +2138,15 @@ class FriendOverlay {
   private keyTrapCleanup: KeyTrapCleanup | null = null;
   private handleOverlayOpen = () => this.setOpen(true);
   private handleOverlayClose = () => this.setOpen(false);
+  private handleAuthUpdate = () => {
+    this.updateAuthGateVisibility();
+    this.refreshAuthTabs();
+  };
+  private refreshAuthTabs(): void {
+    this.tabs.get("community")?.refresh?.();
+    this.tabs.get("groups")?.refresh?.();
+    this.tabs.get("messages")?.refresh?.();
+  }
   private handleResize = () => {
     this.attach();
     if (this.panelOpen && !this.panelDetached) {
@@ -1763,6 +2169,7 @@ class FriendOverlay {
     const lastTab = window.__qws_friend_overlay_last_tab;
     if (
       lastTab === "community" ||
+      lastTab === "room" ||
       lastTab === "messages" ||
       lastTab === "groups" ||
       lastTab === "leaderboard" ||
@@ -1786,6 +2193,7 @@ class FriendOverlay {
     window.addEventListener("pointerdown", this.handlePointerDown);
     window.addEventListener("qws-friend-overlay-open", this.handleOverlayOpen as EventListener);
     window.addEventListener("qws-friend-overlay-close", this.handleOverlayClose as EventListener);
+    window.addEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate as EventListener);
   }
 
   destroy(): void {
@@ -1807,6 +2215,7 @@ class FriendOverlay {
     try {
       window.removeEventListener("qws-friend-overlay-open", this.handleOverlayOpen as EventListener);
       window.removeEventListener("qws-friend-overlay-close", this.handleOverlayClose as EventListener);
+      window.removeEventListener("qws-friend-overlay-auth-update", this.handleAuthUpdate as EventListener);
     } catch {}
     try {
       this.slot.remove();
@@ -1840,6 +2249,7 @@ class FriendOverlay {
       const active = this.tabs.get(this.activeTab);
       active?.hide?.();
     }
+    this.updateAuthGateVisibility();
     this.updateButtonBadge();
   }
 
@@ -1907,6 +2317,289 @@ class FriendOverlay {
     const total = this.unreadMessages + this.unreadGroups + this.pendingRequests;
     this.badge.textContent = total ? String(total) : "";
     style(this.badge, { display: total ? "inline-flex" : "none" });
+  }
+
+  private setAuthGateButtonEnabled(
+    button: HTMLButtonElement | null,
+    enabled: boolean,
+  ): void {
+    if (!button) return;
+    button.disabled = !enabled;
+    button.classList.toggle("is-disabled", !enabled);
+    button.setAttribute("aria-disabled", (!enabled).toString());
+  }
+
+  private ensureAuthGate(): void {
+    if (this.authGate) return;
+
+    const overlay = document.createElement("div");
+    overlay.className = "qws-fo-auth-overlay";
+
+    const card = document.createElement("div");
+    card.className = "qws-fo-auth-card";
+
+    const header = document.createElement("div");
+    header.className = "qws-fo-auth-header";
+
+    const icon = document.createElement("div");
+    icon.className = "qws-fo-auth-icon";
+    icon.innerHTML =
+      '<svg viewBox="0 0.5 24 24" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">' +
+      '<g clip-path="url(#clip0_537_21_fo)">' +
+      '<path d="M20.317 4.54101C18.7873 3.82774 17.147 3.30224 15.4319 3.00126C15.4007 2.99545 15.3695 3.00997 15.3534 3.039C15.1424 3.4203 14.9087 3.91774 14.7451 4.30873C12.9004 4.02808 11.0652 4.02808 9.25832 4.30873C9.09465 3.90905 8.85248 3.4203 8.64057 3.039C8.62448 3.01094 8.59328 2.99642 8.56205 3.00126C6.84791 3.30128 5.20756 3.82678 3.67693 4.54101C3.66368 4.54681 3.65233 4.5565 3.64479 4.56907C0.533392 9.29283 -0.31895 13.9005 0.0991801 18.451C0.101072 18.4733 0.11337 18.4946 0.130398 18.5081C2.18321 20.0401 4.17171 20.9701 6.12328 21.5866C6.15451 21.5963 6.18761 21.5847 6.20748 21.5585C6.66913 20.9179 7.08064 20.2424 7.43348 19.532C7.4543 19.4904 7.43442 19.441 7.39186 19.4246C6.73913 19.173 6.1176 18.8662 5.51973 18.5178C5.47244 18.4897 5.46865 18.421 5.51216 18.3881C5.63797 18.2923 5.76382 18.1926 5.88396 18.0919C5.90569 18.0736 5.93598 18.0697 5.96153 18.0813C9.88928 19.9036 14.1415 19.9036 18.023 18.0813C18.0485 18.0687 18.0788 18.0726 18.1015 18.091C18.2216 18.1916 18.3475 18.2923 18.4742 18.3881C18.5177 18.421 18.5149 18.4897 18.4676 18.5178C17.8697 18.8729 17.2482 19.173 16.5945 19.4236C16.552 19.4401 16.533 19.4904 16.5538 19.532C16.9143 20.2414 17.3258 20.9169 17.7789 21.5576C17.7978 21.5847 17.8319 21.5963 17.8631 21.5866C19.8241 20.9701 21.8126 20.0401 23.8654 18.5081C23.8834 18.4946 23.8948 18.4742 23.8967 18.452C24.3971 13.1911 23.0585 8.6212 20.3482 4.57004C20.3416 4.5565 20.3303 4.54681 20.317 4.54101ZM8.02002 15.6802C6.8375 15.6802 5.86313 14.577 5.86313 13.222C5.86313 11.8671 6.8186 10.7639 8.02002 10.7639C9.23087 10.7639 10.1958 11.8768 10.1769 13.222C10.1769 14.577 9.22141 15.6802 8.02002 15.6802ZM15.9947 15.6802C14.8123 15.6802 13.8379 14.577 13.8379 13.222C13.8379 11.8671 14.7933 10.7639 15.9947 10.7639C17.2056 10.7639 18.1705 11.8768 18.1516 13.222C18.1516 14.577 17.2056 15.6802 15.9947 15.6802Z" fill="#758CA3"/>' +
+      "</g>" +
+      "<defs>" +
+      '<clipPath id="clip0_537_21_fo">' +
+      '<rect width="24" height="24" fill="white"/>' +
+      "</clipPath>" +
+      "</defs>" +
+      "</svg>";
+
+    const titleWrap = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "qws-fo-auth-title";
+    title.textContent = "Connect Discord to use Community Hub";
+    const subtitle = document.createElement("div");
+    subtitle.className = "qws-fo-auth-subtitle";
+    subtitle.textContent =
+      "Community features are disabled until you connect your Discord account.";
+    titleWrap.append(title, subtitle);
+
+    const brand = document.createElement("span");
+    brand.className = "qws-fo-auth-brand";
+    brand.textContent = "ARIE'S MOD";
+
+    header.append(icon, titleWrap, brand);
+
+    const dividerTop = document.createElement("div");
+    dividerTop.className = "qws-fo-auth-divider";
+
+    const iconCheck =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+      '<path d="M5 12.5l4 4 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      "</svg>";
+
+    const createListItem = (text: string) => {
+      const item = document.createElement("div");
+      item.className = "qws-fo-auth-item";
+      const bullet = document.createElement("span");
+      bullet.className = "qws-fo-auth-bullet";
+      bullet.innerHTML = iconCheck;
+      const label = document.createElement("span");
+      label.textContent = text;
+      item.append(bullet, label);
+      return item;
+    };
+
+    const whySection = document.createElement("div");
+    whySection.className = "qws-fo-auth-section";
+    const whyTitle = document.createElement("div");
+    whyTitle.className = "qws-fo-auth-section-title";
+    whyTitle.textContent = "Why this is needed";
+    const whyList = document.createElement("div");
+    whyList.className = "qws-fo-auth-list";
+    whyList.append(
+      createListItem("Prevent impersonation and abuse"),
+      createListItem("Protect leaderboards and community stats from manipulation"),
+      createListItem("Protect against message interception"),
+    );
+    whySection.append(whyTitle, whyList);
+
+    const dividerBottom = document.createElement("div");
+    dividerBottom.className = "qws-fo-auth-divider";
+
+    const infoNote = document.createElement("div");
+    infoNote.className = "qws-fo-auth-subtitle";
+    infoNote.textContent =
+      "Arie's Mod collects in-game player information (stats, garden, inventory, etc.) to power Community Hub features.";
+
+    const unlocks = document.createElement("div");
+    unlocks.className = "qws-fo-auth-unlocks";
+    unlocks.innerHTML =
+      "<strong>Unlocks</strong> Public rooms / Friends / Messages / Groups / Leaderboards";
+
+    const isDiscord = isDiscordActivityContext();
+    let manualInput: HTMLInputElement | null = null;
+    let manualRow: HTMLDivElement | null = null;
+
+    const status = document.createElement("div");
+    status.className = "qws-fo-auth-status";
+    status.textContent = "";
+    this.authGateStatus = status;
+
+    const actions = document.createElement("div");
+    actions.className = "qws-fo-auth-actions";
+
+    let authBtn: HTMLButtonElement | null = null;
+    let refuseBtn: HTMLButtonElement | null = null;
+    if (isDiscord) {
+      const inputRow = document.createElement("div");
+      inputRow.className = "qws-fo-auth-input-row";
+      const inputLabel = document.createElement("div");
+      inputLabel.className = "qws-fo-auth-input-label";
+      inputLabel.textContent =
+        "Discord Activity cannot open popups. Paste your API key here.";
+      const input = document.createElement("input");
+      input.className = "qws-fo-auth-input";
+      input.type = "text";
+      input.placeholder = "Paste your API key";
+      manualInput = input;
+      inputRow.append(inputLabel, input);
+      inputRow.classList.add("qws-fo-auth-hidden");
+      manualRow = inputRow;
+
+      const openBtn = document.createElement("button");
+      openBtn.type = "button";
+      openBtn.className = "qws-fo-auth-btn primary";
+      openBtn.textContent = "Authenticate with Discord";
+      authBtn = openBtn;
+      this.authGateAuthBtn = openBtn;
+
+      const contBtn = document.createElement("button");
+      contBtn.type = "button";
+      contBtn.className = "qws-fo-auth-btn ghost";
+      contBtn.textContent = "Continue without Discord";
+      refuseBtn = contBtn;
+
+      actions.append(contBtn, openBtn);
+    } else {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qws-fo-auth-btn primary";
+      btn.textContent = "Authenticate with Discord";
+      authBtn = btn;
+      this.authGateAuthBtn = btn;
+      actions.append(btn);
+    }
+
+    const cardNodes: HTMLElement[] = [
+      header,
+      dividerTop,
+      whySection,
+      dividerBottom,
+      infoNote,
+      unlocks,
+    ];
+    if (manualRow) cardNodes.push(manualRow);
+    cardNodes.push(status, actions);
+    card.append(...cardNodes);
+    overlay.appendChild(card);
+    this.content.appendChild(overlay);
+
+    if (refuseBtn) {
+      refuseBtn.addEventListener("click", () => {
+        setDeclinedApiAuth(true);
+        this.authGateSuppressed = true;
+        this.updateAuthGateVisibility();
+      });
+    }
+
+    if (authBtn) {
+      authBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        if (isDiscord) {
+          if (!this.authGateManualMode) {
+            this.authGateManualMode = true;
+            if (manualRow) manualRow.classList.remove("qws-fo-auth-hidden");
+            authBtn.textContent = "Save API key";
+            manualInput?.focus();
+            status.textContent = "After logging in, paste your API key below.";
+            requestApiKey()
+              .then(async (apiKey) => {
+                if (!apiKey) return;
+                setDeclinedApiAuth(false);
+                this.authGateSuppressed = false;
+                this.updateAuthGateVisibility();
+                await triggerPlayerStateSyncNow({ force: true });
+                this.refreshTabsAfterAuth();
+                window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+              })
+              .catch(() => {});
+            return;
+          }
+
+          const key = (manualInput?.value ?? "").trim();
+          if (!key) {
+            status.textContent = "Please paste your API key.";
+            return;
+          }
+          setApiKey(key);
+          setDeclinedApiAuth(false);
+          this.authGateSuppressed = false;
+          this.updateAuthGateVisibility();
+          await triggerPlayerStateSyncNow({ force: true });
+          this.refreshTabsAfterAuth();
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+          return;
+        }
+
+        this.setAuthGateButtonEnabled(authBtn, false);
+        const originalLabel = authBtn.textContent || "";
+        authBtn.textContent = "Authenticating...";
+
+        const apiKey = await requestApiKey();
+
+        if (apiKey) {
+          setDeclinedApiAuth(false);
+          this.updateAuthGateVisibility();
+          await triggerPlayerStateSyncNow({ force: true });
+          this.refreshTabsAfterAuth();
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+          return;
+        }
+
+        status.textContent =
+          "Authentication failed. Please allow popups and try again.";
+        authBtn.textContent = originalLabel;
+        this.setAuthGateButtonEnabled(authBtn, true);
+      });
+    }
+
+    if (manualInput) {
+      manualInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        authBtn?.click();
+      });
+    }
+
+    this.authGateManualRow = manualRow;
+    this.authGateManualInput = manualInput;
+
+    this.authGate = overlay;
+  }
+
+  private updateAuthGateVisibility(): void {
+    const shouldShow =
+      this.panelOpen &&
+      !hasApiKey() &&
+      hasDeclinedApiAuth() &&
+      !this.authGateSuppressed;
+    if (shouldShow) {
+      this.ensureAuthGate();
+      this.authGateManualMode = false;
+      if (this.authGateStatus) {
+        this.authGateStatus.textContent = "";
+      }
+      if (this.authGateAuthBtn) {
+        this.authGateAuthBtn.textContent = "Authenticate with Discord";
+        this.setAuthGateButtonEnabled(this.authGateAuthBtn, true);
+        this.authGateAuthBtn.classList.remove("qws-fo-auth-hidden");
+      }
+      if (this.authGateManualRow) {
+        this.authGateManualRow.classList.add("qws-fo-auth-hidden");
+      }
+      if (this.authGateManualInput) {
+        this.authGateManualInput.value = "";
+      }
+    }
+    if (!this.authGate) return;
+    this.authGate.classList.toggle("is-visible", shouldShow);
+  }
+
+  private refreshTabsAfterAuth(): void {
+    for (const tab of this.tabs.values()) {
+      tab.refresh?.();
+    }
   }
 
   private setTabBadge(id: TabId, text: string | null): void {
@@ -1992,6 +2685,27 @@ class FriendOverlay {
         },
       },
       {
+        id: "room",
+        label: "Rooms",
+        icon:
+          '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+          '<path d="M4 4h10a2 2 0 0 1 2 2v14H4V4Z" fill="currentColor"/>' +
+          '<path d="M14 6h6v14h-6V6Z" fill="currentColor" opacity="0.65"/>' +
+          '<circle cx="9" cy="12" r="1.2" fill="#0b1020"/>' +
+          "</svg>",
+        build: () => {
+          const tab = createRoomTab();
+          return {
+            id: "room",
+            root: tab.root,
+            refresh: tab.refresh,
+            show: tab.show,
+            hide: tab.hide,
+            destroy: tab.destroy,
+          };
+        },
+      },
+      {
         id: "groups",
         label: "Groups",
         icon:
@@ -2043,6 +2757,7 @@ class FriendOverlay {
             root: tab.root,
             show: tab.show,
             hide: tab.hide,
+            refresh: tab.refresh,
             destroy: tab.destroy,
           };
         },

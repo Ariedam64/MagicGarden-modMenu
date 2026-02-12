@@ -355,6 +355,15 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
     })
     .catch(() => {});
 
+  const handleAuthUpdate = () => {
+    // Petit délai pour s'assurer que l'API key est bien disponible
+    setTimeout(() => {
+      resetStream();
+      void loadRequests({ force: true });
+    }, 100);
+  };
+  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
+
   return {
     root,
     refresh: (opts?: { force?: boolean }) => loadRequests(opts),
@@ -362,6 +371,12 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
       destroyed = true;
       try {
         unsubscribePlayerId?.();
+      } catch {}
+      try {
+        window.removeEventListener(
+          "qws-friend-overlay-auth-update",
+          handleAuthUpdate as EventListener,
+        );
       } catch {}
       if (stream) {
         try {

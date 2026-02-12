@@ -4,6 +4,7 @@ import {
   patchFriendSettings,
   type FriendSettings,
 } from "../../../../utils/friendSettings";
+import { clearApiKey, hasApiKey, setDeclinedApiAuth } from "../../../../utils/localStorage";
 import { player, playerDatabaseUserId } from "../../../../store/atoms";
 import { createCard, createToggle, getToggleInput } from "../ui";
 
@@ -86,6 +87,28 @@ export function createSettingsTab(): SettingsTabHandle {
   privacyCard.body.style.display = "grid";
   privacyCard.body.style.gap = "12px";
 
+  const privacyHint = document.createElement("div");
+  privacyHint.textContent =
+    "These settings control what your friends can see and whether you appear on leaderboards.";
+  privacyHint.style.fontSize = "12px";
+  privacyHint.style.fontWeight = "400";
+  privacyHint.style.textTransform = "none";
+  privacyHint.style.letterSpacing = "normal";
+  privacyHint.style.opacity = "0.7";
+  const privacyHead = privacyCard.root.querySelector<HTMLDivElement>(".qws-fo-card__head");
+  if (privacyHead) {
+    const titleText = privacyHead.textContent ?? "Privacy";
+    privacyHead.textContent = "";
+    privacyHead.style.display = "grid";
+    privacyHead.style.gap = "4px";
+
+    const titleEl = document.createElement("div");
+    titleEl.textContent = titleText;
+    privacyHead.append(titleEl, privacyHint);
+  } else {
+    privacyCard.root.insertBefore(privacyHint, privacyCard.body);
+  }
+
   const applyPatch = (patch: Partial<FriendSettings>) => patchFriendSettings(patch);
 
   const buildToggleRow = (
@@ -160,44 +183,100 @@ export function createSettingsTab(): SettingsTabHandle {
 
   privacyCard.body.append(
     buildToggleRow(
-      "Friends can view my garden",
+      "Garden",
       settings.showGarden,
       undefined,
       (next) => applyPatch({ showGarden: next }),
     ),
     buildToggleRow(
-      "Friends can view my inventory",
+      "Inventory",
       settings.showInventory,
       undefined,
       (next) => applyPatch({ showInventory: next }),
     ),
     buildToggleRow(
-      "Friends can see my coins",
+      "Coins",
       settings.showCoins,
       undefined,
       (next) => applyPatch({ showCoins: next }),
     ),
     buildToggleRow(
-      "Friends can see my activity log",
+      "Activity",
       settings.showActivityLog,
       undefined,
       (next) => applyPatch({ showActivityLog: next }),
     ),
     buildToggleRow(
-      "Friends can view my journal",
+      "Journal",
       settings.showJournal,
       undefined,
       (next) => applyPatch({ showJournal: next }),
     ),
     buildToggleRow(
-      "Friends can see my stats",
+      "Stats",
       settings.showStats,
       undefined,
       (next) => applyPatch({ showStats: next }),
     ),
   );
 
-  layout.append(profileCard.root, globalCard.root, privacyCard.root);
+  const accessCard = createCard("Community access");
+  accessCard.body.style.display = "grid";
+  accessCard.body.style.gap = "8px";
+  accessCard.body.style.justifyItems = "center";
+  accessCard.body.style.textAlign = "center";
+  const accessHead = accessCard.root.querySelector<HTMLDivElement>(".qws-fo-card__head");
+  if (accessHead) {
+    accessHead.style.textAlign = "center";
+  }
+
+  const accessNote = document.createElement("div");
+  accessNote.textContent =
+    "Disconnecting will disable Community Hub features until you authenticate again.";
+  accessNote.style.fontSize = "12px";
+  accessNote.style.opacity = "0.7";
+
+  const accessStatus = document.createElement("div");
+  accessStatus.style.fontSize = "12px";
+  accessStatus.style.opacity = "0.75";
+
+  const disconnectBtn = document.createElement("button");
+  disconnectBtn.type = "button";
+  disconnectBtn.className = "qws-fo-btn qws-fo-btn--danger";
+  disconnectBtn.textContent = "Disconnect Discord";
+
+  const updateAccessState = () => {
+    if (hasApiKey()) {
+      accessStatus.textContent = "";
+      disconnectBtn.disabled = false;
+      disconnectBtn.classList.remove("is-disabled");
+      disconnectBtn.setAttribute("aria-disabled", "false");
+    } else {
+      accessStatus.textContent = "No Discord connection found.";
+      disconnectBtn.disabled = true;
+      disconnectBtn.classList.add("is-disabled");
+      disconnectBtn.setAttribute("aria-disabled", "true");
+    }
+  };
+
+  disconnectBtn.addEventListener("click", () => {
+    clearApiKey();
+    setDeclinedApiAuth(true);
+    disconnectBtn.disabled = true;
+    disconnectBtn.classList.add("is-disabled");
+    disconnectBtn.setAttribute("aria-disabled", "true");
+    accessStatus.textContent = "";
+    window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+  });
+
+  updateAccessState();
+
+  const handleAuthUpdate = () => updateAccessState();
+  window.addEventListener("qws-friend-overlay-auth-update", handleAuthUpdate as EventListener);
+
+  accessCard.body.append(accessNote, accessStatus, disconnectBtn);
+
+  layout.append(profileCard.root, globalCard.root, privacyCard.root, accessCard.root);
   root.appendChild(layout);
 
   const updateProfileInfo = async () => {
@@ -259,6 +338,12 @@ export function createSettingsTab(): SettingsTabHandle {
     root,
     destroy: () => {
       unsubscribeSettings();
+      try {
+        window.removeEventListener(
+          "qws-friend-overlay-auth-update",
+          handleAuthUpdate as EventListener,
+        );
+      } catch {}
       try {
         unsubscribePlayerId?.();
       } catch {}

@@ -50,25 +50,10 @@ function ensureRoomMenuStyles(): void {
   document.head.appendChild(style);
 }
 
-const TAB_ID = "public-rooms";
-const CUSTOM_TAB_ID = "custom-rooms";
-const SEARCH_TAB_ID = "search-player";
-const PLAYERS_TAB_ID = "players";
 type PlayerFilter = "any" | "few" | "crowded" | "full";
 
 export async function renderRoomMenu(root: HTMLElement) {
-  const ui = new Menu({
-    id: "room",
-    compact: true,
-    windowSelector: ".qws-win",
-    classes: "qmm-room-menu",
-  });
-  ui.addTab(TAB_ID, "Public Rooms", (view) => renderPublicRoomsTab(view, ui));
-  ui.addTab(SEARCH_TAB_ID, "Search Player", (view) => renderSearchPlayerTab(view, ui));
-  ui.addTab(PLAYERS_TAB_ID, "Players", (view) => {
-    void renderPlayersTab(view).catch(() => {});
-  });
-  ui.mount(root);
+  await renderPlayersTab(root);
 }
 
 function renderPublicRoomsTab(view: HTMLElement, ui: Menu) {
