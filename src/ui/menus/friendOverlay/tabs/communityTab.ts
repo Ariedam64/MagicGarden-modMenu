@@ -774,11 +774,9 @@ export function createCommunityTab(options: {
 
   removeBtn.addEventListener("click", async () => {
     if (!activeFriend?.playerId) return;
-    const me = await playerDatabaseUserId.get();
-    if (!me) return;
     removeBtn.disabled = true;
     try {
-      await removeFriend(me, activeFriend.playerId);
+      await removeFriend(activeFriend.playerId);
       window.dispatchEvent(new CustomEvent("qws-friends-refresh"));
       void friendsTab.refresh({ force: true });
       setProfileOpen(false);

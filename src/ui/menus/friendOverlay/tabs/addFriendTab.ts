@@ -225,7 +225,7 @@ export function createAddFriendTab(): AddFriendTabHandle {
         renderModPlayers();
         try {
           if (isFriend) {
-            const ok = await removeFriend(myId, targetId);
+            const ok = await removeFriend(targetId);
             if (ok) {
               friendIds.delete(targetId);
               await toastSimple("Friends", `Removed ${entry.playerName ?? targetId}.`, "success");
@@ -233,7 +233,7 @@ export function createAddFriendTab(): AddFriendTabHandle {
               await toastSimple("Friends", "Unable to remove friend.", "info");
             }
           } else if (hasOutgoing) {
-            const ok = await cancelFriendRequest(myId, targetId);
+            const ok = await cancelFriendRequest(targetId);
             if (ok) {
               outgoingRequestIds.delete(targetId);
               await toastSimple("Friend request", `Request to ${entry.playerName ?? targetId} cancelled.`, "success");
@@ -241,7 +241,7 @@ export function createAddFriendTab(): AddFriendTabHandle {
               await toastSimple("Friend request", "Unable to cancel request.", "info");
             }
           } else {
-            const sent = await sendFriendRequest(myId, targetId);
+            const sent = await sendFriendRequest(targetId);
             if (sent) {
               outgoingRequestIds.add(targetId);
               await toastSimple("Friend request", `Request sent to ${entry.playerName ?? targetId}.`, "success");

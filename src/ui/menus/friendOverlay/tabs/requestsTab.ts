@@ -221,7 +221,7 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
         rejectBtn.disabled = true;
         acceptBtn.disabled = true;
         try {
-          await respondFriendRequest({ playerId: myId, otherPlayerId: req.fromPlayerId, action });
+          await respondFriendRequest({ otherPlayerId: req.fromPlayerId, action });
         } catch (e) {
           console.error("[RequestsTab] respondFriendRequest", e);
         } finally {
@@ -249,7 +249,7 @@ export function createRequestsTab(options: RequestsTabOptions = {}): RequestsTab
         actionInProgress.add(req.toPlayerId);
         cancelBtn.disabled = true;
         try {
-          await cancelFriendRequest(myId, req.toPlayerId);
+          await cancelFriendRequest(req.toPlayerId);
         } catch (e) {
           console.error("[RequestsTab] cancelFriendRequest", e);
         } finally {
