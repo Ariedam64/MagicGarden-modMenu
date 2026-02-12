@@ -33297,7 +33297,7 @@
           rejectBtn.disabled = true;
           acceptBtn.disabled = true;
           try {
-            await respondFriendRequest({ playerId: myId, otherPlayerId: req.fromPlayerId, action: action2 });
+            await respondFriendRequest({ otherPlayerId: req.fromPlayerId, action: action2 });
           } catch (e) {
             console.error("[RequestsTab] respondFriendRequest", e);
           } finally {
@@ -33322,7 +33322,7 @@
           actionInProgress.add(req.toPlayerId);
           cancelBtn.disabled = true;
           try {
-            await cancelFriendRequest(myId, req.toPlayerId);
+            await cancelFriendRequest(req.toPlayerId);
           } catch (e) {
             console.error("[RequestsTab] cancelFriendRequest", e);
           } finally {
@@ -33630,7 +33630,7 @@
           renderModPlayers();
           try {
             if (isFriend) {
-              const ok = await removeFriend(myId, targetId);
+              const ok = await removeFriend(targetId);
               if (ok) {
                 friendIds.delete(targetId);
                 await toastSimple("Friends", `Removed ${entry.playerName ?? targetId}.`, "success");
@@ -33638,7 +33638,7 @@
                 await toastSimple("Friends", "Unable to remove friend.", "info");
               }
             } else if (hasOutgoing) {
-              const ok = await cancelFriendRequest(myId, targetId);
+              const ok = await cancelFriendRequest(targetId);
               if (ok) {
                 outgoingRequestIds.delete(targetId);
                 await toastSimple("Friend request", `Request to ${entry.playerName ?? targetId} cancelled.`, "success");
@@ -33646,7 +33646,7 @@
                 await toastSimple("Friend request", "Unable to cancel request.", "info");
               }
             } else {
-              const sent = await sendFriendRequest(myId, targetId);
+              const sent = await sendFriendRequest(targetId);
               if (sent) {
                 outgoingRequestIds.add(targetId);
                 await toastSimple("Friend request", `Request sent to ${entry.playerName ?? targetId}.`, "success");
@@ -35032,11 +35032,9 @@
     });
     removeBtn.addEventListener("click", async () => {
       if (!activeFriend?.playerId) return;
-      const me = await playerDatabaseUserId.get();
-      if (!me) return;
       removeBtn.disabled = true;
       try {
-        await removeFriend(me, activeFriend.playerId);
+        await removeFriend(activeFriend.playerId);
         window.dispatchEvent(new CustomEvent("qws-friends-refresh"));
         void friendsTab.refresh({ force: true });
         setProfileOpen(false);
