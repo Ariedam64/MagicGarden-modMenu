@@ -169,6 +169,12 @@ function selectSlot(
     }
   }
 
+  // Ne pas prendre de fallback si un playerId spécifique était demandé
+  // Cela évite d'envoyer les stats d'un autre joueur par erreur
+  if (normalizedId) {
+    return null;
+  }
+
   for (const slot of slots) {
     if (!slot || typeof slot !== "object") continue;
     if (slot.playerId || slot.databaseUserId || slot.data) return slot;
@@ -291,7 +297,10 @@ export async function buildPlayerStatePayload(
       ...options,
       playerId: options.playerId ?? myDatabaseUserId ?? undefined,
     });
-    if (!slot || typeof slot !== "object") return null;
+
+    if (!slot || typeof slot !== "object") {
+      return null;
+    }
 
     const slotData = slot.data ?? slot;
     if (!slotData || typeof slotData !== "object") return null;
@@ -468,6 +477,27 @@ async function tryInitializeReporting(state?: any): Promise<void> {
     ? snapshot.data.players
     : [];
   if (players.length === 0) return;
+
+  // Vérifier que notre slot est présent avant de démarrer
+  const myDatabaseUserId = await playerDatabaseUserId.get();
+  if (myDatabaseUserId) {
+    const slots = getSlotsArray(snapshot);
+    const mySlotExists = slots.some((slot) => {
+      const slotId = String(
+        slot?.databaseUserId ??
+          slot?.data?.databaseUserId ??
+          slot?.playerId ??
+          slot?.data?.playerId ??
+          "",
+      );
+      return slotId === String(myDatabaseUserId);
+    });
+
+    if (!mySlotExists) {
+      return;
+    }
+  }
+
   gameReadyTriggered = true;
   startPlayerStateReporting(preferredReportingIntervalMs);
   startFriendDataRefreshLoop();
@@ -583,12 +613,21 @@ export function stopPlayerStateReporting(): void {
   payloadReportingTimer = null;
 }
 
-export async function triggerPlayerStateSyncNow(options?: { force?: boolean }): Promise<void> {
-  if (options?.force) {
+export type TriggerPlayerStateSyncOptions = {
+  force?: boolean;
+};
+
+/**
+ * Triggers an immediate player state sync, bypassing the normal interval.
+ * Useful after auth changes or when forcing a fresh state update.
+ */
+export async function triggerPlayerStateSyncNow(
+  options: TriggerPlayerStateSyncOptions = {},
+): Promise<void> {
+  if (options.force) {
+    // Reset tracking to force send even if unchanged
     lastSentPayloadSnapshot = null;
     unchangedSnapshotCount = 0;
-    initialSendRetries = 0;
   }
   await buildAndSendPlayerState();
-  await warmSupabaseInitialFetch();
 }

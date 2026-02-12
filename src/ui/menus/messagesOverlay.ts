@@ -2617,6 +2617,7 @@ export class MessagesOverlay {
   private suppressSoundUntil = Date.now() + 10000; // Bloquer les sons pendant 10s au démarrage
   private groupIds = new Set<string>();
   private groupIdsLoaded = false;
+  private initialGroupsSyncDone = false;
   private myAvatarUrl: string | null = null;
   private myAvatar: string[] | null = null;
   private myName: string | null = null;
@@ -2815,6 +2816,7 @@ export class MessagesOverlay {
     this.groupIds.clear();
     this.groupIdsLoaded = false;
     this.initialDmSyncDone = false; // Réinitialiser pour attendre la nouvelle sync DB
+    this.initialGroupsSyncDone = false; // Réinitialiser pour attendre le chargement des groupes
     if (this.mode === "group" && this.myId) {
       this.loadGroupReadState();
     }
@@ -3332,6 +3334,8 @@ export class MessagesOverlay {
     if (!getFriendSettings().messageSoundEnabled) return;
     // En mode DM, attendre la première sync DB avant de jouer des sons
     if (this.mode === "dm" && !this.initialDmSyncDone) return;
+    // En mode group, attendre le chargement initial des groupes avant de jouer des sons
+    if (this.mode === "group" && !this.initialGroupsSyncDone) return;
     const now = Date.now();
     if (now < this.suppressSoundUntil) return;
     if (now - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
@@ -3686,8 +3690,13 @@ export class MessagesOverlay {
         this.saveGroupReadState();
         void this.markConversationRead(conv.otherId);
       } else if (!alreadyRead) {
+        // groupReadAt permet de distinguer les messages déjà lus des nouveaux
+        // On incrémente toujours le compteur pour les vrais nouveaux messages
         conv.unread += 1;
-        this.playNotificationSound();
+        // Mais on ne joue le son qu'après le chargement initial
+        if (this.initialGroupsSyncDone) {
+          this.playNotificationSound();
+        }
       }
     }
 
@@ -3901,9 +3910,10 @@ export class MessagesOverlay {
         this.renderThread({ preserveScroll: true, scrollToBottom: false });
       }
     } finally {
-      // Débloquer le son pour les groupes après le chargement initial
+      // Débloquer le son et les notifications pour les groupes après le chargement initial
       if (this.mode === "group" && this.groupIdsLoaded) {
         this.suppressSoundUntil = 0;
+        this.initialGroupsSyncDone = true;
       }
     }
   }
