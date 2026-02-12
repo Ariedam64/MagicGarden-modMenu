@@ -29984,6 +29984,7 @@
       // Bloquer les sons pendant 10s au démarrage
       __publicField(this, "groupIds", /* @__PURE__ */ new Set());
       __publicField(this, "groupIdsLoaded", false);
+      __publicField(this, "initialGroupsSyncDone", false);
       __publicField(this, "myAvatarUrl", null);
       __publicField(this, "myAvatar", null);
       __publicField(this, "myName", null);
@@ -30177,6 +30178,7 @@
       this.groupIds.clear();
       this.groupIdsLoaded = false;
       this.initialDmSyncDone = false;
+      this.initialGroupsSyncDone = false;
       if (this.mode === "group" && this.myId) {
         this.loadGroupReadState();
       }
@@ -30547,6 +30549,7 @@
     playNotificationSound() {
       if (!getFriendSettings().messageSoundEnabled) return;
       if (this.mode === "dm" && !this.initialDmSyncDone) return;
+      if (this.mode === "group" && !this.initialGroupsSyncDone) return;
       const now2 = Date.now();
       if (now2 < this.suppressSoundUntil) return;
       if (now2 - this.lastNotificationSoundAt < this.notificationSoundCooldownMs) return;
@@ -30845,7 +30848,9 @@
           void this.markConversationRead(conv.otherId);
         } else if (!alreadyRead) {
           conv.unread += 1;
-          this.playNotificationSound();
+          if (this.initialGroupsSyncDone) {
+            this.playNotificationSound();
+          }
         }
       }
       this.updateButtonBadge();
@@ -31022,6 +31027,7 @@
       } finally {
         if (this.mode === "group" && this.groupIdsLoaded) {
           this.suppressSoundUntil = 0;
+          this.initialGroupsSyncDone = true;
         }
       }
     }
@@ -37153,6 +37159,9 @@
         }
       }
     }
+    if (normalizedId) {
+      return null;
+    }
     for (const slot of slots) {
       if (!slot || typeof slot !== "object") continue;
       if (slot.playerId || slot.databaseUserId || slot.data) return slot;
@@ -37224,7 +37233,9 @@
         ...options,
         playerId: options.playerId ?? myDatabaseUserId ?? void 0
       });
-      if (!slot || typeof slot !== "object") return null;
+      if (!slot || typeof slot !== "object") {
+        return null;
+      }
       const slotData = slot.data ?? slot;
       if (!slotData || typeof slotData !== "object") return null;
       const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
@@ -37335,6 +37346,19 @@
     const snapshot = state3 ?? await Atoms.root.state.get();
     const players = Array.isArray(snapshot?.data?.players) ? snapshot.data.players : [];
     if (players.length === 0) return;
+    const myDatabaseUserId = await playerDatabaseUserId.get();
+    if (myDatabaseUserId) {
+      const slots = getSlotsArray(snapshot);
+      const mySlotExists = slots.some((slot) => {
+        const slotId = String(
+          slot?.databaseUserId ?? slot?.data?.databaseUserId ?? slot?.playerId ?? slot?.data?.playerId ?? ""
+        );
+        return slotId === String(myDatabaseUserId);
+      });
+      if (!mySlotExists) {
+        return;
+      }
+    }
     gameReadyTriggered = true;
     startPlayerStateReporting(preferredReportingIntervalMs);
     startFriendDataRefreshLoop();
@@ -37406,14 +37430,12 @@
       void buildAndSendPlayerState();
     }, normalizedMs);
   }
-  async function triggerPlayerStateSyncNow(options) {
-    if (options?.force) {
+  async function triggerPlayerStateSyncNow(options = {}) {
+    if (options.force) {
       lastSentPayloadSnapshot = null;
       unchangedSnapshotCount = 0;
-      initialSendRetries = 0;
     }
     await buildAndSendPlayerState();
-    await warmSupabaseInitialFetch();
   }
 
   // src/ui/menus/friendOverlay/index.ts
