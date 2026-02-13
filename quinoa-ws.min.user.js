@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.0.4
+// @version      3.0.5
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -39770,43 +39770,24 @@
       this.authGateStatus = status;
       const actions = document.createElement("div");
       actions.className = "qws-fo-auth-actions";
-      let authBtn = null;
-      let refuseBtn = null;
-      if (isDiscord) {
-        const inputRow = document.createElement("div");
-        inputRow.className = "qws-fo-auth-input-row";
-        const inputLabel = document.createElement("div");
-        inputLabel.className = "qws-fo-auth-input-label";
-        inputLabel.textContent = "Discord Activity cannot open popups. Paste your API key here.";
-        const input = document.createElement("input");
-        input.className = "qws-fo-auth-input";
-        input.type = "text";
-        input.placeholder = "Paste your API key";
-        manualInput = input;
-        inputRow.append(inputLabel, input);
-        inputRow.classList.add("qws-fo-auth-hidden");
-        manualRow = inputRow;
-        const openBtn = document.createElement("button");
-        openBtn.type = "button";
-        openBtn.className = "qws-fo-auth-btn primary";
-        openBtn.textContent = "Authenticate with Discord";
-        authBtn = openBtn;
-        this.authGateAuthBtn = openBtn;
-        const contBtn = document.createElement("button");
-        contBtn.type = "button";
-        contBtn.className = "qws-fo-auth-btn ghost";
-        contBtn.textContent = "Continue without Discord";
-        refuseBtn = contBtn;
-        actions.append(contBtn, openBtn);
-      } else {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "qws-fo-auth-btn primary";
-        btn.textContent = "Authenticate with Discord";
-        authBtn = btn;
-        this.authGateAuthBtn = btn;
-        actions.append(btn);
-      }
+      const inputRow = document.createElement("div");
+      inputRow.className = "qws-fo-auth-input-row qws-fo-auth-hidden";
+      const inputLabel = document.createElement("div");
+      inputLabel.className = "qws-fo-auth-input-label";
+      inputLabel.textContent = isDiscord ? "Discord Activity cannot open popups. Paste your API key here." : "If automatic detection didn't work, paste your API key here.";
+      const input = document.createElement("input");
+      input.className = "qws-fo-auth-input";
+      input.type = "text";
+      input.placeholder = "Paste your API key";
+      manualInput = input;
+      inputRow.append(inputLabel, input);
+      manualRow = inputRow;
+      const authBtn = document.createElement("button");
+      authBtn.type = "button";
+      authBtn.className = "qws-fo-auth-btn primary";
+      authBtn.textContent = "Authenticate with Discord";
+      this.authGateAuthBtn = authBtn;
+      actions.append(authBtn);
       const cardNodes = [
         header,
         dividerTop,
@@ -39820,66 +39801,50 @@
       card.append(...cardNodes);
       overlay.appendChild(card);
       this.content.appendChild(overlay);
-      if (refuseBtn) {
-        refuseBtn.addEventListener("click", () => {
-          setDeclinedApiAuth(true);
-          this.authGateSuppressed = true;
+      authBtn.addEventListener("click", async () => {
+        status.textContent = "";
+        if (this.authGateManualMode) {
+          const key2 = (manualInput?.value ?? "").trim();
+          if (!key2) {
+            status.textContent = "Please paste your API key.";
+            return;
+          }
+          setApiKey(key2);
+          setDeclinedApiAuth(false);
+          this.authGateSuppressed = false;
           this.updateAuthGateVisibility();
-        });
-      }
-      if (authBtn) {
-        authBtn.addEventListener("click", async () => {
-          status.textContent = "";
+          await triggerPlayerStateSyncNow({ force: true });
+          this.refreshTabsAfterAuth();
+          window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+          return;
+        }
+        if (!this.authGateManualMode) {
+          this.authGateManualMode = true;
+          if (manualRow) manualRow.classList.remove("qws-fo-auth-hidden");
+          authBtn.textContent = "Save API key";
+          manualInput?.focus();
           if (isDiscord) {
-            if (!this.authGateManualMode) {
-              this.authGateManualMode = true;
-              if (manualRow) manualRow.classList.remove("qws-fo-auth-hidden");
-              authBtn.textContent = "Save API key";
-              manualInput?.focus();
-              status.textContent = "After logging in, paste your API key below.";
-              requestApiKey().then(async (apiKey2) => {
-                if (!apiKey2) return;
-                setDeclinedApiAuth(false);
-                this.authGateSuppressed = false;
-                this.updateAuthGateVisibility();
-                await triggerPlayerStateSyncNow({ force: true });
-                this.refreshTabsAfterAuth();
-                window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
-              }).catch(() => {
-              });
-              return;
-            }
-            const key2 = (manualInput?.value ?? "").trim();
-            if (!key2) {
-              status.textContent = "Please paste your API key.";
-              return;
-            }
-            setApiKey(key2);
-            setDeclinedApiAuth(false);
-            this.authGateSuppressed = false;
-            this.updateAuthGateVisibility();
-            await triggerPlayerStateSyncNow({ force: true });
-            this.refreshTabsAfterAuth();
-            window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
-            return;
+            status.textContent = "After logging in, paste your API key below.";
+          } else {
+            status.textContent = "If automatic detection didn't work, paste your API key below.";
           }
-          this.setAuthGateButtonEnabled(authBtn, false);
-          const originalLabel = authBtn.textContent || "";
-          authBtn.textContent = "Authenticating...";
-          const apiKey = await requestApiKey();
-          if (apiKey) {
-            setDeclinedApiAuth(false);
-            this.updateAuthGateVisibility();
-            await triggerPlayerStateSyncNow({ force: true });
-            this.refreshTabsAfterAuth();
-            window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
-            return;
-          }
-          status.textContent = "Authentication failed. Please allow popups and try again.";
-          authBtn.textContent = originalLabel;
-          this.setAuthGateButtonEnabled(authBtn, true);
-        });
-      }
+          requestApiKey().then(async (apiKey) => {
+            if (apiKey) {
+              setDeclinedApiAuth(false);
+              this.authGateSuppressed = false;
+              this.updateAuthGateVisibility();
+              await triggerPlayerStateSyncNow({ force: true });
+              this.refreshTabsAfterAuth();
+              window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
+            } else {
+              status.textContent = isDiscord ? "After logging in, paste your API key below." : "Automatic detection failed. Please paste your API key below.";
+            }
+          }).catch(() => {
+            status.textContent = isDiscord ? "After logging in, paste your API key below." : "Authentication failed. Please paste your API key below.";
+          });
+          return;
+        }
+      });
       if (manualInput) {
         manualInput.addEventListener("keydown", (event) => {
           if (event.key !== "Enter") return;
