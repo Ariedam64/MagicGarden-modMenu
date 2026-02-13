@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.0.3
+// @version      3.0.4
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -47072,7 +47072,7 @@
     function formatNumber(value, digits = 3) {
       return value == null || Number.isNaN(value) || !Number.isFinite(value) ? "\u2014" : value.toFixed(digits);
     }
-    function setButtonEnabled3(btn, enabled) {
+    function setButtonEnabled2(btn, enabled) {
       const setter = btn.setEnabled;
       if (typeof setter === "function") setter(enabled);
       else btn.disabled = !enabled;
@@ -47080,7 +47080,7 @@
     const scanLabel = btnScan.querySelector(".label");
     const defaultScanText = scanLabel?.textContent ?? "Rescan sounds";
     function setScanButtonLoading(loading) {
-      setButtonEnabled3(btnScan, !loading);
+      setButtonEnabled2(btnScan, !loading);
       if (scanLabel) scanLabel.textContent = loading ? "Scanning\u2026" : defaultScanText;
     }
     function refreshData() {
@@ -47183,7 +47183,7 @@
       groupList.style.display = visible ? "" : "none";
       groupEmpty.textContent = groupEntries.length ? "No groups match the current filter." : "No groups detected yet. Run a rescan to populate the cache.";
       groupEmpty.style.display = visible ? "none" : "block";
-      setButtonEnabled3(btnGroupClear, groupFilter.value.trim().length > 0);
+      setButtonEnabled2(btnGroupClear, groupFilter.value.trim().length > 0);
     }
     function renderSounds() {
       const rx = safeRegex(soundFilter.value.trim() || ".*");
@@ -47244,8 +47244,8 @@
       soundList.style.display = visibleSounds.length ? "" : "none";
       soundEmpty.textContent = infoList.length ? "No sounds match the current filter." : "No sounds detected yet. Run a rescan to populate the cache.";
       soundEmpty.style.display = visibleSounds.length ? "none" : "block";
-      setButtonEnabled3(btnCopyVisible, visibleSounds.length > 0);
-      setButtonEnabled3(btnSoundClear, soundFilter.value.trim().length > 0);
+      setButtonEnabled2(btnCopyVisible, visibleSounds.length > 0);
+      setButtonEnabled2(btnSoundClear, soundFilter.value.trim().length > 0);
     }
     async function refreshAll(opts = {}) {
       if (busy) return;
@@ -47253,8 +47253,8 @@
       const { rescan = false } = opts;
       overviewError.clear();
       if (rescan) setScanButtonLoading(true);
-      else setButtonEnabled3(btnScan, false);
-      setButtonEnabled3(btnRefresh, false);
+      else setButtonEnabled2(btnScan, false);
+      setButtonEnabled2(btnRefresh, false);
       let scanError = null;
       try {
         if (rescan) {
@@ -47275,8 +47275,8 @@
         }
       } finally {
         if (rescan) setScanButtonLoading(false);
-        else setButtonEnabled3(btnScan, true);
-        setButtonEnabled3(btnRefresh, true);
+        else setButtonEnabled2(btnScan, true);
+        setButtonEnabled2(btnRefresh, true);
         busy = false;
       }
     }
@@ -60843,7 +60843,7 @@ next: ${next}`;
       });
       actionsWrap.appendChild(resetBtn);
     }
-    const setButtonEnabled3 = (btn, enabled) => {
+    const setButtonEnabled2 = (btn, enabled) => {
       if (!btn) return;
       const setter = btn.setEnabled;
       if (setter) {
@@ -60857,11 +60857,11 @@ next: ${next}`;
     const updateButtons2 = (current) => {
       const hasHotkey = hotkeyToString(current).length > 0;
       if (clearBtn) {
-        setButtonEnabled3(clearBtn, hasHotkey);
+        setButtonEnabled2(clearBtn, hasHotkey);
       }
       if (resetBtn) {
         const isDefault = hotkeyToString(current) === defaultString;
-        setButtonEnabled3(resetBtn, !isDefault);
+        setButtonEnabled2(resetBtn, !isDefault);
       }
     };
     if (clearBtn) {
@@ -62285,11 +62285,6 @@ next: ${next}`;
       window.addEventListener("DOMContentLoaded", () => resolve2(), { once: true });
     });
   }
-  function setButtonEnabled2(button, enabled) {
-    button.disabled = !enabled;
-    button.classList.toggle("is-disabled", !enabled);
-    button.setAttribute("aria-disabled", (!enabled).toString());
-  }
   function createListItem(text, iconSvg) {
     const item = document.createElement("div");
     item.className = "qws-auth-item";
@@ -62451,8 +62446,6 @@ next: ${next}`;
           } else {
             status.textContent = "If automatic detection didn't work, paste your API key below.";
           }
-          setButtonEnabled2(authBtn, false);
-          setButtonEnabled2(refuseBtn, false);
           requestApiKey().then(async (apiKey) => {
             if (apiKey) {
               setDeclinedApiAuth(false);
@@ -62460,13 +62453,9 @@ next: ${next}`;
               window.dispatchEvent(new CustomEvent("qws-friend-overlay-auth-update"));
               closeModal2();
             } else {
-              setButtonEnabled2(authBtn, true);
-              setButtonEnabled2(refuseBtn, true);
               status.textContent = isDiscord ? "After logging in, paste your API key below." : "Automatic detection failed. Please paste your API key below.";
             }
           }).catch(() => {
-            setButtonEnabled2(authBtn, true);
-            setButtonEnabled2(refuseBtn, true);
             status.textContent = isDiscord ? "After logging in, paste your API key below." : "Authentication failed. Please paste your API key below.";
           });
           return;
