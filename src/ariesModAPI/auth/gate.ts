@@ -1,12 +1,15 @@
-import { requestApiKey } from "../utils/supabase";
+// ariesModAPI/auth/gate.ts
+// Modal d'authentification Discord (UI)
+
+import { requestApiKey } from "./core";
 import {
   hasApiKey,
   hasDeclinedApiAuth,
   setApiKey,
   setDeclinedApiAuth,
-} from "../utils/localStorage";
-import { isDiscordActivityContext } from "../utils/discordCsp";
-import { triggerPlayerStateSyncNow } from "../utils/payload";
+} from "../../utils/localStorage";
+import { isDiscordActivityContext } from "../../utils/discordCsp";
+import { triggerPlayerStateSyncNow } from "../endpoints/state";
 
 const AUTH_MODAL_STYLE_ID = "qws-auth-modal-style";
 const AUTH_MODAL_ID = "qws-auth-modal";
@@ -232,8 +235,19 @@ function createListItem(text: string, iconSvg: string): HTMLDivElement {
   return item;
 }
 
+/**
+ * Affiche la modal d'authentification au démarrage si nécessaire
+ */
 export async function promptApiAuthOnStartup(): Promise<void> {
   if (hasApiKey() || hasDeclinedApiAuth()) return;
+  await ensureBodyReady();
+  showAuthModal();
+}
+
+/**
+ * Affiche la modal d'authentification (peut être appelé manuellement)
+ */
+export async function showAuthModalIfNeeded(): Promise<void> {
   await ensureBodyReady();
   showAuthModal();
 }
@@ -486,5 +500,3 @@ function showAuthModal(): void {
     });
   }
 }
-
-

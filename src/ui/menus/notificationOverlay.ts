@@ -9,6 +9,7 @@ import {
   seedNameFromSpecies
 } from "../../utils/catalogIndex";
 import { attachSpriteIcon } from "../spriteIconCache";
+import { startInjectGamePanelButton } from "../../utils/toolbarButton";
 
 /* ========= Types min ========= */
 type SeedItem  = { itemType: "Seed";  species: string; initialStock: number };
@@ -132,15 +133,14 @@ function purchasedCountForId(
 /* ========= Overlay (affichage + subs) ========= */
 class OverlayBarebone {
   private slot:  HTMLDivElement    = document.createElement("div");
-  private btn:   HTMLButtonElement = document.createElement("button");
   private badge: HTMLSpanElement   = document.createElement("span");
   private panel: HTMLDivElement    = document.createElement("div");
-  private bellWrap: HTMLDivElement = document.createElement("div");
+  private cleanupToolbarButton: (() => void) | null = null;
 
   private lastShops: ShopsSnapshot | null = null;
   private lastPurch: PurchasesSnapshot | null = null;
 
-  // Suivi des IDs visibles dans l’overlay (pour loops & diff)
+  // Suivi des IDs visibles dans l'overlay (pour loops & diff)
   private prevOverlayIds = new Set<string>();
   private currentOverlayIds = new Set<string>();
   private rulesById = new Map<string, NotifierRule>();
@@ -150,9 +150,7 @@ class OverlayBarebone {
   private bootArmed = false;
   private justRestocked = false;
 
-  private mo: MutationObserver | null = null;
-
-  // Items à afficher dans l’overlay (déjà filtrés)
+  // Items à afficher dans l'overlay (déjà filtrés)
   private rows: Array<{ id: string; qty: number }> = [];
   private lastPanelSig: string | null = null;
 
@@ -160,37 +158,51 @@ class OverlayBarebone {
     this.slot = this.createSlot();
     this.slot.id = "qws-notifier-slot";
     (globalThis as any).__qws_notifier_slot = this.slot;
-    this.btn = this.createButton();
     this.ensureBellCSS();
     this.badge = this.createBadge();
     this.panel = this.createPanel();
     this.installScrollGuards(this.panel);
 
+    // Inject button into game toolbar using utility
+    // Create bell SVG icon as data URL
+    const bellSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+    const bellDataUrl = `data:image/svg+xml;base64,${btoa(bellSvg)}`;
+
     // Prime audio au premier clic utilisateur + toggle panel
     let primedOnce = false;
-    this.btn.onclick = async () => {
-      if (!primedOnce) {
-        primedOnce = true;
-        try { await audio.prime(); } catch {}
-      }
-      const on = this.panel.style.display !== "block";
-      this.panel.style.display = on ? "block" : "none";
-      if (on) this.renderPanel();
-      this.updateBellWiggle();
-    };
 
-    this.slot.append(this.btn, this.badge, this.panel);
-    this.attachLeftOfTargetCanvas();
-    this.observeDomForRelocation();
+    this.cleanupToolbarButton = startInjectGamePanelButton({
+      onClick: async () => {
+        if (!primedOnce) {
+          primedOnce = true;
+          try { await audio.prime(); } catch {}
+        }
+        const on = this.panel.style.display !== "block";
+        this.panel.style.display = on ? "block" : "none";
+        if (on) {
+          this.updatePanelPosition();
+          this.renderPanel();
+          this.updateBadgePosition();
+        }
+        this.updateBellWiggle();
+      },
+      iconUrl: bellDataUrl,
+      ariaLabel: "Notifications",
+    });
+
+    this.slot.append(this.badge, this.panel);
+    document.body.appendChild(this.slot);
 
     // Fermer en cliquant dehors
     window.addEventListener("pointerdown", (e) => {
       if (this.panel.style.display !== "block") return;
       const t = e.target as Node;
-      if (!this.slot.contains(t)) this.panel.style.display = "none";
+      if (!this.slot.contains(t) && !this.isClickOnToolbarButton(e.target as Node)) {
+        this.panel.style.display = "none";
+      }
     });
 
-    // Brancher le “purchase checker” pour le mode “Until purchase”
+    // Brancher le "purchase checker" pour le mode "Until purchase"
     audio.setPurchaseChecker((itemId) => {
       if (!itemId) return false;
       if (this.currentOverlayIds.has(itemId)) return false;
@@ -198,15 +210,32 @@ class OverlayBarebone {
     });
   }
 
+  private isClickOnToolbarButton(target: Node): boolean {
+    // Check if click is on our toolbar button
+    let el = target as HTMLElement | null;
+    while (el) {
+      if (el instanceof HTMLButtonElement && el.getAttribute("aria-label") === "Notifications") {
+        return true;
+      }
+      el = el.parentElement;
+    }
+    return false;
+  }
+
   destroy() {
-    try { this.mo?.disconnect(); } catch {}
+    // Cleanup toolbar button injection
+    if (this.cleanupToolbarButton) {
+      try { this.cleanupToolbarButton(); } catch {}
+      this.cleanupToolbarButton = null;
+    }
+
     try { this.slot.remove(); } catch {}
     try {
       if ((globalThis as any).__qws_notifier_slot === this.slot) {
         delete (globalThis as any).__qws_notifier_slot;
       }
     } catch {}
-    // Stop toutes les boucles audio liées à l’overlay
+    // Stop toutes les boucles audio liées à l'overlay
     try { audio.stopAllLoops(); } catch {}
   }
 
@@ -473,6 +502,7 @@ class OverlayBarebone {
     const n = this.rows.length;
     this.badge.textContent = n ? String(n) : "";
     style(this.badge, { display: n ? "inline-flex" : "none" });
+    this.updateBadgePosition();
   }
 
   private resolveShopItem(id: string): { kind: ShopKind; item: any } | null {
@@ -672,11 +702,11 @@ class OverlayBarebone {
   private createSlot(): HTMLDivElement {
     const d = document.createElement("div");
     style(d, {
-      position: "relative",
-      display: "inline-flex",
-      alignItems: "center",
-      marginRight: "0",
-      pointerEvents: "auto",
+      position: "fixed",
+      top: "0",
+      right: "0",
+      pointerEvents: "none",
+      zIndex: "9999",
       fontFamily: "var(--chakra-fonts-body, GreyCliff CF), system-ui, sans-serif",
       color: "var(--chakra-colors-chakra-body-text, #e7eef7)",
       userSelect: "none",
@@ -689,42 +719,54 @@ class OverlayBarebone {
     return d;
   }
 
-  private createButton(): HTMLButtonElement {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.setAttribute("aria-label", "Notifications");
-    const bell = document.createElement("span");
-    bell.className = "qws-bell";
-    bell.textContent = "🔔";
-    bell.setAttribute("aria-hidden", "true");
-    this.bellWrap = document.createElement("div");
-    this.bellWrap.className = "qws-bell-wrap";
-    this.bellWrap.appendChild(bell);
-    this.applyFallbackButtonStyles();
-    btn.appendChild(this.bellWrap);
-    btn.addEventListener("mouseenter", () => {
-      if (btn.hasAttribute("style")) btn.style.borderColor = "var(--qws-accent, #7aa2ff)";
-    });
-    btn.addEventListener("mouseleave", () => {
-      if (btn.hasAttribute("style")) btn.style.borderColor = "var(--chakra-colors-chakra-border-color, #ffffff33)";
-    });
-    return btn;
+  private updateBadgePosition(): void {
+    // Find the toolbar button and position badge relative to it
+    const btn = document.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    if (btn && this.badge) {
+      const rect = btn.getBoundingClientRect();
+      style(this.badge, {
+        top: `${rect.top - 4}px`,
+        right: `${window.innerWidth - rect.right - 4}px`,
+      });
+    }
+  }
+
+  private updatePanelPosition(): void {
+    // Find the toolbar button and position panel below it
+    const btn = document.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    if (btn && this.panel) {
+      const rect = btn.getBoundingClientRect();
+      style(this.panel, {
+        position: "fixed",
+        top: `${rect.bottom + 8}px`,
+        right: `${window.innerWidth - rect.right}px`,
+      });
+    }
   }
 
   private updateBellWiggle() {
-    const bell = this.btn.querySelector(".qws-bell") as HTMLElement | null;
-    if (!bell) return;
-    // Shake seulement si l’overlay a au moins 1 item ET que le panneau est fermé
+    // Find the toolbar button and its icon
+    const btn = document.querySelector<HTMLButtonElement>('button[aria-label="Notifications"]');
+    if (!btn) return;
+    const icon = btn.querySelector("img");
+    if (!icon) return;
+
+    // Shake seulement si l'overlay a au moins 1 item ET que le panneau est fermé
     const shouldWiggle = (this.rows.length > 0) && (this.panel.style.display !== "block");
-    bell.classList.toggle("qws-bell--wiggle", shouldWiggle);
+
+    // Apply animation to the img element
+    if (shouldWiggle) {
+      icon.style.animation = "qwsBellShake 1.2s ease-in-out infinite";
+      icon.style.transformOrigin = "50% 0%";
+    } else {
+      icon.style.animation = "";
+    }
   }
 
   private createBadge(): HTMLSpanElement {
     const badge = document.createElement("span");
     style(badge, {
-      position: "absolute",
-      top: "-6px",
-      right: "-6px",
+      position: "fixed",
       minWidth: "18px",
       height: "18px",
       padding: "0 6px",
@@ -739,6 +781,7 @@ class OverlayBarebone {
       border: "1px solid rgba(0,0,0,.35)",
       lineHeight: "18px",
       pointerEvents: "none",
+      zIndex: "10000",
     });
     return badge;
   }
@@ -748,13 +791,11 @@ class OverlayBarebone {
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", "Tracked items available");
     style(panel, {
-      position: "absolute",
-      top: "calc(100% + var(--chakra-space-2, 0.5rem))",
-      right: "0",
+      position: "fixed",
       width: "min(340px, 80vw)",        // ← largeur réduite (était 360px)
       maxHeight: "50vh",
       overflow: "auto",
-      overscrollBehavior: "contain",     // ← empêche le scroll de “remonter” au jeu
+      overscrollBehavior: "contain",     // ← empêche le scroll de "remonter" au jeu
       touchAction: "pan-y",              // ← gestes tactiles = scroll vertical, pas zoom/pan global
       borderRadius: "var(--chakra-radii-card, 12px)",
       border: "1px solid var(--qws-border, #ffffff22)",
@@ -765,6 +806,7 @@ class OverlayBarebone {
       padding: "8px",
       display: "none",
       zIndex: "var(--chakra-zIndices-DialogModal, 7010)",
+      pointerEvents: "auto",
     });
     setProps(panel, { "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))" });
     return panel;
@@ -783,245 +825,6 @@ class OverlayBarebone {
     el.addEventListener("DOMMouseScroll", stop as any, { passive: true, capture: true } as any);
     // Tactile
     el.addEventListener("touchmove", stop, { passive: true, capture: true });
-  }
-
-  /* ========= Anchoring ========= */
-  private findTargetCanvas(): HTMLCanvasElement | null {
-    try {
-      const c1 = document.querySelector('span[tabindex] canvas') as HTMLCanvasElement | null;
-      if (c1) return c1;
-      const all = Array.from(document.querySelectorAll<HTMLCanvasElement>("canvas"));
-      const candidates = all
-        .map(c => ({ c, r: c.getBoundingClientRect() }))
-        .filter(({ r }) => r.width <= 512 && r.height <= 512 && r.top < 300)
-        .sort((a, b) => (a.r.left - b.r.left) || (a.r.top - b.r.top));
-      return candidates[0]?.c ?? null;
-    } catch { return null; }
-  }
-
-  private closestFlexWithEnoughChildren(el: HTMLElement, minChildren = 3): HTMLElement | null {
-    let cur: HTMLElement | null = el;
-    while (cur && cur.parentElement) {
-      const parent = cur.parentElement as HTMLElement;
-      const cs = getComputedStyle(parent);
-      if (cs.display.includes("flex") && parent.children.length >= minChildren) return parent;
-      cur = parent;
-    }
-    return null;
-  }
-
-  private findToolbarContainer(): HTMLElement | null {
-    try {
-      const mcFlex = document.querySelector<HTMLElement>(".McFlex.css-13izacw");
-      if (mcFlex) return mcFlex;
-
-      const chatBtn = document.querySelector('button[aria-label="Chat"]') as HTMLElement | null;
-      const flexFromChat = chatBtn ? this.closestFlexWithEnoughChildren(chatBtn) : null;
-      if (flexFromChat) return flexFromChat;
-
-      const canvas = this.findTargetCanvas();
-      if (canvas) {
-        const flexFromCanvas = this.closestFlexWithEnoughChildren(canvas);
-        if (flexFromCanvas) return flexFromCanvas;
-        const block = this.findAnchorBlockFromCanvas(canvas);
-        if (block && block.parentElement) return block.parentElement as HTMLElement;
-      }
-      return null;
-    } catch { return null; }
-  }
-
-  private applyFallbackButtonStyles() {
-    this.btn.className = "";
-    style(this.btn, {
-      display: "inline-flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "6px",
-      height: "36px",
-      padding: "0 12px",
-      borderRadius: "var(--chakra-radii-button, 50px)",
-      border: "1px solid var(--chakra-colors-chakra-border-color, #ffffff33)",
-      background: "var(--qws-panel, #111823cc)",
-      backdropFilter: "blur(var(--qws-blur, 8px))",
-      color: "var(--qws-text, #e7eef7)",
-      boxShadow: "var(--qws-shadow, 0 10px 36px rgba(0,0,0,.45))",
-      cursor: "pointer",
-      transition: "border-color var(--chakra-transition-duration-fast,150ms) ease",
-      outline: "none",
-      position: "relative",
-    });
-    setProps(this.btn, {
-      "-webkit-backdrop-filter": "blur(var(--qws-blur, 8px))",
-      "-webkit-tap-highlight-color": "transparent",
-    });
-    this.bellWrap.className = "qws-bell-wrap";
-    style(this.bellWrap, {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "6px",
-      height: "100%",
-    });
-  }
-
-  private applyToolbarLook(toolbar: HTMLElement | null) {
-    const refBtn = toolbar?.querySelector("button.chakra-button") as HTMLButtonElement | null;
-    if (!refBtn) return;
-
-    // Mirror classes from the toolbar buttons for a native look
-    this.btn.className = refBtn.className;
-    this.btn.removeAttribute("style");
-    this.btn.removeAttribute("data-focus-visible-added");
-
-    const refInner = refBtn.querySelector("div") as HTMLElement | null;
-    if (refInner) {
-      this.bellWrap.className = refInner.className;
-      this.bellWrap.removeAttribute("style");
-    }
-
-    // Ensure the bell stays centered even if class layout differs
-    style(this.bellWrap, {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      height: "100%",
-    });
-    // Keep a positioning context for badge/panel
-    style(this.btn, { position: "relative" });
-  }
-
-  private anchorIntoToolbar(toolbar: HTMLElement) {
-    this.applyToolbarLook(toolbar);
-
-    const cs = getComputedStyle(toolbar);
-    const isColumn = (cs.flexDirection || "").startsWith("column");
-    const gap = Number.parseFloat(cs.gap || cs.columnGap || cs.rowGap || "0") || 0;
-
-    if (cs.position === "static") {
-      toolbar.style.position = "relative";
-    }
-
-    const rect = toolbar.getBoundingClientRect();
-    const siblings = Array.from(toolbar.children).filter((c) => c !== this.slot) as HTMLElement[];
-    const last = siblings[siblings.length - 1];
-    const lastRect = last?.getBoundingClientRect();
-
-    const targetTop = isColumn
-      ? (lastRect ? (lastRect.bottom - rect.top + gap) : rect.height + gap)
-      : (lastRect ? (lastRect.top - rect.top + lastRect.height / 2) : rect.height / 2);
-    const targetLeft = isColumn
-      ? (lastRect ? (lastRect.left - rect.left + lastRect.width / 2) : rect.width / 2)
-      : (lastRect ? (lastRect.right - rect.left + gap) : rect.width + gap);
-
-    style(this.slot, {
-      position: "absolute",
-      top: `${targetTop}px`,
-      left: `${targetLeft}px`,
-      transform: isColumn ? "translate(-50%, 0)" : "translate(0, -50%)",
-      pointerEvents: "auto", // laisse les clics traverser vers le panel/bouton
-      margin: "0",
-    });
-    style(this.btn, { pointerEvents: "auto" });
-
-    if (this.slot.parentElement !== toolbar || this.slot.nextElementSibling) {
-      toolbar.appendChild(this.slot); // on reste dernier sans pousser le layout
-    }
-  }
-
-  private resetSlotPositioning() {
-    style(this.slot, {
-      position: "relative",
-      top: "",
-      left: "",
-      right: "",
-      bottom: "",
-      transform: "",
-      pointerEvents: "auto",
-      margin: "0",
-    });
-    style(this.btn, { pointerEvents: "auto" });
-  }
-
-  private findAnchorBlockFromCanvas(c: HTMLCanvasElement): HTMLElement | null {
-    try {
-      const tabbable = c.closest("span[tabindex]");
-      if (tabbable && tabbable.parentElement) return tabbable.parentElement as HTMLElement;
-
-      let cur: HTMLElement | null = c;
-      while (cur && cur.parentElement) {
-        const p = cur.parentElement as HTMLElement;
-        const cs = getComputedStyle(p);
-        if (cs.display.includes("flex") && p.children.length <= 3) return p;
-        cur = p;
-      }
-      return null;
-    } catch { return null; }
-  }
-
-  private insertLeftOf(block: Element, el: Element) {
-    const parent = block.parentElement;
-    if (!parent) return;
-    if (!(block as any).isConnected || !(parent as any).isConnected) return;
-
-    const cs = getComputedStyle(parent);
-    const isFlex = cs.display.includes("flex");
-    const dir = cs.flexDirection || "row";
-
-    try {
-      if (isFlex && dir.startsWith("row") && dir.endsWith("reverse")) {
-        if (el !== block.nextSibling) parent.insertBefore(el, block.nextSibling);
-      } else {
-        parent.insertBefore(el, block);
-      }
-    } catch {}
-  }
-
-  private attachLeftOfTargetCanvas() {
-    try {
-      this.resetSlotPositioning();
-
-      const toolbar = this.findToolbarContainer();
-      if (toolbar && (toolbar as any).isConnected) {
-        this.anchorIntoToolbar(toolbar);
-        return;
-      }
-
-      const canvas = this.findTargetCanvas();
-      const block = canvas ? this.findAnchorBlockFromCanvas(canvas) : null;
-
-      if (!block || !block.parentElement || !(block as any).isConnected) {
-        let fixed = document.getElementById("qws-notifier-fallback") as HTMLDivElement | null;
-        if (!fixed) {
-          fixed = document.createElement("div");
-          fixed.id = "qws-notifier-fallback";
-          style(fixed, {
-            position: "fixed",
-            zIndex: "var(--chakra-zIndices-PresentableOverlay, 5100)",
-            top: "calc(10px + var(--sait, 0px))",
-            right: "calc(10px + var(--sair, 0px))",
-          });
-          document.body.appendChild(fixed);
-        }
-        this.applyFallbackButtonStyles();
-        if (!fixed.contains(this.slot)) fixed.appendChild(this.slot);
-        return;
-      }
-
-      this.applyFallbackButtonStyles();
-      if (this.slot.parentElement !== block.parentElement ||
-          (this.slot.nextElementSibling !== block && block.previousElementSibling !== this.slot)) {
-        this.insertLeftOf(block, this.slot);
-      }
-    } catch {}
-  }
-
-  private observeDomForRelocation() {
-    try {
-      this.mo?.disconnect();
-      this.mo = new MutationObserver(() => this.attachLeftOfTargetCanvas());
-      this.mo.observe(document.body, { childList: true, subtree: true });
-      this.attachLeftOfTargetCanvas();
-    } catch {}
   }
 }
 

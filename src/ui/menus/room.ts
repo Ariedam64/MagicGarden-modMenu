@@ -15,7 +15,7 @@ import {
   waitStatsModalClosed,
 } from "../../services/fakeModal";
 import { pageWindow } from "../../utils/page-context";
-import { fetchAvailableRooms, searchRoomsByPlayerName, type Room as SupabaseRoom } from "../../utils/supabase";
+import { fetchAvailableRooms, searchRoomsByPlayerName, type Room as SupabaseRoom } from "../../ariesModAPI";
 import {
   RoomService,
   type PublicRoomDefinition,

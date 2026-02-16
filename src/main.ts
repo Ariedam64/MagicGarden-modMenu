@@ -1,5 +1,5 @@
 // src/main.ts
-
+import "./sprite";
 import { installPageWebSocketHook } from "./hooks/ws-hook";
 import { mountHUD, initWatchers } from "./ui/hud";
 
@@ -15,7 +15,6 @@ import { renderToolsMenu } from "./ui/menus/tools";
 import { renderEditorMenu } from "./ui/menus/editor";
 import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
-import { initAuthBridgeIfNeeded } from "./utils/authBridge";
 
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
@@ -23,12 +22,18 @@ import { EditorService } from "./services/editor";
 
 import { initGameVersion } from "./utils/gameVersion";
 import { MGVersion } from "./utils/mgVersion";
-import { startPlayerStateReportingWhenGameReady } from "./utils/payload";
 
 import { warmupSpriteCache } from "./ui/spriteIconCache";
 import { tos } from "./utils/tileObjectSystemApi";
-import "./sprite";
-import { promptApiAuthOnStartup } from "./ui/authGate";
+import { installEmojiDataFetchInterceptor, isDiscordActivityContext } from "./utils/discordCsp";
+
+
+
+import {
+  initAuthBridgeIfNeeded,
+  startPlayerStateReportingWhenGameReady,
+  initializeStreamsWhenReady,
+} from "./ariesModAPI";
 
 
 
@@ -36,6 +41,10 @@ import { promptApiAuthOnStartup } from "./ui/authGate";
   "use strict";
 
   if (initAuthBridgeIfNeeded()) return;
+
+    if (isDiscordActivityContext()) {
+    installEmojiDataFetchInterceptor();
+  }
 
   installPageWebSocketHook();
   initGameVersion();
@@ -45,8 +54,6 @@ import { promptApiAuthOnStartup } from "./ui/authGate";
     tos.init()
 
   EditorService.init();
-
-   void promptApiAuthOnStartup();
 
   mountHUD({
     onRegister(register) {
@@ -75,5 +82,5 @@ import { promptApiAuthOnStartup } from "./ui/authGate";
   antiAfk.start();
 
   startPlayerStateReportingWhenGameReady();
-
+  initializeStreamsWhenReady();
 })();

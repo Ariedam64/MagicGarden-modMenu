@@ -17,9 +17,8 @@ import {
   type Hotkey,
   type KeybindId,
 } from "../services/keybinds";
-import { PlayerService } from "../services/player";
 import { renderOverlay } from "./menus/notificationOverlay";
-import { renderFriendOverlay } from "./menus/friendOverlay";
+import { renderCommunityHub } from "./menus/communityHub";
 import { getSpriteWarmupState, onSpriteWarmupProgress } from "./spriteIconCache";
 import { setupBuyAll, startReorderObserver } from "../utils/shopUtility";
 import { startPetPanelEnhancer } from "../utils/petPanelEnhancer";
@@ -1079,7 +1078,7 @@ export function initWatchers(){
       await startActivityLogHistoryWatcher()
       startActivityLogFilter();
       await renderOverlay()
-      await renderFriendOverlay()
+      await renderCommunityHub()
       setupBuyAll()
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();

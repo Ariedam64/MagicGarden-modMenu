@@ -15,6 +15,7 @@ import {
 import { pageWindow } from "../../utils/page-context";
 
 declare const GM_download: ((options: { name?: string; url: string; saveAs?: boolean }) => void) | undefined;
+declare const GM_openInTab: ((url: string, options?: { active?: boolean; insert?: boolean; setParent?: boolean }) => void) | undefined;
 
 function createActionButton(label: string): HTMLButtonElement {
   const button = document.createElement("button");
@@ -506,6 +507,66 @@ function renderInfosTab(view: HTMLElement, ui: Menu): void {
   });
 
   view.appendChild(infoCard.root);
+
+  const supportCard = ui.card("Support the project");
+  supportCard.body.style.display = "flex";
+  supportCard.body.style.flexDirection = "column";
+  supportCard.body.style.gap = "12px";
+  supportCard.body.style.alignItems = "center";
+
+  const supportText = document.createElement("div");
+  supportText.style.fontSize = "13px";
+  supportText.style.lineHeight = "1.5";
+  supportText.style.opacity = "0.9";
+  supportText.style.textAlign = "center";
+  supportText.innerHTML =
+    "This mod is actively maintained and some features require paid server hosting (like public rooms). " +
+    "If you find this mod useful and want to support its development, consider buying me a coffee!";
+
+  const kofiButton = document.createElement("a");
+  const kofiUrl = "https://ko-fi.com/ariedam";
+  kofiButton.href = kofiUrl;
+  kofiButton.target = "_blank";
+  kofiButton.rel = "noopener noreferrer";
+  kofiButton.textContent = "☕ Support on Ko-fi";
+  kofiButton.style.display = "inline-flex";
+  kofiButton.style.alignItems = "center";
+  kofiButton.style.justifyContent = "center";
+  kofiButton.style.gap = "8px";
+  kofiButton.style.padding = "10px 24px";
+  kofiButton.style.borderRadius = "8px";
+  kofiButton.style.background = "#EDE8E3";
+  kofiButton.style.color = "#2b2622";
+  kofiButton.style.fontSize = "14px";
+  kofiButton.style.fontWeight = "600";
+  kofiButton.style.textDecoration = "none";
+  kofiButton.style.cursor = "pointer";
+  kofiButton.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+  kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
+  kofiButton.style.transition = "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease";
+
+  kofiButton.addEventListener("click", (event) => {
+    const isDiscord = environment?.surface === "discord";
+    if (isDiscord && typeof GM_openInTab === "function") {
+      event.preventDefault();
+      GM_openInTab(kofiUrl, { active: true });
+    }
+  });
+
+  kofiButton.addEventListener("mouseenter", () => {
+    kofiButton.style.transform = "translateY(-2px)";
+    kofiButton.style.background = "#F5F0EB";
+    kofiButton.style.boxShadow = "0 6px 16px rgba(0, 0, 0, 0.3)";
+  });
+
+  kofiButton.addEventListener("mouseleave", () => {
+    kofiButton.style.transform = "translateY(0)";
+    kofiButton.style.background = "#EDE8E3";
+    kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
+  });
+
+  supportCard.body.append(supportText, kofiButton);
+  view.appendChild(supportCard.root);
 }
 
 export function renderSettingsMenu(container: HTMLElement) {

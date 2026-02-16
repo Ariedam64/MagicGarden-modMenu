@@ -167,6 +167,9 @@ export function getAudioUrlSafe(url: string): Promise<string> {
 
 // ---------- Emoji data fetch interceptor (bypass CSP + blob HEAD issue) ----------
 
+// Import from ariesModAPI to pause long polls during fetch (avoid concurrent GM requests)
+import { withDiscordPollPause } from "../ariesModAPI/client/events";
+
 const EMOJI_DATA_CDN_PREFIX =
   "https://cdn.jsdelivr.net/npm/emoji-picker-element-data";
 let _emojiJson: string | null = null;
@@ -228,24 +231,31 @@ export function installEmojiDataFetchInterceptor(): void {
     });
   };
 
-  GM_xmlhttpRequest({
-    method: "GET",
-    url: `${EMOJI_DATA_CDN_PREFIX}@^1/en/emojibase/data.json`,
-    headers: {},
-    onload: (res) => {
-      if (res.status >= 200 && res.status < 300 && res.responseText) {
-        _emojiJson = res.responseText;
-        for (const cb of _emojiPending) cb(_emojiJson);
-      } else {
-        console.error("[api] emoji fetch failed:", res.status);
-        for (const cb of _emojiPending) cb(null);
-      }
-      _emojiPending = [];
-    },
-    onerror: (err) => {
-      console.error("[api] emoji fetch error:", err);
-      for (const cb of _emojiPending) cb(null);
-      _emojiPending = [];
-    },
+  // Pause long polls during emoji data fetch to avoid too many concurrent GM_xmlhttpRequest
+  void withDiscordPollPause(async () => {
+    return new Promise<void>((resolve) => {
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: `${EMOJI_DATA_CDN_PREFIX}@^1/en/emojibase/data.json`,
+        headers: {},
+        onload: (res) => {
+          if (res.status >= 200 && res.status < 300 && res.responseText) {
+            _emojiJson = res.responseText;
+            for (const cb of _emojiPending) cb(_emojiJson);
+          } else {
+            console.error("[discordCsp] emoji fetch failed:", res.status);
+            for (const cb of _emojiPending) cb(null);
+          }
+          _emojiPending = [];
+          resolve();
+        },
+        onerror: (err) => {
+          console.error("[discordCsp] emoji fetch error:", err);
+          for (const cb of _emojiPending) cb(null);
+          _emojiPending = [];
+          resolve();
+        },
+      });
+    });
   });
 }

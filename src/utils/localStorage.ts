@@ -52,12 +52,18 @@ export type AriesStorage = {
   friends?: {
     settings?: FriendSettings;
   };
+  notifications?: {
+    soundEnabled?: boolean;
+  };
 };
 
 const DEFAULT_ARIES_STORAGE: AriesStorage = {
   version: ARIES_STORAGE_VERSION,
   friends: {
     settings: DEFAULT_FRIEND_SETTINGS,
+  },
+  notifications: {
+    soundEnabled: true,
   },
 };
 
