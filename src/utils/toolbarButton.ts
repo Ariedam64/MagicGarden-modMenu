@@ -1,6 +1,5 @@
-// Inject a resilient button into the game's top-right toolbar
-// Strategy: detect toolbar by known aria-label buttons, clone existing button styles,
-// and append our button as the last item. Uses MutationObserver for resilience.
+// Inject a resilient button into the game's top-right toolbar.
+// Strategy: detect toolbar via known aria-labels, fallback to game CSS class.
 
 type Options = {
   onClick: () => void;
@@ -10,7 +9,8 @@ type Options = {
 };
 
 const KNOWN_ARIA = ["Chat", "Leaderboard", "Stats", "Open Activity Log"];
-const PREFERRED_REF_ARIA = "Stats";
+const TOOLBAR_FALLBACK_CLASS = "css-13izacw";
+const OWN_BTN_SEL = '[data-qws-btn="true"]';
 
 export function startInjectGamePanelButton(opts: Options): () => void {
   const { onClick, iconUrl = "", ariaLabel = "" } = opts;
@@ -20,7 +20,6 @@ export function startInjectGamePanelButton(opts: Options): () => void {
   let isMounting = false;
   let mounted = false;
 
-  // Safe CSS.escape fallback
   const esc = (v: string) => {
     try {
       return typeof CSS?.escape === "function" ? CSS.escape(v) : v.replace(/"/g, '\\"');
@@ -29,41 +28,40 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     }
   };
 
-  // Find toolbar root by climbing up from known buttons
   function findToolbarRoot(): HTMLElement | null {
+    // 1) Try known English aria-labels
     const selector = KNOWN_ARIA.map(a => `button[aria-label="${esc(a)}"]`).join(",");
-    const anyBtn = document.querySelector(selector);
-    if (!anyBtn) return null;
+    const knownBtn = document.querySelector(selector);
 
-    let parent = anyBtn.parentElement;
-    while (parent && parent !== document.body) {
-      const count = KNOWN_ARIA.reduce(
-        (acc, a) => acc + parent!.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
-        0
-      );
-      if (count >= 2) return parent;
-      parent = parent.parentElement;
+    if (knownBtn) {
+      let parent = knownBtn.parentElement;
+      while (parent && parent !== document.body) {
+        const count = KNOWN_ARIA.reduce(
+          (acc, a) => acc + parent!.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
+          0,
+        );
+        if (count >= 2) return parent;
+        parent = parent.parentElement;
+      }
     }
-    return null;
+
+    // 2) Fallback: game toolbar CSS class
+    return document.querySelector<HTMLElement>(`.${TOOLBAR_FALLBACK_CLASS}`) ?? null;
   }
 
-  // Get reference button and wrapper for cloning
   function getReference(root: HTMLElement) {
-    const all = Array.from(root.querySelectorAll<HTMLButtonElement>("button[aria-label]"));
+    const all = Array.from(
+      root.querySelectorAll<HTMLButtonElement>(`button:not(${OWN_BTN_SEL})`),
+    );
     if (!all.length) return { refBtn: null, refWrapper: null };
 
-    // Exclude our own buttons
     const filtered = all.filter(
-      b => b.dataset.qwsBtn !== "true" && b.getAttribute("aria-label") !== ariaLabel
+      b => b.getAttribute("aria-label") !== ariaLabel,
     );
     const list = filtered.length ? filtered : all;
 
-    // Prefer Stats button, otherwise second-to-last
-    const preferred = list.find(
-      b => b.getAttribute("aria-label")?.toLowerCase() === PREFERRED_REF_ARIA.toLowerCase()
-    );
     const idx = list.length >= 2 ? list.length - 2 : list.length - 1;
-    const refBtn = preferred || list[idx];
+    const refBtn = list[idx];
 
     const parent = refBtn?.parentElement;
     const refWrapper =
@@ -72,7 +70,6 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     return { refBtn, refWrapper };
   }
 
-  // Clone button from reference
   function cloneButton(ref: HTMLButtonElement): HTMLButtonElement {
     const btn = ref.cloneNode(false) as HTMLButtonElement;
     btn.type = "button";
@@ -101,15 +98,12 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      try {
-        onClick();
-      } catch {}
+      try { onClick(); } catch {}
     });
 
     return btn;
   }
 
-  // Mount button into toolbar
   function mount(): boolean {
     if (isMounting) return false;
     isMounting = true;
@@ -121,7 +115,6 @@ export function startInjectGamePanelButton(opts: Options): () => void {
       const { refBtn, refWrapper } = getReference(root);
       if (!refBtn) return false;
 
-      // Find or create wrapper
       if (!mountedWrap) {
         mountedWrap = root.querySelector<HTMLDivElement>('div[data-qws-wrapper="true"]');
         if (!mountedWrap && refWrapper) {
@@ -131,7 +124,6 @@ export function startInjectGamePanelButton(opts: Options): () => void {
         }
       }
 
-      // Find or create button
       if (!mountedBtn) {
         mountedBtn =
           mountedWrap?.querySelector<HTMLButtonElement>('button[data-qws-btn="true"]') || null;
@@ -145,12 +137,10 @@ export function startInjectGamePanelButton(opts: Options): () => void {
         }
       }
 
-      // Append wrapper to toolbar if needed
       if (mountedWrap && mountedWrap.parentElement !== root) {
         root.appendChild(mountedWrap);
       }
 
-      // Verify button is in DOM
       const inDOM = document.contains(mountedBtn);
       if (inDOM && !mounted) {
         mounted = true;
@@ -164,15 +154,12 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     }
   }
 
-  // Mutation observer with debounced retry
   const host = document.getElementById("App") || document.body;
   let timer: number | null = null;
 
   const observer = new MutationObserver(() => {
-    // Skip if already mounted and in DOM
     if (mounted && mountedBtn && document.contains(mountedBtn)) return;
 
-    // Reset if button was removed
     if (mountedBtn && !document.contains(mountedBtn)) {
       console.warn("[ToolbarButton] Removed from DOM, retrying:", ariaLabel);
       mounted = false;
@@ -180,7 +167,6 @@ export function startInjectGamePanelButton(opts: Options): () => void {
       mountedWrap = null;
     }
 
-    // Debounced retry
     if (timer !== null) return;
     timer = window.setTimeout(() => {
       timer = null;
@@ -188,30 +174,21 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     }, 100);
   });
 
-  // Polling fallback: check every 2 seconds if button is still mounted
-  // This catches edge cases where MutationObserver misses DOM changes
   const pollingInterval = window.setInterval(() => {
-    // If button should be mounted but isn't in DOM, remount
     if (mounted && mountedBtn && !document.contains(mountedBtn)) {
       console.warn("[ToolbarButton] Detected missing button (polling), remounting:", ariaLabel);
       mounted = false;
       mountedBtn = null;
       mountedWrap = null;
       mount();
-    }
-    // If not mounted at all, try mounting (handles toolbar appearing late)
-    else if (!mounted || !mountedBtn) {
+    } else if (!mounted || !mountedBtn) {
       mount();
     }
   }, 2000);
 
-  // Initial mount
   mount();
-
-  // Start observing
   observer.observe(host, { childList: true, subtree: true });
 
-  // Return cleanup function
   return () => {
     observer.disconnect();
     clearInterval(pollingInterval);

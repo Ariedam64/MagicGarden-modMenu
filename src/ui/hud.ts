@@ -1074,7 +1074,14 @@ export function initWatchers(){
     installJournalKeybindsOnce();
     installSeedSiloKeybindsOnce();
     installDecorShedKeybindsOnce();
+
     (async () => {
+      try { await renderOverlay(); } catch (e) { console.error("[HUD] renderOverlay failed:", e); }
+      try { await renderCommunityHub(); } catch (e) { console.error("[HUD] renderCommunityHub failed:", e); }
+    })();
+
+    (async () => {
+        try { await PetAlertService.start(); } catch {}
         try { setTeamsForHotkeys(PetsService.getTeams()); } catch {}
         try {
           await PetsService.onTeamsChangeNow((teams) => {
@@ -1087,12 +1094,9 @@ export function initWatchers(){
             catch (e) { console.warn("[Pets] hotkey useTeam failed:", e); }
           });
         } catch {}
-      await PetsService.startAbilityLogsWatcher()
-       try { await PetAlertService.start(); } catch {}
-      await startActivityLogHistoryWatcher()
+      try { await PetsService.startAbilityLogsWatcher(); } catch {}
+      try { await startActivityLogHistoryWatcher(); } catch {}
       startActivityLogFilter();
-      await renderOverlay()
-      await renderCommunityHub()
       setupBuyAll()
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();

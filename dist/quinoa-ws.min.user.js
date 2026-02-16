@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.0
+// @version      3.1.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26571,7 +26571,8 @@
 
   // src/utils/toolbarButton.ts
   var KNOWN_ARIA = ["Chat", "Leaderboard", "Stats", "Open Activity Log"];
-  var PREFERRED_REF_ARIA = "Stats";
+  var TOOLBAR_FALLBACK_CLASS = "css-13izacw";
+  var OWN_BTN_SEL = '[data-qws-btn="true"]';
   function startInjectGamePanelButton(opts) {
     const { onClick, iconUrl = "", ariaLabel = "" } = opts;
     let mountedBtn = null;
@@ -26587,31 +26588,31 @@
     };
     function findToolbarRoot() {
       const selector = KNOWN_ARIA.map((a) => `button[aria-label="${esc(a)}"]`).join(",");
-      const anyBtn = document.querySelector(selector);
-      if (!anyBtn) return null;
-      let parent = anyBtn.parentElement;
-      while (parent && parent !== document.body) {
-        const count = KNOWN_ARIA.reduce(
-          (acc, a) => acc + parent.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
-          0
-        );
-        if (count >= 2) return parent;
-        parent = parent.parentElement;
+      const knownBtn = document.querySelector(selector);
+      if (knownBtn) {
+        let parent = knownBtn.parentElement;
+        while (parent && parent !== document.body) {
+          const count = KNOWN_ARIA.reduce(
+            (acc, a) => acc + parent.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
+            0
+          );
+          if (count >= 2) return parent;
+          parent = parent.parentElement;
+        }
       }
-      return null;
+      return document.querySelector(`.${TOOLBAR_FALLBACK_CLASS}`) ?? null;
     }
     function getReference(root) {
-      const all = Array.from(root.querySelectorAll("button[aria-label]"));
+      const all = Array.from(
+        root.querySelectorAll(`button:not(${OWN_BTN_SEL})`)
+      );
       if (!all.length) return { refBtn: null, refWrapper: null };
       const filtered = all.filter(
-        (b) => b.dataset.qwsBtn !== "true" && b.getAttribute("aria-label") !== ariaLabel
+        (b) => b.getAttribute("aria-label") !== ariaLabel
       );
       const list = filtered.length ? filtered : all;
-      const preferred = list.find(
-        (b) => b.getAttribute("aria-label")?.toLowerCase() === PREFERRED_REF_ARIA.toLowerCase()
-      );
       const idx = list.length >= 2 ? list.length - 2 : list.length - 1;
-      const refBtn = preferred || list[idx];
+      const refBtn = list[idx];
       const parent = refBtn?.parentElement;
       const refWrapper = parent?.parentElement === root && parent.tagName === "DIV" ? parent : null;
       return { refBtn, refWrapper };
@@ -46427,6 +46428,22 @@
     installDecorShedKeybindsOnce();
     (async () => {
       try {
+        await renderOverlay();
+      } catch (e) {
+        console.error("[HUD] renderOverlay failed:", e);
+      }
+      try {
+        await renderCommunityHub();
+      } catch (e) {
+        console.error("[HUD] renderCommunityHub failed:", e);
+      }
+    })();
+    (async () => {
+      try {
+        await PetAlertService.start();
+      } catch {
+      }
+      try {
         setTeamsForHotkeys(PetsService.getTeams());
       } catch {
       }
@@ -46449,15 +46466,15 @@
         });
       } catch {
       }
-      await PetsService.startAbilityLogsWatcher();
       try {
-        await PetAlertService.start();
+        await PetsService.startAbilityLogsWatcher();
       } catch {
       }
-      await startActivityLogHistoryWatcher();
+      try {
+        await startActivityLogHistoryWatcher();
+      } catch {
+      }
       startActivityLogFilter();
-      await renderOverlay();
-      await renderCommunityHub();
       setupBuyAll();
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();
