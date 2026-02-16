@@ -6,45 +6,53 @@ import type { LeaderboardRow, LeaderboardResponse, LeaderboardRankResponse } fro
 
 /**
  * Récupère le leaderboard des coins
- * @param params - Paramètres optionnels (query, limit, offset)
- * @returns Liste des entrées du leaderboard
+ * @param params - Paramètres optionnels (query, limit, offset, myPlayerId)
+ * @returns Entrées du leaderboard + rang du joueur si myPlayerId fourni
  */
 export async function fetchLeaderboardCoins(params?: {
   query?: string;
   limit?: number;
   offset?: number;
-}): Promise<LeaderboardRow[]> {
-  const { query, limit = 15, offset = 0 } = params || {};
+  myPlayerId?: string;
+}): Promise<{ rows: LeaderboardRow[]; myRank: LeaderboardRow | null }> {
+  const { query, limit = 15, offset = 0, myPlayerId } = params || {};
   const queryParams: Record<string, string | number> = { limit, offset };
   if (query && query.trim()) {
     queryParams.query = query.trim();
   }
+  if (myPlayerId) {
+    queryParams.myPlayerId = myPlayerId;
+  }
   const { status, data } = await httpGet<LeaderboardResponse>("leaderboard/coins", queryParams);
-  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-  return data.rows;
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return { rows: [], myRank: null };
+  return { rows: data.rows, myRank: data.myRank ?? null };
 }
 
 /**
  * Récupère le leaderboard des œufs éclos
- * @param params - Paramètres optionnels (query, limit, offset)
- * @returns Liste des entrées du leaderboard
+ * @param params - Paramètres optionnels (query, limit, offset, myPlayerId)
+ * @returns Entrées du leaderboard + rang du joueur si myPlayerId fourni
  */
 export async function fetchLeaderboardEggsHatched(params?: {
   query?: string;
   limit?: number;
   offset?: number;
-}): Promise<LeaderboardRow[]> {
-  const { query, limit = 15, offset = 0 } = params || {};
+  myPlayerId?: string;
+}): Promise<{ rows: LeaderboardRow[]; myRank: LeaderboardRow | null }> {
+  const { query, limit = 15, offset = 0, myPlayerId } = params || {};
   const queryParams: Record<string, string | number> = { limit, offset };
   if (query && query.trim()) {
     queryParams.query = query.trim();
+  }
+  if (myPlayerId) {
+    queryParams.myPlayerId = myPlayerId;
   }
   const { status, data } = await httpGet<LeaderboardResponse>(
     "leaderboard/eggs-hatched",
     queryParams,
   );
-  if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-  return data.rows;
+  if (status !== 200 || !data || !Array.isArray(data.rows)) return { rows: [], myRank: null };
+  return { rows: data.rows, myRank: data.myRank ?? null };
 }
 
 /**

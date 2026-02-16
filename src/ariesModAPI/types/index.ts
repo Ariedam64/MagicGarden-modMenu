@@ -242,6 +242,7 @@ export interface LeaderboardRow {
 
 export interface LeaderboardResponse {
   rows: LeaderboardRow[];
+  myRank?: LeaderboardRow | null;
 }
 
 export interface LeaderboardRankResponse {

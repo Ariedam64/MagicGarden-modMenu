@@ -212,26 +212,41 @@ export function createLeaderboardTab() {
     renderLeaderboard(); // Show loading state
 
     const query = searchBar.value.trim();
+    const myPlayerId = getCachedMyProfile()?.playerId;
 
     try {
       let rows: LeaderboardRow[] = [];
+      let myRank: LeaderboardRow | null = null;
+
       if (activeCategory === "coins") {
-        rows = await fetchLeaderboardCoins({ query: query || undefined, limit: 15 });
+        const result = await fetchLeaderboardCoins({
+          query: query || undefined,
+          limit: 15,
+          myPlayerId,
+        });
+        rows = result.rows;
+        myRank = result.myRank;
       } else {
-        rows = await fetchLeaderboardEggsHatched({ query: query || undefined, limit: 15 });
+        const result = await fetchLeaderboardEggsHatched({
+          query: query || undefined,
+          limit: 15,
+          myPlayerId,
+        });
+        rows = result.rows;
+        myRank = result.myRank;
       }
 
-      // Update cache with new data
+      // Update cache with new data (including refreshed myRank)
       const cachedData = getCachedLeaderboard();
       if (cachedData) {
         const updatedData: LeaderboardData = {
           coins:
             activeCategory === "coins"
-              ? { top: rows, myRank: cachedData.coins.myRank }
+              ? { top: rows, myRank: myRank ?? cachedData.coins.myRank }
               : cachedData.coins,
           eggsHatched:
             activeCategory === "eggsHatched"
-              ? { top: rows, myRank: cachedData.eggsHatched.myRank }
+              ? { top: rows, myRank: myRank ?? cachedData.eggsHatched.myRank }
               : cachedData.eggsHatched,
         };
         updateLeaderboardCache(updatedData);
@@ -263,9 +278,11 @@ export function createLeaderboardTab() {
     try {
       let rows: LeaderboardRow[] = [];
       if (activeCategory === "coins") {
-        rows = await fetchLeaderboardCoins({ query, limit: 15 });
+        const result = await fetchLeaderboardCoins({ query, limit: 15 });
+        rows = result.rows;
       } else {
-        rows = await fetchLeaderboardEggsHatched({ query, limit: 15 });
+        const result = await fetchLeaderboardEggsHatched({ query, limit: 15 });
+        rows = result.rows;
       }
 
       isLoading = false;

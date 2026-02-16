@@ -345,6 +345,18 @@ export function mountHUD(opts?: HUDOptions) {
     el.style.right = r + 'px';
     el.style.bottom = b + 'px';
   }
+
+    function attachAutoClamp(win: HTMLElement) {
+    const anyWin = win as HTMLElement & { __qwsClampObserver?: ResizeObserver };
+    if (anyWin.__qwsClampObserver || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => ensureOnScreen(win));
+    });
+    ro.observe(win);
+    anyWin.__qwsClampObserver = ro;
+  }
   function resetWinPosDefault(el: HTMLElement) {
     el.style.right = '16px';
     el.style.bottom = '16px';
@@ -595,6 +607,8 @@ export function mountHUD(opts?: HUDOptions) {
 
     try { render(body); } catch (e) { body.textContent = String(e); }
 
+    attachAutoClamp(win);
+    requestAnimationFrame(() => ensureOnScreen(win));
     saveWinPos(id, win);
     windows.set(id, { id, el: win, head, body });
     setLaunchState(id, true); // newly opened → Close
