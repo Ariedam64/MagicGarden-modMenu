@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.0
+// @version      3.1.1
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26571,7 +26571,8 @@
 
   // src/utils/toolbarButton.ts
   var KNOWN_ARIA = ["Chat", "Leaderboard", "Stats", "Open Activity Log"];
-  var PREFERRED_REF_ARIA = "Stats";
+  var TOOLBAR_FALLBACK_CLASS = "css-13izacw";
+  var OWN_BTN_SEL = '[data-qws-btn="true"]';
   function startInjectGamePanelButton(opts) {
     const { onClick, iconUrl = "", ariaLabel = "" } = opts;
     let mountedBtn = null;
@@ -26587,31 +26588,31 @@
     };
     function findToolbarRoot() {
       const selector = KNOWN_ARIA.map((a) => `button[aria-label="${esc(a)}"]`).join(",");
-      const anyBtn = document.querySelector(selector);
-      if (!anyBtn) return null;
-      let parent = anyBtn.parentElement;
-      while (parent && parent !== document.body) {
-        const count = KNOWN_ARIA.reduce(
-          (acc, a) => acc + parent.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
-          0
-        );
-        if (count >= 2) return parent;
-        parent = parent.parentElement;
+      const knownBtn = document.querySelector(selector);
+      if (knownBtn) {
+        let parent = knownBtn.parentElement;
+        while (parent && parent !== document.body) {
+          const count = KNOWN_ARIA.reduce(
+            (acc, a) => acc + parent.querySelectorAll(`button[aria-label="${esc(a)}"]`).length,
+            0
+          );
+          if (count >= 2) return parent;
+          parent = parent.parentElement;
+        }
       }
-      return null;
+      return document.querySelector(`.${TOOLBAR_FALLBACK_CLASS}`) ?? null;
     }
     function getReference(root) {
-      const all = Array.from(root.querySelectorAll("button[aria-label]"));
+      const all = Array.from(
+        root.querySelectorAll(`button:not(${OWN_BTN_SEL})`)
+      );
       if (!all.length) return { refBtn: null, refWrapper: null };
       const filtered = all.filter(
-        (b) => b.dataset.qwsBtn !== "true" && b.getAttribute("aria-label") !== ariaLabel
+        (b) => b.getAttribute("aria-label") !== ariaLabel
       );
       const list = filtered.length ? filtered : all;
-      const preferred = list.find(
-        (b) => b.getAttribute("aria-label")?.toLowerCase() === PREFERRED_REF_ARIA.toLowerCase()
-      );
       const idx = list.length >= 2 ? list.length - 2 : list.length - 1;
-      const refBtn = preferred || list[idx];
+      const refBtn = list[idx];
       const parent = refBtn?.parentElement;
       const refWrapper = parent?.parentElement === root && parent.tagName === "DIV" ? parent : null;
       return { refBtn, refWrapper };
@@ -29020,27 +29021,33 @@
 
   // src/ariesModAPI/endpoints/leaderboard.ts
   async function fetchLeaderboardCoins(params) {
-    const { query, limit = 15, offset = 0 } = params || {};
+    const { query, limit = 15, offset = 0, myPlayerId } = params || {};
     const queryParams = { limit, offset };
     if (query && query.trim()) {
       queryParams.query = query.trim();
     }
+    if (myPlayerId) {
+      queryParams.myPlayerId = myPlayerId;
+    }
     const { status, data } = await httpGet("leaderboard/coins", queryParams);
-    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-    return data.rows;
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return { rows: [], myRank: null };
+    return { rows: data.rows, myRank: data.myRank ?? null };
   }
   async function fetchLeaderboardEggsHatched(params) {
-    const { query, limit = 15, offset = 0 } = params || {};
+    const { query, limit = 15, offset = 0, myPlayerId } = params || {};
     const queryParams = { limit, offset };
     if (query && query.trim()) {
       queryParams.query = query.trim();
+    }
+    if (myPlayerId) {
+      queryParams.myPlayerId = myPlayerId;
     }
     const { status, data } = await httpGet(
       "leaderboard/eggs-hatched",
       queryParams
     );
-    if (status !== 200 || !data || !Array.isArray(data.rows)) return [];
-    return data.rows;
+    if (status !== 200 || !data || !Array.isArray(data.rows)) return { rows: [], myRank: null };
+    return { rows: data.rows, myRank: data.myRank ?? null };
   }
 
   // src/ariesModAPI/endpoints/search.ts
@@ -38164,18 +38171,32 @@
       isLoading = true;
       renderLeaderboard();
       const query = searchBar.value.trim();
+      const myPlayerId = getCachedMyProfile()?.playerId;
       try {
         let rows = [];
+        let myRank = null;
         if (activeCategory === "coins") {
-          rows = await fetchLeaderboardCoins({ query: query || void 0, limit: 15 });
+          const result = await fetchLeaderboardCoins({
+            query: query || void 0,
+            limit: 15,
+            myPlayerId
+          });
+          rows = result.rows;
+          myRank = result.myRank;
         } else {
-          rows = await fetchLeaderboardEggsHatched({ query: query || void 0, limit: 15 });
+          const result = await fetchLeaderboardEggsHatched({
+            query: query || void 0,
+            limit: 15,
+            myPlayerId
+          });
+          rows = result.rows;
+          myRank = result.myRank;
         }
         const cachedData = getCachedLeaderboard();
         if (cachedData) {
           const updatedData = {
-            coins: activeCategory === "coins" ? { top: rows, myRank: cachedData.coins.myRank } : cachedData.coins,
-            eggsHatched: activeCategory === "eggsHatched" ? { top: rows, myRank: cachedData.eggsHatched.myRank } : cachedData.eggsHatched
+            coins: activeCategory === "coins" ? { top: rows, myRank: myRank ?? cachedData.coins.myRank } : cachedData.coins,
+            eggsHatched: activeCategory === "eggsHatched" ? { top: rows, myRank: myRank ?? cachedData.eggsHatched.myRank } : cachedData.eggsHatched
           };
           updateLeaderboardCache(updatedData);
         }
@@ -38199,9 +38220,11 @@
       try {
         let rows = [];
         if (activeCategory === "coins") {
-          rows = await fetchLeaderboardCoins({ query, limit: 15 });
+          const result = await fetchLeaderboardCoins({ query, limit: 15 });
+          rows = result.rows;
         } else {
-          rows = await fetchLeaderboardEggsHatched({ query, limit: 15 });
+          const result = await fetchLeaderboardEggsHatched({ query, limit: 15 });
+          rows = result.rows;
         }
         isLoading = false;
         renderLeaderboard(rows);
@@ -45774,6 +45797,17 @@
       el2.style.right = r + "px";
       el2.style.bottom = b + "px";
     }
+    function attachAutoClamp(win) {
+      const anyWin = win;
+      if (anyWin.__qwsClampObserver || typeof ResizeObserver === "undefined") return;
+      let raf = 0;
+      const ro = new ResizeObserver(() => {
+        if (raf) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => ensureOnScreen(win));
+      });
+      ro.observe(win);
+      anyWin.__qwsClampObserver = ro;
+    }
     function resetWinPosDefault(el2) {
       el2.style.right = "16px";
       el2.style.bottom = "16px";
@@ -46009,6 +46043,8 @@
       } catch (e) {
         body.textContent = String(e);
       }
+      attachAutoClamp(win);
+      requestAnimationFrame(() => ensureOnScreen(win));
       saveWinPos(id, win);
       windows.set(id, { id, el: win, head, body });
       setLaunchState(id, true);
@@ -46392,6 +46428,22 @@
     installDecorShedKeybindsOnce();
     (async () => {
       try {
+        await renderOverlay();
+      } catch (e) {
+        console.error("[HUD] renderOverlay failed:", e);
+      }
+      try {
+        await renderCommunityHub();
+      } catch (e) {
+        console.error("[HUD] renderCommunityHub failed:", e);
+      }
+    })();
+    (async () => {
+      try {
+        await PetAlertService.start();
+      } catch {
+      }
+      try {
         setTeamsForHotkeys(PetsService.getTeams());
       } catch {
       }
@@ -46414,15 +46466,15 @@
         });
       } catch {
       }
-      await PetsService.startAbilityLogsWatcher();
       try {
-        await PetAlertService.start();
+        await PetsService.startAbilityLogsWatcher();
       } catch {
       }
-      await startActivityLogHistoryWatcher();
+      try {
+        await startActivityLogHistoryWatcher();
+      } catch {
+      }
       startActivityLogFilter();
-      await renderOverlay();
-      await renderCommunityHub();
       setupBuyAll();
       startReorderObserver();
       startCropValuesObserverFromGardenAtom();
