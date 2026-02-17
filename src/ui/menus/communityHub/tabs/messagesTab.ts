@@ -24,6 +24,11 @@ import { sendGroupMessage, markGroupMessagesAsRead } from "../../../../ariesModA
 import type { CachedFriendConversation, CachedGroupConversation, CachedDirectMessage, CachedGroupMessage } from "../../../../ariesModAPI";
 import type { DirectMessage, GroupMessage } from "../../../../ariesModAPI/types";
 import { createImportButton, createAttachmentState, parseGemTokens, createTokenCardsContainer, createTeamSelectionView, buildTeamToken } from "./chatImporter";
+import { isDiscordSurface } from "../../../../utils/api";
+
+declare const GM_openInTab:
+  | ((url: string, opts?: { active?: boolean; insert?: boolean; setParent?: boolean }) => void)
+  | undefined;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Main export
@@ -1198,6 +1203,73 @@ export function createMessagesTab() {
     return avatar;
   }
 
+  // ── Link detection & rendering ──────────────────────────────────────────────
+
+  const URL_RE = /https?:\/\/[^\s<>)"'\]]+/gi;
+
+  function shortenUrl(raw: string): string {
+    try {
+      const u = new URL(raw);
+      const host = u.hostname.replace(/^www\./, "");
+      const path = u.pathname === "/" ? "" : u.pathname;
+      const short = host + path;
+      return short.length > 40 ? short.slice(0, 37) + "..." : short;
+    } catch {
+      return raw.length > 40 ? raw.slice(0, 37) + "..." : raw;
+    }
+  }
+
+  function openLink(url: string): void {
+    if (isDiscordSurface() && typeof GM_openInTab === "function") {
+      try {
+        GM_openInTab(url, { active: true, insert: true });
+        return;
+      } catch { /* fallback below */ }
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function linkifyInto(text: string, container: HTMLElement): void {
+    URL_RE.lastIndex = 0;
+    let lastIdx = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = URL_RE.exec(text)) !== null) {
+      // Text before the URL
+      if (match.index > lastIdx) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+
+      const href = match[0];
+      const link = document.createElement("a");
+      link.textContent = shortenUrl(href);
+      link.title = href;
+      link.href = href;
+      link.rel = "noopener noreferrer";
+      link.target = "_blank";
+      Object.assign(link.style, {
+        color: "#5eead4",
+        textDecoration: "underline",
+        textDecorationColor: "rgba(94,234,212,0.4)",
+        cursor: "pointer",
+        wordBreak: "break-all",
+      });
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openLink(href);
+      });
+
+      container.appendChild(link);
+      lastIdx = URL_RE.lastIndex;
+    }
+
+    // Remaining text after last URL
+    if (lastIdx < text.length) {
+      container.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+  }
+
   function createBubbleContent(body: string, createdAt: string, isOutgoing: boolean, status?: "pending" | "sent" | "read", showMeta: boolean = true): HTMLElement {
     const bubble = document.createElement("div");
     style(bubble, { maxWidth: "70%", display: "flex", flexDirection: "column", gap: showMeta ? "4px" : "0" });
@@ -1217,11 +1289,11 @@ export function createMessagesTab() {
 
     // Show clean text (without tokens) or hide bubble if only tokens
     if (cleanText) {
-      content.textContent = cleanText;
+      linkifyInto(cleanText, content);
       bubble.appendChild(content);
     } else if (tokens.length === 0) {
       // No tokens and no text — show original body
-      content.textContent = body;
+      linkifyInto(body, content);
       bubble.appendChild(content);
     }
 
