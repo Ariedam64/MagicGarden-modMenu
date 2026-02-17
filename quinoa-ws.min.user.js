@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.1
+// @version      3.1.11
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5348,7 +5348,8 @@
     Beet: 67,
     Gentian: 68,
     VioletCort: 69,
-    DragonFruitTree: 70
+    DragonFruitTree: 70,
+    RoseRed: 71
   };
   var tileRefsTallPlants = {
     Bamboo: 1,
@@ -5407,7 +5408,8 @@
     VioletCort: 53,
     Cabbage: 54,
     Beet: 55,
-    Gentian: 56
+    Gentian: 56,
+    Rose: 57
   };
   var tileRefsItems = {
     Coin: 1,
@@ -5692,6 +5694,29 @@
         baseWeight: 0.3,
         baseTileScale: 0.2,
         maxScale: 3
+      }
+    },
+    Rose: {
+      seed: {
+        tileRef: tileRefsSeeds.Rose,
+        name: "Rose Seed",
+        coinPrice: 229,
+        creditPrice: 27,
+        rarity: rarity.Uncommon
+      },
+      plant: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 1
+      },
+      crop: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose",
+        baseSellPrice: 300,
+        baseWeight: 0.01,
+        baseTileScale: 1,
+        maxScale: 4
       }
     },
     FavaBean: {
@@ -32980,6 +33005,62 @@
       }
       return avatar;
     }
+    const URL_RE = /https?:\/\/[^\s<>)"'\]]+/gi;
+    function shortenUrl(raw) {
+      try {
+        const u = new URL(raw);
+        const host = u.hostname.replace(/^www\./, "");
+        const path = u.pathname === "/" ? "" : u.pathname;
+        const short = host + path;
+        return short.length > 40 ? short.slice(0, 37) + "..." : short;
+      } catch {
+        return raw.length > 40 ? raw.slice(0, 37) + "..." : raw;
+      }
+    }
+    function openLink2(url) {
+      if (isDiscordSurface() && typeof GM_openInTab === "function") {
+        try {
+          GM_openInTab(url, { active: true, insert: true });
+          return;
+        } catch {
+        }
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    function linkifyInto(text, container) {
+      URL_RE.lastIndex = 0;
+      let lastIdx = 0;
+      let match;
+      while ((match = URL_RE.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+        }
+        const href = match[0];
+        const link = document.createElement("a");
+        link.textContent = shortenUrl(href);
+        link.title = href;
+        link.href = href;
+        link.rel = "noopener noreferrer";
+        link.target = "_blank";
+        Object.assign(link.style, {
+          color: "#5eead4",
+          textDecoration: "underline",
+          textDecorationColor: "rgba(94,234,212,0.4)",
+          cursor: "pointer",
+          wordBreak: "break-all"
+        });
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openLink2(href);
+        });
+        container.appendChild(link);
+        lastIdx = URL_RE.lastIndex;
+      }
+      if (lastIdx < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
+    }
     function createBubbleContent(body, createdAt, isOutgoing, status, showMeta = true) {
       const bubble = document.createElement("div");
       style2(bubble, { maxWidth: "70%", display: "flex", flexDirection: "column", gap: showMeta ? "4px" : "0" });
@@ -32997,10 +33078,10 @@
         color: isOutgoing ? "#d1fae5" : "#e7eef7"
       });
       if (cleanText) {
-        content.textContent = cleanText;
+        linkifyInto(cleanText, content);
         bubble.appendChild(content);
       } else if (tokens.length === 0) {
-        content.textContent = body;
+        linkifyInto(body, content);
         bubble.appendChild(content);
       }
       if (tokens.length > 0) {
