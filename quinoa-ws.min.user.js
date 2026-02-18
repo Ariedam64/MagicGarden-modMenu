@@ -7326,6 +7326,12 @@
       baseProbability: 0.4,
       baseParameters: { scaleIncreasePercentage: 10 }
     },
+    ProduceScaleBoostIII: {
+      name: "Crop Size Boost III",
+      trigger: "continuous",
+      baseProbability: 0.5,
+      baseParameters: { scaleIncreasePercentage: 14 }
+    },
     SnowyCropSizeBoost: {
       name: "Snowy Crop Size Boost",
       trigger: "continuous",
@@ -7405,8 +7411,14 @@
       baseProbability: 27,
       baseParameters: { plantGrowthReductionMinutes: 5 }
     },
+    PlantGrowthBoostIII: {
+      name: "Plant Growth Boost III",
+      trigger: "continuous",
+      baseProbability: 30,
+      baseParameters: { plantGrowthReductionMinutes: 7 }
+    },
     SnowyPlantGrowthBoost: {
-      name: "Snowy Plant Growth Boost",
+      name: "Snow Plant Growth Boost",
       trigger: "continuous",
       baseProbability: 40,
       baseParameters: {
@@ -7414,17 +7426,47 @@
         requiredWeather: "Frost"
       }
     },
-    ProduceMutationBoost: {
-      name: "Crop Mutation Boost I",
-      description: "Increases the chance of garden crops gaining mutations",
+    DawnPlantGrowthBoost: {
+      name: "Dawn Plant Growth Boost",
       trigger: "continuous",
-      baseParameters: { mutationChanceIncreasePercentage: 10 }
+      baseProbability: 60,
+      baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "Dawn" }
     },
-    ProduceMutationBoostII: {
-      name: "Crop Mutation Boost II",
-      description: "Increases the chance of garden crops gaining mutations",
+    AmberPlantGrowthBoost: {
+      name: "Amber Plant Growth Boost",
+      trigger: "continuous",
+      baseProbability: 80,
+      baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "AmberMoon" }
+    },
+    ProduceMutationBoost: {
+      name: "Weather Mutation Boost I",
       trigger: "continuous",
       baseParameters: { mutationChanceIncreasePercentage: 15 }
+    },
+    ProduceMutationBoostII: {
+      name: "Weather Mutation Boost II",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 20 }
+    },
+    ProduceMutationBoostIII: {
+      name: "Weather Mutation Boost III",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 25 }
+    },
+    SnowyCropMutationBoost: {
+      name: "Snow Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 32, requiredWeather: "Frost" }
+    },
+    DawnBoost: {
+      name: "Dawn Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 36, requiredWeather: "Dawn" }
+    },
+    AmberMoonBoost: {
+      name: "Amber Moon Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 40, requiredWeather: "AmberMoon" }
     },
     PetMutationBoost: {
       name: "Pet Mutation Boost I",
@@ -7437,6 +7479,11 @@
       description: "Increases the chance of hatched pets gaining mutations",
       trigger: "hatchEgg",
       baseParameters: { mutationChanceIncreasePercentage: 10 }
+    },
+    PetMutationBoostIII: {
+      name: "Pet Mutation Boost III",
+      trigger: "hatchEgg",
+      baseParameters: { mutationChanceIncreasePercentage: 13 }
     },
     GoldGranter: {
       name: "Gold Granter",
@@ -7505,6 +7552,12 @@
       baseProbability: 60,
       baseParameters: { bonusXp: 12e3 }
     },
+    PetAgeBoostIII: {
+      name: "Hatch XP Boost III",
+      trigger: "hatchEgg",
+      baseProbability: 70,
+      baseParameters: { bonusXp: 16e3 }
+    },
     PetHatchSizeBoost: {
       name: "Max Strength Boost I",
       description: "Increases the maximum strength of hatched pets",
@@ -7518,6 +7571,12 @@
       trigger: "hatchEgg",
       baseProbability: 14,
       baseParameters: { maxStrengthIncreasePercentage: 3.5 }
+    },
+    PetHatchSizeBoostIII: {
+      name: "Max Strength Boost III",
+      trigger: "hatchEgg",
+      baseProbability: 16,
+      baseParameters: { maxStrengthIncreasePercentage: 4.6 }
     },
     PetXpBoost: {
       name: "XP Boost I",
@@ -7533,12 +7592,18 @@
       baseProbability: 35,
       baseParameters: { bonusXp: 400 }
     },
-    SnowyPetXpBoost: {
-      name: "Snowy XP Boost",
+    PetXpBoostIII: {
+      name: "XP Boost III",
       trigger: "continuous",
-      baseProbability: 30,
+      baseProbability: 40,
+      baseParameters: { bonusXp: 500 }
+    },
+    SnowyPetXpBoost: {
+      name: "Snow XP Boost",
+      trigger: "continuous",
+      baseProbability: 50,
       baseParameters: {
-        bonusXp: 300,
+        bonusXp: 450,
         requiredWeather: "Frost"
       }
     },
@@ -7555,6 +7620,12 @@
       trigger: "continuous",
       baseProbability: 14,
       baseParameters: { hungerRestorePercentage: 35 }
+    },
+    HungerRestoreIII: {
+      name: "Hunger Restore III",
+      trigger: "continuous",
+      baseProbability: 16,
+      baseParameters: { hungerRestorePercentage: 40 }
     },
     SnowyHungerRestore: {
       name: "Snowy Hunger Restore",
@@ -7576,6 +7647,11 @@
       description: "Reduces the hunger depletion rate of active pets",
       trigger: "continuous",
       baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+    },
+    HungerBoostIII: {
+      name: "Hunger Boost III",
+      trigger: "continuous",
+      baseParameters: { hungerDepletionRateDecreasePercentage: 20 }
     },
     SnowyHungerBoost: {
       name: "Snowy Hunger Boost",
@@ -7693,6 +7769,18 @@
       baseParameters: {
         grantedMutations: ["Frozen"]
       }
+    },
+    DawnlitGranter: {
+      name: "Dawnlit Granter",
+      trigger: "continuous",
+      baseProbability: 4,
+      baseParameters: { grantedMutations: ["Dawnlit"] }
+    },
+    AmberlitGranter: {
+      name: "Amberlit Granter",
+      trigger: "continuous",
+      baseProbability: 2,
+      baseParameters: { grantedMutations: ["Ambershine"] }
     }
   };
   var toolCatalog = {
@@ -55988,7 +56076,7 @@ next: ${next}`;
     if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
       return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
     }
-    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
+    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost") || is("DawnPlantGrowthBoost") || is("AmberPlantGrowthBoost")) {
       return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
     }
     if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
@@ -56021,7 +56109,7 @@ next: ${next}`;
         hover: "rgba(168,102,38,1)"
       };
     }
-    if (is("ProduceMutationBoost")) {
+    if (is("ProduceMutationBoost") || is("SnowyCropMutationBoost") || is("DawnBoost") || is("AmberMoonBoost")) {
       return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
     }
     if (is("PetMutationBoost")) {
@@ -56058,16 +56146,19 @@ next: ${next}`;
       };
     }
     if (is("RainDance")) {
-      return {
-        bg: "rgba(102,204,216,0.9)",
-        hover: "rgba(102,204,216,1)"
-      };
+      return { bg: "rgba(76,204,204,0.9)", hover: "rgba(76,204,204,1)" };
     }
     if (is("SnowGranter")) {
-      return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+      return { bg: "rgba(144,184,204,0.9)", hover: "rgba(144,184,204,1)" };
     }
     if (is("FrostGranter")) {
-      return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+      return { bg: "rgba(148,160,204,0.9)", hover: "rgba(148,160,204,1)" };
+    }
+    if (is("DawnlitGranter")) {
+      return { bg: "rgba(196,124,180,0.9)", hover: "rgba(196,124,180,1)" };
+    }
+    if (is("AmberlitGranter")) {
+      return { bg: "rgba(204,144,96,0.9)", hover: "rgba(204,144,96,1)" };
     }
     return {
       bg: "rgba(100,100,100,0.9)",
