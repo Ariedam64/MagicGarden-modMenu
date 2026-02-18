@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.15
+// @version      3.1.16
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -27211,7 +27211,7 @@
   .qws-bell--wiggle { animation: none !important; }
 }
 `;
-      document.head.appendChild(style3);
+      (document.head ?? document.documentElement).appendChild(style3);
     }
     /* ========= SETTERS (subs) ========= */
     setShops(s) {
@@ -28888,7 +28888,7 @@
   // src/utils/version.ts
   var REPO_OWNER = "Ariedam64";
   var REPO_NAME = "MG-AriesMod";
-  var REPO_BRANCH = "main/dist";
+  var REPO_BRANCH = "main";
   var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
   var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
   var COMMITS_API_URL = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits/${REPO_BRANCH}`;
@@ -28946,7 +28946,7 @@
   }
   async function fetchScriptSource() {
     const commitSha = await fetchLatestCommitSha();
-    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
+    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/dist/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/dist/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
     return await fetchText(scriptUrl);
   }
   async function fetchRemoteVersion() {
@@ -40288,7 +40288,7 @@
   .qws-ch-nav-btn{ flex:1 0 auto; }
 }
 `;
-    document.head.appendChild(st);
+    (document.head ?? document.documentElement).appendChild(st);
   }
   var CommunityHub = class {
     constructor() {
@@ -47404,7 +47404,7 @@
     installJournalKeybindsOnce();
     installSeedSiloKeybindsOnce();
     installDecorShedKeybindsOnce();
-    (async () => {
+    const bootToolbar = async () => {
       try {
         await renderOverlay();
       } catch (e) {
@@ -47415,7 +47415,12 @@
       } catch (e) {
         console.error("[HUD] renderCommunityHub failed:", e);
       }
-    })();
+    };
+    if (document.head) {
+      bootToolbar();
+    } else {
+      document.addEventListener("DOMContentLoaded", () => bootToolbar(), { once: true });
+    }
     (async () => {
       try {
         await PetAlertService.start();

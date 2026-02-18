@@ -178,7 +178,7 @@ function ensureCommunityHubStyle(): void {
   .qws-ch-nav-btn{ flex:1 0 auto; }
 }
 `;
-  document.head.appendChild(st);
+  (document.head ?? document.documentElement).appendChild(st);
 }
 
 class CommunityHub {

@@ -2,7 +2,7 @@ import { isDiscordSurface } from "./api";
 
 const REPO_OWNER = "Ariedam64";
 const REPO_NAME = "MG-AriesMod";
-const REPO_BRANCH = "main/dist";
+const REPO_BRANCH = "main";
 const SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
 
 const RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
@@ -92,8 +92,8 @@ async function fetchScriptSource(): Promise<string> {
   const commitSha = await fetchLatestCommitSha();
 
   const scriptUrl = commitSha
-    ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}`
-    : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
+    ? `${RAW_BASE_URL}/${commitSha}/dist/${SCRIPT_FILE_PATH}`
+    : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/dist/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
 
   return await fetchText(scriptUrl);
 }

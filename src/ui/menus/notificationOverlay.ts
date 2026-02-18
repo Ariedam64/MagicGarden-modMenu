@@ -269,7 +269,7 @@ class OverlayBarebone {
   .qws-bell--wiggle { animation: none !important; }
 }
 `;
-    document.head.appendChild(style);
+    (document.head ?? document.documentElement).appendChild(style);
   }
 
   /* ========= SETTERS (subs) ========= */

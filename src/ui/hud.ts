@@ -1075,10 +1075,15 @@ export function initWatchers(){
     installSeedSiloKeybindsOnce();
     installDecorShedKeybindsOnce();
 
-    (async () => {
+    const bootToolbar = async () => {
       try { await renderOverlay(); } catch (e) { console.error("[HUD] renderOverlay failed:", e); }
       try { await renderCommunityHub(); } catch (e) { console.error("[HUD] renderCommunityHub failed:", e); }
-    })();
+    };
+    if (document.head) {
+      bootToolbar();
+    } else {
+      document.addEventListener("DOMContentLoaded", () => bootToolbar(), { once: true });
+    }
 
     (async () => {
         try { await PetAlertService.start(); } catch {}
