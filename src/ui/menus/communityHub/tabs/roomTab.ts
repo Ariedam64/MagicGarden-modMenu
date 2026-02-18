@@ -1,7 +1,6 @@
 import { fetchAvailableRooms, getCachedPublicRooms, onWelcome } from "../../../../ariesModAPI";
 import type { Room } from "../../../../ariesModAPI";
 import { style, ensureSharedStyles, formatTimestamp } from "../shared";
-import { detectEnvironment } from "../../../../utils/api";
 
 export function createRoomTab() {
   ensureSharedStyles();
@@ -190,9 +189,6 @@ export function createRoomTab() {
 
   // Create a room card
   const createRoomCard = (room: Room): HTMLElement => {
-    const env = detectEnvironment();
-    const isDiscord = env.surface === "discord";
-
     const card = document.createElement("div");
     style(card, {
       padding: "12px",
@@ -310,30 +306,24 @@ export function createRoomTab() {
     // Join button
     const joinButton = document.createElement("button");
     const isFull = room.playersCount >= 6;
-    const isDisabled = isFull || isDiscord;
-
-    if (isDiscord) {
-      joinButton.textContent = "Unavailable";
-    } else {
-      joinButton.textContent = isFull ? "Full" : "Join";
-    }
-    joinButton.disabled = isDisabled;
+    joinButton.textContent = isFull ? "Full" : "Join";
+    joinButton.disabled = isFull;
 
     style(joinButton, {
       padding: "6px 14px",
-      border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+      border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
       borderRadius: "6px",
-      background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-      color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
+      background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+      color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
       fontSize: "12px",
       fontWeight: "600",
-      cursor: isDisabled ? "not-allowed" : "pointer",
+      cursor: isFull ? "not-allowed" : "pointer",
       transition: "all 120ms ease",
       flexShrink: "0",
-      opacity: isDisabled ? "0.5" : "1",
+      opacity: isFull ? "0.5" : "1",
     });
 
-    if (!isDisabled) {
+    if (!isFull) {
       joinButton.onmouseenter = () => {
         style(joinButton, {
           background: "rgba(94,234,212,0.2)",
@@ -352,9 +342,6 @@ export function createRoomTab() {
         e.stopPropagation();
         window.location.href = `https://magicgarden.gg/r/${room.id}`;
       };
-    } else if (isDiscord && !isFull) {
-      // Add tooltip for Discord users
-      joinButton.title = "Room joining is not available on Discord";
     }
 
     card.append(leftWrapper, counter, joinButton);

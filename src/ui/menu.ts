@@ -1393,70 +1393,75 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
     const css = `
     /* ================= Modern UI for qmm ================= */
 .qmm{
-  --qmm-bg:        #0f1318;
-  --qmm-bg-soft:   #0b0f13;
-  --qmm-panel:     #111823cc;
-  --qmm-border:    #ffffff22;
-  --qmm-border-2:  #ffffff14;
-  --qmm-accent:    #7aa2ff;
-  --qmm-accent-2:  #92b2ff;
+  --qmm-bg:        #0a0e14;
+  --qmm-bg-soft:   #080c12;
+  --qmm-panel:     rgba(10,14,20,0.96);
+  --qmm-border:    rgba(255,255,255,0.14);
+  --qmm-border-2:  rgba(255,255,255,0.08);
+  --qmm-accent:    #5eead4;
+  --qmm-accent-2:  #2dd4bf;
   --qmm-text:      #e7eef7;
   --qmm-text-dim:  #b9c3cf;
-  --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
-  --qmm-blur:      8px;
+  --qmm-shadow:    0 18px 44px rgba(0,0,0,.45);
+  --qmm-blur:      10px;
 
   display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
 }
 .qmm-compact{ gap:6px }
 
-/* ---------- Tabs (pill + underline) ---------- */
+/* ---------- Tabs (pill nav) ---------- */
 .qmm-tabs{
-  display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
-  padding:0 6px 2px 6px; position:relative; isolation:isolate;
-  border-bottom:1px solid var(--qmm-border);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  border-top-left-radius:10px; border-top-right-radius:10px;
+  display:flex; gap:4px; flex-wrap:wrap; align-items:center;
+  padding:8px 10px; position:relative; isolation:isolate;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(120deg, rgba(22,28,40,0.9), rgba(12,17,26,0.92));
+  border-top-left-radius:18px; border-top-right-radius:18px;
 }
-.qmm-no-tabs .qmm-views{ margin-top:0 }
+.qmm-no-tabs .qmm-views{ margin-top:0; border-radius:18px; }
 
 .qmm-tab{
   flex:1 1 0; min-width:0; cursor:pointer;
   display:inline-flex; justify-content:center; align-items:center; gap:8px;
-  padding:8px 12px; color:var(--qmm-text);
-  background:transparent; border:1px solid transparent; border-bottom:none;
-  border-top-left-radius:10px; border-top-right-radius:10px;
-  position:relative; margin:0; margin-bottom:-1px;
-  transition:background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
+  padding:8px 12px; color:#c9d4e6;
+  background:transparent; border:1px solid transparent;
+  border-radius:12px;
+  position:relative; margin:0;
+  font-size:12px;
+  transition:background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .qmm-compact .qmm-tab{ padding:6px 10px }
-.qmm-tab:hover{ background:rgba(255,255,255,.06) }
+.qmm-tab:hover{ background:rgba(94,234,212,0.08); color:#e7eef7; }
 .qmm-tab:active{ transform:translateY(1px) }
-.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
+.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:12px }
 
 .qmm-tab .badge{
   font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
-  background:#ffffff1a; border:1px solid #ffffff22;
+  background:rgba(94,234,212,0.12); border:1px solid rgba(94,234,212,0.25);
+  color:#5eead4;
 }
 
 .qmm-tab.active{
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  color:#fff; box-shadow:inset 0 -1px 0 #0007;
-}
-.qmm-tab.active::after{
-  content:""; position:absolute; left:10%; right:10%; bottom:-1px; height:2px;
-  background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
-  border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
+  background:rgba(94,234,212,0.18);
+  border-color:rgba(94,234,212,0.35);
+  color:#ecfdf5;
 }
 
 /* ---------- Views panel ---------- */
 .qmm-views{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
+  border:1px solid rgba(255,255,255,0.14); border-radius:18px; padding:14px;
+  background:linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%);
+  backdrop-filter:blur(10px);
   display:flex; flex-direction:column;
-  min-width:0; min-height:0; overflow:auto; box-shadow:var(--qmm-shadow);
+  min-width:0; min-height:0; overflow:auto; box-shadow:0 18px 44px rgba(0,0,0,.45);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(94,234,212,0.20) rgba(255,255,255,0.03);
 }
+.qmm-views::-webkit-scrollbar{ width:8px; }
+.qmm-views::-webkit-scrollbar-track{ background:rgba(255,255,255,0.03); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb{ background:rgba(94,234,212,0.20); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb:hover{ background:rgba(94,234,212,0.35); }
 .qmm-compact .qmm-views{ padding:8px }
-.qmm-tabs + .qmm-views{ margin-top:-1px }
+.qmm-tabs + .qmm-views{ margin-top:0; border-top:none; border-top-left-radius:0; border-top-right-radius:0; }
 
 .qmm-view{ display:none; min-width:0; min-height:0; }
 .qmm-view.active{ display:block; }
@@ -1485,10 +1490,10 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   line-height:1.2;
   cursor:pointer;
   user-select:none;
-  transition:background .18s ease, border-color .18s ease, transform .1s ease, box-shadow .18s ease, color .18s ease;
+  transition:background 120ms ease, border-color 120ms ease, transform 100ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 .qmm-compact .qmm-btn{ padding:6px 10px }
-.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:#ffffff3d }
+.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:rgba(255,255,255,0.24) }
 .qmm-btn:active{ transform:translateY(1px) }
 .qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
 .qmm-btn:disabled,
@@ -1508,12 +1513,12 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 /* Button variants */
 .qmm-btn--primary,
 .qmm-btn.qmm-primary{
-  background:linear-gradient(180deg, rgba(122,162,255,.38), rgba(122,162,255,.16));
-  border-color:#9db7ff55;
-  box-shadow:0 4px 14px rgba(122,162,255,.26);
+  background:linear-gradient(180deg, rgba(94,234,212,.32), rgba(45,212,191,.14));
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 4px 14px rgba(94,234,212,.18);
 }
 .qmm-btn--primary:hover,
-.qmm-btn.qmm-primary:hover{ border-color:#afc5ff77; }
+.qmm-btn.qmm-primary:hover{ border-color:rgba(94,234,212,0.65); background:linear-gradient(180deg, rgba(94,234,212,.42), rgba(45,212,191,.22)); }
 .qmm-btn--secondary{
   background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.01));
 }
@@ -1526,9 +1531,9 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 .qmm-btn--ghost{ background:transparent; border-color:transparent; }
 .qmm-btn--ghost:hover{ background:rgba(255,255,255,.06); border-color:#ffffff2a; }
 .qmm-btn.active{
-  background:#79a6ff22;
-  border-color:#79a6ff66;
-  box-shadow: inset 0 0 0 1px #79a6ff33;
+  background:rgba(94,234,212,0.14);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:inset 0 0 0 1px rgba(94,234,212,0.20);
 }
 
 .qmm-flex{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -1542,13 +1547,14 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 .qmm-card{
   display:grid;
   gap:12px;
-  border:1px solid var(--qmm-border);
-  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px;
   padding:14px;
-  background:var(--qmm-panel);
-  backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(18,24,34,0.95), rgba(12,17,26,0.96));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
   width:100%;
+  transition:border-color 120ms ease, box-shadow 120ms ease;
 }
 .qmm-card.is-center{ text-align:center; align-items:center; }
 .qmm-card.is-stretch{ align-items:stretch; }
@@ -1566,13 +1572,13 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 .qmm-card__actions{ display:flex; gap:6px; margin-left:auto; }
 .qmm-card__body{ display:grid; gap:10px; }
 .qmm-card[data-tone="muted"]{
-  background:rgba(15,17,22,.88);
-  border-color:#ffffff1a;
+  background:rgba(10,14,20,.92);
+  border-color:rgba(255,255,255,0.08);
   box-shadow:none;
 }
 .qmm-card[data-tone="accent"]{
-  border-color:#7aa2ff99;
-  box-shadow:0 10px 26px rgba(122,162,255,.25);
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 10px 26px rgba(94,234,212,.15);
 }
 
 .qmm .stats-collapse-toggle{
@@ -1583,9 +1589,9 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   padding:6px 12px;
   min-height:32px;
   border-radius:999px;
-  border:1px solid rgba(122,162,255,.45);
-  background:linear-gradient(135deg, rgba(122,162,255,.18), rgba(33,59,121,.18));
-  color:rgba(220,230,255,.92);
+  border:1px solid rgba(94,234,212,.40);
+  background:linear-gradient(135deg, rgba(94,234,212,.14), rgba(15,30,30,.18));
+  color:rgba(220,240,236,.92);
   font-size:12px;
   font-weight:600;
   letter-spacing:.01em;
@@ -1594,25 +1600,25 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   transition:background .26s ease, border-color .26s ease, box-shadow .26s ease, color .26s ease, transform .16s ease;
 }
 .qmm .stats-collapse-toggle:hover{
-  background:linear-gradient(135deg, rgba(122,162,255,.28), rgba(53,94,182,.24));
-  border-color:rgba(122,162,255,.62);
+  background:linear-gradient(135deg, rgba(94,234,212,.22), rgba(20,100,90,.22));
+  border-color:rgba(94,234,212,.55);
   color:#fff;
-  box-shadow:0 14px 30px rgba(66,106,201,.32), inset 0 1px 0 rgba(255,255,255,.18);
+  box-shadow:0 14px 30px rgba(45,212,191,.25), inset 0 1px 0 rgba(255,255,255,.18);
 }
 .qmm .stats-collapse-toggle:active{
   transform:translateY(1px) scale(.99);
 }
 .qmm-card--collapsible[data-collapsed="true"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.12), rgba(23,36,78,.12));
-  border-color:rgba(122,162,255,.32);
-  color:rgba(208,219,255,.82);
+  background:linear-gradient(135deg, rgba(94,234,212,.08), rgba(8,30,28,.12));
+  border-color:rgba(94,234,212,.25);
+  color:rgba(196,240,236,.85);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 6px 18px rgba(9,13,27,.22);
 }
 .qmm-card--collapsible[data-collapsed="false"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.36), rgba(83,124,255,.28));
-  border-color:rgba(122,162,255,.78);
+  background:linear-gradient(135deg, rgba(94,234,212,.30), rgba(45,212,191,.25));
+  border-color:rgba(94,234,212,.72);
   color:#fff;
-  box-shadow:0 16px 32px rgba(72,112,214,.35), inset 0 1px 0 rgba(255,255,255,.22);
+  box-shadow:0 16px 32px rgba(45,212,191,.28), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .qmm .stats-collapse-toggle__icon{
   width:16px;
@@ -1668,10 +1674,10 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 .qmm-chip-toggle__label{ font-weight:600; }
 .qmm-chip-toggle__desc{ font-size:12px; opacity:.75; }
 .qmm-chip-toggle__badge{ font-size:11px; padding:2px 6px; border-radius:999px; background:#ffffff1a; border:1px solid #ffffff22; }
-.qmm-chip-toggle:hover{ border-color:#7aa2ff55; background:rgba(122,162,255,.12); }
+.qmm-chip-toggle:hover{ border-color:rgba(94,234,212,0.30); background:rgba(94,234,212,0.09); }
 .qmm-chip-toggle input:checked + .qmm-chip-toggle__face{
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  box-shadow:0 0 0 1px #7aa2ff55 inset, 0 6px 18px rgba(122,162,255,.22);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  box-shadow:0 0 0 1px rgba(94,234,212,0.35) inset, 0 6px 18px rgba(94,234,212,.15);
 }
 
 .qmm .stats-metric-grid{
@@ -1691,8 +1697,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   transition:border-color .18s ease, background .18s ease, transform .14s ease;
 }
 .qmm .stats-metric:hover{
-  border-color:#7aa2ff55;
-  background:linear-gradient(180deg, rgba(122,162,255,.22), rgba(122,162,255,.10));
+  border-color:rgba(94,234,212,0.30);
+  background:linear-gradient(180deg, rgba(94,234,212,.14), rgba(94,234,212,.06));
   transform:translateY(-1px);
 }
 .qmm .stats-metric__label{
@@ -1723,8 +1729,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   transition:border-color .18s ease, background .18s ease;
 }
 .qmm .stats-list__row:not(.stats-list__row--header):hover{
-  background:rgba(122,162,255,.12);
-  border-color:#7aa2ff55;
+  background:rgba(94,234,212,0.09);
+  border-color:rgba(94,234,212,0.28);
 }
 .qmm .stats-list__row--header{
   background:transparent;
@@ -1866,13 +1872,13 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 
 /* Inputs */
 .qmm-input{
-  min-width:90px; background:rgba(0,0,0,.42); color:#fff;
-  border:1px solid var(--qmm-border); border-radius:10px;
+  min-width:90px; background:rgba(255,255,255,0.04); color:#fff;
+  border:1px solid rgba(255,255,255,0.12); border-radius:10px;
   padding:8px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  transition:border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 .qmm-input::placeholder{ color:#cbd6e780 }
-.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
+.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:rgba(8,12,20,0.9); box-shadow:0 0 0 2px rgba(94,234,212,0.20) }
 
 /* Number input + spinner (unchanged API) */
 .qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
@@ -1899,7 +1905,7 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   background:#fff; border-radius:50%; transition:transform .2s ease;
   box-shadow:0 2px 8px rgba(0,0,0,.35);
 }
-.qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
+.qmm-switch:checked{ background:linear-gradient(180deg, rgba(94,234,212,.90), rgba(45,212,191,.65)) }
 .qmm-switch:checked::before{ transform:translateX(18px) }
 .qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
 
@@ -1912,11 +1918,11 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 }
 .qmm-range:focus{ outline:none }
 .qmm-range::-webkit-slider-runnable-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-moz-range-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-webkit-slider-thumb{
@@ -1944,7 +1950,7 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   height:8px;
   border-radius:999px;
   background:linear-gradient(90deg, rgba(8,19,33,.8), rgba(27,43,68,.9));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(118,156,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(94,234,212,.08);
 }
 .qmm-range-dual-fill{
   position:absolute;
@@ -1952,8 +1958,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   transform:translateY(-50%);
   height:8px;
   border-radius:999px;
-  background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff99);
-  box-shadow:0 4px 14px rgba(37,92,255,.3);
+  background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.55));
+  box-shadow:0 4px 14px rgba(94,234,212,.22);
   transition:left .12s ease, right .12s ease;
 }
 .qmm-range-dual-input{
@@ -1975,8 +1981,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -1990,8 +1996,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -2011,7 +2017,7 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   font-size:11px;
   line-height:1;
   font-weight:600;
-  color:#dbe6ff;
+  color:#d6f5ef;
   background:rgba(17,28,46,.9);
   box-shadow:0 4px 14px rgba(0,0,0,.35);
   pointer-events:none;
@@ -2096,10 +2102,11 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 }
 .qmm-split-left{ display:flex; flex-direction:column; gap:10px }
 .qmm-split-right{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:12px;
   display:flex; flex-direction:column; gap:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(15,20,30,0.95), rgba(10,14,20,0.95));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
 }
 
 /* ---------- VTabs (vertical list + filter) ---------- */
@@ -2124,9 +2131,9 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 .qmm-vtab:hover{ background:rgba(255,255,255,.07); border-color:#ffffff34 }
 .qmm-vtab:active{ transform:translateY(1px) }
 .qmm-vtab.active{
-  background:linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
-  border-color:#9db7ff55;
-  box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
+  background:linear-gradient(180deg, rgba(94,234,212,.16), rgba(94,234,212,.07));
+  border-color:rgba(94,234,212,0.35);
+  box-shadow:0 1px 14px rgba(94,234,212,.14) inset;
 }
 
 .qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
@@ -2142,12 +2149,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 }
 
 /* ---------- Small helpers (optional) ---------- */
-.qmm .qmm-card{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
-}
   .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+  .qmm .qmm-sep{ height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); width:100%; border:none; }
 
 /* drag handle */
 .qmm-grab {
@@ -2208,22 +2211,22 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 }
 
 .qmm-hotkey.is-assigned{
-  border-color: rgba(122,162,255,.45);
-  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(122,162,255,.24);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(94,234,212,0.20);
 }
 
 .qmm-hotkey.is-recording{
   outline:2px solid var(--qmm-accent);
   outline-offset:2px;
-  border-color: var(--qmm-accent);
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  animation: qmm-hotkey-breathe 1.2s ease-in-out infinite;
+  border-color:var(--qmm-accent);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  animation:qmm-hotkey-breathe 1.2s ease-in-out infinite;
 }
-  
+
 @keyframes qmm-hotkey-breathe{
-  0%   { box-shadow: 0 0 0 0 rgba(122,162,255,.55), 0 1px 16px rgba(0,0,0,.25); }
-  60%  { box-shadow: 0 0 0 12px rgba(122,162,255,0), 0 1px 16px rgba(0,0,0,.25); }
-  100% { box-shadow: 0 0 0 0 rgba(122,162,255,0),  0 1px 16px rgba(0,0,0,.25); }
+  0%   { box-shadow: 0 0 0 0 rgba(94,234,212,.50), 0 1px 16px rgba(0,0,0,.25); }
+  60%  { box-shadow: 0 0 0 12px rgba(94,234,212,0), 0 1px 16px rgba(0,0,0,.25); }
+  100% { box-shadow: 0 0 0 0 rgba(94,234,212,0),  0 1px 16px rgba(0,0,0,.25); }
 }
 
 /* ---------- Segmented (minimal, modern) ---------- */
@@ -2233,8 +2236,8 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   --seg-stroke: 1.2px;      /* épaisseur du trait */
   --seg-nudge-x: 0px;       /* micro-ajustements optionnels */
   --seg-nudge-w: 0px;
-  --seg-fill: rgba(122,162,255,.05);           
-  --seg-stroke-color: rgba(122,162,255,.60);
+  --seg-fill: rgba(94,234,212,.07);
+  --seg-stroke-color: rgba(94,234,212,.55);
 
   position: relative;
   display: inline-flex;
@@ -2283,7 +2286,7 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
   outline: var(--seg-stroke,1.2px) solid var(--seg-stroke-color);
   outline-offset: calc(-1 * var(--seg-stroke));
 
-  box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  box-shadow: 0 1px 4px rgba(94,234,212,.08);
   transform-origin: left center;
   will-change: transform, width, opacity;
   transition: transform .18s cubic-bezier(.2,.8,.2,1),
@@ -2295,7 +2298,16 @@ inputNumber(min = 0, max = 9999, step = 1, value = 0) {
 /* Accessibilité */
 @media (prefers-reduced-motion: reduce){
   .qmm-seg__indicator, .qmm-seg__btn { transition: none; }
-}  /* ← manquait cette accolade */
+}
+
+/* ---------- Card bounce utility ---------- */
+@keyframes qmm-card-bounce{
+  0%   { transform:translateY(0); }
+  30%  { transform:translateY(-4px); }
+  60%  { transform:translateY(1px); }
+  100% { transform:translateY(0); }
+}
+.qmm-card.is-bouncing{ animation:qmm-card-bounce 320ms ease; }
 
     `;
     const st = document.createElement('style');

@@ -115,6 +115,7 @@ export function addFriendToCache(friend: FriendSummary): void {
     hasModInstalled: false,
     isOnline: friend.isOnline,
     lastEventAt: friend.lastEventAt,
+    badges: friend.badges || null,
     privacy: {
       showGarden: true,
       showInventory: true,

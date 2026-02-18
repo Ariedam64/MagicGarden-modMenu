@@ -79,6 +79,7 @@ export function openFriendRequestsStream(
             hasModInstalled: false,
             isOnline: f.isOnline || false,
             lastEventAt: f.lastEventAt || null,
+            badges: f.badges || null,
             privacy: {
               showGarden: true,
               showInventory: true,
@@ -102,6 +103,7 @@ export function openFriendRequestsStream(
             hasModInstalled: false,
             isOnline: false,
             lastEventAt: null,
+            badges: r.badges || null,
             privacy: {
               showGarden: true,
               showInventory: true,
@@ -121,6 +123,7 @@ export function openFriendRequestsStream(
             otherPlayerId: r.otherPlayerId,
             playerName: r.playerName || null,
             avatarUrl: r.avatarUrl || null,
+            badges: r.badges || null,
             createdAt: r.createdAt,
           }));
           updateOutgoingRequestsCache(outgoingRequests);
@@ -170,6 +173,7 @@ export function openFriendRequestsStream(
             name: m.name || null,
             avatarUrl: m.avatarUrl || null,
             avatar: m.avatar || null,
+            badges: m.badges || null,
             lastEventAt: m.lastEventAt || null,
             roomId: m.roomId ?? null,
             isOnline: m.isOnline || false,
@@ -203,6 +207,7 @@ export function openFriendRequestsStream(
               hasModInstalled: false,
               isOnline: false,
               lastEventAt: null,
+              badges: req.requesterBadges || null,
               privacy: {
                 showGarden: true,
                 showInventory: true,
@@ -221,6 +226,7 @@ export function openFriendRequestsStream(
               otherPlayerId: req.targetId,
               playerName: req.targetName || null,
               avatarUrl: req.targetAvatarUrl || null,
+              badges: req.targetBadges || null,
               createdAt: req.createdAt,
             };
             addOutgoingRequestToCache(existing);
@@ -252,6 +258,7 @@ export function openFriendRequestsStream(
             const otherAvatar = isRequester ? resp.responderAvatarUrl : resp.requesterAvatarUrl;
             const otherIsOnline = isRequester ? resp.responderIsOnline : resp.requesterIsOnline;
             const otherRoomId = isRequester ? resp.responderRoomId : resp.requesterRoomId;
+            const otherBadges = isRequester ? resp.responderBadges : resp.requesterBadges;
             addFriendToCache({
               playerId: otherId,
               playerName: otherName || null,
@@ -260,6 +267,7 @@ export function openFriendRequestsStream(
               lastEventAt: resp.updatedAt,
               isOnline: otherIsOnline ?? false,
               roomId: otherRoomId ?? null,
+              badges: otherBadges || null,
             });
             // Notify UI: friends list changed (new friend added)
             try {

@@ -1,343 +1,486 @@
 // src/ui/menus/editor.ts
-import { Menu } from "../menu";
 import { toastSimple } from "../toast";
 import { EditorService } from "../../services/editor";
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Constants & style injection
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+const STYLE_ID = "qws-editor-menu-css";
+const TEAL        = "#5eead4";
+const TEAL_DIM    = "rgba(94,234,212,0.12)";
+const TEAL_MID    = "rgba(94,234,212,0.22)";
+const TEAL_BORDER = "rgba(94,234,212,0.3)";
+const TEAL_BRD_HI = "rgba(94,234,212,0.55)";
+const BORDER      = "rgba(255,255,255,0.08)";
+const BORDER_HI   = "rgba(255,255,255,0.16)";
+const CARD_BG     = "rgba(255,255,255,0.03)";
+const CARD_BG_HI  = "rgba(255,255,255,0.06)";
+const TEXT        = "#e7eef7";
+const TEXT_DIM    = "rgba(226,232,240,0.45)";
+const DANGER      = "#ef4444";
+const DANGER_DIM  = "rgba(239,68,68,0.12)";
+const DANGER_BRD  = "rgba(239,68,68,0.3)";
+const DANGER_HI   = "rgba(239,68,68,0.2)";
+const DANGER_BRD_HI = "rgba(239,68,68,0.55)";
+
+function ensureStyles(): void {
+  if (document.getElementById(STYLE_ID)) return;
+  const st = document.createElement("style");
+  st.id = STYLE_ID;
+  st.textContent = `
+.qws-ed-scroll::-webkit-scrollbar { width: 6px; }
+.qws-ed-scroll::-webkit-scrollbar-track { background: transparent; }
+.qws-ed-scroll::-webkit-scrollbar-thumb { background: rgba(94,234,212,0.2); border-radius: 3px; }
+.qws-ed-scroll::-webkit-scrollbar-thumb:hover { background: rgba(94,234,212,0.35); }
+.qws-ed-scroll { scrollbar-width: thin; scrollbar-color: rgba(94,234,212,0.2) transparent; }
+
+/* Toggle switch */
+.qws-ed-toggle { position:relative; display:inline-block; width:36px; height:20px; cursor:pointer; flex-shrink:0; }
+.qws-ed-toggle input { opacity:0; width:0; height:0; position:absolute; }
+.qws-ed-track {
+  position:absolute; inset:0; border-radius:10px;
+  background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.12);
+  transition:background 150ms ease, border-color 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track {
+  background:rgba(94,234,212,0.25); border-color:rgba(94,234,212,0.5);
+}
+.qws-ed-thumb {
+  position:absolute; top:3px; left:3px;
+  width:12px; height:12px; border-radius:50%;
+  background:rgba(226,232,240,0.5);
+  transition:transform 150ms ease, background 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track .qws-ed-thumb {
+  transform:translateX(16px); background:${TEAL};
+}
+`;
+  document.head.appendChild(st);
+}
+
+const css = (el: HTMLElement, s: Partial<CSSStyleDeclaration>) => Object.assign(el.style, s);
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * UI atoms
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+function sectionLabel(text: string): HTMLElement {
+  const el = document.createElement("div");
+  css(el, {
+    fontSize: "10px",
+    fontWeight: "700",
+    letterSpacing: "0.08em",
+    color: TEXT_DIM,
+    textTransform: "uppercase",
+    paddingBottom: "7px",
+  });
+  el.textContent = text;
+  return el;
+}
+
+function card(children: HTMLElement[]): HTMLElement {
+  const el = document.createElement("div");
+  css(el, {
+    padding: "14px",
+    background: CARD_BG,
+    borderRadius: "12px",
+    border: `1px solid ${BORDER}`,
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  });
+  el.append(...children);
+  return el;
+}
+
+function primaryBtn(label: string, onClick: () => void | Promise<void>): HTMLElement {
+  const btn = document.createElement("button");
+  css(btn, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    padding: "10px 14px",
+    border: `1px solid ${TEAL_BORDER}`,
+    borderRadius: "10px",
+    background: TEAL_DIM,
+    color: TEAL,
+    fontSize: "12px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 120ms ease",
+    flex: "1",
+  });
+  btn.textContent = label;
+  btn.onmouseenter = () => css(btn, { background: TEAL_MID, borderColor: TEAL_BRD_HI });
+  btn.onmouseleave = () => css(btn, { background: TEAL_DIM, borderColor: TEAL_BORDER });
+  btn.onclick = async () => {
+    css(btn, { opacity: "0.6", pointerEvents: "none" });
+    try { await onClick(); } finally { css(btn, { opacity: "1", pointerEvents: "auto" }); }
+  };
+  return btn;
+}
+
+function secondaryBtn(label: string, onClick: () => void | Promise<void>): HTMLElement {
+  const btn = document.createElement("button");
+  css(btn, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "10px 14px",
+    border: `1px solid ${BORDER}`,
+    borderRadius: "10px",
+    background: CARD_BG,
+    color: TEXT,
+    fontSize: "12px",
+    fontWeight: "500",
+    cursor: "pointer",
+    transition: "all 120ms ease",
+    flex: "1",
+  });
+  btn.textContent = label;
+  btn.onmouseenter = () => css(btn, { background: CARD_BG_HI, borderColor: BORDER_HI });
+  btn.onmouseleave = () => css(btn, { background: CARD_BG, borderColor: BORDER });
+  btn.onclick = async () => {
+    css(btn, { opacity: "0.6", pointerEvents: "none" });
+    try { await onClick(); } finally { css(btn, { opacity: "1", pointerEvents: "auto" }); }
+  };
+  return btn;
+}
+
+function dangerBtn(label: string, onClick: () => void | Promise<void>): HTMLElement {
+  const btn = document.createElement("button");
+  css(btn, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 11px",
+    border: `1px solid ${DANGER_BRD}`,
+    borderRadius: "8px",
+    background: DANGER_DIM,
+    color: DANGER,
+    fontSize: "11px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 120ms ease",
+    flexShrink: "0",
+  });
+  btn.textContent = label;
+  btn.onmouseenter = () => css(btn, { background: DANGER_HI, borderColor: DANGER_BRD_HI });
+  btn.onmouseleave = () => css(btn, { background: DANGER_DIM, borderColor: DANGER_BRD });
+  btn.onclick = async () => {
+    css(btn, { opacity: "0.6", pointerEvents: "none" });
+    try { await onClick(); } finally { css(btn, { opacity: "1", pointerEvents: "auto" }); }
+  };
+  return btn;
+}
+
+function smallBtn(label: string, teal: boolean, onClick: () => void | Promise<void>): HTMLElement {
+  const btn = document.createElement("button");
+  css(btn, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "7px 11px",
+    border: `1px solid ${teal ? TEAL_BORDER : BORDER}`,
+    borderRadius: "8px",
+    background: teal ? TEAL_DIM : CARD_BG,
+    color: teal ? TEAL : TEXT,
+    fontSize: "11px",
+    fontWeight: "600",
+    cursor: "pointer",
+    transition: "all 120ms ease",
+    flexShrink: "0",
+  });
+  btn.textContent = label;
+  btn.onmouseenter = () => css(btn, { background: teal ? TEAL_MID : CARD_BG_HI, borderColor: teal ? TEAL_BRD_HI : BORDER_HI });
+  btn.onmouseleave = () => css(btn, { background: teal ? TEAL_DIM : CARD_BG, borderColor: teal ? TEAL_BORDER : BORDER });
+  btn.onclick = async () => {
+    css(btn, { opacity: "0.6", pointerEvents: "none" });
+    try { await onClick(); } finally { css(btn, { opacity: "1", pointerEvents: "auto" }); }
+  };
+  return btn;
+}
+
+function styledInput(placeholder: string): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  css(input, {
+    width: "100%",
+    padding: "9px 12px",
+    border: `1px solid ${BORDER}`,
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.06)",
+    color: TEXT,
+    fontSize: "12px",
+    outline: "none",
+    transition: "border-color 150ms ease",
+    boxSizing: "border-box",
+  });
+  input.addEventListener("focus", () => css(input, { borderColor: TEAL_BORDER }));
+  input.addEventListener("blur",  () => css(input, { borderColor: BORDER }));
+  return input;
+}
+
+function styledTextarea(placeholder: string): HTMLTextAreaElement {
+  const ta = document.createElement("textarea");
+  ta.placeholder = placeholder;
+  css(ta, {
+    width: "100%",
+    minHeight: "80px",
+    padding: "9px 12px",
+    border: `1px solid ${BORDER}`,
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.06)",
+    color: TEXT,
+    fontSize: "11px",
+    fontFamily: "monospace",
+    outline: "none",
+    resize: "vertical",
+    transition: "border-color 150ms ease",
+    boxSizing: "border-box",
+  });
+  ta.addEventListener("focus", () => css(ta, { borderColor: TEAL_BORDER }));
+  ta.addEventListener("blur",  () => css(ta, { borderColor: BORDER }));
+  return ta;
+}
+
+function createToggle(checked: boolean, onChange: (v: boolean) => void): HTMLLabelElement {
+  const label = document.createElement("label");
+  label.className = "qws-ed-toggle";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  input.addEventListener("change", () => onChange(input.checked));
+
+  const track = document.createElement("div");
+  track.className = "qws-ed-track";
+  const thumb = document.createElement("div");
+  thumb.className = "qws-ed-thumb";
+  track.appendChild(thumb);
+
+  label.append(input, track);
+  return label;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Main render
+ * ───────────────────────────────────────────────────────────────────────────*/
+
 export function renderEditorMenu(container: HTMLElement) {
-  const ui = new Menu({ id: "editor", compact: true });
-  ui.mount(container);
+  ensureStyles();
 
-  const view = ui.root.querySelector(".qmm-views") as HTMLElement;
-  view.innerHTML = "";
-  view.style.display = "flex";
-  view.style.flexDirection = "column";
-  view.style.gap = "8px";
-  view.style.justifyContent = "flex-start";
-  view.style.alignItems = "stretch";
-  view.style.height = "100%";
-  view.style.minHeight = "0";
-  view.style.overflow = "hidden";
-  view.style.flex = "1";
-  ui.root.style.display = "flex";
-  ui.root.style.flexDirection = "column";
-  ui.root.style.height = "100%";
-  ui.root.style.maxHeight = "100%";
-  ui.root.style.minHeight = "0";
-  ui.root.style.overflow = "hidden";
-  ui.root.style.flex = "1 1 auto";
+  css(container, { padding: "0", overflow: "hidden" });
 
-  const card = ui.card("Editor mode", { tone: "muted", align: "center" });
-  card.header.style.display = "none";
-  card.root.style.maxWidth = "420px";
-  card.root.style.alignSelf = "stretch";
-  card.root.style.flex = "0 0 auto";
-  card.root.style.flexShrink = "0";
-  card.body.style.display = "grid";
-  card.body.style.gap = "10px";
+  // Outer scrollable wrapper
+  const wrap = document.createElement("div");
+  wrap.className = "qws-ed-scroll";
+  css(wrap, {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    padding: "14px",
+    overflowY: "auto",
+    height: "100%",
+    boxSizing: "border-box",
+    background: "linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%)",
+  });
+  container.appendChild(wrap);
 
-  const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-  const label = ui.label("Editor mode");
-  label.style.margin = "0";
+  /* ── Status bar (shared across sections) ─────────────────────────────────*/
+  const statusEl = document.createElement("div");
+  css(statusEl, {
+    fontSize: "11px",
+    color: TEXT_DIM,
+    minHeight: "16px",
+    paddingLeft: "2px",
+    transition: "opacity 200ms ease",
+  });
 
-  const toggle = ui.switch(EditorService.isEnabled()) as HTMLInputElement;
-  toggle.setAttribute("aria-label", "Toggle editor mode");
-  toggle.addEventListener("change", () => {
-    const on = !!toggle.checked;
+  function setStatus(msg: string, tone: "ok" | "warn" | "err" = "ok") {
+    statusEl.textContent = msg;
+    statusEl.style.color = tone === "err" ? DANGER : tone === "warn" ? "#fbbf24" : TEAL;
+    clearTimeout((statusEl as any).__t);
+    (statusEl as any).__t = setTimeout(() => {
+      statusEl.textContent = "";
+      statusEl.style.color = TEXT_DIM;
+    }, 4000);
+  }
+
+  /* ── Editor mode toggle ───────────────────────────────────────────────────*/
+  const toggleRow = document.createElement("div");
+  css(toggleRow, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" });
+
+  const toggleLabel = document.createElement("div");
+  css(toggleLabel, { fontSize: "13px", fontWeight: "600", color: TEXT });
+  toggleLabel.textContent = "Editor mode";
+
+  const toggle = createToggle(EditorService.isEnabled(), (on) => {
     EditorService.setEnabled(on);
   });
 
-  row.append(label, toggle as unknown as HTMLElement);
-  card.body.append(row);
+  toggleRow.append(toggleLabel, toggle);
 
-  const hint = document.createElement("div");
-  hint.textContent = "Sandbox garden editor with every plants and decors unlocked. Build, experiment, and customize without limits";
-  hint.style.fontSize = "12px";
-  hint.style.opacity = "0.7";
-  hint.style.textAlign = "left";
-  hint.style.lineHeight = "1.4";
-  hint.style.width = "100%";
-  card.body.append(hint);
+  const desc = document.createElement("div");
+  css(desc, { fontSize: "11px", color: TEXT_DIM, lineHeight: "1.5" });
+  desc.textContent = "Sandbox garden editor with every plant and decor unlocked. Place/Remove uses your action key · Toggle overlays with U · Edit keybinds in Keybinds › Editor.";
 
-  const hintPlaceRemove = document.createElement("div");
-  hintPlaceRemove.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
-  hintPlaceRemove.style.fontSize = "11px";
-  hintPlaceRemove.style.opacity = "0.65";
-  hintPlaceRemove.style.textAlign = "center";
-  hintPlaceRemove.style.lineHeight = "1.3";
-  hintPlaceRemove.style.width = "100%";
-  card.body.append(hintPlaceRemove);
+  wrap.appendChild(card([toggleRow, desc]));
 
-  const hintDelete = document.createElement("div");
-  hintDelete.textContent = "Remove selected item from inventory with Delete.";
-  hintDelete.style.fontSize = "11px";
-  hintDelete.style.opacity = "0.65";
-  hintDelete.style.textAlign = "center";
-  hintDelete.style.lineHeight = "1.3";
-  hintDelete.style.width = "100%";
-  card.body.append(hintDelete);
+  /* ── Current garden ───────────────────────────────────────────────────────*/
+  const nameInput = styledInput("Garden name…");
 
-  const hintKeybinds = document.createElement("div");
-  hintKeybinds.textContent = "Keys are editable in Keybinds > Editor.";
-  hintKeybinds.style.fontSize = "11px";
-  hintKeybinds.style.opacity = "0.65";
-  hintKeybinds.style.textAlign = "center";
-  hintKeybinds.style.lineHeight = "1.3";
-  hintKeybinds.style.width = "100%";
-  card.body.append(hintKeybinds);
+  const actRow = document.createElement("div");
+  css(actRow, { display: "flex", gap: "8px" });
 
-  const cleanup = EditorService.onChange((enabled) => {
-    toggle.checked = enabled;
-    renderSavedList();
-  });
-  let savedListCleanup: (() => void) | undefined;
-
-  (view as any).__cleanup__ = () => {
-    try { cleanup(); } catch {}
-    try { savedListCleanup?.(); } catch {}
-  };
-
-  // Saved gardens section
-  const sectionCard = (title: string, content: HTMLElement) => {
-    const card = ui.card(title, { tone: "muted", align: "center" });
-    card.root.style.maxWidth = "520px";
-    card.body.style.display = "grid";
-    card.body.style.gap = "8px";
-    card.body.style.width = "100%";
-    card.body.style.minHeight = "0";
-    card.body.append(content);
-    return card;
-  };
-
-  const status = document.createElement("div");
-  status.style.fontSize = "12px";
-  status.style.opacity = "0.7";
-  status.style.minHeight = "18px";
-
-  // Current garden controls
-  const currentWrap = document.createElement("div");
-  currentWrap.style.display = "grid";
-  currentWrap.style.gap = "6px";
-
-  const nameInput = ui.inputText("Garden name", "");
-  nameInput.placeholder = "Garden name";
-  nameInput.style.width = "100%";
-
-  const actionsRow = document.createElement("div");
-  actionsRow.style.display = "grid";
-  actionsRow.style.gridTemplateColumns = "1fr 1fr";
-  actionsRow.style.gap = "8px";
-
-  const saveBtn = ui.btn("Save current garden", {
-    variant: "primary",
-    fullWidth: true,
-    onClick: async () => {
+  actRow.append(
+    primaryBtn("Save current garden", async () => {
       const fn = (window as any).qwsEditorSaveGarden;
       if (typeof fn !== "function") return;
       const saved = await fn(nameInput.value);
-      if (!saved) {
-        status.textContent = "Save failed (no garden state found).";
-        return;
-      }
-      status.textContent = `Saved "${saved.name}".`;
-      renderSavedList();
-    },
-  });
-
-  const clearBtn = ui.btn("Clear garden", {
-    variant: "secondary",
-    fullWidth: true,
-    onClick: async () => {
+      if (!saved) { setStatus("Save failed (no garden state found).", "err"); return; }
+      setStatus(`Saved "${saved.name}".`);
+    }),
+    secondaryBtn("Clear garden", async () => {
       const fn = (window as any).qwsEditorClearGarden;
       if (typeof fn !== "function") return;
       const ok = await fn();
-      status.textContent = ok ? "Garden cleared." : "Clear failed.";
-    },
-  });
+      setStatus(ok ? "Garden cleared." : "Clear failed.", ok ? "ok" : "err");
+    }),
+  );
 
-  actionsRow.append(saveBtn, clearBtn);
-  currentWrap.append(nameInput, actionsRow);
+  wrap.appendChild(
+    card([sectionLabel("Current garden"), nameInput, actRow])
+  );
 
-  // Import section
-  const importWrap = document.createElement("div");
-  importWrap.style.display = "grid";
-  importWrap.style.gap = "6px";
+  /* ── Import ───────────────────────────────────────────────────────────────*/
+  const importArea = styledTextarea("Paste garden JSON here…");
 
-  const importArea = document.createElement("textarea");
-  importArea.placeholder = "Paste garden JSON here...";
-  importArea.style.width = "100%";
-  importArea.style.minHeight = "80px";
-  importArea.style.borderRadius = "8px";
-  importArea.style.border = "1px solid #2b3441";
-  importArea.style.background = "rgba(16,21,28,0.9)";
-  importArea.style.color = "#e7eef7";
-  importArea.style.padding = "8px";
-  importArea.style.fontSize = "12px";
-  importArea.style.fontFamily = "monospace";
+  wrap.appendChild(
+    card([
+      sectionLabel("Import"),
+      importArea,
+      primaryBtn("Import to saved gardens", async () => {
+        const fn = (window as any).qwsEditorImportGarden;
+        if (typeof fn !== "function") return;
+        const saved = await fn(nameInput.value || "Imported garden", importArea.value);
+        if (!saved) { setStatus("Import failed (invalid JSON).", "err"); return; }
+        importArea.value = "";
+        setStatus(`Imported "${saved.name}".`);
+      }),
+    ])
+  );
 
-  const importBtn = ui.btn("Import to saved gardens", {
-    variant: "secondary",
-    fullWidth: true,
-    onClick: async () => {
-      const fn = (window as any).qwsEditorImportGarden;
-      if (typeof fn !== "function") return;
-      const saved = await fn(nameInput.value || "Imported garden", importArea.value);
-      if (!saved) {
-        status.textContent = "Import failed (invalid JSON).";
-        return;
-      }
-      status.textContent = `Imported "${saved.name}".`;
-      renderSavedList();
-    },
-  });
-  importBtn.style.width = "100%";
-
-  importWrap.append(importArea, importBtn);
-
-  // Saved list
+  /* ── Saved gardens ────────────────────────────────────────────────────────*/
   const listWrap = document.createElement("div");
-  listWrap.style.display = "flex";
-  listWrap.style.flexDirection = "column";
-  listWrap.style.gap = "8px";
-  listWrap.style.flex = "1";
-  listWrap.style.overflowY = "auto";
-  listWrap.style.width = "100%";
-  listWrap.style.boxSizing = "border-box";
-  listWrap.style.minHeight = "0";
+  css(listWrap, { display: "flex", flexDirection: "column", gap: "6px" });
 
   const renderSavedList = () => {
     const listFn = (window as any).qwsEditorListSavedGardens;
     const loadFn = (window as any).qwsEditorLoadGarden;
-    const delFn = (window as any).qwsEditorDeleteGarden;
-    const expFn = (window as any).qwsEditorExportGarden;
+    const delFn  = (window as any).qwsEditorDeleteGarden;
+    const expFn  = (window as any).qwsEditorExportGarden;
 
     listWrap.innerHTML = "";
-    const items = typeof listFn === "function" ? listFn() : [];
-    if (!items || !items.length) {
+
+    const items: any[] = typeof listFn === "function" ? listFn() : [];
+    if (!items.length) {
       const empty = document.createElement("div");
+      css(empty, { fontSize: "12px", color: TEXT_DIM, padding: "4px 0" });
       empty.textContent = "No saved gardens yet.";
-      empty.style.opacity = "0.7";
-      empty.style.fontSize = "12px";
       listWrap.appendChild(empty);
       return;
     }
 
     const editorOn = EditorService.isEnabled();
+
     for (const g of items) {
       const row = document.createElement("div");
-      row.style.display = "grid";
-      row.style.gridTemplateColumns = "1fr auto auto auto";
-      row.style.gap = "6px";
-      row.style.alignItems = "center";
-      row.style.padding = "8px";
-      row.style.borderRadius = "8px";
-      row.style.border = "1px solid #2b3441";
-      row.style.background = "rgba(16,21,28,0.9)";
-
-      const name = document.createElement("div");
-      name.textContent = g.name || "Untitled";
-      name.style.fontWeight = "700";
-      name.style.fontSize = "13px";
-      name.style.overflow = "hidden";
-      name.style.textOverflow = "ellipsis";
-      name.style.whiteSpace = "nowrap";
-
-      const load = ui.btn("Load", {
-        size: "sm",
-        onClick: async () => {
-          if (!EditorService.isEnabled()) {
-            status.textContent = "Enable editor mode to load a garden.";
-            return;
-          }
-          if (typeof loadFn !== "function") return;
-          const ok = await loadFn(g.id);
-          if (ok) {
-            status.textContent = `Loaded "${g.name}".`;
-          } else {
-            status.textContent = "Load failed.";
-          }
-        },
+      css(row, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "10px 12px",
+        background: CARD_BG,
+        borderRadius: "10px",
+        border: `1px solid ${BORDER}`,
+        transition: "border-color 120ms ease",
       });
-      load.disabled = !editorOn;
-      if (!editorOn) load.title = "Enable editor mode to load";
+      row.onmouseenter = () => css(row, { borderColor: BORDER_HI });
+      row.onmouseleave = () => css(row, { borderColor: BORDER });
 
-      const exp = ui.btn("Export", {
-        size: "sm",
-        variant: "secondary",
-        onClick: async () => {
-          if (typeof expFn !== "function") return;
-          const json = expFn(g.id);
-          if (!json) {
-            status.textContent = "Export failed.";
-            return;
-          }
-          try {
-            await navigator.clipboard.writeText(json);
-            status.textContent = `Exported "${g.name}" to clipboard.`;
-            await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
-          } catch {
-            status.textContent = `Exported "${g.name}". Copy manually.`;
-            window.prompt("Garden JSON", json);
-          }
-        },
+      const nameEl = document.createElement("div");
+      css(nameEl, {
+        flex: "1",
+        fontSize: "12px",
+        fontWeight: "600",
+        color: TEXT,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
+        minWidth: "0",
       });
+      nameEl.textContent = g.name || "Untitled";
+      nameEl.title = g.name || "Untitled";
 
-      const del = ui.btn("Delete", {
-        size: "sm",
-        variant: "danger",
-        onClick: () => {
-          if (typeof delFn !== "function") return;
-          const ok = delFn(g.id);
-          if (ok) {
-            status.textContent = `Deleted "${g.name}".`;
-            renderSavedList();
-          }
-        },
+      const loadBtn = smallBtn("Load", true, async () => {
+        if (!EditorService.isEnabled()) {
+          setStatus("Enable editor mode first.", "warn");
+          return;
+        }
+        if (typeof loadFn !== "function") return;
+        const ok = await loadFn(g.id);
+        setStatus(ok ? `Loaded "${g.name}".` : "Load failed.", ok ? "ok" : "err");
+      });
+      loadBtn.disabled = !editorOn;
+      if (!editorOn) {
+        css(loadBtn, { opacity: "0.4", cursor: "not-allowed" });
+        loadBtn.title = "Enable editor mode to load";
+      }
+
+      const expBtn = smallBtn("Export", false, async () => {
+        if (typeof expFn !== "function") return;
+        const json = expFn(g.id);
+        if (!json) { setStatus("Export failed.", "err"); return; }
+        try {
+          await navigator.clipboard.writeText(json);
+          setStatus(`Copied "${g.name}" to clipboard.`);
+          await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
+        } catch {
+          setStatus(`Exported "${g.name}". Copy manually.`);
+          window.prompt("Garden JSON", json);
+        }
       });
 
-      row.append(name, load, exp, del);
+      const delBtn = dangerBtn("Delete", () => {
+        if (typeof delFn !== "function") return;
+        const ok = delFn(g.id);
+        if (ok) { setStatus(`Deleted "${g.name}".`); renderSavedList(); }
+      });
+
+      row.append(nameEl, loadBtn, expBtn, delBtn);
       listWrap.appendChild(row);
     }
   };
 
   renderSavedList();
-  savedListCleanup = EditorService.onSavedGardensChange(renderSavedList);
 
-  const currentCard = sectionCard("🌱 Current garden", currentWrap);
-  currentCard.root.style.alignSelf = "stretch";
-  currentCard.root.style.flex = "0 0 auto";
-  currentCard.root.style.flexShrink = "0";
-  const importCard = sectionCard("📥 Import", importWrap);
-  importCard.root.style.alignSelf = "stretch";
-  importCard.root.style.flex = "0 0 auto";
-  importCard.root.style.flexShrink = "0";
-  const savedCard = sectionCard("💾 Saved gardens", listWrap);
-  savedCard.root.style.display = "flex";
-  savedCard.root.style.flexDirection = "column";
-  savedCard.root.style.flex = "1 1 0";
-  savedCard.root.style.minHeight = "220px";
-  savedCard.root.style.overflow = "hidden";
-  savedCard.body.style.display = "flex";
-  savedCard.body.style.flexDirection = "column";
-  savedCard.body.style.alignItems = "stretch";
-  savedCard.body.style.justifyContent = "stretch";
-  savedCard.body.style.overflow = "hidden";
-  savedCard.body.style.flex = "1 1 auto";
-  savedCard.body.style.minHeight = "0";
-  savedCard.body.innerHTML = "";
-  status.style.flex = "0 0 auto";
-  status.style.alignSelf = "stretch";
-  status.style.margin = "0";
-  status.style.height = "18px";
-  savedCard.body.append(status, listWrap);
+  wrap.appendChild(
+    card([sectionLabel("Saved gardens"), statusEl, listWrap])
+  );
 
-  const content = document.createElement("div");
-  content.style.display = "flex";
-  content.style.flexDirection = "column";
-  content.style.gap = "8px";
-  content.style.flex = "1";
-  content.style.minHeight = "0";
-  content.style.overflow = "hidden";
-  content.append(currentCard.root, importCard.root, savedCard.root);
+  /* ── Subscriptions & cleanup ──────────────────────────────────────────────*/
+  const unsubChange = EditorService.onChange((enabled) => {
+    toggle.querySelector("input")!.checked = enabled;
+    renderSavedList();
+  });
+  const unsubSaved = EditorService.onSavedGardensChange(renderSavedList);
 
-  view.append(card.root, content);
+  (container as any).__cleanup__ = () => {
+    try { unsubChange(); } catch {}
+    try { unsubSaved(); } catch {}
+  };
 }

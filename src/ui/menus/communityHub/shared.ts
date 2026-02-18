@@ -268,6 +268,90 @@ export function createRoomBadge(roomId: string | null | undefined): HTMLElement 
   return badge;
 }
 
+// ── Player badges ────────────────────────────────────────────────────────────
+
+const HEART_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" style="display:block;flex-shrink:0;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+const CODE_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+
+interface BadgeConfig {
+  label: string;
+  svg: string;
+  color: string;
+  border: string;
+  bg: string;
+}
+
+const BADGE_CONFIGS: Record<string, BadgeConfig> = {
+  supporter: {
+    label: "Supporter",
+    svg: HEART_SVG,
+    color: "#f472b6",
+    border: "rgba(244,114,182,0.3)",
+    bg: "rgba(244,114,182,0.1)",
+  },
+  mod_creator: {
+    label: "Mod Creator",
+    svg: CODE_SVG,
+    color: "#a78bfa",
+    border: "rgba(167,139,250,0.3)",
+    bg: "rgba(167,139,250,0.1)",
+  },
+};
+
+/**
+ * Renders a row of badge chips for the given badge keys.
+ * Returns null if there are no known badges to display.
+ * @param iconOnly - If true, renders only the icon (no label text).
+ */
+export function createPlayerBadges(badges: string[] | null | undefined, iconOnly = false): HTMLElement | null {
+  if (!badges || badges.length === 0) return null;
+
+  const knownBadges = badges.filter((b) => b in BADGE_CONFIGS);
+  if (knownBadges.length === 0) return null;
+
+  const row = document.createElement("div");
+  style(row, {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: "4px",
+  });
+
+  for (const badgeKey of knownBadges) {
+    const cfg = BADGE_CONFIGS[badgeKey];
+    const chip = document.createElement("span");
+    style(chip, {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: iconOnly ? "0px" : "3px",
+      padding: iconOnly ? "3px" : "2px 6px",
+      borderRadius: iconOnly ? "50%" : "6px",
+      fontSize: "10px",
+      fontWeight: "600",
+      color: cfg.color,
+      border: `1px solid ${cfg.border}`,
+      background: cfg.bg,
+    });
+
+    const icon = document.createElement("span");
+    icon.innerHTML = cfg.svg;
+    style(icon, { display: "inline-flex", alignItems: "center" });
+    chip.appendChild(icon);
+
+    if (!iconOnly) {
+      const label = document.createElement("span");
+      label.textContent = cfg.label;
+      chip.appendChild(label);
+    } else {
+      chip.title = cfg.label;
+    }
+
+    row.appendChild(chip);
+  }
+
+  return row;
+}
+
 // ── Game input blocker ──────────────────────────────────────────────────────
 
 export function createKeyBlocker(shouldBlock: () => boolean) {

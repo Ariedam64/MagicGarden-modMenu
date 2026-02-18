@@ -5,7 +5,7 @@ import {
   cancelFriendRequest,
 } from "../../../../ariesModAPI";
 import type { PlayerView } from "../../../../ariesModAPI";
-import { style, CH_EVENTS, formatRelativeTime } from "../shared";
+import { style, CH_EVENTS, formatRelativeTime, createPlayerBadges } from "../shared";
 
 export function createRequestsSubTab() {
   const container = document.createElement("div");
@@ -127,15 +127,25 @@ function createIncomingRequestCard(request: PlayerView & { createdAt: string }):
   const info = document.createElement("div");
   style(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
 
+  const nameRow = document.createElement("div");
+  style(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+
   const name = document.createElement("div");
   style(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
   name.textContent = request.playerName || "Unknown";
+
+  nameRow.appendChild(name);
+  const badgesEl = createPlayerBadges(request.badges, true);
+  if (badgesEl) {
+    style(badgesEl, { flexShrink: "0" });
+    nameRow.appendChild(badgesEl);
+  }
 
   const time = document.createElement("div");
   style(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
   time.textContent = formatRelativeTime(request.createdAt);
 
-  info.append(name, time);
+  info.append(nameRow, time);
 
   // Buttons
   const buttonsContainer = document.createElement("div");
@@ -220,6 +230,7 @@ function createOutgoingRequestCard(request: {
   toPlayerId: string;
   playerName?: string | null;
   avatarUrl?: string | null;
+  badges?: string[] | null;
   createdAt: string;
 }): HTMLElement {
   const card = document.createElement("div");
@@ -254,15 +265,25 @@ function createOutgoingRequestCard(request: {
   const info = document.createElement("div");
   style(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
 
+  const nameRow = document.createElement("div");
+  style(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+
   const name = document.createElement("div");
   style(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
   name.textContent = request.playerName || "Unknown";
+
+  nameRow.appendChild(name);
+  const outBadgesEl = createPlayerBadges(request.badges, true);
+  if (outBadgesEl) {
+    style(outBadgesEl, { flexShrink: "0" });
+    nameRow.appendChild(outBadgesEl);
+  }
 
   const time = document.createElement("div");
   style(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
   time.textContent = formatRelativeTime(request.createdAt);
 
-  info.append(name, time);
+  info.append(nameRow, time);
 
   // Cancel button
   const cancelButton = document.createElement("button");

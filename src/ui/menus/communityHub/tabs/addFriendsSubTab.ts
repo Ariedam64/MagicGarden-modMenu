@@ -8,7 +8,7 @@ import {
   getCachedModPlayers,
 } from "../../../../ariesModAPI";
 import type { ModPlayerSummary } from "../../../../ariesModAPI";
-import { style, CH_EVENTS, ensureSharedStyles, createKeyBlocker } from "../shared";
+import { style, CH_EVENTS, ensureSharedStyles, createKeyBlocker, createPlayerBadges } from "../shared";
 
 export function createAddFriendsSubTab() {
   ensureSharedStyles();
@@ -206,6 +206,7 @@ function createAddFriendCard(
 ): HTMLElement {
   const card = document.createElement("div");
   style(card, {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -381,6 +382,20 @@ function createAddFriendCard(
     };
 
     card.append(avatarWrapper, info, actionButton);
+  }
+
+  const badgesEl = createPlayerBadges(player.badges, true);
+  if (badgesEl) {
+    style(badgesEl, {
+      position: "absolute",
+      top: "8px",
+      right: "8px",
+      flexDirection: "column",
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+      gap: "3px",
+    });
+    card.appendChild(badgesEl);
   }
 
   return card;

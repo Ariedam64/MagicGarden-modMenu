@@ -1,6 +1,6 @@
 import { getCachedFriendsWithViews } from "../../../../ariesModAPI";
 import type { PlayerView } from "../../../../ariesModAPI";
-import { style, CH_EVENTS, ensureSharedStyles, formatRelativeTime, createKeyBlocker, createRoomBadge } from "../shared";
+import { style, CH_EVENTS, ensureSharedStyles, formatRelativeTime, createKeyBlocker, createRoomBadge, createPlayerBadges } from "../shared";
 
 export function createMyFriendsSubTab(showPlayerDetail: (player: PlayerView) => void) {
   ensureSharedStyles();
@@ -102,6 +102,7 @@ export function createMyFriendsSubTab(showPlayerDetail: (player: PlayerView) => 
 function createFriendCard(friend: PlayerView, onClick: (player: PlayerView) => void): HTMLElement {
   const card = document.createElement("div");
   style(card, {
+    position: "relative",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
@@ -193,6 +194,21 @@ function createFriendCard(friend: PlayerView, onClick: (player: PlayerView) => v
   }
 
   info.append(name, status);
-  card.append(avatarWrapper, info);
+
+  const badgesEl = createPlayerBadges(friend.badges, true);
+  if (badgesEl) {
+    style(badgesEl, {
+      position: "absolute",
+      top: "8px",
+      right: "8px",
+      flexDirection: "column",
+      alignItems: "flex-end",
+      justifyContent: "flex-start",
+      gap: "3px",
+    });
+    card.append(avatarWrapper, info, badgesEl);
+  } else {
+    card.append(avatarWrapper, info);
+  }
   return card;
 }

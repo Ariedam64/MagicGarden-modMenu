@@ -149,7 +149,7 @@ const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} .mg-crop-simulation__crop-name {
   font-size: 13px;
   font-weight: 600;
-  color: #38bdf8;
+  color: #5eead4;
   text-transform: capitalize;
 }
 .${ROOT_CLASS} .mg-crop-simulation__sprite-section {
@@ -242,7 +242,7 @@ const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} .mg-crop-simulation__slider {
   flex: 1 1 auto;
   min-width: 0;
-  accent-color: #38bdf8;
+  accent-color: #5eead4;
 }
 .${ROOT_CLASS} .mg-crop-simulation__price {
   display: inline-flex;
@@ -287,9 +287,9 @@ const CROP_SIMULATION_CSS = `
   gap: 10px;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid #4446;
-  background: #1f2328;
-  box-shadow: 0 0 0 1px #0002 inset;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow: none;
   justify-items: stretch;
 }
 .${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section-heading {
@@ -375,7 +375,7 @@ const CROP_SIMULATION_CSS = `
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"] .qmm-seg__btn-label,
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active .qmm-seg__btn-label {
   color: transparent;
-  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc);
+  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #5eead4, #c084fc);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -620,7 +620,7 @@ function ensureCalculatorStyles(): void {
       padding-bottom: 4px;
     }
     .mg-crop-calculator__source-hint a {
-      color: #38bdf8;
+      color: #5eead4;
       text-decoration: underline;
     }
   `);
@@ -890,7 +890,7 @@ export async function renderCalculatorMenu(container: HTMLElement) {
   gridTemplateColumns: "1fr",
   overflow: "auto",
   paddingRight: "2px",
-  border: "1px solid #4445",
+  border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: "10px",
   minHeight: "0",     // important
   height: "100%",     // pour que overflow: auto prenne effet
@@ -1074,8 +1074,9 @@ export async function renderCalculatorMenu(container: HTMLElement) {
     const refreshListStyles = () => {
       listButtons.forEach(({ button, dot }, key) => {
         const isSelected = selectedKey === key;
-        button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
-        dot.style.background = isSelected ? "#2ecc71" : "#4c566a";
+        button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
+        button.style.borderColor = isSelected ? "rgba(94,234,212,0.35)" : "rgba(255,255,255,0.10)";
+        dot.style.background = isSelected ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
       });
     };
 
@@ -1285,13 +1286,13 @@ export async function renderCalculatorMenu(container: HTMLElement) {
         button.style.padding = "6px 8px";
         button.style.marginBottom = "6px";
         button.style.borderRadius = "8px";
-        button.style.border = "1px solid #4445";
-        button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+        button.style.border = "1px solid rgba(255,255,255,0.10)";
+        button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
         button.style.color = "#e7eef7";
 
         const dot = document.createElement("span");
         dot.className = "qmm-dot";
-        dot.style.background = selectedKey === opt.key ? "#2ecc71" : "#4c566a";
+        dot.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
 
         const label = document.createElement("span");
         label.className = "label";
@@ -1305,8 +1306,8 @@ export async function renderCalculatorMenu(container: HTMLElement) {
 
         button.append(dot, label, sprite);
 
-        button.onmouseenter = () => (button.style.borderColor = "#6aa1");
-        button.onmouseleave = () => (button.style.borderColor = "#4445");
+        button.onmouseenter = () => { button.style.borderColor = "rgba(94,234,212,0.35)"; button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.18)" : "rgba(255,255,255,0.07)"; };
+        button.onmouseleave = () => { button.style.borderColor = "rgba(255,255,255,0.10)"; button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)"; };
         button.onclick = () => {
           if (selectedKey === opt.key) return;
           selectedKey = opt.key;

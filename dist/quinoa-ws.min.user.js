@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.1
+// @version      3.1.13
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23,6 +23,8 @@
 // @connect      cdn.pixabay.com
 // @connect      cdn.jsdelivr.net
 // @connect      magicgarden.gg
+// @connect      i.imgur.com
+// @connect      cdn.discordapp.com
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -5288,142 +5290,130 @@
     Multiple: "Multiple"
   };
   var tileRefsPlants = {
-    DirtPatch: 1,
-    SproutFlower: 2,
-    SproutVegetable: 3,
-    SproutFruit: 4,
-    SproutVine: 5,
-    StemFlower: 6,
-    Trellis: 7,
-    Daffodil: 11,
-    Tulip: 12,
-    Sunflower: 13,
-    Lily: 14,
-    Starweaver: 15,
-    Chrysanthemum: 16,
-    Aloe: 18,
-    Blueberry: 21,
-    Banana: 22,
-    Strawberry: 23,
-    Mango: 24,
-    Grape: 25,
-    Watermelon: 26,
-    Lemon: 27,
-    Apple: 28,
-    Pear: 29,
-    Pineapple: 30,
-    Pepper: 31,
-    PalmTree: 3e3,
-    CacaoTree: 3001,
-    Tree: 8,
-    Tomato: 32,
-    BabyCarrot: 33,
-    Carrot: 34,
-    Pumpkin: 35,
-    Corn: 36,
-    FavaBean: 37,
-    Cacao: 38,
-    PalmTreeTop: 39,
-    BushyTree: 40,
-    Coconut: 41,
-    PassionFruit: 43,
-    DragonFruit: 44,
-    Lychee: 45,
-    Mushroom: 3002,
-    BurrosTail: 47,
-    Echeveria: 49,
-    Delphinium: 50,
-    DawnCelestialCrop: 51,
-    MoonCelestialCrop: 52,
-    Camellia: 57,
-    Hedge: 58,
-    FlowerBush: 59,
-    Squash: 60,
-    PineTree: 61,
-    Poinsettia: 62,
-    Shrub: 63,
-    CabbagePlant: 64,
-    Cabbage: 65,
-    BabyBeet: 66,
-    Beet: 67,
-    Gentian: 68,
-    VioletCort: 69,
-    DragonFruitTree: 70
+    Aloe: "sprite/plant/Aloe",
+    Apple: "sprite/plant/Apple",
+    BabyBeet: "sprite/plant/BabyBeet",
+    BabyCarrot: "sprite/plant/BabyCarrot",
+    Banana: "sprite/plant/Banana",
+    Beet: "sprite/plant/Beet",
+    Blueberry: "sprite/plant/Blueberry",
+    BurrosTail: "sprite/plant/BurrosTail",
+    BushyTree: "sprite/plant/BushyTree",
+    Cabbage: "sprite/plant/Cabbage",
+    CabbagePlant: "sprite/plant/CabbagePlant",
+    Cacao: "sprite/plant/Cacao",
+    CacaoTree: "sprite/plant/CacaoTree",
+    Camellia: "sprite/plant/Camellia",
+    Carrot: "sprite/plant/Carrot",
+    Chrysanthemum: "sprite/plant/Chrysanthemum",
+    Coconut: "sprite/plant/Coconut",
+    Corn: "sprite/plant/Corn",
+    Daffodil: "sprite/plant/Daffodil",
+    DawnCelestialCrop: "sprite/plant/DawnCelestialCrop",
+    Delphinium: "sprite/plant/Delphinium",
+    DirtPatch: "sprite/plant/DirtPatch",
+    DragonFruit: "sprite/plant/DragonFruit",
+    DragonFruitTree: "sprite/plant/DragonFruitTree",
+    Echeveria: "sprite/plant/Echeveria",
+    FavaBean: "sprite/plant/FavaBean",
+    FlowerBush: "sprite/plant/FlowerBush",
+    Gentian: "sprite/plant/Gentian",
+    Grape: "sprite/plant/Grape",
+    Hedge: "sprite/plant/Hedge",
+    Lemon: "sprite/plant/Lemon",
+    Lily: "sprite/plant/Lily",
+    Lychee: "sprite/plant/Lychee",
+    MoonCelestialCrop: "sprite/plant/MoonCelestialCrop",
+    Mushroom: "sprite/plant/Mushroom",
+    PalmTree: "sprite/plant/PalmTree",
+    PassionFruit: "sprite/plant/PassionFruit",
+    Peach: "sprite/plant/Peach",
+    Pear: "sprite/plant/Pear",
+    Pepper: "sprite/plant/Pepper",
+    PineTree: "sprite/plant/PineTree",
+    Poinsettia: "sprite/plant/Poinsettia",
+    Pumpkin: "sprite/plant/Pumpkin",
+    RoseRed: "sprite/plant/RoseRed",
+    Shrub: "sprite/plant/Shrub",
+    SproutFlower: "sprite/plant/SproutFlower",
+    SproutFruit: "sprite/plant/SproutFruit",
+    SproutVine: "sprite/plant/SproutVine",
+    Squash: "sprite/plant/Squash",
+    Starweaver: "sprite/plant/Starweaver",
+    StemFlower: "sprite/plant/StemFlower",
+    Strawberry: "sprite/plant/Strawberry",
+    Sunflower: "sprite/plant/Sunflower",
+    Tomato: "sprite/plant/Tomato",
+    Tree: "sprite/plant/Tree",
+    Trellis: "sprite/plant/Trellis",
+    Tulip: "sprite/plant/Tulip",
+    VioletCort: "sprite/plant/VioletCort",
+    Watermelon: "sprite/plant/Watermelon"
   };
   var tileRefsTallPlants = {
-    Bamboo: 1,
-    DawnCelestialPlatform: 3,
-    DawnCelestialPlant: 4,
-    DawnCelestialPlantActive: 5,
-    DawnCelestialPlatformTopmostLayer: 6,
-    Cactus: 7,
-    MoonCelestialPlatform: 9,
-    MoonCelestialPlant: 10,
-    MoonCelestialPlantActive: 11,
-    StarweaverPlatform: 13,
-    StarweaverPlant: 14
+    Bamboo: "sprite/tall-plant/Bamboo",
+    Cactus: "sprite/tall-plant/Cactus",
+    DawnCelestialPlant: "sprite/tall-plant/DawnCelestialPlant",
+    DawnCelestialPlantActive: "sprite/tall-plant/DawnCelestialPlantActive",
+    DawnCelestialPlatform: "sprite/tall-plant/DawnCelestialPlatform",
+    DawnCelestialPlatformTopmostLayer: "sprite/tall-plant/DawnCelestialPlatformTopmostLayer",
+    MoonCelestialPlant: "sprite/tall-plant/MoonCelestialPlant",
+    MoonCelestialPlantActive: "sprite/tall-plant/MoonCelestialPlantActive",
+    MoonCelestialPlatform: "sprite/tall-plant/MoonCelestialPlatform",
+    StarweaverPlant: "sprite/tall-plant/StarweaverPlant",
+    StarweaverPlatform: "sprite/tall-plant/StarweaverPlatform"
   };
   var tileRefsSeeds = {
-    Daffodil: 1,
-    Tulip: 2,
-    Sunflower: 3,
-    Starweaver: 6,
-    DawnCelestial: 7,
-    MoonCelestial: 8,
-    Blueberry: 11,
-    Banana: 12,
-    Strawberry: 13,
-    Mango: 14,
-    Grape: 15,
-    Watermelon: 16,
-    Lemon: 17,
-    Apple: 18,
-    Pear: 19,
-    Lily: 20,
-    Pepper: 21,
-    Tomato: 22,
-    Carrot: 23,
-    Pumpkin: 25,
-    Corn: 26,
-    Peach: 27,
-    FavaBean: 28,
-    Cacao: 29,
-    Delphinium: 30,
-    Coconut: 31,
-    Mushroom: 32,
-    PassionFruit: 33,
-    DragonFruit: 34,
-    Lychee: 35,
-    BurrosTail: 37,
-    Aloe: 39,
-    Echeveria: 40,
-    Bamboo: 41,
-    Cactus: 42,
-    Camellia: 48,
-    Chrysanthemum: 49,
-    Squash: 50,
-    Pinecone: 51,
-    Poinsettia: 52,
-    VioletCort: 53,
-    Cabbage: 54,
-    Beet: 55,
-    Gentian: 56
+    Aloe: "sprite/seed/Aloe",
+    Apple: "sprite/seed/Apple",
+    Bamboo: "sprite/seed/Bamboo",
+    Banana: "sprite/seed/Banana",
+    Beet: "sprite/seed/Beet",
+    Blueberry: "sprite/seed/Blueberry",
+    BurrosTail: "sprite/seed/BurrosTail",
+    Cabbage: "sprite/seed/Cabbage",
+    Cacao: "sprite/seed/Cacao",
+    Cactus: "sprite/seed/Cactus",
+    Camellia: "sprite/seed/Camellia",
+    Carrot: "sprite/seed/Carrot",
+    Chrysanthemum: "sprite/seed/Chrysanthemum",
+    Coconut: "sprite/seed/Coconut",
+    Corn: "sprite/seed/Corn",
+    Daffodil: "sprite/seed/Daffodil",
+    DawnCelestial: "sprite/seed/DawnCelestial",
+    Delphinium: "sprite/seed/Delphinium",
+    DragonFruit: "sprite/seed/DragonFruit",
+    Echeveria: "sprite/seed/Echeveria",
+    FavaBean: "sprite/seed/FavaBean",
+    Gentian: "sprite/seed/Gentian",
+    Grape: "sprite/seed/Grape",
+    Lemon: "sprite/seed/Lemon",
+    Lily: "sprite/seed/Lily",
+    Lychee: "sprite/seed/Lychee",
+    MoonCelestial: "sprite/seed/MoonCelestial",
+    Mushroom: "sprite/seed/Mushroom",
+    PassionFruit: "sprite/seed/PassionFruit",
+    Peach: "sprite/seed/Peach",
+    Pear: "sprite/seed/Pear",
+    Pepper: "sprite/seed/Pepper",
+    Pinecone: "sprite/seed/Pinecone",
+    Poinsettia: "sprite/seed/Poinsettia",
+    Pumpkin: "sprite/seed/Pumpkin",
+    Rose: "sprite/seed/Rose",
+    Squash: "sprite/seed/Squash",
+    Starweaver: "sprite/seed/Starweaver",
+    Strawberry: "sprite/seed/Strawberry",
+    Sunflower: "sprite/seed/Sunflower",
+    Tomato: "sprite/seed/Tomato",
+    Tulip: "sprite/seed/Tulip",
+    VioletCort: "sprite/seed/VioletCort",
+    Watermelon: "sprite/seed/Watermelon"
   };
   var tileRefsItems = {
+    // UI / système (pas dans V.Item)
     Coin: 1,
-    Shovel: 2,
-    PlanterPot: 6,
     InventoryBag: 7,
-    WateringCan: 9,
     MoneyBag: 11,
-    RainbowPotion: 14,
-    GoldPotion: 15,
-    WetPotion: 16,
-    ChilledPotion: 17,
-    FrozenPotion: 18,
-    DawnlitPotion: 19,
-    AmberlitPotion: 20,
-    CropCleanser: 21,
     JournalStamp: 22,
     Donut: 23,
     ToolsRestocked: 24,
@@ -5435,48 +5425,66 @@
     ActivityLog: 30,
     ChatBubble: 39,
     ArrowKeys: 41,
-    Touchpad: 42
+    Touchpad: 42,
+    // V.Item
+    AmberlitPotion: "sprite/item/AmberlitPotion",
+    ChilledPotion: "sprite/item/ChilledPotion",
+    CropCleanser: "sprite/item/CropCleanser",
+    DawnlitPotion: "sprite/item/DawnlitPotion",
+    FrozenPotion: "sprite/item/FrozenPotion",
+    GoldPotion: "sprite/item/GoldPotion",
+    PlanterPot: "sprite/item/PlanterPot",
+    RainbowPotion: "sprite/item/RainbowPotion",
+    Shovel: "sprite/item/Shovel",
+    WateringCan: "sprite/item/WateringCan",
+    WetPotion: "sprite/item/WetPotion"
   };
   var tileRefsPets = {
-    Bee: 1,
-    Chicken: 2,
-    Bunny: 3,
-    Turtle: 4,
-    Capybara: 5,
-    Cow: 6,
-    Pig: 7,
-    Butterfly: 8,
-    Snail: 9,
-    Worm: 10,
-    CommonEgg: 11,
-    UncommonEgg: 12,
-    RareEgg: 13,
-    LegendaryEgg: 14,
-    MythicalEgg: 15,
+    Bee: "sprite/pet/Bee",
+    Bunny: "sprite/pet/Bunny",
+    Butterfly: "sprite/pet/Butterfly",
+    Capybara: "sprite/pet/Capybara",
+    Chicken: "sprite/pet/Chicken",
+    CommonEgg: "sprite/pet/CommonEgg",
+    Cow: "sprite/pet/Cow",
+    Dragonfly: "sprite/pet/Dragonfly",
+    FireHorse: "sprite/pet/FireHorse",
+    FireHorseActive: "sprite/pet/FireHorseActive",
+    Goat: "sprite/pet/Goat",
+    Horse: "sprite/pet/Horse",
+    HorseEgg: "sprite/pet/HorseEgg",
+    LegendaryEgg: "sprite/pet/LegendaryEgg",
+    MythicalEgg: "sprite/pet/MythicalEgg",
+    Peacock: "sprite/pet/Peacock",
+    Pig: "sprite/pet/Pig",
+    Pony: "sprite/pet/Pony",
+    RareEgg: "sprite/pet/RareEgg",
+    Snail: "sprite/pet/Snail",
+    SnowEgg: "sprite/pet/SnowEgg",
+    SnowFox: "sprite/pet/SnowFox",
+    Squirrel: "sprite/pet/Squirrel",
+    Stoat: "sprite/pet/Stoat",
+    Turkey: "sprite/pet/Turkey",
+    Turtle: "sprite/pet/Turtle",
+    UncommonEgg: "sprite/pet/UncommonEgg",
+    WhiteCaribou: "sprite/pet/WhiteCaribou",
+    WinterEgg: "sprite/pet/WinterEgg",
+    Worm: "sprite/pet/Worm",
+    // Pas dans V.Pet (garder pour compatibilité)
     DivineEgg: 16,
-    CelestialEgg: 17,
-    Squirrel: 18,
-    Goat: 19,
-    Dragonfly: 20,
-    Turkey: 29,
-    Peacock: 30,
-    SnowFox: 31,
-    Stoat: 32,
-    WhiteCaribou: 33,
-    WinterEgg: 34,
-    SnowEgg: 35
+    CelestialEgg: 17
   };
   var tileRefsMutations = {
-    Wet: 1,
-    Chilled: 2,
-    Frozen: 3,
-    Puddle: 5,
-    Dawnlit: 11,
-    Amberlit: 12,
-    Dawncharged: 13,
-    Ambercharged: 14,
-    Thunderstruck: 15,
-    ThunderstruckGround: 16
+    Ambercharged: "sprite/mutation/Ambercharged",
+    Amberlit: "sprite/mutation/Amberlit",
+    Chilled: "sprite/mutation/Chilled",
+    Dawncharged: "sprite/mutation/Dawncharged",
+    Dawnlit: "sprite/mutation/Dawnlit",
+    Frozen: "sprite/mutation/Frozen",
+    Puddle: "sprite/mutation/Puddle",
+    Thunderstruck: "sprite/mutation/Thunderstruck",
+    ThunderstruckGround: "sprite/mutation/ThunderstruckGround",
+    Wet: "sprite/mutation/Wet"
   };
   var tileRefsMutationLabels = {
     Wet: "Wet",
@@ -5491,76 +5499,66 @@
     ThunderstruckGround: "Thunderstruck"
   };
   var tileRefsDecor = {
-    SmallRock: 11,
-    MediumRock: 21,
-    LargeRock: 31,
-    WoodPedestal: 4,
-    WoodBench: 13,
-    WoodBenchBackwards: 14,
-    WoodBenchSideways: 24,
-    WoodBucketPedestal: 34,
-    WoodLampPost: 23,
-    WoodStool: 63,
-    WoodArch: 33,
-    WoodArchSide: 43,
-    WoodPergola: 73,
-    WoodBridge: 34,
-    WoodBridgeSideways: 44,
-    WoodOwl: 53,
-    WoodGardenBox: 74,
-    Birdhouse: 54,
-    WoodWindmill: 64,
-    StonePedestal: 6,
-    StoneBench: 15,
-    StoneBenchSideways: 2600,
-    StoneBucketPedestal: 16,
-    StoneLampPost: 25,
-    StoneColumn: 2601,
-    StoneArch: 35,
-    StoneArchSideways: 45,
-    StoneBridge: 36,
-    StoneBridgeSideways: 46,
-    StoneGnome: 55,
-    StoneGardenBox: 66,
-    StoneBirdBath: 56,
-    MarblePedestal: 8,
-    MarbleBench: 17,
-    MarbleBenchBackwards: 18,
-    MarbleBenchSideways: 28,
-    MarbleBucketPedestal: 58,
-    MarbleLampPost: 27,
-    MarbleColumn: 68,
-    MarbleArch: 37,
-    MarbleArchSideways: 47,
-    MarbleBridge: 38,
-    MarbleBridgeSideways: 48,
-    MarbleBlobling: 57,
-    MarbleFountain: 58,
-    MarbleGardenBox: 78,
-    MiniFairyCottage: 50,
-    MiniFairyForge: 40,
-    MiniFairyKeep: 60,
-    MiniWizardTower: 68,
-    HayBale: 29,
-    HayBaleSideways: 39,
-    StrawScarecrow: 49,
-    Cauldron: 59,
-    SmallGravestone: 69,
-    SmallGravestoneSideways: 70,
-    MediumGravestone: 79,
-    MediumGravestoneSideways: 80,
-    LargeGravestone: 89,
-    LargeGravestoneSideways: 90,
-    WoodCaribou: 91,
-    StoneCaribou: 92,
-    MarbleCaribou: 93,
-    ColoredStringLights: 94,
-    ColoredStringLightsSideways: 95,
-    StringLights: 96,
-    StringLightsSideways: 97,
-    PetHutch: 30,
-    DecorShed: 98,
-    SeedSilo: 99
+    Birdhouse: "sprite/decor/Birdhouse",
+    Cauldron: "sprite/decor/Cauldron",
+    ColoredStringLights: "sprite/decor/ColoredStringLights",
+    ColoredStringLightsSideways: "sprite/decor/ColoredStringLightsSideways",
+    DecorShed: "sprite/decor/DecorShed",
+    HayBale: "sprite/decor/HayBale",
+    HayBaleSideways: "sprite/decor/HayBaleSideways",
+    LargeGravestone: "sprite/decor/LargeGravestone",
+    LargeGravestoneSideways: "sprite/decor/LargeGravestoneSideways",
+    LargeRock: "sprite/decor/LargeRock",
+    MarbleArch: "sprite/decor/MarbleArch",
+    MarbleArchSideways: "sprite/decor/MarbleArchSideways",
+    MarbleBench: "sprite/decor/MarbleBench",
+    MarbleBenchBackwards: "sprite/decor/MarbleBenchBackwards",
+    MarbleBenchSideways: "sprite/decor/MarbleBenchSideways",
+    MarbleBlobling: "sprite/decor/MarbleBlobling",
+    MarbleBridge: "sprite/decor/MarbleBridge",
+    MarbleBridgeSideways: "sprite/decor/MarbleBridgeSideways",
+    MarbleCaribou: "sprite/decor/MarbleCaribou",
+    MarbleFountain: "sprite/decor/MarbleFountain",
+    MarbleLampPost: "sprite/decor/MarbleLampPost",
+    MediumGravestone: "sprite/decor/MediumGravestone",
+    MediumGravestoneSideways: "sprite/decor/MediumGravestoneSideways",
+    MediumRock: "sprite/decor/MediumRock",
+    MiniFairyCottage: "sprite/decor/MiniFairyCottage",
+    MiniFairyForge: "sprite/decor/MiniFairyForge",
+    MiniFairyKeep: "sprite/decor/MiniFairyKeep",
+    MiniWizardTower: "sprite/decor/MiniWizardTower",
+    PaperLantern: "sprite/decor/PaperLantern",
+    PaperLanternSideways: "sprite/decor/PaperLanternSideways",
+    PetHutch: "sprite/decor/PetHutch",
+    SeedSilo: "sprite/decor/SeedSilo",
+    SmallGravestone: "sprite/decor/SmallGravestone",
+    SmallGravestoneSideways: "sprite/decor/SmallGravestoneSideways",
+    SmallRock: "sprite/decor/SmallRock",
+    StoneArch: "sprite/decor/StoneArch",
+    StoneArchSideways: "sprite/decor/StoneArchSideways",
+    StoneBench: "sprite/decor/StoneBench",
+    StoneBenchSideways: "sprite/decor/StoneBenchSideways",
+    StoneBirdBath: "sprite/decor/StoneBirdBath",
+    StoneBridge: "sprite/decor/StoneBridge",
+    StoneBridgeSideways: "sprite/decor/StoneBridgeSideways",
+    StoneCaribou: "sprite/decor/StoneCaribou",
+    StoneGnome: "sprite/decor/StoneGnome",
+    StoneLampPost: "sprite/decor/StoneLampPost",
+    StrawScarecrow: "sprite/decor/StrawScarecrow",
+    StringLights: "sprite/decor/StringLights",
+    StringLightsSideways: "sprite/decor/StringLightsSideways",
+    WoodArch: "sprite/decor/WoodArch",
+    WoodArchSide: "sprite/decor/WoodArchSide",
+    WoodBench: "sprite/decor/WoodBench",
+    WoodBenchBackwards: "sprite/decor/WoodBenchBackwards",
+    WoodBenchSideways: "sprite/decor/WoodBenchSideways",
+    WoodBridge: "sprite/decor/WoodBridge",
+    WoodBridgeSideways: "sprite/decor/WoodBridgeSideways",
+    WoodCaribou: "sprite/decor/WoodCaribou",
+    WoodLampPost: "sprite/decor/WoodLampPost",
+    WoodOwl: "sprite/decor/WoodOwl",
+    WoodPergola: "sprite/decor/WoodPergola",
+    WoodWindmill: "sprite/decor/WoodWindmill"
   };
   var plantCatalog = {
     Carrot: {
@@ -5692,6 +5690,29 @@
         baseWeight: 0.3,
         baseTileScale: 0.2,
         maxScale: 3
+      }
+    },
+    Rose: {
+      seed: {
+        tileRef: tileRefsSeeds.Rose,
+        name: "Rose Seed",
+        coinPrice: 229,
+        creditPrice: 27,
+        rarity: rarity.Uncommon
+      },
+      plant: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 1
+      },
+      crop: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose",
+        baseSellPrice: 300,
+        baseWeight: 0.01,
+        baseTileScale: 1,
+        maxScale: 4
       }
     },
     FavaBean: {
@@ -6264,6 +6285,40 @@
         maxScale: 2.5
       }
     },
+    Peach: {
+      seed: {
+        tileRef: tileRefsSeeds.Peach,
+        name: "Peach Seed",
+        coinPrice: 85e3,
+        creditPrice: 299,
+        rarity: rarity.Legendary
+      },
+      plant: {
+        tileRef: tileRefsPlants.Tree,
+        name: "Peach Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: -0.66, y: -0.34, rotation: 0 },
+          { x: -0.2, y: -0.1, rotation: 0 },
+          { x: 0.35, y: -0.25, rotation: 0 },
+          { x: 0.76, y: -0.56, rotation: 0 },
+          { x: -0.08, y: -0.69, rotation: 0 },
+          { x: 0.36, y: -1.03, rotation: 0 },
+          { x: -0.54, y: -0.97, rotation: 0 }
+        ],
+        secondsToMature: 7200,
+        rotateSlotOffsetsRandomly: true,
+        baseTileScale: 3
+      },
+      crop: {
+        tileRef: tileRefsPlants.Peach,
+        name: "Peach",
+        baseSellPrice: 9e3,
+        baseWeight: 0.18,
+        baseTileScale: 0.5,
+        maxScale: 3
+      }
+    },
     BurrosTail: {
       seed: {
         tileRef: tileRefsSeeds.BurrosTail,
@@ -6607,7 +6662,7 @@
         rarity: rarity.Divine
       },
       plant: {
-        tileRef: tileRefsPlants.PalmTreeTop,
+        tileRef: tileRefsPlants.PalmTree,
         name: "Dragon Fruit Plant",
         harvestType: harvestType.Multiple,
         slotOffsets: [
@@ -6884,6 +6939,22 @@
         WhiteCaribou: 5
       },
       requiredWeather: "Frost"
+    },
+    HorseEgg: {
+      tileRef: tileRefsPets.HorseEgg,
+      name: "Horse Egg",
+      coinPrice: 2e8,
+      creditPrice: 379,
+      rarity: rarity.Legendary,
+      initialTileScale: 0.3,
+      baseTileScale: 0.8,
+      secondsToHatch: 43200,
+      faunaSpawnWeights: {
+        Pony: 60,
+        Horse: 35,
+        FireHorse: 5
+      }
+      // expiryDate: A6, // TODO: fill in actual expiry date from game source
     }
   };
   var petCatalog = {
@@ -7131,6 +7202,66 @@
       hoursToMature: 100,
       rarity: rarity.Legendary,
       diet: ["Camellia", "BurrosTail", "Mushroom"]
+    },
+    Pony: {
+      tileRef: tileRefsPets.Pony,
+      name: "Pony",
+      coinsToFullyReplenishHunger: 4e3,
+      innateAbilityWeights: {
+        SellBoostIII: 25,
+        CoinFinderIII: 25,
+        HungerRestoreII: 25,
+        SeedFinderII: 25
+      },
+      maxScale: 2,
+      maturitySellPrice: 1e7,
+      matureWeight: 200,
+      moveProbability: 0.3,
+      moveTweenDurationMs: 600,
+      hoursToMature: 72,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      diet: ["Beet", "Pear", "Coconut"]
+    },
+    Horse: {
+      tileRef: tileRefsPets.Horse,
+      name: "Horse",
+      coinsToFullyReplenishHunger: 25e3,
+      innateAbilityWeights: {
+        DawnBoost: 30,
+        DawnlitGranter: 40,
+        DawnPlantGrowthBoost: 10,
+        PetAgeBoostII: 20
+      },
+      maxScale: 2.5,
+      maturitySellPrice: 5e7,
+      matureWeight: 80,
+      moveProbability: 0.4,
+      moveTweenDurationMs: 500,
+      hoursToMature: 100,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      diet: ["Squash", "Echeveria", "Gentian"]
+    },
+    FireHorse: {
+      tileRef: tileRefsPets.FireHorse,
+      name: "Fire Horse",
+      coinsToFullyReplenishHunger: 2e5,
+      innateAbilityWeights: {
+        AmberMoonBoost: 30,
+        PetHatchSizeBoostII: 20,
+        AmberlitGranter: 40,
+        AmberPlantGrowthBoost: 10
+      },
+      maxScale: 2.5,
+      maturitySellPrice: 15e7,
+      matureWeight: 700,
+      moveProbability: 0.4,
+      moveTweenDurationMs: 800,
+      hoursToMature: 144,
+      rarity: rarity.Mythic,
+      tileTransformOrigin: "bottom",
+      diet: ["DragonFruit", "Poinsettia", "Cacao"]
     },
     Butterfly: {
       tileRef: tileRefsPets.Butterfly,
@@ -8077,6 +8208,29 @@
       baseTileScale: 1,
       isOneTimePurchase: false
     },
+    PaperLantern: {
+      tileRef: tileRefsDecor.PaperLantern,
+      rotationVariants: {
+        90: {
+          tileRef: tileRefsDecor.PaperLanternSideways,
+          flipH: true
+        },
+        180: {
+          tileRef: tileRefsDecor.PaperLantern,
+          flipH: true
+        },
+        270: {
+          tileRef: tileRefsDecor.PaperLanternSideways
+        }
+      },
+      name: "Paper Lantern",
+      coinPrice: 9e3,
+      creditPrice: 13,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false
+      // expiryDate: A6, // TODO: fill in actual expiry date from game source
+    },
     SmallGravestone: {
       tileRef: tileRefsDecor.SmallGravestone,
       rotationVariants: {
@@ -8249,6 +8403,7 @@
   var ARIES_STORAGE_VERSION = 1;
   var API_KEY_STORAGE_KEY = "aries_api_key";
   var AUTH_DECLINED_STORAGE_KEY = "aries_auth_declined";
+  var SEEN_ROOM_PRIVACY_NOTICE_KEY = "aries_seen_room_privacy_notice";
   var DEFAULT_ARIES_STORAGE = {
     version: ARIES_STORAGE_VERSION,
     friends: {
@@ -8466,6 +8621,29 @@
   function hasApiKey() {
     const key2 = getApiKey();
     return key2 !== null && key2.length > 0;
+  }
+  function hasSeenRoomPrivacyNotice() {
+    try {
+      if (typeof GM_getValue === "function") {
+        const raw = GM_getValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, null);
+        if (raw == null) return false;
+        if (typeof raw === "boolean") return raw;
+        return String(raw).trim() === "1";
+      }
+      return getHostStorage()?.getItem(SEEN_ROOM_PRIVACY_NOTICE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  function markRoomPrivacyNoticeSeen() {
+    try {
+      if (typeof GM_setValue === "function") {
+        GM_setValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+        return;
+      }
+      getHostStorage()?.setItem(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+    } catch {
+    }
   }
   function setDeclinedApiAuth(declined) {
     try {
@@ -13740,73 +13918,78 @@
     }
     ensureStyles() {
       if (document.getElementById("__qmm_css__")) return;
-      const css = `
+      const css3 = `
     /* ================= Modern UI for qmm ================= */
 .qmm{
-  --qmm-bg:        #0f1318;
-  --qmm-bg-soft:   #0b0f13;
-  --qmm-panel:     #111823cc;
-  --qmm-border:    #ffffff22;
-  --qmm-border-2:  #ffffff14;
-  --qmm-accent:    #7aa2ff;
-  --qmm-accent-2:  #92b2ff;
+  --qmm-bg:        #0a0e14;
+  --qmm-bg-soft:   #080c12;
+  --qmm-panel:     rgba(10,14,20,0.96);
+  --qmm-border:    rgba(255,255,255,0.14);
+  --qmm-border-2:  rgba(255,255,255,0.08);
+  --qmm-accent:    #5eead4;
+  --qmm-accent-2:  #2dd4bf;
   --qmm-text:      #e7eef7;
   --qmm-text-dim:  #b9c3cf;
-  --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
-  --qmm-blur:      8px;
+  --qmm-shadow:    0 18px 44px rgba(0,0,0,.45);
+  --qmm-blur:      10px;
 
   display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
 }
 .qmm-compact{ gap:6px }
 
-/* ---------- Tabs (pill + underline) ---------- */
+/* ---------- Tabs (pill nav) ---------- */
 .qmm-tabs{
-  display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
-  padding:0 6px 2px 6px; position:relative; isolation:isolate;
-  border-bottom:1px solid var(--qmm-border);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  border-top-left-radius:10px; border-top-right-radius:10px;
+  display:flex; gap:4px; flex-wrap:wrap; align-items:center;
+  padding:8px 10px; position:relative; isolation:isolate;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(120deg, rgba(22,28,40,0.9), rgba(12,17,26,0.92));
+  border-top-left-radius:18px; border-top-right-radius:18px;
 }
-.qmm-no-tabs .qmm-views{ margin-top:0 }
+.qmm-no-tabs .qmm-views{ margin-top:0; border-radius:18px; }
 
 .qmm-tab{
   flex:1 1 0; min-width:0; cursor:pointer;
   display:inline-flex; justify-content:center; align-items:center; gap:8px;
-  padding:8px 12px; color:var(--qmm-text);
-  background:transparent; border:1px solid transparent; border-bottom:none;
-  border-top-left-radius:10px; border-top-right-radius:10px;
-  position:relative; margin:0; margin-bottom:-1px;
-  transition:background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
+  padding:8px 12px; color:#c9d4e6;
+  background:transparent; border:1px solid transparent;
+  border-radius:12px;
+  position:relative; margin:0;
+  font-size:12px;
+  transition:background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .qmm-compact .qmm-tab{ padding:6px 10px }
-.qmm-tab:hover{ background:rgba(255,255,255,.06) }
+.qmm-tab:hover{ background:rgba(94,234,212,0.08); color:#e7eef7; }
 .qmm-tab:active{ transform:translateY(1px) }
-.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
+.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:12px }
 
 .qmm-tab .badge{
   font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
-  background:#ffffff1a; border:1px solid #ffffff22;
+  background:rgba(94,234,212,0.12); border:1px solid rgba(94,234,212,0.25);
+  color:#5eead4;
 }
 
 .qmm-tab.active{
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  color:#fff; box-shadow:inset 0 -1px 0 #0007;
-}
-.qmm-tab.active::after{
-  content:""; position:absolute; left:10%; right:10%; bottom:-1px; height:2px;
-  background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
-  border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
+  background:rgba(94,234,212,0.18);
+  border-color:rgba(94,234,212,0.35);
+  color:#ecfdf5;
 }
 
 /* ---------- Views panel ---------- */
 .qmm-views{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
+  border:1px solid rgba(255,255,255,0.14); border-radius:18px; padding:14px;
+  background:linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%);
+  backdrop-filter:blur(10px);
   display:flex; flex-direction:column;
-  min-width:0; min-height:0; overflow:auto; box-shadow:var(--qmm-shadow);
+  min-width:0; min-height:0; overflow:auto; box-shadow:0 18px 44px rgba(0,0,0,.45);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(94,234,212,0.20) rgba(255,255,255,0.03);
 }
+.qmm-views::-webkit-scrollbar{ width:8px; }
+.qmm-views::-webkit-scrollbar-track{ background:rgba(255,255,255,0.03); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb{ background:rgba(94,234,212,0.20); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb:hover{ background:rgba(94,234,212,0.35); }
 .qmm-compact .qmm-views{ padding:8px }
-.qmm-tabs + .qmm-views{ margin-top:-1px }
+.qmm-tabs + .qmm-views{ margin-top:0; border-top:none; border-top-left-radius:0; border-top-right-radius:0; }
 
 .qmm-view{ display:none; min-width:0; min-height:0; }
 .qmm-view.active{ display:block; }
@@ -13835,10 +14018,10 @@
   line-height:1.2;
   cursor:pointer;
   user-select:none;
-  transition:background .18s ease, border-color .18s ease, transform .1s ease, box-shadow .18s ease, color .18s ease;
+  transition:background 120ms ease, border-color 120ms ease, transform 100ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 .qmm-compact .qmm-btn{ padding:6px 10px }
-.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:#ffffff3d }
+.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:rgba(255,255,255,0.24) }
 .qmm-btn:active{ transform:translateY(1px) }
 .qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
 .qmm-btn:disabled,
@@ -13858,12 +14041,12 @@
 /* Button variants */
 .qmm-btn--primary,
 .qmm-btn.qmm-primary{
-  background:linear-gradient(180deg, rgba(122,162,255,.38), rgba(122,162,255,.16));
-  border-color:#9db7ff55;
-  box-shadow:0 4px 14px rgba(122,162,255,.26);
+  background:linear-gradient(180deg, rgba(94,234,212,.32), rgba(45,212,191,.14));
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 4px 14px rgba(94,234,212,.18);
 }
 .qmm-btn--primary:hover,
-.qmm-btn.qmm-primary:hover{ border-color:#afc5ff77; }
+.qmm-btn.qmm-primary:hover{ border-color:rgba(94,234,212,0.65); background:linear-gradient(180deg, rgba(94,234,212,.42), rgba(45,212,191,.22)); }
 .qmm-btn--secondary{
   background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.01));
 }
@@ -13876,9 +14059,9 @@
 .qmm-btn--ghost{ background:transparent; border-color:transparent; }
 .qmm-btn--ghost:hover{ background:rgba(255,255,255,.06); border-color:#ffffff2a; }
 .qmm-btn.active{
-  background:#79a6ff22;
-  border-color:#79a6ff66;
-  box-shadow: inset 0 0 0 1px #79a6ff33;
+  background:rgba(94,234,212,0.14);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:inset 0 0 0 1px rgba(94,234,212,0.20);
 }
 
 .qmm-flex{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -13892,13 +14075,14 @@
 .qmm-card{
   display:grid;
   gap:12px;
-  border:1px solid var(--qmm-border);
-  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px;
   padding:14px;
-  background:var(--qmm-panel);
-  backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(18,24,34,0.95), rgba(12,17,26,0.96));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
   width:100%;
+  transition:border-color 120ms ease, box-shadow 120ms ease;
 }
 .qmm-card.is-center{ text-align:center; align-items:center; }
 .qmm-card.is-stretch{ align-items:stretch; }
@@ -13916,13 +14100,13 @@
 .qmm-card__actions{ display:flex; gap:6px; margin-left:auto; }
 .qmm-card__body{ display:grid; gap:10px; }
 .qmm-card[data-tone="muted"]{
-  background:rgba(15,17,22,.88);
-  border-color:#ffffff1a;
+  background:rgba(10,14,20,.92);
+  border-color:rgba(255,255,255,0.08);
   box-shadow:none;
 }
 .qmm-card[data-tone="accent"]{
-  border-color:#7aa2ff99;
-  box-shadow:0 10px 26px rgba(122,162,255,.25);
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 10px 26px rgba(94,234,212,.15);
 }
 
 .qmm .stats-collapse-toggle{
@@ -13933,9 +14117,9 @@
   padding:6px 12px;
   min-height:32px;
   border-radius:999px;
-  border:1px solid rgba(122,162,255,.45);
-  background:linear-gradient(135deg, rgba(122,162,255,.18), rgba(33,59,121,.18));
-  color:rgba(220,230,255,.92);
+  border:1px solid rgba(94,234,212,.40);
+  background:linear-gradient(135deg, rgba(94,234,212,.14), rgba(15,30,30,.18));
+  color:rgba(220,240,236,.92);
   font-size:12px;
   font-weight:600;
   letter-spacing:.01em;
@@ -13944,25 +14128,25 @@
   transition:background .26s ease, border-color .26s ease, box-shadow .26s ease, color .26s ease, transform .16s ease;
 }
 .qmm .stats-collapse-toggle:hover{
-  background:linear-gradient(135deg, rgba(122,162,255,.28), rgba(53,94,182,.24));
-  border-color:rgba(122,162,255,.62);
+  background:linear-gradient(135deg, rgba(94,234,212,.22), rgba(20,100,90,.22));
+  border-color:rgba(94,234,212,.55);
   color:#fff;
-  box-shadow:0 14px 30px rgba(66,106,201,.32), inset 0 1px 0 rgba(255,255,255,.18);
+  box-shadow:0 14px 30px rgba(45,212,191,.25), inset 0 1px 0 rgba(255,255,255,.18);
 }
 .qmm .stats-collapse-toggle:active{
   transform:translateY(1px) scale(.99);
 }
 .qmm-card--collapsible[data-collapsed="true"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.12), rgba(23,36,78,.12));
-  border-color:rgba(122,162,255,.32);
-  color:rgba(208,219,255,.82);
+  background:linear-gradient(135deg, rgba(94,234,212,.08), rgba(8,30,28,.12));
+  border-color:rgba(94,234,212,.25);
+  color:rgba(196,240,236,.85);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 6px 18px rgba(9,13,27,.22);
 }
 .qmm-card--collapsible[data-collapsed="false"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.36), rgba(83,124,255,.28));
-  border-color:rgba(122,162,255,.78);
+  background:linear-gradient(135deg, rgba(94,234,212,.30), rgba(45,212,191,.25));
+  border-color:rgba(94,234,212,.72);
   color:#fff;
-  box-shadow:0 16px 32px rgba(72,112,214,.35), inset 0 1px 0 rgba(255,255,255,.22);
+  box-shadow:0 16px 32px rgba(45,212,191,.28), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .qmm .stats-collapse-toggle__icon{
   width:16px;
@@ -14018,10 +14202,10 @@
 .qmm-chip-toggle__label{ font-weight:600; }
 .qmm-chip-toggle__desc{ font-size:12px; opacity:.75; }
 .qmm-chip-toggle__badge{ font-size:11px; padding:2px 6px; border-radius:999px; background:#ffffff1a; border:1px solid #ffffff22; }
-.qmm-chip-toggle:hover{ border-color:#7aa2ff55; background:rgba(122,162,255,.12); }
+.qmm-chip-toggle:hover{ border-color:rgba(94,234,212,0.30); background:rgba(94,234,212,0.09); }
 .qmm-chip-toggle input:checked + .qmm-chip-toggle__face{
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  box-shadow:0 0 0 1px #7aa2ff55 inset, 0 6px 18px rgba(122,162,255,.22);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  box-shadow:0 0 0 1px rgba(94,234,212,0.35) inset, 0 6px 18px rgba(94,234,212,.15);
 }
 
 .qmm .stats-metric-grid{
@@ -14041,8 +14225,8 @@
   transition:border-color .18s ease, background .18s ease, transform .14s ease;
 }
 .qmm .stats-metric:hover{
-  border-color:#7aa2ff55;
-  background:linear-gradient(180deg, rgba(122,162,255,.22), rgba(122,162,255,.10));
+  border-color:rgba(94,234,212,0.30);
+  background:linear-gradient(180deg, rgba(94,234,212,.14), rgba(94,234,212,.06));
   transform:translateY(-1px);
 }
 .qmm .stats-metric__label{
@@ -14073,8 +14257,8 @@
   transition:border-color .18s ease, background .18s ease;
 }
 .qmm .stats-list__row:not(.stats-list__row--header):hover{
-  background:rgba(122,162,255,.12);
-  border-color:#7aa2ff55;
+  background:rgba(94,234,212,0.09);
+  border-color:rgba(94,234,212,0.28);
 }
 .qmm .stats-list__row--header{
   background:transparent;
@@ -14216,13 +14400,13 @@
 
 /* Inputs */
 .qmm-input{
-  min-width:90px; background:rgba(0,0,0,.42); color:#fff;
-  border:1px solid var(--qmm-border); border-radius:10px;
+  min-width:90px; background:rgba(255,255,255,0.04); color:#fff;
+  border:1px solid rgba(255,255,255,0.12); border-radius:10px;
   padding:8px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  transition:border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 .qmm-input::placeholder{ color:#cbd6e780 }
-.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
+.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:rgba(8,12,20,0.9); box-shadow:0 0 0 2px rgba(94,234,212,0.20) }
 
 /* Number input + spinner (unchanged API) */
 .qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
@@ -14249,7 +14433,7 @@
   background:#fff; border-radius:50%; transition:transform .2s ease;
   box-shadow:0 2px 8px rgba(0,0,0,.35);
 }
-.qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
+.qmm-switch:checked{ background:linear-gradient(180deg, rgba(94,234,212,.90), rgba(45,212,191,.65)) }
 .qmm-switch:checked::before{ transform:translateX(18px) }
 .qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
 
@@ -14262,11 +14446,11 @@
 }
 .qmm-range:focus{ outline:none }
 .qmm-range::-webkit-slider-runnable-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-moz-range-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-webkit-slider-thumb{
@@ -14294,7 +14478,7 @@
   height:8px;
   border-radius:999px;
   background:linear-gradient(90deg, rgba(8,19,33,.8), rgba(27,43,68,.9));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(118,156,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(94,234,212,.08);
 }
 .qmm-range-dual-fill{
   position:absolute;
@@ -14302,8 +14486,8 @@
   transform:translateY(-50%);
   height:8px;
   border-radius:999px;
-  background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff99);
-  box-shadow:0 4px 14px rgba(37,92,255,.3);
+  background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.55));
+  box-shadow:0 4px 14px rgba(94,234,212,.22);
   transition:left .12s ease, right .12s ease;
 }
 .qmm-range-dual-input{
@@ -14325,8 +14509,8 @@
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -14340,8 +14524,8 @@
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -14361,7 +14545,7 @@
   font-size:11px;
   line-height:1;
   font-weight:600;
-  color:#dbe6ff;
+  color:#d6f5ef;
   background:rgba(17,28,46,.9);
   box-shadow:0 4px 14px rgba(0,0,0,.35);
   pointer-events:none;
@@ -14446,10 +14630,11 @@
 }
 .qmm-split-left{ display:flex; flex-direction:column; gap:10px }
 .qmm-split-right{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:12px;
   display:flex; flex-direction:column; gap:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(15,20,30,0.95), rgba(10,14,20,0.95));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
 }
 
 /* ---------- VTabs (vertical list + filter) ---------- */
@@ -14474,9 +14659,9 @@
 .qmm-vtab:hover{ background:rgba(255,255,255,.07); border-color:#ffffff34 }
 .qmm-vtab:active{ transform:translateY(1px) }
 .qmm-vtab.active{
-  background:linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
-  border-color:#9db7ff55;
-  box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
+  background:linear-gradient(180deg, rgba(94,234,212,.16), rgba(94,234,212,.07));
+  border-color:rgba(94,234,212,0.35);
+  box-shadow:0 1px 14px rgba(94,234,212,.14) inset;
 }
 
 .qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
@@ -14492,12 +14677,8 @@
 }
 
 /* ---------- Small helpers (optional) ---------- */
-.qmm .qmm-card{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
-}
   .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+  .qmm .qmm-sep{ height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); width:100%; border:none; }
 
 /* drag handle */
 .qmm-grab {
@@ -14558,22 +14739,22 @@
 }
 
 .qmm-hotkey.is-assigned{
-  border-color: rgba(122,162,255,.45);
-  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(122,162,255,.24);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(94,234,212,0.20);
 }
 
 .qmm-hotkey.is-recording{
   outline:2px solid var(--qmm-accent);
   outline-offset:2px;
-  border-color: var(--qmm-accent);
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  animation: qmm-hotkey-breathe 1.2s ease-in-out infinite;
+  border-color:var(--qmm-accent);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  animation:qmm-hotkey-breathe 1.2s ease-in-out infinite;
 }
-  
+
 @keyframes qmm-hotkey-breathe{
-  0%   { box-shadow: 0 0 0 0 rgba(122,162,255,.55), 0 1px 16px rgba(0,0,0,.25); }
-  60%  { box-shadow: 0 0 0 12px rgba(122,162,255,0), 0 1px 16px rgba(0,0,0,.25); }
-  100% { box-shadow: 0 0 0 0 rgba(122,162,255,0),  0 1px 16px rgba(0,0,0,.25); }
+  0%   { box-shadow: 0 0 0 0 rgba(94,234,212,.50), 0 1px 16px rgba(0,0,0,.25); }
+  60%  { box-shadow: 0 0 0 12px rgba(94,234,212,0), 0 1px 16px rgba(0,0,0,.25); }
+  100% { box-shadow: 0 0 0 0 rgba(94,234,212,0),  0 1px 16px rgba(0,0,0,.25); }
 }
 
 /* ---------- Segmented (minimal, modern) ---------- */
@@ -14583,8 +14764,8 @@
   --seg-stroke: 1.2px;      /* \xE9paisseur du trait */
   --seg-nudge-x: 0px;       /* micro-ajustements optionnels */
   --seg-nudge-w: 0px;
-  --seg-fill: rgba(122,162,255,.05);           
-  --seg-stroke-color: rgba(122,162,255,.60);
+  --seg-fill: rgba(94,234,212,.07);
+  --seg-stroke-color: rgba(94,234,212,.55);
 
   position: relative;
   display: inline-flex;
@@ -14633,7 +14814,7 @@
   outline: var(--seg-stroke,1.2px) solid var(--seg-stroke-color);
   outline-offset: calc(-1 * var(--seg-stroke));
 
-  box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  box-shadow: 0 1px 4px rgba(94,234,212,.08);
   transform-origin: left center;
   will-change: transform, width, opacity;
   transition: transform .18s cubic-bezier(.2,.8,.2,1),
@@ -14645,12 +14826,21 @@
 /* Accessibilit\xE9 */
 @media (prefers-reduced-motion: reduce){
   .qmm-seg__indicator, .qmm-seg__btn { transition: none; }
-}  /* \u2190 manquait cette accolade */
+}
+
+/* ---------- Card bounce utility ---------- */
+@keyframes qmm-card-bounce{
+  0%   { transform:translateY(0); }
+  30%  { transform:translateY(-4px); }
+  60%  { transform:translateY(1px); }
+  100% { transform:translateY(0); }
+}
+.qmm-card.is-bouncing{ animation:qmm-card-bounce 320ms ease; }
 
     `;
       const st = document.createElement("style");
       st.id = "__qmm_css__";
-      st.textContent = css;
+      st.textContent = css3;
       (document.documentElement || document.body).appendChild(st);
     }
   };
@@ -17299,10 +17489,10 @@
           mutRow.appendChild(tag);
         }
         if (mutations.length < mutationKeys.length) {
-          const toggleBtn = document.createElement("button");
-          toggleBtn.type = "button";
-          toggleBtn.textContent = "+";
-          Object.assign(toggleBtn.style, {
+          const toggleBtn2 = document.createElement("button");
+          toggleBtn2.type = "button";
+          toggleBtn2.textContent = "+";
+          Object.assign(toggleBtn2.style, {
             width: "28px",
             height: "28px",
             borderRadius: "50%",
@@ -17316,12 +17506,12 @@
             alignItems: "center",
             justifyContent: "center"
           });
-          toggleBtn.onclick = () => {
+          toggleBtn2.onclick = () => {
             const isOpen = dropdown.style.display !== "none";
             dropdown.style.display = isOpen ? "none" : "grid";
-            toggleBtn.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
+            toggleBtn2.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
           };
-          mutRow.appendChild(toggleBtn);
+          mutRow.appendChild(toggleBtn2);
         }
       };
       const dropdown = document.createElement("div");
@@ -19872,9 +20062,9 @@
     return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
-    const STYLE_ID4 = "mgAutoRecoOverlayStyle";
-    if (document.getElementById(STYLE_ID4)) return;
-    const css = `
+    const STYLE_ID6 = "mgAutoRecoOverlayStyle";
+    if (document.getElementById(STYLE_ID6)) return;
+    const css3 = `
     #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
     #mgAutoRecoOverlay .title { font-size: 24px; font-weight: 900; letter-spacing: .02em; margin: 0 0 8px 0; }
@@ -19883,8 +20073,8 @@
     #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
   `;
     const style3 = document.createElement("style");
-    style3.id = STYLE_ID4;
-    style3.textContent = css;
+    style3.id = STYLE_ID6;
+    style3.textContent = css3;
     document.documentElement.appendChild(style3);
   }
   function createAutoRecoOverlay(initialMs, onReconnectNow) {
@@ -24120,9 +24310,9 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID4 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID4)) return;
-    const css = `
+    const STYLE_ID6 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID6)) return;
+    const css3 = `
 .${injectedClass}{
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
@@ -24176,8 +24366,8 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID4;
-    s.textContent = css;
+    s.id = STYLE_ID6;
+    s.textContent = css3;
     document.head.appendChild(s);
   }
   function hookHistory(onNavigate) {
@@ -27655,6 +27845,65 @@
     }
     return badge;
   }
+  var HEART_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" style="display:block;flex-shrink:0;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+  var CODE_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+  var BADGE_CONFIGS = {
+    supporter: {
+      label: "Supporter",
+      svg: HEART_SVG,
+      color: "#f472b6",
+      border: "rgba(244,114,182,0.3)",
+      bg: "rgba(244,114,182,0.1)"
+    },
+    mod_creator: {
+      label: "Mod Creator",
+      svg: CODE_SVG,
+      color: "#a78bfa",
+      border: "rgba(167,139,250,0.3)",
+      bg: "rgba(167,139,250,0.1)"
+    }
+  };
+  function createPlayerBadges(badges, iconOnly = false) {
+    if (!badges || badges.length === 0) return null;
+    const knownBadges = badges.filter((b) => b in BADGE_CONFIGS);
+    if (knownBadges.length === 0) return null;
+    const row = document.createElement("div");
+    style2(row, {
+      display: "flex",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: "4px"
+    });
+    for (const badgeKey of knownBadges) {
+      const cfg = BADGE_CONFIGS[badgeKey];
+      const chip = document.createElement("span");
+      style2(chip, {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: iconOnly ? "0px" : "3px",
+        padding: iconOnly ? "3px" : "2px 6px",
+        borderRadius: iconOnly ? "50%" : "6px",
+        fontSize: "10px",
+        fontWeight: "600",
+        color: cfg.color,
+        border: `1px solid ${cfg.border}`,
+        background: cfg.bg
+      });
+      const icon = document.createElement("span");
+      icon.innerHTML = cfg.svg;
+      style2(icon, { display: "inline-flex", alignItems: "center" });
+      chip.appendChild(icon);
+      if (!iconOnly) {
+        const label2 = document.createElement("span");
+        label2.textContent = cfg.label;
+        chip.appendChild(label2);
+      } else {
+        chip.title = cfg.label;
+      }
+      row.appendChild(chip);
+    }
+    return row;
+  }
   function createKeyBlocker(shouldBlock) {
     const handler = (e) => {
       if (shouldBlock()) e.stopPropagation();
@@ -28799,7 +29048,7 @@
       const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
       const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
       const avatarRaw = resolvedPlayer?.cosmetic?.avatar ?? slotData?.cosmetic?.avatar ?? slot?.cosmetic?.avatar ?? null;
-      const avatar = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
+      const avatar2 = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
       const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
       const coinValue = Number(coinCandidate);
       const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
@@ -28817,7 +29066,7 @@
       const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
       const payload = {
         playerName: playerName ?? null,
-        avatar: avatar ?? null,
+        avatar: avatar2 ?? null,
         modVersion,
         coins: coinsRaw,
         room: {
@@ -29096,6 +29345,7 @@
       hasModInstalled: false,
       isOnline: friend.isOnline,
       lastEventAt: friend.lastEventAt,
+      badges: friend.badges || null,
       privacy: {
         showGarden: true,
         showInventory: true,
@@ -30136,6 +30386,7 @@
               hasModInstalled: false,
               isOnline: f.isOnline || false,
               lastEventAt: f.lastEventAt || null,
+              badges: f.badges || null,
               privacy: {
                 showGarden: true,
                 showInventory: true,
@@ -30157,6 +30408,7 @@
               hasModInstalled: false,
               isOnline: false,
               lastEventAt: null,
+              badges: r.badges || null,
               privacy: {
                 showGarden: true,
                 showInventory: true,
@@ -30174,6 +30426,7 @@
               otherPlayerId: r.otherPlayerId,
               playerName: r.playerName || null,
               avatarUrl: r.avatarUrl || null,
+              badges: r.badges || null,
               createdAt: r.createdAt
             }));
             updateOutgoingRequestsCache(outgoingRequests);
@@ -30217,6 +30470,7 @@
               name: m.name || null,
               avatarUrl: m.avatarUrl || null,
               avatar: m.avatar || null,
+              badges: m.badges || null,
               lastEventAt: m.lastEventAt || null,
               roomId: m.roomId ?? null,
               isOnline: m.isOnline || false,
@@ -30246,6 +30500,7 @@
                 hasModInstalled: false,
                 isOnline: false,
                 lastEventAt: null,
+                badges: req.requesterBadges || null,
                 privacy: {
                   showGarden: true,
                   showInventory: true,
@@ -30263,6 +30518,7 @@
                 otherPlayerId: req.targetId,
                 playerName: req.targetName || null,
                 avatarUrl: req.targetAvatarUrl || null,
+                badges: req.targetBadges || null,
                 createdAt: req.createdAt
               };
               addOutgoingRequestToCache(existing);
@@ -30289,6 +30545,7 @@
               const otherAvatar = isRequester ? resp.responderAvatarUrl : resp.requesterAvatarUrl;
               const otherIsOnline = isRequester ? resp.responderIsOnline : resp.requesterIsOnline;
               const otherRoomId = isRequester ? resp.responderRoomId : resp.requesterRoomId;
+              const otherBadges = isRequester ? resp.responderBadges : resp.requesterBadges;
               addFriendToCache({
                 playerId: otherId,
                 playerName: otherName || null,
@@ -30296,7 +30553,8 @@
                 avatar: null,
                 lastEventAt: resp.updatedAt,
                 isOnline: otherIsOnline ?? false,
-                roomId: otherRoomId ?? null
+                roomId: otherRoomId ?? null,
+                badges: otherBadges || null
               });
               try {
                 window.dispatchEvent(new CustomEvent("qws:friends-refresh"));
@@ -30705,8 +30963,8 @@
   function createRoomCard(token, isOutgoing) {
     const env = detectEnvironment();
     const isDiscord = env.surface === "discord";
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -30719,11 +30977,11 @@
       maxWidth: "100%"
     });
     if (!isDiscord) {
-      card.onmouseenter = () => style2(card, {
+      card2.onmouseenter = () => style2(card2, {
         background: isOutgoing ? "rgba(94,234,212,0.14)" : "rgba(255,255,255,0.08)",
         borderColor: isOutgoing ? "rgba(94,234,212,0.3)" : "rgba(255,255,255,0.14)"
       });
-      card.onmouseleave = () => style2(card, {
+      card2.onmouseleave = () => style2(card2, {
         background: isOutgoing ? "rgba(94,234,212,0.08)" : "rgba(255,255,255,0.04)",
         borderColor: isOutgoing ? "rgba(94,234,212,0.18)" : "rgba(255,255,255,0.08)"
       });
@@ -30778,7 +31036,7 @@
       });
       disabledMsg.textContent = "Unavailable on Discord";
       info.appendChild(disabledMsg);
-      card.append(icon, info);
+      card2.append(icon, info);
     } else {
       const arrow = document.createElement("div");
       style2(arrow, {
@@ -30786,17 +31044,17 @@
         color: isOutgoing ? "rgba(94,234,212,0.4)" : "rgba(226,232,240,0.3)"
       });
       arrow.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
-      card.append(icon, info, arrow);
-      card.onclick = () => {
+      card2.append(icon, info, arrow);
+      card2.onclick = () => {
         const roomUrl = `${env.origin}/r/${token.id}`;
         window.open(roomUrl, "_blank");
       };
     }
-    return card;
+    return card2;
   }
   function createGenericCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "8px",
@@ -30807,12 +31065,12 @@
       fontSize: "12px",
       color: isOutgoing ? "#d1fae5" : "#e7eef7"
     });
-    card.textContent = `${token.type}: ${token.id}`;
-    return card;
+    card2.textContent = `${token.type}: ${token.id}`;
+    return card2;
   }
   function createItemCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -30879,16 +31137,16 @@
         flexShrink: "0"
       });
       qtyBadge.textContent = `x${qty}`;
-      card.append(spriteWrap, info, qtyBadge);
+      card2.append(spriteWrap, info, qtyBadge);
     } else {
-      card.append(spriteWrap, info);
+      card2.append(spriteWrap, info);
     }
-    return card;
+    return card2;
   }
   var PRODUCE_SPRITE_CATS = ["crop", "plant", "tallplant"];
   function createProduceCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -30995,8 +31253,8 @@
     const formatted = formatPrice(coinVal) ?? String(coinVal);
     valueEl.textContent = `${formatted} coins`;
     info.append(typeLabelRow, nameEl, valueEl);
-    card.append(spriteWrap, info);
-    return card;
+    card2.append(spriteWrap, info);
+    return card2;
   }
   function getAbilityChipColors(id) {
     const key2 = String(id || "");
@@ -31100,8 +31358,8 @@
     return { strength, maxStrength };
   }
   function createPetCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -31183,12 +31441,12 @@
     if (abilities.length > 0) {
       info.appendChild(createAbilityBadge(abilities));
     }
-    card.append(spriteWrap, info);
-    return card;
+    card2.append(spriteWrap, info);
+    return card2;
   }
   function createTeamCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "10px",
@@ -31234,7 +31492,7 @@
     });
     teamName.textContent = token.label || token.id;
     headerRow.append(typeLabel, teamName);
-    card.appendChild(headerRow);
+    card2.appendChild(headerRow);
     const petsRow = document.createElement("div");
     style2(petsRow, {
       display: "flex",
@@ -31310,8 +31568,8 @@
       }
       petsRow.appendChild(petSlot);
     }
-    card.appendChild(petsRow);
-    return card;
+    card2.appendChild(petsRow);
+    return card2;
   }
   function createTokenCardsContainer(tokens, isOutgoing) {
     const container = document.createElement("div");
@@ -32093,6 +32351,8 @@
       gap: "1px",
       minWidth: "0"
     });
+    const threadNameRow = document.createElement("div");
+    style2(threadNameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const threadName = document.createElement("div");
     style2(threadName, {
       fontSize: "13px",
@@ -32103,12 +32363,15 @@
       whiteSpace: "nowrap"
     });
     threadName.textContent = "Select a conversation";
+    const threadBadgesContainer = document.createElement("div");
+    style2(threadBadgesContainer, { flexShrink: "0", display: "none" });
+    threadNameRow.append(threadName, threadBadgesContainer);
     const threadStatus = document.createElement("div");
     style2(threadStatus, {
       fontSize: "11px",
       color: "rgba(226,232,240,0.5)"
     });
-    threadInfo.append(threadName, threadStatus);
+    threadInfo.append(threadNameRow, threadStatus);
     threadHeader.append(threadAvatar, threadInfo);
     const threadBody = document.createElement("div");
     threadBody.className = "qws-ch-scrollable-narrow";
@@ -32492,7 +32755,8 @@
       }
       const conv = getCachedFriendConversations().find((c) => c.conversationId === selectedId);
       if (!conv) return;
-      updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false);
+      const friendData = getCachedFriendsWithViews().find((f) => f.playerId === conv.otherPlayerId);
+      updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false, friendData?.badges);
       const messages = sortChronological(getCachedFriendConversationMessages(selectedId));
       const currentPlayerId = getCurrentPlayerId();
       if (messages.length === 0) {
@@ -32640,8 +32904,8 @@
       style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
       for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
         const member = previewMembers[i];
-        const avatar = document.createElement("div");
-        style2(avatar, {
+        const avatar2 = document.createElement("div");
+        style2(avatar2, {
           width: "20px",
           height: "20px",
           borderRadius: "50%",
@@ -32650,7 +32914,7 @@
           marginLeft: i > 0 ? "-6px" : "0",
           flexShrink: "0"
         });
-        avatarsContainer.appendChild(avatar);
+        avatarsContainer.appendChild(avatar2);
       }
       const memberCountEl = document.createElement("div");
       style2(memberCountEl, {
@@ -32842,7 +33106,7 @@
         threadBody.scrollTop = threadBody.scrollHeight;
       });
     }
-    function updateThreadHeader(avatarUrl, displayName, statusText, isGroup) {
+    function updateThreadHeader(avatarUrl, displayName, statusText, isGroup, badges) {
       if (isGroup) {
         style2(threadAvatar, { display: "none" });
       } else if (avatarUrl) {
@@ -32857,6 +33121,14 @@
       }
       threadName.textContent = displayName;
       threadStatus.textContent = statusText || "";
+      threadBadgesContainer.innerHTML = "";
+      const badgesEl = badges && !isGroup ? createPlayerBadges(badges) : null;
+      if (badgesEl) {
+        threadBadgesContainer.appendChild(badgesEl);
+        style2(threadBadgesContainer, { display: "block" });
+      } else {
+        style2(threadBadgesContainer, { display: "none" });
+      }
     }
     function createEmptyListItem(query) {
       const empty = document.createElement("div");
@@ -32880,9 +33152,9 @@
     function createAvatarEl(avatarUrl, displayName, isGroup) {
       const wrap = document.createElement("div");
       style2(wrap, { position: "relative", flexShrink: "0" });
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       const fallbackGradient = isGroup ? "linear-gradient(135deg, rgba(251,191,36,0.3), rgba(234,88,12,0.3))" : "linear-gradient(135deg, rgba(94,234,212,0.25), rgba(59,130,246,0.25))";
-      style2(avatar, {
+      style2(avatar2, {
         width: "36px",
         height: "36px",
         borderRadius: "50%",
@@ -32896,9 +33168,9 @@
         border: "1.5px solid rgba(255,255,255,0.08)"
       });
       if (!avatarUrl) {
-        avatar.textContent = isGroup ? "#" : (displayName || "?").charAt(0).toUpperCase();
+        avatar2.textContent = isGroup ? "#" : (displayName || "?").charAt(0).toUpperCase();
       }
-      wrap.appendChild(avatar);
+      wrap.appendChild(avatar2);
       return wrap;
     }
     function createRowMeta(name, previewText, lastDate, hasUnread, unreadCount) {
@@ -32951,9 +33223,9 @@
       return meta;
     }
     function createSmallAvatar(avatarUrl, fallbackName) {
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       if (avatarUrl) {
-        style2(avatar, {
+        style2(avatar2, {
           width: "28px",
           height: "28px",
           borderRadius: "50%",
@@ -32962,7 +33234,7 @@
           border: "1px solid rgba(255,255,255,0.06)"
         });
       } else {
-        style2(avatar, {
+        style2(avatar2, {
           width: "28px",
           height: "28px",
           borderRadius: "50%",
@@ -32976,9 +33248,65 @@
           flexShrink: "0",
           border: "1px solid rgba(255,255,255,0.06)"
         });
-        avatar.textContent = (fallbackName || "?").charAt(0).toUpperCase();
+        avatar2.textContent = (fallbackName || "?").charAt(0).toUpperCase();
       }
-      return avatar;
+      return avatar2;
+    }
+    const URL_RE = /https?:\/\/[^\s<>)"'\]]+/gi;
+    function shortenUrl(raw) {
+      try {
+        const u = new URL(raw);
+        const host = u.hostname.replace(/^www\./, "");
+        const path = u.pathname === "/" ? "" : u.pathname;
+        const short = host + path;
+        return short.length > 40 ? short.slice(0, 37) + "..." : short;
+      } catch {
+        return raw.length > 40 ? raw.slice(0, 37) + "..." : raw;
+      }
+    }
+    function openLink2(url) {
+      if (isDiscordSurface() && typeof GM_openInTab === "function") {
+        try {
+          GM_openInTab(url, { active: true, insert: true });
+          return;
+        } catch {
+        }
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    function linkifyInto(text, container) {
+      URL_RE.lastIndex = 0;
+      let lastIdx = 0;
+      let match;
+      while ((match = URL_RE.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+        }
+        const href = match[0];
+        const link = document.createElement("a");
+        link.textContent = shortenUrl(href);
+        link.title = href;
+        link.href = href;
+        link.rel = "noopener noreferrer";
+        link.target = "_blank";
+        Object.assign(link.style, {
+          color: "#5eead4",
+          textDecoration: "underline",
+          textDecorationColor: "rgba(94,234,212,0.4)",
+          cursor: "pointer",
+          wordBreak: "break-all"
+        });
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openLink2(href);
+        });
+        container.appendChild(link);
+        lastIdx = URL_RE.lastIndex;
+      }
+      if (lastIdx < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
     }
     function createBubbleContent(body, createdAt, isOutgoing, status, showMeta = true) {
       const bubble = document.createElement("div");
@@ -32997,10 +33325,10 @@
         color: isOutgoing ? "#d1fae5" : "#e7eef7"
       });
       if (cleanText) {
-        content.textContent = cleanText;
+        linkifyInto(cleanText, content);
         bubble.appendChild(content);
       } else if (tokens.length === 0) {
-        content.textContent = body;
+        linkifyInto(body, content);
         bubble.appendChild(content);
       }
       if (tokens.length > 0) {
@@ -33994,8 +34322,8 @@
       gap: "16px",
       alignItems: "center"
     });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "80px",
       height: "80px",
       borderRadius: "50%",
@@ -34010,6 +34338,8 @@
       gap: "8px",
       flex: "1"
     });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
     const name = document.createElement("div");
     style2(name, {
       fontSize: "20px",
@@ -34017,6 +34347,9 @@
       color: "#e7eef7"
     });
     name.textContent = player2.playerName || "Unknown Player";
+    nameRow.appendChild(name);
+    const badgesEl = createPlayerBadges(player2.badges);
+    if (badgesEl) nameRow.appendChild(badgesEl);
     const playerId2 = document.createElement("div");
     style2(playerId2, {
       fontSize: "12px",
@@ -34046,8 +34379,8 @@
     });
     statusText.textContent = player2.isOnline ? "Online" : "Offline";
     statusRow.append(statusIndicator, statusText);
-    infoColumn.append(name, playerId2, statusRow);
-    topRow.append(avatar, infoColumn);
+    infoColumn.append(nameRow, playerId2, statusRow);
+    topRow.append(avatar2, infoColumn);
     const playerData = player2;
     if (playerData.avatar && Array.isArray(playerData.avatar) && playerData.avatar.length > 0) {
       const cosmetics = playerData.avatar;
@@ -34257,22 +34590,28 @@
     counter.textContent = `${playersCount}/${maxPlayers}`;
     const joinButton = document.createElement("button");
     const isFull = playersCount >= maxPlayers;
-    joinButton.textContent = isFull ? "Full" : "Join";
-    joinButton.disabled = isFull;
+    const isDiscord = detectEnvironment().surface === "discord";
+    const isDisabled = isFull || isDiscord;
+    if (isDiscord) {
+      joinButton.textContent = "Unavailable";
+    } else {
+      joinButton.textContent = isFull ? "Full" : "Join";
+    }
+    joinButton.disabled = isDisabled;
     style2(joinButton, {
       padding: "6px 14px",
-      border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+      border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
       borderRadius: "6px",
-      background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-      color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
+      background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+      color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
       fontSize: "12px",
       fontWeight: "600",
-      cursor: isFull ? "not-allowed" : "pointer",
+      cursor: isDisabled ? "not-allowed" : "pointer",
       transition: "all 120ms ease",
       flexShrink: "0",
-      opacity: isFull ? "0.5" : "1"
+      opacity: isDisabled ? "0.5" : "1"
     });
-    if (!isFull) {
+    if (!isDisabled) {
       joinButton.onmouseenter = () => {
         style2(joinButton, {
           background: "rgba(94,234,212,0.2)",
@@ -34286,7 +34625,10 @@
         });
       };
       joinButton.onclick = () => {
+        window.location.href = `${detectEnvironment().origin}/r/${roomId}`;
       };
+    } else if (isDiscord && !isFull) {
+      joinButton.title = "Room joining is not available on Discord";
     }
     section.append(roomName, avatarsContainer, counter, joinButton);
     return section;
@@ -34360,8 +34702,8 @@
     return section;
   }
   function createStatCard(label2, rank, total, rankChange = null) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       padding: "14px",
       border: "1px solid rgba(255,255,255,0.08)",
       borderRadius: "10px",
@@ -34436,8 +34778,8 @@
     });
     totalEl.textContent = total;
     valueRow.append(leftSide, totalEl);
-    card.append(labelEl, valueRow);
-    return card;
+    card2.append(labelEl, valueRow);
+    return card2;
   }
   function createActionsSection(player2) {
     const section = document.createElement("div");
@@ -34665,8 +35007,9 @@
     };
   }
   function createFriendCard(friend, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
+      position: "relative",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -34678,17 +35021,17 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(friend);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(friend);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "56px",
       height: "56px",
       borderRadius: "50%",
@@ -34707,7 +35050,7 @@
       border: "2px solid #0f141e",
       boxShadow: friend.isOnline ? "0 0 8px rgba(16,185,129,0.6)" : "0 0 6px rgba(239,68,68,0.4)"
     });
-    avatarWrapper.append(avatar, onlineIndicator);
+    avatarWrapper.append(avatar2, onlineIndicator);
     const info = document.createElement("div");
     style2(info, { display: "flex", flexDirection: "column", gap: "2px", alignItems: "center", width: "100%" });
     const name = document.createElement("div");
@@ -34742,8 +35085,22 @@
       }
     }
     info.append(name, status);
-    card.append(avatarWrapper, info);
-    return card;
+    const badgesEl = createPlayerBadges(friend.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
+        gap: "3px"
+      });
+      card2.append(avatarWrapper, info, badgesEl);
+    } else {
+      card2.append(avatarWrapper, info);
+    }
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/addFriendsSubTab.ts
@@ -34901,8 +35258,9 @@
     };
   }
   function createAddFriendCard(player2, getButtonState) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
+      position: "relative",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -34913,17 +35271,17 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
     };
     const isOnline = player2.isOnline ?? false;
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "56px",
       height: "56px",
       borderRadius: "50%",
@@ -34942,7 +35300,7 @@
       border: "2px solid #0f141e",
       boxShadow: isOnline ? "0 0 8px rgba(16,185,129,0.6)" : "0 0 6px rgba(239,68,68,0.4)"
     });
-    avatarWrapper.append(avatar, onlineIndicator);
+    avatarWrapper.append(avatar2, onlineIndicator);
     const info = document.createElement("div");
     style2(info, { display: "flex", flexDirection: "column", gap: "2px", alignItems: "center", width: "100%" });
     const name = document.createElement("div");
@@ -34980,7 +35338,7 @@
         alignItems: "center",
         justifyContent: "center"
       });
-      card.append(avatarWrapper, info, friendsText);
+      card2.append(avatarWrapper, info, friendsText);
     } else if (buttonState === "cancel") {
       const requestSentText = document.createElement("div");
       requestSentText.innerHTML = `
@@ -35003,7 +35361,7 @@
         alignItems: "center",
         justifyContent: "center"
       });
-      card.append(avatarWrapper, info, requestSentText);
+      card2.append(avatarWrapper, info, requestSentText);
     } else {
       const actionButton = document.createElement("button");
       if (buttonState === "add") {
@@ -35040,9 +35398,9 @@
       actionButton.onclick = async (e) => {
         e.stopPropagation();
         if (buttonState === "add") {
-          card.style.animation = "none";
-          void card.offsetWidth;
-          card.style.animation = "qws-card-bounce 250ms ease";
+          card2.style.animation = "none";
+          void card2.offsetWidth;
+          card2.style.animation = "qws-card-bounce 250ms ease";
           actionButton.disabled = true;
           actionButton.textContent = "Sending...";
           style2(actionButton, { cursor: "not-allowed", opacity: "0.6" });
@@ -35055,9 +35413,22 @@
           }
         }
       };
-      card.append(avatarWrapper, info, actionButton);
+      card2.append(avatarWrapper, info, actionButton);
     }
-    return card;
+    const badgesEl = createPlayerBadges(player2.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
+        gap: "3px"
+      });
+      card2.appendChild(badgesEl);
+    }
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/requestsSubTab.ts
@@ -35130,8 +35501,8 @@
     };
   }
   function createIncomingRequestCard(request2) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "12px",
@@ -35141,10 +35512,10 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
-    card.onmouseleave = () => style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    card2.onmouseenter = () => style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseleave = () => style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "48px",
       height: "48px",
       borderRadius: "50%",
@@ -35154,13 +35525,21 @@
     });
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const name = document.createElement("div");
     style2(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
     name.textContent = request2.playerName || "Unknown";
+    nameRow.appendChild(name);
+    const badgesEl = createPlayerBadges(request2.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, { flexShrink: "0" });
+      nameRow.appendChild(badgesEl);
+    }
     const time = document.createElement("div");
     style2(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
     time.textContent = formatRelativeTime(request2.createdAt);
-    info.append(name, time);
+    info.append(nameRow, time);
     const buttonsContainer = document.createElement("div");
     style2(buttonsContainer, { display: "flex", gap: "8px", flexShrink: "0" });
     const acceptButton = document.createElement("button");
@@ -35226,12 +35605,12 @@
       }
     };
     buttonsContainer.append(acceptButton, declineButton);
-    card.append(avatar, info, buttonsContainer);
-    return card;
+    card2.append(avatar2, info, buttonsContainer);
+    return card2;
   }
   function createOutgoingRequestCard(request2) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "12px",
@@ -35241,10 +35620,10 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
-    card.onmouseleave = () => style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    card2.onmouseenter = () => style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseleave = () => style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "48px",
       height: "48px",
       borderRadius: "50%",
@@ -35254,13 +35633,21 @@
     });
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const name = document.createElement("div");
     style2(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
     name.textContent = request2.playerName || "Unknown";
+    nameRow.appendChild(name);
+    const outBadgesEl = createPlayerBadges(request2.badges, true);
+    if (outBadgesEl) {
+      style2(outBadgesEl, { flexShrink: "0" });
+      nameRow.appendChild(outBadgesEl);
+    }
     const time = document.createElement("div");
     style2(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
     time.textContent = formatRelativeTime(request2.createdAt);
-    info.append(name, time);
+    info.append(nameRow, time);
     const cancelButton = document.createElement("button");
     cancelButton.textContent = "Cancel";
     style2(cancelButton, {
@@ -35290,8 +35677,8 @@
         style2(cancelButton, { cursor: "pointer", opacity: "1" });
       }
     };
-    card.append(avatar, info, cancelButton);
-    return card;
+    card2.append(avatar2, info, cancelButton);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/communityTab.ts
@@ -35632,10 +36019,8 @@
       }
     };
     const createRoomCard2 = (room) => {
-      const env = detectEnvironment();
-      const isDiscord = env.surface === "discord";
-      const card = document.createElement("div");
-      style2(card, {
+      const card2 = document.createElement("div");
+      style2(card2, {
         padding: "12px",
         background: "rgba(255,255,255,0.02)",
         borderRadius: "10px",
@@ -35645,14 +36030,14 @@
         gap: "12px",
         transition: "all 120ms ease"
       });
-      card.onmouseenter = () => {
-        style2(card, {
+      card2.onmouseenter = () => {
+        style2(card2, {
           background: "rgba(255,255,255,0.04)",
           borderColor: "rgba(94,234,212,0.15)"
         });
       };
-      card.onmouseleave = () => {
-        style2(card, {
+      card2.onmouseleave = () => {
+        style2(card2, {
           background: "rgba(255,255,255,0.02)",
           borderColor: "rgba(255,255,255,0.06)"
         });
@@ -35729,27 +36114,22 @@
       counter.textContent = `${room.playersCount}/6`;
       const joinButton = document.createElement("button");
       const isFull = room.playersCount >= 6;
-      const isDisabled = isFull || isDiscord;
-      if (isDiscord) {
-        joinButton.textContent = "Unavailable";
-      } else {
-        joinButton.textContent = isFull ? "Full" : "Join";
-      }
-      joinButton.disabled = isDisabled;
+      joinButton.textContent = isFull ? "Full" : "Join";
+      joinButton.disabled = isFull;
       style2(joinButton, {
         padding: "6px 14px",
-        border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+        border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
         borderRadius: "6px",
-        background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-        color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
+        background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+        color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
         fontSize: "12px",
         fontWeight: "600",
-        cursor: isDisabled ? "not-allowed" : "pointer",
+        cursor: isFull ? "not-allowed" : "pointer",
         transition: "all 120ms ease",
         flexShrink: "0",
-        opacity: isDisabled ? "0.5" : "1"
+        opacity: isFull ? "0.5" : "1"
       });
-      if (!isDisabled) {
+      if (!isFull) {
         joinButton.onmouseenter = () => {
           style2(joinButton, {
             background: "rgba(94,234,212,0.2)",
@@ -35766,11 +36146,9 @@
           e.stopPropagation();
           window.location.href = `https://magicgarden.gg/r/${room.id}`;
         };
-      } else if (isDiscord && !isFull) {
-        joinButton.title = "Room joining is not available on Discord";
       }
-      card.append(leftWrapper, counter, joinButton);
-      return card;
+      card2.append(leftWrapper, counter, joinButton);
+      return card2;
     };
     const loadRooms = async (forceRefresh = false) => {
       isLoading = true;
@@ -35898,7 +36276,12 @@
         return bTime - aTime;
       });
       for (const group of sorted) {
-        groupsList.appendChild(createGroupCard(group, showGroupDetail));
+        const groupSummary = {
+          ...group,
+          id: String(group.id),
+          role: group.role
+        };
+        groupsList.appendChild(createGroupCard(groupSummary, showGroupDetail));
       }
     };
     renderGroups();
@@ -35915,8 +36298,8 @@
     };
   }
   function createGroupCard(group, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "12px",
@@ -35927,12 +36310,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(group);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(group);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const header = document.createElement("div");
     style2(header, { display: "flex", alignItems: "center", gap: "8px" });
@@ -35996,8 +36379,8 @@
     style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
     for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
       const member = previewMembers[i];
-      const avatar = document.createElement("div");
-      style2(avatar, {
+      const avatar2 = document.createElement("div");
+      style2(avatar2, {
         width: "28px",
         height: "28px",
         borderRadius: "50%",
@@ -36005,7 +36388,7 @@
         border: "2px solid #0f141e",
         marginLeft: i > 0 ? "-8px" : "0"
       });
-      avatarsContainer.appendChild(avatar);
+      avatarsContainer.appendChild(avatar2);
     }
     const memberCount = document.createElement("div");
     style2(memberCount, {
@@ -36016,12 +36399,12 @@
     const count = group.memberCount || group.membersCount || 0;
     memberCount.textContent = `${count} member${count !== 1 ? "s" : ""}`;
     avatarsRow.append(avatarsContainer, memberCount);
-    card.append(header, avatarsRow);
-    return card;
+    card2.append(header, avatarsRow);
+    return card2;
   }
   function createGroupCreateCard(onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -36034,12 +36417,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = onClick;
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(94,234,212,0.12)", borderColor: "rgba(94,234,212,0.5)", transform: "translateY(-2px)" });
+    card2.onclick = onClick;
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(94,234,212,0.12)", borderColor: "rgba(94,234,212,0.5)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(94,234,212,0.05)", borderColor: "rgba(94,234,212,0.3)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(94,234,212,0.05)", borderColor: "rgba(94,234,212,0.3)", transform: "translateY(0)" });
     };
     const icon = document.createElement("div");
     style2(icon, {
@@ -36061,8 +36444,8 @@
       color: "#5eead4"
     });
     label2.textContent = "Create Group";
-    card.append(icon, label2);
-    return card;
+    card2.append(icon, label2);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/publicGroupsSubTab.ts
@@ -36222,7 +36605,12 @@
         return bTime - aTime;
       });
       for (const group of sorted) {
-        groupsList.appendChild(createPublicGroupCard(group, showGroupDetail));
+        const groupSummary = {
+          ...group,
+          id: String(group.id),
+          isPublic: true
+        };
+        groupsList.appendChild(createPublicGroupCard(groupSummary, showGroupDetail));
       }
     };
     const loadPublicGroups = async () => {
@@ -36266,8 +36654,8 @@
     };
   }
   function createPublicGroupCard(group, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "12px",
@@ -36278,12 +36666,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(group);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(group);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const header = document.createElement("div");
     style2(header, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" });
@@ -36318,8 +36706,8 @@
     style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
     for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
       const member = previewMembers[i];
-      const avatar = document.createElement("div");
-      style2(avatar, {
+      const avatar2 = document.createElement("div");
+      style2(avatar2, {
         width: "28px",
         height: "28px",
         borderRadius: "50%",
@@ -36328,7 +36716,7 @@
         marginLeft: i > 0 ? "-8px" : "0",
         flexShrink: "0"
       });
-      avatarsContainer.appendChild(avatar);
+      avatarsContainer.appendChild(avatar2);
     }
     const memberCount = document.createElement("div");
     style2(memberCount, {
@@ -36339,8 +36727,8 @@
     const count = group.memberCount || 0;
     memberCount.textContent = `${count} member${count !== 1 ? "s" : ""}`;
     avatarsRow.append(avatarsContainer, memberCount);
-    card.append(header, avatarsRow);
-    return card;
+    card2.append(header, avatarsRow);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/groupDetailView.ts
@@ -36706,8 +37094,8 @@
     return header;
   }
   function buildInfoCard(details, myRole, members) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "16px",
@@ -36751,8 +37139,8 @@
     const groupId = String(details.group?.id || "");
     const isPublic = details.group?.isPublic ?? false;
     infoRow.appendChild(buildVisibilityCell(isPublic, myRole === "owner", groupId));
-    card.append(nameRow, infoRow);
-    return card;
+    card2.append(nameRow, infoRow);
+    return card2;
   }
   var ICON_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
   var ICON_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -37043,8 +37431,8 @@
     const isOnline = member.isOnline ?? false;
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "40px",
       height: "40px",
       borderRadius: "50%",
@@ -37062,7 +37450,7 @@
       background: isOnline ? "#10b981" : "#6b7280",
       border: "2px solid #0f141e"
     });
-    avatarWrapper.append(avatar, onlineDot);
+    avatarWrapper.append(avatar2, onlineDot);
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" });
     const nameEl = document.createElement("div");
@@ -37088,7 +37476,15 @@
     } else {
       meta.textContent = member.lastEventAt ? `Last seen ${formatRelativeTime(member.lastEventAt)}` : "";
     }
-    info.append(nameEl, meta);
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" });
+    nameRow.appendChild(nameEl);
+    const badgesEl = createPlayerBadges(member.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, { flexShrink: "0" });
+      nameRow.appendChild(badgesEl);
+    }
+    info.append(nameRow, meta);
     memberRefs?.set(member.playerId, { onlineDot, meta, member });
     const roleBadge = createRoleBadge(member.role || "member");
     row.append(roleBadge, avatarWrapper, info);
@@ -37385,8 +37781,8 @@
     row.onmouseleave = () => style2(row, { background: "transparent" });
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "36px",
       height: "36px",
       borderRadius: "50%",
@@ -37404,7 +37800,7 @@
       background: friend.isOnline ? "#10b981" : "#6b7280",
       border: "2px solid #1a1f2e"
     });
-    avatarWrapper.append(avatar, onlineDot);
+    avatarWrapper.append(avatar2, onlineDot);
     const name = document.createElement("div");
     style2(name, {
       flex: "1",
@@ -38303,8 +38699,8 @@
       }
     };
     function createLeaderboardRow(row, category, isMyRank = false) {
-      const card = document.createElement("div");
-      style2(card, {
+      const card2 = document.createElement("div");
+      style2(card2, {
         padding: "10px 12px",
         background: isMyRank ? "rgba(94,234,212,0.08)" : "rgba(255,255,255,0.02)",
         borderRadius: "10px",
@@ -38315,14 +38711,14 @@
         transition: "all 120ms ease"
       });
       if (!isMyRank) {
-        card.onmouseenter = () => {
-          style2(card, {
+        card2.onmouseenter = () => {
+          style2(card2, {
             background: "rgba(255,255,255,0.05)",
             borderColor: "rgba(94,234,212,0.15)"
           });
         };
-        card.onmouseleave = () => {
-          style2(card, {
+        card2.onmouseleave = () => {
+          style2(card2, {
             background: "rgba(255,255,255,0.02)",
             borderColor: "rgba(255,255,255,0.06)"
           });
@@ -38368,9 +38764,9 @@
         marginTop: "2px"
       });
       rankBadge.textContent = `#${row.rank}`;
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       const isAnonymous = row.playerId === "null" || row.playerName === "anonymous";
-      style2(avatar, {
+      style2(avatar2, {
         width: "36px",
         height: "36px",
         borderRadius: "50%",
@@ -38382,7 +38778,7 @@
         justifyContent: "center"
       });
       if (isAnonymous) {
-        avatar.innerHTML = `
+        avatar2.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
@@ -38409,11 +38805,11 @@
       });
       total.textContent = formatPrice(row.total) ?? String(row.total);
       if (rankChangeIndicator) {
-        card.append(rankChangeIndicator, rankBadge, avatar, name, total);
+        card2.append(rankChangeIndicator, rankBadge, avatar2, name, total);
       } else {
-        card.append(rankBadge, avatar, name, total);
+        card2.append(rankBadge, avatar2, name, total);
       }
-      return card;
+      return card2;
     }
     renderLeaderboard();
     const unsubWelcome = onWelcome((data) => {
@@ -38525,6 +38921,8 @@
   }
 
   // src/ui/menus/communityHub/tabs/myProfileTab.ts
+  var ICON_GLOBE2 = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z" stroke="currentColor" stroke-width="2"/></svg>`;
+  var ICON_LOCK2 = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
   function createMyProfileTab() {
     const container = document.createElement("div");
     style2(container, {
@@ -38581,6 +38979,8 @@
         gap: "4px",
         flex: "1"
       });
+      const nameRow = document.createElement("div");
+      style2(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
       const name = document.createElement("div");
       style2(name, {
         fontSize: "18px",
@@ -38588,6 +38988,12 @@
         color: "#e7eef7"
       });
       name.textContent = myProfile.name;
+      nameRow.appendChild(name);
+      const badgesEl = createPlayerBadges(myProfile.badges);
+      if (badgesEl) {
+        style2(badgesEl, { flexShrink: "0" });
+        nameRow.appendChild(badgesEl);
+      }
       const playerId2 = document.createElement("div");
       style2(playerId2, {
         fontSize: "11px",
@@ -38595,7 +39001,7 @@
         fontFamily: "monospace"
       });
       playerId2.textContent = myProfile.playerId;
-      infoColumn.append(name, playerId2);
+      infoColumn.append(nameRow, playerId2);
       topRow.append(discordAvatar, infoColumn);
       if (myProfile.avatar && Array.isArray(myProfile.avatar) && myProfile.avatar.length > 0) {
         try {
@@ -38731,8 +39137,8 @@
         flexDirection: "column",
         gap: "12px"
       });
+      settingsList.appendChild(createRoomVisibilitySetting(myProfile.privacy.hideRoomFromPublicList));
       const privacySettings = [
-        { key: "hideRoomFromPublicList", label: "Make my room private" },
         { key: "showGarden", label: "Garden" },
         { key: "showInventory", label: "Inventory" },
         { key: "showCoins", label: "Coins" },
@@ -38837,6 +39243,83 @@
       };
       return container2;
     };
+    const createRoomVisibilitySetting = (initialIsHidden) => {
+      const row = document.createElement("div");
+      style2(row, {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "12px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: "8px",
+        transition: "all 120ms ease"
+      });
+      row.onmouseenter = () => style2(row, { background: "rgba(255,255,255,0.04)", borderColor: "rgba(94,234,212,0.15)" });
+      row.onmouseleave = () => style2(row, { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" });
+      const labelEl = document.createElement("div");
+      style2(labelEl, { flex: "1", fontSize: "13px", fontWeight: "600", color: "#e7eef7" });
+      labelEl.textContent = "Room Visibility";
+      const toggle = document.createElement("div");
+      style2(toggle, {
+        display: "flex",
+        borderRadius: "6px",
+        overflow: "hidden",
+        border: "1px solid rgba(255,255,255,0.1)",
+        flexShrink: "0"
+      });
+      const publicBtn = document.createElement("button");
+      const privateBtn = document.createElement("button");
+      const ACTIVE = { background: "rgba(94,234,212,0.15)", color: "#5eead4" };
+      const INACTIVE = { background: "rgba(255,255,255,0.02)", color: "rgba(226,232,240,0.4)" };
+      const applyStyles3 = (isHidden) => {
+        style2(publicBtn, isHidden ? INACTIVE : ACTIVE);
+        style2(privateBtn, isHidden ? ACTIVE : INACTIVE);
+      };
+      const BASE_BTN = {
+        padding: "5px 10px",
+        border: "none",
+        fontSize: "11px",
+        fontWeight: "600",
+        cursor: "pointer",
+        transition: "all 120ms ease",
+        display: "flex",
+        alignItems: "center"
+      };
+      publicBtn.innerHTML = `${ICON_GLOBE2}Public`;
+      style2(publicBtn, BASE_BTN);
+      privateBtn.innerHTML = `${ICON_LOCK2}Private`;
+      style2(privateBtn, { ...BASE_BTN, borderLeft: "1px solid rgba(255,255,255,0.1)" });
+      let currentIsHidden = initialIsHidden;
+      applyStyles3(currentIsHidden);
+      publicBtn.onclick = async () => {
+        if (!currentIsHidden) return;
+        currentIsHidden = false;
+        applyStyles3(false);
+        const result = await updatePrivacy({ hideRoomFromPublicList: false });
+        if (result) {
+          updateCachedMyProfilePrivacy(result);
+        } else {
+          currentIsHidden = true;
+          applyStyles3(true);
+        }
+      };
+      privateBtn.onclick = async () => {
+        if (currentIsHidden) return;
+        currentIsHidden = true;
+        applyStyles3(true);
+        const result = await updatePrivacy({ hideRoomFromPublicList: true });
+        if (result) {
+          updateCachedMyProfilePrivacy(result);
+        } else {
+          currentIsHidden = false;
+          applyStyles3(false);
+        }
+      };
+      toggle.append(publicBtn, privateBtn);
+      row.append(labelEl, toggle);
+      return row;
+    };
     let renderCount = 0;
     const render2 = async () => {
       renderCount++;
@@ -38911,8 +39394,8 @@
       padding: "32px",
       overflow: "auto"
     });
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       width: "min(520px, 100%)",
       background: "radial-gradient(140% 140% at 0% 0%, rgba(28,36,56,0.98), rgba(12,16,26,0.98))",
       border: "1px solid rgba(148,163,184,0.22)",
@@ -39150,8 +39633,8 @@
     ];
     if (manualRow) cardNodes.push(manualRow);
     cardNodes.push(status, actions);
-    card.append(...cardNodes);
-    container.appendChild(card);
+    card2.append(...cardNodes);
+    container.appendChild(card2);
     refuseBtn.addEventListener("click", () => {
       setDeclinedApiAuth(true);
       window.dispatchEvent(new CustomEvent("gemini:ch-close-after-decline"));
@@ -39201,6 +39684,129 @@
       });
     }
     return container;
+  }
+
+  // src/ui/menus/communityHub/roomPrivacyNotice.ts
+  var INFO_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+  function createRoomPrivacyNotice(onDismiss) {
+    const overlay = document.createElement("div");
+    style2(overlay, {
+      position: "absolute",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      left: "0",
+      zIndex: "10",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(8,12,18,0.82)",
+      backdropFilter: "blur(4px)",
+      borderRadius: "18px"
+    });
+    const card2 = document.createElement("div");
+    style2(card2, {
+      width: "min(460px, 88%)",
+      background: "linear-gradient(160deg, rgba(20,28,42,0.99) 0%, rgba(12,18,28,0.99) 100%)",
+      border: "1px solid rgba(94,234,212,0.22)",
+      borderRadius: "14px",
+      padding: "26px 26px 22px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "14px",
+      boxShadow: "0 8px 36px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset"
+    });
+    const header = document.createElement("div");
+    style2(header, {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px"
+    });
+    const iconWrap = document.createElement("span");
+    iconWrap.innerHTML = INFO_ICON_SVG;
+    style2(iconWrap, { color: "#5eead4", flexShrink: "0", display: "flex" });
+    const title = document.createElement("span");
+    title.textContent = "Your room is visible to other mod users";
+    style2(title, { fontWeight: "700", fontSize: "14px", color: "#e7eef7", lineHeight: "1.3" });
+    header.append(iconWrap, title);
+    const body = document.createElement("p");
+    body.textContent = "By default, your room is set to Public. This is intentional, it's what keeps the Rooms tab alive and lets players discover each other. If you're fine with that, no action needed.";
+    style2(body, {
+      margin: "0",
+      fontSize: "13px",
+      color: "rgba(231,238,247,0.72)",
+      lineHeight: "1.6"
+    });
+    const stepsLabel = document.createElement("p");
+    stepsLabel.textContent = "If you want to play privately with friends only:";
+    style2(stepsLabel, {
+      margin: "0",
+      fontSize: "13px",
+      fontWeight: "600",
+      color: "#e7eef7"
+    });
+    const stepsList = document.createElement("div");
+    style2(stepsList, {
+      margin: "0",
+      display: "flex",
+      flexDirection: "column",
+      gap: "7px"
+    });
+    const STEPS = [
+      ["Go to ", "My Profile \u2192 Room Visibility", " and toggle it to Private"],
+      ["Make sure ", "every mod user in your room", " does the same. One Public player is enough to make the whole room visible"]
+    ];
+    for (const [before, bold, after] of STEPS) {
+      const p = document.createElement("p");
+      style2(p, { margin: "0", fontSize: "13px", color: "rgba(231,238,247,0.72)", lineHeight: "1.5" });
+      const bSpan = document.createElement("strong");
+      bSpan.textContent = bold;
+      bSpan.style.color = "#e7eef7";
+      p.append(before, bSpan, after);
+      stepsList.appendChild(p);
+    }
+    const tip = document.createElement("p");
+    const tipEm = document.createElement("em");
+    tipEm.textContent = "Already left a room but people keep joining? Someone still in the room has it set to Public.";
+    tip.appendChild(tipEm);
+    style2(tip, {
+      margin: "0",
+      fontSize: "12px",
+      color: "rgba(231,238,247,0.48)",
+      lineHeight: "1.5",
+      borderLeft: "2px solid rgba(94,234,212,0.28)",
+      paddingLeft: "10px"
+    });
+    const dismissBtn = document.createElement("button");
+    dismissBtn.textContent = "Got it, don't show again";
+    style2(dismissBtn, {
+      marginTop: "2px",
+      padding: "9px 18px",
+      background: "rgba(94,234,212,0.1)",
+      border: "1px solid rgba(94,234,212,0.28)",
+      borderRadius: "8px",
+      color: "#5eead4",
+      fontSize: "13px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "background 150ms ease, border-color 150ms ease",
+      alignSelf: "flex-end"
+    });
+    dismissBtn.addEventListener("mouseenter", () => {
+      dismissBtn.style.background = "rgba(94,234,212,0.18)";
+      dismissBtn.style.borderColor = "rgba(94,234,212,0.48)";
+    });
+    dismissBtn.addEventListener("mouseleave", () => {
+      dismissBtn.style.background = "rgba(94,234,212,0.1)";
+      dismissBtn.style.borderColor = "rgba(94,234,212,0.28)";
+    });
+    dismissBtn.addEventListener("click", () => {
+      markRoomPrivacyNoticeSeen();
+      onDismiss();
+    });
+    card2.append(header, body, stepsLabel, stepsList, tip, dismissBtn);
+    overlay.appendChild(card2);
+    return overlay;
   }
 
   // src/ui/menus/communityHub/index.ts
@@ -39358,6 +39964,7 @@
       __publicField(this, "nav", document.createElement("div"));
       __publicField(this, "content", document.createElement("div"));
       __publicField(this, "authGate", null);
+      __publicField(this, "roomPrivacyNotice", null);
       __publicField(this, "tabs", /* @__PURE__ */ new Map());
       __publicField(this, "tabButtons", /* @__PURE__ */ new Map());
       __publicField(this, "navBadges", /* @__PURE__ */ new Map());
@@ -39638,6 +40245,7 @@
         requestAnimationFrame(() => {
           this.panel.classList.add("open");
         });
+        if (hasApiKey()) this.maybeShowRoomPrivacyNotice();
         try {
           window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN));
         } catch {
@@ -39681,6 +40289,16 @@
         }
       }
     }
+    maybeShowRoomPrivacyNotice() {
+      if (hasSeenRoomPrivacyNotice()) return;
+      if (this.roomPrivacyNotice?.isConnected) return;
+      this.roomPrivacyNotice?.remove();
+      this.roomPrivacyNotice = createRoomPrivacyNotice(() => {
+        this.roomPrivacyNotice?.remove();
+        this.roomPrivacyNotice = null;
+      });
+      this.panel.appendChild(this.roomPrivacyNotice);
+    }
     destroy() {
       window.removeEventListener("pointerdown", this.handlePointerDown);
       window.removeEventListener(CH_EVENTS.OPEN, this.handleOverlayOpen);
@@ -39699,6 +40317,10 @@
       if (this.authGate) {
         this.authGate.remove();
         this.authGate = null;
+      }
+      if (this.roomPrivacyNotice) {
+        this.roomPrivacyNotice.remove();
+        this.roomPrivacyNotice = null;
       }
       for (const tab of this.tabs.values()) {
         tab.destroy?.();
@@ -40012,7 +40634,7 @@
   }
   function ensureGlobalStyles() {
     if (document.getElementById(STYLE_ID2)) return;
-    const css = `
+    const css3 = `
     .${BTN_CLASS}{
       background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
       border-color: var(--chakra-colors-Blue-Dark, #264093) !important;
@@ -40060,7 +40682,7 @@
   `.trim();
     const style3 = document.createElement("style");
     style3.id = STYLE_ID2;
-    style3.textContent = css;
+    style3.textContent = css3;
     document.head.appendChild(style3);
   }
   function createButton2(templateBtn) {
@@ -40343,9 +40965,9 @@
     if (document.readyState !== "loading") res();
     else addEventListener("DOMContentLoaded", () => res(), { once: true });
   });
-  function addStyle(css) {
+  function addStyle(css3) {
     const s = document.createElement("style");
-    s.textContent = css;
+    s.textContent = css3;
     document.head.appendChild(s);
     return s;
   }
@@ -42701,8 +43323,8 @@
     }
     return null;
   };
-  var alignInventoryStrengthText = (card) => {
-    const strengthWrap = card.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  var alignInventoryStrengthText = (card2) => {
+    const strengthWrap = card2.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
     if (!strengthWrap) return;
     const baseTransformKey = "tmStrengthBaseTransform";
     const existingBase = strengthWrap.dataset[baseTransformKey];
@@ -42721,7 +43343,7 @@
       }
       return;
     }
-    const container = findAncestorWithDescendant(strengthWrap, INVENTORY_FAVORITE_BUTTON_SELECTOR) ?? findAncestorWithDescendant(card, INVENTORY_FAVORITE_BUTTON_SELECTOR);
+    const container = findAncestorWithDescendant(strengthWrap, INVENTORY_FAVORITE_BUTTON_SELECTOR) ?? findAncestorWithDescendant(card2, INVENTORY_FAVORITE_BUTTON_SELECTOR);
     if (!container) return;
     const favoriteButton = container.querySelector(INVENTORY_FAVORITE_BUTTON_SELECTOR);
     if (!favoriteButton) return;
@@ -42757,10 +43379,10 @@
     const children = Array.from(container.children);
     for (const child of children) {
       if (!(child instanceof HTMLElement)) continue;
-      const card = getInventoryCardElement(child);
-      if (card) {
-        alignInventoryStrengthText(card);
-        entries.push({ wrapper: child, card });
+      const card2 = getInventoryCardElement(child);
+      if (card2) {
+        alignInventoryStrengthText(card2);
+        entries.push({ wrapper: child, card: card2 });
       }
     }
     return entries;
@@ -42892,8 +43514,8 @@
     }
     return { label: label2, current, max };
   };
-  function updateInventoryCardStrengthText(card, item) {
-    const strengthWrap = card.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  function updateInventoryCardStrengthText(card2, item) {
+    const strengthWrap = card2.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
     if (!strengthWrap) return;
     const textEl = strengthWrap.querySelector(INVENTORY_STRENGTH_TEXT_SELECTOR);
     if (!textEl) return;
@@ -43042,12 +43664,12 @@
       setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
     }
   }
-  function updateInventoryCardValue(card, rawValue) {
-    const container = card.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
-    const existing = card.dataset[INVENTORY_VALUE_DATASET_KEY];
+  function updateInventoryCardValue(card2, rawValue) {
+    const container = card2.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
+    const existing = card2.dataset[INVENTORY_VALUE_DATASET_KEY];
     if (!container) {
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43057,7 +43679,7 @@
         currentEl.parentElement.removeChild(currentEl);
       }
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43066,7 +43688,7 @@
         currentEl.parentElement.removeChild(currentEl);
       }
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43105,7 +43727,7 @@
     }
     textEl.textContent = compactValue;
     target.title = fullValue;
-    card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
+    card2.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
     if (target.parentElement !== container || target !== container.lastElementChild) {
       container.appendChild(target);
     }
@@ -43299,7 +43921,7 @@
     }
     return null;
   };
-  var getPetCardName = (card) => normalize(card.querySelector(PET_NAME_SELECTOR)?.textContent ?? "");
+  var getPetCardName = (card2) => normalize(card2.querySelector(PET_NAME_SELECTOR)?.textContent ?? "");
   var getPetNameCandidates = (item) => {
     const candidates = /* @__PURE__ */ new Set();
     const name = readNestedStringField(item, "name");
@@ -43821,7 +44443,7 @@
   }
   function injectDarkSelectStyles(id = "inv-sort-dark-styles") {
     if (document.getElementById(id)) return;
-    const css = `
+    const css3 = `
     .tm-sort-select {
       color: #e7eef7 !important;
       background-color: rgba(17,17,17,0.98) !important;
@@ -43846,7 +44468,7 @@
   `;
     const style3 = document.createElement("style");
     style3.id = id;
-    style3.textContent = css;
+    style3.textContent = css3;
     document.head.appendChild(style3);
   }
   function createSortingBar(useCustomSelectStyles) {
@@ -45220,7 +45842,7 @@
   }
   function ensureStyles() {
     if (document.getElementById(STYLE_ID3)) return;
-    const css = `
+    const css3 = `
 .${WRAPPER_CLASS}{
   display:flex;
   align-items:center;
@@ -45272,7 +45894,7 @@
   transform:translateY(-1px);
 }
 `;
-    const s = addStyle(css);
+    const s = addStyle(css3);
     s.id = STYLE_ID3;
   }
 
@@ -45525,7 +46147,7 @@
       document.addEventListener("DOMContentLoaded", () => mountHUD(opts), { once: true });
       return;
     }
-    const css = `
+    const css3 = `
   :root{
     --qws-bg:        #0f1318;
     --qws-panel:     #111823cc;
@@ -45626,7 +46248,7 @@
   .qws-win .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 }
   `;
     const st = document.createElement("style");
-    st.textContent = css;
+    st.textContent = css3;
     (document.documentElement || document.body).appendChild(st);
     const box = document.createElement("div");
     box.className = "qws2";
@@ -46917,11 +47539,11 @@
     view.classList.add("dd-debug-view");
     const { leftCol, rightCol } = createTwoColumns(view);
     {
-      const card = ui.card("\u{1F5C4}\uFE0F Capture store", {
+      const card2 = ui.card("\u{1F5C4}\uFE0F Capture store", {
         tone: "muted",
         subtitle: "Initialize the Jotai store so atoms can be inspected."
       });
-      leftCol.appendChild(card.root);
+      leftCol.appendChild(card2.root);
       const status = document.createElement("span");
       status.className = "dd-status-chip";
       const refreshStatus = () => {
@@ -46944,14 +47566,14 @@
         }
       });
       actions.append(btnCap, status);
-      card.body.appendChild(actions);
+      card2.body.appendChild(actions);
     }
     {
-      const card = ui.card("\u{1F50D} Explore atoms", {
+      const card2 = ui.card("\u{1F50D} Explore atoms", {
         tone: "muted",
         subtitle: "Filter labels using a regular expression."
       });
-      leftCol.appendChild(card.root);
+      leftCol.appendChild(card2.root);
       const queryRow = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("regex label (ex: position|health)", "");
       q.classList.add("dd-grow");
@@ -46969,14 +47591,14 @@
         const labels = atoms.map((a) => String(a?.debugLabel || a?.label || "<?>"));
         pre.textContent = labels.join("\n");
       }
-      card.body.append(queryRow, pre);
+      card2.body.append(queryRow, pre);
     }
     {
-      const card = ui.card("\u{1F9ED} Inspect an atom", {
+      const card2 = ui.card("\u{1F9ED} Inspect an atom", {
         tone: "muted",
         subtitle: "Get the current value or subscribe to updates."
       });
-      rightCol.appendChild(card.root);
+      rightCol.appendChild(card2.root);
       const controls = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("atom label (ex: positionAtom)", "");
       q.classList.add("dd-grow");
@@ -47029,14 +47651,14 @@
       const note = document.createElement("p");
       note.className = "dd-inline-note";
       note.textContent = "Tip: subscriptions keep the value updated after each mutation.";
-      card.body.append(controls, note, pre);
+      card2.body.append(controls, note, pre);
     }
     {
-      const card = ui.card("\u270F\uFE0F Update an atom", {
+      const card2 = ui.card("\u270F\uFE0F Update an atom", {
         tone: "muted",
         subtitle: "Publish a new value (JSON)."
       });
-      rightCol.appendChild(card.root);
+      rightCol.appendChild(card2.root);
       const controls = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("atom label (ex: activeModalAtom)", "");
       q.classList.add("dd-grow");
@@ -47090,7 +47712,7 @@
       });
       const btnCopy = ui.btn("Copy JSON", { icon: "\u{1F4CB}", onClick: () => copy(ta.value) });
       controls.append(q, btnSet, btnCopy);
-      card.body.append(controls, ta);
+      card2.body.append(controls, ta);
     }
     function setText(el2, v) {
       el2.textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -48341,9 +48963,9 @@ next: ${next}`;
       previewArea.innerHTML = "";
       records.forEach((record) => {
         const { entry, parsed } = record;
-        const card = document.createElement("div");
-        card.className = "dd-sprite-grid__item";
-        card.title = entry?.key ?? parsed.full;
+        const card2 = document.createElement("div");
+        card2.className = "dd-sprite-grid__item";
+        card2.title = entry?.key ?? parsed.full;
         const imgWrap = document.createElement("div");
         imgWrap.className = "dd-sprite-grid__img";
         imgWrap.style.setProperty("--sprite-size", `${SPRITE_ICON_SIZE}px`);
@@ -48366,20 +48988,20 @@ next: ${next}`;
         const meta = document.createElement("span");
         meta.className = "dd-sprite-grid__meta";
         meta.textContent = entry?.key ?? parsed.full;
-        card.append(imgWrap, nameEl, meta);
+        card2.append(imgWrap, nameEl, meta);
         const triggerDownload = () => {
           if (downloadInProgress) return;
           void downloadSpriteRecord(record, void 0, getActiveMutations());
         };
-        card.addEventListener("click", triggerDownload);
-        card.addEventListener("keydown", (event) => {
+        card2.addEventListener("click", triggerDownload);
+        card2.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             triggerDownload();
           }
         });
-        card.tabIndex = 0;
-        previewArea.appendChild(card);
+        card2.tabIndex = 0;
+        previewArea.appendChild(card2);
       });
     }
     const updateList = async (forceService = false) => {
@@ -48882,7 +49504,7 @@ next: ${next}`;
     if (key2 === "Puddle" || key2 === "ThunderstruckGround") {
       return false;
     }
-    return typeof value === "number" && Number.isFinite(value);
+    return typeof value === "number" || typeof value === "string";
   }).map(([key2, value]) => ({
     key: key2,
     label: WEATHER_MUTATION_LABELS[key2] ?? formatMutationLabel(key2),
@@ -49291,13 +49913,13 @@ next: ${next}`;
       alignItems: "center",
       gap,
       padding,
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
-      background: "#0f1318",
+      background: "rgba(255,255,255,0.02)",
       cursor: "pointer",
       minWidth,
       transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease",
-      boxShadow: "0 0 0 1px #0002 inset"
+      boxShadow: "none"
     };
     if (isMain) {
       wrapStyles.width = "100%";
@@ -49354,15 +49976,15 @@ next: ${next}`;
     const updateState = () => {
       if (input.checked) {
         applyStyles(wrap, {
-          borderColor: "#6aa6",
-          boxShadow: "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
-          background: "#182029"
+          borderColor: "rgba(94,234,212,0.40)",
+          boxShadow: "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
+          background: "rgba(94,234,212,0.12)"
         });
       } else {
         applyStyles(wrap, {
-          borderColor: "#4445",
-          boxShadow: "0 0 0 1px #0002 inset",
-          background: "#0f1318"
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "none",
+          background: "rgba(255,255,255,0.02)"
         });
       }
       applyDisabledState();
@@ -49386,41 +50008,59 @@ next: ${next}`;
     button.style.margin = "0";
     button.style.padding = "6px 10px";
     button.style.borderRadius = "8px";
-    button.style.border = "1px solid #4445";
-    button.style.background = "#1f2328";
+    button.style.border = "1px solid rgba(255,255,255,0.10)";
+    button.style.background = "rgba(255,255,255,0.04)";
     button.style.color = "#e7eef7";
+    button.style.fontSize = "13px";
+    button.style.fontWeight = "600";
+    button.style.cursor = "pointer";
     button.style.justifyContent = "center";
-    button.onmouseenter = () => button.style.borderColor = "#6aa1";
-    button.onmouseleave = () => button.style.borderColor = "#4445";
+    button.onmouseenter = () => {
+      button.style.borderColor = "rgba(94,234,212,0.35)";
+      button.style.background = "rgba(94,234,212,0.08)";
+    };
+    button.onmouseleave = () => {
+      button.style.borderColor = "rgba(255,255,255,0.10)";
+      button.style.background = "rgba(255,255,255,0.04)";
+    };
   }
   function styleBtnCompact(button, text) {
     button.textContent = text;
     button.style.margin = "0";
     button.style.padding = "4px 8px";
     button.style.borderRadius = "8px";
-    button.style.border = "1px solid #4445";
-    button.style.background = "#1f2328";
+    button.style.border = "1px solid rgba(255,255,255,0.10)";
+    button.style.background = "rgba(255,255,255,0.04)";
     button.style.color = "#e7eef7";
+    button.style.fontSize = "12px";
+    button.style.fontWeight = "600";
+    button.style.cursor = "pointer";
     button.style.display = "inline-flex";
     button.style.alignItems = "center";
     button.style.justifyContent = "center";
     button.style.minWidth = "36px";
-    button.onmouseenter = () => button.style.borderColor = "#6aa1";
-    button.onmouseleave = () => button.style.borderColor = "#4445";
+    button.onmouseenter = () => {
+      button.style.borderColor = "rgba(94,234,212,0.35)";
+      button.style.background = "rgba(94,234,212,0.08)";
+    };
+    button.onmouseleave = () => {
+      button.style.borderColor = "rgba(255,255,255,0.10)";
+      button.style.background = "rgba(255,255,255,0.04)";
+    };
   }
   function createLockerSettingsCard(ui, state3, opts = {}) {
-    const card = document.createElement("div");
-    card.dataset.lockerSettingsCard = "1";
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "12px";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "12px";
-    card.style.alignItems = "center";
-    card.style.overflow = "auto";
-    card.style.minHeight = "0";
-    card.style.width = "min(760px, 100%)";
+    const card2 = document.createElement("div");
+    card2.dataset.lockerSettingsCard = "1";
+    card2.style.border = "1px solid rgba(255,255,255,0.10)";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "12px";
+    card2.style.display = "flex";
+    card2.style.flexDirection = "column";
+    card2.style.gap = "12px";
+    card2.style.alignItems = "center";
+    card2.style.overflow = "auto";
+    card2.style.minHeight = "0";
+    card2.style.width = "min(760px, 100%)";
     let recipesTitleElement = null;
     const updateRecipeTitleText = () => {
       if (!recipesTitleElement) return;
@@ -49433,11 +50073,11 @@ next: ${next}`;
       section.style.justifyItems = "center";
       section.style.gap = "8px";
       section.style.textAlign = "center";
-      section.style.border = "1px solid #4446";
+      section.style.border = "1px solid rgba(255,255,255,0.10)";
       section.style.borderRadius = "10px";
       section.style.padding = "10px";
-      section.style.background = "#1f2328";
-      section.style.boxShadow = "0 0 0 1px #0002 inset";
+      section.style.background = "rgba(255,255,255,0.04)";
+      section.style.boxShadow = "none";
       section.style.width = "min(720px, 100%)";
       const heading = document.createElement("div");
       heading.textContent = titleText;
@@ -49713,13 +50353,13 @@ next: ${next}`;
       applyStyles(button, {
         padding: "6px 12px",
         borderRadius: "8px",
-        border: "1px solid #4445",
-        background: "#1f2328",
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.04)",
         color: "#e7eef7",
         fontWeight: "600",
         letterSpacing: "0.3px",
         transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease",
-        boxShadow: "0 0 0 1px #0002 inset",
+        boxShadow: "none",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -49742,11 +50382,11 @@ next: ${next}`;
       button.appendChild(text);
       button.addEventListener("mouseenter", () => {
         if (button.disabled || button.dataset.active === "1") return;
-        button.style.borderColor = "#6aa1";
+        button.style.borderColor = "rgba(94,234,212,0.35)";
       });
       button.addEventListener("mouseleave", () => {
         if (button.dataset.active === "1") return;
-        button.style.borderColor = "#4445";
+        button.style.borderColor = "rgba(255,255,255,0.10)";
       });
       return button;
     };
@@ -49761,9 +50401,9 @@ next: ${next}`;
     );
     const updateColorButtonVisual = (button, active) => {
       button.dataset.active = active ? "1" : "0";
-      button.style.borderColor = active ? "#6aa6" : "#4445";
-      button.style.boxShadow = active ? "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)" : "0 0 0 1px #0002 inset";
-      button.style.background = active ? "#182029" : "#1f2328";
+      button.style.borderColor = active ? "rgba(94,234,212,0.40)" : "rgba(255,255,255,0.10)";
+      button.style.boxShadow = active ? "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)" : "none";
+      button.style.background = active ? "rgba(94,234,212,0.12)" : "rgba(255,255,255,0.04)";
       button.style.opacity = button.disabled ? "0.55" : "";
       button.style.cursor = button.disabled ? "default" : "pointer";
     };
@@ -49823,7 +50463,7 @@ next: ${next}`;
       return toggle;
     });
     const updateWeatherMutationsDisabled = () => {
-      const disabled = card.dataset.disabled === "1" || state3.weatherMode === "RECIPES";
+      const disabled = card2.dataset.disabled === "1" || state3.weatherMode === "RECIPES";
       weatherGrid.style.opacity = disabled ? "0.55" : "";
       weatherGrid.style.pointerEvents = disabled ? "none" : "";
       weatherToggles.forEach((toggle) => toggle.setDisabled(disabled));
@@ -49883,7 +50523,7 @@ next: ${next}`;
     emptyRecipes.style.textAlign = "center";
     const updateAddRecipeDisabled = () => {
       const editing = editingRecipeIndex !== null;
-      const cardDisabled = card.dataset.disabled === "1";
+      const cardDisabled = card2.dataset.disabled === "1";
       btnAddRecipe.disabled = editing || cardDisabled;
       btnAddRecipe.style.opacity = editing ? "0.7" : "";
       btnAddRecipe.style.pointerEvents = editing ? "none" : "";
@@ -49938,8 +50578,8 @@ next: ${next}`;
         gap: "6px",
         padding: "4px 10px",
         borderRadius: "999px",
-        border: "1px solid #4445",
-        background: "#11161c",
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.04)",
         color: "#e7eef7",
         fontSize: "12px",
         fontWeight: "600",
@@ -49990,8 +50630,8 @@ next: ${next}`;
       container.appendChild(badges);
     };
     const applyDisabled = () => {
-      const cardDisabled = card.dataset.disabled === "1";
-      const inputs = card.querySelectorAll("input,button,select,textarea");
+      const cardDisabled = card2.dataset.disabled === "1";
+      const inputs = card2.querySelectorAll("input,button,select,textarea");
       inputs.forEach((el2) => {
         if (el2.dataset.weatherToggle === "main") {
           return;
@@ -50001,7 +50641,7 @@ next: ${next}`;
       });
       updateWeatherMutationsDisabled();
       updateColorButtons();
-      card.style.opacity = cardDisabled ? "0.55" : "";
+      card2.style.opacity = cardDisabled ? "0.55" : "";
       updateAddRecipeDisabled();
     };
     function buildRecipeToggleGrid(selection, onSelectionChange) {
@@ -50062,11 +50702,11 @@ next: ${next}`;
         const row = applyStyles(document.createElement("div"), {
           display: "flex",
           gap: isEditing ? "10px" : "12px",
-          border: "1px solid #4446",
+          border: "1px solid rgba(255,255,255,0.10)",
           borderRadius: "10px",
           padding: isEditing ? "12px" : "10px 12px",
-          background: "#0f1318",
-          boxShadow: "0 0 0 1px #0002 inset",
+          background: "rgba(255,255,255,0.02)",
+          boxShadow: "none",
           width: "100%"
         });
         if (isEditing) {
@@ -50138,11 +50778,11 @@ next: ${next}`;
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          border: "1px solid #4446",
+          border: "1px solid rgba(255,255,255,0.10)",
           borderRadius: "10px",
           padding: "12px",
-          background: "#0f1318",
-          boxShadow: "0 0 0 1px #0002 inset",
+          background: "rgba(255,255,255,0.02)",
+          boxShadow: "none",
           width: "100%"
         });
         const summary = document.createElement("div");
@@ -50171,7 +50811,7 @@ next: ${next}`;
       startEditingRecipe(state3.weatherRecipes.length);
     };
     recipesWrap.append(recipesHeader, recipesList);
-    card.append(
+    card2.append(
       makeSection("Harvest mode", lockModeRow),
       makeSection("Filter by size", scaleRow),
       makeSection("Filter by color", colorsRow),
@@ -50198,11 +50838,11 @@ next: ${next}`;
       repaintRecipes();
     };
     const setDisabled = (value) => {
-      card.dataset.disabled = value ? "1" : "0";
+      card2.dataset.disabled = value ? "1" : "0";
       applyDisabled();
     };
     refresh();
-    return { root: card, refresh, setDisabled };
+    return { root: card2, refresh, setDisabled };
   }
   function createRestrictionsTabRenderer(ui) {
     let state3 = lockerRestrictionsService.getState();
@@ -50220,13 +50860,13 @@ next: ${next}`;
       width: "100%",
       maxWidth: "1100px"
     });
-    const card = ui.card("Friend bonus locker", {
+    const card2 = ui.card("Friend bonus locker", {
       align: "stretch"
     });
-    card.root.style.width = "100%";
-    card.header.style.display = "flex";
-    card.header.style.alignItems = "center";
-    card.header.style.justifyContent = "space-between";
+    card2.root.style.width = "100%";
+    card2.header.style.display = "flex";
+    card2.header.style.alignItems = "center";
+    card2.header.style.justifyContent = "space-between";
     const sliderWrap = applyStyles(document.createElement("div"), {
       display: "grid",
       gap: "6px"
@@ -50256,14 +50896,14 @@ next: ${next}`;
       letterSpacing: "0.25px"
     });
     statusBadge.style.marginLeft = "auto";
-    card.header.appendChild(statusBadge);
+    card2.header.appendChild(statusBadge);
     const statusText = applyStyles(document.createElement("div"), {
       fontSize: "12.5px",
       lineHeight: "1.5",
       opacity: "0.92"
     });
-    card.body.append(sliderWrap, statusText);
-    layout.append(card.root);
+    card2.body.append(sliderWrap, statusText);
+    layout.append(card2.root);
     const decorCard = ui.card("Decor pick locker", { align: "stretch" });
     decorCard.root.style.width = "100%";
     const decorRow = applyStyles(document.createElement("div"), {
@@ -50318,9 +50958,9 @@ next: ${next}`;
         justifyContent: "space-between",
         gap: "12px",
         padding: "8px 10px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
-        background: "#0f1318"
+        background: "rgba(255,255,255,0.02)"
       });
       const text = applyStyles(document.createElement("div"), {
         display: "grid",
@@ -50374,7 +51014,7 @@ next: ${next}`;
     emptyEggPlaceholder.textContent = "No eggs detected in shop.";
     const updateEggToggleAppearance = (toggle, locked) => {
       toggle.textContent = locked ? LOCKED_ICON : UNLOCKED_ICON;
-      toggle.style.background = locked ? "#331616" : "#12301d";
+      toggle.style.background = locked ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)";
       toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
     };
     let renderEggList;
@@ -50385,13 +51025,13 @@ next: ${next}`;
         alignItems: "center",
         gap: "10px",
         padding: "8px 10px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
-        background: "#0f1318"
+        background: "rgba(255,255,255,0.02)"
       });
       const toggle = document.createElement("button");
       toggle.type = "button";
-      toggle.style.border = "1px solid #4445";
+      toggle.style.border = "1px solid rgba(255,255,255,0.10)";
       toggle.style.borderRadius = "10px";
       toggle.style.padding = "6px 10px";
       toggle.style.fontSize = "14px";
@@ -50474,7 +51114,7 @@ next: ${next}`;
       setRuleRowDisabled(sellMaxStrRow.row, !enabled);
     };
     const setStatusTone = (tone) => {
-      const palette = tone === "success" ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" } : tone === "warn" ? { bg: "#321616", border: "#c74343", color: "#fca5a5" } : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
+      const palette = tone === "success" ? { bg: "rgba(16,185,129,0.15)", border: "rgba(16,185,129,0.35)", color: "#9ef7c3" } : tone === "warn" ? { bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.35)", color: "#fca5a5" } : { bg: "rgba(59,130,246,0.15)", border: "rgba(59,130,246,0.35)", color: "#a5c7ff" };
       statusBadge.style.background = palette.bg;
       statusBadge.style.border = `1px solid ${palette.border}`;
       statusBadge.style.color = palette.color;
@@ -50646,11 +51286,11 @@ next: ${next}`;
       alignItems: "center",
       gap: "10px",
       justifyContent: "space-between",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
       padding: "12px 16px",
-      background: "#1f2328",
-      boxShadow: "0 0 0 1px #0002 inset",
+      background: "rgba(255,255,255,0.04)",
+      boxShadow: "none",
       width: "min(760px, 100%)"
     });
     const textWrap = applyStyles(document.createElement("div"), {
@@ -50728,7 +51368,7 @@ next: ${next}`;
       rowGap: "6px",
       overflow: "auto",
       paddingRight: "2px",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
       padding: "6px"
     });
@@ -50781,7 +51421,7 @@ next: ${next}`;
     const refreshListStyles = () => {
       listButtons.forEach(({ button, dot }, key2) => {
         const isSelected = selectedKey === key2;
-        button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
+        button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
         dot.style.background = store.getOverride(key2)?.enabled ? "#2ecc71" : "#e74c3c";
       });
     };
@@ -50816,8 +51456,8 @@ next: ${next}`;
         button.style.textAlign = "left";
         button.style.padding = "6px 8px";
         button.style.borderRadius = "8px";
-        button.style.border = "1px solid #4445";
-        button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+        button.style.border = "1px solid rgba(255,255,255,0.10)";
+        button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
         button.style.color = "#e7eef7";
         const dot = document.createElement("span");
         dot.className = "qmm-dot";
@@ -50828,8 +51468,8 @@ next: ${next}`;
         const icon = createSeedIcon(opt.key, { size: 24 });
         button.append(dot, label2, icon);
         listButtons.set(opt.key, { button, dot });
-        button.onmouseenter = () => button.style.borderColor = "#6aa1";
-        button.onmouseleave = () => button.style.borderColor = "#4445";
+        button.onmouseenter = () => button.style.borderColor = "rgba(94,234,212,0.35)";
+        button.onmouseleave = () => button.style.borderColor = "rgba(255,255,255,0.10)";
         button.onclick = () => {
           if (selectedKey === opt.key) return;
           selectedKey = opt.key;
@@ -50854,7 +51494,7 @@ next: ${next}`;
         empty.style.fontSize = "13px";
         empty.style.textAlign = "center";
         empty.style.padding = "32px 24px";
-        empty.style.border = "1px dashed #4445";
+        empty.style.border = "1px dashed rgba(255,255,255,0.12)";
         empty.style.borderRadius = "10px";
         empty.style.width = "min(760px, 100%)";
         detail.appendChild(empty);
@@ -50871,11 +51511,11 @@ next: ${next}`;
       }
       const override = store.ensureOverride(selectedKey, { silent: true });
       const header = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
-      header.style.border = "1px solid #4445";
+      header.style.border = "1px solid rgba(255,255,255,0.10)";
       header.style.borderRadius = "10px";
       header.style.padding = "12px 16px";
-      header.style.background = "#1f2328";
-      header.style.boxShadow = "0 0 0 1px #0002 inset";
+      header.style.background = "rgba(255,255,255,0.04)";
+      header.style.boxShadow = "none";
       header.style.width = "min(760px, 100%)";
       const titleWrap = ui.flexRow({ gap: 10, align: "center" });
       titleWrap.style.flexWrap = "nowrap";
@@ -51083,7 +51723,7 @@ next: ${next}`;
 .${ROOT_CLASS} .mg-crop-simulation__crop-name {
   font-size: 13px;
   font-weight: 600;
-  color: #38bdf8;
+  color: #5eead4;
   text-transform: capitalize;
 }
 .${ROOT_CLASS} .mg-crop-simulation__sprite-section {
@@ -51176,7 +51816,7 @@ next: ${next}`;
 .${ROOT_CLASS} .mg-crop-simulation__slider {
   flex: 1 1 auto;
   min-width: 0;
-  accent-color: #38bdf8;
+  accent-color: #5eead4;
 }
 .${ROOT_CLASS} .mg-crop-simulation__price {
   display: inline-flex;
@@ -51221,9 +51861,9 @@ next: ${next}`;
   gap: 10px;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid #4446;
-  background: #1f2328;
-  box-shadow: 0 0 0 1px #0002 inset;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow: none;
   justify-items: stretch;
 }
 .${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section-heading {
@@ -51309,7 +51949,7 @@ next: ${next}`;
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"] .qmm-seg__btn-label,
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active .qmm-seg__btn-label {
   color: transparent;
-  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc);
+  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #5eead4, #c084fc);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -51513,7 +52153,7 @@ next: ${next}`;
       padding-bottom: 4px;
     }
     .mg-crop-calculator__source-hint a {
-      color: #38bdf8;
+      color: #5eead4;
       text-decoration: underline;
     }
   `);
@@ -51727,7 +52367,7 @@ next: ${next}`;
         gridTemplateColumns: "1fr",
         overflow: "auto",
         paddingRight: "2px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
         minHeight: "0",
         // important
@@ -51872,8 +52512,9 @@ next: ${next}`;
       const refreshListStyles = () => {
         listButtons.forEach(({ button, dot }, key2) => {
           const isSelected = selectedKey === key2;
-          button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
-          dot.style.background = isSelected ? "#2ecc71" : "#4c566a";
+          button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
+          button.style.borderColor = isSelected ? "rgba(94,234,212,0.35)" : "rgba(255,255,255,0.10)";
+          dot.style.background = isSelected ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
         });
       };
       function renderColorSegment(state3, interactive) {
@@ -52056,20 +52697,26 @@ next: ${next}`;
           button.style.padding = "6px 8px";
           button.style.marginBottom = "6px";
           button.style.borderRadius = "8px";
-          button.style.border = "1px solid #4445";
-          button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+          button.style.border = "1px solid rgba(255,255,255,0.10)";
+          button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
           button.style.color = "#e7eef7";
           const dot = document.createElement("span");
           dot.className = "qmm-dot";
-          dot.style.background = selectedKey === opt.key ? "#2ecc71" : "#4c566a";
+          dot.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
           const label2 = document.createElement("span");
           label2.className = "label";
           label2.textContent = opt.cropName || opt.key;
           const fallbackEmoji = getLockerSeedEmojiForKey(opt.key) || getLockerSeedEmojiForSeedName(opt.seedName) || "\u{1F331}";
           const sprite2 = createSeedSpriteIcon(opt, fallbackEmoji, 24, "calculator-list");
           button.append(dot, label2, sprite2);
-          button.onmouseenter = () => button.style.borderColor = "#6aa1";
-          button.onmouseleave = () => button.style.borderColor = "#4445";
+          button.onmouseenter = () => {
+            button.style.borderColor = "rgba(94,234,212,0.35)";
+            button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.18)" : "rgba(255,255,255,0.07)";
+          };
+          button.onmouseleave = () => {
+            button.style.borderColor = "rgba(255,255,255,0.10)";
+            button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
+          };
           button.onclick = () => {
             if (selectedKey === opt.key) return;
             selectedKey = opt.key;
@@ -52735,10 +53382,10 @@ next: ${next}`;
     void PetAlertService.start().catch(() => {
     });
     const section = (title) => {
-      const card = ui.card(title, { tone: "muted" });
-      card.body.style.display = "grid";
-      card.body.style.gap = "10px";
-      return card;
+      const card2 = ui.card(title, { tone: "muted" });
+      card2.body.style.display = "grid";
+      card2.body.style.gap = "10px";
+      return card2;
     };
     const row = (labelTxt, control, opts) => {
       const { root: r, label: label2 } = ui.formRow(labelTxt, control, { alignTop: opts?.alignTop, labelWidth: "160px" });
@@ -52758,7 +53405,7 @@ next: ${next}`;
     const playIconBtn = (title = "Play") => {
       return ui.btn("", { icon: "\u25B6", size: "sm", tooltip: title, ariaLabel: title });
     };
-    const smallBtn = (txt) => ui.btn(txt, { size: "sm" });
+    const smallBtn2 = (txt) => ui.btn(txt, { size: "sm" });
     const errorBar = () => ui.errorBar();
     const root = document.createElement("div");
     Object.assign(root.style, {
@@ -52779,8 +53426,8 @@ next: ${next}`;
       { key: "pets", label: "Pets", allowPurchase: true, showStop: false }
     ];
     for (const cfg of contextOrder) {
-      const card = document.createElement("div");
-      Object.assign(card.style, {
+      const card2 = document.createElement("div");
+      Object.assign(card2.style, {
         display: "grid",
         gap: "12px",
         padding: "16px",
@@ -52793,7 +53440,7 @@ next: ${next}`;
       heading.style.fontWeight = "700";
       heading.style.fontSize = "14px";
       heading.style.letterSpacing = "0.02em";
-      card.appendChild(heading);
+      card2.appendChild(heading);
       const defaultWrap = document.createElement("div");
       defaultWrap.style.display = "flex";
       defaultWrap.style.alignItems = "center";
@@ -52802,7 +53449,7 @@ next: ${next}`;
       select2.dataset.soundSelect = cfg.key;
       const playBtn = playIconBtn(`Play ${cfg.label.toLowerCase()} sound`);
       defaultWrap.append(select2, playBtn);
-      card.appendChild(row("Default sound", defaultWrap));
+      card2.appendChild(row("Default sound", defaultWrap));
       const volumeWrap = document.createElement("div");
       volumeWrap.style.display = "flex";
       volumeWrap.style.alignItems = "center";
@@ -52817,7 +53464,7 @@ next: ${next}`;
       volumeValue.style.minWidth = "32px";
       volumeValue.style.textAlign = "right";
       volumeWrap.append(volumeRange, volumeValue);
-      card.appendChild(row("Volume", volumeWrap));
+      card2.appendChild(row("Volume", volumeWrap));
       const modeWrap = document.createElement("div");
       modeWrap.style.display = "flex";
       modeWrap.style.gap = "12px";
@@ -52828,7 +53475,7 @@ next: ${next}`;
         modeLoop = radio(`ap.mode.${cfg.key}`, "loop", "Loop");
         modeWrap.append(modeLoop.label);
       }
-      card.appendChild(row("Playback mode", modeWrap));
+      card2.appendChild(row("Playback mode", modeWrap));
       let stopRow;
       let loopInput;
       let loopWrap;
@@ -52837,53 +53484,57 @@ next: ${next}`;
         stopWrap.style.display = "flex";
         stopWrap.style.flexDirection = "column";
         stopWrap.style.gap = "10px";
-        loopWrap = document.createElement("div");
-        loopWrap.style.display = "flex";
-        loopWrap.style.flexDirection = "column";
-        loopWrap.style.gap = "4px";
-        const loopTitle = document.createElement("div");
-        loopTitle.textContent = "Loop interval";
-        loopTitle.style.opacity = "0.8";
-        loopTitle.style.fontSize = "12px";
-        loopTitle.style.fontWeight = "600";
-        const loopBox = document.createElement("div");
-        loopBox.style.display = "inline-flex";
-        loopBox.style.alignItems = "center";
-        loopBox.style.gap = "8px";
-        loopInput = document.createElement("input");
-        loopInput.type = "number";
-        loopInput.min = "150";
-        loopInput.max = "10000";
-        loopInput.step = "50";
-        loopInput.style.width = "100px";
-        loopInput.style.textAlign = "center";
-        const loopLabel = document.createElement("span");
-        loopLabel.textContent = "ms between plays";
-        loopLabel.style.opacity = "0.85";
-        loopBox.append(loopInput, loopLabel);
-        loopWrap.append(loopTitle, loopBox);
         const stopInfo = document.createElement("div");
         stopInfo.textContent = cfg.showStop === false ? "Loops keep repeating; stop manually by disabling the alert." : "Loops stop automatically when the item is purchased.";
         stopInfo.style.opacity = "0.75";
         stopInfo.style.fontSize = "12px";
         stopInfo.style.lineHeight = "1.4";
-        stopWrap.append(stopInfo, loopWrap);
+        if (cfg.key !== "pets") {
+          loopWrap = document.createElement("div");
+          loopWrap.style.display = "flex";
+          loopWrap.style.flexDirection = "column";
+          loopWrap.style.gap = "4px";
+          const loopTitle = document.createElement("div");
+          loopTitle.textContent = "Loop interval";
+          loopTitle.style.opacity = "0.8";
+          loopTitle.style.fontSize = "12px";
+          loopTitle.style.fontWeight = "600";
+          const loopBox = document.createElement("div");
+          loopBox.style.display = "inline-flex";
+          loopBox.style.alignItems = "center";
+          loopBox.style.gap = "8px";
+          loopInput = document.createElement("input");
+          loopInput.type = "number";
+          loopInput.min = "150";
+          loopInput.max = "10000";
+          loopInput.step = "50";
+          loopInput.style.width = "100px";
+          loopInput.style.textAlign = "center";
+          const loopLabel = document.createElement("span");
+          loopLabel.textContent = "ms between plays";
+          loopLabel.style.opacity = "0.85";
+          loopBox.append(loopInput, loopLabel);
+          loopWrap.append(loopTitle, loopBox);
+          stopWrap.append(stopInfo, loopWrap);
+        } else {
+          stopWrap.append(stopInfo);
+        }
         if (cfg.showStop !== false) {
           stopRow = row("Stop condition", stopWrap);
         } else {
           stopRow = row("Loop interval", stopWrap);
         }
-        card.appendChild(stopRow);
+        card2.appendChild(stopRow);
       } else {
         const info = document.createElement("div");
         info.textContent = "Weather alerts play once per trigger.";
         info.style.opacity = "0.75";
         info.style.fontSize = "12px";
         info.style.lineHeight = "1.4";
-        card.appendChild(row("Details", info));
+        card2.appendChild(row("Details", info));
       }
       contextControls[cfg.key] = {
-        container: card,
+        container: card2,
         select: select2,
         playBtn,
         volumeRange,
@@ -52894,7 +53545,7 @@ next: ${next}`;
         loopInput,
         loopWrap
       };
-      s1.body.appendChild(card);
+      s1.body.appendChild(card2);
     }
     const s1Err = errorBar();
     s1.body.appendChild(s1Err.el);
@@ -53218,11 +53869,11 @@ next: ${next}`;
           justifyContent: "flex-end",
           flexWrap: "wrap"
         });
-        const btnPlay = smallBtn("\u25B6");
-        const btnSetShops = smallBtn("Set shops");
-        const btnSetWeather = smallBtn("Set weather");
-        const btnSetPets = smallBtn("Set pets");
-        const btnDel = smallBtn("Remove");
+        const btnPlay = smallBtn2("\u25B6");
+        const btnSetShops = smallBtn2("Set shops");
+        const btnSetWeather = smallBtn2("Set weather");
+        const btnSetPets = smallBtn2("Set pets");
+        const btnDel = smallBtn2("Remove");
         btnPlay.title = "Preview";
         btnSetShops.title = "Set as shops default";
         btnSetWeather.title = "Set as weather default";
@@ -53495,16 +54146,16 @@ next: ${next}`;
     followedBadge.style.marginLeft = "auto";
     followedBadge.style.width = "115px";
     header.append(lblType, selType, lblRarity, selRarity, followedBadge);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     const COLS = "minmax(200px, 1fr) 9rem 7rem 8rem";
     headerGrid.style.display = "grid";
@@ -53521,7 +54172,7 @@ next: ${next}`;
       mkHeadCell("Notify"),
       mkHeadCell("Custom rules")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = COLS;
@@ -53534,7 +54185,7 @@ next: ${next}`;
     bodyGrid.style.overscrollBehavior = "contain";
     bodyGrid.style.width = "100%";
     bodyGrid.style.scrollbarGutter = "stable";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const refreshRulesUI = () => {
       const kids = Array.from(bodyGrid.children);
       for (let i = 0; i + 3 < kids.length; i += 4) {
@@ -53836,8 +54487,8 @@ next: ${next}`;
     view.innerHTML = "";
     void PetAlertService.start().catch(() => {
     });
-    const card = document.createElement("div");
-    Object.assign(card.style, {
+    const card2 = document.createElement("div");
+    Object.assign(card2.style, {
       display: "grid",
       gridTemplateColumns: "minmax(220px, 260px) minmax(0, 1fr)",
       gap: "10px",
@@ -53849,7 +54500,7 @@ next: ${next}`;
       padding: "10px",
       background: "#0f1318"
     });
-    view.appendChild(card);
+    view.appendChild(card2);
     const petList = document.createElement("div");
     Object.assign(petList.style, {
       display: "grid",
@@ -53860,7 +54511,7 @@ next: ${next}`;
       border: "1px solid #4445",
       borderRadius: "10px"
     });
-    card.appendChild(petList);
+    card2.appendChild(petList);
     const right = document.createElement("div");
     Object.assign(right.style, {
       display: "flex",
@@ -53869,7 +54520,7 @@ next: ${next}`;
       overflow: "auto",
       minHeight: "0"
     });
-    card.appendChild(right);
+    card2.appendChild(right);
     let pets = [];
     let unsubPets2 = null;
     let generalEnabled = PetAlertService.isGeneralEnabled();
@@ -53934,27 +54585,27 @@ next: ${next}`;
         left.style.alignItems = "center";
         left.style.gap = "8px";
         left.style.minWidth = "0";
-        const avatar = document.createElement("div");
-        avatar.style.width = "40px";
-        avatar.style.height = "40px";
-        avatar.style.borderRadius = "8px";
-        avatar.style.display = "inline-flex";
-        avatar.style.alignItems = "center";
-        avatar.style.justifyContent = "center";
-        avatar.style.background = "#111821";
-        avatar.style.border = "1px solid #1f2429";
-        avatar.style.overflow = "hidden";
+        const avatar2 = document.createElement("div");
+        avatar2.style.width = "40px";
+        avatar2.style.height = "40px";
+        avatar2.style.borderRadius = "8px";
+        avatar2.style.display = "inline-flex";
+        avatar2.style.alignItems = "center";
+        avatar2.style.justifyContent = "center";
+        avatar2.style.background = "#111821";
+        avatar2.style.border = "1px solid #1f2429";
+        avatar2.style.overflow = "hidden";
         const useEmojiFallback = () => {
-          avatar.replaceChildren();
+          avatar2.replaceChildren();
           const span = document.createElement("span");
           span.textContent = "\u{1F43E}";
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
-          avatar.appendChild(span);
+          avatar2.appendChild(span);
         };
         const setIcon = (species2, mutations2) => {
           const speciesLabel = String(species2 ?? "").trim();
-          avatar.replaceChildren();
+          avatar2.replaceChildren();
           if (!speciesLabel) {
             useEmojiFallback();
             return;
@@ -53963,8 +54614,8 @@ next: ${next}`;
           span.textContent = speciesLabel.charAt(0).toUpperCase() || "\u0110Y?\xF3";
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
-          avatar.appendChild(span);
-          attachSpriteIcon(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
+          avatar2.appendChild(span);
+          attachSpriteIcon(avatar2, ["pet"], [speciesLabel], 36, "alerts-pet", {
             mutations: Array.isArray(mutations2) ? mutations2 : void 0
           });
         };
@@ -53983,7 +54634,7 @@ next: ${next}`;
         title.style.textOverflow = "ellipsis";
         title.style.whiteSpace = "nowrap";
         titleWrap.append(title);
-        left.append(avatar, titleWrap);
+        left.append(avatar2, titleWrap);
         const hungerValue = document.createElement("div");
         hungerValue.textContent = hungerText;
         hungerValue.style.fontWeight = "700";
@@ -54029,16 +54680,16 @@ next: ${next}`;
       minHeight: "0"
     });
     view.appendChild(wrap);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     const COLS = "minmax(240px, 1fr) 9rem 7rem 8rem";
     headerGrid.style.display = "grid";
@@ -54055,7 +54706,7 @@ next: ${next}`;
       mkHeadCell("Notify"),
       mkHeadCell("Custom rules")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = COLS;
@@ -54068,7 +54719,7 @@ next: ${next}`;
     bodyGrid.style.overscrollBehavior = "contain";
     bodyGrid.style.width = "100%";
     bodyGrid.style.scrollbarGutter = "stable";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const weatherLastSeenRefs = /* @__PURE__ */ new Map();
     const refreshRulesUI = () => {
       const kids = Array.from(bodyGrid.children);
@@ -54741,8 +55392,8 @@ next: ${next}`;
     [rarity.Celestial]: "#7C2AE8"
   };
   function createCollapsibleCard(ui, title, opts = {}) {
-    const card = ui.card(title, { tone: "muted", align: "stretch", subtitle: opts.subtitle, icon: opts.icon });
-    card.root.classList.add("qmm-card--collapsible");
+    const card2 = ui.card(title, { tone: "muted", align: "stretch", subtitle: opts.subtitle, icon: opts.icon });
+    card2.root.classList.add("qmm-card--collapsible");
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "qmm-btn qmm-btn--ghost qmm-btn--sm stats-collapse-toggle";
@@ -54753,9 +55404,9 @@ next: ${next}`;
     const toggleLabel = document.createElement("span");
     toggleLabel.className = "stats-collapse-toggle__label";
     toggle.append(toggleIcon, toggleLabel);
-    const titleElement = card.header.querySelector(".qmm-card__title");
+    const titleElement = card2.header.querySelector(".qmm-card__title");
     if (titleElement) titleElement.insertAdjacentElement("afterend", toggle);
-    else card.header.appendChild(toggle);
+    else card2.header.appendChild(toggle);
     const storageId = opts.storageId?.trim() || null;
     let currentAnimation = null;
     const stopAnimation = () => {
@@ -54764,7 +55415,7 @@ next: ${next}`;
       currentAnimation = null;
     };
     const animateBody = (collapsed) => {
-      const body = card.body;
+      const body = card2.body;
       stopAnimation();
       const prefersReducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (prefersReducedMotion) {
@@ -54833,21 +55484,21 @@ next: ${next}`;
     const setCollapsed = (collapsed, persist2 = true, animate = true) => {
       if (!animate) {
         stopAnimation();
-        card.body.style.display = collapsed ? "none" : "grid";
-        card.body.style.height = "";
-        card.body.style.opacity = "";
-        card.body.style.overflow = "";
+        card2.body.style.display = collapsed ? "none" : "grid";
+        card2.body.style.height = "";
+        card2.body.style.opacity = "";
+        card2.body.style.overflow = "";
       } else {
         animateBody(collapsed);
       }
-      card.root.dataset.collapsed = collapsed ? "true" : "false";
+      card2.root.dataset.collapsed = collapsed ? "true" : "false";
       toggle.setAttribute("aria-expanded", String(!collapsed));
       const verb = collapsed ? "Show" : "Hide";
       const label2 = `${verb} ${title}`;
       toggleLabel.textContent = verb;
       toggle.setAttribute("aria-label", label2);
       toggle.title = label2;
-      card.root.classList.toggle("is-collapsed", collapsed);
+      card2.root.classList.toggle("is-collapsed", collapsed);
       if (persist2 && storageId) {
         setSectionCollapsed(storageId, collapsed);
       }
@@ -54856,26 +55507,26 @@ next: ${next}`;
     const initialCollapsed = storageId ? getSectionCollapsed(storageId, defaultCollapsed) : defaultCollapsed;
     setCollapsed(initialCollapsed, false, false);
     toggle.addEventListener("click", () => {
-      const collapsed = card.root.dataset.collapsed === "true";
+      const collapsed = card2.root.dataset.collapsed === "true";
       setCollapsed(!collapsed);
     });
-    return { root: card.root, body: card.body, header: card.header, setCollapsed };
+    return { root: card2.root, body: card2.body, header: card2.header, setCollapsed };
   }
   function createMetricGrid(rows) {
     const grid = document.createElement("div");
     grid.className = "stats-metric-grid";
     for (const row of rows) {
-      const card = document.createElement("div");
-      card.className = "stats-metric";
-      if (row.hint) card.title = row.hint;
+      const card2 = document.createElement("div");
+      card2.className = "stats-metric";
+      if (row.hint) card2.title = row.hint;
       const label2 = document.createElement("span");
       label2.className = "stats-metric__label";
       label2.textContent = row.label;
       const value = document.createElement("span");
       value.className = "stats-metric__value qmm-num";
       value.textContent = row.value;
-      card.append(label2, value);
-      grid.appendChild(card);
+      card2.append(label2, value);
+      grid.appendChild(card2);
     }
     return grid;
   }
@@ -54989,7 +55640,7 @@ next: ${next}`;
     return DATE_TIME_FORMATTER.format(new Date(ms));
   }
   function renderMetaSection(ui, root, stats) {
-    const card = ui.card("\u{1F5D3}\uFE0F Tracking", {
+    const card2 = ui.card("\u{1F5D3}\uFE0F Tracking", {
       tone: "muted",
       align: "stretch",
       compactHeader: true
@@ -55014,11 +55665,11 @@ next: ${next}`;
       void initPets(freshStats);
     });
     row.appendChild(resetButton);
-    card.body.appendChild(row);
-    root.appendChild(card.root);
+    card2.body.appendChild(row);
+    root.appendChild(card2.root);
   }
   function renderGardenSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F331} Garden", {
+    const card2 = createCollapsibleCard(ui, "\u{1F331} Garden", {
       subtitle: "Field activity",
       storageId: "garden"
     });
@@ -55033,11 +55684,11 @@ next: ${next}`;
         hint: `${formatInt(stats.garden.waterTimeSavedMs)} ms`
       }
     ];
-    card.body.appendChild(createMetricGrid(rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createMetricGrid(rows));
+    root.appendChild(card2.root);
   }
   function renderShopSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F3EA} Shops", {
+    const card2 = createCollapsibleCard(ui, "\u{1F3EA} Shops", {
       subtitle: "Purchases & sales",
       storageId: "shops"
     });
@@ -55057,8 +55708,8 @@ next: ${next}`;
         value: formatPrice(stats.shops.petsSoldValue) ?? formatInt(stats.shops.petsSoldValue)
       }
     ];
-    card.body.appendChild(createMetricGrid(rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createMetricGrid(rows));
+    root.appendChild(card2.root);
   }
   function createPetRarityGroups() {
     const map2 = /* @__PURE__ */ new Map();
@@ -55104,7 +55755,7 @@ next: ${next}`;
     return { content: value };
   }
   function renderPetSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F43E} Pets", {
+    const card2 = createCollapsibleCard(ui, "\u{1F43E} Pets", {
       subtitle: "Hatching overview",
       storageId: "pets"
     });
@@ -55165,12 +55816,12 @@ next: ${next}`;
       ]);
       content.appendChild(createStatList(columns, rows));
       group.appendChild(content);
-      card.body.appendChild(group);
+      card2.body.appendChild(group);
     }
-    root.appendChild(card.root);
+    root.appendChild(card2.root);
   }
   function renderAbilitySection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F9E0} Abilities", {
+    const card2 = createCollapsibleCard(ui, "\u{1F9E0} Abilities", {
       subtitle: "Trigger counts",
       storageId: "abilities"
     });
@@ -55195,11 +55846,11 @@ next: ${next}`;
         { text: formatted }
       ]);
     }
-    card.body.appendChild(createStatList(columns, rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createStatList(columns, rows));
+    root.appendChild(card2.root);
   }
   function renderWeatherSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u26C5 Weather", {
+    const card2 = createCollapsibleCard(ui, "\u26C5 Weather", {
       subtitle: "Events overview",
       storageId: "weather"
     });
@@ -55227,8 +55878,8 @@ next: ${next}`;
         { text: formatInt(entry.triggers) }
       ]);
     }
-    card.body.appendChild(createStatList(columns, rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createStatList(columns, rows));
+    root.appendChild(card2.root);
   }
   function renderStatsMenu(container) {
     const root = container;
@@ -55917,17 +56568,17 @@ next: ${next}`;
     btnUseTeam.disabled = true;
     header.append(headerTitle, btnUseTeam);
     right.appendChild(header);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "12px";
-    card.style.overflow = "auto";
-    card.style.minHeight = "0";
-    card.style.background = "#0f1318";
-    right.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.display = "flex";
+    card2.style.flexDirection = "column";
+    card2.style.gap = "12px";
+    card2.style.overflow = "auto";
+    card2.style.minHeight = "0";
+    card2.style.background = "#0f1318";
+    right.appendChild(card2);
     const secName = (() => {
       const r = row();
       r.style.width = "100%";
@@ -55936,7 +56587,7 @@ next: ${next}`;
       nameInput.style.flex = "1";
       nameInput.style.minWidth = "0";
       r.append(nameInput);
-      card.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
+      card2.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
       return { nameInput };
     })();
     const secSearch = (() => {
@@ -56020,7 +56671,7 @@ next: ${next}`;
       };
       select2.addEventListener("change", applyFilterToTeam);
       wrapOuter.append(seg, select2);
-      card.appendChild(framed("\u{1F50D} Search", wrapOuter));
+      card2.appendChild(framed("\u{1F50D} Search", wrapOuter));
       const ensureOptionExists = (val, pretty) => {
         const v = (val || "").trim();
         if (!v) return;
@@ -56238,7 +56889,7 @@ next: ${next}`;
       wrapSlots.style.flexDirection = "column";
       wrapSlots.style.gap = "8px";
       wrapSlots.append(grid, extra);
-      card.appendChild(framed("\u26A1 Active pets (3 slots)", wrapSlots));
+      card2.appendChild(framed("\u26A1 Active pets (3 slots)", wrapSlots));
       return {
         rows: [r0, r1, r2],
         btnUseCurrent,
@@ -56532,21 +57183,21 @@ next: ${next}`;
     };
     addToggle("Show Instant Feed button", "instantFeed", settings.instantFeed);
     addToggle("Show Feed from Inventory button", "feedFromInventory", settings.feedFromInventory);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    right.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    right.appendChild(card2);
     const header = document.createElement("div");
     header.style.display = "flex";
     header.style.flexDirection = "column";
     header.style.gap = "4px";
     header.style.marginBottom = "8px";
-    card.appendChild(header);
+    card2.appendChild(header);
     const title = document.createElement("div");
     title.textContent = "Instant feed options";
     title.style.fontWeight = "600";
@@ -56562,7 +57213,7 @@ next: ${next}`;
     body.style.gap = "6px";
     body.style.overflow = "auto";
     body.style.minHeight = "0";
-    card.appendChild(body);
+    card2.appendChild(body);
     const petItems = Object.keys(petCatalog).map((species) => {
       const entry = petCatalog[species];
       const name = String(entry?.name || species);
@@ -56675,16 +57326,16 @@ next: ${next}`;
       inputSearch,
       btnClear
     );
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     headerGrid.style.display = "grid";
     headerGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
@@ -56706,7 +57357,7 @@ next: ${next}`;
       mkHeadCell2("Ability"),
       mkHeadCell2("Details", "left")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
@@ -56715,7 +57366,7 @@ next: ${next}`;
     bodyGrid.style.overflow = "auto";
     bodyGrid.style.width = "100%";
     bodyGrid.style.minHeight = "0";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const sessionStart = PetsService.getAbilityLogsSessionStart?.() ?? 0;
     let logs = [];
     let abilityFilter = "";
@@ -57059,12 +57710,12 @@ next: ${next}`;
       row.append(text, controls);
       return { row, controls };
     };
-    const styleCard = (card) => {
-      card.root.style.width = "100%";
-      card.root.style.maxWidth = "100%";
-      card.root.style.minWidth = "0";
-      card.body.style.display = "grid";
-      card.body.style.gap = "10px";
+    const styleCard = (card2) => {
+      card2.root.style.width = "100%";
+      card2.root.style.maxWidth = "100%";
+      card2.root.style.minWidth = "0";
+      card2.body.style.display = "grid";
+      card2.body.style.gap = "10px";
     };
     const header = applyStyles3(document.createElement("div"), {
       width: "100%",
@@ -57101,12 +57752,12 @@ next: ${next}`;
       alignItems: "start"
     });
     const secAutoReco = (() => {
-      const card = ui.card("Auto reconnect", {
+      const card2 = ui.card("Auto reconnect", {
         tone: "muted",
         align: "stretch",
         subtitle: "Reconnect automatically when the session is kicked."
       });
-      styleCard(card);
+      styleCard(card2);
       const toggle = ui.switch(MiscService.readAutoRecoEnabled(false));
       const toggleRow = createSettingRow(
         "Enabled",
@@ -57154,16 +57805,16 @@ next: ${next}`;
       slider.addEventListener("input", () => updateSlider(Number(slider.value), false));
       slider.addEventListener("change", () => updateSlider(Number(slider.value), true));
       syncToggle();
-      card.body.append(toggleRow.row, sliderRow.row, hint);
-      return card.root;
+      card2.body.append(toggleRow.row, sliderRow.row, hint);
+      return card2.root;
     })();
     const secPlayer = (() => {
-      const card = ui.card("Player controls", {
+      const card2 = ui.card("Player controls", {
         tone: "muted",
         align: "stretch",
         subtitle: "Movement helpers for walking and testing."
       });
-      styleCard(card);
+      styleCard(card2);
       const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false));
       ghostSwitch.id = "player.ghostMode";
       const delayInput = ui.inputNumber(10, 1e3, 5, 50);
@@ -57195,22 +57846,22 @@ next: ${next}`;
         MiscService.writeGhostEnabled(on);
         on ? ghost.start() : ghost.stop();
       };
-      card.root.__cleanup__ = () => {
+      card2.root.__cleanup__ = () => {
         try {
           ghost.stop();
         } catch {
         }
       };
-      card.body.append(ghostRow.row, delayRow.row);
-      return card.root;
+      card2.body.append(ghostRow.row, delayRow.row);
+      return card2.root;
     })();
     const secInventoryReserve = (() => {
-      const card = ui.card("Inventory guard", {
+      const card2 = ui.card("Inventory guard", {
         tone: "muted",
         align: "stretch",
         subtitle: "Keep a slot open for swaps and bulk actions."
       });
-      styleCard(card);
+      styleCard(card2);
       const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false));
       const row = createSettingRow(
         "Keep 1 slot free",
@@ -57220,16 +57871,16 @@ next: ${next}`;
       toggle.addEventListener("change", () => {
         MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
       });
-      card.body.append(row.row);
-      return card.root;
+      card2.body.append(row.row);
+      return card2.root;
     })();
     const secStorage = (() => {
-      const card = ui.card("Storage auto-store", {
+      const card2 = ui.card("Storage auto-store", {
         tone: "muted",
         align: "stretch",
         subtitle: "Move items into storage when a matching stack already exists."
       });
-      styleCard(card);
+      styleCard(card2);
       const seedToggle = ui.switch(MiscService.readAutoStoreSeedSiloEnabled(false));
       const seedRow = createSettingRow(
         "Seed Silo",
@@ -57248,8 +57899,8 @@ next: ${next}`;
       decorToggle.addEventListener("change", () => {
         MiscService.setAutoStoreDecorShedEnabled(!!decorToggle.checked);
       });
-      card.body.append(seedRow.row, decorRow.row);
-      return card.root;
+      card2.body.append(seedRow.row, decorRow.row);
+      return card2.root;
     })();
     const secSeed = (() => {
       const grid2 = applyStyles3(document.createElement("div"), {
@@ -57426,18 +58077,18 @@ next: ${next}`;
         seedEstimatedFinish = null;
         updateSummaryUI();
       };
-      const card = ui.card("Seed deleter", {
+      const card2 = ui.card("Seed deleter", {
         tone: "muted",
         align: "stretch",
         subtitle: "Bulk delete seeds from inventory."
       });
-      styleCard(card);
-      card.body.append(grid2);
-      card.root.__cleanup__ = () => {
+      styleCard(card2);
+      card2.body.append(grid2);
+      card2.root.__cleanup__ = () => {
         clearSeedSummaryTimer();
         cleanupSeedListeners();
       };
-      return card.root;
+      return card2.root;
     })();
     const secDecor = (() => {
       const grid2 = applyStyles3(document.createElement("div"), {
@@ -57614,18 +58265,18 @@ next: ${next}`;
         }
         updateSummaryUI();
       };
-      const card = ui.card("Decor deleter", {
+      const card2 = ui.card("Decor deleter", {
         tone: "muted",
         align: "stretch",
         subtitle: "Bulk delete decor from inventory."
       });
-      styleCard(card);
-      card.body.append(grid2);
-      card.root.__cleanup__ = () => {
+      styleCard(card2);
+      card2.body.append(grid2);
+      card2.root.__cleanup__ = () => {
         clearDecorSummaryTimer();
         cleanupDecorListeners();
       };
-      return card.root;
+      return card2.root;
     })();
     secSeed.style.gridColumn = "1 / -1";
     secDecor.style.gridColumn = "1 / -1";
@@ -57940,15 +58591,15 @@ next: ${next}`;
     const ioCard = ui.card("Import / Export", {
       description: "Import or export the mod settings directly through JSON files."
     });
-    const card = ui.card("Backup", {
+    const card2 = ui.card("Backup", {
       description: "Save our settings directly inside the mod storage for easy restores."
     });
     ioCard.body.style.display = "flex";
     ioCard.body.style.flexDirection = "column";
     ioCard.body.style.gap = "10px";
-    card.body.style.display = "flex";
-    card.body.style.flexDirection = "column";
-    card.body.style.gap = "10px";
+    card2.body.style.display = "flex";
+    card2.body.style.flexDirection = "column";
+    card2.body.style.gap = "10px";
     const ioStatus = createStatusLine();
     const exportButton = createActionButton("Export Settings");
     exportButton.style.width = "100%";
@@ -58101,37 +58752,10 @@ next: ${next}`;
       }
     });
     controlRow.append(nameInput, saveButton);
-    card.body.append(controlRow, controlStatus, backupListHolder);
-    layout.appendChild(card.root);
+    card2.body.append(controlRow, controlStatus, backupListHolder);
+    layout.appendChild(card2.root);
     view.appendChild(layout);
     refreshBackupList(controlStatus, backupListHolder);
-  }
-  function createInfoRow2(ui, label2, value) {
-    const row = document.createElement("div");
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = "1fr auto";
-    row.style.alignItems = "baseline";
-    row.style.gap = "12px";
-    const labelEl = ui.label(label2);
-    labelEl.style.fontSize = "12px";
-    labelEl.style.opacity = "0.8";
-    const valueEl = document.createElement("div");
-    valueEl.style.textAlign = "right";
-    valueEl.style.fontSize = "13px";
-    valueEl.style.fontWeight = "600";
-    valueEl.style.wordBreak = "break-word";
-    valueEl.textContent = value;
-    row.append(labelEl, valueEl);
-    return row;
-  }
-  function getWindowSizeLabel(win) {
-    if (!win) return "n/a";
-    const width = typeof win.innerWidth === "number" ? Math.floor(win.innerWidth) : null;
-    const height = typeof win.innerHeight === "number" ? Math.floor(win.innerHeight) : null;
-    if (width === null || height === null) {
-      return "unknown";
-    }
-    return `${width} x ${height}`;
   }
   function describeSurface(env) {
     if (!env) return "n/a";
@@ -58171,7 +58795,7 @@ next: ${next}`;
     if (/sunos|solaris/.test(target)) return "Solaris";
     return nav?.platform || nav?.userAgent || "Unknown";
   }
-  function renderInfosTab(view, ui) {
+  function renderInfosTab(view, _ui) {
     view.innerHTML = "";
     const safeWindow = typeof window !== "undefined" ? window : null;
     const safeNavigator = typeof navigator !== "undefined" ? navigator : null;
@@ -58179,77 +58803,140 @@ next: ${next}`;
     const environment = safeWindow ? detectEnvironment() : null;
     const resolvedGameVersion = gameVersion ?? "unknown";
     const resolvedModVersion = getLocalVersion() ?? "unknown";
-    const infoCard = ui.card("Runtime infos");
-    infoCard.body.style.display = "flex";
-    infoCard.body.style.flexDirection = "column";
-    infoCard.body.style.gap = "10px";
-    const infoRows = [
-      { label: "Mod version", value: resolvedModVersion },
-      { label: "Game version", value: resolvedGameVersion },
-      { label: "Window size", value: getWindowSizeLabel(safeWindow) },
-      {
-        label: "Host",
-        value: environment?.host ?? safeLocation?.hostname ?? "n/a"
-      },
-      { label: "Surface", value: describeSurface(environment) },
-      { label: "Platform", value: describePlatform(environment, safeNavigator) },
-      { label: "OS", value: detectOsLabel(safeNavigator) }
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.flexDirection = "column";
+    header.style.alignItems = "center";
+    header.style.gap = "6px";
+    header.style.padding = "18px 0 14px";
+    header.style.textAlign = "center";
+    const headerTitle = document.createElement("div");
+    headerTitle.textContent = "Arie's Mod";
+    headerTitle.style.fontSize = "18px";
+    headerTitle.style.fontWeight = "700";
+    headerTitle.style.color = "#e7eef7";
+    headerTitle.style.letterSpacing = "-0.3px";
+    const versionBadge = document.createElement("div");
+    versionBadge.textContent = `v${resolvedModVersion}`;
+    versionBadge.style.display = "inline-block";
+    versionBadge.style.padding = "2px 10px";
+    versionBadge.style.borderRadius = "999px";
+    versionBadge.style.background = "rgba(94,234,212,0.12)";
+    versionBadge.style.border = "1px solid rgba(94,234,212,0.25)";
+    versionBadge.style.color = "#5eead4";
+    versionBadge.style.fontSize = "11px";
+    versionBadge.style.fontWeight = "600";
+    versionBadge.style.letterSpacing = "0.3px";
+    const headerSub = document.createElement("div");
+    headerSub.textContent = "Browser userscript for MagicGarden";
+    headerSub.style.fontSize = "11px";
+    headerSub.style.color = "rgba(231,238,247,0.45)";
+    headerSub.style.marginTop = "2px";
+    header.append(headerTitle, versionBadge, headerSub);
+    view.appendChild(header);
+    const sep = document.createElement("div");
+    sep.style.height = "1px";
+    sep.style.background = "rgba(255,255,255,0.07)";
+    sep.style.margin = "0 0 12px";
+    view.appendChild(sep);
+    const runtimeRows = [
+      ["Game version", resolvedGameVersion],
+      ["Host", environment?.host ?? safeLocation?.hostname ?? "n/a"],
+      ["Surface", describeSurface(environment)],
+      ["Platform", describePlatform(environment, safeNavigator)],
+      ["OS", detectOsLabel(safeNavigator)]
     ];
-    infoRows.forEach((entry) => {
-      infoCard.body.appendChild(createInfoRow2(ui, entry.label, entry.value));
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexDirection = "column";
+    grid.style.borderRadius = "10px";
+    grid.style.border = "1px solid rgba(255,255,255,0.07)";
+    grid.style.overflow = "hidden";
+    grid.style.marginBottom = "14px";
+    runtimeRows.forEach(([label2, value], i) => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.alignItems = "center";
+      row.style.padding = "8px 12px";
+      row.style.background = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent";
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label2;
+      labelEl.style.fontSize = "12px";
+      labelEl.style.color = "rgba(231,238,247,0.5)";
+      const valueEl = document.createElement("span");
+      valueEl.textContent = value;
+      valueEl.style.fontSize = "12px";
+      valueEl.style.fontWeight = "600";
+      valueEl.style.color = "#e7eef7";
+      row.append(labelEl, valueEl);
+      grid.appendChild(row);
     });
-    view.appendChild(infoCard.root);
-    const supportCard = ui.card("Support the project");
-    supportCard.body.style.display = "flex";
-    supportCard.body.style.flexDirection = "column";
-    supportCard.body.style.gap = "12px";
-    supportCard.body.style.alignItems = "center";
+    view.appendChild(grid);
+    const supportBlock = document.createElement("div");
+    supportBlock.style.display = "flex";
+    supportBlock.style.flexDirection = "column";
+    supportBlock.style.alignItems = "center";
+    supportBlock.style.gap = "10px";
+    supportBlock.style.padding = "16px 12px";
+    supportBlock.style.borderRadius = "10px";
+    supportBlock.style.border = "1px solid rgba(255,255,255,0.07)";
+    supportBlock.style.background = "rgba(255,255,255,0.02)";
     const supportText = document.createElement("div");
-    supportText.style.fontSize = "13px";
+    supportText.style.fontSize = "12px";
     supportText.style.lineHeight = "1.5";
-    supportText.style.opacity = "0.9";
+    supportText.style.color = "rgba(231,238,247,0.55)";
     supportText.style.textAlign = "center";
-    supportText.innerHTML = "This mod is actively maintained and some features require paid server hosting (like public rooms). If you find this mod useful and want to support its development, consider buying me a coffee!";
+    supportText.textContent = "Some features rely on paid server hosting. If you enjoy the mod, a coffee is always appreciated!";
+    const kofiUrl = "https://ko-fi.com/E1E11TWTM1";
+    const isDiscord = environment?.surface === "discord";
     const kofiButton = document.createElement("a");
-    const kofiUrl = "https://ko-fi.com/ariedam";
     kofiButton.href = kofiUrl;
     kofiButton.target = "_blank";
     kofiButton.rel = "noopener noreferrer";
-    kofiButton.textContent = "\u2615 Support on Ko-fi";
-    kofiButton.style.display = "inline-flex";
-    kofiButton.style.alignItems = "center";
-    kofiButton.style.justifyContent = "center";
-    kofiButton.style.gap = "8px";
-    kofiButton.style.padding = "10px 24px";
-    kofiButton.style.borderRadius = "8px";
-    kofiButton.style.background = "#EDE8E3";
-    kofiButton.style.color = "#2b2622";
-    kofiButton.style.fontSize = "14px";
-    kofiButton.style.fontWeight = "600";
-    kofiButton.style.textDecoration = "none";
-    kofiButton.style.cursor = "pointer";
-    kofiButton.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-    kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
-    kofiButton.style.transition = "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease";
+    kofiButton.title = "Buy Me a Coffee at ko-fi.com";
+    kofiButton.style.transition = "opacity 0.15s ease, transform 0.15s ease";
+    if (isDiscord) {
+      kofiButton.textContent = "\u2615 Support on Ko-fi";
+      kofiButton.style.display = "inline-flex";
+      kofiButton.style.alignItems = "center";
+      kofiButton.style.padding = "8px 20px";
+      kofiButton.style.borderRadius = "8px";
+      kofiButton.style.background = "rgba(94,234,212,0.1)";
+      kofiButton.style.border = "1px solid rgba(94,234,212,0.28)";
+      kofiButton.style.color = "#5eead4";
+      kofiButton.style.fontSize = "13px";
+      kofiButton.style.fontWeight = "600";
+      kofiButton.style.textDecoration = "none";
+      kofiButton.style.cursor = "pointer";
+    } else {
+      kofiButton.style.display = "inline-block";
+      kofiButton.style.border = "0";
+      const kofiImg = document.createElement("img");
+      kofiImg.src = "https://storage.ko-fi.com/cdn/kofi5.png?v=6";
+      kofiImg.alt = "Buy Me a Coffee at ko-fi.com";
+      kofiImg.height = 36;
+      kofiImg.style.height = "36px";
+      kofiImg.style.border = "0";
+      kofiImg.style.display = "block";
+      kofiButton.appendChild(kofiImg);
+    }
     kofiButton.addEventListener("click", (event) => {
-      const isDiscord = environment?.surface === "discord";
       if (isDiscord && typeof GM_openInTab === "function") {
         event.preventDefault();
         GM_openInTab(kofiUrl, { active: true });
       }
     });
     kofiButton.addEventListener("mouseenter", () => {
+      kofiButton.style.opacity = "0.82";
       kofiButton.style.transform = "translateY(-2px)";
-      kofiButton.style.background = "#F5F0EB";
-      kofiButton.style.boxShadow = "0 6px 16px rgba(0, 0, 0, 0.3)";
     });
     kofiButton.addEventListener("mouseleave", () => {
+      kofiButton.style.opacity = "1";
       kofiButton.style.transform = "translateY(0)";
-      kofiButton.style.background = "#EDE8E3";
-      kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
     });
-    supportCard.body.append(supportText, kofiButton);
-    view.appendChild(supportCard.root);
+    supportBlock.append(supportText, kofiButton);
+    view.appendChild(supportBlock);
   }
   function renderSettingsMenu(container) {
     const ui = new Menu({ id: "settings", compact: true });
@@ -58611,9 +59298,9 @@ next: ${next}`;
       return await res.blob();
     }
     const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
-    const card = ui.card("", { tone: "muted", align: "stretch" });
-    card.root.style.width = "100%";
-    const body = card.body;
+    const card2 = ui.card("", { tone: "muted", align: "stretch" });
+    card2.root.style.width = "100%";
+    const body = card2.body;
     body.style.display = "grid";
     body.style.gap = "10px";
     body.style.justifyItems = "stretch";
@@ -58702,15 +59389,15 @@ next: ${next}`;
           chip.style.border = "1px solid #ffffff18";
           chip.style.borderRadius = "999px";
           if (creatorInfo.avatar) {
-            const avatar = document.createElement("img");
-            avatar.src = creatorInfo.avatar;
-            avatar.alt = creatorInfo.name;
-            avatar.style.width = "26px";
-            avatar.style.height = "26px";
-            avatar.style.borderRadius = "999px";
-            avatar.style.objectFit = "cover";
-            avatar.style.border = "1px solid #ffffff22";
-            chip.appendChild(avatar);
+            const avatar2 = document.createElement("img");
+            avatar2.src = creatorInfo.avatar;
+            avatar2.alt = creatorInfo.name;
+            avatar2.style.width = "26px";
+            avatar2.style.height = "26px";
+            avatar2.style.borderRadius = "999px";
+            avatar2.style.objectFit = "cover";
+            avatar2.style.border = "1px solid #ffffff22";
+            chip.appendChild(avatar2);
           }
           const name = document.createElement("span");
           name.textContent = creatorInfo.name;
@@ -58879,7 +59566,7 @@ next: ${next}`;
       actionsRow.append(openBtn);
     }
     body.appendChild(actionsRow);
-    return card.root;
+    return card2.root;
   }
   async function renderToolsMenu(container) {
     const ui = new Menu({ id: "tools", compact: true });
@@ -59037,184 +59724,353 @@ next: ${next}`;
   }
 
   // src/ui/menus/editor.ts
+  var STYLE_ID4 = "qws-editor-menu-css";
+  var TEAL = "#5eead4";
+  var TEAL_DIM = "rgba(94,234,212,0.12)";
+  var TEAL_MID = "rgba(94,234,212,0.22)";
+  var TEAL_BORDER = "rgba(94,234,212,0.3)";
+  var TEAL_BRD_HI = "rgba(94,234,212,0.55)";
+  var BORDER = "rgba(255,255,255,0.08)";
+  var BORDER_HI = "rgba(255,255,255,0.16)";
+  var CARD_BG = "rgba(255,255,255,0.03)";
+  var CARD_BG_HI = "rgba(255,255,255,0.06)";
+  var TEXT = "#e7eef7";
+  var TEXT_DIM = "rgba(226,232,240,0.45)";
+  var DANGER = "#ef4444";
+  var DANGER_DIM = "rgba(239,68,68,0.12)";
+  var DANGER_BRD = "rgba(239,68,68,0.3)";
+  var DANGER_HI = "rgba(239,68,68,0.2)";
+  var DANGER_BRD_HI = "rgba(239,68,68,0.55)";
+  function ensureStyles3() {
+    if (document.getElementById(STYLE_ID4)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID4;
+    st.textContent = `
+.qws-ed-scroll::-webkit-scrollbar { width: 6px; }
+.qws-ed-scroll::-webkit-scrollbar-track { background: transparent; }
+.qws-ed-scroll::-webkit-scrollbar-thumb { background: rgba(94,234,212,0.2); border-radius: 3px; }
+.qws-ed-scroll::-webkit-scrollbar-thumb:hover { background: rgba(94,234,212,0.35); }
+.qws-ed-scroll { scrollbar-width: thin; scrollbar-color: rgba(94,234,212,0.2) transparent; }
+
+/* Toggle switch */
+.qws-ed-toggle { position:relative; display:inline-block; width:36px; height:20px; cursor:pointer; flex-shrink:0; }
+.qws-ed-toggle input { opacity:0; width:0; height:0; position:absolute; }
+.qws-ed-track {
+  position:absolute; inset:0; border-radius:10px;
+  background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.12);
+  transition:background 150ms ease, border-color 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track {
+  background:rgba(94,234,212,0.25); border-color:rgba(94,234,212,0.5);
+}
+.qws-ed-thumb {
+  position:absolute; top:3px; left:3px;
+  width:12px; height:12px; border-radius:50%;
+  background:rgba(226,232,240,0.5);
+  transition:transform 150ms ease, background 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track .qws-ed-thumb {
+  transform:translateX(16px); background:${TEAL};
+}
+`;
+    document.head.appendChild(st);
+  }
+  var css = (el2, s) => Object.assign(el2.style, s);
+  function sectionLabel(text) {
+    const el2 = document.createElement("div");
+    css(el2, {
+      fontSize: "10px",
+      fontWeight: "700",
+      letterSpacing: "0.08em",
+      color: TEXT_DIM,
+      textTransform: "uppercase",
+      paddingBottom: "7px"
+    });
+    el2.textContent = text;
+    return el2;
+  }
+  function card(children) {
+    const el2 = document.createElement("div");
+    css(el2, {
+      padding: "14px",
+      background: CARD_BG,
+      borderRadius: "12px",
+      border: `1px solid ${BORDER}`,
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px"
+    });
+    el2.append(...children);
+    return el2;
+  }
+  function primaryBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
+      padding: "10px 14px",
+      border: `1px solid ${TEAL_BORDER}`,
+      borderRadius: "10px",
+      background: TEAL_DIM,
+      color: TEAL,
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: TEAL_MID, borderColor: TEAL_BRD_HI });
+    btn.onmouseleave = () => css(btn, { background: TEAL_DIM, borderColor: TEAL_BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function secondaryBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "10px 14px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: CARD_BG,
+      color: TEXT,
+      fontSize: "12px",
+      fontWeight: "500",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: CARD_BG_HI, borderColor: BORDER_HI });
+    btn.onmouseleave = () => css(btn, { background: CARD_BG, borderColor: BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function dangerBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "7px 11px",
+      border: `1px solid ${DANGER_BRD}`,
+      borderRadius: "8px",
+      background: DANGER_DIM,
+      color: DANGER,
+      fontSize: "11px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flexShrink: "0"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: DANGER_HI, borderColor: DANGER_BRD_HI });
+    btn.onmouseleave = () => css(btn, { background: DANGER_DIM, borderColor: DANGER_BRD });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function smallBtn(label2, teal, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "7px 11px",
+      border: `1px solid ${teal ? TEAL_BORDER : BORDER}`,
+      borderRadius: "8px",
+      background: teal ? TEAL_DIM : CARD_BG,
+      color: teal ? TEAL : TEXT,
+      fontSize: "11px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flexShrink: "0"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: teal ? TEAL_MID : CARD_BG_HI, borderColor: teal ? TEAL_BRD_HI : BORDER_HI });
+    btn.onmouseleave = () => css(btn, { background: teal ? TEAL_DIM : CARD_BG, borderColor: teal ? TEAL_BORDER : BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function styledInput(placeholder) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    css(input, {
+      width: "100%",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: "rgba(255,255,255,0.06)",
+      color: TEXT,
+      fontSize: "12px",
+      outline: "none",
+      transition: "border-color 150ms ease",
+      boxSizing: "border-box"
+    });
+    input.addEventListener("focus", () => css(input, { borderColor: TEAL_BORDER }));
+    input.addEventListener("blur", () => css(input, { borderColor: BORDER }));
+    return input;
+  }
+  function styledTextarea(placeholder) {
+    const ta = document.createElement("textarea");
+    ta.placeholder = placeholder;
+    css(ta, {
+      width: "100%",
+      minHeight: "80px",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: "rgba(255,255,255,0.06)",
+      color: TEXT,
+      fontSize: "11px",
+      fontFamily: "monospace",
+      outline: "none",
+      resize: "vertical",
+      transition: "border-color 150ms ease",
+      boxSizing: "border-box"
+    });
+    ta.addEventListener("focus", () => css(ta, { borderColor: TEAL_BORDER }));
+    ta.addEventListener("blur", () => css(ta, { borderColor: BORDER }));
+    return ta;
+  }
+  function createToggle(checked, onChange) {
+    const label2 = document.createElement("label");
+    label2.className = "qws-ed-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    const track = document.createElement("div");
+    track.className = "qws-ed-track";
+    const thumb = document.createElement("div");
+    thumb.className = "qws-ed-thumb";
+    track.appendChild(thumb);
+    label2.append(input, track);
+    return label2;
+  }
   function renderEditorMenu(container) {
-    const ui = new Menu({ id: "editor", compact: true });
-    ui.mount(container);
-    const view = ui.root.querySelector(".qmm-views");
-    view.innerHTML = "";
-    view.style.display = "flex";
-    view.style.flexDirection = "column";
-    view.style.gap = "8px";
-    view.style.justifyContent = "flex-start";
-    view.style.alignItems = "stretch";
-    view.style.height = "100%";
-    view.style.minHeight = "0";
-    view.style.overflow = "hidden";
-    view.style.flex = "1";
-    ui.root.style.display = "flex";
-    ui.root.style.flexDirection = "column";
-    ui.root.style.height = "100%";
-    ui.root.style.maxHeight = "100%";
-    ui.root.style.minHeight = "0";
-    ui.root.style.overflow = "hidden";
-    ui.root.style.flex = "1 1 auto";
-    const card = ui.card("Editor mode", { tone: "muted", align: "center" });
-    card.header.style.display = "none";
-    card.root.style.maxWidth = "420px";
-    card.root.style.alignSelf = "stretch";
-    card.root.style.flex = "0 0 auto";
-    card.root.style.flexShrink = "0";
-    card.body.style.display = "grid";
-    card.body.style.gap = "10px";
-    const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-    const label2 = ui.label("Editor mode");
-    label2.style.margin = "0";
-    const toggle = ui.switch(EditorService.isEnabled());
-    toggle.setAttribute("aria-label", "Toggle editor mode");
-    toggle.addEventListener("change", () => {
-      const on = !!toggle.checked;
+    ensureStyles3();
+    css(container, { padding: "0", overflow: "hidden" });
+    const wrap = document.createElement("div");
+    wrap.className = "qws-ed-scroll";
+    css(wrap, {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      padding: "14px",
+      overflowY: "auto",
+      height: "100%",
+      boxSizing: "border-box",
+      background: "linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%)"
+    });
+    container.appendChild(wrap);
+    const statusEl = document.createElement("div");
+    css(statusEl, {
+      fontSize: "11px",
+      color: TEXT_DIM,
+      minHeight: "16px",
+      paddingLeft: "2px",
+      transition: "opacity 200ms ease"
+    });
+    function setStatus(msg, tone = "ok") {
+      statusEl.textContent = msg;
+      statusEl.style.color = tone === "err" ? DANGER : tone === "warn" ? "#fbbf24" : TEAL;
+      clearTimeout(statusEl.__t);
+      statusEl.__t = setTimeout(() => {
+        statusEl.textContent = "";
+        statusEl.style.color = TEXT_DIM;
+      }, 4e3);
+    }
+    const toggleRow = document.createElement("div");
+    css(toggleRow, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" });
+    const toggleLabel = document.createElement("div");
+    css(toggleLabel, { fontSize: "13px", fontWeight: "600", color: TEXT });
+    toggleLabel.textContent = "Editor mode";
+    const toggle = createToggle(EditorService.isEnabled(), (on) => {
       EditorService.setEnabled(on);
     });
-    row.append(label2, toggle);
-    card.body.append(row);
-    const hint = document.createElement("div");
-    hint.textContent = "Sandbox garden editor with every plants and decors unlocked. Build, experiment, and customize without limits";
-    hint.style.fontSize = "12px";
-    hint.style.opacity = "0.7";
-    hint.style.textAlign = "left";
-    hint.style.lineHeight = "1.4";
-    hint.style.width = "100%";
-    card.body.append(hint);
-    const hintPlaceRemove = document.createElement("div");
-    hintPlaceRemove.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
-    hintPlaceRemove.style.fontSize = "11px";
-    hintPlaceRemove.style.opacity = "0.65";
-    hintPlaceRemove.style.textAlign = "center";
-    hintPlaceRemove.style.lineHeight = "1.3";
-    hintPlaceRemove.style.width = "100%";
-    card.body.append(hintPlaceRemove);
-    const hintDelete = document.createElement("div");
-    hintDelete.textContent = "Remove selected item from inventory with Delete.";
-    hintDelete.style.fontSize = "11px";
-    hintDelete.style.opacity = "0.65";
-    hintDelete.style.textAlign = "center";
-    hintDelete.style.lineHeight = "1.3";
-    hintDelete.style.width = "100%";
-    card.body.append(hintDelete);
-    const hintKeybinds = document.createElement("div");
-    hintKeybinds.textContent = "Keys are editable in Keybinds > Editor.";
-    hintKeybinds.style.fontSize = "11px";
-    hintKeybinds.style.opacity = "0.65";
-    hintKeybinds.style.textAlign = "center";
-    hintKeybinds.style.lineHeight = "1.3";
-    hintKeybinds.style.width = "100%";
-    card.body.append(hintKeybinds);
-    const cleanup2 = EditorService.onChange((enabled) => {
-      toggle.checked = enabled;
-      renderSavedList();
-    });
-    let savedListCleanup;
-    view.__cleanup__ = () => {
-      try {
-        cleanup2();
-      } catch {
-      }
-      try {
-        savedListCleanup?.();
-      } catch {
-      }
-    };
-    const sectionCard = (title, content2) => {
-      const card2 = ui.card(title, { tone: "muted", align: "center" });
-      card2.root.style.maxWidth = "520px";
-      card2.body.style.display = "grid";
-      card2.body.style.gap = "8px";
-      card2.body.style.width = "100%";
-      card2.body.style.minHeight = "0";
-      card2.body.append(content2);
-      return card2;
-    };
-    const status = document.createElement("div");
-    status.style.fontSize = "12px";
-    status.style.opacity = "0.7";
-    status.style.minHeight = "18px";
-    const currentWrap = document.createElement("div");
-    currentWrap.style.display = "grid";
-    currentWrap.style.gap = "6px";
-    const nameInput = ui.inputText("Garden name", "");
-    nameInput.placeholder = "Garden name";
-    nameInput.style.width = "100%";
-    const actionsRow = document.createElement("div");
-    actionsRow.style.display = "grid";
-    actionsRow.style.gridTemplateColumns = "1fr 1fr";
-    actionsRow.style.gap = "8px";
-    const saveBtn = ui.btn("Save current garden", {
-      variant: "primary",
-      fullWidth: true,
-      onClick: async () => {
+    toggleRow.append(toggleLabel, toggle);
+    const desc = document.createElement("div");
+    css(desc, { fontSize: "11px", color: TEXT_DIM, lineHeight: "1.5" });
+    desc.textContent = "Sandbox garden editor with every plant and decor unlocked. Place/Remove uses your action key \xB7 Toggle overlays with U \xB7 Edit keybinds in Keybinds \u203A Editor.";
+    wrap.appendChild(card([toggleRow, desc]));
+    const nameInput = styledInput("Garden name\u2026");
+    const actRow = document.createElement("div");
+    css(actRow, { display: "flex", gap: "8px" });
+    actRow.append(
+      primaryBtn("Save current garden", async () => {
         const fn = window.qwsEditorSaveGarden;
         if (typeof fn !== "function") return;
         const saved = await fn(nameInput.value);
         if (!saved) {
-          status.textContent = "Save failed (no garden state found).";
+          setStatus("Save failed (no garden state found).", "err");
           return;
         }
-        status.textContent = `Saved "${saved.name}".`;
-        renderSavedList();
-      }
-    });
-    const clearBtn = ui.btn("Clear garden", {
-      variant: "secondary",
-      fullWidth: true,
-      onClick: async () => {
+        setStatus(`Saved "${saved.name}".`);
+      }),
+      secondaryBtn("Clear garden", async () => {
         const fn = window.qwsEditorClearGarden;
         if (typeof fn !== "function") return;
         const ok = await fn();
-        status.textContent = ok ? "Garden cleared." : "Clear failed.";
-      }
-    });
-    actionsRow.append(saveBtn, clearBtn);
-    currentWrap.append(nameInput, actionsRow);
-    const importWrap = document.createElement("div");
-    importWrap.style.display = "grid";
-    importWrap.style.gap = "6px";
-    const importArea = document.createElement("textarea");
-    importArea.placeholder = "Paste garden JSON here...";
-    importArea.style.width = "100%";
-    importArea.style.minHeight = "80px";
-    importArea.style.borderRadius = "8px";
-    importArea.style.border = "1px solid #2b3441";
-    importArea.style.background = "rgba(16,21,28,0.9)";
-    importArea.style.color = "#e7eef7";
-    importArea.style.padding = "8px";
-    importArea.style.fontSize = "12px";
-    importArea.style.fontFamily = "monospace";
-    const importBtn = ui.btn("Import to saved gardens", {
-      variant: "secondary",
-      fullWidth: true,
-      onClick: async () => {
-        const fn = window.qwsEditorImportGarden;
-        if (typeof fn !== "function") return;
-        const saved = await fn(nameInput.value || "Imported garden", importArea.value);
-        if (!saved) {
-          status.textContent = "Import failed (invalid JSON).";
-          return;
-        }
-        status.textContent = `Imported "${saved.name}".`;
-        renderSavedList();
-      }
-    });
-    importBtn.style.width = "100%";
-    importWrap.append(importArea, importBtn);
+        setStatus(ok ? "Garden cleared." : "Clear failed.", ok ? "ok" : "err");
+      })
+    );
+    wrap.appendChild(
+      card([sectionLabel("Current garden"), nameInput, actRow])
+    );
+    const importArea = styledTextarea("Paste garden JSON here\u2026");
+    wrap.appendChild(
+      card([
+        sectionLabel("Import"),
+        importArea,
+        primaryBtn("Import to saved gardens", async () => {
+          const fn = window.qwsEditorImportGarden;
+          if (typeof fn !== "function") return;
+          const saved = await fn(nameInput.value || "Imported garden", importArea.value);
+          if (!saved) {
+            setStatus("Import failed (invalid JSON).", "err");
+            return;
+          }
+          importArea.value = "";
+          setStatus(`Imported "${saved.name}".`);
+        })
+      ])
+    );
     const listWrap = document.createElement("div");
-    listWrap.style.display = "flex";
-    listWrap.style.flexDirection = "column";
-    listWrap.style.gap = "8px";
-    listWrap.style.flex = "1";
-    listWrap.style.overflowY = "auto";
-    listWrap.style.width = "100%";
-    listWrap.style.boxSizing = "border-box";
-    listWrap.style.minHeight = "0";
+    css(listWrap, { display: "flex", flexDirection: "column", gap: "6px" });
     const renderSavedList = () => {
       const listFn = window.qwsEditorListSavedGardens;
       const loadFn = window.qwsEditorLoadGarden;
@@ -59222,124 +60078,336 @@ next: ${next}`;
       const expFn = window.qwsEditorExportGarden;
       listWrap.innerHTML = "";
       const items = typeof listFn === "function" ? listFn() : [];
-      if (!items || !items.length) {
+      if (!items.length) {
         const empty = document.createElement("div");
+        css(empty, { fontSize: "12px", color: TEXT_DIM, padding: "4px 0" });
         empty.textContent = "No saved gardens yet.";
-        empty.style.opacity = "0.7";
-        empty.style.fontSize = "12px";
         listWrap.appendChild(empty);
         return;
       }
       const editorOn = EditorService.isEnabled();
       for (const g of items) {
-        const row2 = document.createElement("div");
-        row2.style.display = "grid";
-        row2.style.gridTemplateColumns = "1fr auto auto auto";
-        row2.style.gap = "6px";
-        row2.style.alignItems = "center";
-        row2.style.padding = "8px";
-        row2.style.borderRadius = "8px";
-        row2.style.border = "1px solid #2b3441";
-        row2.style.background = "rgba(16,21,28,0.9)";
-        const name = document.createElement("div");
-        name.textContent = g.name || "Untitled";
-        name.style.fontWeight = "700";
-        name.style.fontSize = "13px";
-        name.style.overflow = "hidden";
-        name.style.textOverflow = "ellipsis";
-        name.style.whiteSpace = "nowrap";
-        const load = ui.btn("Load", {
-          size: "sm",
-          onClick: async () => {
-            if (!EditorService.isEnabled()) {
-              status.textContent = "Enable editor mode to load a garden.";
-              return;
-            }
-            if (typeof loadFn !== "function") return;
-            const ok = await loadFn(g.id);
-            if (ok) {
-              status.textContent = `Loaded "${g.name}".`;
-            } else {
-              status.textContent = "Load failed.";
-            }
+        const row = document.createElement("div");
+        css(row, {
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "10px 12px",
+          background: CARD_BG,
+          borderRadius: "10px",
+          border: `1px solid ${BORDER}`,
+          transition: "border-color 120ms ease"
+        });
+        row.onmouseenter = () => css(row, { borderColor: BORDER_HI });
+        row.onmouseleave = () => css(row, { borderColor: BORDER });
+        const nameEl = document.createElement("div");
+        css(nameEl, {
+          flex: "1",
+          fontSize: "12px",
+          fontWeight: "600",
+          color: TEXT,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          minWidth: "0"
+        });
+        nameEl.textContent = g.name || "Untitled";
+        nameEl.title = g.name || "Untitled";
+        const loadBtn = smallBtn("Load", true, async () => {
+          if (!EditorService.isEnabled()) {
+            setStatus("Enable editor mode first.", "warn");
+            return;
+          }
+          if (typeof loadFn !== "function") return;
+          const ok = await loadFn(g.id);
+          setStatus(ok ? `Loaded "${g.name}".` : "Load failed.", ok ? "ok" : "err");
+        });
+        loadBtn.disabled = !editorOn;
+        if (!editorOn) {
+          css(loadBtn, { opacity: "0.4", cursor: "not-allowed" });
+          loadBtn.title = "Enable editor mode to load";
+        }
+        const expBtn = smallBtn("Export", false, async () => {
+          if (typeof expFn !== "function") return;
+          const json = expFn(g.id);
+          if (!json) {
+            setStatus("Export failed.", "err");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(json);
+            setStatus(`Copied "${g.name}" to clipboard.`);
+            await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
+          } catch {
+            setStatus(`Exported "${g.name}". Copy manually.`);
+            window.prompt("Garden JSON", json);
           }
         });
-        load.disabled = !editorOn;
-        if (!editorOn) load.title = "Enable editor mode to load";
-        const exp = ui.btn("Export", {
-          size: "sm",
-          variant: "secondary",
-          onClick: async () => {
-            if (typeof expFn !== "function") return;
-            const json = expFn(g.id);
-            if (!json) {
-              status.textContent = "Export failed.";
-              return;
-            }
-            try {
-              await navigator.clipboard.writeText(json);
-              status.textContent = `Exported "${g.name}" to clipboard.`;
-              await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
-            } catch {
-              status.textContent = `Exported "${g.name}". Copy manually.`;
-              window.prompt("Garden JSON", json);
-            }
+        const delBtn = dangerBtn("Delete", () => {
+          if (typeof delFn !== "function") return;
+          const ok = delFn(g.id);
+          if (ok) {
+            setStatus(`Deleted "${g.name}".`);
+            renderSavedList();
           }
         });
-        const del = ui.btn("Delete", {
-          size: "sm",
-          variant: "danger",
-          onClick: () => {
-            if (typeof delFn !== "function") return;
-            const ok = delFn(g.id);
-            if (ok) {
-              status.textContent = `Deleted "${g.name}".`;
-              renderSavedList();
-            }
-          }
-        });
-        row2.append(name, load, exp, del);
-        listWrap.appendChild(row2);
+        row.append(nameEl, loadBtn, expBtn, delBtn);
+        listWrap.appendChild(row);
       }
     };
     renderSavedList();
-    savedListCleanup = EditorService.onSavedGardensChange(renderSavedList);
-    const currentCard = sectionCard("\u{1F331} Current garden", currentWrap);
-    currentCard.root.style.alignSelf = "stretch";
-    currentCard.root.style.flex = "0 0 auto";
-    currentCard.root.style.flexShrink = "0";
-    const importCard = sectionCard("\u{1F4E5} Import", importWrap);
-    importCard.root.style.alignSelf = "stretch";
-    importCard.root.style.flex = "0 0 auto";
-    importCard.root.style.flexShrink = "0";
-    const savedCard = sectionCard("\u{1F4BE} Saved gardens", listWrap);
-    savedCard.root.style.display = "flex";
-    savedCard.root.style.flexDirection = "column";
-    savedCard.root.style.flex = "1 1 0";
-    savedCard.root.style.minHeight = "220px";
-    savedCard.root.style.overflow = "hidden";
-    savedCard.body.style.display = "flex";
-    savedCard.body.style.flexDirection = "column";
-    savedCard.body.style.alignItems = "stretch";
-    savedCard.body.style.justifyContent = "stretch";
-    savedCard.body.style.overflow = "hidden";
-    savedCard.body.style.flex = "1 1 auto";
-    savedCard.body.style.minHeight = "0";
-    savedCard.body.innerHTML = "";
-    status.style.flex = "0 0 auto";
-    status.style.alignSelf = "stretch";
-    status.style.margin = "0";
-    status.style.height = "18px";
-    savedCard.body.append(status, listWrap);
-    const content = document.createElement("div");
-    content.style.display = "flex";
-    content.style.flexDirection = "column";
-    content.style.gap = "8px";
-    content.style.flex = "1";
-    content.style.minHeight = "0";
-    content.style.overflow = "hidden";
-    content.append(currentCard.root, importCard.root, savedCard.root);
-    view.append(card.root, content);
+    wrap.appendChild(
+      card([sectionLabel("Saved gardens"), statusEl, listWrap])
+    );
+    const unsubChange = EditorService.onChange((enabled) => {
+      toggle.querySelector("input").checked = enabled;
+      renderSavedList();
+    });
+    const unsubSaved = EditorService.onSavedGardensChange(renderSavedList);
+    container.__cleanup__ = () => {
+      try {
+        unsubChange();
+      } catch {
+      }
+      try {
+        unsubSaved();
+      } catch {
+      }
+    };
+  }
+
+  // src/ui/menus/keybinds.ts
+  function createKeybindRow(ui, action2) {
+    const controls = document.createElement("div");
+    controls.style.display = "flex";
+    controls.style.alignItems = "center";
+    controls.style.flexWrap = "nowrap";
+    controls.style.gap = "8px";
+    const button = ui.hotkeyButton(
+      getKeybind(action2.id),
+      (hk) => setKeybind(action2.id, hk),
+      {
+        emptyLabel: "Unassigned",
+        listeningLabel: "Press a key\xE2\u20AC\xA6",
+        clearable: true,
+        allowModifierOnly: action2.allowModifierOnly
+      }
+    );
+    button.style.flexShrink = "0";
+    controls.appendChild(button);
+    let detachHoldListener = null;
+    if (action2.holdDetection) {
+      if (action2.id === "game.action") {
+        const holdContainer = document.createElement("div");
+        holdContainer.style.display = "flex";
+        holdContainer.style.flexDirection = "column";
+        holdContainer.style.alignItems = "center";
+        holdContainer.style.gap = "4px";
+        holdContainer.style.flex = "0 1 160px";
+        holdContainer.style.alignSelf = "center";
+        const holdButton = ui.btn("Hold", { size: "sm", variant: "secondary" });
+        holdButton.style.display = "inline-flex";
+        holdButton.style.alignItems = "center";
+        holdButton.style.gap = "6px";
+        holdButton.setAttribute("aria-label", action2.holdDetection.label);
+        holdButton.title = action2.holdDetection.label;
+        const holdIndicator = document.createElement("span");
+        holdIndicator.textContent = "\u25CF";
+        holdIndicator.style.fontSize = "10px";
+        holdIndicator.style.lineHeight = "1";
+        holdIndicator.setAttribute("aria-hidden", "true");
+        const holdText = document.createElement("span");
+        holdText.textContent = "Hold";
+        holdButton.replaceChildren(holdIndicator, holdText);
+        let holdEnabled = getKeybindHoldDetection(action2.id);
+        const updateHoldButton = (enabled) => {
+          holdEnabled = enabled;
+          holdButton.setAttribute("aria-pressed", enabled ? "true" : "false");
+          holdIndicator.style.color = enabled ? "#34c759" : "#ff3b30";
+        };
+        updateHoldButton(holdEnabled);
+        holdButton.addEventListener("click", () => {
+          setKeybindHoldDetection(action2.id, !holdEnabled);
+        });
+        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
+          updateHoldButton(enabled);
+        });
+        holdContainer.appendChild(holdButton);
+        if (action2.holdDetection.description) {
+          const holdDesc = document.createElement("div");
+          holdDesc.textContent = action2.holdDetection.description;
+          holdDesc.style.fontSize = "11px";
+          holdDesc.style.opacity = "0.65";
+          holdDesc.style.maxWidth = "100%";
+          holdDesc.style.textAlign = "center";
+          holdContainer.appendChild(holdDesc);
+        }
+        controls.appendChild(holdContainer);
+      } else {
+        const holdContainer = document.createElement("div");
+        holdContainer.style.display = "flex";
+        holdContainer.style.flexDirection = "column";
+        holdContainer.style.alignItems = "flex-start";
+        holdContainer.style.gap = "2px";
+        holdContainer.style.padding = "2px 4px";
+        holdContainer.style.borderRadius = "8px";
+        holdContainer.style.background = "rgba(255, 255, 255, 0.04)";
+        holdContainer.style.flex = "0 1 180px";
+        holdContainer.style.maxWidth = "180px";
+        const holdLabel = document.createElement("label");
+        holdLabel.style.display = "inline-flex";
+        holdLabel.style.alignItems = "center";
+        holdLabel.style.gap = "6px";
+        holdLabel.style.fontSize = "12px";
+        holdLabel.style.cursor = "pointer";
+        const holdToggle = ui.switch(getKeybindHoldDetection(action2.id));
+        holdToggle.style.margin = "0";
+        holdToggle.setAttribute("aria-label", action2.holdDetection.label);
+        const holdText = document.createElement("span");
+        holdText.textContent = action2.holdDetection.label;
+        holdText.style.opacity = "0.85";
+        holdLabel.append(holdToggle, holdText);
+        holdContainer.appendChild(holdLabel);
+        if (action2.holdDetection.description) {
+          const holdDesc = document.createElement("div");
+          holdDesc.textContent = action2.holdDetection.description;
+          holdDesc.style.fontSize = "11px";
+          holdDesc.style.opacity = "0.65";
+          holdDesc.style.maxWidth = "100%";
+          holdContainer.appendChild(holdDesc);
+        }
+        holdToggle.addEventListener("change", () => {
+          setKeybindHoldDetection(action2.id, holdToggle.checked);
+        });
+        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
+          holdToggle.checked = enabled;
+        });
+        controls.appendChild(holdContainer);
+      }
+    }
+    const actionsWrap = document.createElement("div");
+    actionsWrap.style.display = "flex";
+    actionsWrap.style.alignItems = "center";
+    actionsWrap.style.gap = "4px";
+    actionsWrap.style.marginLeft = "auto";
+    const clearBtn = action2.sectionId === "game" && !action2.allowClear ? null : ui.btn("", {
+      icon: "\u{1F5D1}\uFE0F",
+      variant: "danger",
+      size: "sm",
+      tooltip: "Remove this shortcut",
+      ariaLabel: "Remove keybind"
+    });
+    if (clearBtn) {
+      actionsWrap.appendChild(clearBtn);
+    }
+    const defaultHotkey = getDefaultKeybind(action2.id);
+    const defaultString = hotkeyToString(defaultHotkey);
+    let resetBtn = null;
+    if (defaultHotkey) {
+      resetBtn = ui.btn("", {
+        icon: "\u{1F504}",
+        variant: "primary",
+        size: "sm",
+        tooltip: "Restore default shortcut",
+        ariaLabel: "Reset keybind to default"
+      });
+      actionsWrap.appendChild(resetBtn);
+    }
+    const setButtonEnabled = (btn, enabled) => {
+      if (!btn) return;
+      const setter = btn.setEnabled;
+      if (setter) {
+        setter(enabled);
+      } else {
+        btn.disabled = !enabled;
+        btn.classList.toggle("is-disabled", !enabled);
+        btn.setAttribute("aria-disabled", (!enabled).toString());
+      }
+    };
+    const updateButtons2 = (current) => {
+      const hasHotkey = hotkeyToString(current).length > 0;
+      if (clearBtn) {
+        setButtonEnabled(clearBtn, hasHotkey);
+      }
+      if (resetBtn) {
+        const isDefault = hotkeyToString(current) === defaultString;
+        setButtonEnabled(resetBtn, !isDefault);
+      }
+    };
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        setKeybind(action2.id, null);
+        const refreshed = getKeybind(action2.id);
+        button.refreshHotkey(refreshed);
+        updateButtons2(refreshed);
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        resetKeybind(action2.id);
+        const refreshed = getKeybind(action2.id);
+        button.refreshHotkey(refreshed);
+        updateButtons2(refreshed);
+      });
+    }
+    controls.appendChild(actionsWrap);
+    updateButtons2(getKeybind(action2.id));
+    const stop2 = onKeybindChange(action2.id, (hk) => {
+      button.refreshHotkey(hk);
+      updateButtons2(hk);
+    });
+    ui.on("unmounted", stop2);
+    if (detachHoldListener) ui.on("unmounted", detachHoldListener);
+    const row = ui.formRow(action2.label, controls, { labelWidth: "180px" });
+    row.label.style.fontSize = "13px";
+    row.label.style.opacity = "0.92";
+    if (action2.hint) {
+      const hintEl = document.createElement("div");
+      hintEl.textContent = action2.hint;
+      hintEl.style.fontSize = "11px";
+      hintEl.style.opacity = "0.7";
+      hintEl.style.marginTop = "2px";
+      hintEl.style.gridColumn = "2 / 3";
+      row.root.appendChild(hintEl);
+    }
+    return row.root;
+  }
+  async function renderKeybindsMenu(container) {
+    const ui = new Menu({ id: "keybinds", compact: true });
+    ui.mount(container);
+    const view = ui.root.querySelector(".qmm-views");
+    view.innerHTML = "";
+    view.style.display = "flex";
+    view.style.flexDirection = "column";
+    view.style.gap = "12px";
+    view.style.padding = "8px";
+    view.style.maxHeight = "60vh";
+    view.style.overflowY = "auto";
+    const wrapper = document.createElement("div");
+    wrapper.style.display = "grid";
+    wrapper.style.gap = "12px";
+    wrapper.style.width = "100%";
+    wrapper.style.maxWidth = "720px";
+    wrapper.style.margin = "0 auto";
+    for (const section of getKeybindSections()) {
+      const card2 = ui.card(`${section.icon} ${section.title}`, { tone: "muted", align: "stretch" });
+      card2.root.dataset.section = section.id;
+      card2.body.style.display = "flex";
+      card2.body.style.flexDirection = "column";
+      card2.body.style.gap = "10px";
+      const desc = document.createElement("p");
+      desc.textContent = section.description;
+      desc.style.margin = "0";
+      desc.style.fontSize = "12px";
+      desc.style.opacity = "0.78";
+      card2.body.appendChild(desc);
+      for (const action2 of section.actions) {
+        const row = createKeybindRow(ui, action2);
+        card2.body.appendChild(row);
+      }
+      wrapper.appendChild(card2.root);
+    }
+    view.appendChild(wrapper);
   }
 
   // src/services/players.ts
@@ -60016,621 +61084,555 @@ next: ${next}`;
   // src/ui/menus/room.ts
   init_fakeModal();
   init_page_context();
-
-  // src/utils/publicRooms.ts
-  init_page_context();
-
-  // src/services/room.ts
-  function deriveCategoryOrder(definitions2, preferredOrder = []) {
-    const available = new Set(definitions2.map((room) => room.category));
-    const seen = /* @__PURE__ */ new Set();
-    const order = [];
-    for (const category of preferredOrder) {
-      if (!available.has(category)) continue;
-      if (seen.has(category)) continue;
-      seen.add(category);
-      order.push(category);
-    }
-    for (const room of definitions2) {
-      if (seen.has(room.category)) continue;
-      seen.add(room.category);
-      order.push(room.category);
-    }
-    return order;
+  var STYLE_ID5 = "qws-room-menu-css";
+  var TEAL2 = "#5eead4";
+  var TEAL_DIM2 = "rgba(94,234,212,0.12)";
+  var TEAL_MID2 = "rgba(94,234,212,0.22)";
+  var TEAL_BORDER2 = "rgba(94,234,212,0.3)";
+  var TEAL_BORDER_HI = "rgba(94,234,212,0.55)";
+  var BORDER2 = "rgba(255,255,255,0.08)";
+  var BORDER_HI2 = "rgba(255,255,255,0.16)";
+  var CARD_BG2 = "rgba(255,255,255,0.03)";
+  var CARD_BG_HI2 = "rgba(255,255,255,0.06)";
+  var TEXT2 = "#e7eef7";
+  var TEXT_DIM2 = "rgba(226,232,240,0.45)";
+  var GREEN = "#10b981";
+  function ensureStyles4() {
+    if (document.getElementById(STYLE_ID5)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID5;
+    st.textContent = `
+.qws-rm-scroll::-webkit-scrollbar { width: 6px; }
+.qws-rm-scroll::-webkit-scrollbar-track { background: transparent; }
+.qws-rm-scroll::-webkit-scrollbar-thumb { background: ${TEAL_DIM2}; border-radius: 3px; }
+.qws-rm-scroll::-webkit-scrollbar-thumb:hover { background: rgba(94,234,212,0.35); }
+.qws-rm-scroll { scrollbar-width: thin; scrollbar-color: ${TEAL_DIM2} transparent; }
+@keyframes qws-rm-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+`;
+    document.head.appendChild(st);
   }
-  function createStateFromDefinitions(definitions2, preferredOrder = []) {
-    const cloned = definitions2.map((room) => ({ ...room }));
-    return {
-      definitions: cloned,
-      categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
-    };
-  }
-  function cloneState2(state3) {
-    return {
-      definitions: state3.definitions.map((room) => ({ ...room })),
-      categoryOrder: [...state3.categoryOrder]
-    };
-  }
-  var INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
-  var publicRoomsState = cloneState2(INITIAL_PUBLIC_ROOMS_STATE);
-
-  // src/ui/menus/room.ts
-  async function renderRoomMenu(root) {
-    await renderPlayersTab(root);
-  }
-  var GUILD_PLANT_BADGES = Object.entries(plantCatalog).map(([plantId, entry]) => {
-    const fn = entry?.seed?.getCanSpawnInGuild;
-    if (typeof fn !== "function") return null;
-    return { plantId, predicate: fn };
-  }).filter((v) => Boolean(v));
-  async function readPlayers() {
-    return PlayersService.list();
-  }
-  var NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-  function truncateLabel(s, max = 22) {
-    if (!s) return "";
-    return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
-  }
-  var vItem = (p) => ({
-    id: p.id,
-    title: truncateLabel(p.name || p.id, 9),
-    subtitle: p.isConnected ? "Online" : "Offline",
-    avatarUrl: p.discordAvatarUrl || "",
-    statusColor: p.isConnected ? "#48d170" : "#999a"
-  });
-  async function renderPlayersTab(root) {
-    const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
-    ui.mount(root);
-    const panel = ui.root.querySelector(".qmm-views");
-    const { root: split, left, right } = ui.split2("260px");
-    panel.appendChild(split);
-    split.style.height = "100%";
-    split.style.minHeight = "0";
-    left.style.display = "flex";
-    left.style.flexDirection = "column";
-    left.style.minHeight = "0";
-    right.style.minHeight = "0";
-    right.style.overflow = "auto";
-    const vt = ui.vtabs({
-      filterPlaceholder: "Find player\u2026",
-      onSelect: (_id, item) => renderRight(item?.id || null),
-      fillAvailableHeight: true
+  var css2 = (el2, s) => Object.assign(el2.style, s);
+  function sectionLabel2(text) {
+    const el2 = document.createElement("div");
+    css2(el2, {
+      fontSize: "10px",
+      fontWeight: "700",
+      letterSpacing: "0.08em",
+      color: TEXT_DIM2,
+      textTransform: "uppercase",
+      paddingBottom: "6px"
     });
-    vt.root.style.display = "flex";
-    vt.root.style.flexDirection = "column";
-    vt.root.style.flex = "1 1 auto";
-    vt.root.style.minHeight = "0";
-    left.appendChild(vt.root);
-    const filter = vt.root.querySelector(".filter");
-    if (filter) {
-      filter.remove();
+    el2.textContent = text;
+    return el2;
+  }
+  function avatar(player2, size) {
+    const el2 = document.createElement("div");
+    css2(el2, {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: "50%",
+      flexShrink: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: `${Math.floor(size * 0.38)}px`,
+      fontWeight: "700",
+      color: TEAL2,
+      overflow: "hidden"
+    });
+    if (player2.discordAvatarUrl) {
+      css2(el2, {
+        backgroundImage: `url(${player2.discordAvatarUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        border: `2px solid ${TEAL_BORDER2}`
+      });
+    } else {
+      css2(el2, {
+        background: "linear-gradient(135deg, rgba(94,234,212,0.22), rgba(59,130,246,0.22))",
+        border: `2px solid rgba(94,234,212,0.2)`
+      });
+      el2.textContent = (player2.name || "?").charAt(0).toUpperCase();
     }
-    async function renderRight(playerId2) {
-      right.innerHTML = "";
-      const p = playerId2 ? players.find((x) => x.id === playerId2) || null : null;
-      if (!p) {
-        const empty = document.createElement("div");
-        empty.style.opacity = "0.75";
-        empty.textContent = "Select a player on the left.";
-        right.appendChild(empty);
+    return el2;
+  }
+  function statusPill(online) {
+    const wrap = document.createElement("div");
+    css2(wrap, {
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+      fontSize: "11px",
+      color: online ? GREEN : TEXT_DIM2
+    });
+    const dot = document.createElement("span");
+    css2(dot, {
+      width: "6px",
+      height: "6px",
+      borderRadius: "50%",
+      background: online ? GREEN : "rgba(226,232,240,0.3)",
+      flexShrink: "0"
+    });
+    wrap.append(dot, document.createTextNode(online ? "Online" : "Offline"));
+    return wrap;
+  }
+  function primaryBtn2(label2, iconSvg, onClick) {
+    const btn = document.createElement("button");
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "7px",
+      padding: "10px 14px",
+      border: `1px solid ${TEAL_BORDER2}`,
+      borderRadius: "10px",
+      background: TEAL_DIM2,
+      color: TEAL2,
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1",
+      whiteSpace: "nowrap"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0" });
+    btn.append(icon, document.createTextNode(label2));
+    btn.onmouseenter = () => css2(btn, { background: TEAL_MID2, borderColor: TEAL_BORDER_HI });
+    btn.onmouseleave = () => css2(btn, { background: TEAL_DIM2, borderColor: TEAL_BORDER2 });
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function toggleBtn(label2, iconSvg, active, onToggle) {
+    let isActive = active;
+    const btn = document.createElement("button");
+    const applyState2 = () => {
+      css2(btn, {
+        border: `1px solid ${isActive ? TEAL_BORDER_HI : BORDER2}`,
+        background: isActive ? TEAL_MID2 : CARD_BG2,
+        color: isActive ? TEAL2 : TEXT2
+      });
+    };
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "7px",
+      padding: "10px 14px",
+      borderRadius: "10px",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1",
+      whiteSpace: "nowrap"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0" });
+    btn.append(icon, document.createTextNode(label2));
+    applyState2();
+    btn.onmouseenter = () => {
+      if (!isActive) css2(btn, { background: CARD_BG_HI2, borderColor: TEAL_BORDER2 });
+    };
+    btn.onmouseleave = applyState2;
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        const next = !isActive;
+        await onToggle(next);
+        isActive = next;
+        applyState2();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    btn.__setActive = (v) => {
+      isActive = v;
+      applyState2();
+    };
+    return btn;
+  }
+  function secondaryBtn2(label2, iconSvg, onClick) {
+    const btn = document.createElement("button");
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      gap: "7px",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER2}`,
+      borderRadius: "10px",
+      background: CARD_BG2,
+      color: TEXT2,
+      fontSize: "12px",
+      fontWeight: "500",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      width: "100%",
+      textAlign: "left"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0", opacity: "0.7" });
+    btn.append(icon, document.createTextNode(label2));
+    btn.onmouseenter = () => css2(btn, { background: CARD_BG_HI2, borderColor: BORDER_HI2 });
+    btn.onmouseleave = () => css2(btn, { background: CARD_BG2, borderColor: BORDER2 });
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  var ICO = (d) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  var ICONS = {
+    teleport: ICO(`<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>`),
+    garden: ICO(`<polygon points="12 3 20 15 4 15"/><polygon points="12 9 21 21 3 21"/><rect x="10" y="21" width="4" height="3" rx="1"/>`),
+    inventory: ICO(`<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/>`),
+    journal: ICO(`<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>`),
+    stats: ICO(`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`),
+    actLog: ICO(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`),
+    save: ICO(`<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/>`),
+    user: ICO(`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`),
+    follow: ICO(`<path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>`)
+  };
+  async function renderRoomMenu(root) {
+    ensureStyles4();
+    css2(root, { padding: "0", overflow: "hidden" });
+    const wrap = document.createElement("div");
+    css2(wrap, {
+      display: "flex",
+      flexDirection: "row",
+      minHeight: "400px",
+      height: "100%",
+      background: "linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%)"
+    });
+    const leftPane = document.createElement("div");
+    leftPane.className = "qws-rm-scroll";
+    css2(leftPane, {
+      width: "200px",
+      flexShrink: "0",
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+      overflowY: "auto",
+      padding: "14px 8px 14px 12px",
+      borderRight: `1px solid ${BORDER2}`
+    });
+    const rightPane = document.createElement("div");
+    rightPane.className = "qws-rm-scroll";
+    css2(rightPane, {
+      flex: "1",
+      overflowY: "auto",
+      padding: "14px 14px 14px 16px",
+      minWidth: "0"
+    });
+    wrap.append(leftPane, rightPane);
+    root.appendChild(wrap);
+    const getWin = () => root.closest(".qws-win");
+    const hideWin = () => {
+      const w = getWin();
+      if (w) w.style.display = "none";
+    };
+    const showWin = () => {
+      const w = getWin();
+      if (w) w.style.display = "";
+    };
+    let players = [];
+    let selectedId = null;
+    function renderRightPanel(playerId2) {
+      rightPane.innerHTML = "";
+      const player2 = playerId2 ? players.find((p) => p.id === playerId2) ?? null : null;
+      if (!player2) {
+        const hint = document.createElement("div");
+        css2(hint, {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          gap: "10px",
+          color: TEXT_DIM2,
+          fontSize: "12px",
+          paddingTop: "60px"
+        });
+        const iconWrap = document.createElement("div");
+        iconWrap.innerHTML = ICONS.user.replace("13", "28").replace("13", "28");
+        css2(iconWrap, { opacity: "0.35" });
+        hint.append(iconWrap, document.createTextNode("Select a player"));
+        rightPane.appendChild(hint);
         return;
       }
-      const col = document.createElement("div");
-      col.style.display = "grid";
-      col.style.gridAutoRows = "min-content";
-      col.style.justifyItems = "center";
-      col.style.gap = "10px";
-      col.style.overflow = "auto";
-      right.appendChild(col);
-      const prof = document.createElement("div");
-      prof.style.display = "grid";
-      prof.style.gap = "8px";
-      prof.style.justifyItems = "center";
-      const head = document.createElement("div");
-      head.style.display = "flex";
-      head.style.alignItems = "center";
-      head.style.gap = "12px";
-      const avatar = document.createElement("img");
-      avatar.src = p.discordAvatarUrl || "";
-      avatar.alt = p.name;
-      avatar.width = 48;
-      avatar.height = 48;
-      avatar.style.borderRadius = "50%";
-      avatar.style.objectFit = "cover";
-      avatar.style.border = "1px solid #4446";
-      const title = document.createElement("div");
-      const nameEl = document.createElement("div");
-      nameEl.textContent = p.name || p.id;
-      nameEl.style.fontWeight = "600";
-      nameEl.style.fontSize = "16px";
-      const sub = document.createElement("div");
-      sub.style.opacity = "0.8";
-      sub.style.fontSize = "12px";
-      sub.textContent = p.isConnected ? "Online" : "Offline";
-      title.append(nameEl, sub);
-      head.append(avatar, title);
-      const info = document.createElement("div");
-      info.style.opacity = "0.9";
-      prof.append(head, info);
-      col.appendChild(prof);
-      const infoWrap = document.createElement("div");
-      infoWrap.style.display = "grid";
-      infoWrap.style.gap = "6px";
-      infoWrap.style.justifySelf = "stretch";
-      infoWrap.style.width = "100%";
-      const invValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const invLabel = document.createElement("div");
-      invLabel.textContent = "Inventory: ";
-      invLabel.style.fontSize = "14px";
-      invLabel.style.opacity = "0.85";
-      const invValue = document.createElement("div");
-      invValue.textContent = "\u2026";
-      invValue.style.fontSize = "15px";
-      invValue.style.fontWeight = "700";
-      invValue.style.color = "#FFD84D";
-      invValueRow.append(invLabel, invValue);
-      const gardenValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const gardenLabel = document.createElement("div");
-      gardenLabel.textContent = "Garden: ";
-      gardenLabel.style.fontSize = "14px";
-      gardenLabel.style.opacity = "0.85";
-      const gardenValue = document.createElement("div");
-      gardenValue.textContent = "\u2026";
-      gardenValue.style.fontWeight = "700";
-      gardenValue.style.fontSize = "15px";
-      gardenValue.style.color = "#FFD84D";
-      gardenValueRow.append(gardenLabel, gardenValue);
-      infoWrap.append(invValueRow, gardenValueRow);
-      const infoCard = ui.card("\u{1F331} Crops values", { tone: "muted", align: "center" });
-      infoCard.body.append(infoWrap);
-      col.appendChild(infoCard.root);
-      const editorCard = ui.card("\u270F\uFE0F Editor", { tone: "muted", align: "center" });
-      editorCard.body.style.display = "grid";
-      editorCard.body.style.gap = "8px";
-      const savePlayerBtn = ui.btn("Save player garden", {
-        fullWidth: true,
-        onClick: async () => {
-          try {
-            const saveFn = window.qwsEditorSaveGardenForPlayer || pageWindow?.qwsEditorSaveGardenForPlayer;
-            if (typeof saveFn !== "function") {
-              await toastSimple("Save garden", "Editor save unavailable", "error");
-              return;
-            }
-            const name = `${p.name || p.id || "Player"}'s garden`;
-            const saved = await saveFn(p.id, name);
-            if (!saved) {
-              await toastSimple("Save garden", "Save failed (no garden state)", "error");
-              return;
-            }
-            await toastSimple(`Saved "${saved.name}".`, "success");
-          } catch {
-            await toastSimple(`Save failed`, "error");
-          }
-        }
+      const content = document.createElement("div");
+      css2(content, { display: "flex", flexDirection: "column", gap: "18px" });
+      const profileCard = document.createElement("div");
+      css2(profileCard, {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "14px",
+        background: CARD_BG2,
+        borderRadius: "12px",
+        border: `1px solid ${BORDER2}`
       });
-      editorCard.body.append(savePlayerBtn);
-      col.appendChild(editorCard.root);
-      const teleRow = ui.flexRow({ justify: "center" });
-      const btnToPlayer = ui.btn("To player", { size: "sm" });
-      btnToPlayer.style.minWidth = "120px";
-      const btnToGarden = ui.btn("To garden", { size: "sm" });
-      btnToGarden.style.minWidth = "120px";
-      btnToPlayer.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToPlayer ?? PlayersService.teleportTo;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      btnToGarden.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToGarden ?? PlayersService.tptogarden;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      teleRow.append(btnToPlayer, btnToGarden);
-      const teleportCard = ui.card("\u{1F30C} Teleport", { tone: "muted", align: "center" });
-      teleportCard.body.append(teleRow);
-      col.appendChild(teleportCard.root);
-      const invRow = ui.flexRow({ justify: "center" });
-      const btnInv = ui.btn("Inventory", { size: "sm" });
-      btnInv.style.minWidth = "120px";
-      const btnJournal = ui.btn("Journal", { size: "sm" });
-      btnJournal.style.minWidth = "120px";
-      const btnStats = ui.btn("Stats", { size: "sm" });
-      btnStats.style.minWidth = "120px";
-      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
-      btnActivityLog.style.minWidth = "120px";
-      btnInv.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openInventoryPreview(p.id, p.name);
-          if (await isInventoryPanelOpen()) {
-            await waitInventoryPanelClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnJournal.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openJournalLog(p.id, p.name);
-          if (await isJournalModalOpen()) {
-            await waitJournalModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnStats.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openStatsModal(p.id, p.name);
-          if (await isStatsModalOpenAsync()) {
-            await waitStatsModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnActivityLog.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openActivityLogModal(p.id, p.name);
-          if (await isActivityLogModalOpenAsync()) {
-            await waitActivityLogModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      const inspectGrid = document.createElement("div");
-      inspectGrid.style.display = "grid";
-      inspectGrid.style.gap = "6px";
-      const activityRow = ui.flexRow({ justify: "center" });
-      invRow.append(btnInv, btnJournal);
-      activityRow.append(btnStats, btnActivityLog);
-      inspectGrid.append(invRow, activityRow);
-      const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
-      inspectCard.body.append(inspectGrid);
-      col.appendChild(inspectCard.root);
-      const funWrap = document.createElement("div");
-      funWrap.style.display = "grid";
-      funWrap.style.gap = "10px";
-      const followRow = ui.flexRow({ justify: "center" });
-      followRow.style.gap = "16px";
-      const playerFollowGroup = document.createElement("div");
-      playerFollowGroup.style.display = "flex";
-      playerFollowGroup.style.alignItems = "center";
-      playerFollowGroup.style.gap = "8px";
-      const label2 = document.createElement("div");
-      label2.textContent = "Follow player";
-      label2.style.fontSize = "14px";
-      label2.style.opacity = "0.85";
-      const sw = ui.switch(PlayersService.isFollowing(p.id));
-      sw.addEventListener("change", async () => {
-        try {
-          if (sw.checked) {
-            await PlayersService.startFollowing(p.id);
-            await toastSimple("Follow", "Enabled.", "success");
+      const av = avatar(player2, 46);
+      const infoBlock = document.createElement("div");
+      css2(infoBlock, { display: "flex", flexDirection: "column", gap: "4px", minWidth: "0", flex: "1" });
+      const nameEl = document.createElement("div");
+      css2(nameEl, {
+        fontSize: "15px",
+        fontWeight: "700",
+        color: TEXT2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      });
+      nameEl.textContent = player2.name || player2.id;
+      infoBlock.append(nameEl, statusPill(player2.isConnected ?? false));
+      profileCard.append(av, infoBlock);
+      content.appendChild(profileCard);
+      const teleSection = document.createElement("div");
+      teleSection.appendChild(sectionLabel2("Teleport"));
+      const teleRow = document.createElement("div");
+      css2(teleRow, { display: "flex", gap: "8px" });
+      teleRow.append(
+        primaryBtn2("To player", ICONS.teleport, () => PlayersService.teleportToPlayer(player2.id)),
+        primaryBtn2("To garden", ICONS.garden, () => PlayersService.teleportToGarden(player2.id))
+      );
+      teleSection.appendChild(teleRow);
+      content.appendChild(teleSection);
+      const followSection = document.createElement("div");
+      followSection.appendChild(sectionLabel2("Follow"));
+      const followRow = document.createElement("div");
+      css2(followRow, { display: "flex", gap: "8px" });
+      const followPlayerBtn = toggleBtn(
+        "Follow player",
+        ICONS.follow,
+        PlayersService.isFollowing(player2.id),
+        async (next) => {
+          if (next) {
+            await PlayersService.startFollowing(player2.id);
+            await toastSimple("Follow", `Following ${player2.name || player2.id}.`, "success");
           } else {
             PlayersService.stopFollowing();
-            await toastSimple("Follow", "Disable.", "info");
+            await toastSimple("Follow", "Stopped following.", "info");
           }
-        } catch (e) {
-          await toastSimple("Follow", e?.message || "Error", "error");
-          sw.checked = !sw.checked;
         }
-      });
-      playerFollowGroup.append(label2, sw);
-      const petFollowGroup = document.createElement("div");
-      petFollowGroup.style.display = "flex";
-      petFollowGroup.style.alignItems = "center";
-      petFollowGroup.style.gap = "4px";
-      const petsLabel = document.createElement("div");
-      petsLabel.textContent = "Pet follow";
-      petsLabel.style.fontSize = "14px";
-      petsLabel.style.opacity = "0.85";
-      const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
-      petsSwitch.addEventListener("change", async () => {
-        try {
-          if (petsSwitch.checked) {
-            await PlayersService.startPetFollowing(p.id);
-          } else {
-            await PlayersService.stopPetFollowing();
+      );
+      followRow.append(followPlayerBtn);
+      followSection.appendChild(followRow);
+      content.appendChild(followSection);
+      const inspectSection = document.createElement("div");
+      inspectSection.appendChild(sectionLabel2("Inspect"));
+      const inspectGrid = document.createElement("div");
+      css2(inspectGrid, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" });
+      inspectGrid.append(
+        secondaryBtn2("Inventory", ICONS.inventory, async () => {
+          hideWin();
+          try {
+            await PlayersService.openInventoryPreview(player2.id, player2.name);
+            if (await isInventoryPanelOpen()) await waitInventoryPanelClosed();
+          } finally {
+            showWin();
           }
-        } catch (e) {
-          await toastSimple("Pet follow", e?.message || "Error", "error");
-          petsSwitch.checked = !petsSwitch.checked;
-        }
-      });
-      petFollowGroup.append(petsLabel, petsSwitch);
-      followRow.append(playerFollowGroup, petFollowGroup);
-      funWrap.append(followRow);
-      const funCard = ui.card("\u{1F389} Fun", { tone: "muted", align: "center" });
-      funCard.body.append(funWrap);
-      col.appendChild(funCard.root);
-      (async () => {
+        }),
+        secondaryBtn2("Journal", ICONS.journal, async () => {
+          hideWin();
+          try {
+            await PlayersService.openJournalLog(player2.id, player2.name);
+            if (await isJournalModalOpen()) await waitJournalModalClosed();
+          } finally {
+            showWin();
+          }
+        }),
+        secondaryBtn2("Stats", ICONS.stats, async () => {
+          hideWin();
+          try {
+            await PlayersService.openStatsModal(player2.id, player2.name);
+            if (await isStatsModalOpenAsync()) await waitStatsModalClosed();
+          } finally {
+            showWin();
+          }
+        }),
+        secondaryBtn2("Activity log", ICONS.actLog, async () => {
+          hideWin();
+          try {
+            await PlayersService.openActivityLogModal(player2.id, player2.name);
+            if (await isActivityLogModalOpenAsync()) await waitActivityLogModalClosed();
+          } finally {
+            showWin();
+          }
+        })
+      );
+      inspectSection.appendChild(inspectGrid);
+      content.appendChild(inspectSection);
+      const editorSection = document.createElement("div");
+      editorSection.appendChild(sectionLabel2("Editor"));
+      editorSection.appendChild(
+        secondaryBtn2("Save player garden", ICONS.save, async () => {
+          const fn = window.qwsEditorSaveGardenForPlayer ?? pageWindow?.qwsEditorSaveGardenForPlayer;
+          if (typeof fn !== "function") {
+            await toastSimple("Save garden", "Editor save unavailable.", "error");
+            return;
+          }
+          const saved = await fn(player2.id, `${player2.name || player2.id}'s garden`);
+          if (!saved) await toastSimple("Save garden", "Save failed (no garden state).", "error");
+          else await toastSimple(`Saved "${saved.name}".`, "success");
+        })
+      );
+      content.appendChild(editorSection);
+      const valSection = document.createElement("div");
+      valSection.appendChild(sectionLabel2("Crop values"));
+      const valRow = document.createElement("div");
+      css2(valRow, { display: "flex", gap: "8px" });
+      const makeValCard = (label2) => {
+        const card2 = document.createElement("div");
+        css2(card2, {
+          flex: "1",
+          padding: "11px 14px",
+          background: CARD_BG2,
+          borderRadius: "10px",
+          border: `1px solid ${BORDER2}`,
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px"
+        });
+        const lbl = document.createElement("div");
+        css2(lbl, { fontSize: "10px", color: TEXT_DIM2, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" });
+        lbl.textContent = label2;
+        const val = document.createElement("div");
+        css2(val, { fontSize: "15px", fontWeight: "700", color: "#FFD84D" });
+        val.textContent = "\u2026";
+        card2.append(lbl, val);
+        return { card: card2, val };
+      };
+      const { card: invCard, val: invVal } = makeValCard("Inventory");
+      const { card: gardenCard, val: gardenVal } = makeValCard("Garden");
+      valRow.append(invCard, gardenCard);
+      valSection.appendChild(valRow);
+      content.appendChild(valSection);
+      rightPane.appendChild(content);
+      void (async () => {
         try {
-          const total = await PlayersService.getInventoryValue(p.id);
-          invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          invValue.title = "Total inventory value";
+          invVal.textContent = formatPrice(Math.round(await PlayersService.getInventoryValue(player2.id))) ?? "\u2014";
         } catch {
-          invValue.textContent = "\u2014";
+          invVal.textContent = "\u2014";
         }
         try {
-          const total = await PlayersService.getGardenValue(p.id);
-          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          gardenValue.title = "Total garden value";
+          gardenVal.textContent = formatPrice(Math.round(await PlayersService.getGardenValue(player2.id))) ?? "\u2014";
         } catch {
-          gardenValue.textContent = "\u2014";
+          gardenVal.textContent = "\u2014";
         }
       })();
     }
-    let players = [];
-    let lastSig = "";
-    function signature(ps) {
-      return ps.map(
-        (p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
-      ).join(";");
+    function createPlayerCard(player2) {
+      const isSelected = selectedId === player2.id;
+      const card2 = document.createElement("div");
+      css2(card2, {
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        padding: "9px 10px",
+        borderRadius: "10px",
+        border: isSelected ? `1px solid ${TEAL_BORDER2}` : `1px solid ${BORDER2}`,
+        background: isSelected ? TEAL_DIM2 : "rgba(255,255,255,0.02)",
+        cursor: "pointer",
+        transition: "all 120ms ease"
+      });
+      if (!isSelected) {
+        card2.onmouseenter = () => css2(card2, { background: CARD_BG_HI2, borderColor: "rgba(94,234,212,0.18)" });
+        card2.onmouseleave = () => css2(card2, { background: "rgba(255,255,255,0.02)", borderColor: BORDER2 });
+      }
+      card2.onclick = () => {
+        selectedId = player2.id;
+        renderPlayerList();
+        renderRightPanel(player2.id);
+      };
+      const av = avatar(player2, 32);
+      const info = document.createElement("div");
+      css2(info, { flex: "1", minWidth: "0" });
+      const nameEl = document.createElement("div");
+      css2(nameEl, {
+        fontSize: "12px",
+        fontWeight: "600",
+        color: TEXT2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      });
+      nameEl.textContent = player2.name || player2.id;
+      const st = document.createElement("div");
+      css2(st, {
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        marginTop: "2px",
+        fontSize: "10px",
+        color: player2.isConnected ? GREEN : TEXT_DIM2
+      });
+      const dot = document.createElement("span");
+      css2(dot, { width: "5px", height: "5px", borderRadius: "50%", background: player2.isConnected ? GREEN : "rgba(226,232,240,0.3)", flexShrink: "0" });
+      st.append(dot, document.createTextNode(player2.isConnected ? "Online" : "Offline"));
+      info.append(nameEl, st);
+      card2.append(av, info);
+      return card2;
     }
-    async function refreshAll(keepSelection = true) {
-      const prevSel = vt.getSelected()?.id ?? null;
-      const next = await readPlayers();
-      const sig = signature(next);
-      if (sig === lastSig) {
+    function renderPlayerList() {
+      leftPane.innerHTML = "";
+      const header = document.createElement("div");
+      css2(header, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: "6px"
+      });
+      const countEl = document.createElement("div");
+      css2(countEl, { fontSize: "10px", fontWeight: "700", letterSpacing: "0.07em", color: TEXT_DIM2, textTransform: "uppercase" });
+      countEl.textContent = `${players.length} player${players.length !== 1 ? "s" : ""}`;
+      header.appendChild(countEl);
+      leftPane.appendChild(header);
+      if (players.length === 0) {
+        const empty = document.createElement("div");
+        css2(empty, { paddingTop: "16px", textAlign: "center", color: TEXT_DIM2, fontSize: "12px" });
+        empty.textContent = "No players in room";
+        leftPane.appendChild(empty);
         return;
       }
-      lastSig = sig;
+      for (const p of players) {
+        leftPane.appendChild(createPlayerCard(p));
+      }
+    }
+    let lastSig = "";
+    function buildSig(ps) {
+      return ps.map((p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}`).join(";");
+    }
+    async function refresh(keepSelection = true) {
+      const prevSel = selectedId;
+      const next = await PlayersService.list();
+      const s = buildSig(next);
+      if (s === lastSig) return;
+      lastSig = s;
       players = next;
-      vt.setItems(players.map(vItem));
       const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
-      if (sel !== null) vt.select(sel);
-      else renderRight(null);
+      selectedId = sel;
+      renderPlayerList();
+      renderRightPanel(sel);
     }
     await PlayersService.onChange(() => {
-      refreshAll(true).catch(() => {
-      });
+      void refresh(true);
     });
-    await refreshAll(true);
-  }
-
-  // src/ui/menus/keybinds.ts
-  function createKeybindRow(ui, action2) {
-    const controls = document.createElement("div");
-    controls.style.display = "flex";
-    controls.style.alignItems = "center";
-    controls.style.flexWrap = "nowrap";
-    controls.style.gap = "8px";
-    const button = ui.hotkeyButton(
-      getKeybind(action2.id),
-      (hk) => setKeybind(action2.id, hk),
-      {
-        emptyLabel: "Unassigned",
-        listeningLabel: "Press a key\xE2\u20AC\xA6",
-        clearable: true,
-        allowModifierOnly: action2.allowModifierOnly
-      }
-    );
-    button.style.flexShrink = "0";
-    controls.appendChild(button);
-    let detachHoldListener = null;
-    if (action2.holdDetection) {
-      if (action2.id === "game.action") {
-        const holdContainer = document.createElement("div");
-        holdContainer.style.display = "flex";
-        holdContainer.style.flexDirection = "column";
-        holdContainer.style.alignItems = "center";
-        holdContainer.style.gap = "4px";
-        holdContainer.style.flex = "0 1 160px";
-        holdContainer.style.alignSelf = "center";
-        const holdButton = ui.btn("Hold", { size: "sm", variant: "secondary" });
-        holdButton.style.display = "inline-flex";
-        holdButton.style.alignItems = "center";
-        holdButton.style.gap = "6px";
-        holdButton.setAttribute("aria-label", action2.holdDetection.label);
-        holdButton.title = action2.holdDetection.label;
-        const holdIndicator = document.createElement("span");
-        holdIndicator.textContent = "\u25CF";
-        holdIndicator.style.fontSize = "10px";
-        holdIndicator.style.lineHeight = "1";
-        holdIndicator.setAttribute("aria-hidden", "true");
-        const holdText = document.createElement("span");
-        holdText.textContent = "Hold";
-        holdButton.replaceChildren(holdIndicator, holdText);
-        let holdEnabled = getKeybindHoldDetection(action2.id);
-        const updateHoldButton = (enabled) => {
-          holdEnabled = enabled;
-          holdButton.setAttribute("aria-pressed", enabled ? "true" : "false");
-          holdIndicator.style.color = enabled ? "#34c759" : "#ff3b30";
-        };
-        updateHoldButton(holdEnabled);
-        holdButton.addEventListener("click", () => {
-          setKeybindHoldDetection(action2.id, !holdEnabled);
-        });
-        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
-          updateHoldButton(enabled);
-        });
-        holdContainer.appendChild(holdButton);
-        if (action2.holdDetection.description) {
-          const holdDesc = document.createElement("div");
-          holdDesc.textContent = action2.holdDetection.description;
-          holdDesc.style.fontSize = "11px";
-          holdDesc.style.opacity = "0.65";
-          holdDesc.style.maxWidth = "100%";
-          holdDesc.style.textAlign = "center";
-          holdContainer.appendChild(holdDesc);
-        }
-        controls.appendChild(holdContainer);
-      } else {
-        const holdContainer = document.createElement("div");
-        holdContainer.style.display = "flex";
-        holdContainer.style.flexDirection = "column";
-        holdContainer.style.alignItems = "flex-start";
-        holdContainer.style.gap = "2px";
-        holdContainer.style.padding = "2px 4px";
-        holdContainer.style.borderRadius = "8px";
-        holdContainer.style.background = "rgba(255, 255, 255, 0.04)";
-        holdContainer.style.flex = "0 1 180px";
-        holdContainer.style.maxWidth = "180px";
-        const holdLabel = document.createElement("label");
-        holdLabel.style.display = "inline-flex";
-        holdLabel.style.alignItems = "center";
-        holdLabel.style.gap = "6px";
-        holdLabel.style.fontSize = "12px";
-        holdLabel.style.cursor = "pointer";
-        const holdToggle = ui.switch(getKeybindHoldDetection(action2.id));
-        holdToggle.style.margin = "0";
-        holdToggle.setAttribute("aria-label", action2.holdDetection.label);
-        const holdText = document.createElement("span");
-        holdText.textContent = action2.holdDetection.label;
-        holdText.style.opacity = "0.85";
-        holdLabel.append(holdToggle, holdText);
-        holdContainer.appendChild(holdLabel);
-        if (action2.holdDetection.description) {
-          const holdDesc = document.createElement("div");
-          holdDesc.textContent = action2.holdDetection.description;
-          holdDesc.style.fontSize = "11px";
-          holdDesc.style.opacity = "0.65";
-          holdDesc.style.maxWidth = "100%";
-          holdContainer.appendChild(holdDesc);
-        }
-        holdToggle.addEventListener("change", () => {
-          setKeybindHoldDetection(action2.id, holdToggle.checked);
-        });
-        detachHoldListener = onKeybindHoldDetectionChange(action2.id, (enabled) => {
-          holdToggle.checked = enabled;
-        });
-        controls.appendChild(holdContainer);
-      }
-    }
-    const actionsWrap = document.createElement("div");
-    actionsWrap.style.display = "flex";
-    actionsWrap.style.alignItems = "center";
-    actionsWrap.style.gap = "4px";
-    actionsWrap.style.marginLeft = "auto";
-    const clearBtn = action2.sectionId === "game" && !action2.allowClear ? null : ui.btn("", {
-      icon: "\u{1F5D1}\uFE0F",
-      variant: "danger",
-      size: "sm",
-      tooltip: "Remove this shortcut",
-      ariaLabel: "Remove keybind"
-    });
-    if (clearBtn) {
-      actionsWrap.appendChild(clearBtn);
-    }
-    const defaultHotkey = getDefaultKeybind(action2.id);
-    const defaultString = hotkeyToString(defaultHotkey);
-    let resetBtn = null;
-    if (defaultHotkey) {
-      resetBtn = ui.btn("", {
-        icon: "\u{1F504}",
-        variant: "primary",
-        size: "sm",
-        tooltip: "Restore default shortcut",
-        ariaLabel: "Reset keybind to default"
-      });
-      actionsWrap.appendChild(resetBtn);
-    }
-    const setButtonEnabled = (btn, enabled) => {
-      if (!btn) return;
-      const setter = btn.setEnabled;
-      if (setter) {
-        setter(enabled);
-      } else {
-        btn.disabled = !enabled;
-        btn.classList.toggle("is-disabled", !enabled);
-        btn.setAttribute("aria-disabled", (!enabled).toString());
-      }
-    };
-    const updateButtons2 = (current) => {
-      const hasHotkey = hotkeyToString(current).length > 0;
-      if (clearBtn) {
-        setButtonEnabled(clearBtn, hasHotkey);
-      }
-      if (resetBtn) {
-        const isDefault = hotkeyToString(current) === defaultString;
-        setButtonEnabled(resetBtn, !isDefault);
-      }
-    };
-    if (clearBtn) {
-      clearBtn.addEventListener("click", () => {
-        setKeybind(action2.id, null);
-        const refreshed = getKeybind(action2.id);
-        button.refreshHotkey(refreshed);
-        updateButtons2(refreshed);
-      });
-    }
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => {
-        resetKeybind(action2.id);
-        const refreshed = getKeybind(action2.id);
-        button.refreshHotkey(refreshed);
-        updateButtons2(refreshed);
-      });
-    }
-    controls.appendChild(actionsWrap);
-    updateButtons2(getKeybind(action2.id));
-    const stop2 = onKeybindChange(action2.id, (hk) => {
-      button.refreshHotkey(hk);
-      updateButtons2(hk);
-    });
-    ui.on("unmounted", stop2);
-    if (detachHoldListener) ui.on("unmounted", detachHoldListener);
-    const row = ui.formRow(action2.label, controls, { labelWidth: "180px" });
-    row.label.style.fontSize = "13px";
-    row.label.style.opacity = "0.92";
-    if (action2.hint) {
-      const hintEl = document.createElement("div");
-      hintEl.textContent = action2.hint;
-      hintEl.style.fontSize = "11px";
-      hintEl.style.opacity = "0.7";
-      hintEl.style.marginTop = "2px";
-      hintEl.style.gridColumn = "2 / 3";
-      row.root.appendChild(hintEl);
-    }
-    return row.root;
-  }
-  async function renderKeybindsMenu(container) {
-    const ui = new Menu({ id: "keybinds", compact: true });
-    ui.mount(container);
-    const view = ui.root.querySelector(".qmm-views");
-    view.innerHTML = "";
-    view.style.display = "flex";
-    view.style.flexDirection = "column";
-    view.style.gap = "12px";
-    view.style.padding = "8px";
-    view.style.maxHeight = "60vh";
-    view.style.overflowY = "auto";
-    const wrapper = document.createElement("div");
-    wrapper.style.display = "grid";
-    wrapper.style.gap = "12px";
-    wrapper.style.width = "100%";
-    wrapper.style.maxWidth = "720px";
-    wrapper.style.margin = "0 auto";
-    for (const section of getKeybindSections()) {
-      const card = ui.card(`${section.icon} ${section.title}`, { tone: "muted", align: "stretch" });
-      card.root.dataset.section = section.id;
-      card.body.style.display = "flex";
-      card.body.style.flexDirection = "column";
-      card.body.style.gap = "10px";
-      const desc = document.createElement("p");
-      desc.textContent = section.description;
-      desc.style.margin = "0";
-      desc.style.fontSize = "12px";
-      desc.style.opacity = "0.78";
-      card.body.appendChild(desc);
-      for (const action2 of section.actions) {
-        const row = createKeybindRow(ui, action2);
-        card.body.appendChild(row);
-      }
-      wrapper.appendChild(card.root);
-    }
-    view.appendChild(wrapper);
+    await refresh(true);
   }
 
   // src/utils/antiafk.ts
@@ -60810,10 +61812,10 @@ next: ${next}`;
     mountHUD({
       onRegister(register) {
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
-        register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
         register("calculator", "\u{1F913} Calculator", renderCalculatorMenu);
+        register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("editor", "\u{1F4DD} Editor", renderEditorMenu);
         register("stats", "\u{1F4CA} Stats", renderStatsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);

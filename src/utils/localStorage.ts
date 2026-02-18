@@ -16,6 +16,7 @@ export const ARIES_STORAGE_KEY = "aries_mod";
 const ARIES_STORAGE_VERSION = 1;
 const API_KEY_STORAGE_KEY = "aries_api_key";
 const AUTH_DECLINED_STORAGE_KEY = "aries_auth_declined";
+const SEEN_ROOM_PRIVACY_NOTICE_KEY = "aries_seen_room_privacy_notice";
 
 export type AriesStorage = {
   version: number;
@@ -646,6 +647,34 @@ export function hasDeclinedApiAuth(): boolean {
   if (!raw) return false;
   const val = String(raw).trim().toLowerCase();
   return val === "1" || val === "true" || val === "yes";
+}
+
+// ---------- Room privacy notice seen flag ----------
+
+export function hasSeenRoomPrivacyNotice(): boolean {
+  try {
+    if (typeof GM_getValue === "function") {
+      const raw = GM_getValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, null);
+      if (raw == null) return false;
+      if (typeof raw === "boolean") return raw;
+      return String(raw).trim() === "1";
+    }
+    return getHostStorage()?.getItem(SEEN_ROOM_PRIVACY_NOTICE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markRoomPrivacyNoticeSeen(): void {
+  try {
+    if (typeof GM_setValue === "function") {
+      GM_setValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+      return;
+    }
+    getHostStorage()?.setItem(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
 }
 
 export function setDeclinedApiAuth(declined: boolean): void {

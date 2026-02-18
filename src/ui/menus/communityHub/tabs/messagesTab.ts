@@ -1,4 +1,4 @@
-import { style, ensureSharedStyles, formatRelativeTimeShort, formatMessageTime, CH_EVENTS, createKeyBlocker } from "../shared";
+import { style, ensureSharedStyles, formatRelativeTimeShort, formatMessageTime, CH_EVENTS, createKeyBlocker, createPlayerBadges } from "../shared";
 import {
   getCachedFriendConversations,
   getCachedFriendConversationMessages,
@@ -173,6 +173,9 @@ export function createMessagesTab() {
     minWidth: "0",
   });
 
+  const threadNameRow = document.createElement("div");
+  style(threadNameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
+
   const threadName = document.createElement("div");
   style(threadName, {
     fontSize: "13px",
@@ -184,13 +187,18 @@ export function createMessagesTab() {
   });
   threadName.textContent = "Select a conversation";
 
+  const threadBadgesContainer = document.createElement("div");
+  style(threadBadgesContainer, { flexShrink: "0", display: "none" });
+
+  threadNameRow.append(threadName, threadBadgesContainer);
+
   const threadStatus = document.createElement("div");
   style(threadStatus, {
     fontSize: "11px",
     color: "rgba(226,232,240,0.5)",
   });
 
-  threadInfo.append(threadName, threadStatus);
+  threadInfo.append(threadNameRow, threadStatus);
   threadHeader.append(threadAvatar, threadInfo);
 
   // Thread body (messages)
@@ -640,8 +648,9 @@ export function createMessagesTab() {
     const conv = getCachedFriendConversations().find((c) => c.conversationId === selectedId);
     if (!conv) return;
 
-    // Header
-    updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false);
+    // Header — look up friend badges from cache
+    const friendData = getCachedFriendsWithViews().find((f) => f.playerId === conv.otherPlayerId);
+    updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false, friendData?.badges);
 
     const messages = sortChronological(getCachedFriendConversationMessages(selectedId));
     const currentPlayerId = getCurrentPlayerId();
@@ -1070,7 +1079,7 @@ export function createMessagesTab() {
     requestAnimationFrame(() => { threadBody.scrollTop = threadBody.scrollHeight; });
   }
 
-  function updateThreadHeader(avatarUrl: string | null | undefined, displayName: string, statusText: string | null, isGroup: boolean): void {
+  function updateThreadHeader(avatarUrl: string | null | undefined, displayName: string, statusText: string | null, isGroup: boolean, badges?: string[] | null): void {
     // Hide avatar for groups
     if (isGroup) {
       style(threadAvatar, { display: "none" });
@@ -1086,6 +1095,16 @@ export function createMessagesTab() {
     }
     threadName.textContent = displayName;
     threadStatus.textContent = statusText || "";
+
+    // Update badges
+    threadBadgesContainer.innerHTML = "";
+    const badgesEl = badges && !isGroup ? createPlayerBadges(badges) : null;
+    if (badgesEl) {
+      threadBadgesContainer.appendChild(badgesEl);
+      style(threadBadgesContainer, { display: "block" });
+    } else {
+      style(threadBadgesContainer, { display: "none" });
+    }
   }
 
   function createEmptyListItem(query: string): HTMLElement {

@@ -1,5 +1,5 @@
 import { getWelcomeCache } from "../../../../ariesModAPI";
-import type { GroupSummary } from "../../../../ariesModAPI";
+import type { GroupSummary, GroupRole } from "../../../../ariesModAPI";
 import { style, CH_EVENTS, ensureSharedStyles, createKeyBlocker } from "../shared";
 
 export function createMyGroupsSubTab(
@@ -85,7 +85,13 @@ export function createMyGroupsSubTab(
     });
 
     for (const group of sorted) {
-      groupsList.appendChild(createGroupCard(group, showGroupDetail));
+      // Convert WelcomeGroup to GroupSummary format (id: number -> string)
+      const groupSummary: GroupSummary = {
+        ...group,
+        id: String(group.id),
+        role: group.role as GroupRole,
+      };
+      groupsList.appendChild(createGroupCard(groupSummary, showGroupDetail));
     }
   };
 

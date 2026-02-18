@@ -2,7 +2,10 @@ import { getCachedMyProfile, updateCachedMyProfilePrivacy } from "../../../../ar
 import { onWelcome, updatePrivacy } from "../../../../ariesModAPI";
 import type { PlayerPrivacyPayload } from "../../../../ariesModAPI/types";
 import { createAvatarElement } from "./playerAvatar";
-import { style } from "../shared";
+import { style, createPlayerBadges } from "../shared";
+
+const ICON_GLOBE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z" stroke="currentColor" stroke-width="2"/></svg>`;
+const ICON_LOCK = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 import {
   isNotificationSoundEnabled,
   setNotificationSoundEnabled,
@@ -76,6 +79,9 @@ export function createMyProfileTab() {
       flex: "1",
     });
 
+    const nameRow = document.createElement("div");
+    style(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
+
     const name = document.createElement("div");
     style(name, {
       fontSize: "18px",
@@ -83,6 +89,13 @@ export function createMyProfileTab() {
       color: "#e7eef7",
     });
     name.textContent = myProfile.name;
+
+    nameRow.appendChild(name);
+    const badgesEl = createPlayerBadges(myProfile.badges);
+    if (badgesEl) {
+      style(badgesEl, { flexShrink: "0" });
+      nameRow.appendChild(badgesEl);
+    }
 
     const playerId = document.createElement("div");
     style(playerId, {
@@ -92,7 +105,7 @@ export function createMyProfileTab() {
     });
     playerId.textContent = myProfile.playerId;
 
-    infoColumn.append(name, playerId);
+    infoColumn.append(nameRow, playerId);
     topRow.append(discordAvatar, infoColumn);
 
     // Game avatar (cosmetics) - if available
@@ -264,8 +277,10 @@ export function createMyProfileTab() {
       gap: "12px",
     });
 
+    // Room Visibility uses a dedicated Public/Private segmented control
+    settingsList.appendChild(createRoomVisibilitySetting(myProfile.privacy.hideRoomFromPublicList as boolean));
+
     const privacySettings = [
-      { key: "hideRoomFromPublicList", label: "Make my room private" },
       { key: "showGarden", label: "Garden" },
       { key: "showInventory", label: "Inventory" },
       { key: "showCoins", label: "Coins" },
@@ -391,6 +406,90 @@ export function createMyProfileTab() {
     };
 
     return container;
+  };
+
+  // Room Visibility segmented control (Public / Private)
+  // hideRoomFromPublicList = true → Private, false → Public
+  const createRoomVisibilitySetting = (initialIsHidden: boolean) => {
+    const row = document.createElement("div");
+    style(row, {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      padding: "12px",
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.06)",
+      borderRadius: "8px",
+      transition: "all 120ms ease",
+    });
+
+    row.onmouseenter = () => style(row, { background: "rgba(255,255,255,0.04)", borderColor: "rgba(94,234,212,0.15)" });
+    row.onmouseleave = () => style(row, { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" });
+
+    const labelEl = document.createElement("div");
+    style(labelEl, { flex: "1", fontSize: "13px", fontWeight: "600", color: "#e7eef7" });
+    labelEl.textContent = "Room Visibility";
+
+    // Segmented control
+    const toggle = document.createElement("div");
+    style(toggle, {
+      display: "flex",
+      borderRadius: "6px",
+      overflow: "hidden",
+      border: "1px solid rgba(255,255,255,0.1)",
+      flexShrink: "0",
+    });
+
+    const publicBtn = document.createElement("button");
+    const privateBtn = document.createElement("button");
+
+    const ACTIVE = { background: "rgba(94,234,212,0.15)", color: "#5eead4" };
+    const INACTIVE = { background: "rgba(255,255,255,0.02)", color: "rgba(226,232,240,0.4)" };
+
+    const applyStyles = (isHidden: boolean) => {
+      style(publicBtn, isHidden ? INACTIVE : ACTIVE);
+      style(privateBtn, isHidden ? ACTIVE : INACTIVE);
+    };
+
+    const BASE_BTN: Partial<CSSStyleDeclaration> = {
+      padding: "5px 10px",
+      border: "none",
+      fontSize: "11px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      display: "flex",
+      alignItems: "center",
+    };
+
+    publicBtn.innerHTML = `${ICON_GLOBE}Public`;
+    style(publicBtn, BASE_BTN);
+
+    privateBtn.innerHTML = `${ICON_LOCK}Private`;
+    style(privateBtn, { ...BASE_BTN, borderLeft: "1px solid rgba(255,255,255,0.1)" });
+
+    let currentIsHidden = initialIsHidden;
+    applyStyles(currentIsHidden);
+
+    publicBtn.onclick = async () => {
+      if (!currentIsHidden) return;
+      currentIsHidden = false;
+      applyStyles(false);
+      const result = await updatePrivacy({ hideRoomFromPublicList: false } as Partial<PlayerPrivacyPayload>);
+      if (result) { updateCachedMyProfilePrivacy(result); } else { currentIsHidden = true; applyStyles(true); }
+    };
+
+    privateBtn.onclick = async () => {
+      if (currentIsHidden) return;
+      currentIsHidden = true;
+      applyStyles(true);
+      const result = await updatePrivacy({ hideRoomFromPublicList: true } as Partial<PlayerPrivacyPayload>);
+      if (result) { updateCachedMyProfilePrivacy(result); } else { currentIsHidden = false; applyStyles(false); }
+    };
+
+    toggle.append(publicBtn, privateBtn);
+    row.append(labelEl, toggle);
+    return row;
   };
 
   // Initial render

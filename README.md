@@ -128,10 +128,6 @@ These features are injected directly into the game's interface — no menu neede
 
 ## Other Menus
 
-### Room
-
-Browse public rooms, search for specific players across all rooms, and join with one click. Save favorite rooms for quick access.
-
 ### Calculator
 
 Estimate the exact sell value of any crop. Pick a species, adjust size, mutations, weather, and friend bonus to see min/max coin prices with a live sprite preview.

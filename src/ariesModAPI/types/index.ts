@@ -80,6 +80,7 @@ export interface PlayerView {
   lastEventAt: string | null;
   privacy: PlayerPrivacyPayload;
   state?: PlayerViewState;
+  badges?: string[] | null;
 }
 
 export type PlayerViewSection =
@@ -106,6 +107,7 @@ export interface ModPlayerSummary {
   avatar: string[] | null;
   lastEventAt: string | null;
   isOnline: boolean;
+  badges?: string[] | null;
 }
 
 // ========== Friend Types ==========
@@ -118,6 +120,7 @@ export interface FriendSummary {
   lastEventAt: string | null;
   isOnline: boolean;
   roomId: string | null;
+  badges?: string[] | null;
 }
 
 export interface IncomingRequestView extends PlayerView {
@@ -127,6 +130,7 @@ export interface IncomingRequestView extends PlayerView {
 export interface FriendRequestIncoming {
   fromPlayerId: string;
   otherPlayerId: string;
+  badges?: string[] | null;
   createdAt: string;
 }
 
@@ -135,6 +139,7 @@ export interface FriendRequestOutgoing {
   otherPlayerId: string;
   playerName?: string | null;
   avatarUrl?: string | null;
+  badges?: string[] | null;
   createdAt: string;
 }
 
@@ -156,9 +161,11 @@ export interface FriendRequestStreamRequest {
   requesterId: string;
   requesterName?: string | null;
   requesterAvatarUrl?: string | null;
+  requesterBadges?: string[] | null;
   targetId: string;
   targetName?: string | null;
   targetAvatarUrl?: string | null;
+  targetBadges?: string[] | null;
   createdAt: string;
 }
 
@@ -166,11 +173,13 @@ export interface FriendRequestStreamResponse {
   requesterId: string;
   requesterName?: string | null;
   requesterAvatarUrl?: string | null;
+  requesterBadges?: string[] | null;
   requesterIsOnline?: boolean;
   requesterRoomId?: string | null;
   responderId: string;
   responderName?: string | null;
   responderAvatarUrl?: string | null;
+  responderBadges?: string[] | null;
   responderIsOnline?: boolean;
   responderRoomId?: string | null;
   action: FriendAction;
@@ -269,6 +278,7 @@ export interface GroupSummary {
     discordAvatarUrl?: string | null;
     avatarUrl?: string | null;
     avatar?: string[] | null;
+    badges?: string[] | null;
   }>;
   unreadCount?: number;
   createdAt?: string;
@@ -282,6 +292,7 @@ export interface GroupMember {
   name?: string | null;
   avatarUrl?: string | null;
   avatar?: string[] | null;
+  badges?: string[] | null;
   joinedAt?: string;
   lastEventAt?: string | null;
   isOnline?: boolean;
@@ -439,6 +450,7 @@ export interface WelcomeFriend {
   name: string | null;
   avatarUrl: string | null;
   avatar: string[] | null;
+  badges?: string[] | null;
   lastEventAt: string | null;
   isOnline: boolean;
   roomId: string | null;
@@ -450,6 +462,7 @@ export interface WelcomeFriendRequest {
   otherPlayerId: string;
   playerName?: string | null;
   avatarUrl?: string | null;
+  badges?: string[] | null;
   createdAt: string;
 }
 
@@ -516,6 +529,7 @@ export interface MyProfile {
   name: string;
   avatarUrl?: string | null;
   avatar?: string[] | null;
+  badges?: string[] | null;
   privacy: PrivacySettings;
 }
 
@@ -524,6 +538,7 @@ export interface WelcomeGroupMember {
   name: string | null;
   avatarUrl: string | null;
   avatar: string[] | null;
+  badges?: string[] | null;
   lastEventAt: string | null;
   roomId: string | null;
   isOnline: boolean;
@@ -542,6 +557,7 @@ export interface WelcomePayload {
     avatarUrl?: string | null;
     avatar?: string[] | null;
     lastEventAt?: string | null;
+    badges?: string[] | null;
   }>;
   groups: WelcomeGroup[];
   groupMembers?: WelcomeGroupMember[];
@@ -555,6 +571,7 @@ export interface WelcomePayload {
       playerName?: string | null;
       discordAvatarUrl?: string | null;
       avatar?: string[] | null;
+      badges?: string[] | null;
     }>;
     createdAt: string;
     updatedAt: string;
@@ -603,6 +620,7 @@ export interface LeaderboardRow {
   playerName: string | null;     // "anonymous" for anonymous players
   avatarUrl: string | null;
   avatar: string[] | null;
+  badges?: string[] | null;
   rank: number;
   total: number;                 // The value for the category (coins or eggsHatched)
   rankChange: number | null;     // +2, -3, 0, null (no snapshot yet)

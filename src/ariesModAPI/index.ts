@@ -9,9 +9,6 @@ export type {
   Room,
   PlayerView,
   FriendSummary,
-  FriendWithView,
-  FriendRequest,
-  FriendRequestWithView,
   DirectMessage,
   GroupSummary,
   GroupDetails,
@@ -28,11 +25,11 @@ export type {
   WelcomePayload,
   WelcomeGroupMember,
   StreamHandle,
-  PlayerStatePayload,
   PlayerPrivacyPayload,
   LeaderboardRow,
   LeaderboardCategoryData,
   LeaderboardData,
+  ModPlayerSummary,
 } from "./types";
 
 // ========== Auth ==========

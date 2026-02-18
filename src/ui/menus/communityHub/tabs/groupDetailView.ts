@@ -13,7 +13,7 @@ import {
 } from "../../../../ariesModAPI";
 import type { GroupSummary, GroupDetails, GroupMember, GroupRole, PlayerView } from "../../../../ariesModAPI";
 import { toastSimple } from "../../../toast";
-import { style, ensureSharedStyles, formatRelativeTime, createKeyBlocker, CH_EVENTS, createRoomBadge } from "../shared";
+import { style, ensureSharedStyles, formatRelativeTime, createKeyBlocker, CH_EVENTS, createRoomBadge, createPlayerBadges } from "../shared";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -977,7 +977,16 @@ function buildMemberRow(
     meta.textContent = member.lastEventAt ? `Last seen ${formatRelativeTime(member.lastEventAt)}` : "";
   }
 
-  info.append(nameEl, meta);
+  const nameRow = document.createElement("div");
+  style(nameRow, { display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" });
+  nameRow.appendChild(nameEl);
+  const badgesEl = createPlayerBadges(member.badges, true);
+  if (badgesEl) {
+    style(badgesEl, { flexShrink: "0" });
+    nameRow.appendChild(badgesEl);
+  }
+
+  info.append(nameRow, meta);
 
   // Store refs for in-place presence/room updates
   memberRefs?.set(member.playerId, { onlineDot, meta, member });

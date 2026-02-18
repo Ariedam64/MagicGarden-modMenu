@@ -13,8 +13,8 @@ import { renderSettingsMenu } from "./ui/menus/settings";
 import { renderNotifierMenu } from "./ui/menus/notifier";
 import { renderToolsMenu } from "./ui/menus/tools";
 import { renderEditorMenu } from "./ui/menus/editor";
-import { renderRoomMenu } from "./ui/menus/room";
 import { renderKeybindsMenu } from "./ui/menus/keybinds";
+import { renderRoomMenu } from "./ui/menus/room";
 
 import { PlayerService } from "./services/player";
 import { createAntiAfkController } from "./utils/antiafk";
@@ -58,10 +58,10 @@ import {
   mountHUD({
     onRegister(register) {
       register('pets', '🐾 Pets', renderPetsMenu);
-      register('room', '🏠 Room', renderRoomMenu);
       register('locker', '🔒 Locker', renderLockerMenu);
       register('alerts',  '🔔 Alerts', renderNotifierMenu)
       register('calculator', '🤓 Calculator', renderCalculatorMenu);
+      register('room', '🏠 Room', renderRoomMenu);
       register('editor', '📝 Editor', renderEditorMenu);
       register('stats', '📊 Stats', renderStatsMenu);
       register('misc', '🧩 Misc', renderMiscMenu);

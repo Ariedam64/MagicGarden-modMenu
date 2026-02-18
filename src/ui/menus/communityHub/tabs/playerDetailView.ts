@@ -8,8 +8,9 @@ import {
   viewJournal,
 } from "./playerViewActions";
 import { createAvatarElement } from "./playerAvatar";
-import { style, ensureSharedStyles, CH_EVENTS } from "../shared";
+import { style, ensureSharedStyles, CH_EVENTS, createPlayerBadges } from "../shared";
 import { formatPrice } from "../../../../utils/format";
+import { detectEnvironment } from "../../../../utils/api";
 
 type PlayerDetailViewOptions = {
   player: PlayerView;
@@ -273,6 +274,9 @@ async function createPlayerInfoSection(player: PlayerView): Promise<HTMLElement>
     flex: "1",
   });
 
+  const nameRow = document.createElement("div");
+  style(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
+
   const name = document.createElement("div");
   style(name, {
     fontSize: "20px",
@@ -280,6 +284,10 @@ async function createPlayerInfoSection(player: PlayerView): Promise<HTMLElement>
     color: "#e7eef7",
   });
   name.textContent = player.playerName || "Unknown Player";
+
+  nameRow.appendChild(name);
+  const badgesEl = createPlayerBadges(player.badges);
+  if (badgesEl) nameRow.appendChild(badgesEl);
 
   const playerId = document.createElement("div");
   style(playerId, {
@@ -314,7 +322,8 @@ async function createPlayerInfoSection(player: PlayerView): Promise<HTMLElement>
   statusText.textContent = player.isOnline ? "Online" : "Offline";
 
   statusRow.append(statusIndicator, statusText);
-  infoColumn.append(name, playerId, statusRow);
+
+  infoColumn.append(nameRow, playerId, statusRow);
   topRow.append(avatar, infoColumn);
 
   // Add game avatar (cosmetics) if available - WAIT for it to load
@@ -571,24 +580,31 @@ function createRoomSection(roomId: string, playersCount: number, maxPlayers: num
   // Join button
   const joinButton = document.createElement("button");
   const isFull = playersCount >= maxPlayers;
-  joinButton.textContent = isFull ? "Full" : "Join";
-  joinButton.disabled = isFull;
+  const isDiscord = detectEnvironment().surface === "discord";
+  const isDisabled = isFull || isDiscord;
+
+  if (isDiscord) {
+    joinButton.textContent = "Unavailable";
+  } else {
+    joinButton.textContent = isFull ? "Full" : "Join";
+  }
+  joinButton.disabled = isDisabled;
 
   style(joinButton, {
     padding: "6px 14px",
-    border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+    border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
     borderRadius: "6px",
-    background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-    color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
+    background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+    color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
     fontSize: "12px",
     fontWeight: "600",
-    cursor: isFull ? "not-allowed" : "pointer",
+    cursor: isDisabled ? "not-allowed" : "pointer",
     transition: "all 120ms ease",
     flexShrink: "0",
-    opacity: isFull ? "0.5" : "1",
+    opacity: isDisabled ? "0.5" : "1",
   });
 
-  if (!isFull) {
+  if (!isDisabled) {
     joinButton.onmouseenter = () => {
       style(joinButton, {
         background: "rgba(94,234,212,0.2)",
@@ -604,8 +620,10 @@ function createRoomSection(roomId: string, playersCount: number, maxPlayers: num
     };
 
     joinButton.onclick = () => {
-      // TODO: Implement join room logic
+      window.location.href = `${detectEnvironment().origin}/r/${roomId}`;
     };
+  } else if (isDiscord && !isFull) {
+    joinButton.title = "Room joining is not available on Discord";
   }
 
   section.append(roomName, avatarsContainer, counter, joinButton);

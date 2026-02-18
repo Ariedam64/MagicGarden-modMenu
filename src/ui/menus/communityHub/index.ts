@@ -13,6 +13,7 @@ import {
   cleanupNotificationSound,
 } from "./notificationSound";
 import { createAuthGate } from "./authGate";
+import { createRoomPrivacyNotice, hasSeenRoomPrivacyNotice } from "./roomPrivacyNotice";
 
 const STYLE_ID = "qws-community-hub-css";
 
@@ -186,6 +187,7 @@ class CommunityHub {
   private nav: HTMLDivElement = document.createElement("div");
   private content: HTMLDivElement = document.createElement("div");
   private authGate: HTMLElement | null = null;
+  private roomPrivacyNotice: HTMLElement | null = null;
   private tabs = new Map<TabId, TabInstance>();
   private tabButtons = new Map<TabId, HTMLButtonElement>();
   private navBadges = new Map<TabId, HTMLSpanElement>();
@@ -547,6 +549,8 @@ class CommunityHub {
       requestAnimationFrame(() => {
         this.panel.classList.add("open");
       });
+      // Show room privacy notice if authenticated and not yet seen
+      if (hasApiKey()) this.maybeShowRoomPrivacyNotice();
       // Notify tabs (e.g. messagesTab auto-mark-as-read on reopen)
       try { window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN)); } catch {}
     } else {
@@ -594,6 +598,19 @@ class CommunityHub {
     }
   }
 
+  private maybeShowRoomPrivacyNotice(): void {
+    if (hasSeenRoomPrivacyNotice()) return;
+    // Skip only if the element is actually in the panel DOM
+    if (this.roomPrivacyNotice?.isConnected) return;
+
+    this.roomPrivacyNotice?.remove();
+    this.roomPrivacyNotice = createRoomPrivacyNotice(() => {
+      this.roomPrivacyNotice?.remove();
+      this.roomPrivacyNotice = null;
+    });
+    this.panel.appendChild(this.roomPrivacyNotice);
+  }
+
   destroy(): void {
     window.removeEventListener("pointerdown", this.handlePointerDown);
     window.removeEventListener(CH_EVENTS.OPEN, this.handleOverlayOpen as EventListener);
@@ -618,6 +635,12 @@ class CommunityHub {
     if (this.authGate) {
       this.authGate.remove();
       this.authGate = null;
+    }
+
+    // Cleanup room privacy notice (if dismissed before destroy)
+    if (this.roomPrivacyNotice) {
+      this.roomPrivacyNotice.remove();
+      this.roomPrivacyNotice = null;
     }
 
     for (const tab of this.tabs.values()) {

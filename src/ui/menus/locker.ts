@@ -129,7 +129,7 @@ type WeatherIconFactory = (options?: IconOptions) => HTMLElement;
 type WeatherMutationInfo = {
   key: WeatherTag;
   label: string;
-  tileRef?: number | null;
+  tileRef?: number | string | null;
   iconFactory?: WeatherIconFactory;
 };
 
@@ -147,14 +147,14 @@ const WEATHER_MUTATION_LABELS =
   (tileRefsMutationLabels as Record<string, string> | undefined) ?? {};
 
 const WEATHER_MUTATIONS: WeatherMutationInfo[] = Object.entries(
-  tileRefsMutations as Record<string, number>,
+  tileRefsMutations as Record<string, number | string>,
 )
-  .filter((entry): entry is [WeatherTag, number] => {
+  .filter((entry): entry is [WeatherTag, number | string] => {
     const [key, value] = entry;
     if (key === "Puddle" || key === "ThunderstruckGround") {
       return false;
     }
-    return typeof value === "number" && Number.isFinite(value);
+    return typeof value === "number" || typeof value === "string";
   })
   .map(([key, value]) => ({
     key,
@@ -638,13 +638,13 @@ function createWeatherMutationToggle({
     alignItems: "center",
     gap,
     padding,
-    border: "1px solid #4445",
+    border: "1px solid rgba(255,255,255,0.10)",
     borderRadius: "10px",
-    background: "#0f1318",
+    background: "rgba(255,255,255,0.02)",
     cursor: "pointer",
     minWidth,
     transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease",
-    boxShadow: "0 0 0 1px #0002 inset",
+    boxShadow: "none",
   };
   if (isMain) {
     wrapStyles.width = "100%";
@@ -708,15 +708,15 @@ function createWeatherMutationToggle({
   const updateState = () => {
     if (input.checked) {
       applyStyles(wrap, {
-        borderColor: "#6aa6",
-        boxShadow: "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
-        background: "#182029",
+        borderColor: "rgba(94,234,212,0.40)",
+        boxShadow: "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
+        background: "rgba(94,234,212,0.12)",
       });
     } else {
       applyStyles(wrap, {
-        borderColor: "#4445",
-        boxShadow: "0 0 0 1px #0002 inset",
-        background: "#0f1318",
+        borderColor: "rgba(255,255,255,0.10)",
+        boxShadow: "none",
+        background: "rgba(255,255,255,0.02)",
       });
     }
     applyDisabledState();
@@ -745,12 +745,15 @@ function styleBtnFullWidth(button: HTMLButtonElement, text: string) {
   button.style.margin = "0";
   button.style.padding = "6px 10px";
   button.style.borderRadius = "8px";
-  button.style.border = "1px solid #4445";
-  button.style.background = "#1f2328";
+  button.style.border = "1px solid rgba(255,255,255,0.10)";
+  button.style.background = "rgba(255,255,255,0.04)";
   button.style.color = "#e7eef7";
+  button.style.fontSize = "13px";
+  button.style.fontWeight = "600";
+  button.style.cursor = "pointer";
   button.style.justifyContent = "center";
-  button.onmouseenter = () => (button.style.borderColor = "#6aa1");
-  button.onmouseleave = () => (button.style.borderColor = "#4445");
+  button.onmouseenter = () => { button.style.borderColor = "rgba(94,234,212,0.35)"; button.style.background = "rgba(94,234,212,0.08)"; };
+  button.onmouseleave = () => { button.style.borderColor = "rgba(255,255,255,0.10)"; button.style.background = "rgba(255,255,255,0.04)"; };
 }
 
 function styleBtnCompact(button: HTMLButtonElement, text: string) {
@@ -758,15 +761,18 @@ function styleBtnCompact(button: HTMLButtonElement, text: string) {
   button.style.margin = "0";
   button.style.padding = "4px 8px";
   button.style.borderRadius = "8px";
-  button.style.border = "1px solid #4445";
-  button.style.background = "#1f2328";
+  button.style.border = "1px solid rgba(255,255,255,0.10)";
+  button.style.background = "rgba(255,255,255,0.04)";
   button.style.color = "#e7eef7";
+  button.style.fontSize = "12px";
+  button.style.fontWeight = "600";
+  button.style.cursor = "pointer";
   button.style.display = "inline-flex";
   button.style.alignItems = "center";
   button.style.justifyContent = "center";
   button.style.minWidth = "36px";
-  button.onmouseenter = () => (button.style.borderColor = "#6aa1");
-  button.onmouseleave = () => (button.style.borderColor = "#4445");
+  button.onmouseenter = () => { button.style.borderColor = "rgba(94,234,212,0.35)"; button.style.background = "rgba(94,234,212,0.08)"; };
+  button.onmouseleave = () => { button.style.borderColor = "rgba(255,255,255,0.10)"; button.style.background = "rgba(255,255,255,0.04)"; };
 }
 
 type SettingsCardOptions = {
@@ -786,7 +792,7 @@ function createLockerSettingsCard(
 ): SettingsCardHandle {
   const card = document.createElement("div");
   card.dataset.lockerSettingsCard = "1";
-  card.style.border = "1px solid #4445";
+  card.style.border = "1px solid rgba(255,255,255,0.10)";
   card.style.borderRadius = "10px";
   card.style.padding = "12px";
   card.style.display = "flex";
@@ -811,11 +817,11 @@ function createLockerSettingsCard(
     section.style.justifyItems = "center";
     section.style.gap = "8px";
     section.style.textAlign = "center";
-    section.style.border = "1px solid #4446";
+    section.style.border = "1px solid rgba(255,255,255,0.10)";
     section.style.borderRadius = "10px";
     section.style.padding = "10px";
-    section.style.background = "#1f2328";
-    section.style.boxShadow = "0 0 0 1px #0002 inset";
+    section.style.background = "rgba(255,255,255,0.04)";
+    section.style.boxShadow = "none";
     section.style.width = "min(720px, 100%)";
 
     const heading = document.createElement("div");
@@ -1121,13 +1127,13 @@ function createLockerSettingsCard(
     applyStyles(button, {
       padding: "6px 12px",
       borderRadius: "8px",
-      border: "1px solid #4445",
-      background: "#1f2328",
+      border: "1px solid rgba(255,255,255,0.10)",
+      background: "rgba(255,255,255,0.04)",
       color: "#e7eef7",
       fontWeight: "600",
       letterSpacing: "0.3px",
       transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease",
-      boxShadow: "0 0 0 1px #0002 inset",
+      boxShadow: "none",
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
@@ -1152,11 +1158,11 @@ function createLockerSettingsCard(
 
     button.addEventListener("mouseenter", () => {
       if (button.disabled || button.dataset.active === "1") return;
-      button.style.borderColor = "#6aa1";
+      button.style.borderColor = "rgba(94,234,212,0.35)";
     });
     button.addEventListener("mouseleave", () => {
       if (button.dataset.active === "1") return;
-      button.style.borderColor = "#4445";
+      button.style.borderColor = "rgba(255,255,255,0.10)";
     });
 
     return button;
@@ -1174,11 +1180,11 @@ function createLockerSettingsCard(
 
   const updateColorButtonVisual = (button: HTMLButtonElement, active: boolean) => {
     button.dataset.active = active ? "1" : "0";
-    button.style.borderColor = active ? "#6aa6" : "#4445";
+    button.style.borderColor = active ? "rgba(94,234,212,0.40)" : "rgba(255,255,255,0.10)";
     button.style.boxShadow = active
-      ? "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)"
-      : "0 0 0 1px #0002 inset";
-    button.style.background = active ? "#182029" : "#1f2328";
+      ? "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)"
+      : "none";
+    button.style.background = active ? "rgba(94,234,212,0.12)" : "rgba(255,255,255,0.04)";
     button.style.opacity = button.disabled ? "0.55" : "";
     button.style.cursor = button.disabled ? "default" : "pointer";
   };
@@ -1375,8 +1381,8 @@ function createLockerSettingsCard(
       gap: "6px",
       padding: "4px 10px",
       borderRadius: "999px",
-      border: "1px solid #4445",
-      background: "#11161c",
+      border: "1px solid rgba(255,255,255,0.10)",
+      background: "rgba(255,255,255,0.04)",
       color: "#e7eef7",
       fontSize: "12px",
       fontWeight: "600",
@@ -1521,11 +1527,11 @@ function createLockerSettingsCard(
       const row = applyStyles(document.createElement("div"), {
         display: "flex",
         gap: isEditing ? "10px" : "12px",
-        border: "1px solid #4446",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
         padding: isEditing ? "12px" : "10px 12px",
-        background: "#0f1318",
-        boxShadow: "0 0 0 1px #0002 inset",
+        background: "rgba(255,255,255,0.02)",
+        boxShadow: "none",
         width: "100%",
       });
       if (isEditing) {
@@ -1610,11 +1616,11 @@ function createLockerSettingsCard(
         display: "flex",
         flexDirection: "column",
         gap: "10px",
-        border: "1px solid #4446",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
         padding: "12px",
-        background: "#0f1318",
-        boxShadow: "0 0 0 1px #0002 inset",
+        background: "rgba(255,255,255,0.02)",
+        boxShadow: "none",
         width: "100%",
       });
 
@@ -1842,9 +1848,9 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
       justifyContent: "space-between",
       gap: "12px",
       padding: "8px 10px",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
-      background: "#0f1318",
+      background: "rgba(255,255,255,0.02)",
     });
     const text = applyStyles(document.createElement("div"), {
       display: "grid",
@@ -1912,7 +1918,7 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
 
   const updateEggToggleAppearance = (toggle: HTMLButtonElement, locked: boolean): void => {
     toggle.textContent = locked ? LOCKED_ICON : UNLOCKED_ICON;
-    toggle.style.background = locked ? "#331616" : "#12301d";
+    toggle.style.background = locked ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)";
     toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
   };
 
@@ -1929,13 +1935,13 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
       alignItems: "center",
       gap: "10px",
       padding: "8px 10px",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
-      background: "#0f1318",
+      background: "rgba(255,255,255,0.02)",
     });
     const toggle = document.createElement("button");
     toggle.type = "button";
-    toggle.style.border = "1px solid #4445";
+    toggle.style.border = "1px solid rgba(255,255,255,0.10)";
     toggle.style.borderRadius = "10px";
     toggle.style.padding = "6px 10px";
     toggle.style.fontSize = "14px";
@@ -2035,10 +2041,10 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   const setStatusTone = (tone: "success" | "warn" | "info") => {
     const palette =
       tone === "success"
-        ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" }
+        ? { bg: "rgba(16,185,129,0.15)", border: "rgba(16,185,129,0.35)", color: "#9ef7c3" }
         : tone === "warn"
-          ? { bg: "#321616", border: "#c74343", color: "#fca5a5" }
-          : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
+          ? { bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.35)", color: "#fca5a5" }
+          : { bg: "rgba(59,130,246,0.15)", border: "rgba(59,130,246,0.35)", color: "#a5c7ff" };
     statusBadge.style.background = palette.bg;
     statusBadge.style.border = `1px solid ${palette.border}`;
     statusBadge.style.color = palette.color;
@@ -2238,11 +2244,11 @@ function createGeneralTabRenderer(ui: Menu, store: LockerMenuStore): LockerTabRe
     alignItems: "center",
     gap: "10px",
     justifyContent: "space-between",
-    border: "1px solid #4445",
+    border: "1px solid rgba(255,255,255,0.10)",
     borderRadius: "10px",
     padding: "12px 16px",
-    background: "#1f2328",
-    boxShadow: "0 0 0 1px #0002 inset",
+    background: "rgba(255,255,255,0.04)",
+    boxShadow: "none",
     width: "min(760px, 100%)",
   });
 
@@ -2338,7 +2344,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     rowGap: "6px",
     overflow: "auto",
     paddingRight: "2px",
-    border: "1px solid #4445",
+    border: "1px solid rgba(255,255,255,0.10)",
     borderRadius: "10px",
     padding: "6px",
   });
@@ -2402,7 +2408,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
   const refreshListStyles = () => {
     listButtons.forEach(({ button, dot }, key) => {
       const isSelected = selectedKey === key;
-      button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
+      button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
       dot.style.background = store.getOverride(key)?.enabled ? "#2ecc71" : "#e74c3c";
     });
   };
@@ -2440,8 +2446,8 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       button.style.textAlign = "left";
       button.style.padding = "6px 8px";
       button.style.borderRadius = "8px";
-      button.style.border = "1px solid #4445";
-      button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+      button.style.border = "1px solid rgba(255,255,255,0.10)";
+      button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
       button.style.color = "#e7eef7";
 
       const dot = document.createElement("span");
@@ -2457,8 +2463,8 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       button.append(dot, label, icon);
       listButtons.set(opt.key, { button, dot });
 
-      button.onmouseenter = () => (button.style.borderColor = "#6aa1");
-      button.onmouseleave = () => (button.style.borderColor = "#4445");
+      button.onmouseenter = () => (button.style.borderColor = "rgba(94,234,212,0.35)");
+      button.onmouseleave = () => (button.style.borderColor = "rgba(255,255,255,0.10)");
       button.onclick = () => {
         if (selectedKey === opt.key) return;
         selectedKey = opt.key;
@@ -2487,7 +2493,7 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
       empty.style.fontSize = "13px";
       empty.style.textAlign = "center";
       empty.style.padding = "32px 24px";
-      empty.style.border = "1px dashed #4445";
+      empty.style.border = "1px dashed rgba(255,255,255,0.12)";
       empty.style.borderRadius = "10px";
       empty.style.width = "min(760px, 100%)";
       detail.appendChild(empty);
@@ -2507,11 +2513,11 @@ function createOverridesTabRenderer(ui: Menu, store: LockerMenuStore): LockerTab
     const override = store.ensureOverride(selectedKey, { silent: true });
 
     const header = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
-    header.style.border = "1px solid #4445";
+    header.style.border = "1px solid rgba(255,255,255,0.10)";
     header.style.borderRadius = "10px";
     header.style.padding = "12px 16px";
-    header.style.background = "#1f2328";
-    header.style.boxShadow = "0 0 0 1px #0002 inset";
+    header.style.background = "rgba(255,255,255,0.04)";
+    header.style.boxShadow = "none";
     header.style.width = "min(760px, 100%)";
 
     const titleWrap = ui.flexRow({ gap: 10, align: "center" });

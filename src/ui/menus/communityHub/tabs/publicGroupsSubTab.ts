@@ -193,7 +193,13 @@ export function createPublicGroupsSubTab(showGroupDetail: (group: GroupSummary) 
     });
 
     for (const group of sorted) {
-      groupsList.appendChild(createPublicGroupCard(group, showGroupDetail));
+      // Convert public group to GroupSummary format (id: number -> string)
+      const groupSummary: GroupSummary = {
+        ...group,
+        id: String(group.id),
+        isPublic: true,
+      };
+      groupsList.appendChild(createPublicGroupCard(groupSummary, showGroupDetail));
     }
   };
 

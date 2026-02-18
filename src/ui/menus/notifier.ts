@@ -893,34 +893,6 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
       stopWrap.style.flexDirection = "column";
       stopWrap.style.gap = "10px";
 
-      loopWrap = document.createElement("div");
-      loopWrap.style.display = "flex";
-      loopWrap.style.flexDirection = "column";
-      loopWrap.style.gap = "4px";
-
-      const loopTitle = document.createElement("div");
-      loopTitle.textContent = "Loop interval";
-      loopTitle.style.opacity = "0.8";
-      loopTitle.style.fontSize = "12px";
-      loopTitle.style.fontWeight = "600";
-
-      const loopBox = document.createElement("div");
-      loopBox.style.display = "inline-flex";
-      loopBox.style.alignItems = "center";
-      loopBox.style.gap = "8px";
-
-      loopInput = document.createElement("input");
-      loopInput.type = "number";
-      loopInput.min = "150"; loopInput.max = "10000"; loopInput.step = "50";
-      loopInput.style.width = "100px";
-      loopInput.style.textAlign = "center";
-
-      const loopLabel = document.createElement("span");
-      loopLabel.textContent = "ms between plays";
-      loopLabel.style.opacity = "0.85";
-      loopBox.append(loopInput, loopLabel);
-      loopWrap.append(loopTitle, loopBox);
-
       const stopInfo = document.createElement("div");
       stopInfo.textContent = cfg.showStop === false
         ? "Loops keep repeating; stop manually by disabling the alert."
@@ -929,7 +901,38 @@ function renderSettingsTab(view: HTMLElement, ui: Menu) {
       stopInfo.style.fontSize = "12px";
       stopInfo.style.lineHeight = "1.4";
 
-      stopWrap.append(stopInfo, loopWrap);
+      if (cfg.key !== "pets") {
+        loopWrap = document.createElement("div");
+        loopWrap.style.display = "flex";
+        loopWrap.style.flexDirection = "column";
+        loopWrap.style.gap = "4px";
+
+        const loopTitle = document.createElement("div");
+        loopTitle.textContent = "Loop interval";
+        loopTitle.style.opacity = "0.8";
+        loopTitle.style.fontSize = "12px";
+        loopTitle.style.fontWeight = "600";
+
+        const loopBox = document.createElement("div");
+        loopBox.style.display = "inline-flex";
+        loopBox.style.alignItems = "center";
+        loopBox.style.gap = "8px";
+
+        loopInput = document.createElement("input");
+        loopInput.type = "number";
+        loopInput.min = "150"; loopInput.max = "10000"; loopInput.step = "50";
+        loopInput.style.width = "100px";
+        loopInput.style.textAlign = "center";
+
+        const loopLabel = document.createElement("span");
+        loopLabel.textContent = "ms between plays";
+        loopLabel.style.opacity = "0.85";
+        loopBox.append(loopInput, loopLabel);
+        loopWrap.append(loopTitle, loopBox);
+        stopWrap.append(stopInfo, loopWrap);
+      } else {
+        stopWrap.append(stopInfo);
+      }
 
       if (cfg.showStop !== false) {
         stopRow = row("Stop condition", stopWrap);
