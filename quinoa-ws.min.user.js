@@ -38873,9 +38873,16 @@
         </svg>
       `;
       }
+      const nameGroup = document.createElement("div");
+      style2(nameGroup, {
+        flex: "1",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        minWidth: "0"
+      });
       const name = document.createElement("div");
       style2(name, {
-        flex: "1",
         fontSize: "13px",
         fontWeight: "600",
         color: isAnonymous ? "rgba(226,232,240,0.4)" : "#e7eef7",
@@ -38884,6 +38891,8 @@
         whiteSpace: "nowrap"
       });
       name.textContent = isAnonymous ? "Anonymous" : row.playerName || "Unknown";
+      const badges = isAnonymous ? null : createPlayerBadges(row.badges, true);
+      nameGroup.append(name, ...badges ? [badges] : []);
       const total = document.createElement("div");
       style2(total, {
         fontSize: "13px",
@@ -38893,9 +38902,9 @@
       });
       total.textContent = formatPrice(row.total) ?? String(row.total);
       if (rankChangeIndicator) {
-        card2.append(rankChangeIndicator, rankBadge, avatar2, name, total);
+        card2.append(rankChangeIndicator, rankBadge, avatar2, nameGroup, total);
       } else {
-        card2.append(rankBadge, avatar2, name, total);
+        card2.append(rankBadge, avatar2, nameGroup, total);
       }
       return card2;
     }
