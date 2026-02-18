@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.14
+// @version      3.1.15
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26,8 +26,8 @@
 // @connect      i.imgur.com
 // @connect      cdn.discordapp.com
 
-// @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
-// @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
+// @downloadURL  https://github.com/Ariedam64/MG-AriesMod/raw/refs/heads/main/dist/quinoa-ws.min.user.js
+// @updateURL    https://github.com/Ariedam64/MG-AriesMod/raw/refs/heads/main/dist/quinoa-ws.min.user.js
 // ==/UserScript==
 (() => {
   var __defProp = Object.defineProperty;
@@ -28887,7 +28887,7 @@
 
   // src/utils/version.ts
   var REPO_OWNER = "Ariedam64";
-  var REPO_NAME = "MagicGarden-modMenu";
+  var REPO_NAME = "MG-AriesMod";
   var REPO_BRANCH = "main";
   var SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
   var RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;
@@ -28946,7 +28946,7 @@
   }
   async function fetchScriptSource() {
     const commitSha = await fetchLatestCommitSha();
-    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
+    const scriptUrl = commitSha ? `${RAW_BASE_URL}/${commitSha}/dist/${SCRIPT_FILE_PATH}` : `${RAW_BASE_URL}/refs/heads/${REPO_BRANCH}/dist/${SCRIPT_FILE_PATH}?t=${Date.now()}`;
     return await fetchText(scriptUrl);
   }
   async function fetchRemoteVersion() {
