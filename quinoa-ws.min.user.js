@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.15
+// @version      3.1.16
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -27211,7 +27211,7 @@
   .qws-bell--wiggle { animation: none !important; }
 }
 `;
-      document.head.appendChild(style3);
+      (document.head ?? document.documentElement).appendChild(style3);
     }
     /* ========= SETTERS (subs) ========= */
     setShops(s) {
@@ -40288,7 +40288,7 @@
   .qws-ch-nav-btn{ flex:1 0 auto; }
 }
 `;
-    document.head.appendChild(st);
+    (document.head ?? document.documentElement).appendChild(st);
   }
   var CommunityHub = class {
     constructor() {
@@ -47404,7 +47404,7 @@
     installJournalKeybindsOnce();
     installSeedSiloKeybindsOnce();
     installDecorShedKeybindsOnce();
-    (async () => {
+    const bootToolbar = async () => {
       try {
         await renderOverlay();
       } catch (e) {
@@ -47415,7 +47415,12 @@
       } catch (e) {
         console.error("[HUD] renderCommunityHub failed:", e);
       }
-    })();
+    };
+    if (document.head) {
+      bootToolbar();
+    } else {
+      document.addEventListener("DOMContentLoaded", () => bootToolbar(), { once: true });
+    }
     (async () => {
       try {
         await PetAlertService.start();
