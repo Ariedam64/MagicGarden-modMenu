@@ -2068,6 +2068,12 @@ export const petAbilities = {
     baseProbability: 0.4,
     baseParameters: { scaleIncreasePercentage: 10 }
   },
+  ProduceScaleBoostIII: {
+    name: "Crop Size Boost III",
+    trigger: "continuous",
+    baseProbability: .5,
+    baseParameters: { scaleIncreasePercentage: 14 }
+  },
   SnowyCropSizeBoost: {
     name: "Snowy Crop Size Boost",
     trigger: "continuous",
@@ -2152,8 +2158,14 @@ export const petAbilities = {
     baseProbability: 27,
     baseParameters: { plantGrowthReductionMinutes: 5 }
   },
+  PlantGrowthBoostIII: {
+    name: "Plant Growth Boost III",
+    trigger: "continuous",
+    baseProbability: 30,
+    baseParameters: { plantGrowthReductionMinutes: 7 }
+  },
   SnowyPlantGrowthBoost: {
-    name: "Snowy Plant Growth Boost",
+    name: "Snow Plant Growth Boost",
     trigger: "continuous",
     baseProbability: 40,
     baseParameters: {
@@ -2161,18 +2173,48 @@ export const petAbilities = {
       requiredWeather: "Frost"
     }
   },
+  DawnPlantGrowthBoost: {
+    name: "Dawn Plant Growth Boost",
+    trigger: "continuous",
+    baseProbability: 60,
+    baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "Dawn" }
+  },
+  AmberPlantGrowthBoost: {
+    name: "Amber Plant Growth Boost",
+    trigger: "continuous",
+    baseProbability: 80,
+    baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "AmberMoon" }
+  },
 
   ProduceMutationBoost: {
-    name: "Crop Mutation Boost I",
-    description: "Increases the chance of garden crops gaining mutations",
-    trigger: "continuous",
-    baseParameters: { mutationChanceIncreasePercentage: 10 }
-  },
-  ProduceMutationBoostII: {
-    name: "Crop Mutation Boost II",
-    description: "Increases the chance of garden crops gaining mutations",
+    name: "Weather Mutation Boost I",
     trigger: "continuous",
     baseParameters: { mutationChanceIncreasePercentage: 15 }
+  },
+  ProduceMutationBoostII: {
+    name: "Weather Mutation Boost II",
+    trigger: "continuous",
+    baseParameters: { mutationChanceIncreasePercentage: 20 }
+  },
+  ProduceMutationBoostIII: {
+    name: "Weather Mutation Boost III",
+    trigger: "continuous",
+    baseParameters: { mutationChanceIncreasePercentage: 25 }
+  },
+  SnowyCropMutationBoost: {
+    name: "Snow Boost",
+    trigger: "continuous",
+    baseParameters: { mutationChanceIncreasePercentage: 32, requiredWeather: "Frost" }
+  },
+  DawnBoost: {
+    name: "Dawn Boost",
+    trigger: "continuous",
+    baseParameters: { mutationChanceIncreasePercentage: 36, requiredWeather: "Dawn" }
+  },
+  AmberMoonBoost: {
+    name: "Amber Moon Boost",
+    trigger: "continuous",
+    baseParameters: { mutationChanceIncreasePercentage: 40, requiredWeather: "AmberMoon" }
   },
 
   PetMutationBoost: {
@@ -2186,6 +2228,11 @@ export const petAbilities = {
     description: "Increases the chance of hatched pets gaining mutations",
     trigger: "hatchEgg",
     baseParameters: { mutationChanceIncreasePercentage: 10 }
+  },
+  PetMutationBoostIII: {
+    name: "Pet Mutation Boost III",
+    trigger: "hatchEgg",
+    baseParameters: { mutationChanceIncreasePercentage: 13 }
   },
 
   GoldGranter: {
@@ -2257,6 +2304,12 @@ export const petAbilities = {
     baseProbability: 60,
     baseParameters: { bonusXp: 12000 }
   },
+  PetAgeBoostIII: {
+    name: "Hatch XP Boost III",
+    trigger: "hatchEgg",
+    baseProbability: 70,
+    baseParameters: { bonusXp: 16000 }
+  },
 
   PetHatchSizeBoost: {
     name: "Max Strength Boost I",
@@ -2271,6 +2324,12 @@ export const petAbilities = {
     trigger: "hatchEgg",
     baseProbability: 14,
     baseParameters: { maxStrengthIncreasePercentage: 3.5 }
+  },
+  PetHatchSizeBoostIII: {
+    name: "Max Strength Boost III",
+    trigger: "hatchEgg",
+    baseProbability: 16,
+    baseParameters: { maxStrengthIncreasePercentage: 4.6 }
   },
 
   PetXpBoost: {
@@ -2287,12 +2346,18 @@ export const petAbilities = {
     baseProbability: 35,
     baseParameters: { bonusXp: 400 }
   },
-  SnowyPetXpBoost: {
-    name: "Snowy XP Boost",
+  PetXpBoostIII: {
+    name: "XP Boost III",
     trigger: "continuous",
-    baseProbability: 30,
+    baseProbability: 40,
+    baseParameters: { bonusXp: 500 }
+  },
+  SnowyPetXpBoost: {
+    name: "Snow XP Boost",
+    trigger: "continuous",
+    baseProbability: 50,
     baseParameters: {
-      bonusXp: 300,
+      bonusXp: 450,
       requiredWeather: "Frost"
     }
   },
@@ -2310,6 +2375,12 @@ export const petAbilities = {
     trigger: "continuous",
     baseProbability: 14,
     baseParameters: { hungerRestorePercentage: 35 }
+  },
+  HungerRestoreIII: {
+    name: "Hunger Restore III",
+    trigger: "continuous",
+    baseProbability: 16,
+    baseParameters: { hungerRestorePercentage: 40 }
   },
   SnowyHungerRestore: {
     name: "Snowy Hunger Restore",
@@ -2332,6 +2403,11 @@ export const petAbilities = {
     description: "Reduces the hunger depletion rate of active pets",
     trigger: "continuous",
     baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+  },
+  HungerBoostIII: {
+    name: "Hunger Boost III",
+    trigger: "continuous",
+    baseParameters: { hungerDepletionRateDecreasePercentage: 20 }
   },
   SnowyHungerBoost: {
     name: "Snowy Hunger Boost",
@@ -2454,6 +2530,18 @@ export const petAbilities = {
       baseParameters: {
           grantedMutations: ["Frozen"]
       }
+  },
+  DawnlitGranter: {
+    name: "Dawnlit Granter",
+    trigger: "continuous",
+    baseProbability: 4,
+    baseParameters: { grantedMutations: ["Dawnlit"] }
+  },
+  AmberlitGranter: {
+    name: "Amberlit Granter",
+    trigger: "continuous",
+    baseProbability: 2,
+    baseParameters: { grantedMutations: ["Ambershine"] }
   },
 };
 

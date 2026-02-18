@@ -52,8 +52,7 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
     return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
   }
 
-  if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
-    // I & II (+ Snowy)
+  if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost") || is("DawnPlantGrowthBoost") || is("AmberPlantGrowthBoost")) {
     return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
   }
 
@@ -108,8 +107,7 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
   }
 
   // Mutation / mutation pets
-  if (is("ProduceMutationBoost")) {
-    // I & II
+  if (is("ProduceMutationBoost") || is("SnowyCropMutationBoost") || is("DawnBoost") || is("AmberMoonBoost")) {
     return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
   }
 
@@ -167,19 +165,24 @@ function getAbilityChipColors(id: string): { bg: string; hover: string } {
 
   // Rain Dance
   if (is("RainDance")) {
-    return {
-      bg: "rgba(102,204,216,0.9)",
-      hover: "rgba(102,204,216,1)",
-    };
+    return { bg: "rgba(76,204,204,0.9)", hover: "rgba(76,204,204,1)" };
   }
 
   // Cold mutations granters
   if (is("SnowGranter")) {
-    return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+    return { bg: "rgba(144,184,204,0.9)", hover: "rgba(144,184,204,1)" };
   }
 
   if (is("FrostGranter")) {
-    return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+    return { bg: "rgba(148,160,204,0.9)", hover: "rgba(148,160,204,1)" };
+  }
+
+  if (is("DawnlitGranter")) {
+    return { bg: "rgba(196,124,180,0.9)", hover: "rgba(196,124,180,1)" };
+  }
+
+  if (is("AmberlitGranter")) {
+    return { bg: "rgba(204,144,96,0.9)", hover: "rgba(204,144,96,1)" };
   }
 
   // Couleur neutre par défaut (même que le jeu)
