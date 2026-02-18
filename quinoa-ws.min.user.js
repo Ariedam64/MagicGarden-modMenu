@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.1
+// @version      3.1.12
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -5348,7 +5348,8 @@
     Beet: 67,
     Gentian: 68,
     VioletCort: 69,
-    DragonFruitTree: 70
+    DragonFruitTree: 70,
+    RoseRed: 71
   };
   var tileRefsTallPlants = {
     Bamboo: 1,
@@ -5407,7 +5408,8 @@
     VioletCort: 53,
     Cabbage: 54,
     Beet: 55,
-    Gentian: 56
+    Gentian: 56,
+    Rose: 57
   };
   var tileRefsItems = {
     Coin: 1,
@@ -5692,6 +5694,29 @@
         baseWeight: 0.3,
         baseTileScale: 0.2,
         maxScale: 3
+      }
+    },
+    Rose: {
+      seed: {
+        tileRef: tileRefsSeeds.Rose,
+        name: "Rose Seed",
+        coinPrice: 229,
+        creditPrice: 27,
+        rarity: rarity.Uncommon
+      },
+      plant: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose Plant",
+        harvestType: harvestType.Single,
+        baseTileScale: 1
+      },
+      crop: {
+        tileRef: tileRefsPlants.RoseRed,
+        name: "Rose",
+        baseSellPrice: 300,
+        baseWeight: 0.01,
+        baseTileScale: 1,
+        maxScale: 4
       }
     },
     FavaBean: {
@@ -8249,6 +8274,7 @@
   var ARIES_STORAGE_VERSION = 1;
   var API_KEY_STORAGE_KEY = "aries_api_key";
   var AUTH_DECLINED_STORAGE_KEY = "aries_auth_declined";
+  var SEEN_ROOM_PRIVACY_NOTICE_KEY = "aries_seen_room_privacy_notice";
   var DEFAULT_ARIES_STORAGE = {
     version: ARIES_STORAGE_VERSION,
     friends: {
@@ -8466,6 +8492,29 @@
   function hasApiKey() {
     const key2 = getApiKey();
     return key2 !== null && key2.length > 0;
+  }
+  function hasSeenRoomPrivacyNotice() {
+    try {
+      if (typeof GM_getValue === "function") {
+        const raw = GM_getValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, null);
+        if (raw == null) return false;
+        if (typeof raw === "boolean") return raw;
+        return String(raw).trim() === "1";
+      }
+      return getHostStorage()?.getItem(SEEN_ROOM_PRIVACY_NOTICE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+  function markRoomPrivacyNoticeSeen() {
+    try {
+      if (typeof GM_setValue === "function") {
+        GM_setValue(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+        return;
+      }
+      getHostStorage()?.setItem(SEEN_ROOM_PRIVACY_NOTICE_KEY, "1");
+    } catch {
+    }
   }
   function setDeclinedApiAuth(declined) {
     try {
@@ -13743,70 +13792,75 @@
       const css = `
     /* ================= Modern UI for qmm ================= */
 .qmm{
-  --qmm-bg:        #0f1318;
-  --qmm-bg-soft:   #0b0f13;
-  --qmm-panel:     #111823cc;
-  --qmm-border:    #ffffff22;
-  --qmm-border-2:  #ffffff14;
-  --qmm-accent:    #7aa2ff;
-  --qmm-accent-2:  #92b2ff;
+  --qmm-bg:        #0a0e14;
+  --qmm-bg-soft:   #080c12;
+  --qmm-panel:     rgba(10,14,20,0.96);
+  --qmm-border:    rgba(255,255,255,0.14);
+  --qmm-border-2:  rgba(255,255,255,0.08);
+  --qmm-accent:    #5eead4;
+  --qmm-accent-2:  #2dd4bf;
   --qmm-text:      #e7eef7;
   --qmm-text-dim:  #b9c3cf;
-  --qmm-shadow:    0 6px 20px rgba(0,0,0,.35);
-  --qmm-blur:      8px;
+  --qmm-shadow:    0 18px 44px rgba(0,0,0,.45);
+  --qmm-blur:      10px;
 
   display:flex; flex-direction:column; gap:10px; color:var(--qmm-text);
 }
 .qmm-compact{ gap:6px }
 
-/* ---------- Tabs (pill + underline) ---------- */
+/* ---------- Tabs (pill nav) ---------- */
 .qmm-tabs{
-  display:flex; gap:6px; flex-wrap:wrap; align-items:flex-end;
-  padding:0 6px 2px 6px; position:relative; isolation:isolate;
-  border-bottom:1px solid var(--qmm-border);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
-  border-top-left-radius:10px; border-top-right-radius:10px;
+  display:flex; gap:4px; flex-wrap:wrap; align-items:center;
+  padding:8px 10px; position:relative; isolation:isolate;
+  border-bottom:1px solid rgba(255,255,255,0.08);
+  background:linear-gradient(120deg, rgba(22,28,40,0.9), rgba(12,17,26,0.92));
+  border-top-left-radius:18px; border-top-right-radius:18px;
 }
-.qmm-no-tabs .qmm-views{ margin-top:0 }
+.qmm-no-tabs .qmm-views{ margin-top:0; border-radius:18px; }
 
 .qmm-tab{
   flex:1 1 0; min-width:0; cursor:pointer;
   display:inline-flex; justify-content:center; align-items:center; gap:8px;
-  padding:8px 12px; color:var(--qmm-text);
-  background:transparent; border:1px solid transparent; border-bottom:none;
-  border-top-left-radius:10px; border-top-right-radius:10px;
-  position:relative; margin:0; margin-bottom:-1px;
-  transition:background .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease;
+  padding:8px 12px; color:#c9d4e6;
+  background:transparent; border:1px solid transparent;
+  border-radius:12px;
+  position:relative; margin:0;
+  font-size:12px;
+  transition:background 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .qmm-compact .qmm-tab{ padding:6px 10px }
-.qmm-tab:hover{ background:rgba(255,255,255,.06) }
+.qmm-tab:hover{ background:rgba(94,234,212,0.08); color:#e7eef7; }
 .qmm-tab:active{ transform:translateY(1px) }
-.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:10px }
+.qmm-tab:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; border-radius:12px }
 
 .qmm-tab .badge{
   font-size:11px; line-height:1; padding:2px 6px; border-radius:999px;
-  background:#ffffff1a; border:1px solid #ffffff22;
+  background:rgba(94,234,212,0.12); border:1px solid rgba(94,234,212,0.25);
+  color:#5eead4;
 }
 
 .qmm-tab.active{
-  background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  color:#fff; box-shadow:inset 0 -1px 0 #0007;
-}
-.qmm-tab.active::after{
-  content:""; position:absolute; left:10%; right:10%; bottom:-1px; height:2px;
-  background:linear-gradient(90deg, transparent, var(--qmm-accent), transparent);
-  border-radius:2px; box-shadow:0 0 12px var(--qmm-accent-2);
+  background:rgba(94,234,212,0.18);
+  border-color:rgba(94,234,212,0.35);
+  color:#ecfdf5;
 }
 
 /* ---------- Views panel ---------- */
 .qmm-views{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
+  border:1px solid rgba(255,255,255,0.14); border-radius:18px; padding:14px;
+  background:linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%);
+  backdrop-filter:blur(10px);
   display:flex; flex-direction:column;
-  min-width:0; min-height:0; overflow:auto; box-shadow:var(--qmm-shadow);
+  min-width:0; min-height:0; overflow:auto; box-shadow:0 18px 44px rgba(0,0,0,.45);
+  scrollbar-width:thin;
+  scrollbar-color:rgba(94,234,212,0.20) rgba(255,255,255,0.03);
 }
+.qmm-views::-webkit-scrollbar{ width:8px; }
+.qmm-views::-webkit-scrollbar-track{ background:rgba(255,255,255,0.03); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb{ background:rgba(94,234,212,0.20); border-radius:4px; }
+.qmm-views::-webkit-scrollbar-thumb:hover{ background:rgba(94,234,212,0.35); }
 .qmm-compact .qmm-views{ padding:8px }
-.qmm-tabs + .qmm-views{ margin-top:-1px }
+.qmm-tabs + .qmm-views{ margin-top:0; border-top:none; border-top-left-radius:0; border-top-right-radius:0; }
 
 .qmm-view{ display:none; min-width:0; min-height:0; }
 .qmm-view.active{ display:block; }
@@ -13835,10 +13889,10 @@
   line-height:1.2;
   cursor:pointer;
   user-select:none;
-  transition:background .18s ease, border-color .18s ease, transform .1s ease, box-shadow .18s ease, color .18s ease;
+  transition:background 120ms ease, border-color 120ms ease, transform 100ms ease, box-shadow 120ms ease, color 120ms ease;
 }
 .qmm-compact .qmm-btn{ padding:6px 10px }
-.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:#ffffff3d }
+.qmm-btn:hover{ background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border-color:rgba(255,255,255,0.24) }
 .qmm-btn:active{ transform:translateY(1px) }
 .qmm-btn:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px; }
 .qmm-btn:disabled,
@@ -13858,12 +13912,12 @@
 /* Button variants */
 .qmm-btn--primary,
 .qmm-btn.qmm-primary{
-  background:linear-gradient(180deg, rgba(122,162,255,.38), rgba(122,162,255,.16));
-  border-color:#9db7ff55;
-  box-shadow:0 4px 14px rgba(122,162,255,.26);
+  background:linear-gradient(180deg, rgba(94,234,212,.32), rgba(45,212,191,.14));
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 4px 14px rgba(94,234,212,.18);
 }
 .qmm-btn--primary:hover,
-.qmm-btn.qmm-primary:hover{ border-color:#afc5ff77; }
+.qmm-btn.qmm-primary:hover{ border-color:rgba(94,234,212,0.65); background:linear-gradient(180deg, rgba(94,234,212,.42), rgba(45,212,191,.22)); }
 .qmm-btn--secondary{
   background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.01));
 }
@@ -13876,9 +13930,9 @@
 .qmm-btn--ghost{ background:transparent; border-color:transparent; }
 .qmm-btn--ghost:hover{ background:rgba(255,255,255,.06); border-color:#ffffff2a; }
 .qmm-btn.active{
-  background:#79a6ff22;
-  border-color:#79a6ff66;
-  box-shadow: inset 0 0 0 1px #79a6ff33;
+  background:rgba(94,234,212,0.14);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:inset 0 0 0 1px rgba(94,234,212,0.20);
 }
 
 .qmm-flex{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
@@ -13892,13 +13946,14 @@
 .qmm-card{
   display:grid;
   gap:12px;
-  border:1px solid var(--qmm-border);
-  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:14px;
   padding:14px;
-  background:var(--qmm-panel);
-  backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(18,24,34,0.95), rgba(12,17,26,0.96));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
   width:100%;
+  transition:border-color 120ms ease, box-shadow 120ms ease;
 }
 .qmm-card.is-center{ text-align:center; align-items:center; }
 .qmm-card.is-stretch{ align-items:stretch; }
@@ -13916,13 +13971,13 @@
 .qmm-card__actions{ display:flex; gap:6px; margin-left:auto; }
 .qmm-card__body{ display:grid; gap:10px; }
 .qmm-card[data-tone="muted"]{
-  background:rgba(15,17,22,.88);
-  border-color:#ffffff1a;
+  background:rgba(10,14,20,.92);
+  border-color:rgba(255,255,255,0.08);
   box-shadow:none;
 }
 .qmm-card[data-tone="accent"]{
-  border-color:#7aa2ff99;
-  box-shadow:0 10px 26px rgba(122,162,255,.25);
+  border-color:rgba(94,234,212,0.45);
+  box-shadow:0 10px 26px rgba(94,234,212,.15);
 }
 
 .qmm .stats-collapse-toggle{
@@ -13933,9 +13988,9 @@
   padding:6px 12px;
   min-height:32px;
   border-radius:999px;
-  border:1px solid rgba(122,162,255,.45);
-  background:linear-gradient(135deg, rgba(122,162,255,.18), rgba(33,59,121,.18));
-  color:rgba(220,230,255,.92);
+  border:1px solid rgba(94,234,212,.40);
+  background:linear-gradient(135deg, rgba(94,234,212,.14), rgba(15,30,30,.18));
+  color:rgba(220,240,236,.92);
   font-size:12px;
   font-weight:600;
   letter-spacing:.01em;
@@ -13944,25 +13999,25 @@
   transition:background .26s ease, border-color .26s ease, box-shadow .26s ease, color .26s ease, transform .16s ease;
 }
 .qmm .stats-collapse-toggle:hover{
-  background:linear-gradient(135deg, rgba(122,162,255,.28), rgba(53,94,182,.24));
-  border-color:rgba(122,162,255,.62);
+  background:linear-gradient(135deg, rgba(94,234,212,.22), rgba(20,100,90,.22));
+  border-color:rgba(94,234,212,.55);
   color:#fff;
-  box-shadow:0 14px 30px rgba(66,106,201,.32), inset 0 1px 0 rgba(255,255,255,.18);
+  box-shadow:0 14px 30px rgba(45,212,191,.25), inset 0 1px 0 rgba(255,255,255,.18);
 }
 .qmm .stats-collapse-toggle:active{
   transform:translateY(1px) scale(.99);
 }
 .qmm-card--collapsible[data-collapsed="true"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.12), rgba(23,36,78,.12));
-  border-color:rgba(122,162,255,.32);
-  color:rgba(208,219,255,.82);
+  background:linear-gradient(135deg, rgba(94,234,212,.08), rgba(8,30,28,.12));
+  border-color:rgba(94,234,212,.25);
+  color:rgba(196,240,236,.85);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.1), 0 6px 18px rgba(9,13,27,.22);
 }
 .qmm-card--collapsible[data-collapsed="false"] .stats-collapse-toggle{
-  background:linear-gradient(135deg, rgba(122,162,255,.36), rgba(83,124,255,.28));
-  border-color:rgba(122,162,255,.78);
+  background:linear-gradient(135deg, rgba(94,234,212,.30), rgba(45,212,191,.25));
+  border-color:rgba(94,234,212,.72);
   color:#fff;
-  box-shadow:0 16px 32px rgba(72,112,214,.35), inset 0 1px 0 rgba(255,255,255,.22);
+  box-shadow:0 16px 32px rgba(45,212,191,.28), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .qmm .stats-collapse-toggle__icon{
   width:16px;
@@ -14018,10 +14073,10 @@
 .qmm-chip-toggle__label{ font-weight:600; }
 .qmm-chip-toggle__desc{ font-size:12px; opacity:.75; }
 .qmm-chip-toggle__badge{ font-size:11px; padding:2px 6px; border-radius:999px; background:#ffffff1a; border:1px solid #ffffff22; }
-.qmm-chip-toggle:hover{ border-color:#7aa2ff55; background:rgba(122,162,255,.12); }
+.qmm-chip-toggle:hover{ border-color:rgba(94,234,212,0.30); background:rgba(94,234,212,0.09); }
 .qmm-chip-toggle input:checked + .qmm-chip-toggle__face{
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  box-shadow:0 0 0 1px #7aa2ff55 inset, 0 6px 18px rgba(122,162,255,.22);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  box-shadow:0 0 0 1px rgba(94,234,212,0.35) inset, 0 6px 18px rgba(94,234,212,.15);
 }
 
 .qmm .stats-metric-grid{
@@ -14041,8 +14096,8 @@
   transition:border-color .18s ease, background .18s ease, transform .14s ease;
 }
 .qmm .stats-metric:hover{
-  border-color:#7aa2ff55;
-  background:linear-gradient(180deg, rgba(122,162,255,.22), rgba(122,162,255,.10));
+  border-color:rgba(94,234,212,0.30);
+  background:linear-gradient(180deg, rgba(94,234,212,.14), rgba(94,234,212,.06));
   transform:translateY(-1px);
 }
 .qmm .stats-metric__label{
@@ -14073,8 +14128,8 @@
   transition:border-color .18s ease, background .18s ease;
 }
 .qmm .stats-list__row:not(.stats-list__row--header):hover{
-  background:rgba(122,162,255,.12);
-  border-color:#7aa2ff55;
+  background:rgba(94,234,212,0.09);
+  border-color:rgba(94,234,212,0.28);
 }
 .qmm .stats-list__row--header{
   background:transparent;
@@ -14216,13 +14271,13 @@
 
 /* Inputs */
 .qmm-input{
-  min-width:90px; background:rgba(0,0,0,.42); color:#fff;
-  border:1px solid var(--qmm-border); border-radius:10px;
+  min-width:90px; background:rgba(255,255,255,0.04); color:#fff;
+  border:1px solid rgba(255,255,255,0.12); border-radius:10px;
   padding:8px 10px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
-  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  transition:border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 .qmm-input::placeholder{ color:#cbd6e780 }
-.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:#0f1521; box-shadow:0 0 0 2px #7aa2ff33 }
+.qmm-input:focus{ outline:none; border-color:var(--qmm-accent); background:rgba(8,12,20,0.9); box-shadow:0 0 0 2px rgba(94,234,212,0.20) }
 
 /* Number input + spinner (unchanged API) */
 .qmm-input-number{ display:inline-flex; align-items:center; gap:6px }
@@ -14249,7 +14304,7 @@
   background:#fff; border-radius:50%; transition:transform .2s ease;
   box-shadow:0 2px 8px rgba(0,0,0,.35);
 }
-.qmm-switch:checked{ background:linear-gradient(180deg, rgba(122,162,255,.9), rgba(122,162,255,.6)) }
+.qmm-switch:checked{ background:linear-gradient(180deg, rgba(94,234,212,.90), rgba(45,212,191,.65)) }
 .qmm-switch:checked::before{ transform:translateX(18px) }
 .qmm-switch:focus-visible{ outline:2px solid var(--qmm-accent); outline-offset:2px }
 
@@ -14262,11 +14317,11 @@
 }
 .qmm-range:focus{ outline:none }
 .qmm-range::-webkit-slider-runnable-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-moz-range-track{
-  height:6px; background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff44);
+  height:6px; background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.25));
   border-radius:999px; box-shadow:inset 0 1px 0 rgba(255,255,255,.14);
 }
 .qmm-range::-webkit-slider-thumb{
@@ -14294,7 +14349,7 @@
   height:8px;
   border-radius:999px;
   background:linear-gradient(90deg, rgba(8,19,33,.8), rgba(27,43,68,.9));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(118,156,255,.08);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), inset 0 0 0 1px rgba(94,234,212,.08);
 }
 .qmm-range-dual-fill{
   position:absolute;
@@ -14302,8 +14357,8 @@
   transform:translateY(-50%);
   height:8px;
   border-radius:999px;
-  background:linear-gradient(90deg, var(--qmm-accent), #7aa2ff99);
-  box-shadow:0 4px 14px rgba(37,92,255,.3);
+  background:linear-gradient(90deg, var(--qmm-accent), rgba(94,234,212,0.55));
+  box-shadow:0 4px 14px rgba(94,234,212,.22);
   transition:left .12s ease, right .12s ease;
 }
 .qmm-range-dual-input{
@@ -14325,8 +14380,8 @@
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -14340,8 +14395,8 @@
   width:18px;
   height:18px;
   border-radius:50%;
-  background:linear-gradient(145deg, #fff, #dce6ff);
-  border:2px solid rgba(122,162,255,.8);
+  background:linear-gradient(145deg, #fff, #d6f5ef);
+  border:2px solid rgba(94,234,212,.65);
   box-shadow:0 4px 12px rgba(0,0,0,.35);
   transition:transform .12s ease, box-shadow .12s ease;
 }
@@ -14361,7 +14416,7 @@
   font-size:11px;
   line-height:1;
   font-weight:600;
-  color:#dbe6ff;
+  color:#d6f5ef;
   background:rgba(17,28,46,.9);
   box-shadow:0 4px 14px rgba(0,0,0,.35);
   pointer-events:none;
@@ -14446,10 +14501,11 @@
 }
 .qmm-split-left{ display:flex; flex-direction:column; gap:10px }
 .qmm-split-right{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
+  border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:12px;
   display:flex; flex-direction:column; gap:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur));
-  box-shadow:var(--qmm-shadow);
+  background:linear-gradient(160deg, rgba(15,20,30,0.95), rgba(10,14,20,0.95));
+  backdrop-filter:blur(10px);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
 }
 
 /* ---------- VTabs (vertical list + filter) ---------- */
@@ -14474,9 +14530,9 @@
 .qmm-vtab:hover{ background:rgba(255,255,255,.07); border-color:#ffffff34 }
 .qmm-vtab:active{ transform:translateY(1px) }
 .qmm-vtab.active{
-  background:linear-gradient(180deg, rgba(122,162,255,.18), rgba(122,162,255,.08));
-  border-color:#9db7ff55;
-  box-shadow:0 1px 14px rgba(122,162,255,.18) inset;
+  background:linear-gradient(180deg, rgba(94,234,212,.16), rgba(94,234,212,.07));
+  border-color:rgba(94,234,212,0.35);
+  box-shadow:0 1px 14px rgba(94,234,212,.14) inset;
 }
 
 .qmm-dot{ width:10px; height:10px; border-radius:50%; justify-self:center; box-shadow:0 0 0 1px #0006 inset }
@@ -14492,12 +14548,8 @@
 }
 
 /* ---------- Small helpers (optional) ---------- */
-.qmm .qmm-card{
-  border:1px solid var(--qmm-border); border-radius:12px; padding:12px;
-  background:var(--qmm-panel); backdrop-filter:blur(var(--qmm-blur)); box-shadow:var(--qmm-shadow);
-}
   .qmm .qmm-help{ font-size:12px; color:var(--qmm-text-dim) }
-  .qmm .qmm-sep{ height:1px; background:var(--qmm-border); width:100%; opacity:.6; }
+  .qmm .qmm-sep{ height:1px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent); width:100%; border:none; }
 
 /* drag handle */
 .qmm-grab {
@@ -14558,22 +14610,22 @@
 }
 
 .qmm-hotkey.is-assigned{
-  border-color: rgba(122,162,255,.45);
-  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(122,162,255,.24);
+  border-color:rgba(94,234,212,0.40);
+  box-shadow:0 1px 0 #000 inset, 0 1px 16px rgba(0,0,0,.18), 0 0 0 2px rgba(94,234,212,0.20);
 }
 
 .qmm-hotkey.is-recording{
   outline:2px solid var(--qmm-accent);
   outline-offset:2px;
-  border-color: var(--qmm-accent);
-  background:linear-gradient(180deg, rgba(122,162,255,.25), rgba(122,162,255,.10));
-  animation: qmm-hotkey-breathe 1.2s ease-in-out infinite;
+  border-color:var(--qmm-accent);
+  background:linear-gradient(180deg, rgba(94,234,212,.22), rgba(94,234,212,.08));
+  animation:qmm-hotkey-breathe 1.2s ease-in-out infinite;
 }
-  
+
 @keyframes qmm-hotkey-breathe{
-  0%   { box-shadow: 0 0 0 0 rgba(122,162,255,.55), 0 1px 16px rgba(0,0,0,.25); }
-  60%  { box-shadow: 0 0 0 12px rgba(122,162,255,0), 0 1px 16px rgba(0,0,0,.25); }
-  100% { box-shadow: 0 0 0 0 rgba(122,162,255,0),  0 1px 16px rgba(0,0,0,.25); }
+  0%   { box-shadow: 0 0 0 0 rgba(94,234,212,.50), 0 1px 16px rgba(0,0,0,.25); }
+  60%  { box-shadow: 0 0 0 12px rgba(94,234,212,0), 0 1px 16px rgba(0,0,0,.25); }
+  100% { box-shadow: 0 0 0 0 rgba(94,234,212,0),  0 1px 16px rgba(0,0,0,.25); }
 }
 
 /* ---------- Segmented (minimal, modern) ---------- */
@@ -14583,8 +14635,8 @@
   --seg-stroke: 1.2px;      /* \xE9paisseur du trait */
   --seg-nudge-x: 0px;       /* micro-ajustements optionnels */
   --seg-nudge-w: 0px;
-  --seg-fill: rgba(122,162,255,.05);           
-  --seg-stroke-color: rgba(122,162,255,.60);
+  --seg-fill: rgba(94,234,212,.07);
+  --seg-stroke-color: rgba(94,234,212,.55);
 
   position: relative;
   display: inline-flex;
@@ -14633,7 +14685,7 @@
   outline: var(--seg-stroke,1.2px) solid var(--seg-stroke-color);
   outline-offset: calc(-1 * var(--seg-stroke));
 
-  box-shadow: 0 1px 4px rgba(122,162,255,.10);
+  box-shadow: 0 1px 4px rgba(94,234,212,.08);
   transform-origin: left center;
   will-change: transform, width, opacity;
   transition: transform .18s cubic-bezier(.2,.8,.2,1),
@@ -14645,7 +14697,16 @@
 /* Accessibilit\xE9 */
 @media (prefers-reduced-motion: reduce){
   .qmm-seg__indicator, .qmm-seg__btn { transition: none; }
-}  /* \u2190 manquait cette accolade */
+}
+
+/* ---------- Card bounce utility ---------- */
+@keyframes qmm-card-bounce{
+  0%   { transform:translateY(0); }
+  30%  { transform:translateY(-4px); }
+  60%  { transform:translateY(1px); }
+  100% { transform:translateY(0); }
+}
+.qmm-card.is-bouncing{ animation:qmm-card-bounce 320ms ease; }
 
     `;
       const st = document.createElement("style");
@@ -23173,29 +23234,6 @@
     const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
     let sum = 0;
     for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
-    return sum;
-  }
-  function sumInventoryValue(items, opts, playersInRoom) {
-    if (!Array.isArray(items)) return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const it of items) {
-      if (it?.itemType === "Produce") {
-        sum += valueFromInventoryProduce(it, merged);
-      }
-    }
-    return sum;
-  }
-  function sumGardenValue(garden2, opts, playersInRoom) {
-    if (!garden2 || typeof garden2 !== "object") return 0;
-    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
-    let sum = 0;
-    for (const k of Object.keys(garden2)) {
-      const p = garden2[k];
-      if (p?.objectType === "plant") {
-        sum += valueFromGardenPlant(p, merged);
-      }
-    }
     return sum;
   }
   var DefaultPricing = Object.freeze({
@@ -32980,6 +33018,62 @@
       }
       return avatar;
     }
+    const URL_RE = /https?:\/\/[^\s<>)"'\]]+/gi;
+    function shortenUrl(raw) {
+      try {
+        const u = new URL(raw);
+        const host = u.hostname.replace(/^www\./, "");
+        const path = u.pathname === "/" ? "" : u.pathname;
+        const short = host + path;
+        return short.length > 40 ? short.slice(0, 37) + "..." : short;
+      } catch {
+        return raw.length > 40 ? raw.slice(0, 37) + "..." : raw;
+      }
+    }
+    function openLink2(url) {
+      if (isDiscordSurface() && typeof GM_openInTab === "function") {
+        try {
+          GM_openInTab(url, { active: true, insert: true });
+          return;
+        } catch {
+        }
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+    function linkifyInto(text, container) {
+      URL_RE.lastIndex = 0;
+      let lastIdx = 0;
+      let match;
+      while ((match = URL_RE.exec(text)) !== null) {
+        if (match.index > lastIdx) {
+          container.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+        }
+        const href = match[0];
+        const link = document.createElement("a");
+        link.textContent = shortenUrl(href);
+        link.title = href;
+        link.href = href;
+        link.rel = "noopener noreferrer";
+        link.target = "_blank";
+        Object.assign(link.style, {
+          color: "#5eead4",
+          textDecoration: "underline",
+          textDecorationColor: "rgba(94,234,212,0.4)",
+          cursor: "pointer",
+          wordBreak: "break-all"
+        });
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openLink2(href);
+        });
+        container.appendChild(link);
+        lastIdx = URL_RE.lastIndex;
+      }
+      if (lastIdx < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIdx)));
+      }
+    }
     function createBubbleContent(body, createdAt, isOutgoing, status, showMeta = true) {
       const bubble = document.createElement("div");
       style2(bubble, { maxWidth: "70%", display: "flex", flexDirection: "column", gap: showMeta ? "4px" : "0" });
@@ -32997,10 +33091,10 @@
         color: isOutgoing ? "#d1fae5" : "#e7eef7"
       });
       if (cleanText) {
-        content.textContent = cleanText;
+        linkifyInto(cleanText, content);
         bubble.appendChild(content);
       } else if (tokens.length === 0) {
-        content.textContent = body;
+        linkifyInto(body, content);
         bubble.appendChild(content);
       }
       if (tokens.length > 0) {
@@ -34257,22 +34351,28 @@
     counter.textContent = `${playersCount}/${maxPlayers}`;
     const joinButton = document.createElement("button");
     const isFull = playersCount >= maxPlayers;
-    joinButton.textContent = isFull ? "Full" : "Join";
-    joinButton.disabled = isFull;
+    const isDiscord = detectEnvironment().surface === "discord";
+    const isDisabled = isFull || isDiscord;
+    if (isDiscord) {
+      joinButton.textContent = "Unavailable";
+    } else {
+      joinButton.textContent = isFull ? "Full" : "Join";
+    }
+    joinButton.disabled = isDisabled;
     style2(joinButton, {
       padding: "6px 14px",
-      border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+      border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
       borderRadius: "6px",
-      background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-      color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
+      background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+      color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
       fontSize: "12px",
       fontWeight: "600",
-      cursor: isFull ? "not-allowed" : "pointer",
+      cursor: isDisabled ? "not-allowed" : "pointer",
       transition: "all 120ms ease",
       flexShrink: "0",
-      opacity: isFull ? "0.5" : "1"
+      opacity: isDisabled ? "0.5" : "1"
     });
-    if (!isFull) {
+    if (!isDisabled) {
       joinButton.onmouseenter = () => {
         style2(joinButton, {
           background: "rgba(94,234,212,0.2)",
@@ -34286,7 +34386,10 @@
         });
       };
       joinButton.onclick = () => {
+        window.location.href = `${detectEnvironment().origin}/r/${roomId}`;
       };
+    } else if (isDiscord && !isFull) {
+      joinButton.title = "Room joining is not available on Discord";
     }
     section.append(roomName, avatarsContainer, counter, joinButton);
     return section;
@@ -35764,7 +35867,7 @@
         };
         joinButton.onclick = (e) => {
           e.stopPropagation();
-          window.location.href = `https://magicgarden.gg/r/${room.id}`;
+          window.location.href = `${detectEnvironment().origin}/r/${room.id}`;
         };
       } else if (isDiscord && !isFull) {
         joinButton.title = "Room joining is not available on Discord";
@@ -35898,7 +36001,12 @@
         return bTime - aTime;
       });
       for (const group of sorted) {
-        groupsList.appendChild(createGroupCard(group, showGroupDetail));
+        const groupSummary = {
+          ...group,
+          id: String(group.id),
+          role: group.role
+        };
+        groupsList.appendChild(createGroupCard(groupSummary, showGroupDetail));
       }
     };
     renderGroups();
@@ -36222,7 +36330,12 @@
         return bTime - aTime;
       });
       for (const group of sorted) {
-        groupsList.appendChild(createPublicGroupCard(group, showGroupDetail));
+        const groupSummary = {
+          ...group,
+          id: String(group.id),
+          isPublic: true
+        };
+        groupsList.appendChild(createPublicGroupCard(groupSummary, showGroupDetail));
       }
     };
     const loadPublicGroups = async () => {
@@ -38525,6 +38638,8 @@
   }
 
   // src/ui/menus/communityHub/tabs/myProfileTab.ts
+  var ICON_GLOBE2 = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z" stroke="currentColor" stroke-width="2"/></svg>`;
+  var ICON_LOCK2 = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="display:inline-block;vertical-align:middle;margin-right:4px"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
   function createMyProfileTab() {
     const container = document.createElement("div");
     style2(container, {
@@ -38731,8 +38846,8 @@
         flexDirection: "column",
         gap: "12px"
       });
+      settingsList.appendChild(createRoomVisibilitySetting(myProfile.privacy.hideRoomFromPublicList));
       const privacySettings = [
-        { key: "hideRoomFromPublicList", label: "Make my room private" },
         { key: "showGarden", label: "Garden" },
         { key: "showInventory", label: "Inventory" },
         { key: "showCoins", label: "Coins" },
@@ -38836,6 +38951,83 @@
         onChange(isOn);
       };
       return container2;
+    };
+    const createRoomVisibilitySetting = (initialIsHidden) => {
+      const row = document.createElement("div");
+      style2(row, {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "12px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px solid rgba(255,255,255,0.06)",
+        borderRadius: "8px",
+        transition: "all 120ms ease"
+      });
+      row.onmouseenter = () => style2(row, { background: "rgba(255,255,255,0.04)", borderColor: "rgba(94,234,212,0.15)" });
+      row.onmouseleave = () => style2(row, { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.06)" });
+      const labelEl = document.createElement("div");
+      style2(labelEl, { flex: "1", fontSize: "13px", fontWeight: "600", color: "#e7eef7" });
+      labelEl.textContent = "Room Visibility";
+      const toggle = document.createElement("div");
+      style2(toggle, {
+        display: "flex",
+        borderRadius: "6px",
+        overflow: "hidden",
+        border: "1px solid rgba(255,255,255,0.1)",
+        flexShrink: "0"
+      });
+      const publicBtn = document.createElement("button");
+      const privateBtn = document.createElement("button");
+      const ACTIVE = { background: "rgba(94,234,212,0.15)", color: "#5eead4" };
+      const INACTIVE = { background: "rgba(255,255,255,0.02)", color: "rgba(226,232,240,0.4)" };
+      const applyStyles3 = (isHidden) => {
+        style2(publicBtn, isHidden ? INACTIVE : ACTIVE);
+        style2(privateBtn, isHidden ? ACTIVE : INACTIVE);
+      };
+      const BASE_BTN = {
+        padding: "5px 10px",
+        border: "none",
+        fontSize: "11px",
+        fontWeight: "600",
+        cursor: "pointer",
+        transition: "all 120ms ease",
+        display: "flex",
+        alignItems: "center"
+      };
+      publicBtn.innerHTML = `${ICON_GLOBE2}Public`;
+      style2(publicBtn, BASE_BTN);
+      privateBtn.innerHTML = `${ICON_LOCK2}Private`;
+      style2(privateBtn, { ...BASE_BTN, borderLeft: "1px solid rgba(255,255,255,0.1)" });
+      let currentIsHidden = initialIsHidden;
+      applyStyles3(currentIsHidden);
+      publicBtn.onclick = async () => {
+        if (!currentIsHidden) return;
+        currentIsHidden = false;
+        applyStyles3(false);
+        const result = await updatePrivacy({ hideRoomFromPublicList: false });
+        if (result) {
+          updateCachedMyProfilePrivacy(result);
+        } else {
+          currentIsHidden = true;
+          applyStyles3(true);
+        }
+      };
+      privateBtn.onclick = async () => {
+        if (currentIsHidden) return;
+        currentIsHidden = true;
+        applyStyles3(true);
+        const result = await updatePrivacy({ hideRoomFromPublicList: true });
+        if (result) {
+          updateCachedMyProfilePrivacy(result);
+        } else {
+          currentIsHidden = false;
+          applyStyles3(false);
+        }
+      };
+      toggle.append(publicBtn, privateBtn);
+      row.append(labelEl, toggle);
+      return row;
     };
     let renderCount = 0;
     const render2 = async () => {
@@ -39203,6 +39395,129 @@
     return container;
   }
 
+  // src/ui/menus/communityHub/roomPrivacyNotice.ts
+  var INFO_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+  function createRoomPrivacyNotice(onDismiss) {
+    const overlay = document.createElement("div");
+    style2(overlay, {
+      position: "absolute",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      left: "0",
+      zIndex: "10",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(8,12,18,0.82)",
+      backdropFilter: "blur(4px)",
+      borderRadius: "18px"
+    });
+    const card = document.createElement("div");
+    style2(card, {
+      width: "min(460px, 88%)",
+      background: "linear-gradient(160deg, rgba(20,28,42,0.99) 0%, rgba(12,18,28,0.99) 100%)",
+      border: "1px solid rgba(94,234,212,0.22)",
+      borderRadius: "14px",
+      padding: "26px 26px 22px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "14px",
+      boxShadow: "0 8px 36px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset"
+    });
+    const header = document.createElement("div");
+    style2(header, {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px"
+    });
+    const iconWrap = document.createElement("span");
+    iconWrap.innerHTML = INFO_ICON_SVG;
+    style2(iconWrap, { color: "#5eead4", flexShrink: "0", display: "flex" });
+    const title = document.createElement("span");
+    title.textContent = "Your room is visible to other mod users";
+    style2(title, { fontWeight: "700", fontSize: "14px", color: "#e7eef7", lineHeight: "1.3" });
+    header.append(iconWrap, title);
+    const body = document.createElement("p");
+    body.textContent = "By default, your room is set to Public. This is intentional, it's what keeps the Rooms tab alive and lets players discover each other. If you're fine with that, no action needed.";
+    style2(body, {
+      margin: "0",
+      fontSize: "13px",
+      color: "rgba(231,238,247,0.72)",
+      lineHeight: "1.6"
+    });
+    const stepsLabel = document.createElement("p");
+    stepsLabel.textContent = "If you want to play privately with friends only:";
+    style2(stepsLabel, {
+      margin: "0",
+      fontSize: "13px",
+      fontWeight: "600",
+      color: "#e7eef7"
+    });
+    const stepsList = document.createElement("div");
+    style2(stepsList, {
+      margin: "0",
+      display: "flex",
+      flexDirection: "column",
+      gap: "7px"
+    });
+    const STEPS = [
+      ["Go to ", "My Profile \u2192 Room Visibility", " and toggle it to Private"],
+      ["Make sure ", "every mod user in your room", " does the same. One Public player is enough to make the whole room visible"]
+    ];
+    for (const [before, bold, after] of STEPS) {
+      const p = document.createElement("p");
+      style2(p, { margin: "0", fontSize: "13px", color: "rgba(231,238,247,0.72)", lineHeight: "1.5" });
+      const bSpan = document.createElement("strong");
+      bSpan.textContent = bold;
+      bSpan.style.color = "#e7eef7";
+      p.append(before, bSpan, after);
+      stepsList.appendChild(p);
+    }
+    const tip = document.createElement("p");
+    const tipEm = document.createElement("em");
+    tipEm.textContent = "Already left a room but people keep joining? Someone still in the room has it set to Public.";
+    tip.appendChild(tipEm);
+    style2(tip, {
+      margin: "0",
+      fontSize: "12px",
+      color: "rgba(231,238,247,0.48)",
+      lineHeight: "1.5",
+      borderLeft: "2px solid rgba(94,234,212,0.28)",
+      paddingLeft: "10px"
+    });
+    const dismissBtn = document.createElement("button");
+    dismissBtn.textContent = "Got it, don't show again";
+    style2(dismissBtn, {
+      marginTop: "2px",
+      padding: "9px 18px",
+      background: "rgba(94,234,212,0.1)",
+      border: "1px solid rgba(94,234,212,0.28)",
+      borderRadius: "8px",
+      color: "#5eead4",
+      fontSize: "13px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "background 150ms ease, border-color 150ms ease",
+      alignSelf: "flex-end"
+    });
+    dismissBtn.addEventListener("mouseenter", () => {
+      dismissBtn.style.background = "rgba(94,234,212,0.18)";
+      dismissBtn.style.borderColor = "rgba(94,234,212,0.48)";
+    });
+    dismissBtn.addEventListener("mouseleave", () => {
+      dismissBtn.style.background = "rgba(94,234,212,0.1)";
+      dismissBtn.style.borderColor = "rgba(94,234,212,0.28)";
+    });
+    dismissBtn.addEventListener("click", () => {
+      markRoomPrivacyNoticeSeen();
+      onDismiss();
+    });
+    card.append(header, body, stepsLabel, stepsList, tip, dismissBtn);
+    overlay.appendChild(card);
+    return overlay;
+  }
+
   // src/ui/menus/communityHub/index.ts
   var STYLE_ID = "qws-community-hub-css";
   function ensureCommunityHubStyle() {
@@ -39358,6 +39673,7 @@
       __publicField(this, "nav", document.createElement("div"));
       __publicField(this, "content", document.createElement("div"));
       __publicField(this, "authGate", null);
+      __publicField(this, "roomPrivacyNotice", null);
       __publicField(this, "tabs", /* @__PURE__ */ new Map());
       __publicField(this, "tabButtons", /* @__PURE__ */ new Map());
       __publicField(this, "navBadges", /* @__PURE__ */ new Map());
@@ -39638,6 +39954,7 @@
         requestAnimationFrame(() => {
           this.panel.classList.add("open");
         });
+        if (hasApiKey()) this.maybeShowRoomPrivacyNotice();
         try {
           window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN));
         } catch {
@@ -39681,6 +39998,16 @@
         }
       }
     }
+    maybeShowRoomPrivacyNotice() {
+      if (hasSeenRoomPrivacyNotice()) return;
+      if (this.roomPrivacyNotice?.isConnected) return;
+      this.roomPrivacyNotice?.remove();
+      this.roomPrivacyNotice = createRoomPrivacyNotice(() => {
+        this.roomPrivacyNotice?.remove();
+        this.roomPrivacyNotice = null;
+      });
+      this.panel.appendChild(this.roomPrivacyNotice);
+    }
     destroy() {
       window.removeEventListener("pointerdown", this.handlePointerDown);
       window.removeEventListener(CH_EVENTS.OPEN, this.handleOverlayOpen);
@@ -39699,6 +40026,10 @@
       if (this.authGate) {
         this.authGate.remove();
         this.authGate = null;
+      }
+      if (this.roomPrivacyNotice) {
+        this.roomPrivacyNotice.remove();
+        this.roomPrivacyNotice = null;
       }
       for (const tab of this.tabs.values()) {
         tab.destroy?.();
@@ -45282,9 +45613,6 @@
   var HISTORY_STORAGE_KEY = "activityLog.history";
   var HISTORY_LIMIT = 500;
   var skipNextHistoryReopen = false;
-  function skipNextActivityLogHistoryReopen() {
-    skipNextHistoryReopen = true;
-  }
   function normalizeEntry(raw) {
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
@@ -58106,33 +58434,6 @@ next: ${next}`;
     view.appendChild(layout);
     refreshBackupList(controlStatus, backupListHolder);
   }
-  function createInfoRow2(ui, label2, value) {
-    const row = document.createElement("div");
-    row.style.display = "grid";
-    row.style.gridTemplateColumns = "1fr auto";
-    row.style.alignItems = "baseline";
-    row.style.gap = "12px";
-    const labelEl = ui.label(label2);
-    labelEl.style.fontSize = "12px";
-    labelEl.style.opacity = "0.8";
-    const valueEl = document.createElement("div");
-    valueEl.style.textAlign = "right";
-    valueEl.style.fontSize = "13px";
-    valueEl.style.fontWeight = "600";
-    valueEl.style.wordBreak = "break-word";
-    valueEl.textContent = value;
-    row.append(labelEl, valueEl);
-    return row;
-  }
-  function getWindowSizeLabel(win) {
-    if (!win) return "n/a";
-    const width = typeof win.innerWidth === "number" ? Math.floor(win.innerWidth) : null;
-    const height = typeof win.innerHeight === "number" ? Math.floor(win.innerHeight) : null;
-    if (width === null || height === null) {
-      return "unknown";
-    }
-    return `${width} x ${height}`;
-  }
   function describeSurface(env) {
     if (!env) return "n/a";
     return env.surface === "discord" ? "Discord" : "Web";
@@ -58171,7 +58472,7 @@ next: ${next}`;
     if (/sunos|solaris/.test(target)) return "Solaris";
     return nav?.platform || nav?.userAgent || "Unknown";
   }
-  function renderInfosTab(view, ui) {
+  function renderInfosTab(view, _ui) {
     view.innerHTML = "";
     const safeWindow = typeof window !== "undefined" ? window : null;
     const safeNavigator = typeof navigator !== "undefined" ? navigator : null;
@@ -58179,77 +58480,140 @@ next: ${next}`;
     const environment = safeWindow ? detectEnvironment() : null;
     const resolvedGameVersion = gameVersion ?? "unknown";
     const resolvedModVersion = getLocalVersion() ?? "unknown";
-    const infoCard = ui.card("Runtime infos");
-    infoCard.body.style.display = "flex";
-    infoCard.body.style.flexDirection = "column";
-    infoCard.body.style.gap = "10px";
-    const infoRows = [
-      { label: "Mod version", value: resolvedModVersion },
-      { label: "Game version", value: resolvedGameVersion },
-      { label: "Window size", value: getWindowSizeLabel(safeWindow) },
-      {
-        label: "Host",
-        value: environment?.host ?? safeLocation?.hostname ?? "n/a"
-      },
-      { label: "Surface", value: describeSurface(environment) },
-      { label: "Platform", value: describePlatform(environment, safeNavigator) },
-      { label: "OS", value: detectOsLabel(safeNavigator) }
+    const header = document.createElement("div");
+    header.style.display = "flex";
+    header.style.flexDirection = "column";
+    header.style.alignItems = "center";
+    header.style.gap = "6px";
+    header.style.padding = "18px 0 14px";
+    header.style.textAlign = "center";
+    const headerTitle = document.createElement("div");
+    headerTitle.textContent = "Arie's Mod";
+    headerTitle.style.fontSize = "18px";
+    headerTitle.style.fontWeight = "700";
+    headerTitle.style.color = "#e7eef7";
+    headerTitle.style.letterSpacing = "-0.3px";
+    const versionBadge = document.createElement("div");
+    versionBadge.textContent = `v${resolvedModVersion}`;
+    versionBadge.style.display = "inline-block";
+    versionBadge.style.padding = "2px 10px";
+    versionBadge.style.borderRadius = "999px";
+    versionBadge.style.background = "rgba(94,234,212,0.12)";
+    versionBadge.style.border = "1px solid rgba(94,234,212,0.25)";
+    versionBadge.style.color = "#5eead4";
+    versionBadge.style.fontSize = "11px";
+    versionBadge.style.fontWeight = "600";
+    versionBadge.style.letterSpacing = "0.3px";
+    const headerSub = document.createElement("div");
+    headerSub.textContent = "Browser userscript for MagicGarden";
+    headerSub.style.fontSize = "11px";
+    headerSub.style.color = "rgba(231,238,247,0.45)";
+    headerSub.style.marginTop = "2px";
+    header.append(headerTitle, versionBadge, headerSub);
+    view.appendChild(header);
+    const sep = document.createElement("div");
+    sep.style.height = "1px";
+    sep.style.background = "rgba(255,255,255,0.07)";
+    sep.style.margin = "0 0 12px";
+    view.appendChild(sep);
+    const runtimeRows = [
+      ["Game version", resolvedGameVersion],
+      ["Host", environment?.host ?? safeLocation?.hostname ?? "n/a"],
+      ["Surface", describeSurface(environment)],
+      ["Platform", describePlatform(environment, safeNavigator)],
+      ["OS", detectOsLabel(safeNavigator)]
     ];
-    infoRows.forEach((entry) => {
-      infoCard.body.appendChild(createInfoRow2(ui, entry.label, entry.value));
+    const grid = document.createElement("div");
+    grid.style.display = "flex";
+    grid.style.flexDirection = "column";
+    grid.style.borderRadius = "10px";
+    grid.style.border = "1px solid rgba(255,255,255,0.07)";
+    grid.style.overflow = "hidden";
+    grid.style.marginBottom = "14px";
+    runtimeRows.forEach(([label2, value], i) => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.alignItems = "center";
+      row.style.padding = "8px 12px";
+      row.style.background = i % 2 === 0 ? "rgba(255,255,255,0.02)" : "transparent";
+      const labelEl = document.createElement("span");
+      labelEl.textContent = label2;
+      labelEl.style.fontSize = "12px";
+      labelEl.style.color = "rgba(231,238,247,0.5)";
+      const valueEl = document.createElement("span");
+      valueEl.textContent = value;
+      valueEl.style.fontSize = "12px";
+      valueEl.style.fontWeight = "600";
+      valueEl.style.color = "#e7eef7";
+      row.append(labelEl, valueEl);
+      grid.appendChild(row);
     });
-    view.appendChild(infoCard.root);
-    const supportCard = ui.card("Support the project");
-    supportCard.body.style.display = "flex";
-    supportCard.body.style.flexDirection = "column";
-    supportCard.body.style.gap = "12px";
-    supportCard.body.style.alignItems = "center";
+    view.appendChild(grid);
+    const supportBlock = document.createElement("div");
+    supportBlock.style.display = "flex";
+    supportBlock.style.flexDirection = "column";
+    supportBlock.style.alignItems = "center";
+    supportBlock.style.gap = "10px";
+    supportBlock.style.padding = "16px 12px";
+    supportBlock.style.borderRadius = "10px";
+    supportBlock.style.border = "1px solid rgba(255,255,255,0.07)";
+    supportBlock.style.background = "rgba(255,255,255,0.02)";
     const supportText = document.createElement("div");
-    supportText.style.fontSize = "13px";
+    supportText.style.fontSize = "12px";
     supportText.style.lineHeight = "1.5";
-    supportText.style.opacity = "0.9";
+    supportText.style.color = "rgba(231,238,247,0.55)";
     supportText.style.textAlign = "center";
-    supportText.innerHTML = "This mod is actively maintained and some features require paid server hosting (like public rooms). If you find this mod useful and want to support its development, consider buying me a coffee!";
+    supportText.textContent = "Some features rely on paid server hosting. If you enjoy the mod, a coffee is always appreciated!";
+    const kofiUrl = "https://ko-fi.com/E1E11TWTM1";
+    const isDiscord = environment?.surface === "discord";
     const kofiButton = document.createElement("a");
-    const kofiUrl = "https://ko-fi.com/ariedam";
     kofiButton.href = kofiUrl;
     kofiButton.target = "_blank";
     kofiButton.rel = "noopener noreferrer";
-    kofiButton.textContent = "\u2615 Support on Ko-fi";
-    kofiButton.style.display = "inline-flex";
-    kofiButton.style.alignItems = "center";
-    kofiButton.style.justifyContent = "center";
-    kofiButton.style.gap = "8px";
-    kofiButton.style.padding = "10px 24px";
-    kofiButton.style.borderRadius = "8px";
-    kofiButton.style.background = "#EDE8E3";
-    kofiButton.style.color = "#2b2622";
-    kofiButton.style.fontSize = "14px";
-    kofiButton.style.fontWeight = "600";
-    kofiButton.style.textDecoration = "none";
-    kofiButton.style.cursor = "pointer";
-    kofiButton.style.border = "1px solid rgba(255, 255, 255, 0.1)";
-    kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
-    kofiButton.style.transition = "transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease";
+    kofiButton.title = "Buy Me a Coffee at ko-fi.com";
+    kofiButton.style.transition = "opacity 0.15s ease, transform 0.15s ease";
+    if (isDiscord) {
+      kofiButton.textContent = "\u2615 Support on Ko-fi";
+      kofiButton.style.display = "inline-flex";
+      kofiButton.style.alignItems = "center";
+      kofiButton.style.padding = "8px 20px";
+      kofiButton.style.borderRadius = "8px";
+      kofiButton.style.background = "rgba(94,234,212,0.1)";
+      kofiButton.style.border = "1px solid rgba(94,234,212,0.28)";
+      kofiButton.style.color = "#5eead4";
+      kofiButton.style.fontSize = "13px";
+      kofiButton.style.fontWeight = "600";
+      kofiButton.style.textDecoration = "none";
+      kofiButton.style.cursor = "pointer";
+    } else {
+      kofiButton.style.display = "inline-block";
+      kofiButton.style.border = "0";
+      const kofiImg = document.createElement("img");
+      kofiImg.src = "https://storage.ko-fi.com/cdn/kofi5.png?v=6";
+      kofiImg.alt = "Buy Me a Coffee at ko-fi.com";
+      kofiImg.height = 36;
+      kofiImg.style.height = "36px";
+      kofiImg.style.border = "0";
+      kofiImg.style.display = "block";
+      kofiButton.appendChild(kofiImg);
+    }
     kofiButton.addEventListener("click", (event) => {
-      const isDiscord = environment?.surface === "discord";
       if (isDiscord && typeof GM_openInTab === "function") {
         event.preventDefault();
         GM_openInTab(kofiUrl, { active: true });
       }
     });
     kofiButton.addEventListener("mouseenter", () => {
+      kofiButton.style.opacity = "0.82";
       kofiButton.style.transform = "translateY(-2px)";
-      kofiButton.style.background = "#F5F0EB";
-      kofiButton.style.boxShadow = "0 6px 16px rgba(0, 0, 0, 0.3)";
     });
     kofiButton.addEventListener("mouseleave", () => {
+      kofiButton.style.opacity = "1";
       kofiButton.style.transform = "translateY(0)";
-      kofiButton.style.background = "#EDE8E3";
-      kofiButton.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.25)";
     });
-    supportCard.body.append(supportText, kofiButton);
-    view.appendChild(supportCard.root);
+    supportBlock.append(supportText, kofiButton);
+    view.appendChild(supportBlock);
   }
   function renderSettingsMenu(container) {
     const ui = new Menu({ id: "settings", compact: true });
@@ -59342,1063 +59706,6 @@ next: ${next}`;
     view.append(card.root, content);
   }
 
-  // src/services/players.ts
-  init_fakeModal();
-  init_atoms();
-  function findPlayersDeep2(state3) {
-    if (!state3 || typeof state3 !== "object") return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    const stack = [state3];
-    while (stack.length) {
-      const cur = stack.pop();
-      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-      seen.add(cur);
-      for (const k of Object.keys(cur)) {
-        const v = cur[k];
-        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
-          const looks = v.some((p) => "id" in p && "name" in p);
-          if (looks && /player/i.test(k)) out.push(...v);
-        }
-        if (v && typeof v === "object") stack.push(v);
-      }
-    }
-    const byId = /* @__PURE__ */ new Map();
-    for (const p of out) if (p?.id) byId.set(String(p.id), p);
-    return [...byId.values()];
-  }
-  function getPlayersArray2(st) {
-    const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
-    return Array.isArray(direct) ? direct : findPlayersDeep2(st);
-  }
-  function getSlotsArray2(st) {
-    const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
-    if (Array.isArray(raw)) return raw;
-    if (raw && typeof raw === "object") {
-      const entries = Object.entries(raw);
-      entries.sort((a, b) => {
-        const ai = Number(a[0]);
-        const bi = Number(b[0]);
-        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
-        return a[0].localeCompare(b[0]);
-      });
-      return entries.map(([, v]) => v);
-    }
-    return [];
-  }
-  function extractPosFromSlot(slot) {
-    const pos = slot?.data?.position ?? slot?.position ?? slot?.data?.coords ?? slot?.coords;
-    const x = Number(pos?.x);
-    const y = Number(pos?.y);
-    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
-  }
-  function extractInventoryFromSlot(slot) {
-    const inv = slot?.data?.inventory;
-    if (!inv || typeof inv !== "object") return null;
-    const items = Array.isArray(inv.items) ? inv.items : [];
-    const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
-    return { items, favoritedItemIds };
-  }
-  function extractJournalFromSlot(slot) {
-    const j = slot?.data?.journal ?? slot?.journal;
-    if (!j || typeof j !== "object") return null;
-    const produce = j.produce && typeof j.produce === "object" ? j.produce : void 0;
-    const pets = j.pets && typeof j.pets === "object" ? j.pets : void 0;
-    const normProduce = produce ? Object.fromEntries(Object.entries(produce).map(([k, v]) => [
-      String(k),
-      { variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [] }
-    ])) : void 0;
-    const normPets = pets ? Object.fromEntries(Object.entries(pets).map(([k, v]) => [
-      String(k),
-      {
-        variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [],
-        abilitiesLogged: Array.isArray(v?.abilitiesLogged) ? v.abilitiesLogged : []
-      }
-    ])) : void 0;
-    return { produce: normProduce, pets: normPets };
-  }
-  function extractStatsFromSlot(slot) {
-    const stats = slot?.data?.stats ?? slot?.stats;
-    if (!stats || typeof stats !== "object") return null;
-    return stats;
-  }
-  function extractActivityLogsFromSlot(slot) {
-    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
-    if (!Array.isArray(logs)) return null;
-    return logs;
-  }
-  function extractGardenFromSlot(slot) {
-    const g = slot?.data?.garden ?? slot?.garden;
-    if (!g || typeof g !== "object") return null;
-    const to = g.tileObjects;
-    const bto = g.boardwalkTileObjects;
-    const tileObjects = to && typeof to === "object" ? to : {};
-    const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
-    return { tileObjects, boardwalkTileObjects };
-  }
-  function getSlotByPlayerId(st, playerId2) {
-    for (const s of getSlotsArray2(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
-    return null;
-  }
-  function enrichPlayersWithSlots(players, st) {
-    const byPid = /* @__PURE__ */ new Map();
-    for (const slot of getSlotsArray2(st)) {
-      if (!slot || typeof slot !== "object") continue;
-      const pid = slot.playerId != null ? String(slot.playerId) : "";
-      if (!pid) continue;
-      const pos = extractPosFromSlot(slot);
-      const inv = extractInventoryFromSlot(slot);
-      byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
-    }
-    return players.map((p) => {
-      const extra = byPid.get(String(p.id));
-      return extra ? { ...p, ...extra } : { ...p, inventory: null };
-    });
-  }
-  function orderPlayersBySlots(players, st) {
-    const slots = getSlotsArray2(st);
-    const mapById = /* @__PURE__ */ new Map();
-    for (const p of players) mapById.set(String(p.id), p);
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const s of slots) {
-      const pid = s?.playerId != null ? String(s.playerId) : "";
-      if (!pid || seen.has(pid)) continue;
-      const p = mapById.get(pid);
-      if (p) {
-        out.push(p);
-        seen.add(pid);
-      }
-    }
-    for (const p of players) {
-      const pid = String(p.id);
-      if (!seen.has(pid)) {
-        out.push(p);
-        seen.add(pid);
-      }
-    }
-    return out;
-  }
-  function clampPlayers2(n) {
-    const v = Math.floor(Number(n));
-    if (!Number.isFinite(v)) return 1;
-    return Math.max(1, Math.min(6, v));
-  }
-  async function getPlayersInRoom() {
-    try {
-      const raw = await Atoms.server.numPlayers.get();
-      return clampPlayers2(raw);
-    } catch {
-      return 1;
-    }
-  }
-  var __cachedSpawnTiles = null;
-  var __spawnLoadPromise = null;
-  async function getSpawnTilesSorted() {
-    if (Array.isArray(__cachedSpawnTiles)) return __cachedSpawnTiles;
-    if (__spawnLoadPromise) return __spawnLoadPromise;
-    __spawnLoadPromise = (async () => {
-      try {
-        const map2 = await Atoms.root.map.get();
-        const arr = map2?.spawnTiles;
-        if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
-          __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
-          return __cachedSpawnTiles;
-        }
-      } catch {
-      }
-      try {
-        const st = await Atoms.root.state.get();
-        const seen = /* @__PURE__ */ new Set();
-        const stack = [st];
-        while (stack.length) {
-          const cur = stack.pop();
-          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
-          seen.add(cur);
-          const arr = cur?.spawnTiles;
-          if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
-            __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
-            return __cachedSpawnTiles;
-          }
-          for (const k of Object.keys(cur)) {
-            const v = cur[k];
-            if (v && typeof v === "object") stack.push(v);
-          }
-        }
-      } catch {
-      }
-      __cachedSpawnTiles = [];
-      return __cachedSpawnTiles;
-    })();
-    const res = await __spawnLoadPromise;
-    __spawnLoadPromise = null;
-    return res;
-  }
-  async function getMapCols() {
-    try {
-      const map2 = await Atoms.root.map.get();
-      const cols = Number(map2?.cols);
-      if (Number.isFinite(cols) && cols > 0) return cols;
-    } catch {
-    }
-    try {
-      const st = await Atoms.root.state.get();
-      const maybeCols = Number(
-        st?.map?.cols ?? st?.child?.data?.map?.cols ?? st?.fullState?.map?.cols
-      );
-      if (Number.isFinite(maybeCols) && maybeCols > 0) return maybeCols;
-    } catch {
-    }
-    return 81;
-  }
-  function assignGardenPositions(players, spawnTilesSorted) {
-    if (!players.length || !spawnTilesSorted.length) {
-      return players.map((p) => ({ ...p, gardenPosition: null }));
-    }
-    const out = [];
-    for (let i = 0; i < players.length; i++) {
-      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
-    }
-    return out;
-  }
-  function nowTs() {
-    return Date.now();
-  }
-  function normJournal(j) {
-    if (!j || typeof j !== "object") return {};
-    const out = {};
-    if (j.produce && typeof j.produce === "object") out.produce = j.produce;
-    if (j.pets && typeof j.pets === "object") out.pets = j.pets;
-    return out;
-  }
-  function hasJournalData(j) {
-    if (!j) return false;
-    const hasProduce = !!j.produce && Object.values(j.produce).some((s) => (s.variantsLogged?.length ?? 0) > 0);
-    const hasPets = !!j.pets && Object.values(j.pets).some((s) => (s.variantsLogged?.length ?? 0) > 0 || (s.abilitiesLogged?.length ?? 0) > 0);
-    return hasProduce || hasPets;
-  }
-  var followingState = {
-    currentTargetId: null,
-    unsub: null,
-    lastPos: null,
-    prevPos: null,
-    steps: 0
-  };
-  var PET_FOLLOW_INTERVAL_MS = 20;
-  var PET_HISTORY_FACTOR = 3;
-  var PET_SPACING_STEPS = 1;
-  var petFollowState = {
-    targetId: null,
-    unsub: null,
-    timer: null,
-    pets: [],
-    history: [],
-    historyCap: 0
-  };
-  function clearPetFollowTimer() {
-    if (petFollowState.timer) {
-      clearInterval(petFollowState.timer);
-      petFollowState.timer = null;
-    }
-  }
-  async function resetPetFollowState() {
-    if (petFollowState.unsub) {
-      const fn = petFollowState.unsub;
-      petFollowState.unsub = null;
-      try {
-        await fn();
-      } catch {
-      }
-    } else {
-      petFollowState.unsub = null;
-    }
-    clearPetFollowTimer();
-    petFollowState.targetId = null;
-    petFollowState.pets = [];
-    petFollowState.history = [];
-    petFollowState.historyCap = 0;
-  }
-  function recordPetHistory(pos, force = false) {
-    const top = petFollowState.history[0];
-    if (!force && top && top.x === pos.x && top.y === pos.y) return;
-    petFollowState.history.unshift({ x: pos.x, y: pos.y });
-    const cap = petFollowState.historyCap || petFollowState.history.length;
-    if (petFollowState.history.length > cap) {
-      petFollowState.history.length = cap;
-    }
-  }
-  var PlayersService = {
-    async list() {
-      const st = await Atoms.root.state.get();
-      if (!st) return [];
-      const base = enrichPlayersWithSlots(getPlayersArray2(st), st);
-      const ordered = orderPlayersBySlots(base, st);
-      const spawns = await getSpawnTilesSorted();
-      const players = assignGardenPositions(ordered, spawns);
-      return players;
-    },
-    async onChange(cb) {
-      return Atoms.root.state.onChange(async () => {
-        try {
-          cb(await this.list());
-        } catch {
-        }
-      });
-    },
-    async getPosition(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const pos = extractPosFromSlot(slot);
-      return pos;
-    },
-    async getInventory(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const inv = extractInventoryFromSlot(slot);
-      return inv;
-    },
-    async getJournal(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      const j = extractJournalFromSlot(slot);
-      const journal = j ? normJournal(j) : null;
-      return journal;
-    },
-    async getGarden(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractGardenFromSlot(slot);
-    },
-    async getGardenPosition(playerId2) {
-      const list = await this.list();
-      const p = list.find((x) => String(x.id) === String(playerId2));
-      return p?.gardenPosition ?? null;
-    },
-    async getPlayerNameById(playerId2) {
-      try {
-        const st = await Atoms.root.state.get();
-        if (st) {
-          const arr = getPlayersArray2(st);
-          const p = arr.find((x) => String(x?.id) === String(playerId2));
-          if (p && typeof p.name === "string" && p.name) return p.name;
-        }
-      } catch {
-      }
-      try {
-        const list = await this.list();
-        const p = list.find((x) => String(x.id) === String(playerId2));
-        return p?.name ?? null;
-      } catch {
-        return null;
-      }
-    },
-    async teleportToPlayer(playerId2) {
-      const pos = await this.getPosition(playerId2);
-      if (!pos) throw new Error("Unknown position for this player");
-      PlayerService.teleport(pos.x, pos.y);
-      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}`, "success");
-    },
-    async teleportToGarden(playerId2) {
-      const tileId = await this.getGardenPosition(playerId2);
-      if (tileId == null) {
-        await toastSimple("Teleport", "No garden position for this player.", "error");
-        return;
-      }
-      const cols = await getMapCols();
-      const x = tileId % cols, y = Math.floor(tileId / cols);
-      await PlayerService.teleport(x, y);
-      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}'s garden`, "success");
-    },
-    async getInventoryValue(playerId2, opts) {
-      try {
-        const playersInRoom = await getPlayersInRoom();
-        const inv = await this.getInventory(playerId2);
-        const items = Array.isArray(inv?.items) ? inv.items : [];
-        if (!items.length) return 0;
-        const value = sumInventoryValue(items, opts, playersInRoom);
-        return value;
-      } catch {
-        return 0;
-      }
-    },
-    async getGardenValue(playerId2, opts) {
-      try {
-        const playersInRoom = await getPlayersInRoom();
-        const garden2 = await this.getGarden(playerId2);
-        if (!garden2) return 0;
-        const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
-        return value;
-      } catch {
-        return 0;
-      }
-    },
-    /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
-    async openInventoryPreview(playerId2, playerName) {
-      try {
-        const inv = await this.getInventory(playerId2);
-        if (!inv) {
-          await toastSimple("Inventory", "No inventory object found for this player.", "error");
-          return;
-        }
-        const items = Array.isArray(inv.items) ? inv.items : [];
-        if (items.length === 0) {
-          await toastSimple("Inventory", "Inventory is empty for this player.", "info");
-          return;
-        }
-        try {
-          await fakeInventoryShow({ ...inv, items }, { open: true });
-        } catch (err) {
-          await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
-          return;
-        }
-        if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
-      }
-    },
-    /** Ouvre le Journal (produce + pets) avec garde + toasts. */
-    async openJournalLog(playerId2, playerName) {
-      try {
-        const journal = await this.getJournal(playerId2);
-        if (!hasJournalData(journal)) {
-          await toastSimple("Journal", "No journal data for this player.", "error");
-          return;
-        }
-        const safe = journal ?? {};
-        try {
-          await fakeJournalShow(safe, { open: true });
-        } catch (err) {
-          await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
-          return;
-        }
-        if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
-      }
-    },
-    async getStats(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractStatsFromSlot(slot);
-    },
-    async getActivityLogs(playerId2) {
-      const st = await Atoms.root.state.get();
-      if (!st) return null;
-      const slot = getSlotByPlayerId(st, playerId2);
-      return extractActivityLogsFromSlot(slot);
-    },
-    async openStatsModal(playerId2, playerName) {
-      try {
-        const stats = await this.getStats(playerId2);
-        if (!stats) {
-          await toastSimple("Stats", "No stats found for this player.", "error");
-          return;
-        }
-        await fakeStatsShow(stats, { open: true });
-        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
-      }
-    },
-    async openActivityLogModal(playerId2, playerName) {
-      try {
-        const logs = await this.getActivityLogs(playerId2);
-        if (!logs || logs.length === 0) {
-          await toastSimple("Activity log", "No activity logs for this player.", "info");
-          return;
-        }
-        skipNextActivityLogHistoryReopen();
-        await fakeActivityLogShow(logs, { open: true });
-        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
-      } catch (e) {
-        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
-      }
-    },
-    /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
-    async addProduceVariant(playerId2, species, variant, createdAt = nowTs()) {
-      if (!species || !variant) {
-        await toastSimple("Journal", "Missing species or variant.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          produce: {
-            [String(species)]: {
-              variantsLogged: [{ variant: String(variant), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
-      }
-    },
-    async addPetVariant(playerId2, petSpecies, variant, createdAt = nowTs()) {
-      if (!petSpecies || !variant) {
-        await toastSimple("Journal", "Missing pet species or variant.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          pets: {
-            [String(petSpecies)]: {
-              variantsLogged: [{ variant: String(variant), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
-      }
-    },
-    async addPetAbility(playerId2, petSpecies, ability, createdAt = nowTs()) {
-      if (!petSpecies || !ability) {
-        await toastSimple("Journal", "Missing pet species or ability.", "error");
-        return;
-      }
-      try {
-        await fakeJournalShow({
-          pets: {
-            [String(petSpecies)]: {
-              abilitiesLogged: [{ ability: String(ability), createdAt }]
-            }
-          }
-        }, { open: true });
-        const name = await this.getPlayerNameById(playerId2);
-        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId2}.`, "success");
-      } catch (e) {
-        await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
-      }
-    },
-    /* ---------------- Follow ---------------- */
-    async stopFollowing() {
-      if (followingState.unsub) {
-        try {
-          await followingState.unsub();
-        } catch {
-        }
-      }
-      followingState.unsub = null;
-      followingState.currentTargetId = null;
-      followingState.lastPos = null;
-      followingState.prevPos = null;
-      followingState.steps = 0;
-    },
-    isFollowing(playerId2) {
-      return followingState.currentTargetId === playerId2;
-    },
-    async startFollowing(playerId2) {
-      if (followingState.unsub) {
-        try {
-          await followingState.unsub();
-        } catch {
-        }
-        followingState.unsub = null;
-      }
-      followingState.currentTargetId = playerId2;
-      followingState.lastPos = null;
-      followingState.prevPos = null;
-      followingState.steps = 0;
-      const pos = await this.getPosition(playerId2);
-      if (!pos) {
-        await toastSimple("Follow", "Unable to retrieve player position.", "error");
-        followingState.currentTargetId = null;
-        return;
-      }
-      await PlayerService.teleport(pos.x, pos.y);
-      followingState.lastPos = { x: pos.x, y: pos.y };
-      followingState.prevPos = null;
-      followingState.steps = 0;
-      followingState.unsub = await this.onChange(async (players) => {
-        if (followingState.currentTargetId !== playerId2) return;
-        const target = players.find((p) => p.id === playerId2);
-        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
-          await this.stopFollowing();
-          await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
-          return;
-        }
-        const cur = { x: target.x, y: target.y };
-        const last = followingState.lastPos;
-        if (!last) {
-          followingState.lastPos = cur;
-          return;
-        }
-        if (cur.x !== last.x || cur.y !== last.y) {
-          followingState.steps += 1;
-          if (followingState.steps >= 2) {
-            if (last) {
-              PlayerService.move(last.x, last.y);
-            }
-          }
-          followingState.prevPos = followingState.lastPos;
-          followingState.lastPos = cur;
-        }
-      });
-      await toastSimple("Follow", "Follow enabled", "success");
-    },
-    /* ---------------- Pet Follow ---------------- */
-    async stopPetFollowing(opts) {
-      await resetPetFollowState();
-      if (!opts?.silent) {
-        await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
-      }
-    },
-    isPetFollowing(playerId2) {
-      return petFollowState.targetId === playerId2;
-    },
-    async startPetFollowing(playerId2) {
-      await this.stopPetFollowing({ silent: true });
-      const petsRaw = await Atoms.pets.myPetInfos.get();
-      const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
-      if (!petIds.length) {
-        await toastSimple("Pet follow", "You don't have any active pets.", "error");
-        return;
-      }
-      const pos = await this.getPosition(playerId2);
-      if (!pos) {
-        await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
-        return;
-      }
-      petFollowState.targetId = playerId2;
-      petFollowState.pets = petIds;
-      petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
-      petFollowState.history = [];
-      for (let i = 0; i < petFollowState.historyCap; i += 1) {
-        recordPetHistory(pos, true);
-      }
-      const sendPositions = async () => {
-        if (petFollowState.targetId !== playerId2) return;
-        if (!petFollowState.pets.length || !petFollowState.history.length) return;
-        const payload = {};
-        for (let i = 0; i < petFollowState.pets.length; i += 1) {
-          const petId = petFollowState.pets[i];
-          const historyIndex = Math.min(
-            petFollowState.history.length - 1,
-            (i + 1) * PET_SPACING_STEPS
-          );
-          const targetPos = petFollowState.history[historyIndex] ?? petFollowState.history[petFollowState.history.length - 1];
-          if (targetPos) {
-            payload[petId] = { x: targetPos.x, y: targetPos.y };
-          }
-        }
-        if (Object.keys(payload).length === 0) return;
-        try {
-          await PlayerService.petPositions(payload);
-        } catch (err) {
-        }
-      };
-      petFollowState.timer = setInterval(() => {
-        sendPositions().catch(() => {
-        });
-      }, PET_FOLLOW_INTERVAL_MS);
-      const initialSend = sendPositions();
-      petFollowState.unsub = await this.onChange(async (players) => {
-        if (petFollowState.targetId !== playerId2) return;
-        const target = players.find((p) => p.id === playerId2);
-        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
-          await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
-          return;
-        }
-        recordPetHistory({ x: target.x, y: target.y });
-      });
-      await initialSend;
-      await toastSimple("Pet follow", "Pets are now following the target.", "success");
-    }
-  };
-
-  // src/ui/menus/room.ts
-  init_fakeModal();
-  init_page_context();
-
-  // src/utils/publicRooms.ts
-  init_page_context();
-
-  // src/services/room.ts
-  function deriveCategoryOrder(definitions2, preferredOrder = []) {
-    const available = new Set(definitions2.map((room) => room.category));
-    const seen = /* @__PURE__ */ new Set();
-    const order = [];
-    for (const category of preferredOrder) {
-      if (!available.has(category)) continue;
-      if (seen.has(category)) continue;
-      seen.add(category);
-      order.push(category);
-    }
-    for (const room of definitions2) {
-      if (seen.has(room.category)) continue;
-      seen.add(room.category);
-      order.push(room.category);
-    }
-    return order;
-  }
-  function createStateFromDefinitions(definitions2, preferredOrder = []) {
-    const cloned = definitions2.map((room) => ({ ...room }));
-    return {
-      definitions: cloned,
-      categoryOrder: deriveCategoryOrder(cloned, preferredOrder)
-    };
-  }
-  function cloneState2(state3) {
-    return {
-      definitions: state3.definitions.map((room) => ({ ...room })),
-      categoryOrder: [...state3.categoryOrder]
-    };
-  }
-  var INITIAL_PUBLIC_ROOMS_STATE = createStateFromDefinitions([]);
-  var publicRoomsState = cloneState2(INITIAL_PUBLIC_ROOMS_STATE);
-
-  // src/ui/menus/room.ts
-  async function renderRoomMenu(root) {
-    await renderPlayersTab(root);
-  }
-  var GUILD_PLANT_BADGES = Object.entries(plantCatalog).map(([plantId, entry]) => {
-    const fn = entry?.seed?.getCanSpawnInGuild;
-    if (typeof fn !== "function") return null;
-    return { plantId, predicate: fn };
-  }).filter((v) => Boolean(v));
-  async function readPlayers() {
-    return PlayersService.list();
-  }
-  var NF_US_INT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
-  function truncateLabel(s, max = 22) {
-    if (!s) return "";
-    return s.length <= max ? s : s.slice(0, max - 1) + "\u2026";
-  }
-  var vItem = (p) => ({
-    id: p.id,
-    title: truncateLabel(p.name || p.id, 9),
-    subtitle: p.isConnected ? "Online" : "Offline",
-    avatarUrl: p.discordAvatarUrl || "",
-    statusColor: p.isConnected ? "#48d170" : "#999a"
-  });
-  async function renderPlayersTab(root) {
-    const ui = new Menu({ id: "players", compact: true, windowSelector: ".qws-win" });
-    ui.mount(root);
-    const panel = ui.root.querySelector(".qmm-views");
-    const { root: split, left, right } = ui.split2("260px");
-    panel.appendChild(split);
-    split.style.height = "100%";
-    split.style.minHeight = "0";
-    left.style.display = "flex";
-    left.style.flexDirection = "column";
-    left.style.minHeight = "0";
-    right.style.minHeight = "0";
-    right.style.overflow = "auto";
-    const vt = ui.vtabs({
-      filterPlaceholder: "Find player\u2026",
-      onSelect: (_id, item) => renderRight(item?.id || null),
-      fillAvailableHeight: true
-    });
-    vt.root.style.display = "flex";
-    vt.root.style.flexDirection = "column";
-    vt.root.style.flex = "1 1 auto";
-    vt.root.style.minHeight = "0";
-    left.appendChild(vt.root);
-    const filter = vt.root.querySelector(".filter");
-    if (filter) {
-      filter.remove();
-    }
-    async function renderRight(playerId2) {
-      right.innerHTML = "";
-      const p = playerId2 ? players.find((x) => x.id === playerId2) || null : null;
-      if (!p) {
-        const empty = document.createElement("div");
-        empty.style.opacity = "0.75";
-        empty.textContent = "Select a player on the left.";
-        right.appendChild(empty);
-        return;
-      }
-      const col = document.createElement("div");
-      col.style.display = "grid";
-      col.style.gridAutoRows = "min-content";
-      col.style.justifyItems = "center";
-      col.style.gap = "10px";
-      col.style.overflow = "auto";
-      right.appendChild(col);
-      const prof = document.createElement("div");
-      prof.style.display = "grid";
-      prof.style.gap = "8px";
-      prof.style.justifyItems = "center";
-      const head = document.createElement("div");
-      head.style.display = "flex";
-      head.style.alignItems = "center";
-      head.style.gap = "12px";
-      const avatar = document.createElement("img");
-      avatar.src = p.discordAvatarUrl || "";
-      avatar.alt = p.name;
-      avatar.width = 48;
-      avatar.height = 48;
-      avatar.style.borderRadius = "50%";
-      avatar.style.objectFit = "cover";
-      avatar.style.border = "1px solid #4446";
-      const title = document.createElement("div");
-      const nameEl = document.createElement("div");
-      nameEl.textContent = p.name || p.id;
-      nameEl.style.fontWeight = "600";
-      nameEl.style.fontSize = "16px";
-      const sub = document.createElement("div");
-      sub.style.opacity = "0.8";
-      sub.style.fontSize = "12px";
-      sub.textContent = p.isConnected ? "Online" : "Offline";
-      title.append(nameEl, sub);
-      head.append(avatar, title);
-      const info = document.createElement("div");
-      info.style.opacity = "0.9";
-      prof.append(head, info);
-      col.appendChild(prof);
-      const infoWrap = document.createElement("div");
-      infoWrap.style.display = "grid";
-      infoWrap.style.gap = "6px";
-      infoWrap.style.justifySelf = "stretch";
-      infoWrap.style.width = "100%";
-      const invValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const invLabel = document.createElement("div");
-      invLabel.textContent = "Inventory: ";
-      invLabel.style.fontSize = "14px";
-      invLabel.style.opacity = "0.85";
-      const invValue = document.createElement("div");
-      invValue.textContent = "\u2026";
-      invValue.style.fontSize = "15px";
-      invValue.style.fontWeight = "700";
-      invValue.style.color = "#FFD84D";
-      invValueRow.append(invLabel, invValue);
-      const gardenValueRow = ui.flexRow({ justify: "start", fullWidth: true, gap: 6 });
-      const gardenLabel = document.createElement("div");
-      gardenLabel.textContent = "Garden: ";
-      gardenLabel.style.fontSize = "14px";
-      gardenLabel.style.opacity = "0.85";
-      const gardenValue = document.createElement("div");
-      gardenValue.textContent = "\u2026";
-      gardenValue.style.fontWeight = "700";
-      gardenValue.style.fontSize = "15px";
-      gardenValue.style.color = "#FFD84D";
-      gardenValueRow.append(gardenLabel, gardenValue);
-      infoWrap.append(invValueRow, gardenValueRow);
-      const infoCard = ui.card("\u{1F331} Crops values", { tone: "muted", align: "center" });
-      infoCard.body.append(infoWrap);
-      col.appendChild(infoCard.root);
-      const editorCard = ui.card("\u270F\uFE0F Editor", { tone: "muted", align: "center" });
-      editorCard.body.style.display = "grid";
-      editorCard.body.style.gap = "8px";
-      const savePlayerBtn = ui.btn("Save player garden", {
-        fullWidth: true,
-        onClick: async () => {
-          try {
-            const saveFn = window.qwsEditorSaveGardenForPlayer || pageWindow?.qwsEditorSaveGardenForPlayer;
-            if (typeof saveFn !== "function") {
-              await toastSimple("Save garden", "Editor save unavailable", "error");
-              return;
-            }
-            const name = `${p.name || p.id || "Player"}'s garden`;
-            const saved = await saveFn(p.id, name);
-            if (!saved) {
-              await toastSimple("Save garden", "Save failed (no garden state)", "error");
-              return;
-            }
-            await toastSimple(`Saved "${saved.name}".`, "success");
-          } catch {
-            await toastSimple(`Save failed`, "error");
-          }
-        }
-      });
-      editorCard.body.append(savePlayerBtn);
-      col.appendChild(editorCard.root);
-      const teleRow = ui.flexRow({ justify: "center" });
-      const btnToPlayer = ui.btn("To player", { size: "sm" });
-      btnToPlayer.style.minWidth = "120px";
-      const btnToGarden = ui.btn("To garden", { size: "sm" });
-      btnToGarden.style.minWidth = "120px";
-      btnToPlayer.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToPlayer ?? PlayersService.teleportTo;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      btnToGarden.onclick = async () => {
-        try {
-          const fn = PlayersService.teleportToGarden ?? PlayersService.tptogarden;
-          await fn.call(PlayersService, p.id);
-        } catch (e) {
-          await toastSimple("Teleport", e?.message || "Error during teleport.", "error");
-        }
-      };
-      teleRow.append(btnToPlayer, btnToGarden);
-      const teleportCard = ui.card("\u{1F30C} Teleport", { tone: "muted", align: "center" });
-      teleportCard.body.append(teleRow);
-      col.appendChild(teleportCard.root);
-      const invRow = ui.flexRow({ justify: "center" });
-      const btnInv = ui.btn("Inventory", { size: "sm" });
-      btnInv.style.minWidth = "120px";
-      const btnJournal = ui.btn("Journal", { size: "sm" });
-      btnJournal.style.minWidth = "120px";
-      const btnStats = ui.btn("Stats", { size: "sm" });
-      btnStats.style.minWidth = "120px";
-      const btnActivityLog = ui.btn("Activity log", { size: "sm" });
-      btnActivityLog.style.minWidth = "120px";
-      btnInv.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openInventoryPreview(p.id, p.name);
-          if (await isInventoryPanelOpen()) {
-            await waitInventoryPanelClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnJournal.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openJournalLog(p.id, p.name);
-          if (await isJournalModalOpen()) {
-            await waitJournalModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnStats.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openStatsModal(p.id, p.name);
-          if (await isStatsModalOpenAsync()) {
-            await waitStatsModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      btnActivityLog.onclick = async () => {
-        try {
-          ui.setWindowVisible(false);
-          await PlayersService.openActivityLogModal(p.id, p.name);
-          if (await isActivityLogModalOpenAsync()) {
-            await waitActivityLogModalClosed();
-          }
-        } finally {
-          ui.setWindowVisible(true);
-        }
-      };
-      const inspectGrid = document.createElement("div");
-      inspectGrid.style.display = "grid";
-      inspectGrid.style.gap = "6px";
-      const activityRow = ui.flexRow({ justify: "center" });
-      invRow.append(btnInv, btnJournal);
-      activityRow.append(btnStats, btnActivityLog);
-      inspectGrid.append(invRow, activityRow);
-      const inspectCard = ui.card("\u{1F50D} Inspect", { tone: "muted", align: "center" });
-      inspectCard.body.append(inspectGrid);
-      col.appendChild(inspectCard.root);
-      const funWrap = document.createElement("div");
-      funWrap.style.display = "grid";
-      funWrap.style.gap = "10px";
-      const followRow = ui.flexRow({ justify: "center" });
-      followRow.style.gap = "16px";
-      const playerFollowGroup = document.createElement("div");
-      playerFollowGroup.style.display = "flex";
-      playerFollowGroup.style.alignItems = "center";
-      playerFollowGroup.style.gap = "8px";
-      const label2 = document.createElement("div");
-      label2.textContent = "Follow player";
-      label2.style.fontSize = "14px";
-      label2.style.opacity = "0.85";
-      const sw = ui.switch(PlayersService.isFollowing(p.id));
-      sw.addEventListener("change", async () => {
-        try {
-          if (sw.checked) {
-            await PlayersService.startFollowing(p.id);
-            await toastSimple("Follow", "Enabled.", "success");
-          } else {
-            PlayersService.stopFollowing();
-            await toastSimple("Follow", "Disable.", "info");
-          }
-        } catch (e) {
-          await toastSimple("Follow", e?.message || "Error", "error");
-          sw.checked = !sw.checked;
-        }
-      });
-      playerFollowGroup.append(label2, sw);
-      const petFollowGroup = document.createElement("div");
-      petFollowGroup.style.display = "flex";
-      petFollowGroup.style.alignItems = "center";
-      petFollowGroup.style.gap = "4px";
-      const petsLabel = document.createElement("div");
-      petsLabel.textContent = "Pet follow";
-      petsLabel.style.fontSize = "14px";
-      petsLabel.style.opacity = "0.85";
-      const petsSwitch = ui.switch(PlayersService.isPetFollowing(p.id));
-      petsSwitch.addEventListener("change", async () => {
-        try {
-          if (petsSwitch.checked) {
-            await PlayersService.startPetFollowing(p.id);
-          } else {
-            await PlayersService.stopPetFollowing();
-          }
-        } catch (e) {
-          await toastSimple("Pet follow", e?.message || "Error", "error");
-          petsSwitch.checked = !petsSwitch.checked;
-        }
-      });
-      petFollowGroup.append(petsLabel, petsSwitch);
-      followRow.append(playerFollowGroup, petFollowGroup);
-      funWrap.append(followRow);
-      const funCard = ui.card("\u{1F389} Fun", { tone: "muted", align: "center" });
-      funCard.body.append(funWrap);
-      col.appendChild(funCard.root);
-      (async () => {
-        try {
-          const total = await PlayersService.getInventoryValue(p.id);
-          invValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          invValue.title = "Total inventory value";
-        } catch {
-          invValue.textContent = "\u2014";
-        }
-        try {
-          const total = await PlayersService.getGardenValue(p.id);
-          gardenValue.textContent = `${NF_US_INT.format(Math.round(total))}`;
-          gardenValue.title = "Total garden value";
-        } catch {
-          gardenValue.textContent = "\u2014";
-        }
-      })();
-    }
-    let players = [];
-    let lastSig = "";
-    function signature(ps) {
-      return ps.map(
-        (p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}|${p.inventory?.items?.length ?? 0}`
-      ).join(";");
-    }
-    async function refreshAll(keepSelection = true) {
-      const prevSel = vt.getSelected()?.id ?? null;
-      const next = await readPlayers();
-      const sig = signature(next);
-      if (sig === lastSig) {
-        return;
-      }
-      lastSig = sig;
-      players = next;
-      vt.setItems(players.map(vItem));
-      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
-      if (sel !== null) vt.select(sel);
-      else renderRight(null);
-    }
-    await PlayersService.onChange(() => {
-      refreshAll(true).catch(() => {
-      });
-    });
-    await refreshAll(true);
-  }
-
   // src/ui/menus/keybinds.ts
   function createKeybindRow(ui, action2) {
     const controls = document.createElement("div");
@@ -60810,7 +60117,6 @@ next: ${next}`;
     mountHUD({
       onRegister(register) {
         register("pets", "\u{1F43E} Pets", renderPetsMenu);
-        register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
         register("calculator", "\u{1F913} Calculator", renderCalculatorMenu);
