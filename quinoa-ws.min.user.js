@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.12
+// @version      3.1.13
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -23,6 +23,8 @@
 // @connect      cdn.pixabay.com
 // @connect      cdn.jsdelivr.net
 // @connect      magicgarden.gg
+// @connect      i.imgur.com
+// @connect      cdn.discordapp.com
 
 // @downloadURL  https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
 // @updateURL    https://github.com/Ariedam64/MagicGarden-modMenu/raw/refs/heads/main/quinoa-ws.min.user.js
@@ -5288,144 +5290,130 @@
     Multiple: "Multiple"
   };
   var tileRefsPlants = {
-    DirtPatch: 1,
-    SproutFlower: 2,
-    SproutVegetable: 3,
-    SproutFruit: 4,
-    SproutVine: 5,
-    StemFlower: 6,
-    Trellis: 7,
-    Daffodil: 11,
-    Tulip: 12,
-    Sunflower: 13,
-    Lily: 14,
-    Starweaver: 15,
-    Chrysanthemum: 16,
-    Aloe: 18,
-    Blueberry: 21,
-    Banana: 22,
-    Strawberry: 23,
-    Mango: 24,
-    Grape: 25,
-    Watermelon: 26,
-    Lemon: 27,
-    Apple: 28,
-    Pear: 29,
-    Pineapple: 30,
-    Pepper: 31,
-    PalmTree: 3e3,
-    CacaoTree: 3001,
-    Tree: 8,
-    Tomato: 32,
-    BabyCarrot: 33,
-    Carrot: 34,
-    Pumpkin: 35,
-    Corn: 36,
-    FavaBean: 37,
-    Cacao: 38,
-    PalmTreeTop: 39,
-    BushyTree: 40,
-    Coconut: 41,
-    PassionFruit: 43,
-    DragonFruit: 44,
-    Lychee: 45,
-    Mushroom: 3002,
-    BurrosTail: 47,
-    Echeveria: 49,
-    Delphinium: 50,
-    DawnCelestialCrop: 51,
-    MoonCelestialCrop: 52,
-    Camellia: 57,
-    Hedge: 58,
-    FlowerBush: 59,
-    Squash: 60,
-    PineTree: 61,
-    Poinsettia: 62,
-    Shrub: 63,
-    CabbagePlant: 64,
-    Cabbage: 65,
-    BabyBeet: 66,
-    Beet: 67,
-    Gentian: 68,
-    VioletCort: 69,
-    DragonFruitTree: 70,
-    RoseRed: 71
+    Aloe: "sprite/plant/Aloe",
+    Apple: "sprite/plant/Apple",
+    BabyBeet: "sprite/plant/BabyBeet",
+    BabyCarrot: "sprite/plant/BabyCarrot",
+    Banana: "sprite/plant/Banana",
+    Beet: "sprite/plant/Beet",
+    Blueberry: "sprite/plant/Blueberry",
+    BurrosTail: "sprite/plant/BurrosTail",
+    BushyTree: "sprite/plant/BushyTree",
+    Cabbage: "sprite/plant/Cabbage",
+    CabbagePlant: "sprite/plant/CabbagePlant",
+    Cacao: "sprite/plant/Cacao",
+    CacaoTree: "sprite/plant/CacaoTree",
+    Camellia: "sprite/plant/Camellia",
+    Carrot: "sprite/plant/Carrot",
+    Chrysanthemum: "sprite/plant/Chrysanthemum",
+    Coconut: "sprite/plant/Coconut",
+    Corn: "sprite/plant/Corn",
+    Daffodil: "sprite/plant/Daffodil",
+    DawnCelestialCrop: "sprite/plant/DawnCelestialCrop",
+    Delphinium: "sprite/plant/Delphinium",
+    DirtPatch: "sprite/plant/DirtPatch",
+    DragonFruit: "sprite/plant/DragonFruit",
+    DragonFruitTree: "sprite/plant/DragonFruitTree",
+    Echeveria: "sprite/plant/Echeveria",
+    FavaBean: "sprite/plant/FavaBean",
+    FlowerBush: "sprite/plant/FlowerBush",
+    Gentian: "sprite/plant/Gentian",
+    Grape: "sprite/plant/Grape",
+    Hedge: "sprite/plant/Hedge",
+    Lemon: "sprite/plant/Lemon",
+    Lily: "sprite/plant/Lily",
+    Lychee: "sprite/plant/Lychee",
+    MoonCelestialCrop: "sprite/plant/MoonCelestialCrop",
+    Mushroom: "sprite/plant/Mushroom",
+    PalmTree: "sprite/plant/PalmTree",
+    PassionFruit: "sprite/plant/PassionFruit",
+    Peach: "sprite/plant/Peach",
+    Pear: "sprite/plant/Pear",
+    Pepper: "sprite/plant/Pepper",
+    PineTree: "sprite/plant/PineTree",
+    Poinsettia: "sprite/plant/Poinsettia",
+    Pumpkin: "sprite/plant/Pumpkin",
+    RoseRed: "sprite/plant/RoseRed",
+    Shrub: "sprite/plant/Shrub",
+    SproutFlower: "sprite/plant/SproutFlower",
+    SproutFruit: "sprite/plant/SproutFruit",
+    SproutVine: "sprite/plant/SproutVine",
+    Squash: "sprite/plant/Squash",
+    Starweaver: "sprite/plant/Starweaver",
+    StemFlower: "sprite/plant/StemFlower",
+    Strawberry: "sprite/plant/Strawberry",
+    Sunflower: "sprite/plant/Sunflower",
+    Tomato: "sprite/plant/Tomato",
+    Tree: "sprite/plant/Tree",
+    Trellis: "sprite/plant/Trellis",
+    Tulip: "sprite/plant/Tulip",
+    VioletCort: "sprite/plant/VioletCort",
+    Watermelon: "sprite/plant/Watermelon"
   };
   var tileRefsTallPlants = {
-    Bamboo: 1,
-    DawnCelestialPlatform: 3,
-    DawnCelestialPlant: 4,
-    DawnCelestialPlantActive: 5,
-    DawnCelestialPlatformTopmostLayer: 6,
-    Cactus: 7,
-    MoonCelestialPlatform: 9,
-    MoonCelestialPlant: 10,
-    MoonCelestialPlantActive: 11,
-    StarweaverPlatform: 13,
-    StarweaverPlant: 14
+    Bamboo: "sprite/tall-plant/Bamboo",
+    Cactus: "sprite/tall-plant/Cactus",
+    DawnCelestialPlant: "sprite/tall-plant/DawnCelestialPlant",
+    DawnCelestialPlantActive: "sprite/tall-plant/DawnCelestialPlantActive",
+    DawnCelestialPlatform: "sprite/tall-plant/DawnCelestialPlatform",
+    DawnCelestialPlatformTopmostLayer: "sprite/tall-plant/DawnCelestialPlatformTopmostLayer",
+    MoonCelestialPlant: "sprite/tall-plant/MoonCelestialPlant",
+    MoonCelestialPlantActive: "sprite/tall-plant/MoonCelestialPlantActive",
+    MoonCelestialPlatform: "sprite/tall-plant/MoonCelestialPlatform",
+    StarweaverPlant: "sprite/tall-plant/StarweaverPlant",
+    StarweaverPlatform: "sprite/tall-plant/StarweaverPlatform"
   };
   var tileRefsSeeds = {
-    Daffodil: 1,
-    Tulip: 2,
-    Sunflower: 3,
-    Starweaver: 6,
-    DawnCelestial: 7,
-    MoonCelestial: 8,
-    Blueberry: 11,
-    Banana: 12,
-    Strawberry: 13,
-    Mango: 14,
-    Grape: 15,
-    Watermelon: 16,
-    Lemon: 17,
-    Apple: 18,
-    Pear: 19,
-    Lily: 20,
-    Pepper: 21,
-    Tomato: 22,
-    Carrot: 23,
-    Pumpkin: 25,
-    Corn: 26,
-    Peach: 27,
-    FavaBean: 28,
-    Cacao: 29,
-    Delphinium: 30,
-    Coconut: 31,
-    Mushroom: 32,
-    PassionFruit: 33,
-    DragonFruit: 34,
-    Lychee: 35,
-    BurrosTail: 37,
-    Aloe: 39,
-    Echeveria: 40,
-    Bamboo: 41,
-    Cactus: 42,
-    Camellia: 48,
-    Chrysanthemum: 49,
-    Squash: 50,
-    Pinecone: 51,
-    Poinsettia: 52,
-    VioletCort: 53,
-    Cabbage: 54,
-    Beet: 55,
-    Gentian: 56,
-    Rose: 57
+    Aloe: "sprite/seed/Aloe",
+    Apple: "sprite/seed/Apple",
+    Bamboo: "sprite/seed/Bamboo",
+    Banana: "sprite/seed/Banana",
+    Beet: "sprite/seed/Beet",
+    Blueberry: "sprite/seed/Blueberry",
+    BurrosTail: "sprite/seed/BurrosTail",
+    Cabbage: "sprite/seed/Cabbage",
+    Cacao: "sprite/seed/Cacao",
+    Cactus: "sprite/seed/Cactus",
+    Camellia: "sprite/seed/Camellia",
+    Carrot: "sprite/seed/Carrot",
+    Chrysanthemum: "sprite/seed/Chrysanthemum",
+    Coconut: "sprite/seed/Coconut",
+    Corn: "sprite/seed/Corn",
+    Daffodil: "sprite/seed/Daffodil",
+    DawnCelestial: "sprite/seed/DawnCelestial",
+    Delphinium: "sprite/seed/Delphinium",
+    DragonFruit: "sprite/seed/DragonFruit",
+    Echeveria: "sprite/seed/Echeveria",
+    FavaBean: "sprite/seed/FavaBean",
+    Gentian: "sprite/seed/Gentian",
+    Grape: "sprite/seed/Grape",
+    Lemon: "sprite/seed/Lemon",
+    Lily: "sprite/seed/Lily",
+    Lychee: "sprite/seed/Lychee",
+    MoonCelestial: "sprite/seed/MoonCelestial",
+    Mushroom: "sprite/seed/Mushroom",
+    PassionFruit: "sprite/seed/PassionFruit",
+    Peach: "sprite/seed/Peach",
+    Pear: "sprite/seed/Pear",
+    Pepper: "sprite/seed/Pepper",
+    Pinecone: "sprite/seed/Pinecone",
+    Poinsettia: "sprite/seed/Poinsettia",
+    Pumpkin: "sprite/seed/Pumpkin",
+    Rose: "sprite/seed/Rose",
+    Squash: "sprite/seed/Squash",
+    Starweaver: "sprite/seed/Starweaver",
+    Strawberry: "sprite/seed/Strawberry",
+    Sunflower: "sprite/seed/Sunflower",
+    Tomato: "sprite/seed/Tomato",
+    Tulip: "sprite/seed/Tulip",
+    VioletCort: "sprite/seed/VioletCort",
+    Watermelon: "sprite/seed/Watermelon"
   };
   var tileRefsItems = {
+    // UI / système (pas dans V.Item)
     Coin: 1,
-    Shovel: 2,
-    PlanterPot: 6,
     InventoryBag: 7,
-    WateringCan: 9,
     MoneyBag: 11,
-    RainbowPotion: 14,
-    GoldPotion: 15,
-    WetPotion: 16,
-    ChilledPotion: 17,
-    FrozenPotion: 18,
-    DawnlitPotion: 19,
-    AmberlitPotion: 20,
-    CropCleanser: 21,
     JournalStamp: 22,
     Donut: 23,
     ToolsRestocked: 24,
@@ -5437,48 +5425,66 @@
     ActivityLog: 30,
     ChatBubble: 39,
     ArrowKeys: 41,
-    Touchpad: 42
+    Touchpad: 42,
+    // V.Item
+    AmberlitPotion: "sprite/item/AmberlitPotion",
+    ChilledPotion: "sprite/item/ChilledPotion",
+    CropCleanser: "sprite/item/CropCleanser",
+    DawnlitPotion: "sprite/item/DawnlitPotion",
+    FrozenPotion: "sprite/item/FrozenPotion",
+    GoldPotion: "sprite/item/GoldPotion",
+    PlanterPot: "sprite/item/PlanterPot",
+    RainbowPotion: "sprite/item/RainbowPotion",
+    Shovel: "sprite/item/Shovel",
+    WateringCan: "sprite/item/WateringCan",
+    WetPotion: "sprite/item/WetPotion"
   };
   var tileRefsPets = {
-    Bee: 1,
-    Chicken: 2,
-    Bunny: 3,
-    Turtle: 4,
-    Capybara: 5,
-    Cow: 6,
-    Pig: 7,
-    Butterfly: 8,
-    Snail: 9,
-    Worm: 10,
-    CommonEgg: 11,
-    UncommonEgg: 12,
-    RareEgg: 13,
-    LegendaryEgg: 14,
-    MythicalEgg: 15,
+    Bee: "sprite/pet/Bee",
+    Bunny: "sprite/pet/Bunny",
+    Butterfly: "sprite/pet/Butterfly",
+    Capybara: "sprite/pet/Capybara",
+    Chicken: "sprite/pet/Chicken",
+    CommonEgg: "sprite/pet/CommonEgg",
+    Cow: "sprite/pet/Cow",
+    Dragonfly: "sprite/pet/Dragonfly",
+    FireHorse: "sprite/pet/FireHorse",
+    FireHorseActive: "sprite/pet/FireHorseActive",
+    Goat: "sprite/pet/Goat",
+    Horse: "sprite/pet/Horse",
+    HorseEgg: "sprite/pet/HorseEgg",
+    LegendaryEgg: "sprite/pet/LegendaryEgg",
+    MythicalEgg: "sprite/pet/MythicalEgg",
+    Peacock: "sprite/pet/Peacock",
+    Pig: "sprite/pet/Pig",
+    Pony: "sprite/pet/Pony",
+    RareEgg: "sprite/pet/RareEgg",
+    Snail: "sprite/pet/Snail",
+    SnowEgg: "sprite/pet/SnowEgg",
+    SnowFox: "sprite/pet/SnowFox",
+    Squirrel: "sprite/pet/Squirrel",
+    Stoat: "sprite/pet/Stoat",
+    Turkey: "sprite/pet/Turkey",
+    Turtle: "sprite/pet/Turtle",
+    UncommonEgg: "sprite/pet/UncommonEgg",
+    WhiteCaribou: "sprite/pet/WhiteCaribou",
+    WinterEgg: "sprite/pet/WinterEgg",
+    Worm: "sprite/pet/Worm",
+    // Pas dans V.Pet (garder pour compatibilité)
     DivineEgg: 16,
-    CelestialEgg: 17,
-    Squirrel: 18,
-    Goat: 19,
-    Dragonfly: 20,
-    Turkey: 29,
-    Peacock: 30,
-    SnowFox: 31,
-    Stoat: 32,
-    WhiteCaribou: 33,
-    WinterEgg: 34,
-    SnowEgg: 35
+    CelestialEgg: 17
   };
   var tileRefsMutations = {
-    Wet: 1,
-    Chilled: 2,
-    Frozen: 3,
-    Puddle: 5,
-    Dawnlit: 11,
-    Amberlit: 12,
-    Dawncharged: 13,
-    Ambercharged: 14,
-    Thunderstruck: 15,
-    ThunderstruckGround: 16
+    Ambercharged: "sprite/mutation/Ambercharged",
+    Amberlit: "sprite/mutation/Amberlit",
+    Chilled: "sprite/mutation/Chilled",
+    Dawncharged: "sprite/mutation/Dawncharged",
+    Dawnlit: "sprite/mutation/Dawnlit",
+    Frozen: "sprite/mutation/Frozen",
+    Puddle: "sprite/mutation/Puddle",
+    Thunderstruck: "sprite/mutation/Thunderstruck",
+    ThunderstruckGround: "sprite/mutation/ThunderstruckGround",
+    Wet: "sprite/mutation/Wet"
   };
   var tileRefsMutationLabels = {
     Wet: "Wet",
@@ -5493,76 +5499,66 @@
     ThunderstruckGround: "Thunderstruck"
   };
   var tileRefsDecor = {
-    SmallRock: 11,
-    MediumRock: 21,
-    LargeRock: 31,
-    WoodPedestal: 4,
-    WoodBench: 13,
-    WoodBenchBackwards: 14,
-    WoodBenchSideways: 24,
-    WoodBucketPedestal: 34,
-    WoodLampPost: 23,
-    WoodStool: 63,
-    WoodArch: 33,
-    WoodArchSide: 43,
-    WoodPergola: 73,
-    WoodBridge: 34,
-    WoodBridgeSideways: 44,
-    WoodOwl: 53,
-    WoodGardenBox: 74,
-    Birdhouse: 54,
-    WoodWindmill: 64,
-    StonePedestal: 6,
-    StoneBench: 15,
-    StoneBenchSideways: 2600,
-    StoneBucketPedestal: 16,
-    StoneLampPost: 25,
-    StoneColumn: 2601,
-    StoneArch: 35,
-    StoneArchSideways: 45,
-    StoneBridge: 36,
-    StoneBridgeSideways: 46,
-    StoneGnome: 55,
-    StoneGardenBox: 66,
-    StoneBirdBath: 56,
-    MarblePedestal: 8,
-    MarbleBench: 17,
-    MarbleBenchBackwards: 18,
-    MarbleBenchSideways: 28,
-    MarbleBucketPedestal: 58,
-    MarbleLampPost: 27,
-    MarbleColumn: 68,
-    MarbleArch: 37,
-    MarbleArchSideways: 47,
-    MarbleBridge: 38,
-    MarbleBridgeSideways: 48,
-    MarbleBlobling: 57,
-    MarbleFountain: 58,
-    MarbleGardenBox: 78,
-    MiniFairyCottage: 50,
-    MiniFairyForge: 40,
-    MiniFairyKeep: 60,
-    MiniWizardTower: 68,
-    HayBale: 29,
-    HayBaleSideways: 39,
-    StrawScarecrow: 49,
-    Cauldron: 59,
-    SmallGravestone: 69,
-    SmallGravestoneSideways: 70,
-    MediumGravestone: 79,
-    MediumGravestoneSideways: 80,
-    LargeGravestone: 89,
-    LargeGravestoneSideways: 90,
-    WoodCaribou: 91,
-    StoneCaribou: 92,
-    MarbleCaribou: 93,
-    ColoredStringLights: 94,
-    ColoredStringLightsSideways: 95,
-    StringLights: 96,
-    StringLightsSideways: 97,
-    PetHutch: 30,
-    DecorShed: 98,
-    SeedSilo: 99
+    Birdhouse: "sprite/decor/Birdhouse",
+    Cauldron: "sprite/decor/Cauldron",
+    ColoredStringLights: "sprite/decor/ColoredStringLights",
+    ColoredStringLightsSideways: "sprite/decor/ColoredStringLightsSideways",
+    DecorShed: "sprite/decor/DecorShed",
+    HayBale: "sprite/decor/HayBale",
+    HayBaleSideways: "sprite/decor/HayBaleSideways",
+    LargeGravestone: "sprite/decor/LargeGravestone",
+    LargeGravestoneSideways: "sprite/decor/LargeGravestoneSideways",
+    LargeRock: "sprite/decor/LargeRock",
+    MarbleArch: "sprite/decor/MarbleArch",
+    MarbleArchSideways: "sprite/decor/MarbleArchSideways",
+    MarbleBench: "sprite/decor/MarbleBench",
+    MarbleBenchBackwards: "sprite/decor/MarbleBenchBackwards",
+    MarbleBenchSideways: "sprite/decor/MarbleBenchSideways",
+    MarbleBlobling: "sprite/decor/MarbleBlobling",
+    MarbleBridge: "sprite/decor/MarbleBridge",
+    MarbleBridgeSideways: "sprite/decor/MarbleBridgeSideways",
+    MarbleCaribou: "sprite/decor/MarbleCaribou",
+    MarbleFountain: "sprite/decor/MarbleFountain",
+    MarbleLampPost: "sprite/decor/MarbleLampPost",
+    MediumGravestone: "sprite/decor/MediumGravestone",
+    MediumGravestoneSideways: "sprite/decor/MediumGravestoneSideways",
+    MediumRock: "sprite/decor/MediumRock",
+    MiniFairyCottage: "sprite/decor/MiniFairyCottage",
+    MiniFairyForge: "sprite/decor/MiniFairyForge",
+    MiniFairyKeep: "sprite/decor/MiniFairyKeep",
+    MiniWizardTower: "sprite/decor/MiniWizardTower",
+    PaperLantern: "sprite/decor/PaperLantern",
+    PaperLanternSideways: "sprite/decor/PaperLanternSideways",
+    PetHutch: "sprite/decor/PetHutch",
+    SeedSilo: "sprite/decor/SeedSilo",
+    SmallGravestone: "sprite/decor/SmallGravestone",
+    SmallGravestoneSideways: "sprite/decor/SmallGravestoneSideways",
+    SmallRock: "sprite/decor/SmallRock",
+    StoneArch: "sprite/decor/StoneArch",
+    StoneArchSideways: "sprite/decor/StoneArchSideways",
+    StoneBench: "sprite/decor/StoneBench",
+    StoneBenchSideways: "sprite/decor/StoneBenchSideways",
+    StoneBirdBath: "sprite/decor/StoneBirdBath",
+    StoneBridge: "sprite/decor/StoneBridge",
+    StoneBridgeSideways: "sprite/decor/StoneBridgeSideways",
+    StoneCaribou: "sprite/decor/StoneCaribou",
+    StoneGnome: "sprite/decor/StoneGnome",
+    StoneLampPost: "sprite/decor/StoneLampPost",
+    StrawScarecrow: "sprite/decor/StrawScarecrow",
+    StringLights: "sprite/decor/StringLights",
+    StringLightsSideways: "sprite/decor/StringLightsSideways",
+    WoodArch: "sprite/decor/WoodArch",
+    WoodArchSide: "sprite/decor/WoodArchSide",
+    WoodBench: "sprite/decor/WoodBench",
+    WoodBenchBackwards: "sprite/decor/WoodBenchBackwards",
+    WoodBenchSideways: "sprite/decor/WoodBenchSideways",
+    WoodBridge: "sprite/decor/WoodBridge",
+    WoodBridgeSideways: "sprite/decor/WoodBridgeSideways",
+    WoodCaribou: "sprite/decor/WoodCaribou",
+    WoodLampPost: "sprite/decor/WoodLampPost",
+    WoodOwl: "sprite/decor/WoodOwl",
+    WoodPergola: "sprite/decor/WoodPergola",
+    WoodWindmill: "sprite/decor/WoodWindmill"
   };
   var plantCatalog = {
     Carrot: {
@@ -6289,6 +6285,40 @@
         maxScale: 2.5
       }
     },
+    Peach: {
+      seed: {
+        tileRef: tileRefsSeeds.Peach,
+        name: "Peach Seed",
+        coinPrice: 85e3,
+        creditPrice: 299,
+        rarity: rarity.Legendary
+      },
+      plant: {
+        tileRef: tileRefsPlants.Tree,
+        name: "Peach Tree",
+        harvestType: harvestType.Multiple,
+        slotOffsets: [
+          { x: -0.66, y: -0.34, rotation: 0 },
+          { x: -0.2, y: -0.1, rotation: 0 },
+          { x: 0.35, y: -0.25, rotation: 0 },
+          { x: 0.76, y: -0.56, rotation: 0 },
+          { x: -0.08, y: -0.69, rotation: 0 },
+          { x: 0.36, y: -1.03, rotation: 0 },
+          { x: -0.54, y: -0.97, rotation: 0 }
+        ],
+        secondsToMature: 7200,
+        rotateSlotOffsetsRandomly: true,
+        baseTileScale: 3
+      },
+      crop: {
+        tileRef: tileRefsPlants.Peach,
+        name: "Peach",
+        baseSellPrice: 9e3,
+        baseWeight: 0.18,
+        baseTileScale: 0.5,
+        maxScale: 3
+      }
+    },
     BurrosTail: {
       seed: {
         tileRef: tileRefsSeeds.BurrosTail,
@@ -6632,7 +6662,7 @@
         rarity: rarity.Divine
       },
       plant: {
-        tileRef: tileRefsPlants.PalmTreeTop,
+        tileRef: tileRefsPlants.PalmTree,
         name: "Dragon Fruit Plant",
         harvestType: harvestType.Multiple,
         slotOffsets: [
@@ -6909,6 +6939,22 @@
         WhiteCaribou: 5
       },
       requiredWeather: "Frost"
+    },
+    HorseEgg: {
+      tileRef: tileRefsPets.HorseEgg,
+      name: "Horse Egg",
+      coinPrice: 2e8,
+      creditPrice: 379,
+      rarity: rarity.Legendary,
+      initialTileScale: 0.3,
+      baseTileScale: 0.8,
+      secondsToHatch: 43200,
+      faunaSpawnWeights: {
+        Pony: 60,
+        Horse: 35,
+        FireHorse: 5
+      }
+      // expiryDate: A6, // TODO: fill in actual expiry date from game source
     }
   };
   var petCatalog = {
@@ -7156,6 +7202,66 @@
       hoursToMature: 100,
       rarity: rarity.Legendary,
       diet: ["Camellia", "BurrosTail", "Mushroom"]
+    },
+    Pony: {
+      tileRef: tileRefsPets.Pony,
+      name: "Pony",
+      coinsToFullyReplenishHunger: 4e3,
+      innateAbilityWeights: {
+        SellBoostIII: 25,
+        CoinFinderIII: 25,
+        HungerRestoreII: 25,
+        SeedFinderII: 25
+      },
+      maxScale: 2,
+      maturitySellPrice: 1e7,
+      matureWeight: 200,
+      moveProbability: 0.3,
+      moveTweenDurationMs: 600,
+      hoursToMature: 72,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      diet: ["Beet", "Pear", "Coconut"]
+    },
+    Horse: {
+      tileRef: tileRefsPets.Horse,
+      name: "Horse",
+      coinsToFullyReplenishHunger: 25e3,
+      innateAbilityWeights: {
+        DawnBoost: 30,
+        DawnlitGranter: 40,
+        DawnPlantGrowthBoost: 10,
+        PetAgeBoostII: 20
+      },
+      maxScale: 2.5,
+      maturitySellPrice: 5e7,
+      matureWeight: 80,
+      moveProbability: 0.4,
+      moveTweenDurationMs: 500,
+      hoursToMature: 100,
+      rarity: rarity.Legendary,
+      tileTransformOrigin: "bottom",
+      diet: ["Squash", "Echeveria", "Gentian"]
+    },
+    FireHorse: {
+      tileRef: tileRefsPets.FireHorse,
+      name: "Fire Horse",
+      coinsToFullyReplenishHunger: 2e5,
+      innateAbilityWeights: {
+        AmberMoonBoost: 30,
+        PetHatchSizeBoostII: 20,
+        AmberlitGranter: 40,
+        AmberPlantGrowthBoost: 10
+      },
+      maxScale: 2.5,
+      maturitySellPrice: 15e7,
+      matureWeight: 700,
+      moveProbability: 0.4,
+      moveTweenDurationMs: 800,
+      hoursToMature: 144,
+      rarity: rarity.Mythic,
+      tileTransformOrigin: "bottom",
+      diet: ["DragonFruit", "Poinsettia", "Cacao"]
     },
     Butterfly: {
       tileRef: tileRefsPets.Butterfly,
@@ -8101,6 +8207,29 @@
       rarity: rarity.Common,
       baseTileScale: 1,
       isOneTimePurchase: false
+    },
+    PaperLantern: {
+      tileRef: tileRefsDecor.PaperLantern,
+      rotationVariants: {
+        90: {
+          tileRef: tileRefsDecor.PaperLanternSideways,
+          flipH: true
+        },
+        180: {
+          tileRef: tileRefsDecor.PaperLantern,
+          flipH: true
+        },
+        270: {
+          tileRef: tileRefsDecor.PaperLanternSideways
+        }
+      },
+      name: "Paper Lantern",
+      coinPrice: 9e3,
+      creditPrice: 13,
+      rarity: rarity.Common,
+      baseTileScale: 1,
+      isOneTimePurchase: false
+      // expiryDate: A6, // TODO: fill in actual expiry date from game source
     },
     SmallGravestone: {
       tileRef: tileRefsDecor.SmallGravestone,
@@ -13789,7 +13918,7 @@
     }
     ensureStyles() {
       if (document.getElementById("__qmm_css__")) return;
-      const css = `
+      const css3 = `
     /* ================= Modern UI for qmm ================= */
 .qmm{
   --qmm-bg:        #0a0e14;
@@ -14711,7 +14840,7 @@
     `;
       const st = document.createElement("style");
       st.id = "__qmm_css__";
-      st.textContent = css;
+      st.textContent = css3;
       (document.documentElement || document.body).appendChild(st);
     }
   };
@@ -17360,10 +17489,10 @@
           mutRow.appendChild(tag);
         }
         if (mutations.length < mutationKeys.length) {
-          const toggleBtn = document.createElement("button");
-          toggleBtn.type = "button";
-          toggleBtn.textContent = "+";
-          Object.assign(toggleBtn.style, {
+          const toggleBtn2 = document.createElement("button");
+          toggleBtn2.type = "button";
+          toggleBtn2.textContent = "+";
+          Object.assign(toggleBtn2.style, {
             width: "28px",
             height: "28px",
             borderRadius: "50%",
@@ -17377,12 +17506,12 @@
             alignItems: "center",
             justifyContent: "center"
           });
-          toggleBtn.onclick = () => {
+          toggleBtn2.onclick = () => {
             const isOpen = dropdown.style.display !== "none";
             dropdown.style.display = isOpen ? "none" : "grid";
-            toggleBtn.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
+            toggleBtn2.style.background = isOpen ? "rgba(10,14,20,0.9)" : "rgba(32,42,56,0.8)";
           };
-          mutRow.appendChild(toggleBtn);
+          mutRow.appendChild(toggleBtn2);
         }
       };
       const dropdown = document.createElement("div");
@@ -19933,9 +20062,9 @@
     return ev.code === 4300 || ev.code === 4250 && (/superseded/i.test(reason) || /newer user session/i.test(reason));
   }
   function ensureAutoRecoOverlayStyle() {
-    const STYLE_ID4 = "mgAutoRecoOverlayStyle";
-    if (document.getElementById(STYLE_ID4)) return;
-    const css = `
+    const STYLE_ID6 = "mgAutoRecoOverlayStyle";
+    if (document.getElementById(STYLE_ID6)) return;
+    const css3 = `
     #mgAutoRecoOverlay { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.65); font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     #mgAutoRecoOverlay .box { background: #0f1318; color: #fff; padding: 24px 28px; border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45); text-align: center; max-width: 92vw; border: 1px solid rgba(255,255,255,.15); }
     #mgAutoRecoOverlay .title { font-size: 24px; font-weight: 900; letter-spacing: .02em; margin: 0 0 8px 0; }
@@ -19944,8 +20073,8 @@
     #mgAutoRecoOverlay .btn:focus { outline: 2px solid #7aa2ff; outline-offset: 2px; }
   `;
     const style3 = document.createElement("style");
-    style3.id = STYLE_ID4;
-    style3.textContent = css;
+    style3.id = STYLE_ID6;
+    style3.textContent = css3;
     document.documentElement.appendChild(style3);
   }
   function createAutoRecoOverlay(initialMs, onReconnectNow) {
@@ -23236,6 +23365,29 @@
     for (const s of plant.slots) sum += valueFromGardenSlot(s, merged);
     return sum;
   }
+  function sumInventoryValue(items, opts, playersInRoom) {
+    if (!Array.isArray(items)) return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const it of items) {
+      if (it?.itemType === "Produce") {
+        sum += valueFromInventoryProduce(it, merged);
+      }
+    }
+    return sum;
+  }
+  function sumGardenValue(garden2, opts, playersInRoom) {
+    if (!garden2 || typeof garden2 !== "object") return 0;
+    const merged = playersInRoom == null ? opts : { ...opts, friendPlayers: playersInRoom };
+    let sum = 0;
+    for (const k of Object.keys(garden2)) {
+      const p = garden2[k];
+      if (p?.objectType === "plant") {
+        sum += valueFromGardenPlant(p, merged);
+      }
+    }
+    return sum;
+  }
   var DefaultPricing = Object.freeze({
     getBasePrice: defaultGetBasePrice,
     rounding: "round"
@@ -24158,9 +24310,9 @@
     root.querySelectorAll(`.${injectedClass}`).forEach((n) => n.remove());
   }
   function ensureStyle(injectedClass, theme) {
-    const STYLE_ID4 = `${injectedClass}-style`;
-    if (document.getElementById(STYLE_ID4)) return;
-    const css = `
+    const STYLE_ID6 = `${injectedClass}-style`;
+    if (document.getElementById(STYLE_ID6)) return;
+    const css3 = `
 .${injectedClass}{
   font-synthesis: none;
   -webkit-font-smoothing: antialiased;
@@ -24214,8 +24366,8 @@
 }
 `.trim();
     const s = document.createElement("style");
-    s.id = STYLE_ID4;
-    s.textContent = css;
+    s.id = STYLE_ID6;
+    s.textContent = css3;
     document.head.appendChild(s);
   }
   function hookHistory(onNavigate) {
@@ -27693,6 +27845,65 @@
     }
     return badge;
   }
+  var HEART_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" style="display:block;flex-shrink:0;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+  var CODE_SVG = `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex-shrink:0;"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+  var BADGE_CONFIGS = {
+    supporter: {
+      label: "Supporter",
+      svg: HEART_SVG,
+      color: "#f472b6",
+      border: "rgba(244,114,182,0.3)",
+      bg: "rgba(244,114,182,0.1)"
+    },
+    mod_creator: {
+      label: "Mod Creator",
+      svg: CODE_SVG,
+      color: "#a78bfa",
+      border: "rgba(167,139,250,0.3)",
+      bg: "rgba(167,139,250,0.1)"
+    }
+  };
+  function createPlayerBadges(badges, iconOnly = false) {
+    if (!badges || badges.length === 0) return null;
+    const knownBadges = badges.filter((b) => b in BADGE_CONFIGS);
+    if (knownBadges.length === 0) return null;
+    const row = document.createElement("div");
+    style2(row, {
+      display: "flex",
+      flexWrap: "wrap",
+      justifyContent: "center",
+      gap: "4px"
+    });
+    for (const badgeKey of knownBadges) {
+      const cfg = BADGE_CONFIGS[badgeKey];
+      const chip = document.createElement("span");
+      style2(chip, {
+        display: "inline-flex",
+        alignItems: "center",
+        gap: iconOnly ? "0px" : "3px",
+        padding: iconOnly ? "3px" : "2px 6px",
+        borderRadius: iconOnly ? "50%" : "6px",
+        fontSize: "10px",
+        fontWeight: "600",
+        color: cfg.color,
+        border: `1px solid ${cfg.border}`,
+        background: cfg.bg
+      });
+      const icon = document.createElement("span");
+      icon.innerHTML = cfg.svg;
+      style2(icon, { display: "inline-flex", alignItems: "center" });
+      chip.appendChild(icon);
+      if (!iconOnly) {
+        const label2 = document.createElement("span");
+        label2.textContent = cfg.label;
+        chip.appendChild(label2);
+      } else {
+        chip.title = cfg.label;
+      }
+      row.appendChild(chip);
+    }
+    return row;
+  }
   function createKeyBlocker(shouldBlock) {
     const handler = (e) => {
       if (shouldBlock()) e.stopPropagation();
@@ -28837,7 +29048,7 @@
       const resolvedPlayer = resolvePlayer(normalizedPlayers, slot, options);
       const playerName = resolvedPlayer?.name ?? slotData?.name ?? slot?.name ?? null;
       const avatarRaw = resolvedPlayer?.cosmetic?.avatar ?? slotData?.cosmetic?.avatar ?? slot?.cosmetic?.avatar ?? null;
-      const avatar = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
+      const avatar2 = Array.isArray(avatarRaw) && avatarRaw.length > 0 ? avatarRaw.map((entry) => String(entry)) : null;
       const coinCandidate = slotData?.coinsCount ?? slot?.coinsCount ?? slotData?.coins ?? slot?.coins ?? null;
       const coinValue = Number(coinCandidate);
       const coinsRaw = Number.isFinite(coinValue) ? coinValue : null;
@@ -28855,7 +29066,7 @@
       const modVersion = localVersion ? `Arie's mod ${localVersion}` : null;
       const payload = {
         playerName: playerName ?? null,
-        avatar: avatar ?? null,
+        avatar: avatar2 ?? null,
         modVersion,
         coins: coinsRaw,
         room: {
@@ -29134,6 +29345,7 @@
       hasModInstalled: false,
       isOnline: friend.isOnline,
       lastEventAt: friend.lastEventAt,
+      badges: friend.badges || null,
       privacy: {
         showGarden: true,
         showInventory: true,
@@ -30174,6 +30386,7 @@
               hasModInstalled: false,
               isOnline: f.isOnline || false,
               lastEventAt: f.lastEventAt || null,
+              badges: f.badges || null,
               privacy: {
                 showGarden: true,
                 showInventory: true,
@@ -30195,6 +30408,7 @@
               hasModInstalled: false,
               isOnline: false,
               lastEventAt: null,
+              badges: r.badges || null,
               privacy: {
                 showGarden: true,
                 showInventory: true,
@@ -30212,6 +30426,7 @@
               otherPlayerId: r.otherPlayerId,
               playerName: r.playerName || null,
               avatarUrl: r.avatarUrl || null,
+              badges: r.badges || null,
               createdAt: r.createdAt
             }));
             updateOutgoingRequestsCache(outgoingRequests);
@@ -30255,6 +30470,7 @@
               name: m.name || null,
               avatarUrl: m.avatarUrl || null,
               avatar: m.avatar || null,
+              badges: m.badges || null,
               lastEventAt: m.lastEventAt || null,
               roomId: m.roomId ?? null,
               isOnline: m.isOnline || false,
@@ -30284,6 +30500,7 @@
                 hasModInstalled: false,
                 isOnline: false,
                 lastEventAt: null,
+                badges: req.requesterBadges || null,
                 privacy: {
                   showGarden: true,
                   showInventory: true,
@@ -30301,6 +30518,7 @@
                 otherPlayerId: req.targetId,
                 playerName: req.targetName || null,
                 avatarUrl: req.targetAvatarUrl || null,
+                badges: req.targetBadges || null,
                 createdAt: req.createdAt
               };
               addOutgoingRequestToCache(existing);
@@ -30327,6 +30545,7 @@
               const otherAvatar = isRequester ? resp.responderAvatarUrl : resp.requesterAvatarUrl;
               const otherIsOnline = isRequester ? resp.responderIsOnline : resp.requesterIsOnline;
               const otherRoomId = isRequester ? resp.responderRoomId : resp.requesterRoomId;
+              const otherBadges = isRequester ? resp.responderBadges : resp.requesterBadges;
               addFriendToCache({
                 playerId: otherId,
                 playerName: otherName || null,
@@ -30334,7 +30553,8 @@
                 avatar: null,
                 lastEventAt: resp.updatedAt,
                 isOnline: otherIsOnline ?? false,
-                roomId: otherRoomId ?? null
+                roomId: otherRoomId ?? null,
+                badges: otherBadges || null
               });
               try {
                 window.dispatchEvent(new CustomEvent("qws:friends-refresh"));
@@ -30743,8 +30963,8 @@
   function createRoomCard(token, isOutgoing) {
     const env = detectEnvironment();
     const isDiscord = env.surface === "discord";
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -30757,11 +30977,11 @@
       maxWidth: "100%"
     });
     if (!isDiscord) {
-      card.onmouseenter = () => style2(card, {
+      card2.onmouseenter = () => style2(card2, {
         background: isOutgoing ? "rgba(94,234,212,0.14)" : "rgba(255,255,255,0.08)",
         borderColor: isOutgoing ? "rgba(94,234,212,0.3)" : "rgba(255,255,255,0.14)"
       });
-      card.onmouseleave = () => style2(card, {
+      card2.onmouseleave = () => style2(card2, {
         background: isOutgoing ? "rgba(94,234,212,0.08)" : "rgba(255,255,255,0.04)",
         borderColor: isOutgoing ? "rgba(94,234,212,0.18)" : "rgba(255,255,255,0.08)"
       });
@@ -30816,7 +31036,7 @@
       });
       disabledMsg.textContent = "Unavailable on Discord";
       info.appendChild(disabledMsg);
-      card.append(icon, info);
+      card2.append(icon, info);
     } else {
       const arrow = document.createElement("div");
       style2(arrow, {
@@ -30824,17 +31044,17 @@
         color: isOutgoing ? "rgba(94,234,212,0.4)" : "rgba(226,232,240,0.3)"
       });
       arrow.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
-      card.append(icon, info, arrow);
-      card.onclick = () => {
+      card2.append(icon, info, arrow);
+      card2.onclick = () => {
         const roomUrl = `${env.origin}/r/${token.id}`;
         window.open(roomUrl, "_blank");
       };
     }
-    return card;
+    return card2;
   }
   function createGenericCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "8px",
@@ -30845,12 +31065,12 @@
       fontSize: "12px",
       color: isOutgoing ? "#d1fae5" : "#e7eef7"
     });
-    card.textContent = `${token.type}: ${token.id}`;
-    return card;
+    card2.textContent = `${token.type}: ${token.id}`;
+    return card2;
   }
   function createItemCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -30917,16 +31137,16 @@
         flexShrink: "0"
       });
       qtyBadge.textContent = `x${qty}`;
-      card.append(spriteWrap, info, qtyBadge);
+      card2.append(spriteWrap, info, qtyBadge);
     } else {
-      card.append(spriteWrap, info);
+      card2.append(spriteWrap, info);
     }
-    return card;
+    return card2;
   }
   var PRODUCE_SPRITE_CATS = ["crop", "plant", "tallplant"];
   function createProduceCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -31033,8 +31253,8 @@
     const formatted = formatPrice(coinVal) ?? String(coinVal);
     valueEl.textContent = `${formatted} coins`;
     info.append(typeLabelRow, nameEl, valueEl);
-    card.append(spriteWrap, info);
-    return card;
+    card2.append(spriteWrap, info);
+    return card2;
   }
   function getAbilityChipColors(id) {
     const key2 = String(id || "");
@@ -31138,8 +31358,8 @@
     return { strength, maxStrength };
   }
   function createPetCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "10px",
@@ -31221,12 +31441,12 @@
     if (abilities.length > 0) {
       info.appendChild(createAbilityBadge(abilities));
     }
-    card.append(spriteWrap, info);
-    return card;
+    card2.append(spriteWrap, info);
+    return card2;
   }
   function createTeamCard(token, isOutgoing) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "10px",
@@ -31272,7 +31492,7 @@
     });
     teamName.textContent = token.label || token.id;
     headerRow.append(typeLabel, teamName);
-    card.appendChild(headerRow);
+    card2.appendChild(headerRow);
     const petsRow = document.createElement("div");
     style2(petsRow, {
       display: "flex",
@@ -31348,8 +31568,8 @@
       }
       petsRow.appendChild(petSlot);
     }
-    card.appendChild(petsRow);
-    return card;
+    card2.appendChild(petsRow);
+    return card2;
   }
   function createTokenCardsContainer(tokens, isOutgoing) {
     const container = document.createElement("div");
@@ -32131,6 +32351,8 @@
       gap: "1px",
       minWidth: "0"
     });
+    const threadNameRow = document.createElement("div");
+    style2(threadNameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const threadName = document.createElement("div");
     style2(threadName, {
       fontSize: "13px",
@@ -32141,12 +32363,15 @@
       whiteSpace: "nowrap"
     });
     threadName.textContent = "Select a conversation";
+    const threadBadgesContainer = document.createElement("div");
+    style2(threadBadgesContainer, { flexShrink: "0", display: "none" });
+    threadNameRow.append(threadName, threadBadgesContainer);
     const threadStatus = document.createElement("div");
     style2(threadStatus, {
       fontSize: "11px",
       color: "rgba(226,232,240,0.5)"
     });
-    threadInfo.append(threadName, threadStatus);
+    threadInfo.append(threadNameRow, threadStatus);
     threadHeader.append(threadAvatar, threadInfo);
     const threadBody = document.createElement("div");
     threadBody.className = "qws-ch-scrollable-narrow";
@@ -32530,7 +32755,8 @@
       }
       const conv = getCachedFriendConversations().find((c) => c.conversationId === selectedId);
       if (!conv) return;
-      updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false);
+      const friendData = getCachedFriendsWithViews().find((f) => f.playerId === conv.otherPlayerId);
+      updateThreadHeader(conv.otherPlayerAvatarUrl, conv.otherPlayerName || "Unknown", null, false, friendData?.badges);
       const messages = sortChronological(getCachedFriendConversationMessages(selectedId));
       const currentPlayerId = getCurrentPlayerId();
       if (messages.length === 0) {
@@ -32678,8 +32904,8 @@
       style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
       for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
         const member = previewMembers[i];
-        const avatar = document.createElement("div");
-        style2(avatar, {
+        const avatar2 = document.createElement("div");
+        style2(avatar2, {
           width: "20px",
           height: "20px",
           borderRadius: "50%",
@@ -32688,7 +32914,7 @@
           marginLeft: i > 0 ? "-6px" : "0",
           flexShrink: "0"
         });
-        avatarsContainer.appendChild(avatar);
+        avatarsContainer.appendChild(avatar2);
       }
       const memberCountEl = document.createElement("div");
       style2(memberCountEl, {
@@ -32880,7 +33106,7 @@
         threadBody.scrollTop = threadBody.scrollHeight;
       });
     }
-    function updateThreadHeader(avatarUrl, displayName, statusText, isGroup) {
+    function updateThreadHeader(avatarUrl, displayName, statusText, isGroup, badges) {
       if (isGroup) {
         style2(threadAvatar, { display: "none" });
       } else if (avatarUrl) {
@@ -32895,6 +33121,14 @@
       }
       threadName.textContent = displayName;
       threadStatus.textContent = statusText || "";
+      threadBadgesContainer.innerHTML = "";
+      const badgesEl = badges && !isGroup ? createPlayerBadges(badges) : null;
+      if (badgesEl) {
+        threadBadgesContainer.appendChild(badgesEl);
+        style2(threadBadgesContainer, { display: "block" });
+      } else {
+        style2(threadBadgesContainer, { display: "none" });
+      }
     }
     function createEmptyListItem(query) {
       const empty = document.createElement("div");
@@ -32918,9 +33152,9 @@
     function createAvatarEl(avatarUrl, displayName, isGroup) {
       const wrap = document.createElement("div");
       style2(wrap, { position: "relative", flexShrink: "0" });
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       const fallbackGradient = isGroup ? "linear-gradient(135deg, rgba(251,191,36,0.3), rgba(234,88,12,0.3))" : "linear-gradient(135deg, rgba(94,234,212,0.25), rgba(59,130,246,0.25))";
-      style2(avatar, {
+      style2(avatar2, {
         width: "36px",
         height: "36px",
         borderRadius: "50%",
@@ -32934,9 +33168,9 @@
         border: "1.5px solid rgba(255,255,255,0.08)"
       });
       if (!avatarUrl) {
-        avatar.textContent = isGroup ? "#" : (displayName || "?").charAt(0).toUpperCase();
+        avatar2.textContent = isGroup ? "#" : (displayName || "?").charAt(0).toUpperCase();
       }
-      wrap.appendChild(avatar);
+      wrap.appendChild(avatar2);
       return wrap;
     }
     function createRowMeta(name, previewText, lastDate, hasUnread, unreadCount) {
@@ -32989,9 +33223,9 @@
       return meta;
     }
     function createSmallAvatar(avatarUrl, fallbackName) {
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       if (avatarUrl) {
-        style2(avatar, {
+        style2(avatar2, {
           width: "28px",
           height: "28px",
           borderRadius: "50%",
@@ -33000,7 +33234,7 @@
           border: "1px solid rgba(255,255,255,0.06)"
         });
       } else {
-        style2(avatar, {
+        style2(avatar2, {
           width: "28px",
           height: "28px",
           borderRadius: "50%",
@@ -33014,9 +33248,9 @@
           flexShrink: "0",
           border: "1px solid rgba(255,255,255,0.06)"
         });
-        avatar.textContent = (fallbackName || "?").charAt(0).toUpperCase();
+        avatar2.textContent = (fallbackName || "?").charAt(0).toUpperCase();
       }
-      return avatar;
+      return avatar2;
     }
     const URL_RE = /https?:\/\/[^\s<>)"'\]]+/gi;
     function shortenUrl(raw) {
@@ -34088,8 +34322,8 @@
       gap: "16px",
       alignItems: "center"
     });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "80px",
       height: "80px",
       borderRadius: "50%",
@@ -34104,6 +34338,8 @@
       gap: "8px",
       flex: "1"
     });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
     const name = document.createElement("div");
     style2(name, {
       fontSize: "20px",
@@ -34111,6 +34347,9 @@
       color: "#e7eef7"
     });
     name.textContent = player2.playerName || "Unknown Player";
+    nameRow.appendChild(name);
+    const badgesEl = createPlayerBadges(player2.badges);
+    if (badgesEl) nameRow.appendChild(badgesEl);
     const playerId2 = document.createElement("div");
     style2(playerId2, {
       fontSize: "12px",
@@ -34140,8 +34379,8 @@
     });
     statusText.textContent = player2.isOnline ? "Online" : "Offline";
     statusRow.append(statusIndicator, statusText);
-    infoColumn.append(name, playerId2, statusRow);
-    topRow.append(avatar, infoColumn);
+    infoColumn.append(nameRow, playerId2, statusRow);
+    topRow.append(avatar2, infoColumn);
     const playerData = player2;
     if (playerData.avatar && Array.isArray(playerData.avatar) && playerData.avatar.length > 0) {
       const cosmetics = playerData.avatar;
@@ -34463,8 +34702,8 @@
     return section;
   }
   function createStatCard(label2, rank, total, rankChange = null) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       padding: "14px",
       border: "1px solid rgba(255,255,255,0.08)",
       borderRadius: "10px",
@@ -34539,8 +34778,8 @@
     });
     totalEl.textContent = total;
     valueRow.append(leftSide, totalEl);
-    card.append(labelEl, valueRow);
-    return card;
+    card2.append(labelEl, valueRow);
+    return card2;
   }
   function createActionsSection(player2) {
     const section = document.createElement("div");
@@ -34768,8 +35007,9 @@
     };
   }
   function createFriendCard(friend, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
+      position: "relative",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -34781,17 +35021,17 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(friend);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(friend);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "56px",
       height: "56px",
       borderRadius: "50%",
@@ -34810,7 +35050,7 @@
       border: "2px solid #0f141e",
       boxShadow: friend.isOnline ? "0 0 8px rgba(16,185,129,0.6)" : "0 0 6px rgba(239,68,68,0.4)"
     });
-    avatarWrapper.append(avatar, onlineIndicator);
+    avatarWrapper.append(avatar2, onlineIndicator);
     const info = document.createElement("div");
     style2(info, { display: "flex", flexDirection: "column", gap: "2px", alignItems: "center", width: "100%" });
     const name = document.createElement("div");
@@ -34845,8 +35085,22 @@
       }
     }
     info.append(name, status);
-    card.append(avatarWrapper, info);
-    return card;
+    const badgesEl = createPlayerBadges(friend.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
+        gap: "3px"
+      });
+      card2.append(avatarWrapper, info, badgesEl);
+    } else {
+      card2.append(avatarWrapper, info);
+    }
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/addFriendsSubTab.ts
@@ -35004,8 +35258,9 @@
     };
   }
   function createAddFriendCard(player2, getButtonState) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
+      position: "relative",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -35016,17 +35271,17 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
     };
     const isOnline = player2.isOnline ?? false;
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "56px",
       height: "56px",
       borderRadius: "50%",
@@ -35045,7 +35300,7 @@
       border: "2px solid #0f141e",
       boxShadow: isOnline ? "0 0 8px rgba(16,185,129,0.6)" : "0 0 6px rgba(239,68,68,0.4)"
     });
-    avatarWrapper.append(avatar, onlineIndicator);
+    avatarWrapper.append(avatar2, onlineIndicator);
     const info = document.createElement("div");
     style2(info, { display: "flex", flexDirection: "column", gap: "2px", alignItems: "center", width: "100%" });
     const name = document.createElement("div");
@@ -35083,7 +35338,7 @@
         alignItems: "center",
         justifyContent: "center"
       });
-      card.append(avatarWrapper, info, friendsText);
+      card2.append(avatarWrapper, info, friendsText);
     } else if (buttonState === "cancel") {
       const requestSentText = document.createElement("div");
       requestSentText.innerHTML = `
@@ -35106,7 +35361,7 @@
         alignItems: "center",
         justifyContent: "center"
       });
-      card.append(avatarWrapper, info, requestSentText);
+      card2.append(avatarWrapper, info, requestSentText);
     } else {
       const actionButton = document.createElement("button");
       if (buttonState === "add") {
@@ -35143,9 +35398,9 @@
       actionButton.onclick = async (e) => {
         e.stopPropagation();
         if (buttonState === "add") {
-          card.style.animation = "none";
-          void card.offsetWidth;
-          card.style.animation = "qws-card-bounce 250ms ease";
+          card2.style.animation = "none";
+          void card2.offsetWidth;
+          card2.style.animation = "qws-card-bounce 250ms ease";
           actionButton.disabled = true;
           actionButton.textContent = "Sending...";
           style2(actionButton, { cursor: "not-allowed", opacity: "0.6" });
@@ -35158,9 +35413,22 @@
           }
         }
       };
-      card.append(avatarWrapper, info, actionButton);
+      card2.append(avatarWrapper, info, actionButton);
     }
-    return card;
+    const badgesEl = createPlayerBadges(player2.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        justifyContent: "flex-start",
+        gap: "3px"
+      });
+      card2.appendChild(badgesEl);
+    }
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/requestsSubTab.ts
@@ -35233,8 +35501,8 @@
     };
   }
   function createIncomingRequestCard(request2) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "12px",
@@ -35244,10 +35512,10 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
-    card.onmouseleave = () => style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    card2.onmouseenter = () => style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseleave = () => style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "48px",
       height: "48px",
       borderRadius: "50%",
@@ -35257,13 +35525,21 @@
     });
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const name = document.createElement("div");
     style2(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
     name.textContent = request2.playerName || "Unknown";
+    nameRow.appendChild(name);
+    const badgesEl = createPlayerBadges(request2.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, { flexShrink: "0" });
+      nameRow.appendChild(badgesEl);
+    }
     const time = document.createElement("div");
     style2(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
     time.textContent = formatRelativeTime(request2.createdAt);
-    info.append(name, time);
+    info.append(nameRow, time);
     const buttonsContainer = document.createElement("div");
     style2(buttonsContainer, { display: "flex", gap: "8px", flexShrink: "0" });
     const acceptButton = document.createElement("button");
@@ -35329,12 +35605,12 @@
       }
     };
     buttonsContainer.append(acceptButton, declineButton);
-    card.append(avatar, info, buttonsContainer);
-    return card;
+    card2.append(avatar2, info, buttonsContainer);
+    return card2;
   }
   function createOutgoingRequestCard(request2) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       alignItems: "center",
       gap: "12px",
@@ -35344,10 +35620,10 @@
       background: "rgba(255,255,255,0.03)",
       transition: "all 120ms ease"
     });
-    card.onmouseenter = () => style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
-    card.onmouseleave = () => style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    card2.onmouseenter = () => style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)" });
+    card2.onmouseleave = () => style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)" });
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "48px",
       height: "48px",
       borderRadius: "50%",
@@ -35357,13 +35633,21 @@
     });
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "4px", minWidth: "0" });
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", minWidth: "0" });
     const name = document.createElement("div");
     style2(name, { fontSize: "13px", fontWeight: "600", color: "#e7eef7", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
     name.textContent = request2.playerName || "Unknown";
+    nameRow.appendChild(name);
+    const outBadgesEl = createPlayerBadges(request2.badges, true);
+    if (outBadgesEl) {
+      style2(outBadgesEl, { flexShrink: "0" });
+      nameRow.appendChild(outBadgesEl);
+    }
     const time = document.createElement("div");
     style2(time, { fontSize: "11px", color: "rgba(226,232,240,0.5)" });
     time.textContent = formatRelativeTime(request2.createdAt);
-    info.append(name, time);
+    info.append(nameRow, time);
     const cancelButton = document.createElement("button");
     cancelButton.textContent = "Cancel";
     style2(cancelButton, {
@@ -35393,8 +35677,8 @@
         style2(cancelButton, { cursor: "pointer", opacity: "1" });
       }
     };
-    card.append(avatar, info, cancelButton);
-    return card;
+    card2.append(avatar2, info, cancelButton);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/communityTab.ts
@@ -35735,10 +36019,8 @@
       }
     };
     const createRoomCard2 = (room) => {
-      const env = detectEnvironment();
-      const isDiscord = env.surface === "discord";
-      const card = document.createElement("div");
-      style2(card, {
+      const card2 = document.createElement("div");
+      style2(card2, {
         padding: "12px",
         background: "rgba(255,255,255,0.02)",
         borderRadius: "10px",
@@ -35748,14 +36030,14 @@
         gap: "12px",
         transition: "all 120ms ease"
       });
-      card.onmouseenter = () => {
-        style2(card, {
+      card2.onmouseenter = () => {
+        style2(card2, {
           background: "rgba(255,255,255,0.04)",
           borderColor: "rgba(94,234,212,0.15)"
         });
       };
-      card.onmouseleave = () => {
-        style2(card, {
+      card2.onmouseleave = () => {
+        style2(card2, {
           background: "rgba(255,255,255,0.02)",
           borderColor: "rgba(255,255,255,0.06)"
         });
@@ -35832,27 +36114,22 @@
       counter.textContent = `${room.playersCount}/6`;
       const joinButton = document.createElement("button");
       const isFull = room.playersCount >= 6;
-      const isDisabled = isFull || isDiscord;
-      if (isDiscord) {
-        joinButton.textContent = "Unavailable";
-      } else {
-        joinButton.textContent = isFull ? "Full" : "Join";
-      }
-      joinButton.disabled = isDisabled;
+      joinButton.textContent = isFull ? "Full" : "Join";
+      joinButton.disabled = isFull;
       style2(joinButton, {
         padding: "6px 14px",
-        border: isDisabled ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
+        border: isFull ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(94,234,212,0.3)",
         borderRadius: "6px",
-        background: isDisabled ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
-        color: isDisabled ? "rgba(226,232,240,0.4)" : "#5eead4",
+        background: isFull ? "rgba(255,255,255,0.03)" : "rgba(94,234,212,0.1)",
+        color: isFull ? "rgba(226,232,240,0.4)" : "#5eead4",
         fontSize: "12px",
         fontWeight: "600",
-        cursor: isDisabled ? "not-allowed" : "pointer",
+        cursor: isFull ? "not-allowed" : "pointer",
         transition: "all 120ms ease",
         flexShrink: "0",
-        opacity: isDisabled ? "0.5" : "1"
+        opacity: isFull ? "0.5" : "1"
       });
-      if (!isDisabled) {
+      if (!isFull) {
         joinButton.onmouseenter = () => {
           style2(joinButton, {
             background: "rgba(94,234,212,0.2)",
@@ -35867,13 +36144,11 @@
         };
         joinButton.onclick = (e) => {
           e.stopPropagation();
-          window.location.href = `${detectEnvironment().origin}/r/${room.id}`;
+          window.location.href = `https://magicgarden.gg/r/${room.id}`;
         };
-      } else if (isDiscord && !isFull) {
-        joinButton.title = "Room joining is not available on Discord";
       }
-      card.append(leftWrapper, counter, joinButton);
-      return card;
+      card2.append(leftWrapper, counter, joinButton);
+      return card2;
     };
     const loadRooms = async (forceRefresh = false) => {
       isLoading = true;
@@ -36023,8 +36298,8 @@
     };
   }
   function createGroupCard(group, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "12px",
@@ -36035,12 +36310,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(group);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(group);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const header = document.createElement("div");
     style2(header, { display: "flex", alignItems: "center", gap: "8px" });
@@ -36104,8 +36379,8 @@
     style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
     for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
       const member = previewMembers[i];
-      const avatar = document.createElement("div");
-      style2(avatar, {
+      const avatar2 = document.createElement("div");
+      style2(avatar2, {
         width: "28px",
         height: "28px",
         borderRadius: "50%",
@@ -36113,7 +36388,7 @@
         border: "2px solid #0f141e",
         marginLeft: i > 0 ? "-8px" : "0"
       });
-      avatarsContainer.appendChild(avatar);
+      avatarsContainer.appendChild(avatar2);
     }
     const memberCount = document.createElement("div");
     style2(memberCount, {
@@ -36124,12 +36399,12 @@
     const count = group.memberCount || group.membersCount || 0;
     memberCount.textContent = `${count} member${count !== 1 ? "s" : ""}`;
     avatarsRow.append(avatarsContainer, memberCount);
-    card.append(header, avatarsRow);
-    return card;
+    card2.append(header, avatarsRow);
+    return card2;
   }
   function createGroupCreateCard(onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -36142,12 +36417,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = onClick;
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(94,234,212,0.12)", borderColor: "rgba(94,234,212,0.5)", transform: "translateY(-2px)" });
+    card2.onclick = onClick;
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(94,234,212,0.12)", borderColor: "rgba(94,234,212,0.5)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(94,234,212,0.05)", borderColor: "rgba(94,234,212,0.3)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(94,234,212,0.05)", borderColor: "rgba(94,234,212,0.3)", transform: "translateY(0)" });
     };
     const icon = document.createElement("div");
     style2(icon, {
@@ -36169,8 +36444,8 @@
       color: "#5eead4"
     });
     label2.textContent = "Create Group";
-    card.append(icon, label2);
-    return card;
+    card2.append(icon, label2);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/publicGroupsSubTab.ts
@@ -36379,8 +36654,8 @@
     };
   }
   function createPublicGroupCard(group, onClick) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "12px",
@@ -36391,12 +36666,12 @@
       cursor: "pointer",
       transition: "all 120ms ease"
     });
-    card.onclick = () => onClick(group);
-    card.onmouseenter = () => {
-      style2(card, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
+    card2.onclick = () => onClick(group);
+    card2.onmouseenter = () => {
+      style2(card2, { background: "rgba(255,255,255,0.06)", borderColor: "rgba(94,234,212,0.25)", transform: "translateY(-2px)" });
     };
-    card.onmouseleave = () => {
-      style2(card, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
+    card2.onmouseleave = () => {
+      style2(card2, { background: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.08)", transform: "translateY(0)" });
     };
     const header = document.createElement("div");
     style2(header, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" });
@@ -36431,8 +36706,8 @@
     style2(avatarsContainer, { display: "flex", marginLeft: "-4px" });
     for (let i = 0; i < Math.min(3, previewMembers.length); i++) {
       const member = previewMembers[i];
-      const avatar = document.createElement("div");
-      style2(avatar, {
+      const avatar2 = document.createElement("div");
+      style2(avatar2, {
         width: "28px",
         height: "28px",
         borderRadius: "50%",
@@ -36441,7 +36716,7 @@
         marginLeft: i > 0 ? "-8px" : "0",
         flexShrink: "0"
       });
-      avatarsContainer.appendChild(avatar);
+      avatarsContainer.appendChild(avatar2);
     }
     const memberCount = document.createElement("div");
     style2(memberCount, {
@@ -36452,8 +36727,8 @@
     const count = group.memberCount || 0;
     memberCount.textContent = `${count} member${count !== 1 ? "s" : ""}`;
     avatarsRow.append(avatarsContainer, memberCount);
-    card.append(header, avatarsRow);
-    return card;
+    card2.append(header, avatarsRow);
+    return card2;
   }
 
   // src/ui/menus/communityHub/tabs/groupDetailView.ts
@@ -36819,8 +37094,8 @@
     return header;
   }
   function buildInfoCard(details, myRole, members) {
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       display: "flex",
       flexDirection: "column",
       gap: "16px",
@@ -36864,8 +37139,8 @@
     const groupId = String(details.group?.id || "");
     const isPublic = details.group?.isPublic ?? false;
     infoRow.appendChild(buildVisibilityCell(isPublic, myRole === "owner", groupId));
-    card.append(nameRow, infoRow);
-    return card;
+    card2.append(nameRow, infoRow);
+    return card2;
   }
   var ICON_EDIT = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
   var ICON_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -37156,8 +37431,8 @@
     const isOnline = member.isOnline ?? false;
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "40px",
       height: "40px",
       borderRadius: "50%",
@@ -37175,7 +37450,7 @@
       background: isOnline ? "#10b981" : "#6b7280",
       border: "2px solid #0f141e"
     });
-    avatarWrapper.append(avatar, onlineDot);
+    avatarWrapper.append(avatar2, onlineDot);
     const info = document.createElement("div");
     style2(info, { flex: "1", display: "flex", flexDirection: "column", gap: "2px", overflow: "hidden" });
     const nameEl = document.createElement("div");
@@ -37201,7 +37476,15 @@
     } else {
       meta.textContent = member.lastEventAt ? `Last seen ${formatRelativeTime(member.lastEventAt)}` : "";
     }
-    info.append(nameEl, meta);
+    const nameRow = document.createElement("div");
+    style2(nameRow, { display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" });
+    nameRow.appendChild(nameEl);
+    const badgesEl = createPlayerBadges(member.badges, true);
+    if (badgesEl) {
+      style2(badgesEl, { flexShrink: "0" });
+      nameRow.appendChild(badgesEl);
+    }
+    info.append(nameRow, meta);
     memberRefs?.set(member.playerId, { onlineDot, meta, member });
     const roleBadge = createRoleBadge(member.role || "member");
     row.append(roleBadge, avatarWrapper, info);
@@ -37498,8 +37781,8 @@
     row.onmouseleave = () => style2(row, { background: "transparent" });
     const avatarWrapper = document.createElement("div");
     style2(avatarWrapper, { position: "relative", flexShrink: "0" });
-    const avatar = document.createElement("div");
-    style2(avatar, {
+    const avatar2 = document.createElement("div");
+    style2(avatar2, {
       width: "36px",
       height: "36px",
       borderRadius: "50%",
@@ -37517,7 +37800,7 @@
       background: friend.isOnline ? "#10b981" : "#6b7280",
       border: "2px solid #1a1f2e"
     });
-    avatarWrapper.append(avatar, onlineDot);
+    avatarWrapper.append(avatar2, onlineDot);
     const name = document.createElement("div");
     style2(name, {
       flex: "1",
@@ -38416,8 +38699,8 @@
       }
     };
     function createLeaderboardRow(row, category, isMyRank = false) {
-      const card = document.createElement("div");
-      style2(card, {
+      const card2 = document.createElement("div");
+      style2(card2, {
         padding: "10px 12px",
         background: isMyRank ? "rgba(94,234,212,0.08)" : "rgba(255,255,255,0.02)",
         borderRadius: "10px",
@@ -38428,14 +38711,14 @@
         transition: "all 120ms ease"
       });
       if (!isMyRank) {
-        card.onmouseenter = () => {
-          style2(card, {
+        card2.onmouseenter = () => {
+          style2(card2, {
             background: "rgba(255,255,255,0.05)",
             borderColor: "rgba(94,234,212,0.15)"
           });
         };
-        card.onmouseleave = () => {
-          style2(card, {
+        card2.onmouseleave = () => {
+          style2(card2, {
             background: "rgba(255,255,255,0.02)",
             borderColor: "rgba(255,255,255,0.06)"
           });
@@ -38481,9 +38764,9 @@
         marginTop: "2px"
       });
       rankBadge.textContent = `#${row.rank}`;
-      const avatar = document.createElement("div");
+      const avatar2 = document.createElement("div");
       const isAnonymous = row.playerId === "null" || row.playerName === "anonymous";
-      style2(avatar, {
+      style2(avatar2, {
         width: "36px",
         height: "36px",
         borderRadius: "50%",
@@ -38495,7 +38778,7 @@
         justifyContent: "center"
       });
       if (isAnonymous) {
-        avatar.innerHTML = `
+        avatar2.innerHTML = `
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
@@ -38522,11 +38805,11 @@
       });
       total.textContent = formatPrice(row.total) ?? String(row.total);
       if (rankChangeIndicator) {
-        card.append(rankChangeIndicator, rankBadge, avatar, name, total);
+        card2.append(rankChangeIndicator, rankBadge, avatar2, name, total);
       } else {
-        card.append(rankBadge, avatar, name, total);
+        card2.append(rankBadge, avatar2, name, total);
       }
-      return card;
+      return card2;
     }
     renderLeaderboard();
     const unsubWelcome = onWelcome((data) => {
@@ -38696,6 +38979,8 @@
         gap: "4px",
         flex: "1"
       });
+      const nameRow = document.createElement("div");
+      style2(nameRow, { display: "flex", alignItems: "center", gap: "8px" });
       const name = document.createElement("div");
       style2(name, {
         fontSize: "18px",
@@ -38703,6 +38988,12 @@
         color: "#e7eef7"
       });
       name.textContent = myProfile.name;
+      nameRow.appendChild(name);
+      const badgesEl = createPlayerBadges(myProfile.badges);
+      if (badgesEl) {
+        style2(badgesEl, { flexShrink: "0" });
+        nameRow.appendChild(badgesEl);
+      }
       const playerId2 = document.createElement("div");
       style2(playerId2, {
         fontSize: "11px",
@@ -38710,7 +39001,7 @@
         fontFamily: "monospace"
       });
       playerId2.textContent = myProfile.playerId;
-      infoColumn.append(name, playerId2);
+      infoColumn.append(nameRow, playerId2);
       topRow.append(discordAvatar, infoColumn);
       if (myProfile.avatar && Array.isArray(myProfile.avatar) && myProfile.avatar.length > 0) {
         try {
@@ -39103,8 +39394,8 @@
       padding: "32px",
       overflow: "auto"
     });
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       width: "min(520px, 100%)",
       background: "radial-gradient(140% 140% at 0% 0%, rgba(28,36,56,0.98), rgba(12,16,26,0.98))",
       border: "1px solid rgba(148,163,184,0.22)",
@@ -39342,8 +39633,8 @@
     ];
     if (manualRow) cardNodes.push(manualRow);
     cardNodes.push(status, actions);
-    card.append(...cardNodes);
-    container.appendChild(card);
+    card2.append(...cardNodes);
+    container.appendChild(card2);
     refuseBtn.addEventListener("click", () => {
       setDeclinedApiAuth(true);
       window.dispatchEvent(new CustomEvent("gemini:ch-close-after-decline"));
@@ -39413,8 +39704,8 @@
       backdropFilter: "blur(4px)",
       borderRadius: "18px"
     });
-    const card = document.createElement("div");
-    style2(card, {
+    const card2 = document.createElement("div");
+    style2(card2, {
       width: "min(460px, 88%)",
       background: "linear-gradient(160deg, rgba(20,28,42,0.99) 0%, rgba(12,18,28,0.99) 100%)",
       border: "1px solid rgba(94,234,212,0.22)",
@@ -39513,8 +39804,8 @@
       markRoomPrivacyNoticeSeen();
       onDismiss();
     });
-    card.append(header, body, stepsLabel, stepsList, tip, dismissBtn);
-    overlay.appendChild(card);
+    card2.append(header, body, stepsLabel, stepsList, tip, dismissBtn);
+    overlay.appendChild(card2);
     return overlay;
   }
 
@@ -40343,7 +40634,7 @@
   }
   function ensureGlobalStyles() {
     if (document.getElementById(STYLE_ID2)) return;
-    const css = `
+    const css3 = `
     .${BTN_CLASS}{
       background: var(--chakra-colors-Blue-Magic, #0067B4) !important;
       border-color: var(--chakra-colors-Blue-Dark, #264093) !important;
@@ -40391,7 +40682,7 @@
   `.trim();
     const style3 = document.createElement("style");
     style3.id = STYLE_ID2;
-    style3.textContent = css;
+    style3.textContent = css3;
     document.head.appendChild(style3);
   }
   function createButton2(templateBtn) {
@@ -40674,9 +40965,9 @@
     if (document.readyState !== "loading") res();
     else addEventListener("DOMContentLoaded", () => res(), { once: true });
   });
-  function addStyle(css) {
+  function addStyle(css3) {
     const s = document.createElement("style");
-    s.textContent = css;
+    s.textContent = css3;
     document.head.appendChild(s);
     return s;
   }
@@ -43032,8 +43323,8 @@
     }
     return null;
   };
-  var alignInventoryStrengthText = (card) => {
-    const strengthWrap = card.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  var alignInventoryStrengthText = (card2) => {
+    const strengthWrap = card2.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
     if (!strengthWrap) return;
     const baseTransformKey = "tmStrengthBaseTransform";
     const existingBase = strengthWrap.dataset[baseTransformKey];
@@ -43052,7 +43343,7 @@
       }
       return;
     }
-    const container = findAncestorWithDescendant(strengthWrap, INVENTORY_FAVORITE_BUTTON_SELECTOR) ?? findAncestorWithDescendant(card, INVENTORY_FAVORITE_BUTTON_SELECTOR);
+    const container = findAncestorWithDescendant(strengthWrap, INVENTORY_FAVORITE_BUTTON_SELECTOR) ?? findAncestorWithDescendant(card2, INVENTORY_FAVORITE_BUTTON_SELECTOR);
     if (!container) return;
     const favoriteButton = container.querySelector(INVENTORY_FAVORITE_BUTTON_SELECTOR);
     if (!favoriteButton) return;
@@ -43088,10 +43379,10 @@
     const children = Array.from(container.children);
     for (const child of children) {
       if (!(child instanceof HTMLElement)) continue;
-      const card = getInventoryCardElement(child);
-      if (card) {
-        alignInventoryStrengthText(card);
-        entries.push({ wrapper: child, card });
+      const card2 = getInventoryCardElement(child);
+      if (card2) {
+        alignInventoryStrengthText(card2);
+        entries.push({ wrapper: child, card: card2 });
       }
     }
     return entries;
@@ -43223,8 +43514,8 @@
     }
     return { label: label2, current, max };
   };
-  function updateInventoryCardStrengthText(card, item) {
-    const strengthWrap = card.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
+  function updateInventoryCardStrengthText(card2, item) {
+    const strengthWrap = card2.querySelector(INVENTORY_STRENGTH_WRAPPER_SELECTOR);
     if (!strengthWrap) return;
     const textEl = strengthWrap.querySelector(INVENTORY_STRENGTH_TEXT_SELECTOR);
     if (!textEl) return;
@@ -43373,12 +43664,12 @@
       setValueSummaryText(summary, FILTERED_VALUE_UNKNOWN);
     }
   }
-  function updateInventoryCardValue(card, rawValue) {
-    const container = card.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
-    const existing = card.dataset[INVENTORY_VALUE_DATASET_KEY];
+  function updateInventoryCardValue(card2, rawValue) {
+    const container = card2.querySelector(INVENTORY_VALUE_CONTAINER_SELECTOR);
+    const existing = card2.dataset[INVENTORY_VALUE_DATASET_KEY];
     if (!container) {
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43388,7 +43679,7 @@
         currentEl.parentElement.removeChild(currentEl);
       }
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43397,7 +43688,7 @@
         currentEl.parentElement.removeChild(currentEl);
       }
       if (existing != null) {
-        delete card.dataset[INVENTORY_VALUE_DATASET_KEY];
+        delete card2.dataset[INVENTORY_VALUE_DATASET_KEY];
       }
       return;
     }
@@ -43436,7 +43727,7 @@
     }
     textEl.textContent = compactValue;
     target.title = fullValue;
-    card.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
+    card2.dataset[INVENTORY_VALUE_DATASET_KEY] = String(rawValue);
     if (target.parentElement !== container || target !== container.lastElementChild) {
       container.appendChild(target);
     }
@@ -43630,7 +43921,7 @@
     }
     return null;
   };
-  var getPetCardName = (card) => normalize(card.querySelector(PET_NAME_SELECTOR)?.textContent ?? "");
+  var getPetCardName = (card2) => normalize(card2.querySelector(PET_NAME_SELECTOR)?.textContent ?? "");
   var getPetNameCandidates = (item) => {
     const candidates = /* @__PURE__ */ new Set();
     const name = readNestedStringField(item, "name");
@@ -44152,7 +44443,7 @@
   }
   function injectDarkSelectStyles(id = "inv-sort-dark-styles") {
     if (document.getElementById(id)) return;
-    const css = `
+    const css3 = `
     .tm-sort-select {
       color: #e7eef7 !important;
       background-color: rgba(17,17,17,0.98) !important;
@@ -44177,7 +44468,7 @@
   `;
     const style3 = document.createElement("style");
     style3.id = id;
-    style3.textContent = css;
+    style3.textContent = css3;
     document.head.appendChild(style3);
   }
   function createSortingBar(useCustomSelectStyles) {
@@ -45551,7 +45842,7 @@
   }
   function ensureStyles() {
     if (document.getElementById(STYLE_ID3)) return;
-    const css = `
+    const css3 = `
 .${WRAPPER_CLASS}{
   display:flex;
   align-items:center;
@@ -45603,7 +45894,7 @@
   transform:translateY(-1px);
 }
 `;
-    const s = addStyle(css);
+    const s = addStyle(css3);
     s.id = STYLE_ID3;
   }
 
@@ -45613,6 +45904,9 @@
   var HISTORY_STORAGE_KEY = "activityLog.history";
   var HISTORY_LIMIT = 500;
   var skipNextHistoryReopen = false;
+  function skipNextActivityLogHistoryReopen() {
+    skipNextHistoryReopen = true;
+  }
   function normalizeEntry(raw) {
     if (!raw || typeof raw !== "object") return null;
     const ts = Number(raw.timestamp);
@@ -45853,7 +46147,7 @@
       document.addEventListener("DOMContentLoaded", () => mountHUD(opts), { once: true });
       return;
     }
-    const css = `
+    const css3 = `
   :root{
     --qws-bg:        #0f1318;
     --qws-panel:     #111823cc;
@@ -45954,7 +46248,7 @@
   .qws-win .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 }
   `;
     const st = document.createElement("style");
-    st.textContent = css;
+    st.textContent = css3;
     (document.documentElement || document.body).appendChild(st);
     const box = document.createElement("div");
     box.className = "qws2";
@@ -47245,11 +47539,11 @@
     view.classList.add("dd-debug-view");
     const { leftCol, rightCol } = createTwoColumns(view);
     {
-      const card = ui.card("\u{1F5C4}\uFE0F Capture store", {
+      const card2 = ui.card("\u{1F5C4}\uFE0F Capture store", {
         tone: "muted",
         subtitle: "Initialize the Jotai store so atoms can be inspected."
       });
-      leftCol.appendChild(card.root);
+      leftCol.appendChild(card2.root);
       const status = document.createElement("span");
       status.className = "dd-status-chip";
       const refreshStatus = () => {
@@ -47272,14 +47566,14 @@
         }
       });
       actions.append(btnCap, status);
-      card.body.appendChild(actions);
+      card2.body.appendChild(actions);
     }
     {
-      const card = ui.card("\u{1F50D} Explore atoms", {
+      const card2 = ui.card("\u{1F50D} Explore atoms", {
         tone: "muted",
         subtitle: "Filter labels using a regular expression."
       });
-      leftCol.appendChild(card.root);
+      leftCol.appendChild(card2.root);
       const queryRow = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("regex label (ex: position|health)", "");
       q.classList.add("dd-grow");
@@ -47297,14 +47591,14 @@
         const labels = atoms.map((a) => String(a?.debugLabel || a?.label || "<?>"));
         pre.textContent = labels.join("\n");
       }
-      card.body.append(queryRow, pre);
+      card2.body.append(queryRow, pre);
     }
     {
-      const card = ui.card("\u{1F9ED} Inspect an atom", {
+      const card2 = ui.card("\u{1F9ED} Inspect an atom", {
         tone: "muted",
         subtitle: "Get the current value or subscribe to updates."
       });
-      rightCol.appendChild(card.root);
+      rightCol.appendChild(card2.root);
       const controls = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("atom label (ex: positionAtom)", "");
       q.classList.add("dd-grow");
@@ -47357,14 +47651,14 @@
       const note = document.createElement("p");
       note.className = "dd-inline-note";
       note.textContent = "Tip: subscriptions keep the value updated after each mutation.";
-      card.body.append(controls, note, pre);
+      card2.body.append(controls, note, pre);
     }
     {
-      const card = ui.card("\u270F\uFE0F Update an atom", {
+      const card2 = ui.card("\u270F\uFE0F Update an atom", {
         tone: "muted",
         subtitle: "Publish a new value (JSON)."
       });
-      rightCol.appendChild(card.root);
+      rightCol.appendChild(card2.root);
       const controls = ui.flexRow({ gap: 10, wrap: true, fullWidth: true });
       const q = ui.inputText("atom label (ex: activeModalAtom)", "");
       q.classList.add("dd-grow");
@@ -47418,7 +47712,7 @@
       });
       const btnCopy = ui.btn("Copy JSON", { icon: "\u{1F4CB}", onClick: () => copy(ta.value) });
       controls.append(q, btnSet, btnCopy);
-      card.body.append(controls, ta);
+      card2.body.append(controls, ta);
     }
     function setText(el2, v) {
       el2.textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2);
@@ -48669,9 +48963,9 @@ next: ${next}`;
       previewArea.innerHTML = "";
       records.forEach((record) => {
         const { entry, parsed } = record;
-        const card = document.createElement("div");
-        card.className = "dd-sprite-grid__item";
-        card.title = entry?.key ?? parsed.full;
+        const card2 = document.createElement("div");
+        card2.className = "dd-sprite-grid__item";
+        card2.title = entry?.key ?? parsed.full;
         const imgWrap = document.createElement("div");
         imgWrap.className = "dd-sprite-grid__img";
         imgWrap.style.setProperty("--sprite-size", `${SPRITE_ICON_SIZE}px`);
@@ -48694,20 +48988,20 @@ next: ${next}`;
         const meta = document.createElement("span");
         meta.className = "dd-sprite-grid__meta";
         meta.textContent = entry?.key ?? parsed.full;
-        card.append(imgWrap, nameEl, meta);
+        card2.append(imgWrap, nameEl, meta);
         const triggerDownload = () => {
           if (downloadInProgress) return;
           void downloadSpriteRecord(record, void 0, getActiveMutations());
         };
-        card.addEventListener("click", triggerDownload);
-        card.addEventListener("keydown", (event) => {
+        card2.addEventListener("click", triggerDownload);
+        card2.addEventListener("keydown", (event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             triggerDownload();
           }
         });
-        card.tabIndex = 0;
-        previewArea.appendChild(card);
+        card2.tabIndex = 0;
+        previewArea.appendChild(card2);
       });
     }
     const updateList = async (forceService = false) => {
@@ -49210,7 +49504,7 @@ next: ${next}`;
     if (key2 === "Puddle" || key2 === "ThunderstruckGround") {
       return false;
     }
-    return typeof value === "number" && Number.isFinite(value);
+    return typeof value === "number" || typeof value === "string";
   }).map(([key2, value]) => ({
     key: key2,
     label: WEATHER_MUTATION_LABELS[key2] ?? formatMutationLabel(key2),
@@ -49619,13 +49913,13 @@ next: ${next}`;
       alignItems: "center",
       gap,
       padding,
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
-      background: "#0f1318",
+      background: "rgba(255,255,255,0.02)",
       cursor: "pointer",
       minWidth,
       transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease",
-      boxShadow: "0 0 0 1px #0002 inset"
+      boxShadow: "none"
     };
     if (isMain) {
       wrapStyles.width = "100%";
@@ -49682,15 +49976,15 @@ next: ${next}`;
     const updateState = () => {
       if (input.checked) {
         applyStyles(wrap, {
-          borderColor: "#6aa6",
-          boxShadow: "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
-          background: "#182029"
+          borderColor: "rgba(94,234,212,0.40)",
+          boxShadow: "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)",
+          background: "rgba(94,234,212,0.12)"
         });
       } else {
         applyStyles(wrap, {
-          borderColor: "#4445",
-          boxShadow: "0 0 0 1px #0002 inset",
-          background: "#0f1318"
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "none",
+          background: "rgba(255,255,255,0.02)"
         });
       }
       applyDisabledState();
@@ -49714,41 +50008,59 @@ next: ${next}`;
     button.style.margin = "0";
     button.style.padding = "6px 10px";
     button.style.borderRadius = "8px";
-    button.style.border = "1px solid #4445";
-    button.style.background = "#1f2328";
+    button.style.border = "1px solid rgba(255,255,255,0.10)";
+    button.style.background = "rgba(255,255,255,0.04)";
     button.style.color = "#e7eef7";
+    button.style.fontSize = "13px";
+    button.style.fontWeight = "600";
+    button.style.cursor = "pointer";
     button.style.justifyContent = "center";
-    button.onmouseenter = () => button.style.borderColor = "#6aa1";
-    button.onmouseleave = () => button.style.borderColor = "#4445";
+    button.onmouseenter = () => {
+      button.style.borderColor = "rgba(94,234,212,0.35)";
+      button.style.background = "rgba(94,234,212,0.08)";
+    };
+    button.onmouseleave = () => {
+      button.style.borderColor = "rgba(255,255,255,0.10)";
+      button.style.background = "rgba(255,255,255,0.04)";
+    };
   }
   function styleBtnCompact(button, text) {
     button.textContent = text;
     button.style.margin = "0";
     button.style.padding = "4px 8px";
     button.style.borderRadius = "8px";
-    button.style.border = "1px solid #4445";
-    button.style.background = "#1f2328";
+    button.style.border = "1px solid rgba(255,255,255,0.10)";
+    button.style.background = "rgba(255,255,255,0.04)";
     button.style.color = "#e7eef7";
+    button.style.fontSize = "12px";
+    button.style.fontWeight = "600";
+    button.style.cursor = "pointer";
     button.style.display = "inline-flex";
     button.style.alignItems = "center";
     button.style.justifyContent = "center";
     button.style.minWidth = "36px";
-    button.onmouseenter = () => button.style.borderColor = "#6aa1";
-    button.onmouseleave = () => button.style.borderColor = "#4445";
+    button.onmouseenter = () => {
+      button.style.borderColor = "rgba(94,234,212,0.35)";
+      button.style.background = "rgba(94,234,212,0.08)";
+    };
+    button.onmouseleave = () => {
+      button.style.borderColor = "rgba(255,255,255,0.10)";
+      button.style.background = "rgba(255,255,255,0.04)";
+    };
   }
   function createLockerSettingsCard(ui, state3, opts = {}) {
-    const card = document.createElement("div");
-    card.dataset.lockerSettingsCard = "1";
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "12px";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "12px";
-    card.style.alignItems = "center";
-    card.style.overflow = "auto";
-    card.style.minHeight = "0";
-    card.style.width = "min(760px, 100%)";
+    const card2 = document.createElement("div");
+    card2.dataset.lockerSettingsCard = "1";
+    card2.style.border = "1px solid rgba(255,255,255,0.10)";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "12px";
+    card2.style.display = "flex";
+    card2.style.flexDirection = "column";
+    card2.style.gap = "12px";
+    card2.style.alignItems = "center";
+    card2.style.overflow = "auto";
+    card2.style.minHeight = "0";
+    card2.style.width = "min(760px, 100%)";
     let recipesTitleElement = null;
     const updateRecipeTitleText = () => {
       if (!recipesTitleElement) return;
@@ -49761,11 +50073,11 @@ next: ${next}`;
       section.style.justifyItems = "center";
       section.style.gap = "8px";
       section.style.textAlign = "center";
-      section.style.border = "1px solid #4446";
+      section.style.border = "1px solid rgba(255,255,255,0.10)";
       section.style.borderRadius = "10px";
       section.style.padding = "10px";
-      section.style.background = "#1f2328";
-      section.style.boxShadow = "0 0 0 1px #0002 inset";
+      section.style.background = "rgba(255,255,255,0.04)";
+      section.style.boxShadow = "none";
       section.style.width = "min(720px, 100%)";
       const heading = document.createElement("div");
       heading.textContent = titleText;
@@ -50041,13 +50353,13 @@ next: ${next}`;
       applyStyles(button, {
         padding: "6px 12px",
         borderRadius: "8px",
-        border: "1px solid #4445",
-        background: "#1f2328",
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.04)",
         color: "#e7eef7",
         fontWeight: "600",
         letterSpacing: "0.3px",
         transition: "border-color 120ms ease, box-shadow 120ms ease, background 120ms ease, opacity 120ms ease",
-        boxShadow: "0 0 0 1px #0002 inset",
+        boxShadow: "none",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -50070,11 +50382,11 @@ next: ${next}`;
       button.appendChild(text);
       button.addEventListener("mouseenter", () => {
         if (button.disabled || button.dataset.active === "1") return;
-        button.style.borderColor = "#6aa1";
+        button.style.borderColor = "rgba(94,234,212,0.35)";
       });
       button.addEventListener("mouseleave", () => {
         if (button.dataset.active === "1") return;
-        button.style.borderColor = "#4445";
+        button.style.borderColor = "rgba(255,255,255,0.10)";
       });
       return button;
     };
@@ -50089,9 +50401,9 @@ next: ${next}`;
     );
     const updateColorButtonVisual = (button, active) => {
       button.dataset.active = active ? "1" : "0";
-      button.style.borderColor = active ? "#6aa6" : "#4445";
-      button.style.boxShadow = active ? "0 0 0 1px #6aa4 inset, 0 2px 6px rgba(0, 0, 0, 0.45)" : "0 0 0 1px #0002 inset";
-      button.style.background = active ? "#182029" : "#1f2328";
+      button.style.borderColor = active ? "rgba(94,234,212,0.40)" : "rgba(255,255,255,0.10)";
+      button.style.boxShadow = active ? "0 0 0 1px rgba(94,234,212,0.25) inset, 0 2px 6px rgba(0, 0, 0, 0.45)" : "none";
+      button.style.background = active ? "rgba(94,234,212,0.12)" : "rgba(255,255,255,0.04)";
       button.style.opacity = button.disabled ? "0.55" : "";
       button.style.cursor = button.disabled ? "default" : "pointer";
     };
@@ -50151,7 +50463,7 @@ next: ${next}`;
       return toggle;
     });
     const updateWeatherMutationsDisabled = () => {
-      const disabled = card.dataset.disabled === "1" || state3.weatherMode === "RECIPES";
+      const disabled = card2.dataset.disabled === "1" || state3.weatherMode === "RECIPES";
       weatherGrid.style.opacity = disabled ? "0.55" : "";
       weatherGrid.style.pointerEvents = disabled ? "none" : "";
       weatherToggles.forEach((toggle) => toggle.setDisabled(disabled));
@@ -50211,7 +50523,7 @@ next: ${next}`;
     emptyRecipes.style.textAlign = "center";
     const updateAddRecipeDisabled = () => {
       const editing = editingRecipeIndex !== null;
-      const cardDisabled = card.dataset.disabled === "1";
+      const cardDisabled = card2.dataset.disabled === "1";
       btnAddRecipe.disabled = editing || cardDisabled;
       btnAddRecipe.style.opacity = editing ? "0.7" : "";
       btnAddRecipe.style.pointerEvents = editing ? "none" : "";
@@ -50266,8 +50578,8 @@ next: ${next}`;
         gap: "6px",
         padding: "4px 10px",
         borderRadius: "999px",
-        border: "1px solid #4445",
-        background: "#11161c",
+        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(255,255,255,0.04)",
         color: "#e7eef7",
         fontSize: "12px",
         fontWeight: "600",
@@ -50318,8 +50630,8 @@ next: ${next}`;
       container.appendChild(badges);
     };
     const applyDisabled = () => {
-      const cardDisabled = card.dataset.disabled === "1";
-      const inputs = card.querySelectorAll("input,button,select,textarea");
+      const cardDisabled = card2.dataset.disabled === "1";
+      const inputs = card2.querySelectorAll("input,button,select,textarea");
       inputs.forEach((el2) => {
         if (el2.dataset.weatherToggle === "main") {
           return;
@@ -50329,7 +50641,7 @@ next: ${next}`;
       });
       updateWeatherMutationsDisabled();
       updateColorButtons();
-      card.style.opacity = cardDisabled ? "0.55" : "";
+      card2.style.opacity = cardDisabled ? "0.55" : "";
       updateAddRecipeDisabled();
     };
     function buildRecipeToggleGrid(selection, onSelectionChange) {
@@ -50390,11 +50702,11 @@ next: ${next}`;
         const row = applyStyles(document.createElement("div"), {
           display: "flex",
           gap: isEditing ? "10px" : "12px",
-          border: "1px solid #4446",
+          border: "1px solid rgba(255,255,255,0.10)",
           borderRadius: "10px",
           padding: isEditing ? "12px" : "10px 12px",
-          background: "#0f1318",
-          boxShadow: "0 0 0 1px #0002 inset",
+          background: "rgba(255,255,255,0.02)",
+          boxShadow: "none",
           width: "100%"
         });
         if (isEditing) {
@@ -50466,11 +50778,11 @@ next: ${next}`;
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          border: "1px solid #4446",
+          border: "1px solid rgba(255,255,255,0.10)",
           borderRadius: "10px",
           padding: "12px",
-          background: "#0f1318",
-          boxShadow: "0 0 0 1px #0002 inset",
+          background: "rgba(255,255,255,0.02)",
+          boxShadow: "none",
           width: "100%"
         });
         const summary = document.createElement("div");
@@ -50499,7 +50811,7 @@ next: ${next}`;
       startEditingRecipe(state3.weatherRecipes.length);
     };
     recipesWrap.append(recipesHeader, recipesList);
-    card.append(
+    card2.append(
       makeSection("Harvest mode", lockModeRow),
       makeSection("Filter by size", scaleRow),
       makeSection("Filter by color", colorsRow),
@@ -50526,11 +50838,11 @@ next: ${next}`;
       repaintRecipes();
     };
     const setDisabled = (value) => {
-      card.dataset.disabled = value ? "1" : "0";
+      card2.dataset.disabled = value ? "1" : "0";
       applyDisabled();
     };
     refresh();
-    return { root: card, refresh, setDisabled };
+    return { root: card2, refresh, setDisabled };
   }
   function createRestrictionsTabRenderer(ui) {
     let state3 = lockerRestrictionsService.getState();
@@ -50548,13 +50860,13 @@ next: ${next}`;
       width: "100%",
       maxWidth: "1100px"
     });
-    const card = ui.card("Friend bonus locker", {
+    const card2 = ui.card("Friend bonus locker", {
       align: "stretch"
     });
-    card.root.style.width = "100%";
-    card.header.style.display = "flex";
-    card.header.style.alignItems = "center";
-    card.header.style.justifyContent = "space-between";
+    card2.root.style.width = "100%";
+    card2.header.style.display = "flex";
+    card2.header.style.alignItems = "center";
+    card2.header.style.justifyContent = "space-between";
     const sliderWrap = applyStyles(document.createElement("div"), {
       display: "grid",
       gap: "6px"
@@ -50584,14 +50896,14 @@ next: ${next}`;
       letterSpacing: "0.25px"
     });
     statusBadge.style.marginLeft = "auto";
-    card.header.appendChild(statusBadge);
+    card2.header.appendChild(statusBadge);
     const statusText = applyStyles(document.createElement("div"), {
       fontSize: "12.5px",
       lineHeight: "1.5",
       opacity: "0.92"
     });
-    card.body.append(sliderWrap, statusText);
-    layout.append(card.root);
+    card2.body.append(sliderWrap, statusText);
+    layout.append(card2.root);
     const decorCard = ui.card("Decor pick locker", { align: "stretch" });
     decorCard.root.style.width = "100%";
     const decorRow = applyStyles(document.createElement("div"), {
@@ -50646,9 +50958,9 @@ next: ${next}`;
         justifyContent: "space-between",
         gap: "12px",
         padding: "8px 10px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
-        background: "#0f1318"
+        background: "rgba(255,255,255,0.02)"
       });
       const text = applyStyles(document.createElement("div"), {
         display: "grid",
@@ -50702,7 +51014,7 @@ next: ${next}`;
     emptyEggPlaceholder.textContent = "No eggs detected in shop.";
     const updateEggToggleAppearance = (toggle, locked) => {
       toggle.textContent = locked ? LOCKED_ICON : UNLOCKED_ICON;
-      toggle.style.background = locked ? "#331616" : "#12301d";
+      toggle.style.background = locked ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)";
       toggle.style.color = locked ? "#fca5a5" : "#9ef7c3";
     };
     let renderEggList;
@@ -50713,13 +51025,13 @@ next: ${next}`;
         alignItems: "center",
         gap: "10px",
         padding: "8px 10px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
-        background: "#0f1318"
+        background: "rgba(255,255,255,0.02)"
       });
       const toggle = document.createElement("button");
       toggle.type = "button";
-      toggle.style.border = "1px solid #4445";
+      toggle.style.border = "1px solid rgba(255,255,255,0.10)";
       toggle.style.borderRadius = "10px";
       toggle.style.padding = "6px 10px";
       toggle.style.fontSize = "14px";
@@ -50802,7 +51114,7 @@ next: ${next}`;
       setRuleRowDisabled(sellMaxStrRow.row, !enabled);
     };
     const setStatusTone = (tone) => {
-      const palette = tone === "success" ? { bg: "#0f2f1f", border: "#1b7c4a", color: "#8cf6ba" } : tone === "warn" ? { bg: "#321616", border: "#c74343", color: "#fca5a5" } : { bg: "#16263d", border: "#3f82d1", color: "#a5c7ff" };
+      const palette = tone === "success" ? { bg: "rgba(16,185,129,0.15)", border: "rgba(16,185,129,0.35)", color: "#9ef7c3" } : tone === "warn" ? { bg: "rgba(239,68,68,0.15)", border: "rgba(239,68,68,0.35)", color: "#fca5a5" } : { bg: "rgba(59,130,246,0.15)", border: "rgba(59,130,246,0.35)", color: "#a5c7ff" };
       statusBadge.style.background = palette.bg;
       statusBadge.style.border = `1px solid ${palette.border}`;
       statusBadge.style.color = palette.color;
@@ -50974,11 +51286,11 @@ next: ${next}`;
       alignItems: "center",
       gap: "10px",
       justifyContent: "space-between",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
       padding: "12px 16px",
-      background: "#1f2328",
-      boxShadow: "0 0 0 1px #0002 inset",
+      background: "rgba(255,255,255,0.04)",
+      boxShadow: "none",
       width: "min(760px, 100%)"
     });
     const textWrap = applyStyles(document.createElement("div"), {
@@ -51056,7 +51368,7 @@ next: ${next}`;
       rowGap: "6px",
       overflow: "auto",
       paddingRight: "2px",
-      border: "1px solid #4445",
+      border: "1px solid rgba(255,255,255,0.10)",
       borderRadius: "10px",
       padding: "6px"
     });
@@ -51109,7 +51421,7 @@ next: ${next}`;
     const refreshListStyles = () => {
       listButtons.forEach(({ button, dot }, key2) => {
         const isSelected = selectedKey === key2;
-        button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
+        button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
         dot.style.background = store.getOverride(key2)?.enabled ? "#2ecc71" : "#e74c3c";
       });
     };
@@ -51144,8 +51456,8 @@ next: ${next}`;
         button.style.textAlign = "left";
         button.style.padding = "6px 8px";
         button.style.borderRadius = "8px";
-        button.style.border = "1px solid #4445";
-        button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+        button.style.border = "1px solid rgba(255,255,255,0.10)";
+        button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
         button.style.color = "#e7eef7";
         const dot = document.createElement("span");
         dot.className = "qmm-dot";
@@ -51156,8 +51468,8 @@ next: ${next}`;
         const icon = createSeedIcon(opt.key, { size: 24 });
         button.append(dot, label2, icon);
         listButtons.set(opt.key, { button, dot });
-        button.onmouseenter = () => button.style.borderColor = "#6aa1";
-        button.onmouseleave = () => button.style.borderColor = "#4445";
+        button.onmouseenter = () => button.style.borderColor = "rgba(94,234,212,0.35)";
+        button.onmouseleave = () => button.style.borderColor = "rgba(255,255,255,0.10)";
         button.onclick = () => {
           if (selectedKey === opt.key) return;
           selectedKey = opt.key;
@@ -51182,7 +51494,7 @@ next: ${next}`;
         empty.style.fontSize = "13px";
         empty.style.textAlign = "center";
         empty.style.padding = "32px 24px";
-        empty.style.border = "1px dashed #4445";
+        empty.style.border = "1px dashed rgba(255,255,255,0.12)";
         empty.style.borderRadius = "10px";
         empty.style.width = "min(760px, 100%)";
         detail.appendChild(empty);
@@ -51199,11 +51511,11 @@ next: ${next}`;
       }
       const override = store.ensureOverride(selectedKey, { silent: true });
       const header = ui.flexRow({ justify: "between", align: "center", fullWidth: true });
-      header.style.border = "1px solid #4445";
+      header.style.border = "1px solid rgba(255,255,255,0.10)";
       header.style.borderRadius = "10px";
       header.style.padding = "12px 16px";
-      header.style.background = "#1f2328";
-      header.style.boxShadow = "0 0 0 1px #0002 inset";
+      header.style.background = "rgba(255,255,255,0.04)";
+      header.style.boxShadow = "none";
       header.style.width = "min(760px, 100%)";
       const titleWrap = ui.flexRow({ gap: 10, align: "center" });
       titleWrap.style.flexWrap = "nowrap";
@@ -51411,7 +51723,7 @@ next: ${next}`;
 .${ROOT_CLASS} .mg-crop-simulation__crop-name {
   font-size: 13px;
   font-weight: 600;
-  color: #38bdf8;
+  color: #5eead4;
   text-transform: capitalize;
 }
 .${ROOT_CLASS} .mg-crop-simulation__sprite-section {
@@ -51504,7 +51816,7 @@ next: ${next}`;
 .${ROOT_CLASS} .mg-crop-simulation__slider {
   flex: 1 1 auto;
   min-width: 0;
-  accent-color: #38bdf8;
+  accent-color: #5eead4;
 }
 .${ROOT_CLASS} .mg-crop-simulation__price {
   display: inline-flex;
@@ -51549,9 +51861,9 @@ next: ${next}`;
   gap: 10px;
   padding: 12px;
   border-radius: 12px;
-  border: 1px solid #4446;
-  background: #1f2328;
-  box-shadow: 0 0 0 1px #0002 inset;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  box-shadow: none;
   justify-items: stretch;
 }
 .${ROOT_CLASS}.mg-crop-simulation--calculator .mg-crop-calculator__section-heading {
@@ -51637,7 +51949,7 @@ next: ${next}`;
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"] .qmm-seg__btn-label,
 .${ROOT_CLASS} .qmm-seg__btn[data-mg-color="rainbow"].active .qmm-seg__btn-label {
   color: transparent;
-  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #38bdf8, #c084fc);
+  background-image: linear-gradient(90deg, #f87171, #fbbf24, #34d399, #5eead4, #c084fc);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -51841,7 +52153,7 @@ next: ${next}`;
       padding-bottom: 4px;
     }
     .mg-crop-calculator__source-hint a {
-      color: #38bdf8;
+      color: #5eead4;
       text-decoration: underline;
     }
   `);
@@ -52055,7 +52367,7 @@ next: ${next}`;
         gridTemplateColumns: "1fr",
         overflow: "auto",
         paddingRight: "2px",
-        border: "1px solid #4445",
+        border: "1px solid rgba(255,255,255,0.10)",
         borderRadius: "10px",
         minHeight: "0",
         // important
@@ -52200,8 +52512,9 @@ next: ${next}`;
       const refreshListStyles = () => {
         listButtons.forEach(({ button, dot }, key2) => {
           const isSelected = selectedKey === key2;
-          button.style.background = isSelected ? "#2b8a3e" : "#1f2328";
-          dot.style.background = isSelected ? "#2ecc71" : "#4c566a";
+          button.style.background = isSelected ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
+          button.style.borderColor = isSelected ? "rgba(94,234,212,0.35)" : "rgba(255,255,255,0.10)";
+          dot.style.background = isSelected ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
         });
       };
       function renderColorSegment(state3, interactive) {
@@ -52384,20 +52697,26 @@ next: ${next}`;
           button.style.padding = "6px 8px";
           button.style.marginBottom = "6px";
           button.style.borderRadius = "8px";
-          button.style.border = "1px solid #4445";
-          button.style.background = selectedKey === opt.key ? "#2b8a3e" : "#1f2328";
+          button.style.border = "1px solid rgba(255,255,255,0.10)";
+          button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
           button.style.color = "#e7eef7";
           const dot = document.createElement("span");
           dot.className = "qmm-dot";
-          dot.style.background = selectedKey === opt.key ? "#2ecc71" : "#4c566a";
+          dot.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.85)" : "rgba(255,255,255,0.20)";
           const label2 = document.createElement("span");
           label2.className = "label";
           label2.textContent = opt.cropName || opt.key;
           const fallbackEmoji = getLockerSeedEmojiForKey(opt.key) || getLockerSeedEmojiForSeedName(opt.seedName) || "\u{1F331}";
           const sprite2 = createSeedSpriteIcon(opt, fallbackEmoji, 24, "calculator-list");
           button.append(dot, label2, sprite2);
-          button.onmouseenter = () => button.style.borderColor = "#6aa1";
-          button.onmouseleave = () => button.style.borderColor = "#4445";
+          button.onmouseenter = () => {
+            button.style.borderColor = "rgba(94,234,212,0.35)";
+            button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.18)" : "rgba(255,255,255,0.07)";
+          };
+          button.onmouseleave = () => {
+            button.style.borderColor = "rgba(255,255,255,0.10)";
+            button.style.background = selectedKey === opt.key ? "rgba(94,234,212,0.15)" : "rgba(255,255,255,0.04)";
+          };
           button.onclick = () => {
             if (selectedKey === opt.key) return;
             selectedKey = opt.key;
@@ -53063,10 +53382,10 @@ next: ${next}`;
     void PetAlertService.start().catch(() => {
     });
     const section = (title) => {
-      const card = ui.card(title, { tone: "muted" });
-      card.body.style.display = "grid";
-      card.body.style.gap = "10px";
-      return card;
+      const card2 = ui.card(title, { tone: "muted" });
+      card2.body.style.display = "grid";
+      card2.body.style.gap = "10px";
+      return card2;
     };
     const row = (labelTxt, control, opts) => {
       const { root: r, label: label2 } = ui.formRow(labelTxt, control, { alignTop: opts?.alignTop, labelWidth: "160px" });
@@ -53086,7 +53405,7 @@ next: ${next}`;
     const playIconBtn = (title = "Play") => {
       return ui.btn("", { icon: "\u25B6", size: "sm", tooltip: title, ariaLabel: title });
     };
-    const smallBtn = (txt) => ui.btn(txt, { size: "sm" });
+    const smallBtn2 = (txt) => ui.btn(txt, { size: "sm" });
     const errorBar = () => ui.errorBar();
     const root = document.createElement("div");
     Object.assign(root.style, {
@@ -53107,8 +53426,8 @@ next: ${next}`;
       { key: "pets", label: "Pets", allowPurchase: true, showStop: false }
     ];
     for (const cfg of contextOrder) {
-      const card = document.createElement("div");
-      Object.assign(card.style, {
+      const card2 = document.createElement("div");
+      Object.assign(card2.style, {
         display: "grid",
         gap: "12px",
         padding: "16px",
@@ -53121,7 +53440,7 @@ next: ${next}`;
       heading.style.fontWeight = "700";
       heading.style.fontSize = "14px";
       heading.style.letterSpacing = "0.02em";
-      card.appendChild(heading);
+      card2.appendChild(heading);
       const defaultWrap = document.createElement("div");
       defaultWrap.style.display = "flex";
       defaultWrap.style.alignItems = "center";
@@ -53130,7 +53449,7 @@ next: ${next}`;
       select2.dataset.soundSelect = cfg.key;
       const playBtn = playIconBtn(`Play ${cfg.label.toLowerCase()} sound`);
       defaultWrap.append(select2, playBtn);
-      card.appendChild(row("Default sound", defaultWrap));
+      card2.appendChild(row("Default sound", defaultWrap));
       const volumeWrap = document.createElement("div");
       volumeWrap.style.display = "flex";
       volumeWrap.style.alignItems = "center";
@@ -53145,7 +53464,7 @@ next: ${next}`;
       volumeValue.style.minWidth = "32px";
       volumeValue.style.textAlign = "right";
       volumeWrap.append(volumeRange, volumeValue);
-      card.appendChild(row("Volume", volumeWrap));
+      card2.appendChild(row("Volume", volumeWrap));
       const modeWrap = document.createElement("div");
       modeWrap.style.display = "flex";
       modeWrap.style.gap = "12px";
@@ -53156,7 +53475,7 @@ next: ${next}`;
         modeLoop = radio(`ap.mode.${cfg.key}`, "loop", "Loop");
         modeWrap.append(modeLoop.label);
       }
-      card.appendChild(row("Playback mode", modeWrap));
+      card2.appendChild(row("Playback mode", modeWrap));
       let stopRow;
       let loopInput;
       let loopWrap;
@@ -53165,53 +53484,57 @@ next: ${next}`;
         stopWrap.style.display = "flex";
         stopWrap.style.flexDirection = "column";
         stopWrap.style.gap = "10px";
-        loopWrap = document.createElement("div");
-        loopWrap.style.display = "flex";
-        loopWrap.style.flexDirection = "column";
-        loopWrap.style.gap = "4px";
-        const loopTitle = document.createElement("div");
-        loopTitle.textContent = "Loop interval";
-        loopTitle.style.opacity = "0.8";
-        loopTitle.style.fontSize = "12px";
-        loopTitle.style.fontWeight = "600";
-        const loopBox = document.createElement("div");
-        loopBox.style.display = "inline-flex";
-        loopBox.style.alignItems = "center";
-        loopBox.style.gap = "8px";
-        loopInput = document.createElement("input");
-        loopInput.type = "number";
-        loopInput.min = "150";
-        loopInput.max = "10000";
-        loopInput.step = "50";
-        loopInput.style.width = "100px";
-        loopInput.style.textAlign = "center";
-        const loopLabel = document.createElement("span");
-        loopLabel.textContent = "ms between plays";
-        loopLabel.style.opacity = "0.85";
-        loopBox.append(loopInput, loopLabel);
-        loopWrap.append(loopTitle, loopBox);
         const stopInfo = document.createElement("div");
         stopInfo.textContent = cfg.showStop === false ? "Loops keep repeating; stop manually by disabling the alert." : "Loops stop automatically when the item is purchased.";
         stopInfo.style.opacity = "0.75";
         stopInfo.style.fontSize = "12px";
         stopInfo.style.lineHeight = "1.4";
-        stopWrap.append(stopInfo, loopWrap);
+        if (cfg.key !== "pets") {
+          loopWrap = document.createElement("div");
+          loopWrap.style.display = "flex";
+          loopWrap.style.flexDirection = "column";
+          loopWrap.style.gap = "4px";
+          const loopTitle = document.createElement("div");
+          loopTitle.textContent = "Loop interval";
+          loopTitle.style.opacity = "0.8";
+          loopTitle.style.fontSize = "12px";
+          loopTitle.style.fontWeight = "600";
+          const loopBox = document.createElement("div");
+          loopBox.style.display = "inline-flex";
+          loopBox.style.alignItems = "center";
+          loopBox.style.gap = "8px";
+          loopInput = document.createElement("input");
+          loopInput.type = "number";
+          loopInput.min = "150";
+          loopInput.max = "10000";
+          loopInput.step = "50";
+          loopInput.style.width = "100px";
+          loopInput.style.textAlign = "center";
+          const loopLabel = document.createElement("span");
+          loopLabel.textContent = "ms between plays";
+          loopLabel.style.opacity = "0.85";
+          loopBox.append(loopInput, loopLabel);
+          loopWrap.append(loopTitle, loopBox);
+          stopWrap.append(stopInfo, loopWrap);
+        } else {
+          stopWrap.append(stopInfo);
+        }
         if (cfg.showStop !== false) {
           stopRow = row("Stop condition", stopWrap);
         } else {
           stopRow = row("Loop interval", stopWrap);
         }
-        card.appendChild(stopRow);
+        card2.appendChild(stopRow);
       } else {
         const info = document.createElement("div");
         info.textContent = "Weather alerts play once per trigger.";
         info.style.opacity = "0.75";
         info.style.fontSize = "12px";
         info.style.lineHeight = "1.4";
-        card.appendChild(row("Details", info));
+        card2.appendChild(row("Details", info));
       }
       contextControls[cfg.key] = {
-        container: card,
+        container: card2,
         select: select2,
         playBtn,
         volumeRange,
@@ -53222,7 +53545,7 @@ next: ${next}`;
         loopInput,
         loopWrap
       };
-      s1.body.appendChild(card);
+      s1.body.appendChild(card2);
     }
     const s1Err = errorBar();
     s1.body.appendChild(s1Err.el);
@@ -53546,11 +53869,11 @@ next: ${next}`;
           justifyContent: "flex-end",
           flexWrap: "wrap"
         });
-        const btnPlay = smallBtn("\u25B6");
-        const btnSetShops = smallBtn("Set shops");
-        const btnSetWeather = smallBtn("Set weather");
-        const btnSetPets = smallBtn("Set pets");
-        const btnDel = smallBtn("Remove");
+        const btnPlay = smallBtn2("\u25B6");
+        const btnSetShops = smallBtn2("Set shops");
+        const btnSetWeather = smallBtn2("Set weather");
+        const btnSetPets = smallBtn2("Set pets");
+        const btnDel = smallBtn2("Remove");
         btnPlay.title = "Preview";
         btnSetShops.title = "Set as shops default";
         btnSetWeather.title = "Set as weather default";
@@ -53823,16 +54146,16 @@ next: ${next}`;
     followedBadge.style.marginLeft = "auto";
     followedBadge.style.width = "115px";
     header.append(lblType, selType, lblRarity, selRarity, followedBadge);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     const COLS = "minmax(200px, 1fr) 9rem 7rem 8rem";
     headerGrid.style.display = "grid";
@@ -53849,7 +54172,7 @@ next: ${next}`;
       mkHeadCell("Notify"),
       mkHeadCell("Custom rules")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = COLS;
@@ -53862,7 +54185,7 @@ next: ${next}`;
     bodyGrid.style.overscrollBehavior = "contain";
     bodyGrid.style.width = "100%";
     bodyGrid.style.scrollbarGutter = "stable";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const refreshRulesUI = () => {
       const kids = Array.from(bodyGrid.children);
       for (let i = 0; i + 3 < kids.length; i += 4) {
@@ -54164,8 +54487,8 @@ next: ${next}`;
     view.innerHTML = "";
     void PetAlertService.start().catch(() => {
     });
-    const card = document.createElement("div");
-    Object.assign(card.style, {
+    const card2 = document.createElement("div");
+    Object.assign(card2.style, {
       display: "grid",
       gridTemplateColumns: "minmax(220px, 260px) minmax(0, 1fr)",
       gap: "10px",
@@ -54177,7 +54500,7 @@ next: ${next}`;
       padding: "10px",
       background: "#0f1318"
     });
-    view.appendChild(card);
+    view.appendChild(card2);
     const petList = document.createElement("div");
     Object.assign(petList.style, {
       display: "grid",
@@ -54188,7 +54511,7 @@ next: ${next}`;
       border: "1px solid #4445",
       borderRadius: "10px"
     });
-    card.appendChild(petList);
+    card2.appendChild(petList);
     const right = document.createElement("div");
     Object.assign(right.style, {
       display: "flex",
@@ -54197,7 +54520,7 @@ next: ${next}`;
       overflow: "auto",
       minHeight: "0"
     });
-    card.appendChild(right);
+    card2.appendChild(right);
     let pets = [];
     let unsubPets2 = null;
     let generalEnabled = PetAlertService.isGeneralEnabled();
@@ -54262,27 +54585,27 @@ next: ${next}`;
         left.style.alignItems = "center";
         left.style.gap = "8px";
         left.style.minWidth = "0";
-        const avatar = document.createElement("div");
-        avatar.style.width = "40px";
-        avatar.style.height = "40px";
-        avatar.style.borderRadius = "8px";
-        avatar.style.display = "inline-flex";
-        avatar.style.alignItems = "center";
-        avatar.style.justifyContent = "center";
-        avatar.style.background = "#111821";
-        avatar.style.border = "1px solid #1f2429";
-        avatar.style.overflow = "hidden";
+        const avatar2 = document.createElement("div");
+        avatar2.style.width = "40px";
+        avatar2.style.height = "40px";
+        avatar2.style.borderRadius = "8px";
+        avatar2.style.display = "inline-flex";
+        avatar2.style.alignItems = "center";
+        avatar2.style.justifyContent = "center";
+        avatar2.style.background = "#111821";
+        avatar2.style.border = "1px solid #1f2429";
+        avatar2.style.overflow = "hidden";
         const useEmojiFallback = () => {
-          avatar.replaceChildren();
+          avatar2.replaceChildren();
           const span = document.createElement("span");
           span.textContent = "\u{1F43E}";
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
-          avatar.appendChild(span);
+          avatar2.appendChild(span);
         };
         const setIcon = (species2, mutations2) => {
           const speciesLabel = String(species2 ?? "").trim();
-          avatar.replaceChildren();
+          avatar2.replaceChildren();
           if (!speciesLabel) {
             useEmojiFallback();
             return;
@@ -54291,8 +54614,8 @@ next: ${next}`;
           span.textContent = speciesLabel.charAt(0).toUpperCase() || "\u0110Y?\xF3";
           span.style.fontSize = "28px";
           span.setAttribute("aria-hidden", "true");
-          avatar.appendChild(span);
-          attachSpriteIcon(avatar, ["pet"], [speciesLabel], 36, "alerts-pet", {
+          avatar2.appendChild(span);
+          attachSpriteIcon(avatar2, ["pet"], [speciesLabel], 36, "alerts-pet", {
             mutations: Array.isArray(mutations2) ? mutations2 : void 0
           });
         };
@@ -54311,7 +54634,7 @@ next: ${next}`;
         title.style.textOverflow = "ellipsis";
         title.style.whiteSpace = "nowrap";
         titleWrap.append(title);
-        left.append(avatar, titleWrap);
+        left.append(avatar2, titleWrap);
         const hungerValue = document.createElement("div");
         hungerValue.textContent = hungerText;
         hungerValue.style.fontWeight = "700";
@@ -54357,16 +54680,16 @@ next: ${next}`;
       minHeight: "0"
     });
     view.appendChild(wrap);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     const COLS = "minmax(240px, 1fr) 9rem 7rem 8rem";
     headerGrid.style.display = "grid";
@@ -54383,7 +54706,7 @@ next: ${next}`;
       mkHeadCell("Notify"),
       mkHeadCell("Custom rules")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = COLS;
@@ -54396,7 +54719,7 @@ next: ${next}`;
     bodyGrid.style.overscrollBehavior = "contain";
     bodyGrid.style.width = "100%";
     bodyGrid.style.scrollbarGutter = "stable";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const weatherLastSeenRefs = /* @__PURE__ */ new Map();
     const refreshRulesUI = () => {
       const kids = Array.from(bodyGrid.children);
@@ -55069,8 +55392,8 @@ next: ${next}`;
     [rarity.Celestial]: "#7C2AE8"
   };
   function createCollapsibleCard(ui, title, opts = {}) {
-    const card = ui.card(title, { tone: "muted", align: "stretch", subtitle: opts.subtitle, icon: opts.icon });
-    card.root.classList.add("qmm-card--collapsible");
+    const card2 = ui.card(title, { tone: "muted", align: "stretch", subtitle: opts.subtitle, icon: opts.icon });
+    card2.root.classList.add("qmm-card--collapsible");
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "qmm-btn qmm-btn--ghost qmm-btn--sm stats-collapse-toggle";
@@ -55081,9 +55404,9 @@ next: ${next}`;
     const toggleLabel = document.createElement("span");
     toggleLabel.className = "stats-collapse-toggle__label";
     toggle.append(toggleIcon, toggleLabel);
-    const titleElement = card.header.querySelector(".qmm-card__title");
+    const titleElement = card2.header.querySelector(".qmm-card__title");
     if (titleElement) titleElement.insertAdjacentElement("afterend", toggle);
-    else card.header.appendChild(toggle);
+    else card2.header.appendChild(toggle);
     const storageId = opts.storageId?.trim() || null;
     let currentAnimation = null;
     const stopAnimation = () => {
@@ -55092,7 +55415,7 @@ next: ${next}`;
       currentAnimation = null;
     };
     const animateBody = (collapsed) => {
-      const body = card.body;
+      const body = card2.body;
       stopAnimation();
       const prefersReducedMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (prefersReducedMotion) {
@@ -55161,21 +55484,21 @@ next: ${next}`;
     const setCollapsed = (collapsed, persist2 = true, animate = true) => {
       if (!animate) {
         stopAnimation();
-        card.body.style.display = collapsed ? "none" : "grid";
-        card.body.style.height = "";
-        card.body.style.opacity = "";
-        card.body.style.overflow = "";
+        card2.body.style.display = collapsed ? "none" : "grid";
+        card2.body.style.height = "";
+        card2.body.style.opacity = "";
+        card2.body.style.overflow = "";
       } else {
         animateBody(collapsed);
       }
-      card.root.dataset.collapsed = collapsed ? "true" : "false";
+      card2.root.dataset.collapsed = collapsed ? "true" : "false";
       toggle.setAttribute("aria-expanded", String(!collapsed));
       const verb = collapsed ? "Show" : "Hide";
       const label2 = `${verb} ${title}`;
       toggleLabel.textContent = verb;
       toggle.setAttribute("aria-label", label2);
       toggle.title = label2;
-      card.root.classList.toggle("is-collapsed", collapsed);
+      card2.root.classList.toggle("is-collapsed", collapsed);
       if (persist2 && storageId) {
         setSectionCollapsed(storageId, collapsed);
       }
@@ -55184,26 +55507,26 @@ next: ${next}`;
     const initialCollapsed = storageId ? getSectionCollapsed(storageId, defaultCollapsed) : defaultCollapsed;
     setCollapsed(initialCollapsed, false, false);
     toggle.addEventListener("click", () => {
-      const collapsed = card.root.dataset.collapsed === "true";
+      const collapsed = card2.root.dataset.collapsed === "true";
       setCollapsed(!collapsed);
     });
-    return { root: card.root, body: card.body, header: card.header, setCollapsed };
+    return { root: card2.root, body: card2.body, header: card2.header, setCollapsed };
   }
   function createMetricGrid(rows) {
     const grid = document.createElement("div");
     grid.className = "stats-metric-grid";
     for (const row of rows) {
-      const card = document.createElement("div");
-      card.className = "stats-metric";
-      if (row.hint) card.title = row.hint;
+      const card2 = document.createElement("div");
+      card2.className = "stats-metric";
+      if (row.hint) card2.title = row.hint;
       const label2 = document.createElement("span");
       label2.className = "stats-metric__label";
       label2.textContent = row.label;
       const value = document.createElement("span");
       value.className = "stats-metric__value qmm-num";
       value.textContent = row.value;
-      card.append(label2, value);
-      grid.appendChild(card);
+      card2.append(label2, value);
+      grid.appendChild(card2);
     }
     return grid;
   }
@@ -55317,7 +55640,7 @@ next: ${next}`;
     return DATE_TIME_FORMATTER.format(new Date(ms));
   }
   function renderMetaSection(ui, root, stats) {
-    const card = ui.card("\u{1F5D3}\uFE0F Tracking", {
+    const card2 = ui.card("\u{1F5D3}\uFE0F Tracking", {
       tone: "muted",
       align: "stretch",
       compactHeader: true
@@ -55342,11 +55665,11 @@ next: ${next}`;
       void initPets(freshStats);
     });
     row.appendChild(resetButton);
-    card.body.appendChild(row);
-    root.appendChild(card.root);
+    card2.body.appendChild(row);
+    root.appendChild(card2.root);
   }
   function renderGardenSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F331} Garden", {
+    const card2 = createCollapsibleCard(ui, "\u{1F331} Garden", {
       subtitle: "Field activity",
       storageId: "garden"
     });
@@ -55361,11 +55684,11 @@ next: ${next}`;
         hint: `${formatInt(stats.garden.waterTimeSavedMs)} ms`
       }
     ];
-    card.body.appendChild(createMetricGrid(rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createMetricGrid(rows));
+    root.appendChild(card2.root);
   }
   function renderShopSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F3EA} Shops", {
+    const card2 = createCollapsibleCard(ui, "\u{1F3EA} Shops", {
       subtitle: "Purchases & sales",
       storageId: "shops"
     });
@@ -55385,8 +55708,8 @@ next: ${next}`;
         value: formatPrice(stats.shops.petsSoldValue) ?? formatInt(stats.shops.petsSoldValue)
       }
     ];
-    card.body.appendChild(createMetricGrid(rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createMetricGrid(rows));
+    root.appendChild(card2.root);
   }
   function createPetRarityGroups() {
     const map2 = /* @__PURE__ */ new Map();
@@ -55432,7 +55755,7 @@ next: ${next}`;
     return { content: value };
   }
   function renderPetSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F43E} Pets", {
+    const card2 = createCollapsibleCard(ui, "\u{1F43E} Pets", {
       subtitle: "Hatching overview",
       storageId: "pets"
     });
@@ -55493,12 +55816,12 @@ next: ${next}`;
       ]);
       content.appendChild(createStatList(columns, rows));
       group.appendChild(content);
-      card.body.appendChild(group);
+      card2.body.appendChild(group);
     }
-    root.appendChild(card.root);
+    root.appendChild(card2.root);
   }
   function renderAbilitySection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u{1F9E0} Abilities", {
+    const card2 = createCollapsibleCard(ui, "\u{1F9E0} Abilities", {
       subtitle: "Trigger counts",
       storageId: "abilities"
     });
@@ -55523,11 +55846,11 @@ next: ${next}`;
         { text: formatted }
       ]);
     }
-    card.body.appendChild(createStatList(columns, rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createStatList(columns, rows));
+    root.appendChild(card2.root);
   }
   function renderWeatherSection(ui, root, stats) {
-    const card = createCollapsibleCard(ui, "\u26C5 Weather", {
+    const card2 = createCollapsibleCard(ui, "\u26C5 Weather", {
       subtitle: "Events overview",
       storageId: "weather"
     });
@@ -55555,8 +55878,8 @@ next: ${next}`;
         { text: formatInt(entry.triggers) }
       ]);
     }
-    card.body.appendChild(createStatList(columns, rows));
-    root.appendChild(card.root);
+    card2.body.appendChild(createStatList(columns, rows));
+    root.appendChild(card2.root);
   }
   function renderStatsMenu(container) {
     const root = container;
@@ -56245,17 +56568,17 @@ next: ${next}`;
     btnUseTeam.disabled = true;
     header.append(headerTitle, btnUseTeam);
     right.appendChild(header);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.display = "flex";
-    card.style.flexDirection = "column";
-    card.style.gap = "12px";
-    card.style.overflow = "auto";
-    card.style.minHeight = "0";
-    card.style.background = "#0f1318";
-    right.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.display = "flex";
+    card2.style.flexDirection = "column";
+    card2.style.gap = "12px";
+    card2.style.overflow = "auto";
+    card2.style.minHeight = "0";
+    card2.style.background = "#0f1318";
+    right.appendChild(card2);
     const secName = (() => {
       const r = row();
       r.style.width = "100%";
@@ -56264,7 +56587,7 @@ next: ${next}`;
       nameInput.style.flex = "1";
       nameInput.style.minWidth = "0";
       r.append(nameInput);
-      card.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
+      card2.appendChild(framed("\u{1F3F7}\uFE0F Team name", r));
       return { nameInput };
     })();
     const secSearch = (() => {
@@ -56348,7 +56671,7 @@ next: ${next}`;
       };
       select2.addEventListener("change", applyFilterToTeam);
       wrapOuter.append(seg, select2);
-      card.appendChild(framed("\u{1F50D} Search", wrapOuter));
+      card2.appendChild(framed("\u{1F50D} Search", wrapOuter));
       const ensureOptionExists = (val, pretty) => {
         const v = (val || "").trim();
         if (!v) return;
@@ -56566,7 +56889,7 @@ next: ${next}`;
       wrapSlots.style.flexDirection = "column";
       wrapSlots.style.gap = "8px";
       wrapSlots.append(grid, extra);
-      card.appendChild(framed("\u26A1 Active pets (3 slots)", wrapSlots));
+      card2.appendChild(framed("\u26A1 Active pets (3 slots)", wrapSlots));
       return {
         rows: [r0, r1, r2],
         btnUseCurrent,
@@ -56860,21 +57183,21 @@ next: ${next}`;
     };
     addToggle("Show Instant Feed button", "instantFeed", settings.instantFeed);
     addToggle("Show Feed from Inventory button", "feedFromInventory", settings.feedFromInventory);
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    right.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    right.appendChild(card2);
     const header = document.createElement("div");
     header.style.display = "flex";
     header.style.flexDirection = "column";
     header.style.gap = "4px";
     header.style.marginBottom = "8px";
-    card.appendChild(header);
+    card2.appendChild(header);
     const title = document.createElement("div");
     title.textContent = "Instant feed options";
     title.style.fontWeight = "600";
@@ -56890,7 +57213,7 @@ next: ${next}`;
     body.style.gap = "6px";
     body.style.overflow = "auto";
     body.style.minHeight = "0";
-    card.appendChild(body);
+    card2.appendChild(body);
     const petItems = Object.keys(petCatalog).map((species) => {
       const entry = petCatalog[species];
       const name = String(entry?.name || species);
@@ -57003,16 +57326,16 @@ next: ${next}`;
       inputSearch,
       btnClear
     );
-    const card = document.createElement("div");
-    card.style.border = "1px solid #4445";
-    card.style.borderRadius = "10px";
-    card.style.padding = "10px";
-    card.style.background = "#0f1318";
-    card.style.overflow = "hidden";
-    card.style.display = "grid";
-    card.style.gridTemplateRows = "auto 1fr";
-    card.style.minHeight = "0";
-    wrap.appendChild(card);
+    const card2 = document.createElement("div");
+    card2.style.border = "1px solid #4445";
+    card2.style.borderRadius = "10px";
+    card2.style.padding = "10px";
+    card2.style.background = "#0f1318";
+    card2.style.overflow = "hidden";
+    card2.style.display = "grid";
+    card2.style.gridTemplateRows = "auto 1fr";
+    card2.style.minHeight = "0";
+    wrap.appendChild(card2);
     const headerGrid = document.createElement("div");
     headerGrid.style.display = "grid";
     headerGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
@@ -57034,7 +57357,7 @@ next: ${next}`;
       mkHeadCell2("Ability"),
       mkHeadCell2("Details", "left")
     );
-    card.appendChild(headerGrid);
+    card2.appendChild(headerGrid);
     const bodyGrid = document.createElement("div");
     bodyGrid.style.display = "grid";
     bodyGrid.style.gridTemplateColumns = "140px 220px 200px minmax(0,1fr)";
@@ -57043,7 +57366,7 @@ next: ${next}`;
     bodyGrid.style.overflow = "auto";
     bodyGrid.style.width = "100%";
     bodyGrid.style.minHeight = "0";
-    card.appendChild(bodyGrid);
+    card2.appendChild(bodyGrid);
     const sessionStart = PetsService.getAbilityLogsSessionStart?.() ?? 0;
     let logs = [];
     let abilityFilter = "";
@@ -57387,12 +57710,12 @@ next: ${next}`;
       row.append(text, controls);
       return { row, controls };
     };
-    const styleCard = (card) => {
-      card.root.style.width = "100%";
-      card.root.style.maxWidth = "100%";
-      card.root.style.minWidth = "0";
-      card.body.style.display = "grid";
-      card.body.style.gap = "10px";
+    const styleCard = (card2) => {
+      card2.root.style.width = "100%";
+      card2.root.style.maxWidth = "100%";
+      card2.root.style.minWidth = "0";
+      card2.body.style.display = "grid";
+      card2.body.style.gap = "10px";
     };
     const header = applyStyles3(document.createElement("div"), {
       width: "100%",
@@ -57429,12 +57752,12 @@ next: ${next}`;
       alignItems: "start"
     });
     const secAutoReco = (() => {
-      const card = ui.card("Auto reconnect", {
+      const card2 = ui.card("Auto reconnect", {
         tone: "muted",
         align: "stretch",
         subtitle: "Reconnect automatically when the session is kicked."
       });
-      styleCard(card);
+      styleCard(card2);
       const toggle = ui.switch(MiscService.readAutoRecoEnabled(false));
       const toggleRow = createSettingRow(
         "Enabled",
@@ -57482,16 +57805,16 @@ next: ${next}`;
       slider.addEventListener("input", () => updateSlider(Number(slider.value), false));
       slider.addEventListener("change", () => updateSlider(Number(slider.value), true));
       syncToggle();
-      card.body.append(toggleRow.row, sliderRow.row, hint);
-      return card.root;
+      card2.body.append(toggleRow.row, sliderRow.row, hint);
+      return card2.root;
     })();
     const secPlayer = (() => {
-      const card = ui.card("Player controls", {
+      const card2 = ui.card("Player controls", {
         tone: "muted",
         align: "stretch",
         subtitle: "Movement helpers for walking and testing."
       });
-      styleCard(card);
+      styleCard(card2);
       const ghostSwitch = ui.switch(MiscService.readGhostEnabled(false));
       ghostSwitch.id = "player.ghostMode";
       const delayInput = ui.inputNumber(10, 1e3, 5, 50);
@@ -57523,22 +57846,22 @@ next: ${next}`;
         MiscService.writeGhostEnabled(on);
         on ? ghost.start() : ghost.stop();
       };
-      card.root.__cleanup__ = () => {
+      card2.root.__cleanup__ = () => {
         try {
           ghost.stop();
         } catch {
         }
       };
-      card.body.append(ghostRow.row, delayRow.row);
-      return card.root;
+      card2.body.append(ghostRow.row, delayRow.row);
+      return card2.root;
     })();
     const secInventoryReserve = (() => {
-      const card = ui.card("Inventory guard", {
+      const card2 = ui.card("Inventory guard", {
         tone: "muted",
         align: "stretch",
         subtitle: "Keep a slot open for swaps and bulk actions."
       });
-      styleCard(card);
+      styleCard(card2);
       const toggle = ui.switch(MiscService.readInventorySlotReserveEnabled(false));
       const row = createSettingRow(
         "Keep 1 slot free",
@@ -57548,16 +57871,16 @@ next: ${next}`;
       toggle.addEventListener("change", () => {
         MiscService.writeInventorySlotReserveEnabled(!!toggle.checked);
       });
-      card.body.append(row.row);
-      return card.root;
+      card2.body.append(row.row);
+      return card2.root;
     })();
     const secStorage = (() => {
-      const card = ui.card("Storage auto-store", {
+      const card2 = ui.card("Storage auto-store", {
         tone: "muted",
         align: "stretch",
         subtitle: "Move items into storage when a matching stack already exists."
       });
-      styleCard(card);
+      styleCard(card2);
       const seedToggle = ui.switch(MiscService.readAutoStoreSeedSiloEnabled(false));
       const seedRow = createSettingRow(
         "Seed Silo",
@@ -57576,8 +57899,8 @@ next: ${next}`;
       decorToggle.addEventListener("change", () => {
         MiscService.setAutoStoreDecorShedEnabled(!!decorToggle.checked);
       });
-      card.body.append(seedRow.row, decorRow.row);
-      return card.root;
+      card2.body.append(seedRow.row, decorRow.row);
+      return card2.root;
     })();
     const secSeed = (() => {
       const grid2 = applyStyles3(document.createElement("div"), {
@@ -57754,18 +58077,18 @@ next: ${next}`;
         seedEstimatedFinish = null;
         updateSummaryUI();
       };
-      const card = ui.card("Seed deleter", {
+      const card2 = ui.card("Seed deleter", {
         tone: "muted",
         align: "stretch",
         subtitle: "Bulk delete seeds from inventory."
       });
-      styleCard(card);
-      card.body.append(grid2);
-      card.root.__cleanup__ = () => {
+      styleCard(card2);
+      card2.body.append(grid2);
+      card2.root.__cleanup__ = () => {
         clearSeedSummaryTimer();
         cleanupSeedListeners();
       };
-      return card.root;
+      return card2.root;
     })();
     const secDecor = (() => {
       const grid2 = applyStyles3(document.createElement("div"), {
@@ -57942,18 +58265,18 @@ next: ${next}`;
         }
         updateSummaryUI();
       };
-      const card = ui.card("Decor deleter", {
+      const card2 = ui.card("Decor deleter", {
         tone: "muted",
         align: "stretch",
         subtitle: "Bulk delete decor from inventory."
       });
-      styleCard(card);
-      card.body.append(grid2);
-      card.root.__cleanup__ = () => {
+      styleCard(card2);
+      card2.body.append(grid2);
+      card2.root.__cleanup__ = () => {
         clearDecorSummaryTimer();
         cleanupDecorListeners();
       };
-      return card.root;
+      return card2.root;
     })();
     secSeed.style.gridColumn = "1 / -1";
     secDecor.style.gridColumn = "1 / -1";
@@ -58268,15 +58591,15 @@ next: ${next}`;
     const ioCard = ui.card("Import / Export", {
       description: "Import or export the mod settings directly through JSON files."
     });
-    const card = ui.card("Backup", {
+    const card2 = ui.card("Backup", {
       description: "Save our settings directly inside the mod storage for easy restores."
     });
     ioCard.body.style.display = "flex";
     ioCard.body.style.flexDirection = "column";
     ioCard.body.style.gap = "10px";
-    card.body.style.display = "flex";
-    card.body.style.flexDirection = "column";
-    card.body.style.gap = "10px";
+    card2.body.style.display = "flex";
+    card2.body.style.flexDirection = "column";
+    card2.body.style.gap = "10px";
     const ioStatus = createStatusLine();
     const exportButton = createActionButton("Export Settings");
     exportButton.style.width = "100%";
@@ -58429,8 +58752,8 @@ next: ${next}`;
       }
     });
     controlRow.append(nameInput, saveButton);
-    card.body.append(controlRow, controlStatus, backupListHolder);
-    layout.appendChild(card.root);
+    card2.body.append(controlRow, controlStatus, backupListHolder);
+    layout.appendChild(card2.root);
     view.appendChild(layout);
     refreshBackupList(controlStatus, backupListHolder);
   }
@@ -58975,9 +59298,9 @@ next: ${next}`;
       return await res.blob();
     }
     const isIconUrl = !!tool.icon && /^https?:\/\//i.test(tool.icon);
-    const card = ui.card("", { tone: "muted", align: "stretch" });
-    card.root.style.width = "100%";
-    const body = card.body;
+    const card2 = ui.card("", { tone: "muted", align: "stretch" });
+    card2.root.style.width = "100%";
+    const body = card2.body;
     body.style.display = "grid";
     body.style.gap = "10px";
     body.style.justifyItems = "stretch";
@@ -59066,15 +59389,15 @@ next: ${next}`;
           chip.style.border = "1px solid #ffffff18";
           chip.style.borderRadius = "999px";
           if (creatorInfo.avatar) {
-            const avatar = document.createElement("img");
-            avatar.src = creatorInfo.avatar;
-            avatar.alt = creatorInfo.name;
-            avatar.style.width = "26px";
-            avatar.style.height = "26px";
-            avatar.style.borderRadius = "999px";
-            avatar.style.objectFit = "cover";
-            avatar.style.border = "1px solid #ffffff22";
-            chip.appendChild(avatar);
+            const avatar2 = document.createElement("img");
+            avatar2.src = creatorInfo.avatar;
+            avatar2.alt = creatorInfo.name;
+            avatar2.style.width = "26px";
+            avatar2.style.height = "26px";
+            avatar2.style.borderRadius = "999px";
+            avatar2.style.objectFit = "cover";
+            avatar2.style.border = "1px solid #ffffff22";
+            chip.appendChild(avatar2);
           }
           const name = document.createElement("span");
           name.textContent = creatorInfo.name;
@@ -59243,7 +59566,7 @@ next: ${next}`;
       actionsRow.append(openBtn);
     }
     body.appendChild(actionsRow);
-    return card.root;
+    return card2.root;
   }
   async function renderToolsMenu(container) {
     const ui = new Menu({ id: "tools", compact: true });
@@ -59401,184 +59724,353 @@ next: ${next}`;
   }
 
   // src/ui/menus/editor.ts
+  var STYLE_ID4 = "qws-editor-menu-css";
+  var TEAL = "#5eead4";
+  var TEAL_DIM = "rgba(94,234,212,0.12)";
+  var TEAL_MID = "rgba(94,234,212,0.22)";
+  var TEAL_BORDER = "rgba(94,234,212,0.3)";
+  var TEAL_BRD_HI = "rgba(94,234,212,0.55)";
+  var BORDER = "rgba(255,255,255,0.08)";
+  var BORDER_HI = "rgba(255,255,255,0.16)";
+  var CARD_BG = "rgba(255,255,255,0.03)";
+  var CARD_BG_HI = "rgba(255,255,255,0.06)";
+  var TEXT = "#e7eef7";
+  var TEXT_DIM = "rgba(226,232,240,0.45)";
+  var DANGER = "#ef4444";
+  var DANGER_DIM = "rgba(239,68,68,0.12)";
+  var DANGER_BRD = "rgba(239,68,68,0.3)";
+  var DANGER_HI = "rgba(239,68,68,0.2)";
+  var DANGER_BRD_HI = "rgba(239,68,68,0.55)";
+  function ensureStyles3() {
+    if (document.getElementById(STYLE_ID4)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID4;
+    st.textContent = `
+.qws-ed-scroll::-webkit-scrollbar { width: 6px; }
+.qws-ed-scroll::-webkit-scrollbar-track { background: transparent; }
+.qws-ed-scroll::-webkit-scrollbar-thumb { background: rgba(94,234,212,0.2); border-radius: 3px; }
+.qws-ed-scroll::-webkit-scrollbar-thumb:hover { background: rgba(94,234,212,0.35); }
+.qws-ed-scroll { scrollbar-width: thin; scrollbar-color: rgba(94,234,212,0.2) transparent; }
+
+/* Toggle switch */
+.qws-ed-toggle { position:relative; display:inline-block; width:36px; height:20px; cursor:pointer; flex-shrink:0; }
+.qws-ed-toggle input { opacity:0; width:0; height:0; position:absolute; }
+.qws-ed-track {
+  position:absolute; inset:0; border-radius:10px;
+  background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.12);
+  transition:background 150ms ease, border-color 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track {
+  background:rgba(94,234,212,0.25); border-color:rgba(94,234,212,0.5);
+}
+.qws-ed-thumb {
+  position:absolute; top:3px; left:3px;
+  width:12px; height:12px; border-radius:50%;
+  background:rgba(226,232,240,0.5);
+  transition:transform 150ms ease, background 150ms ease;
+}
+.qws-ed-toggle input:checked ~ .qws-ed-track .qws-ed-thumb {
+  transform:translateX(16px); background:${TEAL};
+}
+`;
+    document.head.appendChild(st);
+  }
+  var css = (el2, s) => Object.assign(el2.style, s);
+  function sectionLabel(text) {
+    const el2 = document.createElement("div");
+    css(el2, {
+      fontSize: "10px",
+      fontWeight: "700",
+      letterSpacing: "0.08em",
+      color: TEXT_DIM,
+      textTransform: "uppercase",
+      paddingBottom: "7px"
+    });
+    el2.textContent = text;
+    return el2;
+  }
+  function card(children) {
+    const el2 = document.createElement("div");
+    css(el2, {
+      padding: "14px",
+      background: CARD_BG,
+      borderRadius: "12px",
+      border: `1px solid ${BORDER}`,
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px"
+    });
+    el2.append(...children);
+    return el2;
+  }
+  function primaryBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
+      padding: "10px 14px",
+      border: `1px solid ${TEAL_BORDER}`,
+      borderRadius: "10px",
+      background: TEAL_DIM,
+      color: TEAL,
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: TEAL_MID, borderColor: TEAL_BRD_HI });
+    btn.onmouseleave = () => css(btn, { background: TEAL_DIM, borderColor: TEAL_BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function secondaryBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "10px 14px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: CARD_BG,
+      color: TEXT,
+      fontSize: "12px",
+      fontWeight: "500",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: CARD_BG_HI, borderColor: BORDER_HI });
+    btn.onmouseleave = () => css(btn, { background: CARD_BG, borderColor: BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function dangerBtn(label2, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "7px 11px",
+      border: `1px solid ${DANGER_BRD}`,
+      borderRadius: "8px",
+      background: DANGER_DIM,
+      color: DANGER,
+      fontSize: "11px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flexShrink: "0"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: DANGER_HI, borderColor: DANGER_BRD_HI });
+    btn.onmouseleave = () => css(btn, { background: DANGER_DIM, borderColor: DANGER_BRD });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function smallBtn(label2, teal, onClick) {
+    const btn = document.createElement("button");
+    css(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "7px 11px",
+      border: `1px solid ${teal ? TEAL_BORDER : BORDER}`,
+      borderRadius: "8px",
+      background: teal ? TEAL_DIM : CARD_BG,
+      color: teal ? TEAL : TEXT,
+      fontSize: "11px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flexShrink: "0"
+    });
+    btn.textContent = label2;
+    btn.onmouseenter = () => css(btn, { background: teal ? TEAL_MID : CARD_BG_HI, borderColor: teal ? TEAL_BRD_HI : BORDER_HI });
+    btn.onmouseleave = () => css(btn, { background: teal ? TEAL_DIM : CARD_BG, borderColor: teal ? TEAL_BORDER : BORDER });
+    btn.onclick = async () => {
+      css(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function styledInput(placeholder) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    css(input, {
+      width: "100%",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: "rgba(255,255,255,0.06)",
+      color: TEXT,
+      fontSize: "12px",
+      outline: "none",
+      transition: "border-color 150ms ease",
+      boxSizing: "border-box"
+    });
+    input.addEventListener("focus", () => css(input, { borderColor: TEAL_BORDER }));
+    input.addEventListener("blur", () => css(input, { borderColor: BORDER }));
+    return input;
+  }
+  function styledTextarea(placeholder) {
+    const ta = document.createElement("textarea");
+    ta.placeholder = placeholder;
+    css(ta, {
+      width: "100%",
+      minHeight: "80px",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER}`,
+      borderRadius: "10px",
+      background: "rgba(255,255,255,0.06)",
+      color: TEXT,
+      fontSize: "11px",
+      fontFamily: "monospace",
+      outline: "none",
+      resize: "vertical",
+      transition: "border-color 150ms ease",
+      boxSizing: "border-box"
+    });
+    ta.addEventListener("focus", () => css(ta, { borderColor: TEAL_BORDER }));
+    ta.addEventListener("blur", () => css(ta, { borderColor: BORDER }));
+    return ta;
+  }
+  function createToggle(checked, onChange) {
+    const label2 = document.createElement("label");
+    label2.className = "qws-ed-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    const track = document.createElement("div");
+    track.className = "qws-ed-track";
+    const thumb = document.createElement("div");
+    thumb.className = "qws-ed-thumb";
+    track.appendChild(thumb);
+    label2.append(input, track);
+    return label2;
+  }
   function renderEditorMenu(container) {
-    const ui = new Menu({ id: "editor", compact: true });
-    ui.mount(container);
-    const view = ui.root.querySelector(".qmm-views");
-    view.innerHTML = "";
-    view.style.display = "flex";
-    view.style.flexDirection = "column";
-    view.style.gap = "8px";
-    view.style.justifyContent = "flex-start";
-    view.style.alignItems = "stretch";
-    view.style.height = "100%";
-    view.style.minHeight = "0";
-    view.style.overflow = "hidden";
-    view.style.flex = "1";
-    ui.root.style.display = "flex";
-    ui.root.style.flexDirection = "column";
-    ui.root.style.height = "100%";
-    ui.root.style.maxHeight = "100%";
-    ui.root.style.minHeight = "0";
-    ui.root.style.overflow = "hidden";
-    ui.root.style.flex = "1 1 auto";
-    const card = ui.card("Editor mode", { tone: "muted", align: "center" });
-    card.header.style.display = "none";
-    card.root.style.maxWidth = "420px";
-    card.root.style.alignSelf = "stretch";
-    card.root.style.flex = "0 0 auto";
-    card.root.style.flexShrink = "0";
-    card.body.style.display = "grid";
-    card.body.style.gap = "10px";
-    const row = ui.flexRow({ align: "center", justify: "between", fullWidth: true });
-    const label2 = ui.label("Editor mode");
-    label2.style.margin = "0";
-    const toggle = ui.switch(EditorService.isEnabled());
-    toggle.setAttribute("aria-label", "Toggle editor mode");
-    toggle.addEventListener("change", () => {
-      const on = !!toggle.checked;
+    ensureStyles3();
+    css(container, { padding: "0", overflow: "hidden" });
+    const wrap = document.createElement("div");
+    wrap.className = "qws-ed-scroll";
+    css(wrap, {
+      display: "flex",
+      flexDirection: "column",
+      gap: "12px",
+      padding: "14px",
+      overflowY: "auto",
+      height: "100%",
+      boxSizing: "border-box",
+      background: "linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%)"
+    });
+    container.appendChild(wrap);
+    const statusEl = document.createElement("div");
+    css(statusEl, {
+      fontSize: "11px",
+      color: TEXT_DIM,
+      minHeight: "16px",
+      paddingLeft: "2px",
+      transition: "opacity 200ms ease"
+    });
+    function setStatus(msg, tone = "ok") {
+      statusEl.textContent = msg;
+      statusEl.style.color = tone === "err" ? DANGER : tone === "warn" ? "#fbbf24" : TEAL;
+      clearTimeout(statusEl.__t);
+      statusEl.__t = setTimeout(() => {
+        statusEl.textContent = "";
+        statusEl.style.color = TEXT_DIM;
+      }, 4e3);
+    }
+    const toggleRow = document.createElement("div");
+    css(toggleRow, { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" });
+    const toggleLabel = document.createElement("div");
+    css(toggleLabel, { fontSize: "13px", fontWeight: "600", color: TEXT });
+    toggleLabel.textContent = "Editor mode";
+    const toggle = createToggle(EditorService.isEnabled(), (on) => {
       EditorService.setEnabled(on);
     });
-    row.append(label2, toggle);
-    card.body.append(row);
-    const hint = document.createElement("div");
-    hint.textContent = "Sandbox garden editor with every plants and decors unlocked. Build, experiment, and customize without limits";
-    hint.style.fontSize = "12px";
-    hint.style.opacity = "0.7";
-    hint.style.textAlign = "left";
-    hint.style.lineHeight = "1.4";
-    hint.style.width = "100%";
-    card.body.append(hint);
-    const hintPlaceRemove = document.createElement("div");
-    hintPlaceRemove.textContent = "Place/Remove uses your action key. Toggle overlays with U.";
-    hintPlaceRemove.style.fontSize = "11px";
-    hintPlaceRemove.style.opacity = "0.65";
-    hintPlaceRemove.style.textAlign = "center";
-    hintPlaceRemove.style.lineHeight = "1.3";
-    hintPlaceRemove.style.width = "100%";
-    card.body.append(hintPlaceRemove);
-    const hintDelete = document.createElement("div");
-    hintDelete.textContent = "Remove selected item from inventory with Delete.";
-    hintDelete.style.fontSize = "11px";
-    hintDelete.style.opacity = "0.65";
-    hintDelete.style.textAlign = "center";
-    hintDelete.style.lineHeight = "1.3";
-    hintDelete.style.width = "100%";
-    card.body.append(hintDelete);
-    const hintKeybinds = document.createElement("div");
-    hintKeybinds.textContent = "Keys are editable in Keybinds > Editor.";
-    hintKeybinds.style.fontSize = "11px";
-    hintKeybinds.style.opacity = "0.65";
-    hintKeybinds.style.textAlign = "center";
-    hintKeybinds.style.lineHeight = "1.3";
-    hintKeybinds.style.width = "100%";
-    card.body.append(hintKeybinds);
-    const cleanup2 = EditorService.onChange((enabled) => {
-      toggle.checked = enabled;
-      renderSavedList();
-    });
-    let savedListCleanup;
-    view.__cleanup__ = () => {
-      try {
-        cleanup2();
-      } catch {
-      }
-      try {
-        savedListCleanup?.();
-      } catch {
-      }
-    };
-    const sectionCard = (title, content2) => {
-      const card2 = ui.card(title, { tone: "muted", align: "center" });
-      card2.root.style.maxWidth = "520px";
-      card2.body.style.display = "grid";
-      card2.body.style.gap = "8px";
-      card2.body.style.width = "100%";
-      card2.body.style.minHeight = "0";
-      card2.body.append(content2);
-      return card2;
-    };
-    const status = document.createElement("div");
-    status.style.fontSize = "12px";
-    status.style.opacity = "0.7";
-    status.style.minHeight = "18px";
-    const currentWrap = document.createElement("div");
-    currentWrap.style.display = "grid";
-    currentWrap.style.gap = "6px";
-    const nameInput = ui.inputText("Garden name", "");
-    nameInput.placeholder = "Garden name";
-    nameInput.style.width = "100%";
-    const actionsRow = document.createElement("div");
-    actionsRow.style.display = "grid";
-    actionsRow.style.gridTemplateColumns = "1fr 1fr";
-    actionsRow.style.gap = "8px";
-    const saveBtn = ui.btn("Save current garden", {
-      variant: "primary",
-      fullWidth: true,
-      onClick: async () => {
+    toggleRow.append(toggleLabel, toggle);
+    const desc = document.createElement("div");
+    css(desc, { fontSize: "11px", color: TEXT_DIM, lineHeight: "1.5" });
+    desc.textContent = "Sandbox garden editor with every plant and decor unlocked. Place/Remove uses your action key \xB7 Toggle overlays with U \xB7 Edit keybinds in Keybinds \u203A Editor.";
+    wrap.appendChild(card([toggleRow, desc]));
+    const nameInput = styledInput("Garden name\u2026");
+    const actRow = document.createElement("div");
+    css(actRow, { display: "flex", gap: "8px" });
+    actRow.append(
+      primaryBtn("Save current garden", async () => {
         const fn = window.qwsEditorSaveGarden;
         if (typeof fn !== "function") return;
         const saved = await fn(nameInput.value);
         if (!saved) {
-          status.textContent = "Save failed (no garden state found).";
+          setStatus("Save failed (no garden state found).", "err");
           return;
         }
-        status.textContent = `Saved "${saved.name}".`;
-        renderSavedList();
-      }
-    });
-    const clearBtn = ui.btn("Clear garden", {
-      variant: "secondary",
-      fullWidth: true,
-      onClick: async () => {
+        setStatus(`Saved "${saved.name}".`);
+      }),
+      secondaryBtn("Clear garden", async () => {
         const fn = window.qwsEditorClearGarden;
         if (typeof fn !== "function") return;
         const ok = await fn();
-        status.textContent = ok ? "Garden cleared." : "Clear failed.";
-      }
-    });
-    actionsRow.append(saveBtn, clearBtn);
-    currentWrap.append(nameInput, actionsRow);
-    const importWrap = document.createElement("div");
-    importWrap.style.display = "grid";
-    importWrap.style.gap = "6px";
-    const importArea = document.createElement("textarea");
-    importArea.placeholder = "Paste garden JSON here...";
-    importArea.style.width = "100%";
-    importArea.style.minHeight = "80px";
-    importArea.style.borderRadius = "8px";
-    importArea.style.border = "1px solid #2b3441";
-    importArea.style.background = "rgba(16,21,28,0.9)";
-    importArea.style.color = "#e7eef7";
-    importArea.style.padding = "8px";
-    importArea.style.fontSize = "12px";
-    importArea.style.fontFamily = "monospace";
-    const importBtn = ui.btn("Import to saved gardens", {
-      variant: "secondary",
-      fullWidth: true,
-      onClick: async () => {
-        const fn = window.qwsEditorImportGarden;
-        if (typeof fn !== "function") return;
-        const saved = await fn(nameInput.value || "Imported garden", importArea.value);
-        if (!saved) {
-          status.textContent = "Import failed (invalid JSON).";
-          return;
-        }
-        status.textContent = `Imported "${saved.name}".`;
-        renderSavedList();
-      }
-    });
-    importBtn.style.width = "100%";
-    importWrap.append(importArea, importBtn);
+        setStatus(ok ? "Garden cleared." : "Clear failed.", ok ? "ok" : "err");
+      })
+    );
+    wrap.appendChild(
+      card([sectionLabel("Current garden"), nameInput, actRow])
+    );
+    const importArea = styledTextarea("Paste garden JSON here\u2026");
+    wrap.appendChild(
+      card([
+        sectionLabel("Import"),
+        importArea,
+        primaryBtn("Import to saved gardens", async () => {
+          const fn = window.qwsEditorImportGarden;
+          if (typeof fn !== "function") return;
+          const saved = await fn(nameInput.value || "Imported garden", importArea.value);
+          if (!saved) {
+            setStatus("Import failed (invalid JSON).", "err");
+            return;
+          }
+          importArea.value = "";
+          setStatus(`Imported "${saved.name}".`);
+        })
+      ])
+    );
     const listWrap = document.createElement("div");
-    listWrap.style.display = "flex";
-    listWrap.style.flexDirection = "column";
-    listWrap.style.gap = "8px";
-    listWrap.style.flex = "1";
-    listWrap.style.overflowY = "auto";
-    listWrap.style.width = "100%";
-    listWrap.style.boxSizing = "border-box";
-    listWrap.style.minHeight = "0";
+    css(listWrap, { display: "flex", flexDirection: "column", gap: "6px" });
     const renderSavedList = () => {
       const listFn = window.qwsEditorListSavedGardens;
       const loadFn = window.qwsEditorLoadGarden;
@@ -59586,124 +60078,102 @@ next: ${next}`;
       const expFn = window.qwsEditorExportGarden;
       listWrap.innerHTML = "";
       const items = typeof listFn === "function" ? listFn() : [];
-      if (!items || !items.length) {
+      if (!items.length) {
         const empty = document.createElement("div");
+        css(empty, { fontSize: "12px", color: TEXT_DIM, padding: "4px 0" });
         empty.textContent = "No saved gardens yet.";
-        empty.style.opacity = "0.7";
-        empty.style.fontSize = "12px";
         listWrap.appendChild(empty);
         return;
       }
       const editorOn = EditorService.isEnabled();
       for (const g of items) {
-        const row2 = document.createElement("div");
-        row2.style.display = "grid";
-        row2.style.gridTemplateColumns = "1fr auto auto auto";
-        row2.style.gap = "6px";
-        row2.style.alignItems = "center";
-        row2.style.padding = "8px";
-        row2.style.borderRadius = "8px";
-        row2.style.border = "1px solid #2b3441";
-        row2.style.background = "rgba(16,21,28,0.9)";
-        const name = document.createElement("div");
-        name.textContent = g.name || "Untitled";
-        name.style.fontWeight = "700";
-        name.style.fontSize = "13px";
-        name.style.overflow = "hidden";
-        name.style.textOverflow = "ellipsis";
-        name.style.whiteSpace = "nowrap";
-        const load = ui.btn("Load", {
-          size: "sm",
-          onClick: async () => {
-            if (!EditorService.isEnabled()) {
-              status.textContent = "Enable editor mode to load a garden.";
-              return;
-            }
-            if (typeof loadFn !== "function") return;
-            const ok = await loadFn(g.id);
-            if (ok) {
-              status.textContent = `Loaded "${g.name}".`;
-            } else {
-              status.textContent = "Load failed.";
-            }
+        const row = document.createElement("div");
+        css(row, {
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "10px 12px",
+          background: CARD_BG,
+          borderRadius: "10px",
+          border: `1px solid ${BORDER}`,
+          transition: "border-color 120ms ease"
+        });
+        row.onmouseenter = () => css(row, { borderColor: BORDER_HI });
+        row.onmouseleave = () => css(row, { borderColor: BORDER });
+        const nameEl = document.createElement("div");
+        css(nameEl, {
+          flex: "1",
+          fontSize: "12px",
+          fontWeight: "600",
+          color: TEXT,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          minWidth: "0"
+        });
+        nameEl.textContent = g.name || "Untitled";
+        nameEl.title = g.name || "Untitled";
+        const loadBtn = smallBtn("Load", true, async () => {
+          if (!EditorService.isEnabled()) {
+            setStatus("Enable editor mode first.", "warn");
+            return;
+          }
+          if (typeof loadFn !== "function") return;
+          const ok = await loadFn(g.id);
+          setStatus(ok ? `Loaded "${g.name}".` : "Load failed.", ok ? "ok" : "err");
+        });
+        loadBtn.disabled = !editorOn;
+        if (!editorOn) {
+          css(loadBtn, { opacity: "0.4", cursor: "not-allowed" });
+          loadBtn.title = "Enable editor mode to load";
+        }
+        const expBtn = smallBtn("Export", false, async () => {
+          if (typeof expFn !== "function") return;
+          const json = expFn(g.id);
+          if (!json) {
+            setStatus("Export failed.", "err");
+            return;
+          }
+          try {
+            await navigator.clipboard.writeText(json);
+            setStatus(`Copied "${g.name}" to clipboard.`);
+            await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
+          } catch {
+            setStatus(`Exported "${g.name}". Copy manually.`);
+            window.prompt("Garden JSON", json);
           }
         });
-        load.disabled = !editorOn;
-        if (!editorOn) load.title = "Enable editor mode to load";
-        const exp = ui.btn("Export", {
-          size: "sm",
-          variant: "secondary",
-          onClick: async () => {
-            if (typeof expFn !== "function") return;
-            const json = expFn(g.id);
-            if (!json) {
-              status.textContent = "Export failed.";
-              return;
-            }
-            try {
-              await navigator.clipboard.writeText(json);
-              status.textContent = `Exported "${g.name}" to clipboard.`;
-              await toastSimple("Editor", `Copied "${g.name}" to clipboard`, "success");
-            } catch {
-              status.textContent = `Exported "${g.name}". Copy manually.`;
-              window.prompt("Garden JSON", json);
-            }
+        const delBtn = dangerBtn("Delete", () => {
+          if (typeof delFn !== "function") return;
+          const ok = delFn(g.id);
+          if (ok) {
+            setStatus(`Deleted "${g.name}".`);
+            renderSavedList();
           }
         });
-        const del = ui.btn("Delete", {
-          size: "sm",
-          variant: "danger",
-          onClick: () => {
-            if (typeof delFn !== "function") return;
-            const ok = delFn(g.id);
-            if (ok) {
-              status.textContent = `Deleted "${g.name}".`;
-              renderSavedList();
-            }
-          }
-        });
-        row2.append(name, load, exp, del);
-        listWrap.appendChild(row2);
+        row.append(nameEl, loadBtn, expBtn, delBtn);
+        listWrap.appendChild(row);
       }
     };
     renderSavedList();
-    savedListCleanup = EditorService.onSavedGardensChange(renderSavedList);
-    const currentCard = sectionCard("\u{1F331} Current garden", currentWrap);
-    currentCard.root.style.alignSelf = "stretch";
-    currentCard.root.style.flex = "0 0 auto";
-    currentCard.root.style.flexShrink = "0";
-    const importCard = sectionCard("\u{1F4E5} Import", importWrap);
-    importCard.root.style.alignSelf = "stretch";
-    importCard.root.style.flex = "0 0 auto";
-    importCard.root.style.flexShrink = "0";
-    const savedCard = sectionCard("\u{1F4BE} Saved gardens", listWrap);
-    savedCard.root.style.display = "flex";
-    savedCard.root.style.flexDirection = "column";
-    savedCard.root.style.flex = "1 1 0";
-    savedCard.root.style.minHeight = "220px";
-    savedCard.root.style.overflow = "hidden";
-    savedCard.body.style.display = "flex";
-    savedCard.body.style.flexDirection = "column";
-    savedCard.body.style.alignItems = "stretch";
-    savedCard.body.style.justifyContent = "stretch";
-    savedCard.body.style.overflow = "hidden";
-    savedCard.body.style.flex = "1 1 auto";
-    savedCard.body.style.minHeight = "0";
-    savedCard.body.innerHTML = "";
-    status.style.flex = "0 0 auto";
-    status.style.alignSelf = "stretch";
-    status.style.margin = "0";
-    status.style.height = "18px";
-    savedCard.body.append(status, listWrap);
-    const content = document.createElement("div");
-    content.style.display = "flex";
-    content.style.flexDirection = "column";
-    content.style.gap = "8px";
-    content.style.flex = "1";
-    content.style.minHeight = "0";
-    content.style.overflow = "hidden";
-    content.append(currentCard.root, importCard.root, savedCard.root);
-    view.append(card.root, content);
+    wrap.appendChild(
+      card([sectionLabel("Saved gardens"), statusEl, listWrap])
+    );
+    const unsubChange = EditorService.onChange((enabled) => {
+      toggle.querySelector("input").checked = enabled;
+      renderSavedList();
+    });
+    const unsubSaved = EditorService.onSavedGardensChange(renderSavedList);
+    container.__cleanup__ = () => {
+      try {
+        unsubChange();
+      } catch {
+      }
+      try {
+        unsubSaved();
+      } catch {
+      }
+    };
   }
 
   // src/ui/menus/keybinds.ts
@@ -59920,24 +60390,1249 @@ next: ${next}`;
     wrapper.style.maxWidth = "720px";
     wrapper.style.margin = "0 auto";
     for (const section of getKeybindSections()) {
-      const card = ui.card(`${section.icon} ${section.title}`, { tone: "muted", align: "stretch" });
-      card.root.dataset.section = section.id;
-      card.body.style.display = "flex";
-      card.body.style.flexDirection = "column";
-      card.body.style.gap = "10px";
+      const card2 = ui.card(`${section.icon} ${section.title}`, { tone: "muted", align: "stretch" });
+      card2.root.dataset.section = section.id;
+      card2.body.style.display = "flex";
+      card2.body.style.flexDirection = "column";
+      card2.body.style.gap = "10px";
       const desc = document.createElement("p");
       desc.textContent = section.description;
       desc.style.margin = "0";
       desc.style.fontSize = "12px";
       desc.style.opacity = "0.78";
-      card.body.appendChild(desc);
+      card2.body.appendChild(desc);
       for (const action2 of section.actions) {
         const row = createKeybindRow(ui, action2);
-        card.body.appendChild(row);
+        card2.body.appendChild(row);
       }
-      wrapper.appendChild(card.root);
+      wrapper.appendChild(card2.root);
     }
     view.appendChild(wrapper);
+  }
+
+  // src/services/players.ts
+  init_fakeModal();
+  init_atoms();
+  function findPlayersDeep2(state3) {
+    if (!state3 || typeof state3 !== "object") return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const stack = [state3];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+      seen.add(cur);
+      for (const k of Object.keys(cur)) {
+        const v = cur[k];
+        if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object")) {
+          const looks = v.some((p) => "id" in p && "name" in p);
+          if (looks && /player/i.test(k)) out.push(...v);
+        }
+        if (v && typeof v === "object") stack.push(v);
+      }
+    }
+    const byId = /* @__PURE__ */ new Map();
+    for (const p of out) if (p?.id) byId.set(String(p.id), p);
+    return [...byId.values()];
+  }
+  function getPlayersArray2(st) {
+    const direct = st?.fullState?.data?.players ?? st?.data?.players ?? st?.players;
+    return Array.isArray(direct) ? direct : findPlayersDeep2(st);
+  }
+  function getSlotsArray2(st) {
+    const raw = st?.child?.data?.userSlots ?? st?.fullState?.child?.data?.userSlots ?? st?.data?.userSlots;
+    if (Array.isArray(raw)) return raw;
+    if (raw && typeof raw === "object") {
+      const entries = Object.entries(raw);
+      entries.sort((a, b) => {
+        const ai = Number(a[0]);
+        const bi = Number(b[0]);
+        if (Number.isFinite(ai) && Number.isFinite(bi)) return ai - bi;
+        return a[0].localeCompare(b[0]);
+      });
+      return entries.map(([, v]) => v);
+    }
+    return [];
+  }
+  function extractPosFromSlot(slot) {
+    const pos = slot?.data?.position ?? slot?.position ?? slot?.data?.coords ?? slot?.coords;
+    const x = Number(pos?.x);
+    const y = Number(pos?.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  }
+  function extractInventoryFromSlot(slot) {
+    const inv = slot?.data?.inventory;
+    if (!inv || typeof inv !== "object") return null;
+    const items = Array.isArray(inv.items) ? inv.items : [];
+    const favoritedItemIds = Array.isArray(inv.favoritedItemIds) ? inv.favoritedItemIds : [];
+    return { items, favoritedItemIds };
+  }
+  function extractJournalFromSlot(slot) {
+    const j = slot?.data?.journal ?? slot?.journal;
+    if (!j || typeof j !== "object") return null;
+    const produce = j.produce && typeof j.produce === "object" ? j.produce : void 0;
+    const pets = j.pets && typeof j.pets === "object" ? j.pets : void 0;
+    const normProduce = produce ? Object.fromEntries(Object.entries(produce).map(([k, v]) => [
+      String(k),
+      { variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [] }
+    ])) : void 0;
+    const normPets = pets ? Object.fromEntries(Object.entries(pets).map(([k, v]) => [
+      String(k),
+      {
+        variantsLogged: Array.isArray(v?.variantsLogged) ? v.variantsLogged : [],
+        abilitiesLogged: Array.isArray(v?.abilitiesLogged) ? v.abilitiesLogged : []
+      }
+    ])) : void 0;
+    return { produce: normProduce, pets: normPets };
+  }
+  function extractStatsFromSlot(slot) {
+    const stats = slot?.data?.stats ?? slot?.stats;
+    if (!stats || typeof stats !== "object") return null;
+    return stats;
+  }
+  function extractActivityLogsFromSlot(slot) {
+    const logs = slot?.data?.activityLogs ?? slot?.activityLogs;
+    if (!Array.isArray(logs)) return null;
+    return logs;
+  }
+  function extractGardenFromSlot(slot) {
+    const g = slot?.data?.garden ?? slot?.garden;
+    if (!g || typeof g !== "object") return null;
+    const to = g.tileObjects;
+    const bto = g.boardwalkTileObjects;
+    const tileObjects = to && typeof to === "object" ? to : {};
+    const boardwalkTileObjects = bto && typeof bto === "object" ? bto : {};
+    return { tileObjects, boardwalkTileObjects };
+  }
+  function getSlotByPlayerId(st, playerId2) {
+    for (const s of getSlotsArray2(st)) if (String(s?.playerId ?? "") === String(playerId2)) return s;
+    return null;
+  }
+  function enrichPlayersWithSlots(players, st) {
+    const byPid = /* @__PURE__ */ new Map();
+    for (const slot of getSlotsArray2(st)) {
+      if (!slot || typeof slot !== "object") continue;
+      const pid = slot.playerId != null ? String(slot.playerId) : "";
+      if (!pid) continue;
+      const pos = extractPosFromSlot(slot);
+      const inv = extractInventoryFromSlot(slot);
+      byPid.set(pid, { x: pos?.x, y: pos?.y, inventory: inv ?? null });
+    }
+    return players.map((p) => {
+      const extra = byPid.get(String(p.id));
+      return extra ? { ...p, ...extra } : { ...p, inventory: null };
+    });
+  }
+  function orderPlayersBySlots(players, st) {
+    const slots = getSlotsArray2(st);
+    const mapById = /* @__PURE__ */ new Map();
+    for (const p of players) mapById.set(String(p.id), p);
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const s of slots) {
+      const pid = s?.playerId != null ? String(s.playerId) : "";
+      if (!pid || seen.has(pid)) continue;
+      const p = mapById.get(pid);
+      if (p) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    for (const p of players) {
+      const pid = String(p.id);
+      if (!seen.has(pid)) {
+        out.push(p);
+        seen.add(pid);
+      }
+    }
+    return out;
+  }
+  function clampPlayers2(n) {
+    const v = Math.floor(Number(n));
+    if (!Number.isFinite(v)) return 1;
+    return Math.max(1, Math.min(6, v));
+  }
+  async function getPlayersInRoom() {
+    try {
+      const raw = await Atoms.server.numPlayers.get();
+      return clampPlayers2(raw);
+    } catch {
+      return 1;
+    }
+  }
+  var __cachedSpawnTiles = null;
+  var __spawnLoadPromise = null;
+  async function getSpawnTilesSorted() {
+    if (Array.isArray(__cachedSpawnTiles)) return __cachedSpawnTiles;
+    if (__spawnLoadPromise) return __spawnLoadPromise;
+    __spawnLoadPromise = (async () => {
+      try {
+        const map2 = await Atoms.root.map.get();
+        const arr = map2?.spawnTiles;
+        if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+          __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+          return __cachedSpawnTiles;
+        }
+      } catch {
+      }
+      try {
+        const st = await Atoms.root.state.get();
+        const seen = /* @__PURE__ */ new Set();
+        const stack = [st];
+        while (stack.length) {
+          const cur = stack.pop();
+          if (!cur || typeof cur !== "object" || seen.has(cur)) continue;
+          seen.add(cur);
+          const arr = cur?.spawnTiles;
+          if (Array.isArray(arr) && arr.every((n) => Number.isFinite(n))) {
+            __cachedSpawnTiles = [...arr].sort((a, b) => a - b);
+            return __cachedSpawnTiles;
+          }
+          for (const k of Object.keys(cur)) {
+            const v = cur[k];
+            if (v && typeof v === "object") stack.push(v);
+          }
+        }
+      } catch {
+      }
+      __cachedSpawnTiles = [];
+      return __cachedSpawnTiles;
+    })();
+    const res = await __spawnLoadPromise;
+    __spawnLoadPromise = null;
+    return res;
+  }
+  async function getMapCols() {
+    try {
+      const map2 = await Atoms.root.map.get();
+      const cols = Number(map2?.cols);
+      if (Number.isFinite(cols) && cols > 0) return cols;
+    } catch {
+    }
+    try {
+      const st = await Atoms.root.state.get();
+      const maybeCols = Number(
+        st?.map?.cols ?? st?.child?.data?.map?.cols ?? st?.fullState?.map?.cols
+      );
+      if (Number.isFinite(maybeCols) && maybeCols > 0) return maybeCols;
+    } catch {
+    }
+    return 81;
+  }
+  function assignGardenPositions(players, spawnTilesSorted) {
+    if (!players.length || !spawnTilesSorted.length) {
+      return players.map((p) => ({ ...p, gardenPosition: null }));
+    }
+    const out = [];
+    for (let i = 0; i < players.length; i++) {
+      out.push({ ...players[i], gardenPosition: spawnTilesSorted[i] ?? null });
+    }
+    return out;
+  }
+  function nowTs() {
+    return Date.now();
+  }
+  function normJournal(j) {
+    if (!j || typeof j !== "object") return {};
+    const out = {};
+    if (j.produce && typeof j.produce === "object") out.produce = j.produce;
+    if (j.pets && typeof j.pets === "object") out.pets = j.pets;
+    return out;
+  }
+  function hasJournalData(j) {
+    if (!j) return false;
+    const hasProduce = !!j.produce && Object.values(j.produce).some((s) => (s.variantsLogged?.length ?? 0) > 0);
+    const hasPets = !!j.pets && Object.values(j.pets).some((s) => (s.variantsLogged?.length ?? 0) > 0 || (s.abilitiesLogged?.length ?? 0) > 0);
+    return hasProduce || hasPets;
+  }
+  var followingState = {
+    currentTargetId: null,
+    unsub: null,
+    lastPos: null,
+    prevPos: null,
+    steps: 0
+  };
+  var PET_FOLLOW_INTERVAL_MS = 20;
+  var PET_HISTORY_FACTOR = 3;
+  var PET_SPACING_STEPS = 1;
+  var petFollowState = {
+    targetId: null,
+    unsub: null,
+    timer: null,
+    pets: [],
+    history: [],
+    historyCap: 0
+  };
+  function clearPetFollowTimer() {
+    if (petFollowState.timer) {
+      clearInterval(petFollowState.timer);
+      petFollowState.timer = null;
+    }
+  }
+  async function resetPetFollowState() {
+    if (petFollowState.unsub) {
+      const fn = petFollowState.unsub;
+      petFollowState.unsub = null;
+      try {
+        await fn();
+      } catch {
+      }
+    } else {
+      petFollowState.unsub = null;
+    }
+    clearPetFollowTimer();
+    petFollowState.targetId = null;
+    petFollowState.pets = [];
+    petFollowState.history = [];
+    petFollowState.historyCap = 0;
+  }
+  function recordPetHistory(pos, force = false) {
+    const top = petFollowState.history[0];
+    if (!force && top && top.x === pos.x && top.y === pos.y) return;
+    petFollowState.history.unshift({ x: pos.x, y: pos.y });
+    const cap = petFollowState.historyCap || petFollowState.history.length;
+    if (petFollowState.history.length > cap) {
+      petFollowState.history.length = cap;
+    }
+  }
+  var PlayersService = {
+    async list() {
+      const st = await Atoms.root.state.get();
+      if (!st) return [];
+      const base = enrichPlayersWithSlots(getPlayersArray2(st), st);
+      const ordered = orderPlayersBySlots(base, st);
+      const spawns = await getSpawnTilesSorted();
+      const players = assignGardenPositions(ordered, spawns);
+      return players;
+    },
+    async onChange(cb) {
+      return Atoms.root.state.onChange(async () => {
+        try {
+          cb(await this.list());
+        } catch {
+        }
+      });
+    },
+    async getPosition(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const pos = extractPosFromSlot(slot);
+      return pos;
+    },
+    async getInventory(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const inv = extractInventoryFromSlot(slot);
+      return inv;
+    },
+    async getJournal(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      const j = extractJournalFromSlot(slot);
+      const journal = j ? normJournal(j) : null;
+      return journal;
+    },
+    async getGarden(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractGardenFromSlot(slot);
+    },
+    async getGardenPosition(playerId2) {
+      const list = await this.list();
+      const p = list.find((x) => String(x.id) === String(playerId2));
+      return p?.gardenPosition ?? null;
+    },
+    async getPlayerNameById(playerId2) {
+      try {
+        const st = await Atoms.root.state.get();
+        if (st) {
+          const arr = getPlayersArray2(st);
+          const p = arr.find((x) => String(x?.id) === String(playerId2));
+          if (p && typeof p.name === "string" && p.name) return p.name;
+        }
+      } catch {
+      }
+      try {
+        const list = await this.list();
+        const p = list.find((x) => String(x.id) === String(playerId2));
+        return p?.name ?? null;
+      } catch {
+        return null;
+      }
+    },
+    async teleportToPlayer(playerId2) {
+      const pos = await this.getPosition(playerId2);
+      if (!pos) throw new Error("Unknown position for this player");
+      PlayerService.teleport(pos.x, pos.y);
+      toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}`, "success");
+    },
+    async teleportToGarden(playerId2) {
+      const tileId = await this.getGardenPosition(playerId2);
+      if (tileId == null) {
+        await toastSimple("Teleport", "No garden position for this player.", "error");
+        return;
+      }
+      const cols = await getMapCols();
+      const x = tileId % cols, y = Math.floor(tileId / cols);
+      await PlayerService.teleport(x, y);
+      await toastSimple("Teleport", `Teleported to ${await this.getPlayerNameById(playerId2)}'s garden`, "success");
+    },
+    async getInventoryValue(playerId2, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const inv = await this.getInventory(playerId2);
+        const items = Array.isArray(inv?.items) ? inv.items : [];
+        if (!items.length) return 0;
+        const value = sumInventoryValue(items, opts, playersInRoom);
+        return value;
+      } catch {
+        return 0;
+      }
+    },
+    async getGardenValue(playerId2, opts) {
+      try {
+        const playersInRoom = await getPlayersInRoom();
+        const garden2 = await this.getGarden(playerId2);
+        if (!garden2) return 0;
+        const value = sumGardenValue(garden2.tileObjects ?? {}, opts, playersInRoom);
+        return value;
+      } catch {
+        return 0;
+      }
+    },
+    /** Ouvre l’aperçu d’inventaire (fake modal) avec garde + toasts. */
+    async openInventoryPreview(playerId2, playerName) {
+      try {
+        const inv = await this.getInventory(playerId2);
+        if (!inv) {
+          await toastSimple("Inventory", "No inventory object found for this player.", "error");
+          return;
+        }
+        const items = Array.isArray(inv.items) ? inv.items : [];
+        if (items.length === 0) {
+          await toastSimple("Inventory", "Inventory is empty for this player.", "info");
+          return;
+        }
+        try {
+          await fakeInventoryShow({ ...inv, items }, { open: true });
+        } catch (err) {
+          await toastSimple("Inventory", err?.message || "Failed to open inventory", "error");
+          return;
+        }
+        if (playerName) await toastSimple("Inventory", `${playerName}'s inventory displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Inventory", e?.message || "Failed to open inventory.", "error");
+      }
+    },
+    /** Ouvre le Journal (produce + pets) avec garde + toasts. */
+    async openJournalLog(playerId2, playerName) {
+      try {
+        const journal = await this.getJournal(playerId2);
+        if (!hasJournalData(journal)) {
+          await toastSimple("Journal", "No journal data for this player.", "error");
+          return;
+        }
+        const safe = journal ?? {};
+        try {
+          await fakeJournalShow(safe, { open: true });
+        } catch (err) {
+          await toastSimple("Journal", err?.message || "Failed to open journal.", "error");
+          return;
+        }
+        if (playerName) await toastSimple("Journal", `${playerName}'s journal displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to open journal.", "error");
+      }
+    },
+    async getStats(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractStatsFromSlot(slot);
+    },
+    async getActivityLogs(playerId2) {
+      const st = await Atoms.root.state.get();
+      if (!st) return null;
+      const slot = getSlotByPlayerId(st, playerId2);
+      return extractActivityLogsFromSlot(slot);
+    },
+    async openStatsModal(playerId2, playerName) {
+      try {
+        const stats = await this.getStats(playerId2);
+        if (!stats) {
+          await toastSimple("Stats", "No stats found for this player.", "error");
+          return;
+        }
+        await fakeStatsShow(stats, { open: true });
+        if (playerName) await toastSimple("Stats", `${playerName}'s stats displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Stats", e?.message || "Failed to open stats modal.", "error");
+      }
+    },
+    async openActivityLogModal(playerId2, playerName) {
+      try {
+        const logs = await this.getActivityLogs(playerId2);
+        if (!logs || logs.length === 0) {
+          await toastSimple("Activity log", "No activity logs for this player.", "info");
+          return;
+        }
+        skipNextActivityLogHistoryReopen();
+        await fakeActivityLogShow(logs, { open: true });
+        if (playerName) await toastSimple("Activity log", `${playerName}'s activity log displayed.`, "info");
+      } catch (e) {
+        await toastSimple("Activity log", e?.message || "Failed to open activity log.", "error");
+      }
+    },
+    /* ---------------- Ajouts "fake" au journal (UI only, avec gardes) ---------------- */
+    async addProduceVariant(playerId2, species, variant, createdAt = nowTs()) {
+      if (!species || !variant) {
+        await toastSimple("Journal", "Missing species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          produce: {
+            [String(species)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added produce variant "${variant}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add produce variant.", "error");
+      }
+    },
+    async addPetVariant(playerId2, petSpecies, variant, createdAt = nowTs()) {
+      if (!petSpecies || !variant) {
+        await toastSimple("Journal", "Missing pet species or variant.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              variantsLogged: [{ variant: String(variant), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet variant "${variant}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet variant.", "error");
+      }
+    },
+    async addPetAbility(playerId2, petSpecies, ability, createdAt = nowTs()) {
+      if (!petSpecies || !ability) {
+        await toastSimple("Journal", "Missing pet species or ability.", "error");
+        return;
+      }
+      try {
+        await fakeJournalShow({
+          pets: {
+            [String(petSpecies)]: {
+              abilitiesLogged: [{ ability: String(ability), createdAt }]
+            }
+          }
+        }, { open: true });
+        const name = await this.getPlayerNameById(playerId2);
+        await toastSimple("Journal", `Added pet ability "${ability}" for ${name ?? playerId2}.`, "success");
+      } catch (e) {
+        await toastSimple("Journal", e?.message || "Failed to add pet ability.", "error");
+      }
+    },
+    /* ---------------- Follow ---------------- */
+    async stopFollowing() {
+      if (followingState.unsub) {
+        try {
+          await followingState.unsub();
+        } catch {
+        }
+      }
+      followingState.unsub = null;
+      followingState.currentTargetId = null;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+    },
+    isFollowing(playerId2) {
+      return followingState.currentTargetId === playerId2;
+    },
+    async startFollowing(playerId2) {
+      if (followingState.unsub) {
+        try {
+          await followingState.unsub();
+        } catch {
+        }
+        followingState.unsub = null;
+      }
+      followingState.currentTargetId = playerId2;
+      followingState.lastPos = null;
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      const pos = await this.getPosition(playerId2);
+      if (!pos) {
+        await toastSimple("Follow", "Unable to retrieve player position.", "error");
+        followingState.currentTargetId = null;
+        return;
+      }
+      await PlayerService.teleport(pos.x, pos.y);
+      followingState.lastPos = { x: pos.x, y: pos.y };
+      followingState.prevPos = null;
+      followingState.steps = 0;
+      followingState.unsub = await this.onChange(async (players) => {
+        if (followingState.currentTargetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          await this.stopFollowing();
+          await toastSimple("Follow", "The target is no longer trackable (disconnected?).", "error");
+          return;
+        }
+        const cur = { x: target.x, y: target.y };
+        const last = followingState.lastPos;
+        if (!last) {
+          followingState.lastPos = cur;
+          return;
+        }
+        if (cur.x !== last.x || cur.y !== last.y) {
+          followingState.steps += 1;
+          if (followingState.steps >= 2) {
+            if (last) {
+              PlayerService.move(last.x, last.y);
+            }
+          }
+          followingState.prevPos = followingState.lastPos;
+          followingState.lastPos = cur;
+        }
+      });
+      await toastSimple("Follow", "Follow enabled", "success");
+    },
+    /* ---------------- Pet Follow ---------------- */
+    async stopPetFollowing(opts) {
+      await resetPetFollowState();
+      if (!opts?.silent) {
+        await toastSimple("Pet follow", opts?.message ?? "Disabled.", opts?.tone ?? "info");
+      }
+    },
+    isPetFollowing(playerId2) {
+      return petFollowState.targetId === playerId2;
+    },
+    async startPetFollowing(playerId2) {
+      await this.stopPetFollowing({ silent: true });
+      const petsRaw = await Atoms.pets.myPetInfos.get();
+      const petIds = Array.isArray(petsRaw) ? petsRaw.map((entry) => entry?.slot?.id).filter((id) => typeof id === "string" && !!id) : [];
+      if (!petIds.length) {
+        await toastSimple("Pet follow", "You don't have any active pets.", "error");
+        return;
+      }
+      const pos = await this.getPosition(playerId2);
+      if (!pos) {
+        await toastSimple("Pet follow", "Unable to retrieve player position.", "error");
+        return;
+      }
+      petFollowState.targetId = playerId2;
+      petFollowState.pets = petIds;
+      petFollowState.historyCap = Math.max(petIds.length * PET_HISTORY_FACTOR, petIds.length + PET_SPACING_STEPS + 1);
+      petFollowState.history = [];
+      for (let i = 0; i < petFollowState.historyCap; i += 1) {
+        recordPetHistory(pos, true);
+      }
+      const sendPositions = async () => {
+        if (petFollowState.targetId !== playerId2) return;
+        if (!petFollowState.pets.length || !petFollowState.history.length) return;
+        const payload = {};
+        for (let i = 0; i < petFollowState.pets.length; i += 1) {
+          const petId = petFollowState.pets[i];
+          const historyIndex = Math.min(
+            petFollowState.history.length - 1,
+            (i + 1) * PET_SPACING_STEPS
+          );
+          const targetPos = petFollowState.history[historyIndex] ?? petFollowState.history[petFollowState.history.length - 1];
+          if (targetPos) {
+            payload[petId] = { x: targetPos.x, y: targetPos.y };
+          }
+        }
+        if (Object.keys(payload).length === 0) return;
+        try {
+          await PlayerService.petPositions(payload);
+        } catch (err) {
+        }
+      };
+      petFollowState.timer = setInterval(() => {
+        sendPositions().catch(() => {
+        });
+      }, PET_FOLLOW_INTERVAL_MS);
+      const initialSend = sendPositions();
+      petFollowState.unsub = await this.onChange(async (players) => {
+        if (petFollowState.targetId !== playerId2) return;
+        const target = players.find((p) => p.id === playerId2);
+        if (!target || typeof target.x !== "number" || typeof target.y !== "number") {
+          await this.stopPetFollowing({ silent: false, message: "Target is no longer trackable.", tone: "error" });
+          return;
+        }
+        recordPetHistory({ x: target.x, y: target.y });
+      });
+      await initialSend;
+      await toastSimple("Pet follow", "Pets are now following the target.", "success");
+    }
+  };
+
+  // src/ui/menus/room.ts
+  init_fakeModal();
+  init_page_context();
+  var STYLE_ID5 = "qws-room-menu-css";
+  var TEAL2 = "#5eead4";
+  var TEAL_DIM2 = "rgba(94,234,212,0.12)";
+  var TEAL_MID2 = "rgba(94,234,212,0.22)";
+  var TEAL_BORDER2 = "rgba(94,234,212,0.3)";
+  var TEAL_BORDER_HI = "rgba(94,234,212,0.55)";
+  var BORDER2 = "rgba(255,255,255,0.08)";
+  var BORDER_HI2 = "rgba(255,255,255,0.16)";
+  var CARD_BG2 = "rgba(255,255,255,0.03)";
+  var CARD_BG_HI2 = "rgba(255,255,255,0.06)";
+  var TEXT2 = "#e7eef7";
+  var TEXT_DIM2 = "rgba(226,232,240,0.45)";
+  var GREEN = "#10b981";
+  function ensureStyles4() {
+    if (document.getElementById(STYLE_ID5)) return;
+    const st = document.createElement("style");
+    st.id = STYLE_ID5;
+    st.textContent = `
+.qws-rm-scroll::-webkit-scrollbar { width: 6px; }
+.qws-rm-scroll::-webkit-scrollbar-track { background: transparent; }
+.qws-rm-scroll::-webkit-scrollbar-thumb { background: ${TEAL_DIM2}; border-radius: 3px; }
+.qws-rm-scroll::-webkit-scrollbar-thumb:hover { background: rgba(94,234,212,0.35); }
+.qws-rm-scroll { scrollbar-width: thin; scrollbar-color: ${TEAL_DIM2} transparent; }
+@keyframes qws-rm-spin { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+`;
+    document.head.appendChild(st);
+  }
+  var css2 = (el2, s) => Object.assign(el2.style, s);
+  function sectionLabel2(text) {
+    const el2 = document.createElement("div");
+    css2(el2, {
+      fontSize: "10px",
+      fontWeight: "700",
+      letterSpacing: "0.08em",
+      color: TEXT_DIM2,
+      textTransform: "uppercase",
+      paddingBottom: "6px"
+    });
+    el2.textContent = text;
+    return el2;
+  }
+  function avatar(player2, size) {
+    const el2 = document.createElement("div");
+    css2(el2, {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: "50%",
+      flexShrink: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: `${Math.floor(size * 0.38)}px`,
+      fontWeight: "700",
+      color: TEAL2,
+      overflow: "hidden"
+    });
+    if (player2.discordAvatarUrl) {
+      css2(el2, {
+        backgroundImage: `url(${player2.discordAvatarUrl})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        border: `2px solid ${TEAL_BORDER2}`
+      });
+    } else {
+      css2(el2, {
+        background: "linear-gradient(135deg, rgba(94,234,212,0.22), rgba(59,130,246,0.22))",
+        border: `2px solid rgba(94,234,212,0.2)`
+      });
+      el2.textContent = (player2.name || "?").charAt(0).toUpperCase();
+    }
+    return el2;
+  }
+  function statusPill(online) {
+    const wrap = document.createElement("div");
+    css2(wrap, {
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+      fontSize: "11px",
+      color: online ? GREEN : TEXT_DIM2
+    });
+    const dot = document.createElement("span");
+    css2(dot, {
+      width: "6px",
+      height: "6px",
+      borderRadius: "50%",
+      background: online ? GREEN : "rgba(226,232,240,0.3)",
+      flexShrink: "0"
+    });
+    wrap.append(dot, document.createTextNode(online ? "Online" : "Offline"));
+    return wrap;
+  }
+  function primaryBtn2(label2, iconSvg, onClick) {
+    const btn = document.createElement("button");
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "7px",
+      padding: "10px 14px",
+      border: `1px solid ${TEAL_BORDER2}`,
+      borderRadius: "10px",
+      background: TEAL_DIM2,
+      color: TEAL2,
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1",
+      whiteSpace: "nowrap"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0" });
+    btn.append(icon, document.createTextNode(label2));
+    btn.onmouseenter = () => css2(btn, { background: TEAL_MID2, borderColor: TEAL_BORDER_HI });
+    btn.onmouseleave = () => css2(btn, { background: TEAL_DIM2, borderColor: TEAL_BORDER2 });
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  function toggleBtn(label2, iconSvg, active, onToggle) {
+    let isActive = active;
+    const btn = document.createElement("button");
+    const applyState2 = () => {
+      css2(btn, {
+        border: `1px solid ${isActive ? TEAL_BORDER_HI : BORDER2}`,
+        background: isActive ? TEAL_MID2 : CARD_BG2,
+        color: isActive ? TEAL2 : TEXT2
+      });
+    };
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "7px",
+      padding: "10px 14px",
+      borderRadius: "10px",
+      fontSize: "12px",
+      fontWeight: "600",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      flex: "1",
+      whiteSpace: "nowrap"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0" });
+    btn.append(icon, document.createTextNode(label2));
+    applyState2();
+    btn.onmouseenter = () => {
+      if (!isActive) css2(btn, { background: CARD_BG_HI2, borderColor: TEAL_BORDER2 });
+    };
+    btn.onmouseleave = applyState2;
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        const next = !isActive;
+        await onToggle(next);
+        isActive = next;
+        applyState2();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    btn.__setActive = (v) => {
+      isActive = v;
+      applyState2();
+    };
+    return btn;
+  }
+  function secondaryBtn2(label2, iconSvg, onClick) {
+    const btn = document.createElement("button");
+    css2(btn, {
+      display: "flex",
+      alignItems: "center",
+      gap: "7px",
+      padding: "9px 12px",
+      border: `1px solid ${BORDER2}`,
+      borderRadius: "10px",
+      background: CARD_BG2,
+      color: TEXT2,
+      fontSize: "12px",
+      fontWeight: "500",
+      cursor: "pointer",
+      transition: "all 120ms ease",
+      width: "100%",
+      textAlign: "left"
+    });
+    const icon = document.createElement("span");
+    icon.innerHTML = iconSvg;
+    css2(icon, { display: "flex", alignItems: "center", flexShrink: "0", opacity: "0.7" });
+    btn.append(icon, document.createTextNode(label2));
+    btn.onmouseenter = () => css2(btn, { background: CARD_BG_HI2, borderColor: BORDER_HI2 });
+    btn.onmouseleave = () => css2(btn, { background: CARD_BG2, borderColor: BORDER2 });
+    btn.onclick = async () => {
+      css2(btn, { opacity: "0.6", pointerEvents: "none" });
+      try {
+        await onClick();
+      } finally {
+        css2(btn, { opacity: "1", pointerEvents: "auto" });
+      }
+    };
+    return btn;
+  }
+  var ICO = (d) => `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+  var ICONS = {
+    teleport: ICO(`<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/>`),
+    garden: ICO(`<polygon points="12 3 20 15 4 15"/><polygon points="12 9 21 21 3 21"/><rect x="10" y="21" width="4" height="3" rx="1"/>`),
+    inventory: ICO(`<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/>`),
+    journal: ICO(`<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>`),
+    stats: ICO(`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`),
+    actLog: ICO(`<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>`),
+    save: ICO(`<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13"/><polyline points="7 3 7 8 15 8"/>`),
+    user: ICO(`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`),
+    follow: ICO(`<path d="M5 12h14"/><path d="M12 5l7 7-7 7"/>`)
+  };
+  async function renderRoomMenu(root) {
+    ensureStyles4();
+    css2(root, { padding: "0", overflow: "hidden" });
+    const wrap = document.createElement("div");
+    css2(wrap, {
+      display: "flex",
+      flexDirection: "row",
+      minHeight: "400px",
+      height: "100%",
+      background: "linear-gradient(160deg, rgba(15,20,30,0.95) 0%, rgba(10,14,20,0.95) 60%, rgba(8,12,18,0.96) 100%)"
+    });
+    const leftPane = document.createElement("div");
+    leftPane.className = "qws-rm-scroll";
+    css2(leftPane, {
+      width: "200px",
+      flexShrink: "0",
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+      overflowY: "auto",
+      padding: "14px 8px 14px 12px",
+      borderRight: `1px solid ${BORDER2}`
+    });
+    const rightPane = document.createElement("div");
+    rightPane.className = "qws-rm-scroll";
+    css2(rightPane, {
+      flex: "1",
+      overflowY: "auto",
+      padding: "14px 14px 14px 16px",
+      minWidth: "0"
+    });
+    wrap.append(leftPane, rightPane);
+    root.appendChild(wrap);
+    const getWin = () => root.closest(".qws-win");
+    const hideWin = () => {
+      const w = getWin();
+      if (w) w.style.display = "none";
+    };
+    const showWin = () => {
+      const w = getWin();
+      if (w) w.style.display = "";
+    };
+    let players = [];
+    let selectedId = null;
+    function renderRightPanel(playerId2) {
+      rightPane.innerHTML = "";
+      const player2 = playerId2 ? players.find((p) => p.id === playerId2) ?? null : null;
+      if (!player2) {
+        const hint = document.createElement("div");
+        css2(hint, {
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          gap: "10px",
+          color: TEXT_DIM2,
+          fontSize: "12px",
+          paddingTop: "60px"
+        });
+        const iconWrap = document.createElement("div");
+        iconWrap.innerHTML = ICONS.user.replace("13", "28").replace("13", "28");
+        css2(iconWrap, { opacity: "0.35" });
+        hint.append(iconWrap, document.createTextNode("Select a player"));
+        rightPane.appendChild(hint);
+        return;
+      }
+      const content = document.createElement("div");
+      css2(content, { display: "flex", flexDirection: "column", gap: "18px" });
+      const profileCard = document.createElement("div");
+      css2(profileCard, {
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "14px",
+        background: CARD_BG2,
+        borderRadius: "12px",
+        border: `1px solid ${BORDER2}`
+      });
+      const av = avatar(player2, 46);
+      const infoBlock = document.createElement("div");
+      css2(infoBlock, { display: "flex", flexDirection: "column", gap: "4px", minWidth: "0", flex: "1" });
+      const nameEl = document.createElement("div");
+      css2(nameEl, {
+        fontSize: "15px",
+        fontWeight: "700",
+        color: TEXT2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      });
+      nameEl.textContent = player2.name || player2.id;
+      infoBlock.append(nameEl, statusPill(player2.isConnected ?? false));
+      profileCard.append(av, infoBlock);
+      content.appendChild(profileCard);
+      const teleSection = document.createElement("div");
+      teleSection.appendChild(sectionLabel2("Teleport"));
+      const teleRow = document.createElement("div");
+      css2(teleRow, { display: "flex", gap: "8px" });
+      teleRow.append(
+        primaryBtn2("To player", ICONS.teleport, () => PlayersService.teleportToPlayer(player2.id)),
+        primaryBtn2("To garden", ICONS.garden, () => PlayersService.teleportToGarden(player2.id))
+      );
+      teleSection.appendChild(teleRow);
+      content.appendChild(teleSection);
+      const followSection = document.createElement("div");
+      followSection.appendChild(sectionLabel2("Follow"));
+      const followRow = document.createElement("div");
+      css2(followRow, { display: "flex", gap: "8px" });
+      const followPlayerBtn = toggleBtn(
+        "Follow player",
+        ICONS.follow,
+        PlayersService.isFollowing(player2.id),
+        async (next) => {
+          if (next) {
+            await PlayersService.startFollowing(player2.id);
+            await toastSimple("Follow", `Following ${player2.name || player2.id}.`, "success");
+          } else {
+            PlayersService.stopFollowing();
+            await toastSimple("Follow", "Stopped following.", "info");
+          }
+        }
+      );
+      followRow.append(followPlayerBtn);
+      followSection.appendChild(followRow);
+      content.appendChild(followSection);
+      const inspectSection = document.createElement("div");
+      inspectSection.appendChild(sectionLabel2("Inspect"));
+      const inspectGrid = document.createElement("div");
+      css2(inspectGrid, { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" });
+      inspectGrid.append(
+        secondaryBtn2("Inventory", ICONS.inventory, async () => {
+          hideWin();
+          try {
+            await PlayersService.openInventoryPreview(player2.id, player2.name);
+            if (await isInventoryPanelOpen()) await waitInventoryPanelClosed();
+          } finally {
+            showWin();
+          }
+        }),
+        secondaryBtn2("Journal", ICONS.journal, async () => {
+          hideWin();
+          try {
+            await PlayersService.openJournalLog(player2.id, player2.name);
+            if (await isJournalModalOpen()) await waitJournalModalClosed();
+          } finally {
+            showWin();
+          }
+        }),
+        secondaryBtn2("Stats", ICONS.stats, async () => {
+          hideWin();
+          try {
+            await PlayersService.openStatsModal(player2.id, player2.name);
+            if (await isStatsModalOpenAsync()) await waitStatsModalClosed();
+          } finally {
+            showWin();
+          }
+        }),
+        secondaryBtn2("Activity log", ICONS.actLog, async () => {
+          hideWin();
+          try {
+            await PlayersService.openActivityLogModal(player2.id, player2.name);
+            if (await isActivityLogModalOpenAsync()) await waitActivityLogModalClosed();
+          } finally {
+            showWin();
+          }
+        })
+      );
+      inspectSection.appendChild(inspectGrid);
+      content.appendChild(inspectSection);
+      const editorSection = document.createElement("div");
+      editorSection.appendChild(sectionLabel2("Editor"));
+      editorSection.appendChild(
+        secondaryBtn2("Save player garden", ICONS.save, async () => {
+          const fn = window.qwsEditorSaveGardenForPlayer ?? pageWindow?.qwsEditorSaveGardenForPlayer;
+          if (typeof fn !== "function") {
+            await toastSimple("Save garden", "Editor save unavailable.", "error");
+            return;
+          }
+          const saved = await fn(player2.id, `${player2.name || player2.id}'s garden`);
+          if (!saved) await toastSimple("Save garden", "Save failed (no garden state).", "error");
+          else await toastSimple(`Saved "${saved.name}".`, "success");
+        })
+      );
+      content.appendChild(editorSection);
+      const valSection = document.createElement("div");
+      valSection.appendChild(sectionLabel2("Crop values"));
+      const valRow = document.createElement("div");
+      css2(valRow, { display: "flex", gap: "8px" });
+      const makeValCard = (label2) => {
+        const card2 = document.createElement("div");
+        css2(card2, {
+          flex: "1",
+          padding: "11px 14px",
+          background: CARD_BG2,
+          borderRadius: "10px",
+          border: `1px solid ${BORDER2}`,
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px"
+        });
+        const lbl = document.createElement("div");
+        css2(lbl, { fontSize: "10px", color: TEXT_DIM2, fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.05em" });
+        lbl.textContent = label2;
+        const val = document.createElement("div");
+        css2(val, { fontSize: "15px", fontWeight: "700", color: "#FFD84D" });
+        val.textContent = "\u2026";
+        card2.append(lbl, val);
+        return { card: card2, val };
+      };
+      const { card: invCard, val: invVal } = makeValCard("Inventory");
+      const { card: gardenCard, val: gardenVal } = makeValCard("Garden");
+      valRow.append(invCard, gardenCard);
+      valSection.appendChild(valRow);
+      content.appendChild(valSection);
+      rightPane.appendChild(content);
+      void (async () => {
+        try {
+          invVal.textContent = formatPrice(Math.round(await PlayersService.getInventoryValue(player2.id))) ?? "\u2014";
+        } catch {
+          invVal.textContent = "\u2014";
+        }
+        try {
+          gardenVal.textContent = formatPrice(Math.round(await PlayersService.getGardenValue(player2.id))) ?? "\u2014";
+        } catch {
+          gardenVal.textContent = "\u2014";
+        }
+      })();
+    }
+    function createPlayerCard(player2) {
+      const isSelected = selectedId === player2.id;
+      const card2 = document.createElement("div");
+      css2(card2, {
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        padding: "9px 10px",
+        borderRadius: "10px",
+        border: isSelected ? `1px solid ${TEAL_BORDER2}` : `1px solid ${BORDER2}`,
+        background: isSelected ? TEAL_DIM2 : "rgba(255,255,255,0.02)",
+        cursor: "pointer",
+        transition: "all 120ms ease"
+      });
+      if (!isSelected) {
+        card2.onmouseenter = () => css2(card2, { background: CARD_BG_HI2, borderColor: "rgba(94,234,212,0.18)" });
+        card2.onmouseleave = () => css2(card2, { background: "rgba(255,255,255,0.02)", borderColor: BORDER2 });
+      }
+      card2.onclick = () => {
+        selectedId = player2.id;
+        renderPlayerList();
+        renderRightPanel(player2.id);
+      };
+      const av = avatar(player2, 32);
+      const info = document.createElement("div");
+      css2(info, { flex: "1", minWidth: "0" });
+      const nameEl = document.createElement("div");
+      css2(nameEl, {
+        fontSize: "12px",
+        fontWeight: "600",
+        color: TEXT2,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap"
+      });
+      nameEl.textContent = player2.name || player2.id;
+      const st = document.createElement("div");
+      css2(st, {
+        display: "flex",
+        alignItems: "center",
+        gap: "4px",
+        marginTop: "2px",
+        fontSize: "10px",
+        color: player2.isConnected ? GREEN : TEXT_DIM2
+      });
+      const dot = document.createElement("span");
+      css2(dot, { width: "5px", height: "5px", borderRadius: "50%", background: player2.isConnected ? GREEN : "rgba(226,232,240,0.3)", flexShrink: "0" });
+      st.append(dot, document.createTextNode(player2.isConnected ? "Online" : "Offline"));
+      info.append(nameEl, st);
+      card2.append(av, info);
+      return card2;
+    }
+    function renderPlayerList() {
+      leftPane.innerHTML = "";
+      const header = document.createElement("div");
+      css2(header, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: "6px"
+      });
+      const countEl = document.createElement("div");
+      css2(countEl, { fontSize: "10px", fontWeight: "700", letterSpacing: "0.07em", color: TEXT_DIM2, textTransform: "uppercase" });
+      countEl.textContent = `${players.length} player${players.length !== 1 ? "s" : ""}`;
+      header.appendChild(countEl);
+      leftPane.appendChild(header);
+      if (players.length === 0) {
+        const empty = document.createElement("div");
+        css2(empty, { paddingTop: "16px", textAlign: "center", color: TEXT_DIM2, fontSize: "12px" });
+        empty.textContent = "No players in room";
+        leftPane.appendChild(empty);
+        return;
+      }
+      for (const p of players) {
+        leftPane.appendChild(createPlayerCard(p));
+      }
+    }
+    let lastSig = "";
+    function buildSig(ps) {
+      return ps.map((p) => `${p.id}|${p.name ?? ""}|${p.isConnected ? 1 : 0}`).join(";");
+    }
+    async function refresh(keepSelection = true) {
+      const prevSel = selectedId;
+      const next = await PlayersService.list();
+      const s = buildSig(next);
+      if (s === lastSig) return;
+      lastSig = s;
+      players = next;
+      const sel = keepSelection && prevSel && players.some((p) => p.id === prevSel) ? prevSel : players[0]?.id ?? null;
+      selectedId = sel;
+      renderPlayerList();
+      renderRightPanel(sel);
+    }
+    await PlayersService.onChange(() => {
+      void refresh(true);
+    });
+    await refresh(true);
   }
 
   // src/utils/antiafk.ts
@@ -60120,6 +61815,7 @@ next: ${next}`;
         register("locker", "\u{1F512} Locker", renderLockerMenu);
         register("alerts", "\u{1F514} Alerts", renderNotifierMenu);
         register("calculator", "\u{1F913} Calculator", renderCalculatorMenu);
+        register("room", "\u{1F3E0} Room", renderRoomMenu);
         register("editor", "\u{1F4DD} Editor", renderEditorMenu);
         register("stats", "\u{1F4CA} Stats", renderStatsMenu);
         register("misc", "\u{1F9E9} Misc", renderMiscMenu);
