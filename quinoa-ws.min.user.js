@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.13
+// @version      3.1.14
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -7326,6 +7326,12 @@
       baseProbability: 0.4,
       baseParameters: { scaleIncreasePercentage: 10 }
     },
+    ProduceScaleBoostIII: {
+      name: "Crop Size Boost III",
+      trigger: "continuous",
+      baseProbability: 0.5,
+      baseParameters: { scaleIncreasePercentage: 14 }
+    },
     SnowyCropSizeBoost: {
       name: "Snowy Crop Size Boost",
       trigger: "continuous",
@@ -7405,8 +7411,14 @@
       baseProbability: 27,
       baseParameters: { plantGrowthReductionMinutes: 5 }
     },
+    PlantGrowthBoostIII: {
+      name: "Plant Growth Boost III",
+      trigger: "continuous",
+      baseProbability: 30,
+      baseParameters: { plantGrowthReductionMinutes: 7 }
+    },
     SnowyPlantGrowthBoost: {
-      name: "Snowy Plant Growth Boost",
+      name: "Snow Plant Growth Boost",
       trigger: "continuous",
       baseProbability: 40,
       baseParameters: {
@@ -7414,17 +7426,47 @@
         requiredWeather: "Frost"
       }
     },
-    ProduceMutationBoost: {
-      name: "Crop Mutation Boost I",
-      description: "Increases the chance of garden crops gaining mutations",
+    DawnPlantGrowthBoost: {
+      name: "Dawn Plant Growth Boost",
       trigger: "continuous",
-      baseParameters: { mutationChanceIncreasePercentage: 10 }
+      baseProbability: 60,
+      baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "Dawn" }
     },
-    ProduceMutationBoostII: {
-      name: "Crop Mutation Boost II",
-      description: "Increases the chance of garden crops gaining mutations",
+    AmberPlantGrowthBoost: {
+      name: "Amber Plant Growth Boost",
+      trigger: "continuous",
+      baseProbability: 80,
+      baseParameters: { plantGrowthReductionMinutes: 6, requiredWeather: "AmberMoon" }
+    },
+    ProduceMutationBoost: {
+      name: "Weather Mutation Boost I",
       trigger: "continuous",
       baseParameters: { mutationChanceIncreasePercentage: 15 }
+    },
+    ProduceMutationBoostII: {
+      name: "Weather Mutation Boost II",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 20 }
+    },
+    ProduceMutationBoostIII: {
+      name: "Weather Mutation Boost III",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 25 }
+    },
+    SnowyCropMutationBoost: {
+      name: "Snow Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 32, requiredWeather: "Frost" }
+    },
+    DawnBoost: {
+      name: "Dawn Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 36, requiredWeather: "Dawn" }
+    },
+    AmberMoonBoost: {
+      name: "Amber Moon Boost",
+      trigger: "continuous",
+      baseParameters: { mutationChanceIncreasePercentage: 40, requiredWeather: "AmberMoon" }
     },
     PetMutationBoost: {
       name: "Pet Mutation Boost I",
@@ -7437,6 +7479,11 @@
       description: "Increases the chance of hatched pets gaining mutations",
       trigger: "hatchEgg",
       baseParameters: { mutationChanceIncreasePercentage: 10 }
+    },
+    PetMutationBoostIII: {
+      name: "Pet Mutation Boost III",
+      trigger: "hatchEgg",
+      baseParameters: { mutationChanceIncreasePercentage: 13 }
     },
     GoldGranter: {
       name: "Gold Granter",
@@ -7505,6 +7552,12 @@
       baseProbability: 60,
       baseParameters: { bonusXp: 12e3 }
     },
+    PetAgeBoostIII: {
+      name: "Hatch XP Boost III",
+      trigger: "hatchEgg",
+      baseProbability: 70,
+      baseParameters: { bonusXp: 16e3 }
+    },
     PetHatchSizeBoost: {
       name: "Max Strength Boost I",
       description: "Increases the maximum strength of hatched pets",
@@ -7518,6 +7571,12 @@
       trigger: "hatchEgg",
       baseProbability: 14,
       baseParameters: { maxStrengthIncreasePercentage: 3.5 }
+    },
+    PetHatchSizeBoostIII: {
+      name: "Max Strength Boost III",
+      trigger: "hatchEgg",
+      baseProbability: 16,
+      baseParameters: { maxStrengthIncreasePercentage: 4.6 }
     },
     PetXpBoost: {
       name: "XP Boost I",
@@ -7533,12 +7592,18 @@
       baseProbability: 35,
       baseParameters: { bonusXp: 400 }
     },
-    SnowyPetXpBoost: {
-      name: "Snowy XP Boost",
+    PetXpBoostIII: {
+      name: "XP Boost III",
       trigger: "continuous",
-      baseProbability: 30,
+      baseProbability: 40,
+      baseParameters: { bonusXp: 500 }
+    },
+    SnowyPetXpBoost: {
+      name: "Snow XP Boost",
+      trigger: "continuous",
+      baseProbability: 50,
       baseParameters: {
-        bonusXp: 300,
+        bonusXp: 450,
         requiredWeather: "Frost"
       }
     },
@@ -7555,6 +7620,12 @@
       trigger: "continuous",
       baseProbability: 14,
       baseParameters: { hungerRestorePercentage: 35 }
+    },
+    HungerRestoreIII: {
+      name: "Hunger Restore III",
+      trigger: "continuous",
+      baseProbability: 16,
+      baseParameters: { hungerRestorePercentage: 40 }
     },
     SnowyHungerRestore: {
       name: "Snowy Hunger Restore",
@@ -7576,6 +7647,11 @@
       description: "Reduces the hunger depletion rate of active pets",
       trigger: "continuous",
       baseParameters: { hungerDepletionRateDecreasePercentage: 16 }
+    },
+    HungerBoostIII: {
+      name: "Hunger Boost III",
+      trigger: "continuous",
+      baseParameters: { hungerDepletionRateDecreasePercentage: 20 }
     },
     SnowyHungerBoost: {
       name: "Snowy Hunger Boost",
@@ -7693,6 +7769,18 @@
       baseParameters: {
         grantedMutations: ["Frozen"]
       }
+    },
+    DawnlitGranter: {
+      name: "Dawnlit Granter",
+      trigger: "continuous",
+      baseProbability: 4,
+      baseParameters: { grantedMutations: ["Dawnlit"] }
+    },
+    AmberlitGranter: {
+      name: "Amberlit Granter",
+      trigger: "continuous",
+      baseProbability: 2,
+      baseParameters: { grantedMutations: ["Ambershine"] }
     }
   };
   var toolCatalog = {
@@ -38785,9 +38873,16 @@
         </svg>
       `;
       }
+      const nameGroup = document.createElement("div");
+      style2(nameGroup, {
+        flex: "1",
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        minWidth: "0"
+      });
       const name = document.createElement("div");
       style2(name, {
-        flex: "1",
         fontSize: "13px",
         fontWeight: "600",
         color: isAnonymous ? "rgba(226,232,240,0.4)" : "#e7eef7",
@@ -38796,6 +38891,8 @@
         whiteSpace: "nowrap"
       });
       name.textContent = isAnonymous ? "Anonymous" : row.playerName || "Unknown";
+      const badges = isAnonymous ? null : createPlayerBadges(row.badges, true);
+      nameGroup.append(name, ...badges ? [badges] : []);
       const total = document.createElement("div");
       style2(total, {
         fontSize: "13px",
@@ -38805,9 +38902,9 @@
       });
       total.textContent = formatPrice(row.total) ?? String(row.total);
       if (rankChangeIndicator) {
-        card2.append(rankChangeIndicator, rankBadge, avatar2, name, total);
+        card2.append(rankChangeIndicator, rankBadge, avatar2, nameGroup, total);
       } else {
-        card2.append(rankBadge, avatar2, name, total);
+        card2.append(rankBadge, avatar2, nameGroup, total);
       }
       return card2;
     }
@@ -39809,6 +39906,243 @@
     return overlay;
   }
 
+  // src/ui/menus/communityHub/kofiModal.ts
+  var KOFI_URL = "https://ko-fi.com/E1E11TWTM1";
+  var CLOSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  var COFFEE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`;
+  var HEART_SVG2 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+  var SERVER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`;
+  var CODE_SVG2 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+  var REASONS = [
+    {
+      icon: SERVER_SVG,
+      color: "#5eead4",
+      title: "Server infrastructure",
+      desc: "Public rooms, friends, messages and groups all run on a real-time backend I pay for every month. That's the main reason I opened a Ko-fi."
+    },
+    {
+      icon: CODE_SVG2,
+      color: "#a78bfa",
+      title: "Months of development",
+      desc: "This mod has been built and maintained over many months. Every feature took real time to design and ship."
+    },
+    {
+      icon: HEART_SVG2,
+      color: "#f472b6",
+      title: "Exclusive supporter badge",
+      desc: "Supporters get a pink \u2665 badge visible on their profile and next to their name everywhere in the Community Hub."
+    }
+  ];
+  function createReasonRow(reason) {
+    const row = document.createElement("div");
+    style2(row, {
+      display: "flex",
+      gap: "12px",
+      alignItems: "flex-start",
+      padding: "10px 12px",
+      borderRadius: "10px",
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.06)"
+    });
+    const iconWrap = document.createElement("div");
+    iconWrap.innerHTML = reason.icon;
+    style2(iconWrap, {
+      width: "28px",
+      height: "28px",
+      flexShrink: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "8px",
+      background: `${reason.color}1a`,
+      color: reason.color
+    });
+    const textWrap = document.createElement("div");
+    const rowTitle = document.createElement("div");
+    rowTitle.textContent = reason.title;
+    style2(rowTitle, { fontWeight: "600", fontSize: "12px", color: "#e7eef7", marginBottom: "3px" });
+    const rowDesc = document.createElement("div");
+    rowDesc.textContent = reason.desc;
+    style2(rowDesc, { fontSize: "12px", color: "rgba(231,238,247,0.6)", lineHeight: "1.5" });
+    textWrap.append(rowTitle, rowDesc);
+    row.append(iconWrap, textWrap);
+    return row;
+  }
+  function createKofiModal(onClose) {
+    const environment = detectEnvironment();
+    const isDiscord = environment?.surface === "discord";
+    const openKofi = () => {
+      if (isDiscord && typeof GM_openInTab === "function") {
+        GM_openInTab(KOFI_URL, { active: true });
+      } else {
+        window.open(KOFI_URL, "_blank", "noopener,noreferrer");
+      }
+    };
+    const overlay = document.createElement("div");
+    style2(overlay, {
+      position: "absolute",
+      top: "0",
+      right: "0",
+      bottom: "0",
+      left: "0",
+      zIndex: "20",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(8,12,18,0.86)",
+      backdropFilter: "blur(4px)",
+      borderRadius: "18px"
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) onClose();
+    });
+    const card2 = document.createElement("div");
+    style2(card2, {
+      width: "min(480px, 90%)",
+      maxHeight: "min(560px, 85%)",
+      overflowY: "auto",
+      background: "linear-gradient(160deg, rgba(22,28,42,0.99) 0%, rgba(12,18,28,0.99) 100%)",
+      border: "1px solid rgba(244,114,182,0.22)",
+      borderRadius: "14px",
+      padding: "24px 24px 20px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "14px",
+      boxShadow: "0 8px 36px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset",
+      position: "relative"
+    });
+    const closeBtn = document.createElement("button");
+    closeBtn.innerHTML = CLOSE_SVG;
+    style2(closeBtn, {
+      position: "absolute",
+      top: "14px",
+      right: "14px",
+      width: "28px",
+      height: "28px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      border: "1px solid rgba(255,255,255,0.10)",
+      borderRadius: "8px",
+      background: "rgba(255,255,255,0.04)",
+      color: "rgba(231,238,247,0.55)",
+      cursor: "pointer",
+      transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
+      padding: "0",
+      flexShrink: "0"
+    });
+    closeBtn.addEventListener("mouseenter", () => {
+      closeBtn.style.background = "rgba(239,68,68,0.14)";
+      closeBtn.style.borderColor = "rgba(239,68,68,0.3)";
+      closeBtn.style.color = "#ef4444";
+    });
+    closeBtn.addEventListener("mouseleave", () => {
+      closeBtn.style.background = "rgba(255,255,255,0.04)";
+      closeBtn.style.borderColor = "rgba(255,255,255,0.10)";
+      closeBtn.style.color = "rgba(231,238,247,0.55)";
+    });
+    closeBtn.addEventListener("click", onClose);
+    const header = document.createElement("div");
+    style2(header, {
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      paddingRight: "32px"
+    });
+    const coffeeWrap = document.createElement("div");
+    coffeeWrap.innerHTML = COFFEE_SVG;
+    style2(coffeeWrap, {
+      width: "40px",
+      height: "40px",
+      flexShrink: "0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "12px",
+      background: "rgba(244,114,182,0.12)",
+      border: "1px solid rgba(244,114,182,0.25)",
+      color: "#f472b6"
+    });
+    const headerText = document.createElement("div");
+    const headerTitle = document.createElement("div");
+    headerTitle.textContent = "Support the Mod";
+    style2(headerTitle, { fontWeight: "700", fontSize: "15px", color: "#e7eef7" });
+    const headerSub = document.createElement("div");
+    headerSub.textContent = "Help keep the Community Hub alive";
+    style2(headerSub, { fontSize: "11px", color: "rgba(231,238,247,0.45)", marginTop: "2px" });
+    headerText.append(headerTitle, headerSub);
+    header.append(coffeeWrap, headerText);
+    const reasonsList = document.createElement("div");
+    style2(reasonsList, { display: "flex", flexDirection: "column", gap: "8px" });
+    for (const reason of REASONS) {
+      reasonsList.appendChild(createReasonRow(reason));
+    }
+    const kofiBtn = document.createElement("button");
+    kofiBtn.textContent = "\u2615  Buy me a coffee on Ko-fi";
+    style2(kofiBtn, {
+      marginTop: "2px",
+      padding: "11px 20px",
+      background: "linear-gradient(135deg, rgba(244,114,182,0.18) 0%, rgba(244,114,182,0.10) 100%)",
+      border: "1px solid rgba(244,114,182,0.35)",
+      borderRadius: "9px",
+      color: "#f9a8d4",
+      fontSize: "13px",
+      fontWeight: "700",
+      cursor: "pointer",
+      transition: "background 150ms ease, border-color 150ms ease, transform 150ms ease",
+      letterSpacing: "0.01em",
+      width: "100%"
+    });
+    kofiBtn.addEventListener("mouseenter", () => {
+      kofiBtn.style.background = "linear-gradient(135deg, rgba(244,114,182,0.28) 0%, rgba(244,114,182,0.18) 100%)";
+      kofiBtn.style.borderColor = "rgba(244,114,182,0.55)";
+      kofiBtn.style.transform = "translateY(-1px)";
+    });
+    kofiBtn.addEventListener("mouseleave", () => {
+      kofiBtn.style.background = "linear-gradient(135deg, rgba(244,114,182,0.18) 0%, rgba(244,114,182,0.10) 100%)";
+      kofiBtn.style.borderColor = "rgba(244,114,182,0.35)";
+      kofiBtn.style.transform = "translateY(0)";
+    });
+    kofiBtn.addEventListener("click", openKofi);
+    card2.append(closeBtn, header, reasonsList, kofiBtn);
+    overlay.appendChild(card2);
+    return overlay;
+  }
+  function createKofiNavEntry(onClick) {
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    const sep = document.createElement("div");
+    style2(sep, {
+      height: "1px",
+      background: "rgba(255,255,255,0.07)",
+      margin: "0 2px 2px"
+    });
+    const btn = document.createElement("button");
+    btn.className = "qws-ch-nav-btn";
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "qws-ch-nav-icon";
+    iconWrap.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>`;
+    style2(iconWrap, {
+      background: "rgba(244,114,182,0.12)",
+      color: "#f472b6"
+    });
+    const label2 = document.createElement("span");
+    label2.textContent = "Support";
+    label2.style.color = "#f9a8d4";
+    btn.style.justifyContent = "center";
+    btn.addEventListener("mouseenter", () => {
+      btn.style.background = "rgba(244,114,182,0.10)";
+      btn.style.borderColor = "rgba(244,114,182,0.22)";
+    });
+    btn.addEventListener("mouseleave", () => {
+      btn.style.background = "transparent";
+      btn.style.borderColor = "transparent";
+    });
+    btn.addEventListener("click", onClick);
+    btn.append(iconWrap, label2);
+    return { spacer, sep, btn };
+  }
+
   // src/ui/menus/communityHub/index.ts
   var STYLE_ID = "qws-community-hub-css";
   function ensureCommunityHubStyle() {
@@ -39971,6 +40305,8 @@
       __publicField(this, "activeTab", "community");
       __publicField(this, "panelOpen", false);
       __publicField(this, "cleanupToolbarButton", null);
+      __publicField(this, "kofiModal", null);
+      __publicField(this, "kofiNavBtn", null);
       __publicField(this, "handleConversationsRefresh", () => this.updateAllBadges());
       __publicField(this, "handleFriendRequestsRefresh", () => this.updateAllBadges());
       __publicField(this, "handleOverlayOpen", () => this.setOpen(true));
@@ -40226,6 +40562,18 @@
         this.content.appendChild(tab.root);
         this.tabs.set(def.id, tab);
       }
+      const { spacer, sep, btn: kofiBtn } = createKofiNavEntry(() => this.openKofiModal());
+      this.kofiNavBtn = kofiBtn;
+      this.nav.append(spacer, sep, kofiBtn);
+    }
+    openKofiModal() {
+      if (this.kofiModal?.isConnected) return;
+      this.kofiModal?.remove();
+      this.kofiModal = createKofiModal(() => {
+        this.kofiModal?.remove();
+        this.kofiModal = null;
+      });
+      this.panel.appendChild(this.kofiModal);
     }
     switchTab(id) {
       if (this.activeTab === id) return;
@@ -40287,6 +40635,10 @@
           btn.style.pointerEvents = "none";
           btn.style.opacity = "0.5";
         }
+        if (this.kofiNavBtn) {
+          this.kofiNavBtn.style.pointerEvents = "auto";
+          this.kofiNavBtn.style.opacity = "1";
+        }
       }
     }
     maybeShowRoomPrivacyNotice() {
@@ -40321,6 +40673,10 @@
       if (this.roomPrivacyNotice) {
         this.roomPrivacyNotice.remove();
         this.roomPrivacyNotice = null;
+      }
+      if (this.kofiModal) {
+        this.kofiModal.remove();
+        this.kofiModal = null;
       }
       for (const tab of this.tabs.values()) {
         tab.destroy?.();
@@ -55988,7 +56344,7 @@ next: ${next}`;
     if (is("ProduceScaleBoost") || is("SnowyCropSizeBoost")) {
       return { bg: "rgba(34,139,34,0.9)", hover: "rgba(34,139,34,1)" };
     }
-    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost")) {
+    if (is("PlantGrowthBoost") || is("SnowyPlantGrowthBoost") || is("DawnPlantGrowthBoost") || is("AmberPlantGrowthBoost")) {
       return { bg: "rgba(0,128,128,0.9)", hover: "rgba(0,128,128,1)" };
     }
     if (is("EggGrowthBoost") || is("SnowyEggGrowthBoost")) {
@@ -56021,7 +56377,7 @@ next: ${next}`;
         hover: "rgba(168,102,38,1)"
       };
     }
-    if (is("ProduceMutationBoost")) {
+    if (is("ProduceMutationBoost") || is("SnowyCropMutationBoost") || is("DawnBoost") || is("AmberMoonBoost")) {
       return { bg: "rgba(140,15,70,0.9)", hover: "rgba(140,15,70,1)" };
     }
     if (is("PetMutationBoost")) {
@@ -56058,16 +56414,19 @@ next: ${next}`;
       };
     }
     if (is("RainDance")) {
-      return {
-        bg: "rgba(102,204,216,0.9)",
-        hover: "rgba(102,204,216,1)"
-      };
+      return { bg: "rgba(76,204,204,0.9)", hover: "rgba(76,204,204,1)" };
     }
     if (is("SnowGranter")) {
-      return { bg: "rgba(175,215,235,0.9)", hover: "rgba(175,215,235,1)" };
+      return { bg: "rgba(144,184,204,0.9)", hover: "rgba(144,184,204,1)" };
     }
     if (is("FrostGranter")) {
-      return { bg: "rgba(100,160,220,0.9)", hover: "rgba(100,160,220,1)" };
+      return { bg: "rgba(148,160,204,0.9)", hover: "rgba(148,160,204,1)" };
+    }
+    if (is("DawnlitGranter")) {
+      return { bg: "rgba(196,124,180,0.9)", hover: "rgba(196,124,180,1)" };
+    }
+    if (is("AmberlitGranter")) {
+      return { bg: "rgba(204,144,96,0.9)", hover: "rgba(204,144,96,1)" };
     }
     return {
       bg: "rgba(100,100,100,0.9)",
