@@ -14,6 +14,7 @@ import {
 } from "./notificationSound";
 import { createAuthGate } from "./authGate";
 import { createRoomPrivacyNotice, hasSeenRoomPrivacyNotice } from "./roomPrivacyNotice";
+import { createKofiModal, createKofiNavEntry } from "./kofiModal";
 
 const STYLE_ID = "qws-community-hub-css";
 
@@ -194,6 +195,8 @@ class CommunityHub {
   private activeTab: TabId = "community";
   private panelOpen = false;
   private cleanupToolbarButton: (() => void) | null = null;
+  private kofiModal: HTMLElement | null = null;
+  private kofiNavBtn: HTMLButtonElement | null = null;
   private handleConversationsRefresh = () => this.updateAllBadges();
   private handleFriendRequestsRefresh = () => this.updateAllBadges();
   private handleOverlayOpen = () => this.setOpen(true);
@@ -521,6 +524,21 @@ class CommunityHub {
       this.content.appendChild(tab.root);
       this.tabs.set(def.id, tab);
     }
+
+    // Ko-fi support button — pushed to the bottom of the nav
+    const { spacer, sep, btn: kofiBtn } = createKofiNavEntry(() => this.openKofiModal());
+    this.kofiNavBtn = kofiBtn;
+    this.nav.append(spacer, sep, kofiBtn);
+  }
+
+  private openKofiModal(): void {
+    if (this.kofiModal?.isConnected) return;
+    this.kofiModal?.remove();
+    this.kofiModal = createKofiModal(() => {
+      this.kofiModal?.remove();
+      this.kofiModal = null;
+    });
+    this.panel.appendChild(this.kofiModal);
   }
 
   private switchTab(id: TabId): void {
@@ -595,6 +613,11 @@ class CommunityHub {
         btn.style.pointerEvents = "none";
         btn.style.opacity = "0.5";
       }
+      // Ko-fi button is unrelated to auth — keep it fully interactive
+      if (this.kofiNavBtn) {
+        this.kofiNavBtn.style.pointerEvents = "auto";
+        this.kofiNavBtn.style.opacity = "1";
+      }
     }
   }
 
@@ -641,6 +664,12 @@ class CommunityHub {
     if (this.roomPrivacyNotice) {
       this.roomPrivacyNotice.remove();
       this.roomPrivacyNotice = null;
+    }
+
+    // Cleanup Ko-fi modal
+    if (this.kofiModal) {
+      this.kofiModal.remove();
+      this.kofiModal = null;
     }
 
     for (const tab of this.tabs.values()) {

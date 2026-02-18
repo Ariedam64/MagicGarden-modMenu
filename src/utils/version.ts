@@ -1,8 +1,8 @@
 import { isDiscordSurface } from "./api";
 
 const REPO_OWNER = "Ariedam64";
-const REPO_NAME = "MagicGarden-modMenu";
-const REPO_BRANCH = "main";
+const REPO_NAME = "MG-AriesMod";
+const REPO_BRANCH = "main/dist";
 const SCRIPT_FILE_PATH = "quinoa-ws.min.user.js";
 
 const RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}`;

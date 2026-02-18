@@ -7,7 +7,7 @@ import {
   getCachedMyProfile,
 } from "../../../../ariesModAPI";
 import type { LeaderboardRow, LeaderboardData } from "../../../../ariesModAPI";
-import { style, CH_EVENTS, ensureSharedStyles, createKeyBlocker } from "../shared";
+import { style, CH_EVENTS, ensureSharedStyles, createKeyBlocker, createPlayerBadges } from "../shared";
 import { formatPrice } from "../../../../utils/format";
 
 type LeaderboardCategory = "coins" | "eggsHatched";
@@ -495,10 +495,18 @@ export function createLeaderboardTab() {
       `;
     }
 
-    // Name
+    // Name + badges group (flex: 1, stays together)
+    const nameGroup = document.createElement("div");
+    style(nameGroup, {
+      flex: "1",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      minWidth: "0",
+    });
+
     const name = document.createElement("div");
     style(name, {
-      flex: "1",
       fontSize: "13px",
       fontWeight: "600",
       color: isAnonymous ? "rgba(226,232,240,0.4)" : "#e7eef7",
@@ -507,6 +515,10 @@ export function createLeaderboardTab() {
       whiteSpace: "nowrap",
     });
     name.textContent = isAnonymous ? "Anonymous" : row.playerName || "Unknown";
+
+    const badges = isAnonymous ? null : createPlayerBadges(row.badges, true);
+
+    nameGroup.append(name, ...(badges ? [badges] : []));
 
     // Total (right)
     const total = document.createElement("div");
@@ -519,9 +531,9 @@ export function createLeaderboardTab() {
     total.textContent = formatPrice(row.total) ?? String(row.total);
 
     if (rankChangeIndicator) {
-      card.append(rankChangeIndicator, rankBadge, avatar, name, total);
+      card.append(rankChangeIndicator, rankBadge, avatar, nameGroup, total);
     } else {
-      card.append(rankBadge, avatar, name, total);
+      card.append(rankBadge, avatar, nameGroup, total);
     }
     return card;
   }
