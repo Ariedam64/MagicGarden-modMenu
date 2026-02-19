@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.17
+// @version      3.1.21
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -1290,7 +1290,7 @@
       isMyInventoryAtMaxLength = makeAtom("isMyInventoryAtMaxLengthAtom");
       myNumPetHutchItems = makeAtom("myNumPetHutchItemsAtom");
       shops = makeAtom("shopsAtom");
-      myShopPurchases = makeAtom("myShopPurchasesAtom");
+      myShopPurchases = makeView("myDataAtom", { path: "shopPurchases" });
       numPlayers = makeAtom("numPlayersAtom");
       totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
       myValidatedSelectedItemIndex = makeAtom("myValidatedSelectedItemIndexAtom");
