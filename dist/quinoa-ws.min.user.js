@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.18
+// @version      3.1.19
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26380,13 +26380,19 @@
     seed: /* @__PURE__ */ new Map(),
     decor: /* @__PURE__ */ new Map()
   };
-  var _invBaseline = {
+  var _invCurrent = {
     seed: /* @__PURE__ */ new Map(),
     egg: /* @__PURE__ */ new Map(),
     tool: /* @__PURE__ */ new Map(),
     decor: /* @__PURE__ */ new Map()
   };
-  var _invCurrent = {
+  var _purchaseAccumulator = {
+    seed: /* @__PURE__ */ new Map(),
+    egg: /* @__PURE__ */ new Map(),
+    tool: /* @__PURE__ */ new Map(),
+    decor: /* @__PURE__ */ new Map()
+  };
+  var _lastMergedInv = {
     seed: /* @__PURE__ */ new Map(),
     egg: /* @__PURE__ */ new Map(),
     tool: /* @__PURE__ */ new Map(),
@@ -26435,13 +26441,9 @@
   }
   function _computePurchasesFromInventory() {
     const compute = (category) => {
-      const baseline = _invBaseline[category];
-      const current = _invCurrent[category];
       const purchases = {};
-      for (const [key2, qty] of current) {
-        const base = baseline.get(key2) ?? 0;
-        const delta = qty - base;
-        if (delta > 0) purchases[key2] = delta;
+      for (const [key2, qty] of _purchaseAccumulator[category]) {
+        if (qty > 0) purchases[key2] = qty;
       }
       return { createdAt: Date.now(), purchases };
     };
@@ -26452,19 +26454,37 @@
       decor: compute("decor")
     };
   }
-  function _resetBaselines() {
+  function _resetPurchaseTracking() {
     for (const cat of ["seed", "egg", "tool", "decor"]) {
-      _invBaseline[cat] = new Map(_invCurrent[cat]);
+      _purchaseAccumulator[cat] = /* @__PURE__ */ new Map();
+      _lastMergedInv[cat] = new Map(_invCurrent[cat]);
     }
+  }
+  function _accumulateIncrease(category) {
+    const current = _invCurrent[category];
+    const last = _lastMergedInv[category];
+    for (const [key2, qty] of current) {
+      const prev = last.get(key2) ?? 0;
+      if (qty > prev) {
+        const delta = qty - prev;
+        _purchaseAccumulator[category].set(
+          key2,
+          (_purchaseAccumulator[category].get(key2) ?? 0) + delta
+        );
+      }
+    }
+    _lastMergedInv[category] = new Map(current);
   }
   function _onInventoryChange(category, raw) {
     _invRawMain[category] = _buildInvMap(raw, _invKeyExtractors[category]);
     _recomputeInvCurrent();
+    _accumulateIncrease(category);
     _notifyPurchases(_computePurchasesFromInventory());
   }
   function _onStorageChange(kind, raw) {
     _invRawStorage[kind] = _buildInvMap(raw, _invKeyExtractors[kind]);
     _recomputeInvCurrent();
+    _accumulateIncrease(kind);
     _notifyPurchases(_computePurchasesFromInventory());
   }
   async function _snapshotAllInventories() {
@@ -26489,7 +26509,7 @@
       snapStorage("decor", Atoms.inventory.myDecorShedItems)
     ]);
     _recomputeInvCurrent();
-    _resetBaselines();
+    _resetPurchaseTracking();
   }
   function _checkRestockAndResetBaselines(raw) {
     const seconds = (sec) => Number(sec?.secondsUntilRestock) || 0;
@@ -26501,7 +26521,7 @@
     };
     const restocked = next.seed > _lastShopRestock.seed && _lastShopRestock.seed > 0 || next.egg > _lastShopRestock.egg && _lastShopRestock.egg > 0 || next.tool > _lastShopRestock.tool && _lastShopRestock.tool > 0 || next.decor > _lastShopRestock.decor && _lastShopRestock.decor > 0;
     _lastShopRestock = next;
-    if (restocked) _resetBaselines();
+    if (restocked) _resetPurchaseTracking();
   }
   var TOOL_CAPS = {
     Shovel: 1,

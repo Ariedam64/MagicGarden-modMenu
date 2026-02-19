@@ -915,8 +915,9 @@ let _toolInv = new Map<string, number>();
 let _unsubToolInv: null | (() => void) = null;
 
 // ---------- inventory-based purchase detection ----------
-// Baselines are captured when the shop first loads or restocks.
-// purchasedCount = max(0, mergedCurrentQty - baselineQty)
+// Uses an accumulator approach: only accumulate inventory INCREASES as purchases.
+// Decreases (planting, selling, using items) do NOT reduce the purchase count.
+// Reset happens only on shop restock.
 // "merged" = main inventory + storage (seed silo / decor shed)
 type InvCategory = "seed" | "egg" | "tool" | "decor";
 
@@ -928,11 +929,18 @@ const _invRawStorage: { seed: Map<string, number>; decor: Map<string, number> } 
   seed: new Map(), decor: new Map(),
 };
 
-// Merged (main + storage) — used for delta computation
-const _invBaseline: Record<InvCategory, Map<string, number>> = {
+// Merged (main + storage) — updated on every inventory change
+const _invCurrent: Record<InvCategory, Map<string, number>> = {
   seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
 };
-const _invCurrent: Record<InvCategory, Map<string, number>> = {
+
+// Accumulates purchases (only increases; never decreases; resets on restock)
+const _purchaseAccumulator: Record<InvCategory, Map<string, number>> = {
+  seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
+};
+
+// Last known merged state — used to detect increases
+const _lastMergedInv: Record<InvCategory, Map<string, number>> = {
   seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
 };
 
@@ -985,13 +993,9 @@ function _recomputeInvCurrent(): void {
 
 function _computePurchasesFromInventory(): PurchasesSnapshot {
   const compute = (category: InvCategory) => {
-    const baseline = _invBaseline[category];
-    const current = _invCurrent[category];
     const purchases: Record<string, number> = {};
-    for (const [key, qty] of current) {
-      const base = baseline.get(key) ?? 0;
-      const delta = qty - base;
-      if (delta > 0) purchases[key] = delta;
+    for (const [key, qty] of _purchaseAccumulator[category]) {
+      if (qty > 0) purchases[key] = qty;
     }
     return { createdAt: Date.now(), purchases };
   };
@@ -1003,21 +1007,44 @@ function _computePurchasesFromInventory(): PurchasesSnapshot {
   };
 }
 
-function _resetBaselines(): void {
+// Reset purchase accumulator and sync lastMergedInv to current state.
+// Called on initial snapshot and on shop restock.
+function _resetPurchaseTracking(): void {
   for (const cat of ["seed", "egg", "tool", "decor"] as InvCategory[]) {
-    _invBaseline[cat] = new Map(_invCurrent[cat]);
+    _purchaseAccumulator[cat] = new Map();
+    _lastMergedInv[cat] = new Map(_invCurrent[cat]);
   }
+}
+
+// Accumulate increases in the merged inventory for a category.
+// Only increases count as purchases — decreases (using/planting items) are ignored.
+function _accumulateIncrease(category: InvCategory): void {
+  const current = _invCurrent[category];
+  const last = _lastMergedInv[category];
+  for (const [key, qty] of current) {
+    const prev = last.get(key) ?? 0;
+    if (qty > prev) {
+      const delta = qty - prev;
+      _purchaseAccumulator[category].set(
+        key,
+        (_purchaseAccumulator[category].get(key) ?? 0) + delta,
+      );
+    }
+  }
+  _lastMergedInv[category] = new Map(current);
 }
 
 function _onInventoryChange(category: InvCategory, raw: unknown): void {
   _invRawMain[category] = _buildInvMap(raw, _invKeyExtractors[category]);
   _recomputeInvCurrent();
+  _accumulateIncrease(category);
   _notifyPurchases(_computePurchasesFromInventory());
 }
 
 function _onStorageChange(kind: "seed" | "decor", raw: unknown): void {
   _invRawStorage[kind] = _buildInvMap(raw, _invKeyExtractors[kind]);
   _recomputeInvCurrent();
+  _accumulateIncrease(kind);
   _notifyPurchases(_computePurchasesFromInventory());
 }
 
@@ -1041,7 +1068,8 @@ async function _snapshotAllInventories(): Promise<void> {
     snapStorage("decor", Atoms.inventory.myDecorShedItems),
   ]);
   _recomputeInvCurrent();
-  _resetBaselines();
+  // Set baseline: zero accumulator, sync lastMergedInv to current state
+  _resetPurchaseTracking();
 }
 
 function _checkRestockAndResetBaselines(raw: any): void {
@@ -1058,7 +1086,7 @@ function _checkRestockAndResetBaselines(raw: any): void {
     (next.tool > _lastShopRestock.tool && _lastShopRestock.tool > 0) ||
     (next.decor > _lastShopRestock.decor && _lastShopRestock.decor > 0);
   _lastShopRestock = next;
-  if (restocked) _resetBaselines();
+  if (restocked) _resetPurchaseTracking();
 }
 
 const TOOL_CAPS: Record<string, number> = {
