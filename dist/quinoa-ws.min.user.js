@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.21
+// @version      3.1.22
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -22164,6 +22164,7 @@
           return num(data["sellPrice"] ?? 0);
         case "ProduceScaleBoost":
         case "ProduceScaleBoostII":
+        case "ProduceScaleBoostIII":
         case "SnowyCropSizeBoost": {
           const inc = data["scaleIncreasePercentage"] ?? data["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"] ?? 0;
           return num(inc);
@@ -22177,34 +22178,42 @@
         }
         case "PlantGrowthBoost":
         case "PlantGrowthBoostII":
-        case "SnowyPlantGrowthBoost": {
+        case "PlantGrowthBoostIII":
+        case "SnowyPlantGrowthBoost":
+        case "DawnPlantGrowthBoost":
+        case "AmberPlantGrowthBoost": {
           const minutes = data["minutesReduced"] ?? data["reductionMinutes"] ?? data["plantGrowthReductionMinutes"] ?? base["plantGrowthReductionMinutes"] ?? 0;
           return num(minutes) * 60 * 1e3;
         }
         case "PetXpBoost":
         case "SnowyPetXpBoost":
-        case "PetXpBoostII": {
+        case "PetXpBoostII":
+        case "PetXpBoostIII": {
           const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
           return num(xp);
         }
         case "PetAgeBoost":
-        case "PetAgeBoostII": {
+        case "PetAgeBoostII":
+        case "PetAgeBoostIII": {
           const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
           return num(xp);
         }
         case "PetHatchSizeBoost":
-        case "PetHatchSizeBoostII": {
+        case "PetHatchSizeBoostII":
+        case "PetHatchSizeBoostIII": {
           const strength = data["strengthIncrease"] ?? 0;
           return num(strength);
         }
         case "HungerRestore":
         case "HungerRestoreII":
+        case "HungerRestoreIII":
         case "SnowyHungerRestore": {
           const amount = data["hungerRestoreAmount"] ?? data["hungerRestoredPercentage"] ?? base["hungerRestorePercentage"] ?? 0;
           return num(amount);
         }
         case "HungerBoost":
         case "HungerBoostII":
+        case "HungerBoostIII":
         case "SnowyHungerBoost": {
           const pct = data["hungerDepletionRateDecreasePercentage"] ?? base["hungerDepletionRateDecreasePercentage"] ?? 0;
           return num(pct);
@@ -22442,6 +22451,7 @@
           }
           case "HungerRestore":
           case "HungerRestoreII":
+          case "HungerRestoreIII":
           case "SnowyHungerRestore": {
             const whoRaw = d["petName"];
             const who = label2(whoRaw === "itself" ? "itself" : whoRaw, "pet");
@@ -22491,21 +22501,29 @@
             return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
           }
           case "SnowGranter":
-          case "FrostGranter": {
+          case "FrostGranter":
+          case "DawnlitGranter":
+          case "AmberlitGranter": {
             const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
             const crop = label2(d["cropName"], cropFromSlot ?? "crop");
             return `${crop}`;
           }
           case "ProduceScaleBoost":
           case "ProduceScaleBoostII":
+          case "ProduceScaleBoostIII":
           case "SnowyCropSizeBoost": {
             const inc = d["scaleIncreasePercentage"] ?? d["cropScaleIncreasePercentage"] ?? base["scaleIncreasePercentage"];
             return inc != null ? `+ ${fmtPct0(inc)}` : "Crop size boosted";
           }
           case "ProduceMutationBoost":
           case "ProduceMutationBoostII":
+          case "ProduceMutationBoostIII":
+          case "SnowyCropMutationBoost":
+          case "DawnBoost":
+          case "AmberMoonBoost":
           case "PetMutationBoost":
-          case "PetMutationBoostII": {
+          case "PetMutationBoostII":
+          case "PetMutationBoostIII": {
             const inc = percentOr(d["mutationChanceIncreasePercentage"], base["mutationChanceIncreasePercentage"]);
             return inc != null ? `+ ${fmtPct0(inc)} mutation chance` : "Mutation chance up";
           }
@@ -22518,24 +22536,30 @@
           }
           case "PlantGrowthBoost":
           case "PlantGrowthBoostII":
-          case "SnowyPlantGrowthBoost": {
+          case "PlantGrowthBoostIII":
+          case "SnowyPlantGrowthBoost":
+          case "DawnPlantGrowthBoost":
+          case "AmberPlantGrowthBoost": {
             const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
             return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
           }
           case "PetXpBoost":
           case "SnowyPetXpBoost":
-          case "PetXpBoostII": {
+          case "PetXpBoostII":
+          case "PetXpBoostIII": {
             const xp = d["bonusXp"] ?? base["bonusXp"];
             return `+ ${fmtInt(xp)} XP`;
           }
           case "PetAgeBoost":
-          case "PetAgeBoostII": {
+          case "PetAgeBoostII":
+          case "PetAgeBoostIII": {
             const xp = d["bonusXp"] ?? base["bonusXp"];
             const who = label2(d["petName"], "pet");
             return `+ ${fmtInt(xp)} XP (${who})`;
           }
           case "PetHatchSizeBoost":
-          case "PetHatchSizeBoostII": {
+          case "PetHatchSizeBoostII":
+          case "PetHatchSizeBoostIII": {
             const who = label2(d["petName"], "pet");
             if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
             const pct = base["maxStrengthIncreasePercentage"];
@@ -22543,6 +22567,7 @@
           }
           case "HungerBoost":
           case "HungerBoostII":
+          case "HungerBoostIII":
           case "SnowyHungerBoost": {
             const pct = base["hungerDepletionRateDecreasePercentage"];
             return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";

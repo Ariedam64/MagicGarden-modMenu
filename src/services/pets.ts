@@ -1287,6 +1287,7 @@ export const PetsService = {
 
       case "ProduceScaleBoost":
       case "ProduceScaleBoostII":
+      case "ProduceScaleBoostIII":
       case "SnowyCropSizeBoost": {
         const inc =
           data["scaleIncreasePercentage"] ??
@@ -1311,7 +1312,10 @@ export const PetsService = {
 
       case "PlantGrowthBoost":
       case "PlantGrowthBoostII":
-      case "SnowyPlantGrowthBoost": {
+      case "PlantGrowthBoostIII":
+      case "SnowyPlantGrowthBoost":
+      case "DawnPlantGrowthBoost":
+      case "AmberPlantGrowthBoost": {
         const minutes =
           data["minutesReduced"] ??
           data["reductionMinutes"] ??
@@ -1323,25 +1327,29 @@ export const PetsService = {
 
       case "PetXpBoost":
       case "SnowyPetXpBoost":
-      case "PetXpBoostII": {
+      case "PetXpBoostII":
+      case "PetXpBoostIII": {
         const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
         return num(xp);
       }
 
       case "PetAgeBoost":
-      case "PetAgeBoostII": {
+      case "PetAgeBoostII":
+      case "PetAgeBoostIII": {
         const xp = data["bonusXp"] ?? base["bonusXp"] ?? 0;
         return num(xp);
       }
 
       case "PetHatchSizeBoost":
-      case "PetHatchSizeBoostII": {
+      case "PetHatchSizeBoostII":
+      case "PetHatchSizeBoostIII": {
         const strength = data["strengthIncrease"] ?? 0;
         return num(strength);
       }
 
       case "HungerRestore":
       case "HungerRestoreII":
+      case "HungerRestoreIII":
       case "SnowyHungerRestore": {
         const amount =
           data["hungerRestoreAmount"] ??
@@ -1353,6 +1361,7 @@ export const PetsService = {
 
       case "HungerBoost":
       case "HungerBoostII":
+      case "HungerBoostIII":
       case "SnowyHungerBoost": {
         const pct =
           data["hungerDepletionRateDecreasePercentage"] ??
@@ -1605,6 +1614,7 @@ export const PetsService = {
 
         case "HungerRestore":
         case "HungerRestoreII":
+        case "HungerRestoreIII":
         case "SnowyHungerRestore": {
           const whoRaw = d["petName"];
           const who = label(whoRaw === "itself" ? "itself" : whoRaw, "pet");
@@ -1663,7 +1673,9 @@ export const PetsService = {
           return hasFrozen ? `${crop}: Chilled + Frozen` : `${crop}: Wet`;
         }
         case "SnowGranter":
-        case "FrostGranter": {
+        case "FrostGranter":
+        case "DawnlitGranter":
+        case "AmberlitGranter": {
           const cropFromSlot = cropNameFromGrowSlot(d["growSlot"]);
           const crop = label(d["cropName"], cropFromSlot ?? "crop");
           return `${crop}`;
@@ -1671,6 +1683,7 @@ export const PetsService = {
 
         case "ProduceScaleBoost":
         case "ProduceScaleBoostII":
+        case "ProduceScaleBoostIII":
         case "SnowyCropSizeBoost": {
           const inc =
             d["scaleIncreasePercentage"] ??
@@ -1681,8 +1694,13 @@ export const PetsService = {
 
         case "ProduceMutationBoost":
         case "ProduceMutationBoostII":
+        case "ProduceMutationBoostIII":
+        case "SnowyCropMutationBoost":
+        case "DawnBoost":
+        case "AmberMoonBoost":
         case "PetMutationBoost":
-        case "PetMutationBoostII": {
+        case "PetMutationBoostII":
+        case "PetMutationBoostIII": {
           const inc = percentOr(d["mutationChanceIncreasePercentage"], base["mutationChanceIncreasePercentage"]);
           return inc != null ? `+ ${fmtPct0(inc)} mutation chance` : "Mutation chance up";
         }
@@ -1699,25 +1717,31 @@ export const PetsService = {
         }
         case "PlantGrowthBoost":
         case "PlantGrowthBoostII":
-        case "SnowyPlantGrowthBoost": {
+        case "PlantGrowthBoostIII":
+        case "SnowyPlantGrowthBoost":
+        case "DawnPlantGrowthBoost":
+        case "AmberPlantGrowthBoost": {
           const mins = d["minutesReduced"] ?? d["reductionMinutes"] ?? base["plantGrowthReductionMinutes"];
           return mins != null ? `- ${fmtMin1(mins)}` : "Plant growth reduced";
         }
 
         case "PetXpBoost":
         case "SnowyPetXpBoost":
-        case "PetXpBoostII": {
+        case "PetXpBoostII":
+        case "PetXpBoostIII": {
           const xp = d["bonusXp"] ?? base["bonusXp"];
           return `+ ${fmtInt(xp)} XP`;
         }
         case "PetAgeBoost":
-        case "PetAgeBoostII": {
+        case "PetAgeBoostII":
+        case "PetAgeBoostIII": {
           const xp = d["bonusXp"] ?? base["bonusXp"];
           const who = label(d["petName"], "pet");
           return `+ ${fmtInt(xp)} XP (${who})`;
         }
         case "PetHatchSizeBoost":
-        case "PetHatchSizeBoostII": {
+        case "PetHatchSizeBoostII":
+        case "PetHatchSizeBoostIII": {
           const who = label(d["petName"], "pet");
           if (d["strengthIncrease"] != null) return `+${fmtInt(d["strengthIncrease"])} strength (${who})`;
           const pct = base["maxStrengthIncreasePercentage"];
@@ -1726,6 +1750,7 @@ export const PetsService = {
 
         case "HungerBoost":
         case "HungerBoostII":
+        case "HungerBoostIII":
         case "SnowyHungerBoost": {
           const pct = base["hungerDepletionRateDecreasePercentage"];
           return pct != null ? `- ${fmtPct0(pct)} hunger drain` : "Hunger reduced";
