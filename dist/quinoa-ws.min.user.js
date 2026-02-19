@@ -26889,6 +26889,10 @@
       }
       return this.onShopsChange(cb);
     },
+    async getPurchases() {
+      await _ensureStarted();
+      return _computePurchasesFromInventory();
+    },
     onPurchasesChange(cb) {
       _purchasesSubs.add(cb);
       return () => {
