@@ -1437,6 +1437,11 @@ export const NotifierService = {
     return this.onShopsChange(cb);
   },
 
+  async getPurchases(): Promise<PurchasesSnapshot> {
+    await _ensureStarted();
+    return _computePurchasesFromInventory();
+  },
+
   onPurchasesChange(cb: (p: PurchasesSnapshot) => void): () => void {
     _purchasesSubs.add(cb);
     return () => {
