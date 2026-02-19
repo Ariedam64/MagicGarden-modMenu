@@ -22,6 +22,7 @@ import {
 } from "../../services/lockerRestrictions";
 import { Atoms } from "../../store/atoms";
 import { attachSpriteIcon, attachWeatherSpriteIcon } from "../spriteIconCache";
+import { rarityBadge } from "./notifier";
 
 // Reuse tag definitions from garden menu for consistency
 type VisualTag = "Gold" | "Rainbow";
@@ -1896,7 +1897,169 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
   const sellMaxStrRow = createRuleRow("Protect pets with Max STR");
   sellMaxStrRow.controls.append(sellMaxStrToggle, sellMaxStrWrap);
 
-  sellPetsGrid.append(sellEnableRow.row, sellGoldRow.row, sellRainbowRow.row, sellMaxStrRow.row);
+  /* Rarity protection row */
+  const SELL_ALL_RARITIES = ["Common", "Uncommon", "Rare", "Legendary", "Mythical", "Divine", "Celestial"];
+
+  const rarityRow = applyStyles(document.createElement("div"), {
+    padding: "8px 10px",
+    border: "1px solid rgba(255,255,255,0.10)",
+    borderRadius: "10px",
+    background: "rgba(255,255,255,0.02)",
+    display: "grid",
+    gap: "8px",
+  });
+
+  const rarityRowHeader = applyStyles(document.createElement("div"), {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  });
+
+  const rarityRowTitle = applyStyles(document.createElement("div"), {
+    fontWeight: "600",
+    fontSize: "13px",
+  });
+  rarityRowTitle.textContent = "Protect by rarity";
+
+  const rarityAddBtn = applyStyles(document.createElement("button"), {
+    border: "1px solid rgba(255,255,255,0.25)",
+    borderRadius: "6px",
+    background: "rgba(255,255,255,0.08)",
+    color: "#fff",
+    fontSize: "16px",
+    lineHeight: "1",
+    padding: "2px 8px",
+    cursor: "pointer",
+    fontWeight: "700",
+  });
+  rarityAddBtn.type = "button";
+  rarityAddBtn.textContent = "+";
+
+  rarityRowHeader.append(rarityRowTitle, rarityAddBtn);
+
+  const raritySelectedArea = applyStyles(document.createElement("div"), {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px",
+    alignItems: "center",
+  });
+
+  const rarityPickerArea = applyStyles(document.createElement("div"), {
+    display: "none",
+    flexWrap: "wrap",
+    gap: "6px",
+    alignItems: "center",
+    padding: "8px",
+    background: "rgba(0,0,0,0.25)",
+    borderRadius: "8px",
+  });
+
+  rarityRow.append(rarityRowHeader, raritySelectedArea, rarityPickerArea);
+
+  let rarityPickerOpen = false;
+
+  const refreshRarityRow = () => {
+    const rules = lockerRestrictionsService.getSellAllPetsRules();
+    const selected = Array.isArray(rules.protectedRarities) ? rules.protectedRarities : [];
+    const enabled = rules.enabled !== false;
+    const selectedSet = new Set(selected);
+
+    raritySelectedArea.innerHTML = "";
+    if (selected.length === 0) {
+      const none = applyStyles(document.createElement("span"), {
+        fontSize: "12px",
+        opacity: "0.5",
+      });
+      none.textContent = "No rarities protected";
+      raritySelectedArea.appendChild(none);
+    } else {
+      for (const r of selected) {
+        const wrap = applyStyles(document.createElement("div"), {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "3px",
+        });
+        const badge = rarityBadge(r);
+        badge.style.margin = "0";
+
+        const xBtn = applyStyles(document.createElement("button"), {
+          background: "none",
+          border: "none",
+          color: "rgba(255,255,255,0.6)",
+          fontSize: "14px",
+          cursor: "pointer",
+          padding: "0 2px",
+          lineHeight: "1",
+        });
+        xBtn.type = "button";
+        xBtn.textContent = "×";
+        xBtn.addEventListener("click", () => {
+          const current = lockerRestrictionsService.getSellAllPetsRules().protectedRarities ?? [];
+          lockerRestrictionsService.setSellAllPetsRules({
+            protectedRarities: current.filter(x => x !== r),
+          });
+          refreshRarityRow();
+        });
+
+        wrap.append(badge, xBtn);
+        raritySelectedArea.appendChild(wrap);
+      }
+    }
+
+    rarityPickerArea.innerHTML = "";
+    const remaining = SELL_ALL_RARITIES.filter(r => !selectedSet.has(r));
+    if (rarityPickerOpen && remaining.length > 0) {
+      rarityPickerArea.style.display = "flex";
+      for (const r of remaining) {
+        const badge = rarityBadge(r);
+        badge.style.margin = "0";
+        badge.style.cursor = "pointer";
+        badge.addEventListener("click", () => {
+          const current = lockerRestrictionsService.getSellAllPetsRules().protectedRarities ?? [];
+          lockerRestrictionsService.setSellAllPetsRules({
+            protectedRarities: [...current, r],
+          });
+          refreshRarityRow();
+        });
+        rarityPickerArea.appendChild(badge);
+      }
+    } else {
+      rarityPickerArea.style.display = "none";
+      if (remaining.length === 0) rarityPickerOpen = false;
+    }
+
+    rarityAddBtn.textContent = rarityPickerOpen ? "×" : "+";
+
+    rarityRow.style.opacity = enabled ? "1" : "0.6";
+    rarityRow.style.pointerEvents = enabled ? "auto" : "none";
+  };
+
+  let rarityPickerOutsideHandler: ((ev: MouseEvent) => void) | null = null;
+
+  rarityAddBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    rarityPickerOpen = !rarityPickerOpen;
+    refreshRarityRow();
+
+    if (rarityPickerOpen) {
+      rarityPickerOutsideHandler = (ev: MouseEvent) => {
+        if (!rarityRow.contains(ev.target as Node)) {
+          rarityPickerOpen = false;
+          refreshRarityRow();
+          document.removeEventListener("click", rarityPickerOutsideHandler!, true);
+          rarityPickerOutsideHandler = null;
+        }
+      };
+      document.addEventListener("click", rarityPickerOutsideHandler, true);
+    } else if (rarityPickerOutsideHandler) {
+      document.removeEventListener("click", rarityPickerOutsideHandler, true);
+      rarityPickerOutsideHandler = null;
+    }
+  });
+
+  refreshRarityRow();
+
+  sellPetsGrid.append(sellEnableRow.row, sellGoldRow.row, sellRainbowRow.row, sellMaxStrRow.row, rarityRow);
   sellPetsCard.body.append(sellPetsIntro, sellPetsGrid);
   layout.append(sellPetsCard.root);
 
@@ -2036,6 +2199,7 @@ function createRestrictionsTabRenderer(ui: Menu): LockerTabRenderer {
     setRuleRowDisabled(sellGoldRow.row, !enabled);
     setRuleRowDisabled(sellRainbowRow.row, !enabled);
     setRuleRowDisabled(sellMaxStrRow.row, !enabled);
+    refreshRarityRow();
   };
 
   const setStatusTone = (tone: "success" | "warn" | "info") => {

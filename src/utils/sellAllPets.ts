@@ -8,6 +8,7 @@ import { computeInventoryItemValue } from "./inventoryValue";
 import { getPetInfo } from "./petCalcul";
 import { attachSpriteIcon } from "../ui/spriteIconCache";
 import { lockerRestrictionsService } from "../services/lockerRestrictions";
+import { petCatalog } from "../data/hardcoded-data.clean.js";
 
 /* =============================================================================
  * Inject a styled "Sell all Pets" button next to a detected "Sell X" button
@@ -390,7 +391,11 @@ async function confirmHighValuePetSale(
     : 0;
   const checkMaxStr = !!rules.protectMaxStr;
 
-  if (mutationProtect.size === 0 && !checkMaxStr) return true;
+  const protectedRarities = new Set<string>(
+    Array.isArray(rules.protectedRarities) ? rules.protectedRarities : [],
+  );
+
+  if (mutationProtect.size === 0 && !checkMaxStr && protectedRarities.size === 0) return true;
 
   const flagged: FlaggedPet[] = [];
   for (const pet of pets) {
@@ -408,7 +413,14 @@ async function confirmHighValuePetSale(
       ? maxStrength >= maxStrThreshold
       : false;
 
-    if (!hasMutation && !strongEnough) continue;
+    const petSpecies = String(pet.petSpecies || "").trim();
+    const petEntry = petSpecies
+      ? (petCatalog as Record<string, { rarity?: string } | undefined>)[petSpecies]
+      : null;
+    const petRarity = petEntry?.rarity ?? "";
+    const hasProtectedRarity = protectedRarities.size > 0 && petRarity !== "" && protectedRarities.has(petRarity);
+
+    if (!hasMutation && !strongEnough && !hasProtectedRarity) continue;
 
     const reasons: string[] = [];
     if (hasMutation) {
@@ -418,6 +430,9 @@ async function confirmHighValuePetSale(
     }
     if (strongEnough) {
       reasons.push(`Max STR: ${Math.floor(maxStrength ?? 0)}`);
+    }
+    if (hasProtectedRarity) {
+      reasons.push(`Rarity: ${petRarity}`);
     }
 
     flagged.push({

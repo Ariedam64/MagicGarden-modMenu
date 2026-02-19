@@ -20,6 +20,7 @@ export type SellAllPetsRules = {
   protectRainbow: boolean;
   protectMaxStr: boolean;
   maxStrThreshold: number;
+  protectedRarities: string[];
 };
 
 const clampPercent = (value: number): number => Math.max(0, Math.min(50, Math.round(value)));
@@ -27,12 +28,15 @@ const clampPercent = (value: number): number => Math.max(0, Math.min(50, Math.ro
 const roundToStep = (value: number, step: number): number =>
   Math.round(value / step) * step;
 
+const VALID_RARITIES = new Set(["Common", "Uncommon", "Rare", "Legendary", "Mythical", "Divine", "Celestial"]);
+
 const DEFAULT_SELL_ALL_PETS_RULES: SellAllPetsRules = {
   enabled: true,
   protectGold: true,
   protectRainbow: true,
   protectMaxStr: true,
   maxStrThreshold: 95,
+  protectedRarities: [],
 };
 
 const DEFAULT_STATE: LockerRestrictionsState = {
@@ -71,12 +75,17 @@ const sanitizeSellAllPetsRules = (raw: any): SellAllPetsRules => {
   const maxStrThreshold = Number.isFinite(maxStrRaw)
     ? Math.max(0, Math.min(100, Math.round(maxStrRaw)))
     : DEFAULT_SELL_ALL_PETS_RULES.maxStrThreshold;
+  const rawRarities = Array.isArray(raw.protectedRarities) ? raw.protectedRarities : [];
+  const protectedRarities = rawRarities.filter(
+    (r: unknown): r is string => typeof r === "string" && VALID_RARITIES.has(r),
+  );
   return {
     enabled: raw.enabled !== false,
     protectGold: raw.protectGold !== false,
     protectRainbow: raw.protectRainbow !== false,
     protectMaxStr: raw.protectMaxStr !== false,
     maxStrThreshold,
+    protectedRarities,
   };
 };
 
@@ -172,7 +181,9 @@ class LockerRestrictionsService {
       prev?.protectGold === sanitized.protectGold &&
       prev?.protectRainbow === sanitized.protectRainbow &&
       prev?.protectMaxStr === sanitized.protectMaxStr &&
-      prev?.maxStrThreshold === sanitized.maxStrThreshold;
+      prev?.maxStrThreshold === sanitized.maxStrThreshold &&
+      JSON.stringify((prev?.protectedRarities ?? []).slice().sort()) ===
+        JSON.stringify(sanitized.protectedRarities.slice().sort());
     if (same) return;
     this.state = { ...this.state, sellAllPets: sanitized };
     this.save();
