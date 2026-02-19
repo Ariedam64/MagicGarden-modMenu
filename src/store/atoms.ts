@@ -128,7 +128,6 @@ export const isMyInventoryAtMaxLength = makeAtom<any>("isMyInventoryAtMaxLengthA
 export const myNumPetHutchItems = makeAtom<any>("myNumPetHutchItemsAtom")
 
 export const shops = makeAtom<any>("shopsAtom");
-export const myShopPurchases = makeAtom<any>("myShopPurchasesAtom");
 
 export const numPlayers = makeAtom<number>("numPlayersAtom");
 export const totalCropSellPrice = makeAtom<number>("totalCropSellPriceAtom");
@@ -374,7 +373,6 @@ export const Atoms = {
   },
   shop: {
     shops,
-    myShopPurchases,
     totalCropSellPrice,
     seedShop,
     toolShop,

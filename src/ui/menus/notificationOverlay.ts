@@ -295,6 +295,7 @@ class OverlayBarebone {
     this.recompute();
   }
 
+
   notifyStateUpdated() {
     void this.recompute();
   }
@@ -827,6 +828,12 @@ class OverlayBarebone {
     el.addEventListener("touchmove", stop, { passive: true, capture: true });
   }
 }
+
+/* ===== Helpers ===== */
+export const readPurchasedCount = async (id: string): Promise<number> => {
+  const snap = NotifierService.getLatestPurchasesSnapshot();
+  return purchasedCountForId(id, snap);
+};
 
 /* ===== Mount + SUBS ===== */
 export async function renderOverlay() {

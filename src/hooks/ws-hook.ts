@@ -19,6 +19,15 @@ import { detectEnvironment } from "../utils/api";
 import { MiscService } from "../services/misc";
 import { EditorService } from "../services/editor";
 
+export const RAW_WS_JSON_EVENT = "qws:ws-json";
+
+export function emitParsedWSJson(message: any): void {
+  try { pageWindow.dispatchEvent(new CustomEvent(RAW_WS_JSON_EVENT, { detail: message })); } catch {}
+  if (pageWindow !== window) {
+    try { window.dispatchEvent(new CustomEvent(RAW_WS_JSON_EVENT, { detail: message })); } catch {}
+  }
+}
+
 type WsCloseListener = (ev: CloseEvent, ws: WebSocket) => void;
 
 const wsCloseListeners: WsCloseListener[] = [];
@@ -248,6 +257,7 @@ export function installPageWebSocketHook() {
     ws.addEventListener("message", async (ev: MessageEvent) => {
       const j = await parseWSData(ev.data);
       if (!j) return;
+      emitParsedWSJson(j);
       if (
         !hasSharedQuinoaWS() &&
         (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)

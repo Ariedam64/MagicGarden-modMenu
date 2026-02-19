@@ -1262,7 +1262,7 @@
     const arr = await favoriteIds.get();
     return new Set(Array.isArray(arr) ? arr : []);
   }
-  var position, state, map, player, action, myData, myInventory, gardensWithBackfills, myCropInventory, mySeedInventory, myToolInventory, myEggInventory, myDecorInventory, mySeedSiloItems, myDecorShedItems, myPetInfos, myPetSlotInfos, totalPetSellPrice, expandedPetSlotId, myCropItemsToSell, myPetHutchPetItems, isMyInventoryAtMaxLength, myNumPetHutchItems, shops, myShopPurchases, numPlayers, totalCropSellPrice, myValidatedSelectedItemIndex, setSelectedIndexToEnd, mySelectedItemName, myPossiblyNoLongerValidSelectedItemIndex, myCurrentGardenObject, myCurrentSortedGrowSlotIndices, myCurrentGrowSlotIndex, myOwnCurrentGardenObject, isCurrentGrowSlotMature, myOwnCurrentDirtTileIndex, mySelectedItemRotation, weather, activeModal, avatarTriggerAnimationAtom, friendBonusMultiplier, garden, gardenTileObjects, favoriteIds, playerId, playerDatabaseUserId, myOwnCurrentGardenObjectType, stateChild, stateChildData, stateShops, stateUserSlots, statePlayers, myActivityLog, seedShop, toolShop, eggShop, decorShop, GardenSlotsSig, PetsByIdSig, PetsByIdStableSig, FavoriteIdsSig, Atoms;
+  var position, state, map, player, action, myData, myInventory, gardensWithBackfills, myCropInventory, mySeedInventory, myToolInventory, myEggInventory, myDecorInventory, mySeedSiloItems, myDecorShedItems, myPetInfos, myPetSlotInfos, totalPetSellPrice, expandedPetSlotId, myCropItemsToSell, myPetHutchPetItems, isMyInventoryAtMaxLength, myNumPetHutchItems, shops, numPlayers, totalCropSellPrice, myValidatedSelectedItemIndex, setSelectedIndexToEnd, mySelectedItemName, myPossiblyNoLongerValidSelectedItemIndex, myCurrentGardenObject, myCurrentSortedGrowSlotIndices, myCurrentGrowSlotIndex, myOwnCurrentGardenObject, isCurrentGrowSlotMature, myOwnCurrentDirtTileIndex, mySelectedItemRotation, weather, activeModal, avatarTriggerAnimationAtom, friendBonusMultiplier, garden, gardenTileObjects, favoriteIds, playerId, playerDatabaseUserId, myOwnCurrentGardenObjectType, stateChild, stateChildData, stateShops, stateUserSlots, statePlayers, myActivityLog, seedShop, toolShop, eggShop, decorShop, GardenSlotsSig, PetsByIdSig, PetsByIdStableSig, FavoriteIdsSig, Atoms;
   var init_atoms = __esm({
     "src/store/atoms.ts"() {
       init_hub();
@@ -1290,7 +1290,6 @@
       isMyInventoryAtMaxLength = makeAtom("isMyInventoryAtMaxLengthAtom");
       myNumPetHutchItems = makeAtom("myNumPetHutchItemsAtom");
       shops = makeAtom("shopsAtom");
-      myShopPurchases = makeAtom("myShopPurchasesAtom");
       numPlayers = makeAtom("numPlayersAtom");
       totalCropSellPrice = makeAtom("totalCropSellPriceAtom");
       myValidatedSelectedItemIndex = makeAtom("myValidatedSelectedItemIndexAtom");
@@ -1397,7 +1396,6 @@
         },
         shop: {
           shops,
-          myShopPurchases,
           totalCropSellPrice,
           seedShop,
           toolShop,
@@ -20094,6 +20092,19 @@
   }
 
   // src/hooks/ws-hook.ts
+  var RAW_WS_JSON_EVENT = "qws:ws-json";
+  function emitParsedWSJson(message) {
+    try {
+      pageWindow.dispatchEvent(new CustomEvent(RAW_WS_JSON_EVENT, { detail: message }));
+    } catch {
+    }
+    if (pageWindow !== window) {
+      try {
+        window.dispatchEvent(new CustomEvent(RAW_WS_JSON_EVENT, { detail: message }));
+      } catch {
+      }
+    }
+  }
   var wsCloseListeners = [];
   var versionReloadScheduled = false;
   var autoRecoTimer = null;
@@ -20294,6 +20305,7 @@
       ws.addEventListener("message", async (ev) => {
         const j = await parseWSData(ev.data);
         if (!j) return;
+        emitParsedWSJson(j);
         if (!hasSharedQuinoaWS() && (j.type === "Welcome" || j.type === "Config" || j.fullState || j.config)) {
           setQWS(ws, "message:" + (j.type || "state"));
         }
@@ -25803,6 +25815,7 @@
 
   // src/services/notifier.ts
   init_atoms();
+  var RAW_WS_JSON_EVENT2 = "qws:ws-json";
   var PATH_NOTIFIER_PREFS = "notifier.prefs";
   var PATH_NOTIFIER_RULES = "notifier.rules";
   var PATH_NOTIFIER_WEATHER = "notifier.weatherPrefs";
@@ -26366,162 +26379,123 @@
   var _lastSig = "";
   var _state = null;
   var _unsubShops = null;
-  var _unsubPurchases = null;
+  var _removeRawWsPurchasesListener = null;
+  var _lastPurchasesSig = "";
+  var _lastPurchasesSnapshot = null;
   var _subs = /* @__PURE__ */ new Set();
   var _toolInv = /* @__PURE__ */ new Map();
   var _unsubToolInv = null;
-  var _invRawMain = {
-    seed: /* @__PURE__ */ new Map(),
-    egg: /* @__PURE__ */ new Map(),
-    tool: /* @__PURE__ */ new Map(),
-    decor: /* @__PURE__ */ new Map()
-  };
-  var _invRawStorage = {
-    seed: /* @__PURE__ */ new Map(),
-    decor: /* @__PURE__ */ new Map()
-  };
-  var _invCurrent = {
-    seed: /* @__PURE__ */ new Map(),
-    egg: /* @__PURE__ */ new Map(),
-    tool: /* @__PURE__ */ new Map(),
-    decor: /* @__PURE__ */ new Map()
-  };
-  var _purchaseAccumulator = {
-    seed: /* @__PURE__ */ new Map(),
-    egg: /* @__PURE__ */ new Map(),
-    tool: /* @__PURE__ */ new Map(),
-    decor: /* @__PURE__ */ new Map()
-  };
-  var _lastMergedInv = {
-    seed: /* @__PURE__ */ new Map(),
-    egg: /* @__PURE__ */ new Map(),
-    tool: /* @__PURE__ */ new Map(),
-    decor: /* @__PURE__ */ new Map()
-  };
-  var _unsubSeedInv = null;
-  var _unsubEggInv = null;
-  var _unsubDecorInv = null;
-  var _unsubSeedSilo = null;
-  var _unsubDecorShed = null;
-  var _lastShopRestock = { seed: 0, egg: 0, tool: 0, decor: 0 };
-  var _invKeyExtractors = {
-    seed: (item) => typeof item?.species === "string" ? item.species.trim() : "",
-    tool: (item) => typeof item?.toolId === "string" ? item.toolId.trim() : "",
-    egg: (item) => {
-      const id = item?.eggId ?? item?.toolId;
-      return typeof id === "string" ? id.trim() : "";
-    },
-    decor: (item) => typeof item?.decorId === "string" ? item.decorId.trim() : ""
-  };
-  function _buildInvMap(raw, getKey) {
-    const map2 = /* @__PURE__ */ new Map();
-    const list = Array.isArray(raw) ? raw : [];
-    for (const item of list) {
-      const key2 = getKey(item);
-      if (!key2) continue;
-      const qty = Number(item?.quantity);
-      const safe = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
-      if (safe <= 0) continue;
-      map2.set(key2, (map2.get(key2) ?? 0) + safe);
+  function _coercePurchaseCount(value) {
+    if (typeof value === "number") return Math.max(0, Math.floor(value));
+    if (typeof value === "string") {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
     }
-    return map2;
+    return 0;
   }
-  function _mergeInvMaps(a, b) {
-    const merged = new Map(a);
-    for (const [key2, qty] of b) {
-      merged.set(key2, (merged.get(key2) ?? 0) + qty);
+  function _readPurchaseValueForSig(value) {
+    const direct = _coercePurchaseCount(value);
+    if (direct > 0) return direct;
+    if (!value || typeof value !== "object") return 0;
+    const obj = value;
+    const keys = ["count", "quantity", "qty", "purchased", "purchases", "amount", "total"];
+    for (const key2 of keys) {
+      const parsed = _coercePurchaseCount(obj[key2]);
+      if (parsed > 0) return parsed;
     }
-    return merged;
+    return 0;
   }
-  function _recomputeInvCurrent() {
-    _invCurrent.seed = _mergeInvMaps(_invRawMain.seed, _invRawStorage.seed);
-    _invCurrent.egg = _invRawMain.egg;
-    _invCurrent.tool = _invRawMain.tool;
-    _invCurrent.decor = _mergeInvMaps(_invRawMain.decor, _invRawStorage.decor);
+  function _sectionPurchasesSig(section) {
+    const map2 = section?.purchases ?? {};
+    const entries = Object.entries(map2).map(([id, value]) => [String(id), _readPurchaseValueForSig(value)]).sort((a, b) => a[0].localeCompare(b[0])).map(([id, count]) => `${id}:${count}`);
+    return `${Number(section?.createdAt) || 0}|${entries.join(",")}`;
   }
-  function _computePurchasesFromInventory() {
-    const compute = (category) => {
-      const purchases = {};
-      for (const [key2, qty] of _purchaseAccumulator[category]) {
-        if (qty > 0) purchases[key2] = qty;
-      }
-      return { createdAt: Date.now(), purchases };
-    };
-    return {
-      seed: compute("seed"),
-      egg: compute("egg"),
-      tool: compute("tool"),
-      decor: compute("decor")
-    };
+  function _purchasesSnapshotSig(snap) {
+    return [
+      _sectionPurchasesSig(snap.seed),
+      _sectionPurchasesSig(snap.egg),
+      _sectionPurchasesSig(snap.tool),
+      _sectionPurchasesSig(snap.decor)
+    ].join("||");
   }
-  function _resetPurchaseTracking() {
-    for (const cat of ["seed", "egg", "tool", "decor"]) {
-      _purchaseAccumulator[cat] = /* @__PURE__ */ new Map();
-      _lastMergedInv[cat] = new Map(_invCurrent[cat]);
+  function _isLikelyPurchaseSection(section) {
+    if (!section || typeof section !== "object") return false;
+    if (section.purchases != null || section.purchaseCounts != null || section.counts != null || section.bought != null || section.purchased != null) {
+      return true;
     }
+    return Array.isArray(section.purchaseList) || Array.isArray(section.purchasesList) || Array.isArray(section.items) || Array.isArray(section.entries) || Array.isArray(section.list);
   }
-  function _accumulateIncrease(category) {
-    const current = _invCurrent[category];
-    const last = _lastMergedInv[category];
-    for (const [key2, qty] of current) {
-      const prev = last.get(key2) ?? 0;
-      if (qty > prev) {
-        const delta = qty - prev;
-        _purchaseAccumulator[category].set(
-          key2,
-          (_purchaseAccumulator[category].get(key2) ?? 0) + delta
-        );
+  function _looksLikeShopPurchases(value) {
+    if (!value || typeof value !== "object") return false;
+    const sections = ["seed", "egg", "tool", "decor"];
+    let found = 0;
+    for (const key2 of sections) {
+      if (_isLikelyPurchaseSection(value[key2])) found++;
+    }
+    return found > 0;
+  }
+  function _extractShopPurchasesFromWSMessage(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const directCandidates = [
+      raw?.shopPurchases,
+      raw?.myData?.shopPurchases,
+      raw?.data?.shopPurchases,
+      raw?.data?.myData?.shopPurchases,
+      raw?.fullState?.data?.shopPurchases,
+      raw?.fullState?.data?.myData?.shopPurchases,
+      raw?.state?.child?.data?.shopPurchases,
+      raw?.state?.child?.data?.myData?.shopPurchases,
+      raw?.payload?.shopPurchases,
+      raw?.payload?.myData?.shopPurchases,
+      raw?.next?.shopPurchases,
+      raw?.next?.myData?.shopPurchases,
+      raw?.patch?.shopPurchases,
+      raw?.patch?.myData?.shopPurchases,
+      raw?.delta?.shopPurchases,
+      raw?.delta?.myData?.shopPurchases
+    ];
+    for (const candidate of directCandidates) {
+      if (_looksLikeShopPurchases(candidate)) return candidate;
+    }
+    const seen = /* @__PURE__ */ new Set();
+    const queue = [{ node: raw, depth: 0 }];
+    let scanned = 0;
+    while (queue.length) {
+      const current = queue.shift();
+      if (!current) continue;
+      const { node, depth } = current;
+      if (!node || typeof node !== "object" || seen.has(node)) continue;
+      seen.add(node);
+      scanned++;
+      if (scanned > 300) break;
+      const nested = node.shopPurchases;
+      if (_looksLikeShopPurchases(nested)) return nested;
+      if (depth >= 6) continue;
+      for (const key2 of ["payload", "data", "fullState", "state", "child", "myData", "patch", "delta", "next", "update"]) {
+        const child = node[key2];
+        if (child && typeof child === "object" && !seen.has(child)) {
+          queue.push({ node: child, depth: depth + 1 });
+        }
       }
     }
-    _lastMergedInv[category] = new Map(current);
+    return null;
   }
-  function _onInventoryChange(category, raw) {
-    _invRawMain[category] = _buildInvMap(raw, _invKeyExtractors[category]);
-    _recomputeInvCurrent();
-    _accumulateIncrease(category);
-    _notifyPurchases(_computePurchasesFromInventory());
-  }
-  function _onStorageChange(kind, raw) {
-    _invRawStorage[kind] = _buildInvMap(raw, _invKeyExtractors[kind]);
-    _recomputeInvCurrent();
-    _accumulateIncrease(kind);
-    _notifyPurchases(_computePurchasesFromInventory());
-  }
-  async function _snapshotAllInventories() {
-    const snapMain = async (category, atom) => {
+  function _subscribeRawWSPurchases() {
+    if (_removeRawWsPurchasesListener || typeof window === "undefined") return;
+    const handler = (evt) => {
+      const msg = evt?.detail;
+      const purchases = _extractShopPurchasesFromWSMessage(msg);
+      if (!purchases) return;
+      _notifyPurchases(purchases);
+    };
+    window.addEventListener(RAW_WS_JSON_EVENT2, handler);
+    _removeRawWsPurchasesListener = () => {
       try {
-        _invRawMain[category] = _buildInvMap(await atom.get(), _invKeyExtractors[category]);
+        window.removeEventListener(RAW_WS_JSON_EVENT2, handler);
       } catch {
       }
+      _removeRawWsPurchasesListener = null;
     };
-    const snapStorage = async (kind, atom) => {
-      try {
-        _invRawStorage[kind] = _buildInvMap(await atom.get(), _invKeyExtractors[kind]);
-      } catch {
-      }
-    };
-    await Promise.all([
-      snapMain("seed", Atoms.inventory.mySeedInventory),
-      snapMain("tool", Atoms.inventory.myToolInventory),
-      snapMain("egg", Atoms.inventory.myEggInventory),
-      snapMain("decor", Atoms.inventory.myDecorInventory),
-      snapStorage("seed", Atoms.inventory.mySeedSiloItems),
-      snapStorage("decor", Atoms.inventory.myDecorShedItems)
-    ]);
-    _recomputeInvCurrent();
-    _resetPurchaseTracking();
-  }
-  function _checkRestockAndResetBaselines(raw) {
-    const seconds = (sec) => Number(sec?.secondsUntilRestock) || 0;
-    const next = {
-      seed: seconds(raw?.seed),
-      egg: seconds(raw?.egg),
-      tool: seconds(raw?.tool),
-      decor: seconds(raw?.decor)
-    };
-    const restocked = next.seed > _lastShopRestock.seed && _lastShopRestock.seed > 0 || next.egg > _lastShopRestock.egg && _lastShopRestock.egg > 0 || next.tool > _lastShopRestock.tool && _lastShopRestock.tool > 0 || next.decor > _lastShopRestock.decor && _lastShopRestock.decor > 0;
-    _lastShopRestock = next;
-    if (restocked) _resetPurchaseTracking();
   }
   var TOOL_CAPS = {
     Shovel: 1,
@@ -26565,6 +26539,10 @@
   }
   function _notifyPurchases(raw) {
     const snap = _coercePurchases(raw);
+    const sig = _purchasesSnapshotSig(snap);
+    if (sig === _lastPurchasesSig) return;
+    _lastPurchasesSig = sig;
+    _lastPurchasesSnapshot = snap;
     _purchasesSubs.forEach((fn) => {
       try {
         fn(snap);
@@ -26685,19 +26663,15 @@
     _started = true;
     _loadPrefs();
     _ensureRulesLoaded();
+    _subscribeRawWSPurchases();
     try {
       const cur = await Atoms.shop.shops.get();
       _recomputeFromRaw(cur);
       _notifyShops(cur);
-      _checkRestockAndResetBaselines(cur);
     } catch (err) {
     }
     try {
       _unsubShops = await Atoms.shop.shops.onChange((next) => {
-        try {
-          _checkRestockAndResetBaselines(next);
-        } catch {
-        }
         try {
           _recomputeFromRaw(next);
         } catch {
@@ -26709,61 +26683,7 @@
       });
     } catch (err) {
     }
-    await _snapshotAllInventories();
-    try {
-      _notifyPurchases(_computePurchasesFromInventory());
-    } catch {
-    }
-    try {
-      _unsubSeedInv = await Atoms.inventory.mySeedInventory.onChange((next) => {
-        try {
-          _onInventoryChange("seed", next);
-        } catch {
-        }
-      });
-    } catch {
-      _unsubSeedInv = null;
-    }
-    try {
-      _unsubEggInv = await Atoms.inventory.myEggInventory.onChange((next) => {
-        try {
-          _onInventoryChange("egg", next);
-        } catch {
-        }
-      });
-    } catch {
-      _unsubEggInv = null;
-    }
-    try {
-      _unsubDecorInv = await Atoms.inventory.myDecorInventory.onChange((next) => {
-        try {
-          _onInventoryChange("decor", next);
-        } catch {
-        }
-      });
-    } catch {
-      _unsubDecorInv = null;
-    }
-    try {
-      _unsubSeedSilo = await Atoms.inventory.mySeedSiloItems.onChange((next) => {
-        try {
-          _onStorageChange("seed", next);
-        } catch {
-        }
-      });
-    } catch {
-      _unsubSeedSilo = null;
-    }
-    try {
-      _unsubDecorShed = await Atoms.inventory.myDecorShedItems.onChange((next) => {
-        try {
-          _onStorageChange("decor", next);
-        } catch {
-        }
-      });
-    } catch {
-      _unsubDecorShed = null;
-    }
+    _notifyPurchases(null);
     try {
       const invAtom = _resolveToolInvAtom();
       if (invAtom) {
@@ -26775,10 +26695,6 @@
           _unsubToolInv = await invAtom.onChange((next) => {
             try {
               _updateToolInv(next);
-            } catch {
-            }
-            try {
-              _onInventoryChange("tool", next);
             } catch {
             }
           });
@@ -26815,40 +26731,17 @@
     }
     _unsubShops = null;
     try {
-      _unsubPurchases?.();
+      _removeRawWsPurchasesListener?.();
     } catch {
     }
-    _unsubPurchases = null;
+    _removeRawWsPurchasesListener = null;
+    _lastPurchasesSig = "";
+    _lastPurchasesSnapshot = null;
     try {
       _unsubToolInv?.();
     } catch {
     }
     _unsubToolInv = null;
-    try {
-      _unsubSeedInv?.();
-    } catch {
-    }
-    _unsubSeedInv = null;
-    try {
-      _unsubEggInv?.();
-    } catch {
-    }
-    _unsubEggInv = null;
-    try {
-      _unsubDecorInv?.();
-    } catch {
-    }
-    _unsubDecorInv = null;
-    try {
-      _unsubSeedSilo?.();
-    } catch {
-    }
-    _unsubSeedSilo = null;
-    try {
-      _unsubDecorShed?.();
-    } catch {
-    }
-    _unsubDecorShed = null;
     try {
       _unsubWeather?.();
     } catch {
@@ -26909,9 +26802,8 @@
       }
       return this.onShopsChange(cb);
     },
-    async getPurchases() {
-      await _ensureStarted();
-      return _computePurchasesFromInventory();
+    getLatestPurchasesSnapshot() {
+      return _lastPurchasesSnapshot;
     },
     onPurchasesChange(cb) {
       _purchasesSubs.add(cb);
@@ -26922,7 +26814,7 @@
     async onPurchasesChangeNow(cb) {
       await _ensureStarted();
       try {
-        cb(_computePurchasesFromInventory());
+        cb(_lastPurchasesSnapshot ?? _coercePurchases(null));
       } catch {
       }
       return this.onPurchasesChange(cb);

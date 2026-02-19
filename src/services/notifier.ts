@@ -7,6 +7,9 @@
 
 
 import { Atoms } from "../store/atoms";
+
+const RAW_WS_JSON_EVENT = "qws:ws-json";
+
 import {
   plantCatalog,
   eggCatalog,
@@ -908,185 +911,158 @@ let _rowsById = new Map<string, NotifierRow>();
 let _lastSig = ""; // structural signature to avoid noisy notifies
 let _state: NotifierState | null = null;
 let _unsubShops: null | (() => void) = null;
-let _unsubPurchases: null | (() => void) = null;
+let _removeRawWsPurchasesListener: null | (() => void) = null;
+let _lastPurchasesSig = "";
+let _lastPurchasesSnapshot: PurchasesSnapshot | null = null;
 const _subs = new Set<(s: NotifierState) => void>();
 
 let _toolInv = new Map<string, number>();
 let _unsubToolInv: null | (() => void) = null;
 
-// ---------- inventory-based purchase detection ----------
-// Uses an accumulator approach: only accumulate inventory INCREASES as purchases.
-// Decreases (planting, selling, using items) do NOT reduce the purchase count.
-// Reset happens only on shop restock.
-// "merged" = main inventory + storage (seed silo / decor shed)
-type InvCategory = "seed" | "egg" | "tool" | "decor";
+// ---------- WS-based purchase detection ----------
+// shopPurchases data arrives via raw WebSocket messages.
+// We extract it from any WS message that contains it, deduplicate by signature,
+// and fan it out to subscribers.
 
-// Raw sources (before merge)
-const _invRawMain: Record<InvCategory, Map<string, number>> = {
-  seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
-};
-const _invRawStorage: { seed: Map<string, number>; decor: Map<string, number> } = {
-  seed: new Map(), decor: new Map(),
-};
-
-// Merged (main + storage) — updated on every inventory change
-const _invCurrent: Record<InvCategory, Map<string, number>> = {
-  seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
-};
-
-// Accumulates purchases (only increases; never decreases; resets on restock)
-const _purchaseAccumulator: Record<InvCategory, Map<string, number>> = {
-  seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
-};
-
-// Last known merged state — used to detect increases
-const _lastMergedInv: Record<InvCategory, Map<string, number>> = {
-  seed: new Map(), egg: new Map(), tool: new Map(), decor: new Map(),
-};
-
-let _unsubSeedInv: null | (() => void) = null;
-let _unsubEggInv: null | (() => void) = null;
-let _unsubDecorInv: null | (() => void) = null;
-let _unsubSeedSilo: null | (() => void) = null;
-let _unsubDecorShed: null | (() => void) = null;
-
-let _lastShopRestock = { seed: 0, egg: 0, tool: 0, decor: 0 };
-
-const _invKeyExtractors: Record<InvCategory, (item: any) => string> = {
-  seed: (item: any) => (typeof item?.species === "string" ? item.species.trim() : ""),
-  tool: (item: any) => (typeof item?.toolId === "string" ? item.toolId.trim() : ""),
-  egg: (item: any) => {
-    const id = item?.eggId ?? item?.toolId;
-    return typeof id === "string" ? id.trim() : "";
-  },
-  decor: (item: any) => (typeof item?.decorId === "string" ? item.decorId.trim() : ""),
-};
-
-function _buildInvMap(raw: unknown, getKey: (item: any) => string): Map<string, number> {
-  const map = new Map<string, number>();
-  const list = Array.isArray(raw) ? raw : [];
-  for (const item of list) {
-    const key = getKey(item);
-    if (!key) continue;
-    const qty = Number(item?.quantity);
-    const safe = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
-    if (safe <= 0) continue;
-    map.set(key, (map.get(key) ?? 0) + safe);
+function _coercePurchaseCount(value: unknown): number {
+  if (typeof value === "number") return Math.max(0, Math.floor(value));
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
   }
-  return map;
+  return 0;
 }
 
-function _mergeInvMaps(a: Map<string, number>, b: Map<string, number>): Map<string, number> {
-  const merged = new Map(a);
-  for (const [key, qty] of b) {
-    merged.set(key, (merged.get(key) ?? 0) + qty);
+function _readPurchaseValueForSig(value: unknown): number {
+  const direct = _coercePurchaseCount(value);
+  if (direct > 0) return direct;
+  if (!value || typeof value !== "object") return 0;
+  const obj = value as Record<string, unknown>;
+  const keys = ["count", "quantity", "qty", "purchased", "purchases", "amount", "total"];
+  for (const key of keys) {
+    const parsed = _coercePurchaseCount(obj[key]);
+    if (parsed > 0) return parsed;
   }
-  return merged;
+  return 0;
 }
 
-function _recomputeInvCurrent(): void {
-  _invCurrent.seed = _mergeInvMaps(_invRawMain.seed, _invRawStorage.seed);
-  _invCurrent.egg = _invRawMain.egg;
-  _invCurrent.tool = _invRawMain.tool;
-  _invCurrent.decor = _mergeInvMaps(_invRawMain.decor, _invRawStorage.decor);
+function _sectionPurchasesSig(section: { createdAt: number; purchases: Record<string, unknown> }): string {
+  const map = section?.purchases ?? {};
+  const entries = Object.entries(map)
+    .map(([id, value]) => [String(id), _readPurchaseValueForSig(value)] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([id, count]) => `${id}:${count}`);
+  return `${Number(section?.createdAt) || 0}|${entries.join(",")}`;
 }
 
-function _computePurchasesFromInventory(): PurchasesSnapshot {
-  const compute = (category: InvCategory) => {
-    const purchases: Record<string, number> = {};
-    for (const [key, qty] of _purchaseAccumulator[category]) {
-      if (qty > 0) purchases[key] = qty;
+function _purchasesSnapshotSig(snap: PurchasesSnapshot): string {
+  return [
+    _sectionPurchasesSig(snap.seed),
+    _sectionPurchasesSig(snap.egg),
+    _sectionPurchasesSig(snap.tool),
+    _sectionPurchasesSig(snap.decor),
+  ].join("||");
+}
+
+function _isLikelyPurchaseSection(section: any): boolean {
+  if (!section || typeof section !== "object") return false;
+  if (
+    section.purchases != null ||
+    section.purchaseCounts != null ||
+    section.counts != null ||
+    section.bought != null ||
+    section.purchased != null
+  ) {
+    return true;
+  }
+  return (
+    Array.isArray(section.purchaseList) ||
+    Array.isArray(section.purchasesList) ||
+    Array.isArray(section.items) ||
+    Array.isArray(section.entries) ||
+    Array.isArray(section.list)
+  );
+}
+
+function _looksLikeShopPurchases(value: any): boolean {
+  if (!value || typeof value !== "object") return false;
+  const sections = ["seed", "egg", "tool", "decor"] as const;
+  let found = 0;
+  for (const key of sections) {
+    if (_isLikelyPurchaseSection((value as any)[key])) found++;
+  }
+  return found > 0;
+}
+
+function _extractShopPurchasesFromWSMessage(raw: any): any | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const directCandidates = [
+    raw?.shopPurchases,
+    raw?.myData?.shopPurchases,
+    raw?.data?.shopPurchases,
+    raw?.data?.myData?.shopPurchases,
+    raw?.fullState?.data?.shopPurchases,
+    raw?.fullState?.data?.myData?.shopPurchases,
+    raw?.state?.child?.data?.shopPurchases,
+    raw?.state?.child?.data?.myData?.shopPurchases,
+    raw?.payload?.shopPurchases,
+    raw?.payload?.myData?.shopPurchases,
+    raw?.next?.shopPurchases,
+    raw?.next?.myData?.shopPurchases,
+    raw?.patch?.shopPurchases,
+    raw?.patch?.myData?.shopPurchases,
+    raw?.delta?.shopPurchases,
+    raw?.delta?.myData?.shopPurchases,
+  ];
+
+  for (const candidate of directCandidates) {
+    if (_looksLikeShopPurchases(candidate)) return candidate;
+  }
+
+  const seen = new Set<any>();
+  const queue: Array<{ node: any; depth: number }> = [{ node: raw, depth: 0 }];
+  let scanned = 0;
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current) continue;
+    const { node, depth } = current;
+    if (!node || typeof node !== "object" || seen.has(node)) continue;
+    seen.add(node);
+    scanned++;
+    if (scanned > 300) break;
+
+    const nested = (node as any).shopPurchases;
+    if (_looksLikeShopPurchases(nested)) return nested;
+
+    if (depth >= 6) continue;
+    for (const key of ["payload", "data", "fullState", "state", "child", "myData", "patch", "delta", "next", "update"]) {
+      const child = (node as any)[key];
+      if (child && typeof child === "object" && !seen.has(child)) {
+        queue.push({ node: child, depth: depth + 1 });
+      }
     }
-    return { createdAt: Date.now(), purchases };
-  };
-  return {
-    seed: compute("seed"),
-    egg: compute("egg"),
-    tool: compute("tool"),
-    decor: compute("decor"),
-  };
-}
-
-// Reset purchase accumulator and sync lastMergedInv to current state.
-// Called on initial snapshot and on shop restock.
-function _resetPurchaseTracking(): void {
-  for (const cat of ["seed", "egg", "tool", "decor"] as InvCategory[]) {
-    _purchaseAccumulator[cat] = new Map();
-    _lastMergedInv[cat] = new Map(_invCurrent[cat]);
   }
+
+  return null;
 }
 
-// Accumulate increases in the merged inventory for a category.
-// Only increases count as purchases — decreases (using/planting items) are ignored.
-function _accumulateIncrease(category: InvCategory): void {
-  const current = _invCurrent[category];
-  const last = _lastMergedInv[category];
-  for (const [key, qty] of current) {
-    const prev = last.get(key) ?? 0;
-    if (qty > prev) {
-      const delta = qty - prev;
-      _purchaseAccumulator[category].set(
-        key,
-        (_purchaseAccumulator[category].get(key) ?? 0) + delta,
-      );
-    }
-  }
-  _lastMergedInv[category] = new Map(current);
-}
+function _subscribeRawWSPurchases(): void {
+  if (_removeRawWsPurchasesListener || typeof window === "undefined") return;
 
-function _onInventoryChange(category: InvCategory, raw: unknown): void {
-  _invRawMain[category] = _buildInvMap(raw, _invKeyExtractors[category]);
-  _recomputeInvCurrent();
-  _accumulateIncrease(category);
-  _notifyPurchases(_computePurchasesFromInventory());
-}
-
-function _onStorageChange(kind: "seed" | "decor", raw: unknown): void {
-  _invRawStorage[kind] = _buildInvMap(raw, _invKeyExtractors[kind]);
-  _recomputeInvCurrent();
-  _accumulateIncrease(kind);
-  _notifyPurchases(_computePurchasesFromInventory());
-}
-
-async function _snapshotAllInventories(): Promise<void> {
-  const snapMain = async (category: InvCategory, atom: any) => {
-    try {
-      _invRawMain[category] = _buildInvMap(await atom.get(), _invKeyExtractors[category]);
-    } catch {}
+  const handler = (evt: Event) => {
+    const msg = (evt as CustomEvent<any>)?.detail;
+    const purchases = _extractShopPurchasesFromWSMessage(msg);
+    if (!purchases) return;
+    _notifyPurchases(purchases);
   };
-  const snapStorage = async (kind: "seed" | "decor", atom: any) => {
-    try {
-      _invRawStorage[kind] = _buildInvMap(await atom.get(), _invKeyExtractors[kind]);
-    } catch {}
-  };
-  await Promise.all([
-    snapMain("seed", Atoms.inventory.mySeedInventory),
-    snapMain("tool", Atoms.inventory.myToolInventory),
-    snapMain("egg", Atoms.inventory.myEggInventory),
-    snapMain("decor", Atoms.inventory.myDecorInventory),
-    snapStorage("seed", Atoms.inventory.mySeedSiloItems),
-    snapStorage("decor", Atoms.inventory.myDecorShedItems),
-  ]);
-  _recomputeInvCurrent();
-  // Set baseline: zero accumulator, sync lastMergedInv to current state
-  _resetPurchaseTracking();
-}
 
-function _checkRestockAndResetBaselines(raw: any): void {
-  const seconds = (sec: any) => Number(sec?.secondsUntilRestock) || 0;
-  const next = {
-    seed: seconds(raw?.seed),
-    egg: seconds(raw?.egg),
-    tool: seconds(raw?.tool),
-    decor: seconds(raw?.decor),
+  window.addEventListener(RAW_WS_JSON_EVENT, handler as EventListener);
+  _removeRawWsPurchasesListener = () => {
+    try { window.removeEventListener(RAW_WS_JSON_EVENT, handler as EventListener); } catch {}
+    _removeRawWsPurchasesListener = null;
   };
-  const restocked =
-    (next.seed > _lastShopRestock.seed && _lastShopRestock.seed > 0) ||
-    (next.egg > _lastShopRestock.egg && _lastShopRestock.egg > 0) ||
-    (next.tool > _lastShopRestock.tool && _lastShopRestock.tool > 0) ||
-    (next.decor > _lastShopRestock.decor && _lastShopRestock.decor > 0);
-  _lastShopRestock = next;
-  if (restocked) _resetPurchaseTracking();
 }
 
 const TOOL_CAPS: Record<string, number> = {
@@ -1148,6 +1124,10 @@ function _coercePurchases(raw: any): PurchasesSnapshot {
 
 function _notifyPurchases(raw: any) {
   const snap = _coercePurchases(raw);
+  const sig = _purchasesSnapshotSig(snap);
+  if (sig === _lastPurchasesSig) return;
+  _lastPurchasesSig = sig;
+  _lastPurchasesSnapshot = snap;
   _purchasesSubs.forEach((fn) => {
     try {
       fn(snap);
@@ -1297,64 +1277,29 @@ async function _ensureStarted() {
   _loadPrefs();
   _ensureRulesLoaded();
 
-  // prime + subscribe shops (with restock detection)
+  // Subscribe to raw WS for purchase data
+  _subscribeRawWSPurchases();
+
+  // prime + subscribe shops
   try {
     const cur = await Atoms.shop.shops.get();
     _recomputeFromRaw(cur);
     _notifyShops(cur);
-    _checkRestockAndResetBaselines(cur); // prime restock tracker
   } catch (err) {
   }
 
   try {
     _unsubShops = await Atoms.shop.shops.onChange((next) => {
-      try { _checkRestockAndResetBaselines(next); } catch {}
       try { _recomputeFromRaw(next); } catch {}
       try { _notifyShops(next); } catch {}
     });
   } catch (err) {
   }
 
-  // snapshot all inventories as baseline, then subscribe for changes
-  await _snapshotAllInventories();
-  try { _notifyPurchases(_computePurchasesFromInventory()); } catch {}
+  // Prime purchases with an empty snapshot. Live updates come from raw WS.
+  _notifyPurchases(null);
 
-  // seed inventory
-  try {
-    _unsubSeedInv = await Atoms.inventory.mySeedInventory.onChange((next: unknown) => {
-      try { _onInventoryChange("seed", next); } catch {}
-    });
-  } catch { _unsubSeedInv = null; }
-
-  // egg inventory
-  try {
-    _unsubEggInv = await Atoms.inventory.myEggInventory.onChange((next: unknown) => {
-      try { _onInventoryChange("egg", next); } catch {}
-    });
-  } catch { _unsubEggInv = null; }
-
-  // decor inventory
-  try {
-    _unsubDecorInv = await Atoms.inventory.myDecorInventory.onChange((next: unknown) => {
-      try { _onInventoryChange("decor", next); } catch {}
-    });
-  } catch { _unsubDecorInv = null; }
-
-  // seed silo (storage)
-  try {
-    _unsubSeedSilo = await Atoms.inventory.mySeedSiloItems.onChange((next: unknown) => {
-      try { _onStorageChange("seed", next); } catch {}
-    });
-  } catch { _unsubSeedSilo = null; }
-
-  // decor shed (storage)
-  try {
-    _unsubDecorShed = await Atoms.inventory.myDecorShedItems.onChange((next: unknown) => {
-      try { _onStorageChange("decor", next); } catch {}
-    });
-  } catch { _unsubDecorShed = null; }
-
-  // tool inventory (caps + purchase detection)
+  // tool inventory (caps only — purchase detection via WS)
   try {
     const invAtom = _resolveToolInvAtom();
     if (invAtom) {
@@ -1363,7 +1308,6 @@ async function _ensureStarted() {
       try {
         _unsubToolInv = await invAtom.onChange((next: any) => {
           try { _updateToolInv(next); } catch {}
-          try { _onInventoryChange("tool", next); } catch {}
         });
       } catch (err) {
       }
@@ -1394,20 +1338,12 @@ async function _ensureStarted() {
 function _stop() {
   try { _unsubShops?.(); } catch {}
   _unsubShops = null;
-  try { _unsubPurchases?.(); } catch {}
-  _unsubPurchases = null;
+  try { _removeRawWsPurchasesListener?.(); } catch {}
+  _removeRawWsPurchasesListener = null;
+  _lastPurchasesSig = "";
+  _lastPurchasesSnapshot = null;
   try { _unsubToolInv?.(); } catch {}
   _unsubToolInv = null;
-  try { _unsubSeedInv?.(); } catch {}
-  _unsubSeedInv = null;
-  try { _unsubEggInv?.(); } catch {}
-  _unsubEggInv = null;
-  try { _unsubDecorInv?.(); } catch {}
-  _unsubDecorInv = null;
-  try { _unsubSeedSilo?.(); } catch {}
-  _unsubSeedSilo = null;
-  try { _unsubDecorShed?.(); } catch {}
-  _unsubDecorShed = null;
   try { _unsubWeather?.(); } catch {}
   _unsubWeather = null;
   if (_currentWeatherId) {
@@ -1465,9 +1401,8 @@ export const NotifierService = {
     return this.onShopsChange(cb);
   },
 
-  async getPurchases(): Promise<PurchasesSnapshot> {
-    await _ensureStarted();
-    return _computePurchasesFromInventory();
+  getLatestPurchasesSnapshot(): PurchasesSnapshot | null {
+    return _lastPurchasesSnapshot;
   },
 
   onPurchasesChange(cb: (p: PurchasesSnapshot) => void): () => void {
@@ -1479,7 +1414,7 @@ export const NotifierService = {
 
   async onPurchasesChangeNow(cb: (p: PurchasesSnapshot) => void): Promise<() => void> {
     await _ensureStarted();
-    try { cb(_computePurchasesFromInventory()); } catch {}
+    try { cb(_lastPurchasesSnapshot ?? _coercePurchases(null)); } catch {}
     return this.onPurchasesChange(cb);
   },
 
