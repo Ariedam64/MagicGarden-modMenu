@@ -26370,6 +26370,139 @@
   var _subs = /* @__PURE__ */ new Set();
   var _toolInv = /* @__PURE__ */ new Map();
   var _unsubToolInv = null;
+  var _invRawMain = {
+    seed: /* @__PURE__ */ new Map(),
+    egg: /* @__PURE__ */ new Map(),
+    tool: /* @__PURE__ */ new Map(),
+    decor: /* @__PURE__ */ new Map()
+  };
+  var _invRawStorage = {
+    seed: /* @__PURE__ */ new Map(),
+    decor: /* @__PURE__ */ new Map()
+  };
+  var _invBaseline = {
+    seed: /* @__PURE__ */ new Map(),
+    egg: /* @__PURE__ */ new Map(),
+    tool: /* @__PURE__ */ new Map(),
+    decor: /* @__PURE__ */ new Map()
+  };
+  var _invCurrent = {
+    seed: /* @__PURE__ */ new Map(),
+    egg: /* @__PURE__ */ new Map(),
+    tool: /* @__PURE__ */ new Map(),
+    decor: /* @__PURE__ */ new Map()
+  };
+  var _unsubSeedInv = null;
+  var _unsubEggInv = null;
+  var _unsubDecorInv = null;
+  var _unsubSeedSilo = null;
+  var _unsubDecorShed = null;
+  var _lastShopRestock = { seed: 0, egg: 0, tool: 0, decor: 0 };
+  var _invKeyExtractors = {
+    seed: (item) => typeof item?.species === "string" ? item.species.trim() : "",
+    tool: (item) => typeof item?.toolId === "string" ? item.toolId.trim() : "",
+    egg: (item) => {
+      const id = item?.eggId ?? item?.toolId;
+      return typeof id === "string" ? id.trim() : "";
+    },
+    decor: (item) => typeof item?.decorId === "string" ? item.decorId.trim() : ""
+  };
+  function _buildInvMap(raw, getKey) {
+    const map2 = /* @__PURE__ */ new Map();
+    const list = Array.isArray(raw) ? raw : [];
+    for (const item of list) {
+      const key2 = getKey(item);
+      if (!key2) continue;
+      const qty = Number(item?.quantity);
+      const safe = Number.isFinite(qty) ? Math.max(0, Math.floor(qty)) : 0;
+      if (safe <= 0) continue;
+      map2.set(key2, (map2.get(key2) ?? 0) + safe);
+    }
+    return map2;
+  }
+  function _mergeInvMaps(a, b) {
+    const merged = new Map(a);
+    for (const [key2, qty] of b) {
+      merged.set(key2, (merged.get(key2) ?? 0) + qty);
+    }
+    return merged;
+  }
+  function _recomputeInvCurrent() {
+    _invCurrent.seed = _mergeInvMaps(_invRawMain.seed, _invRawStorage.seed);
+    _invCurrent.egg = _invRawMain.egg;
+    _invCurrent.tool = _invRawMain.tool;
+    _invCurrent.decor = _mergeInvMaps(_invRawMain.decor, _invRawStorage.decor);
+  }
+  function _computePurchasesFromInventory() {
+    const compute = (category) => {
+      const baseline = _invBaseline[category];
+      const current = _invCurrent[category];
+      const purchases = {};
+      for (const [key2, qty] of current) {
+        const base = baseline.get(key2) ?? 0;
+        const delta = qty - base;
+        if (delta > 0) purchases[key2] = delta;
+      }
+      return { createdAt: Date.now(), purchases };
+    };
+    return {
+      seed: compute("seed"),
+      egg: compute("egg"),
+      tool: compute("tool"),
+      decor: compute("decor")
+    };
+  }
+  function _resetBaselines() {
+    for (const cat of ["seed", "egg", "tool", "decor"]) {
+      _invBaseline[cat] = new Map(_invCurrent[cat]);
+    }
+  }
+  function _onInventoryChange(category, raw) {
+    _invRawMain[category] = _buildInvMap(raw, _invKeyExtractors[category]);
+    _recomputeInvCurrent();
+    _notifyPurchases(_computePurchasesFromInventory());
+  }
+  function _onStorageChange(kind, raw) {
+    _invRawStorage[kind] = _buildInvMap(raw, _invKeyExtractors[kind]);
+    _recomputeInvCurrent();
+    _notifyPurchases(_computePurchasesFromInventory());
+  }
+  async function _snapshotAllInventories() {
+    const snapMain = async (category, atom) => {
+      try {
+        _invRawMain[category] = _buildInvMap(await atom.get(), _invKeyExtractors[category]);
+      } catch {
+      }
+    };
+    const snapStorage = async (kind, atom) => {
+      try {
+        _invRawStorage[kind] = _buildInvMap(await atom.get(), _invKeyExtractors[kind]);
+      } catch {
+      }
+    };
+    await Promise.all([
+      snapMain("seed", Atoms.inventory.mySeedInventory),
+      snapMain("tool", Atoms.inventory.myToolInventory),
+      snapMain("egg", Atoms.inventory.myEggInventory),
+      snapMain("decor", Atoms.inventory.myDecorInventory),
+      snapStorage("seed", Atoms.inventory.mySeedSiloItems),
+      snapStorage("decor", Atoms.inventory.myDecorShedItems)
+    ]);
+    _recomputeInvCurrent();
+    _resetBaselines();
+  }
+  function _checkRestockAndResetBaselines(raw) {
+    const seconds = (sec) => Number(sec?.secondsUntilRestock) || 0;
+    const next = {
+      seed: seconds(raw?.seed),
+      egg: seconds(raw?.egg),
+      tool: seconds(raw?.tool),
+      decor: seconds(raw?.decor)
+    };
+    const restocked = next.seed > _lastShopRestock.seed && _lastShopRestock.seed > 0 || next.egg > _lastShopRestock.egg && _lastShopRestock.egg > 0 || next.tool > _lastShopRestock.tool && _lastShopRestock.tool > 0 || next.decor > _lastShopRestock.decor && _lastShopRestock.decor > 0;
+    _lastShopRestock = next;
+    if (restocked) _resetBaselines();
+  }
   var TOOL_CAPS = {
     Shovel: 1,
     WateringCan: 99,
@@ -26536,10 +26669,15 @@
       const cur = await Atoms.shop.shops.get();
       _recomputeFromRaw(cur);
       _notifyShops(cur);
+      _checkRestockAndResetBaselines(cur);
     } catch (err) {
     }
     try {
       _unsubShops = await Atoms.shop.shops.onChange((next) => {
+        try {
+          _checkRestockAndResetBaselines(next);
+        } catch {
+        }
         try {
           _recomputeFromRaw(next);
         } catch {
@@ -26551,19 +26689,60 @@
       });
     } catch (err) {
     }
+    await _snapshotAllInventories();
     try {
-      const curP = await Atoms.shop.myShopPurchases.get();
-      _notifyPurchases(curP);
-    } catch (err) {
+      _notifyPurchases(_computePurchasesFromInventory());
+    } catch {
     }
     try {
-      _unsubPurchases = await Atoms.shop.myShopPurchases.onChange((next) => {
+      _unsubSeedInv = await Atoms.inventory.mySeedInventory.onChange((next) => {
         try {
-          _notifyPurchases(next);
+          _onInventoryChange("seed", next);
         } catch {
         }
       });
-    } catch (err) {
+    } catch {
+      _unsubSeedInv = null;
+    }
+    try {
+      _unsubEggInv = await Atoms.inventory.myEggInventory.onChange((next) => {
+        try {
+          _onInventoryChange("egg", next);
+        } catch {
+        }
+      });
+    } catch {
+      _unsubEggInv = null;
+    }
+    try {
+      _unsubDecorInv = await Atoms.inventory.myDecorInventory.onChange((next) => {
+        try {
+          _onInventoryChange("decor", next);
+        } catch {
+        }
+      });
+    } catch {
+      _unsubDecorInv = null;
+    }
+    try {
+      _unsubSeedSilo = await Atoms.inventory.mySeedSiloItems.onChange((next) => {
+        try {
+          _onStorageChange("seed", next);
+        } catch {
+        }
+      });
+    } catch {
+      _unsubSeedSilo = null;
+    }
+    try {
+      _unsubDecorShed = await Atoms.inventory.myDecorShedItems.onChange((next) => {
+        try {
+          _onStorageChange("decor", next);
+        } catch {
+        }
+      });
+    } catch {
+      _unsubDecorShed = null;
     }
     try {
       const invAtom = _resolveToolInvAtom();
@@ -26576,6 +26755,10 @@
           _unsubToolInv = await invAtom.onChange((next) => {
             try {
               _updateToolInv(next);
+            } catch {
+            }
+            try {
+              _onInventoryChange("tool", next);
             } catch {
             }
           });
@@ -26621,6 +26804,31 @@
     } catch {
     }
     _unsubToolInv = null;
+    try {
+      _unsubSeedInv?.();
+    } catch {
+    }
+    _unsubSeedInv = null;
+    try {
+      _unsubEggInv?.();
+    } catch {
+    }
+    _unsubEggInv = null;
+    try {
+      _unsubDecorInv?.();
+    } catch {
+    }
+    _unsubDecorInv = null;
+    try {
+      _unsubSeedSilo?.();
+    } catch {
+    }
+    _unsubSeedSilo = null;
+    try {
+      _unsubDecorShed?.();
+    } catch {
+    }
+    _unsubDecorShed = null;
     try {
       _unsubWeather?.();
     } catch {
@@ -26690,7 +26898,7 @@
     async onPurchasesChangeNow(cb) {
       await _ensureStarted();
       try {
-        cb(_coercePurchases(await Atoms.shop.myShopPurchases.get()));
+        cb(_computePurchasesFromInventory());
       } catch {
       }
       return this.onPurchasesChange(cb);
