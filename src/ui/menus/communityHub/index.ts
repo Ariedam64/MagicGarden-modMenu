@@ -197,37 +197,50 @@ class CommunityHub {
   private cleanupToolbarButton: (() => void) | null = null;
   private kofiModal: HTMLElement | null = null;
   private kofiNavBtn: HTMLButtonElement | null = null;
-  private handleConversationsRefresh = () => this.updateAllBadges();
-  private handleFriendRequestsRefresh = () => this.updateAllBadges();
-  private handleOverlayOpen = () => this.setOpen(true);
-  private handleOverlayClose = () => this.setOpen(false);
+  // Safety flags to prevent stale/destroyed instances from acting on events
+  private destroyed = false;
+  private _isSelfDispatching = false;
+  private handleConversationsRefresh = () => {
+    if (this.destroyed) return;
+    this.updateAllBadges();
+  };
+  private handleFriendRequestsRefresh = () => {
+    if (this.destroyed) return;
+    this.updateAllBadges();
+  };
+  private handleOverlayOpen = () => {
+    // Ignore if this instance dispatched the event itself (prevents circular re-entry)
+    // or if the instance has been destroyed but removeEventListener somehow failed
+    if (this.destroyed || this._isSelfDispatching) return;
+    this.setOpen(true);
+  };
+  private handleOverlayClose = () => {
+    if (this.destroyed || this._isSelfDispatching) return;
+    this.setOpen(false);
+  };
   private handleOpenFriendChat = () => {
-    // Open panel if not already open
-    if (!this.panelOpen) {
-      this.setOpen(true);
-    }
-    // Switch to messages tab
+    if (this.destroyed) return;
+    if (!this.panelOpen) this.setOpen(true);
     this.switchTab("messages");
   };
   private handleOpenGroupChat = () => {
-    if (!this.panelOpen) {
-      this.setOpen(true);
-    }
+    if (this.destroyed) return;
+    if (!this.panelOpen) this.setOpen(true);
     this.switchTab("messages");
   };
   private handleAuthUpdate = () => {
-    // When user successfully authenticates, switch from auth gate to tabs
+    if (this.destroyed) return;
     if (hasApiKey()) {
       console.log("[CommunityHub] Auth successful, showing tabs");
       this.updateContentVisibility();
     }
   };
   private handleCloseAfterDecline = () => {
-    // Close the hub when user declines auth
+    if (this.destroyed) return;
     this.setOpen(false);
   };
   private handlePointerDown = (e: PointerEvent) => {
-    if (!this.panelOpen) return;
+    if (this.destroyed || !this.panelOpen) return;
     const t = e.target as Node;
     if (!this.slot.contains(t) && !this.isClickOnToolbarButton(e.target as Node)) {
       this.setOpen(false);
@@ -570,7 +583,11 @@ class CommunityHub {
       // Show room privacy notice if authenticated and not yet seen
       if (hasApiKey()) this.maybeShowRoomPrivacyNotice();
       // Notify tabs (e.g. messagesTab auto-mark-as-read on reopen)
-      try { window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN)); } catch {}
+      // Use _isSelfDispatching so handleOverlayOpen ignores this event on the same instance.
+      // Since dispatchEvent is synchronous, the flag is guaranteed to be true for the full
+      // call chain (including any stale hub that re-dispatches the same event).
+      this._isSelfDispatching = true;
+      try { window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN)); } finally { this._isSelfDispatching = false; }
     } else {
       this.panel.classList.remove("open");
       setTimeout(() => {
@@ -578,7 +595,8 @@ class CommunityHub {
           this.panel.style.display = "none";
         }
       }, 200);
-      try { window.dispatchEvent(new CustomEvent(CH_EVENTS.CLOSE)); } catch {}
+      this._isSelfDispatching = true;
+      try { window.dispatchEvent(new CustomEvent(CH_EVENTS.CLOSE)); } finally { this._isSelfDispatching = false; }
     }
   }
 
@@ -635,6 +653,7 @@ class CommunityHub {
   }
 
   destroy(): void {
+    this.destroyed = true;
     window.removeEventListener("pointerdown", this.handlePointerDown);
     window.removeEventListener(CH_EVENTS.OPEN, this.handleOverlayOpen as EventListener);
     window.removeEventListener(CH_EVENTS.CLOSE, this.handleOverlayClose as EventListener);

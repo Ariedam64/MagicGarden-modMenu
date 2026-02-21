@@ -15,6 +15,10 @@ const OWN_BTN_SEL = '[data-qws-btn="true"]';
 export function startInjectGamePanelButton(opts: Options): () => void {
   const { onClick, iconUrl = "", ariaLabel = "" } = opts;
 
+  // Unique ID for this invocation — prevents reusing a stale wrapper/button
+  // left in the DOM by a previous call whose cleanup didn't fully execute.
+  const instanceId = Math.random().toString(36).slice(2, 9);
+
   let mountedBtn: HTMLButtonElement | null = null;
   let mountedWrap: HTMLDivElement | null = null;
   let isMounting = false;
@@ -116,11 +120,24 @@ export function startInjectGamePanelButton(opts: Options): () => void {
       if (!refBtn) return false;
 
       if (!mountedWrap) {
-        mountedWrap = root.querySelector<HTMLDivElement>('div[data-qws-wrapper="true"]');
-        if (!mountedWrap && refWrapper) {
-          mountedWrap = refWrapper.cloneNode(false) as HTMLDivElement;
-          mountedWrap.dataset.qwsWrapper = "true";
-          mountedWrap.removeAttribute("id");
+        // Only reuse a wrapper that belongs to THIS invocation (instanceId matches).
+        // This prevents picking up a stale wrapper left by a previous hub that
+        // wasn't fully cleaned up, which would bind us to its old click handler.
+        mountedWrap = root.querySelector<HTMLDivElement>(
+          `div[data-qws-wrapper="true"][data-qws-instance="${instanceId}"]`,
+        );
+        if (!mountedWrap) {
+          // Remove only orphaned wrappers that belong to THIS button (same ariaLabel).
+          // Using a label-scoped selector prevents destroying wrappers of other buttons
+          // (e.g. "Notifications") which would cause an infinite mutual-remount loop.
+          root.querySelectorAll<HTMLElement>(`div[data-qws-wrapper="true"][data-qws-label="${esc(ariaLabel)}"]`).forEach(el => el.remove());
+          if (refWrapper) {
+            mountedWrap = refWrapper.cloneNode(false) as HTMLDivElement;
+            mountedWrap.dataset.qwsWrapper = "true";
+            mountedWrap.dataset.qwsInstance = instanceId;
+            mountedWrap.dataset.qwsLabel = ariaLabel;
+            mountedWrap.removeAttribute("id");
+          }
         }
       }
 
@@ -128,6 +145,12 @@ export function startInjectGamePanelButton(opts: Options): () => void {
         mountedBtn =
           mountedWrap?.querySelector<HTMLButtonElement>('button[data-qws-btn="true"]') || null;
         if (!mountedBtn) {
+          // When there is no wrapper, also remove any stale root-level buttons
+          // left by a previous invocation so we don't end up with duplicates.
+          // Scoped to this button's aria-label to avoid touching other buttons.
+          if (!mountedWrap) {
+            root.querySelectorAll<HTMLButtonElement>(`button[data-qws-btn="true"][aria-label="${esc(ariaLabel)}"]`).forEach(el => el.remove());
+          }
           mountedBtn = cloneButton(refBtn);
           if (mountedWrap) {
             mountedWrap.appendChild(mountedBtn);

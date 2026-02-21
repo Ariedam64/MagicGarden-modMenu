@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.22
+// @version      3.1.221
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26895,6 +26895,7 @@
   var OWN_BTN_SEL = '[data-qws-btn="true"]';
   function startInjectGamePanelButton(opts) {
     const { onClick, iconUrl = "", ariaLabel = "" } = opts;
+    const instanceId = Math.random().toString(36).slice(2, 9);
     let mountedBtn = null;
     let mountedWrap = null;
     let isMounting = false;
@@ -26979,16 +26980,26 @@
         const { refBtn, refWrapper } = getReference(root);
         if (!refBtn) return false;
         if (!mountedWrap) {
-          mountedWrap = root.querySelector('div[data-qws-wrapper="true"]');
-          if (!mountedWrap && refWrapper) {
-            mountedWrap = refWrapper.cloneNode(false);
-            mountedWrap.dataset.qwsWrapper = "true";
-            mountedWrap.removeAttribute("id");
+          mountedWrap = root.querySelector(
+            `div[data-qws-wrapper="true"][data-qws-instance="${instanceId}"]`
+          );
+          if (!mountedWrap) {
+            root.querySelectorAll(`div[data-qws-wrapper="true"][data-qws-label="${esc(ariaLabel)}"]`).forEach((el2) => el2.remove());
+            if (refWrapper) {
+              mountedWrap = refWrapper.cloneNode(false);
+              mountedWrap.dataset.qwsWrapper = "true";
+              mountedWrap.dataset.qwsInstance = instanceId;
+              mountedWrap.dataset.qwsLabel = ariaLabel;
+              mountedWrap.removeAttribute("id");
+            }
           }
         }
         if (!mountedBtn) {
           mountedBtn = mountedWrap?.querySelector('button[data-qws-btn="true"]') || null;
           if (!mountedBtn) {
+            if (!mountedWrap) {
+              root.querySelectorAll(`button[data-qws-btn="true"][aria-label="${esc(ariaLabel)}"]`).forEach((el2) => el2.remove());
+            }
             mountedBtn = cloneButton(refBtn);
             if (mountedWrap) {
               mountedWrap.appendChild(mountedBtn);
@@ -40349,33 +40360,48 @@
       __publicField(this, "cleanupToolbarButton", null);
       __publicField(this, "kofiModal", null);
       __publicField(this, "kofiNavBtn", null);
-      __publicField(this, "handleConversationsRefresh", () => this.updateAllBadges());
-      __publicField(this, "handleFriendRequestsRefresh", () => this.updateAllBadges());
-      __publicField(this, "handleOverlayOpen", () => this.setOpen(true));
-      __publicField(this, "handleOverlayClose", () => this.setOpen(false));
+      // Safety flags to prevent stale/destroyed instances from acting on events
+      __publicField(this, "destroyed", false);
+      __publicField(this, "_isSelfDispatching", false);
+      __publicField(this, "handleConversationsRefresh", () => {
+        if (this.destroyed) return;
+        this.updateAllBadges();
+      });
+      __publicField(this, "handleFriendRequestsRefresh", () => {
+        if (this.destroyed) return;
+        this.updateAllBadges();
+      });
+      __publicField(this, "handleOverlayOpen", () => {
+        if (this.destroyed || this._isSelfDispatching) return;
+        this.setOpen(true);
+      });
+      __publicField(this, "handleOverlayClose", () => {
+        if (this.destroyed || this._isSelfDispatching) return;
+        this.setOpen(false);
+      });
       __publicField(this, "handleOpenFriendChat", () => {
-        if (!this.panelOpen) {
-          this.setOpen(true);
-        }
+        if (this.destroyed) return;
+        if (!this.panelOpen) this.setOpen(true);
         this.switchTab("messages");
       });
       __publicField(this, "handleOpenGroupChat", () => {
-        if (!this.panelOpen) {
-          this.setOpen(true);
-        }
+        if (this.destroyed) return;
+        if (!this.panelOpen) this.setOpen(true);
         this.switchTab("messages");
       });
       __publicField(this, "handleAuthUpdate", () => {
+        if (this.destroyed) return;
         if (hasApiKey()) {
           console.log("[CommunityHub] Auth successful, showing tabs");
           this.updateContentVisibility();
         }
       });
       __publicField(this, "handleCloseAfterDecline", () => {
+        if (this.destroyed) return;
         this.setOpen(false);
       });
       __publicField(this, "handlePointerDown", (e) => {
-        if (!this.panelOpen) return;
+        if (this.destroyed || !this.panelOpen) return;
         const t = e.target;
         if (!this.slot.contains(t) && !this.isClickOnToolbarButton(e.target)) {
           this.setOpen(false);
@@ -40636,9 +40662,11 @@
           this.panel.classList.add("open");
         });
         if (hasApiKey()) this.maybeShowRoomPrivacyNotice();
+        this._isSelfDispatching = true;
         try {
           window.dispatchEvent(new CustomEvent(CH_EVENTS.OPEN));
-        } catch {
+        } finally {
+          this._isSelfDispatching = false;
         }
       } else {
         this.panel.classList.remove("open");
@@ -40647,9 +40675,11 @@
             this.panel.style.display = "none";
           }
         }, 200);
+        this._isSelfDispatching = true;
         try {
           window.dispatchEvent(new CustomEvent(CH_EVENTS.CLOSE));
-        } catch {
+        } finally {
+          this._isSelfDispatching = false;
         }
       }
     }
@@ -40694,6 +40724,7 @@
       this.panel.appendChild(this.roomPrivacyNotice);
     }
     destroy() {
+      this.destroyed = true;
       window.removeEventListener("pointerdown", this.handlePointerDown);
       window.removeEventListener(CH_EVENTS.OPEN, this.handleOverlayOpen);
       window.removeEventListener(CH_EVENTS.CLOSE, this.handleOverlayClose);
