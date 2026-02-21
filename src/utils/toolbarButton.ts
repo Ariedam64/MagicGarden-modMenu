@@ -102,7 +102,7 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      try { onClick(); } catch {}
+      try { onClick(); } catch (e) { console.error("[ToolbarButton] onClick error:", ariaLabel, e); }
     });
 
     return btn;
@@ -216,6 +216,10 @@ export function startInjectGamePanelButton(opts: Options): () => void {
     observer.disconnect();
     clearInterval(pollingInterval);
     mountedWrap?.remove();
+    // Also remove the button directly: when there is no wrapper the button
+    // is a direct child of root. Without this, the orphan stays in the
+    // toolbar across script reloads and accumulates with each invocation.
+    mountedBtn?.remove();
     mountedBtn = null;
     mountedWrap = null;
   };

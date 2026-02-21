@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Arie's Mod
 // @namespace    Quinoa
-// @version      3.1.221
+// @version      3.1.222
 // @match        https://1227719606223765687.discordsays.com/*
 // @match        https://magiccircle.gg/r/*
 // @match        https://magicgarden.gg/r/*
@@ -26966,7 +26966,8 @@
         e.stopPropagation();
         try {
           onClick();
-        } catch {
+        } catch (e2) {
+          console.error("[ToolbarButton] onClick error:", ariaLabel, e2);
         }
       });
       return btn;
@@ -27058,6 +27059,7 @@
       observer2.disconnect();
       clearInterval(pollingInterval);
       mountedWrap?.remove();
+      mountedBtn?.remove();
       mountedBtn = null;
       mountedWrap = null;
     };
